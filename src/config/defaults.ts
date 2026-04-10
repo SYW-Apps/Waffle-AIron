@@ -26,7 +26,7 @@ export function defaultTargetConfig(type: 'claude' | 'gemini'): BuiltinTargetCon
 // waffagent CLI version embedded at build time
 // ---------------------------------------------------------------------------
 
-export const WAFFAGENT_VERSION = '0.1.1';
+export const WAFFAGENT_VERSION = '0.1.2';
 
 // ---------------------------------------------------------------------------
 // GitHub repository (owner/repo) — used by the update command
