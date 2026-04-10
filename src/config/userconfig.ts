@@ -14,6 +14,19 @@ export type UpdateChannel = 'stable' | 'beta' | 'preview';
 export interface UserConfig {
   /** Which release channel to track for updates. Default: 'stable' */
   channel?: UpdateChannel;
+  /**
+   * Aliases that the user has explicitly disabled.
+   * All aliases in SUPPORTED_ALIASES are active by default; add names here to
+   * opt out. This only affects binary installations (pkg builds). When installed
+   * via npm, the bin entries in package.json are always registered.
+   */
+  disabledAliases?: string[];
+  /**
+   * Absolute path to the directory where waffagent binaries are installed.
+   * Written by the install script and used by `waffagent aliases` to know
+   * where to create/remove symlinks or .cmd wrappers.
+   */
+  installDir?: string;
 }
 
 const CONFIG_DIR = path.join(os.homedir(), '.waffagent');
@@ -45,4 +58,24 @@ export function setChannel(channel: UpdateChannel): void {
 
 export function getChannel(): UpdateChannel {
   return loadUserConfig().channel ?? 'stable';
+}
+
+export function getDisabledAliases(): string[] {
+  return loadUserConfig().disabledAliases ?? [];
+}
+
+export function setDisabledAliases(disabled: string[]): void {
+  const config = loadUserConfig();
+  config.disabledAliases = disabled;
+  saveUserConfig(config);
+}
+
+export function getInstallDir(): string | undefined {
+  return loadUserConfig().installDir;
+}
+
+export function setInstallDir(dir: string): void {
+  const config = loadUserConfig();
+  config.installDir = dir;
+  saveUserConfig(config);
 }

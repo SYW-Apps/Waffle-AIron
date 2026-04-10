@@ -79,6 +79,18 @@ export function backendCommand(backend: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Command aliases
+//
+// SUPPORTED_ALIASES — every short name waffagent can be reached under.
+// These are registered in package.json `bin` for npm installs, and created
+// as symlinks / .cmd wrappers for binary installs.
+// Users can disable any alias via `waffagent aliases disable <name>`.
+// ---------------------------------------------------------------------------
+
+export const SUPPORTED_ALIASES = ['wagent'] as const;
+export type SupportedAlias = (typeof SUPPORTED_ALIASES)[number];
+
+// ---------------------------------------------------------------------------
 // Directories to exclude from domain detection scanning
 // ---------------------------------------------------------------------------
 

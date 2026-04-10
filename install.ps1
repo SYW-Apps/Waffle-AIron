@@ -78,6 +78,39 @@ if ($UserPath -notlike "*$InstallDir*") {
     Write-Host "$InstallDir is already in your PATH." -ForegroundColor Gray
 }
 
+# Record the install directory in ~/.waffagent/config.json so `waffagent aliases` knows where to work
+$ConfigDir = "$env:USERPROFILE\.waffagent"
+$ConfigFile = "$ConfigDir\config.json"
+if (-not (Test-Path $ConfigDir)) { New-Item -ItemType Directory -Path $ConfigDir -Force | Out-Null }
+if (Test-Path $ConfigFile) {
+    $cfg = Get-Content $ConfigFile -Raw | ConvertFrom-Json
+} else {
+    $cfg = [PSCustomObject]@{}
+}
+$cfg | Add-Member -MemberType NoteProperty -Name "installDir" -Value $InstallDir -Force
+$cfg | ConvertTo-Json -Depth 5 | Set-Content $ConfigFile -Encoding UTF8
+
+# Create aliases (wagent → waffagent.exe via .cmd wrapper)
+# Skip any alias that is already taken by something else
+$Aliases = @("wagent")
+$DisabledAliases = @()
+if ($cfg.PSObject.Properties["disabledAliases"]) { $DisabledAliases = $cfg.disabledAliases }
+
+foreach ($Alias in $Aliases) {
+    if ($DisabledAliases -contains $Alias) {
+        Write-Host "Alias $Alias is disabled — skipping." -ForegroundColor Gray
+        continue
+    }
+    $AliasCmd = Join-Path $InstallDir "$Alias.cmd"
+    $Existing = Get-Command $Alias -ErrorAction SilentlyContinue
+    if ($Existing -and $Existing.Source -ne $AliasCmd) {
+        Write-Host "  $Alias already exists at: $($Existing.Source) — skipping (run 'waffagent aliases enable $Alias' to override)" -ForegroundColor Yellow
+    } else {
+        "@echo off`r`n""%~dp0waffagent.exe"" %*`r`n" | Set-Content $AliasCmd -Encoding ASCII
+        Write-Host "  Created alias: $AliasCmd" -ForegroundColor Gray
+    }
+}
+
 Write-Host ""
 Write-Host "waffagent $Version installed successfully!" -ForegroundColor Cyan
-Write-Host "Run: waffagent --help" -ForegroundColor White
+Write-Host "Run: waffagent --help  (or: wagent --help)" -ForegroundColor White

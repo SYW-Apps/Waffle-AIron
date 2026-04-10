@@ -20,7 +20,8 @@
   },
   "type": "commonjs",
   "bin": {
-    "waffagent": "./dist/cli/index.js"
+    "waffagent": "./dist/cli/index.js",
+    "wagent": "./dist/cli/index.js"
   },
   "main": "./dist/index.js",
   "files": [
