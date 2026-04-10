@@ -15,3 +15,11 @@ Thumbs.db
 
 # Test outputs
 .vitest/
+
+# pkg compiled binaries
+bin/
+waffagent
+waffagent.exe
+*.tar.gz
+*.zip
+*.sha256

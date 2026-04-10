@@ -17,6 +17,7 @@ import {
   runDomainsScan,
   runDomainsAdd,
   runDomainsRemove,
+  runUpdate,
   runAnalyze,
   runSuggestTopology,
   runCreateAgent,
@@ -187,6 +188,18 @@ domainsCmd
   .description('Remove a domain from the registry')
   .action(async (id: string) => {
     await runDomainsRemove(id);
+  });
+
+// ---------------------------------------------------------------------------
+// update
+// ---------------------------------------------------------------------------
+
+program
+  .command('update')
+  .description('Check for a newer version and update the binary')
+  .option('--check', 'check for updates without installing')
+  .action(async (opts) => {
+    await runUpdate({ check: opts.check });
   });
 
 // ---------------------------------------------------------------------------

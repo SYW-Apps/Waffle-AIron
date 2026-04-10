@@ -5,4 +5,5 @@ export * from './init.js';
 export * from './jobs.js';
 export * from './list.js';
 export * from './stubs.js';
+export * from './update.js';
 export * from './validate.js';

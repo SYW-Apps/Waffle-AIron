@@ -34,12 +34,21 @@
     "dev": "tsx src/cli/index.ts",
     "build": "tsup && node -e \"const fs=require('fs'); fs.cpSync('src/templates','dist/templates',{recursive:true}); fs.cpSync('src/bundles','dist/bundles',{recursive:true});\"",
     "build:watch": "tsup --watch",
+    "build:binary": "npm run build && pkg dist/cli/index.js --target node20-linux-x64,node20-win-x64,node20-macos-x64 --output waffagent --compress GZip",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "lint": "eslint src --ext .ts",
     "clean": "rimraf dist"
+  },
+  "pkg": {
+    "assets": [
+      "dist/templates/**/*",
+      "dist/bundles/**/*"
+    ],
+    "scripts": [],
+    "outputPath": "bin"
   },
   "dependencies": {
     "chalk": "^4.1.2",
@@ -54,6 +63,7 @@
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.14.0",
     "@vitest/coverage-v8": "^1.6.0",
+    "@yao-pkg/pkg": "^5.12.0",
     "rimraf": "^5.0.7",
     "tsup": "^8.1.0",
     "tsx": "^4.15.7",

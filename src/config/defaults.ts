@@ -29,6 +29,12 @@ export function defaultTargetConfig(type: 'claude' | 'gemini'): BuiltinTargetCon
 export const WAFFAGENT_VERSION = '0.1.0';
 
 // ---------------------------------------------------------------------------
+// GitHub repository (owner/repo) — used by the update command
+// ---------------------------------------------------------------------------
+
+export const GITHUB_REPO = 'SYW-Apps/waffagent';
+
+// ---------------------------------------------------------------------------
 // The name of the architect agent created during init
 // ---------------------------------------------------------------------------
 

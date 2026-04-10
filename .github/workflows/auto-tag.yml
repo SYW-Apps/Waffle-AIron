@@ -1,0 +1,63 @@
+name: Auto Tag
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  tag:
+    name: Bump version and tag
+    runs-on: ubuntu-latest
+    # Only run when not triggered by the bot itself
+    if: "!startsWith(github.event.head_commit.message, 'chore: release v')"
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Determine version bump
+        id: bump
+        run: |
+          MSG="${{ github.event.head_commit.message }}"
+          if echo "$MSG" | grep -q '\[major\]'; then
+            echo "bump=major" >> $GITHUB_OUTPUT
+          elif echo "$MSG" | grep -q '\[minor\]'; then
+            echo "bump=minor" >> $GITHUB_OUTPUT
+          else
+            echo "bump=patch" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Bump package.json version
+        id: version
+        run: |
+          BUMP=${{ steps.bump.outputs.bump }}
+          NEW_VERSION=$(npm version $BUMP --no-git-tag-version)
+          echo "new_version=${NEW_VERSION}" >> $GITHUB_OUTPUT
+          echo "Bumped to ${NEW_VERSION}"
+
+      - name: Update WAFFAGENT_VERSION in defaults.ts
+        run: |
+          VERSION=${{ steps.version.outputs.new_version }}
+          # Strip leading 'v'
+          VERSION=${VERSION#v}
+          sed -i "s/export const WAFFAGENT_VERSION = '[^']*'/export const WAFFAGENT_VERSION = '${VERSION}'/" src/config/defaults.ts
+
+      - name: Commit and tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json src/config/defaults.ts
+          git commit -m "chore: release ${{ steps.version.outputs.new_version }}"
+          git tag ${{ steps.version.outputs.new_version }}
+          git push origin main --tags
