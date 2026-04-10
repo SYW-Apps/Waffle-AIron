@@ -10,7 +10,7 @@ coverage/
 Thumbs.db
 
 # IDE
-.vscode/launch.json
+.vscode/
 .idea/
 
 # Test outputs
