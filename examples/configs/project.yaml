@@ -1,0 +1,35 @@
+# Example .ai/project.yaml for a project called "Waffler"
+#
+# This file lives at .ai/project.yaml in your project.
+# Edit it to add/remove targets or adjust topology rules.
+
+schemaVersion: '1.0.0'
+name: waffler
+description: The Waffler application — core services, blueprints, message bus, and UI
+
+targets:
+  - type: claude
+    outputDir: .claude/agents
+    enabled: true
+  - type: gemini
+    outputDir: .gemini/agents
+    enabled: true
+
+rules:
+  # Prevent two agents from claiming the same ownedPaths
+  noOverlappingOwnership: true
+
+  # Require every non-meta/non-guardian agent to have at least one ownedPath
+  requireOwnedPaths: true
+
+  # Tags that exempt an agent from the requireOwnedPaths rule
+  metaAgentTags:
+    - meta
+    - guardian
+    - architect
+
+  # Warn if generated files diverge from what the registry would produce
+  enforceReproducibility: true
+
+createdAt: '2026-04-10T12:00:00.000Z'
+updatedAt: '2026-04-10T12:00:00.000Z'

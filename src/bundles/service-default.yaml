@@ -1,0 +1,55 @@
+id: service-default
+name: Service Default Bundle
+version: 1.0.0
+description: >
+  Standard set of agents for a backend service. Creates an owner, implementer,
+  reviewer, and tester — all scoped to the service's directory.
+
+  Use this when you have a distinct service with its own source tree, API
+  surface, or deployment unit.
+
+  Example: waffagent create-bundle --bundle service-default --scope core-service --dir services/core
+
+agents:
+  - idSuffix: owner
+    template: domain-owner
+    namePattern: "{{scope}} Owner"
+    descriptionPattern: "Primary decision-maker and architectural owner for the {{scope}} service."
+    ownedPathPatterns:
+      - "{{scopeDir}}/**"
+    tags:
+      - service
+      - owner
+
+  - idSuffix: implementer
+    template: implementer
+    namePattern: "{{scope}} Implementer"
+    descriptionPattern: "Implements features and fixes within the {{scope}} service."
+    ownedPathPatterns:
+      - "{{scopeDir}}/**"
+    tags:
+      - service
+      - implementer
+
+  - idSuffix: reviewer
+    template: reviewer
+    namePattern: "{{scope}} Reviewer"
+    descriptionPattern: "Reviews changes to the {{scope}} service for quality and correctness."
+    ownedPathPatterns:
+      - "{{scopeDir}}/**"
+    tags:
+      - service
+      - reviewer
+
+  - idSuffix: tester
+    template: tester
+    namePattern: "{{scope}} Tester"
+    descriptionPattern: "Owns test coverage strategy for the {{scope}} service."
+    ownedPathPatterns:
+      - "{{scopeDir}}/**"
+      - "{{scopeDir}}/**/__tests__/**"
+      - "{{scopeDir}}/**/*.test.*"
+      - "{{scopeDir}}/**/*.spec.*"
+    tags:
+      - service
+      - tester

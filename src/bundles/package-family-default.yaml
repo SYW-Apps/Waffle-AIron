@@ -1,0 +1,45 @@
+id: package-family-default
+name: Package Family Default Bundle
+version: 1.0.0
+description: >
+  Standard set of agents for a package family — a group of related packages
+  with shared concerns (e.g., network packages, database packages, wasm utilities).
+
+  Unlike a service, a package family may span multiple directories and does
+  not necessarily have a runtime boundary. The owner coordinates the family
+  as a whole; implementers and reviewers focus on specific packages within it.
+
+  Example: waffagent create-bundle --bundle package-family-default --scope network-packages --dir packages/network
+
+agents:
+  - idSuffix: owner
+    template: domain-owner
+    namePattern: "{{scope}} Owner"
+    descriptionPattern: >
+      Coordinates the {{scope}} package family. Ensures consistency,
+      shared patterns, and clear interfaces across all packages in the family.
+    ownedPathPatterns:
+      - "{{scopeDir}}/**"
+    tags:
+      - packages
+      - owner
+
+  - idSuffix: implementer
+    template: implementer
+    namePattern: "{{scope}} Implementer"
+    descriptionPattern: "Implements features, fixes, and improvements across the {{scope}} package family."
+    ownedPathPatterns:
+      - "{{scopeDir}}/**"
+    tags:
+      - packages
+      - implementer
+
+  - idSuffix: reviewer
+    template: reviewer
+    namePattern: "{{scope}} Reviewer"
+    descriptionPattern: "Reviews changes within the {{scope}} package family for quality and API consistency."
+    ownedPathPatterns:
+      - "{{scopeDir}}/**"
+    tags:
+      - packages
+      - reviewer

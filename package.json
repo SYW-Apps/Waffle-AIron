@@ -1,0 +1,63 @@
+{
+  "name": "waffagent",
+  "version": "0.1.0",
+  "description": "SYW Waffler Agents — CLI for managing AI coding agent topology across projects",
+  "keywords": [
+    "ai",
+    "agents",
+    "cli",
+    "topology",
+    "claude",
+    "gemini",
+    "developer-tools"
+  ],
+  "author": "SYW",
+  "license": "MIT",
+  "homepage": "https://github.com/syw/waffagent",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/syw/waffagent.git"
+  },
+  "type": "commonjs",
+  "bin": {
+    "waffagent": "./dist/cli/index.js"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "dev": "tsx src/cli/index.ts",
+    "build": "tsup && node -e \"const fs=require('fs'); fs.cpSync('src/templates','dist/templates',{recursive:true}); fs.cpSync('src/bundles','dist/bundles',{recursive:true});\"",
+    "build:watch": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src --ext .ts",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "chalk": "^4.1.2",
+    "commander": "^12.1.0",
+    "inquirer": "^8.2.6",
+    "js-yaml": "^4.1.0",
+    "ora": "^5.4.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/inquirer": "^8.2.10",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.14.0",
+    "@vitest/coverage-v8": "^1.6.0",
+    "rimraf": "^5.0.7",
+    "tsup": "^8.1.0",
+    "tsx": "^4.15.7",
+    "typescript": "^5.5.2",
+    "vitest": "^1.6.0"
+  }
+}
