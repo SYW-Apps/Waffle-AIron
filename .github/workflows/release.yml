@@ -13,31 +13,26 @@ jobs:
     strategy:
       matrix:
         include:
-          # Windows x64
           - os: windows-latest
             target: windows-x64
             pkg_target: node20-win-x64
             asset_ext: .zip
 
-          # Linux x64
           - os: ubuntu-latest
             target: linux-x64
             pkg_target: node20-linux-x64
             asset_ext: .tar.gz
 
-          # Linux ARM64
           - os: ubuntu-latest
             target: linux-arm64
             pkg_target: node20-linux-arm64
             asset_ext: .tar.gz
 
-          # macOS x64
           - os: macos-13
             target: macos-x64
             pkg_target: node20-macos-x64
             asset_ext: .tar.gz
 
-          # macOS ARM64 (Apple Silicon)
           - os: macos-latest
             target: macos-arm64
             pkg_target: node20-macos-arm64
@@ -55,42 +50,55 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build TypeScript
+      - name: Build TypeScript + copy assets
         run: npm run build
-
-      - name: Install pkg
-        run: npm install -g @yao-pkg/pkg
 
       - name: Build binary (${{ matrix.target }})
         run: |
-          pkg dist/cli/index.js \
+          npx --yes @yao-pkg/pkg dist/cli/index.js \
             --target ${{ matrix.pkg_target }} \
             --output waffagent \
-            --compress GZip
+            --compress GZip \
+            --config package.json
 
       - name: Get version from tag
         id: version
         shell: bash
         run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
 
+      - name: Detect pre-release
+        id: prerelease
+        shell: bash
+        run: |
+          if echo "${GITHUB_REF_NAME}" | grep -qE '\-(beta|preview)\.[0-9]+$'; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Package (Unix tar.gz)
         if: matrix.asset_ext == '.tar.gz'
+        shell: bash
         run: |
-          mv waffagent waffagent-bin
-          mkdir waffagent-pkg
-          mv waffagent-bin waffagent-pkg/waffagent
+          mkdir -p waffagent-pkg
+          # pkg on Linux/macOS outputs just "waffagent" (no extension)
+          cp waffagent waffagent-pkg/waffagent 2>/dev/null || cp waffagent-bin waffagent-pkg/waffagent
           chmod +x waffagent-pkg/waffagent
-          tar -czf waffagent-${{ steps.version.outputs.version }}-${{ matrix.target }}.tar.gz -C waffagent-pkg waffagent
+          tar -czf waffagent-${{ steps.version.outputs.version }}-${{ matrix.target }}.tar.gz \
+            -C waffagent-pkg waffagent
 
       - name: Package (Windows zip)
         if: matrix.asset_ext == '.zip'
         shell: pwsh
         run: |
-          Rename-Item -Path "waffagent.exe" -NewName "waffagent-bin.exe" -ErrorAction SilentlyContinue
-          if (!(Test-Path "waffagent-bin.exe")) { Rename-Item "waffagent" "waffagent-bin.exe" }
-          New-Item -ItemType Directory -Path waffagent-pkg
-          Copy-Item "waffagent-bin.exe" "waffagent-pkg\waffagent.exe"
-          Compress-Archive -Path "waffagent-pkg\waffagent.exe" -DestinationPath "waffagent-${{ steps.version.outputs.version }}-${{ matrix.target }}.zip"
+          New-Item -ItemType Directory -Path waffagent-pkg -Force
+          # pkg on Windows outputs "waffagent.exe"
+          Copy-Item "waffagent.exe" "waffagent-pkg\waffagent.exe" -ErrorAction SilentlyContinue
+          if (!(Test-Path "waffagent-pkg\waffagent.exe")) {
+            Copy-Item "waffagent" "waffagent-pkg\waffagent.exe"
+          }
+          Compress-Archive -Path "waffagent-pkg\waffagent.exe" `
+            -DestinationPath "waffagent-${{ steps.version.outputs.version }}-${{ matrix.target }}.zip" -Force
 
       - name: Generate checksum (Unix)
         if: matrix.asset_ext == '.tar.gz'
@@ -102,8 +110,9 @@ jobs:
         if: matrix.asset_ext == '.zip'
         shell: pwsh
         run: |
-          $hash = (Get-FileHash "waffagent-${{ steps.version.outputs.version }}-${{ matrix.target }}.zip" -Algorithm SHA256).Hash.ToLower()
-          "$hash  waffagent-${{ steps.version.outputs.version }}-${{ matrix.target }}.zip" | Out-File -FilePath "waffagent-${{ steps.version.outputs.version }}-${{ matrix.target }}.zip.sha256" -Encoding utf8
+          $file = "waffagent-${{ steps.version.outputs.version }}-${{ matrix.target }}.zip"
+          $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLower()
+          "$hash  $file" | Out-File -FilePath "$file.sha256" -Encoding utf8NoBOM
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -128,19 +137,26 @@ jobs:
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
 
+      - name: Detect pre-release
+        id: prerelease
+        run: |
+          if echo "${GITHUB_REF_NAME}" | grep -qE '\-(beta|preview)\.[0-9]+$'; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
           merge-multiple: true
 
-      - name: List artifacts
-        run: ls -R artifacts/
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: "waffagent ${{ github.ref_name }}"
+          prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
           generate_release_notes: true
           files: |
             artifacts/**/*.tar.gz

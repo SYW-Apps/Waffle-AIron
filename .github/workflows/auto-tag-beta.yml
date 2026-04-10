@@ -1,0 +1,81 @@
+name: Auto Tag (Beta)
+
+on:
+  push:
+    branches: [beta]
+
+jobs:
+  tag:
+    name: Bump beta version and tag
+    runs-on: ubuntu-latest
+    if: "!startsWith(github.event.head_commit.message, 'chore: release v')"
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Compute next beta version
+        id: version
+        run: |
+          CURRENT=$(node -p "require('./package.json').version")
+          echo "Current version: $CURRENT"
+
+          # Strip any existing pre-release suffix to get the base semver
+          BASE=$(echo "$CURRENT" | sed 's/-.*$//')
+
+          # Check if current version already has a -beta.N suffix
+          if echo "$CURRENT" | grep -qE '\-beta\.[0-9]+$'; then
+            # Increment the beta counter
+            N=$(echo "$CURRENT" | sed 's/.*-beta\.//')
+            NEXT_N=$((N + 1))
+            NEW_VERSION="${BASE}-beta.${NEXT_N}"
+          else
+            # First beta from this base — check commit for bump hints
+            MSG="${{ github.event.head_commit.message }}"
+            IFS='.' read -r MAJ MIN PAT <<< "$BASE"
+            if echo "$MSG" | grep -q '\[major\]'; then
+              MAJ=$((MAJ + 1)); MIN=0; PAT=0
+            elif echo "$MSG" | grep -q '\[minor\]'; then
+              MIN=$((MIN + 1)); PAT=0
+            else
+              PAT=$((PAT + 1))
+            fi
+            NEW_VERSION="${MAJ}.${MIN}.${PAT}-beta.1"
+          fi
+
+          echo "new_version=v${NEW_VERSION}" >> $GITHUB_OUTPUT
+          echo "new_version_plain=${NEW_VERSION}" >> $GITHUB_OUTPUT
+          echo "Next version: v${NEW_VERSION}"
+
+      - name: Update package.json and defaults.ts
+        run: |
+          VERSION_PLAIN=${{ steps.version.outputs.new_version_plain }}
+          # Update package.json version field
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json','utf-8'));
+            pkg.version = '${VERSION_PLAIN}';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+          # Update WAFFAGENT_VERSION in defaults.ts
+          sed -i "s/export const WAFFAGENT_VERSION = '[^']*'/export const WAFFAGENT_VERSION = '${VERSION_PLAIN}'/" src/config/defaults.ts
+
+      - name: Commit and tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json src/config/defaults.ts
+          git commit -m "chore: release ${{ steps.version.outputs.new_version }}"
+          git tag ${{ steps.version.outputs.new_version }}
+          git push origin beta --tags

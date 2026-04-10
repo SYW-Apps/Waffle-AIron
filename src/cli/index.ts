@@ -197,9 +197,10 @@ domainsCmd
 program
   .command('update')
   .description('Check for a newer version and update the binary')
-  .option('--check', 'check for updates without installing')
+  .option('--check', 'check for updates without installing (exit 1 if update available)')
+  .option('--channel <channel>', 'set update channel: stable (default), beta, or preview')
   .action(async (opts) => {
-    await runUpdate({ check: opts.check });
+    await runUpdate({ check: opts.check, channel: opts.channel });
   });
 
 // ---------------------------------------------------------------------------
