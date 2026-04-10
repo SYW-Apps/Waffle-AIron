@@ -12,6 +12,8 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+.claude/
+.gemini/
 
 # Test outputs
 .vitest/

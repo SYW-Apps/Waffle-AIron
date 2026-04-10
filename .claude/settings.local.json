@@ -4,7 +4,8 @@
       "Bash(npx tsc:*)",
       "Bash(npx vitest:*)",
       "Bash(npm run:*)",
-      "Bash(node dist/cli/index.js --help)"
+      "Bash(node dist/cli/index.js --help)",
+      "Bash(npm install:*)"
     ]
   }
 }
