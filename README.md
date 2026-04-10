@@ -60,30 +60,124 @@ waffagent gives you:
 
 ## Installation
 
-### Local development
+### Binary install (recommended)
+
+No Node.js required — downloads a self-contained binary for your platform.
+
+**Windows** (PowerShell):
+```powershell
+irm https://raw.githubusercontent.com/SYW-Apps/waffagent/main/install.ps1 | iex
+```
+
+**macOS / Linux** (bash/sh):
+```sh
+curl -fsSL https://raw.githubusercontent.com/SYW-Apps/waffagent/main/install.sh | sh
+```
+
+Both scripts:
+- Detect your OS and architecture (x64 / arm64)
+- Download the matching binary from the latest GitHub release
+- Install to `~/.local/bin` (Unix) or `%LOCALAPPDATA%\waffagent\bin` (Windows)
+- Add that directory to your PATH if it isn't already
+- Create the `wagent` short alias automatically (see [Aliases](#aliases))
+
+To install to a custom directory, set the environment variable before running:
 
 ```sh
-git clone https://github.com/syw/waffagent
+WAFFAGENT_INSTALL_DIR=/usr/local/bin curl -fsSL .../install.sh | sh
+```
+
+---
+
+### npm install
+
+If you already have Node.js 18+ installed:
+
+```sh
+npm install -g waffagent
+```
+
+Both `waffagent` and `wagent` are registered as bin entries — no extra steps needed.
+
+---
+
+### Local development / contributing
+
+```sh
+git clone https://github.com/SYW-Apps/waffagent
 cd waffagent
 npm install
 npm run build
 
-# Run locally:
+# Run from the build output:
 node dist/cli/index.js --help
 
-# Or link globally:
+# Or link globally so `waffagent` resolves from anywhere:
 npm link
 waffagent --help
 ```
 
-### Development mode (no build step)
+**Without a build step** (tsx, slower):
 
 ```sh
-npm install
-npx tsx src/cli/index.ts --help
-# or
 npm run dev -- --help
+# equivalent to: npx tsx src/cli/index.ts --help
 ```
+
+---
+
+### Updating
+
+```sh
+waffagent update          # check and install latest stable release
+waffagent update --check  # check only (exits 1 if an update is available)
+```
+
+#### Release channels
+
+| Channel | Tags | Description |
+|---------|------|-------------|
+| `stable` | `v1.2.3` | Default. Production-ready releases only. |
+| `beta` | `v1.2.3-beta.1` | Includes beta pre-releases for early testing. |
+| `preview` | `v1.2.3-preview.1` | Everything, including the earliest previews. |
+
+```sh
+# Switch to beta channel (persists in ~/.waffagent/config.json)
+waffagent update --channel beta
+
+# Switch back to stable
+waffagent update --channel stable
+```
+
+---
+
+### Aliases
+
+`wagent` is a built-in short alias for `waffagent`. Both commands are identical.
+
+```sh
+wagent init       # same as: waffagent init
+wagent generate   # same as: waffagent generate
+```
+
+**For binary installs**, the install script creates the alias automatically.
+If `wagent` is already used by another tool on your system, the script will
+skip creating it and warn you instead.
+
+Manage aliases at any time:
+
+```sh
+waffagent aliases list              # show all aliases and their status
+waffagent aliases disable wagent    # remove the alias file; persists across updates
+waffagent aliases enable wagent     # re-create it (refuses if there's a conflict)
+```
+
+The `disable` preference is saved to `~/.waffagent/config.json` and survives
+reinstalls and updates — the install script will not re-create a disabled alias.
+
+**For npm installs**, both `waffagent` and `wagent` are always registered as bin
+entries by npm. The `aliases` command reports their status but npm manages the
+files, not waffagent.
 
 ---
 
@@ -189,20 +283,75 @@ The architect agent:
 
 ## CLI Reference
 
-| Command | Status | Description |
-|---------|--------|-------------|
-| `waffagent init` | ✅ | Initialize project, create `.ai/`, generate architect agent |
-| `waffagent generate` | ✅ | Regenerate all agent output files from registry |
-| `waffagent validate` | ✅ | Validate config and registry for errors/rule violations |
-| `waffagent list` | ✅ | List all agents in the registry |
-| `waffagent create-agent` | 🔜 Phase 2 | Interactively create an agent from a template |
-| `waffagent create-bundle` | 🔜 Phase 2 | Scaffold agents from a bundle |
-| `waffagent analyze` | 🔜 Phase 3 | Analyze repo for topology coverage |
-| `waffagent suggest-topology` | 🔜 Phase 3 | Suggest topology improvements |
-| `waffagent split` | 🔜 Phase 4 | Split an agent into two |
-| `waffagent merge` | 🔜 Phase 4 | Merge two agents into one |
+### Project
 
-See [docs/cli.md](docs/cli.md) for full options.
+| Command | Description |
+|---------|-------------|
+| `waffagent init` | Initialize project — create `.ai/`, generate architect agent, detect domains |
+| `waffagent generate [--target] [--dry-run]` | Regenerate all agent output files from registry |
+| `waffagent validate` | Validate config and registry for errors/rule violations |
+| `waffagent list` | List all agents in the registry |
+
+### Domains
+
+Domains are git submodules, nested repos, or package roots that get their own
+local agent files.
+
+| Command | Description |
+|---------|-------------|
+| `waffagent domains list` | Show all tracked domains as a tree |
+| `waffagent domains scan [--add]` | Detect untracked domain candidates; `--add` to interactively add them |
+| `waffagent domains add [--path] [--id]` | Manually register a domain by path |
+| `waffagent domains remove <id>` | Remove a domain from the registry |
+
+### Delegation
+
+Spawn an AI session in a domain's directory with a scoped task.
+
+| Command | Description |
+|---------|-------------|
+| `waffagent delegate <domain-id> -p "task"` | Start an AI session in the domain directory |
+| `waffagent delegate ... --async` | Write a job file and return immediately (no session spawned) |
+| `waffagent delegate ... --backend gemini` | Use Gemini CLI instead of Claude |
+| `waffagent delegate ... --backend ollama --model codellama:13b` | Use a local model |
+
+### Jobs
+
+Inspect the history of delegated tasks.
+
+| Command | Description |
+|---------|-------------|
+| `waffagent jobs list [--domain] [--status]` | List jobs with optional filters |
+| `waffagent jobs show <job-id>` | Show full details and result for a job |
+| `waffagent jobs clean [--all]` | Remove completed/failed/abandoned jobs |
+
+### Tooling
+
+| Command | Description |
+|---------|-------------|
+| `waffagent update [--check] [--channel]` | Check and install latest release; optionally switch channel |
+| `waffagent aliases list` | Show all command aliases and their status |
+| `waffagent aliases enable <name>` | Create alias symlink / wrapper |
+| `waffagent aliases disable <name>` | Remove alias and opt out of future re-creation |
+
+### Planned (not yet implemented)
+
+| Command | Phase | Description |
+|---------|-------|-------------|
+| `waffagent create-agent` | 2 | Interactively create an agent from a template |
+| `waffagent create-bundle` | 2 | Scaffold a set of agents from a bundle |
+| `waffagent analyze` | 3 | Analyze repo for topology coverage gaps |
+| `waffagent suggest-topology` | 3 | Suggest topology improvements |
+| `waffagent split` | 4 | Split an agent into two more focused agents |
+| `waffagent merge` | 4 | Merge two agents into one |
+
+### Global flags
+
+```
+--verbose   enable verbose output
+--silent    suppress all output except errors
+-v          print version
+```
 
 ---
 
