@@ -5,6 +5,9 @@ import { WAFFAGENT_VERSION } from '../config/defaults.js';
 import { logger, setLogLevel } from '../utils/logger.js';
 import { WaffagentError } from '../utils/errors.js';
 import {
+  runAliasesList,
+  runAliasesEnable,
+  runAliasesDisable,
   runInit,
   runGenerate,
   runValidate,
@@ -191,15 +194,46 @@ domainsCmd
   });
 
 // ---------------------------------------------------------------------------
+// aliases
+// ---------------------------------------------------------------------------
+
+const aliasesCmd = program
+  .command('aliases')
+  .description('Manage short command aliases (wagent, …)');
+
+aliasesCmd
+  .command('list')
+  .alias('ls')
+  .description('Show all supported aliases and their current status')
+  .action(async () => {
+    await runAliasesList();
+  });
+
+aliasesCmd
+  .command('enable <name>')
+  .description('Enable an alias (creates symlink or .cmd wrapper in the install dir)')
+  .action(async (name: string) => {
+    await runAliasesEnable(name);
+  });
+
+aliasesCmd
+  .command('disable <name>')
+  .description('Disable an alias and remove its file from the install dir')
+  .action(async (name: string) => {
+    await runAliasesDisable(name);
+  });
+
+// ---------------------------------------------------------------------------
 // update
 // ---------------------------------------------------------------------------
 
 program
   .command('update')
   .description('Check for a newer version and update the binary')
-  .option('--check', 'check for updates without installing')
+  .option('--check', 'check for updates without installing (exit 1 if update available)')
+  .option('--channel <channel>', 'set update channel: stable (default), beta, or preview')
   .action(async (opts) => {
-    await runUpdate({ check: opts.check });
+    await runUpdate({ check: opts.check, channel: opts.channel });
   });
 
 // ---------------------------------------------------------------------------

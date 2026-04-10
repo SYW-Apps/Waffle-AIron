@@ -1,3 +1,4 @@
+export * from './aliases.js';
 export * from './delegate.js';
 export * from './domains.js';
 export * from './generate.js';
