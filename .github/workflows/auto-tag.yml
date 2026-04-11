@@ -4,11 +4,18 @@ on:
   push:
     branches: [main]
 
+# Only one auto-tag run at a time. If a second push lands while one is
+# already running, queue it rather than cancelling — we want every push
+# to eventually get a version bump.
+concurrency:
+  group: auto-tag-main
+  cancel-in-progress: false
+
 jobs:
   tag:
     name: Bump version and tag
     runs-on: ubuntu-latest
-    # Only run when not triggered by the bot itself
+    # Skip commits that the bot itself pushed (the release bump commits)
     if: "!startsWith(github.event.head_commit.message, 'chore: release v')"
 
     permissions:
@@ -25,6 +32,13 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+
+      # Pull the latest state of main so we always start from the
+      # most recently committed package.json, not the version at the
+      # time the trigger fired (which may be stale if a concurrent run
+      # already bumped it).
+      - name: Pull latest main
+        run: git pull --rebase origin main
 
       - name: Determine version bump
         id: bump
@@ -46,14 +60,25 @@ jobs:
           echo "new_version=${NEW_VERSION}" >> $GITHUB_OUTPUT
           echo "Bumped to ${NEW_VERSION}"
 
+      - name: Check tag does not already exist
+        run: |
+          TAG=${{ steps.version.outputs.new_version }}
+          if git tag -l "$TAG" | grep -q "$TAG"; then
+            echo "Tag $TAG already exists — skipping release."
+            echo "skip=true" >> $GITHUB_ENV
+          else
+            echo "skip=false" >> $GITHUB_ENV
+          fi
+
       - name: Update WAIRON_VERSION in defaults.ts
+        if: env.skip == 'false'
         run: |
           VERSION=${{ steps.version.outputs.new_version }}
-          # Strip leading 'v'
           VERSION=${VERSION#v}
           sed -i "s/export const WAIRON_VERSION = '[^']*'/export const WAIRON_VERSION = '${VERSION}'/" src/config/defaults.ts
 
       - name: Commit and tag
+        if: env.skip == 'false'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
