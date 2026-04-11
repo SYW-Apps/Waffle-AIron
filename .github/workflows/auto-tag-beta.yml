@@ -106,4 +106,5 @@ jobs:
           git add package.json src/config/defaults.ts
           git commit -m "chore: release ${{ steps.version.outputs.new_version }}"
           git tag ${{ steps.version.outputs.new_version }}
-          git push origin beta --tags
+          git push origin beta
+          git push origin ${{ steps.version.outputs.new_version }}
