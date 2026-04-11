@@ -28,7 +28,7 @@ jobs:
             pkg_target: node20-linux-arm64
             asset_ext: .tar.gz
 
-          - os: macos-13
+          - os: macos-latest
             target: macos-x64
             pkg_target: node20-macos-x64
             asset_ext: .tar.gz
@@ -54,6 +54,7 @@ jobs:
         run: npm run build
 
       - name: Build binary (${{ matrix.target }})
+        shell: bash
         run: |
           npx --yes @yao-pkg/pkg dist/cli/index.js \
             --target ${{ matrix.pkg_target }} \
