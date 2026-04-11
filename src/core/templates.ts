@@ -10,7 +10,7 @@ import { globalTemplatesDir as resolveGlobalDir } from '../config/defaults.js';
 // Template loader
 //
 // Three-tier resolution order (first match wins):
-//   1. Project-local:  .ai/templates/<id>.yaml
+//   1. Project-local:  .wai/templates/<id>.yaml
 //   2. Global user/org: WAIRON_TEMPLATES_DIR | ~/.wairon/templates/<id>.yaml
 //   3. Built-in:        <package>/dist/templates/<id>.yaml
 //

@@ -7,7 +7,7 @@
 ## Goals
 
 1. **Single source of truth** — every project using waffagent has one canonical place
-   (`.ai/`) where agent topology is defined. Generated agent files in
+   (`.wai/`) where agent topology is defined. Generated agent files in
    `.claude/agents/`, `.gemini/agents/`, etc. are outputs, not inputs.
 
 2. **Multi-tool support** — generate agent definitions for Claude Code, Gemini CLI,
@@ -51,7 +51,7 @@
 - `waffagent generate` — regenerate all agent output files from the registry
 - `waffagent validate` — validate project config and registry for errors
 - `waffagent list` — list all agents in the registry
-- `.ai/` source-of-truth directory structure
+- `.wai/` source-of-truth directory structure
 - `project.yaml` config with schema validation (Zod)
 - `agents.json` registry with schema validation (Zod)
 - Built-in templates: architect, domain-owner, implementer, reviewer, tester, guardian
@@ -129,7 +129,7 @@
 ## Assumptions
 
 - Users run the CLI from the root of their project.
-- `.ai/` is committed to version control.
+- `.wai/` is committed to version control.
 - Generated files (`.claude/agents/`, etc.) may or may not be committed — this is
   the user's choice. The tool regenerates them on demand.
 - Node.js 18+ is available in the target environment.

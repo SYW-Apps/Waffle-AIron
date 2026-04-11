@@ -22,11 +22,11 @@ Templates are the building blocks. The registry holds the instances.
 
 Templates are resolved in this order (first match wins):
 
-1. **Project-local override**: `.ai/templates/<id>.yaml`
+1. **Project-local override**: `.wai/templates/<id>.yaml`
 2. **Built-in**: `<waffagent package>/src/templates/<id>.yaml`
 
 This means you can override any built-in template by placing a file with the
-same id in `.ai/templates/`. Your override is only applied to this project — it
+same id in `.wai/templates/`. Your override is only applied to this project — it
 does not affect other projects using waffagent.
 
 ---
@@ -116,7 +116,7 @@ A cross-cutting agent that enforces a specific concern across the project
 
 ## Creating a Project-Local Template
 
-1. Create `.ai/templates/<your-id>.yaml`
+1. Create `.wai/templates/<your-id>.yaml`
 2. Follow the YAML format above
 3. Run `waffagent validate` to check for issues
 

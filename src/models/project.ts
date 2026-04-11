@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { CustomTargetSchema } from './agent.js';
 
 // ---------------------------------------------------------------------------
-// Project configuration — lives at .ai/project.yaml
+// Project configuration — lives at .wai/project.yaml
 //
 // This is the primary project-level config. It is human-edited and defines
 // which output targets are active, project metadata, and high-level rules.

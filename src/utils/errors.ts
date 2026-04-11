@@ -10,7 +10,7 @@ export class WaironError extends Error {
 }
 
 /**
- * Thrown when the project has not been initialized (.ai/ directory missing).
+ * Thrown when the project has not been initialized (.wai/ directory missing).
  */
 export class ProjectNotInitializedError extends WaironError {
   constructor() {

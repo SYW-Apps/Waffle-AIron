@@ -9,7 +9,7 @@ import { AI_PATHS } from '../config/loader.js';
 // Bundle loader
 //
 // Resolution order (same as templates):
-//   1. Project-local: .ai/bundles/<id>.yaml
+//   1. Project-local: .wai/bundles/<id>.yaml
 //   2. Built-in:      <package>/src/bundles/<id>.yaml
 // ---------------------------------------------------------------------------
 

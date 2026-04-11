@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { AgentRecordSchema } from './agent.js';
 
 // ---------------------------------------------------------------------------
-// Registry — lives at .ai/registry/agents.json
+// Registry — lives at .wai/registry/agents.json
 //
 // The registry is the authoritative list of all agents defined for this project.
 // It is managed programmatically by the CLI and should not be edited by hand

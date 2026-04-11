@@ -22,11 +22,11 @@
 Initialize waffagent in the current project directory.
 
 **Creates:**
-- `.ai/` — source-of-truth directory
-- `.ai/project.yaml` — project config
-- `.ai/registry/agents.json` — agent registry (initially contains only the architect agent)
-- `.ai/rules/topology.yaml` — topology rules
-- `.ai/docs/topology.md` — starter topology notes
+- `.wai/` — source-of-truth directory
+- `.wai/project.yaml` — project config
+- `.wai/registry/agents.json` — agent registry (initially contains only the architect agent)
+- `.wai/rules/topology.yaml` — topology rules
+- `.wai/docs/topology.md` — starter topology notes
 - `<target>/agent-architect.md` — architect agent for each selected target
 
 **Options:**
@@ -114,7 +114,7 @@ Agents (3)
 
 agent-architect [architect] active
   Responsible for managing the AI agent topology of this project.
-  owns: .ai/**
+  owns: .wai/**
   tags: meta, architect
   targets: claude
 
@@ -178,4 +178,4 @@ waffagent always runs in the **current working directory**. Run it from your
 project root.
 
 There are no environment variables, global config files, or daemon processes.
-All state is in `.ai/` inside the project.
+All state is in `.wai/` inside the project.

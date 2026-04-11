@@ -6,11 +6,11 @@ import { z } from 'zod';
 // Jobs are the file-based handoff protocol between agent sessions.
 // A parent agent (or user) creates a job; a child agent in the target domain
 // executes it and writes the result. The protocol is async-capable and
-// creates a full audit trail in .ai/jobs/.
+// creates a full audit trail in .wai/jobs/.
 //
 // File locations:
-//   Job:    .ai/jobs/<job-id>.yaml       (written by delegator)
-//   Result: .ai/jobs/<job-id>.result.yaml (written by sub-agent)
+//   Job:    .wai/jobs/<job-id>.yaml       (written by delegator)
+//   Result: .wai/jobs/<job-id>.result.yaml (written by sub-agent)
 // ---------------------------------------------------------------------------
 
 export const JobStatusSchema = z.enum([

@@ -40,7 +40,7 @@ const program = new Command();
 
 program
   .name('wairon')
-  .description('SYW Waffler Agents — manage AI coding agent topology across projects')
+  .description('SYW Waffle AIron — manage AI coding agent topology across projects')
   .version(WAIRON_VERSION, '-v, --version')
   .option('--verbose', 'enable verbose output')
   .option('--silent', 'suppress all output except errors')

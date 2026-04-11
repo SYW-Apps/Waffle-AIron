@@ -4,7 +4,7 @@ import { z } from 'zod';
 // Template definition — a reusable agent shape
 //
 // Templates live both as built-in files shipped with the CLI (src/templates/)
-// and as project-local overrides (.ai/templates/).
+// and as project-local overrides (.wai/templates/).
 //
 // Project-local templates take precedence over built-ins.
 // ---------------------------------------------------------------------------

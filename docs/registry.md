@@ -131,7 +131,7 @@ but possible for power users. If you edit it manually:
 
 ## Registry + Version Control
 
-Commit `.ai/registry/agents.json` to version control. This gives you:
+Commit `.wai/registry/agents.json` to version control. This gives you:
 - A full history of topology changes
 - The ability to diff topology between branches
 - Reproducible output generation on any checkout

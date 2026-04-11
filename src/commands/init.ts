@@ -25,7 +25,7 @@ import { CustomExporter } from '../exporters/custom.js';
 // init command
 //
 // Bootstraps a new wairon project in the current directory.
-// Creates the .ai/ source-of-truth structure, asks which targets to enable,
+// Creates the .wai/ source-of-truth structure, asks which targets to enable,
 // and generates the initial architect agent into all selected targets.
 // ---------------------------------------------------------------------------
 
@@ -154,11 +154,11 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
   };
 
   // ------------------------------------------------------------------
-  // 3. Scaffold the .ai/ directory
+  // 3. Scaffold the .wai/ directory
   // ------------------------------------------------------------------
 
   logger.blank();
-  logger.info('Creating .ai/ project structure...');
+  logger.info('Creating .wai/ project structure...');
 
   ensureDir(AI_PATHS.root());
   ensureDir(AI_PATHS.registryDir());
@@ -206,7 +206,7 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
     description:
       'Responsible for managing the AI agent topology of this project using the wairon CLI.',
     template: ARCHITECT_TEMPLATE_ID,
-    ownedPaths: ['.ai/**'],
+    ownedPaths: ['.wai/**'],
     tags: ['meta', 'architect'],
     creationReason: 'Bootstrapped by wairon init as the root agent for topology management.',
     targets: activeTargets as AgentRecord['targets'],
@@ -262,7 +262,7 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
   }
 
   // ------------------------------------------------------------------
-  // 7. Write starter docs into .ai/docs/
+  // 7. Write starter docs into .wai/docs/
   // ------------------------------------------------------------------
 
   writeStarterDocs(projectName);
@@ -294,13 +294,13 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
   logger.success(`Project "${projectName}" initialized.`);
   logger.blank();
   logger.info('What was created:');
-  logger.info('  .ai/               — source of truth for agent topology');
-  logger.info('  .ai/project.yaml   — project config (edit to change targets/rules)');
-  logger.info('  .ai/registry/      — agent registry (managed by CLI)');
-  logger.info('  .ai/templates/     — project-local template overrides');
-  logger.info('  .ai/bundles/       — project-local bundle definitions');
-  logger.info('  .ai/rules/         — topology rules');
-  logger.info('  .ai/docs/          — project-level topology notes');
+  logger.info('  .wai/               — source of truth for agent topology');
+  logger.info('  .wai/project.yaml   — project config (edit to change targets/rules)');
+  logger.info('  .wai/registry/      — agent registry (managed by CLI)');
+  logger.info('  .wai/templates/     — project-local template overrides');
+  logger.info('  .wai/bundles/       — project-local bundle definitions');
+  logger.info('  .wai/rules/         — topology rules');
+  logger.info('  .wai/docs/          — project-level topology notes');
   logger.blank();
   logger.info('Next steps:');
   logger.info('  wairon validate      — check the current topology');

@@ -8,8 +8,8 @@ import { WaironError } from '../utils/errors.js';
 // ---------------------------------------------------------------------------
 // Job file management
 //
-// Jobs live at:  .ai/jobs/<job-id>.yaml
-// Results live at: .ai/jobs/<job-id>.result.yaml
+// Jobs live at:  .wai/jobs/<job-id>.yaml
+// Results live at: .wai/jobs/<job-id>.result.yaml
 // ---------------------------------------------------------------------------
 
 function jobFilePath(jobId: string): string {
