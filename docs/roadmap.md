@@ -1,4 +1,4 @@
-# waffagent — Roadmap
+# wairon — Roadmap
 
 > Last updated: 2026-04-10
 
@@ -13,10 +13,10 @@
 - [x] `.ai/` source-of-truth directory structure
 - [x] `project.yaml` config with schema validation
 - [x] `agents.json` registry with schema validation
-- [x] `waffagent init` — interactive project initialization
-- [x] `waffagent generate` — regenerate all agent output files
-- [x] `waffagent validate` — validate config and registry
-- [x] `waffagent list` — list all agents
+- [x] `wairon init` — interactive project initialization
+- [x] `wairon generate` — regenerate all agent output files
+- [x] `wairon validate` — validate config and registry
+- [x] `wairon list` — list all agents
 - [x] Built-in templates: architect, domain-owner, implementer, reviewer, tester, guardian
 - [x] Built-in bundles: service-default, package-family-default
 - [x] Claude Code exporter
@@ -33,32 +33,32 @@
 **Goal:** Make it easy to add agents and bundles through guided CLI flows.
 
 ### Planned
-- [ ] `waffagent create-agent` — interactive agent creation from a template
+- [ ] `wairon create-agent` — interactive agent creation from a template
   - Prompt for: id, name, template, owned paths, tags, targets
   - Write to registry immediately
   - Optionally generate right away
-- [ ] `waffagent create-bundle` — scaffold multiple agents from a bundle
+- [ ] `wairon create-bundle` — scaffold multiple agents from a bundle
   - Prompt for: bundle id, scope name, scope directory
   - Expand bundle spec into registry entries
   - Support `--dry-run` to preview before writing
 - [ ] Diff-aware generation — only update files where the agent or template changed
 - [ ] Full glob-based ownership overlap detection (not just exact-match)
-- [ ] `waffagent show <agent-id>` — display full details of a single agent
-- [ ] `waffagent templates list` — list all available templates
-- [ ] `waffagent bundles list` — list all available bundles
+- [x] `wairon show <agent-id>` — display full details of a single agent
+- [x] `wairon templates list` — list all available templates
+- [x] `wairon bundles list` — list all available bundles
 
 ---
 
 ## Phase 3: Topology Analysis (v0.3)
 
-**Goal:** Let waffagent analyze the repository and surface topology gaps.
+**Goal:** Let wairon analyze the repository and surface topology gaps.
 
 ### Planned
-- [ ] `waffagent analyze` — walk repo, report coverage vs agent ownership
+- [ ] `wairon analyze` — walk repo, report coverage vs agent ownership
   - Which paths have no owning agent?
   - Which agents have overlapping or redundant ownership?
   - Which agents are drafts or deprecated but still generating files?
-- [ ] `waffagent suggest-topology` — propose new agents or path rebalancing
+- [ ] `wairon suggest-topology` — propose new agents or path rebalancing
   - Output: human-readable suggestions (not auto-applied)
   - Suggest bundle use when a scope has no agent family
 - [ ] Coverage report: percentage of repo paths with an owning agent
@@ -71,40 +71,40 @@
 **Goal:** Guided refactoring of agent topology as projects evolve.
 
 ### Planned
-- [ ] `waffagent split <agent-id>` — guided agent splitting into two or more agents
+- [ ] `wairon split <agent-id>` — guided agent splitting into two or more agents
   - Prompt for new ids, names, path reassignment
   - Update registry, deprecate original, generate new outputs
-- [ ] `waffagent merge <id1> <id2>` — guided agent merging
+- [ ] `wairon merge <id1> <id2>` — guided agent merging
   - Prompt for merged id, name, combined paths
   - Update registry, deprecate originals, generate merged output
 - [ ] Migration history in `.ai/docs/` (auto-generated log of topology changes)
-- [ ] `waffagent deprecate <agent-id>` — mark agent as deprecated without deleting
+- [ ] `wairon deprecate <agent-id>` — mark agent as deprecated without deleting
 
 ---
 
 ## Phase 5: MCP Server Wrapper (v0.5)
 
-**Goal:** Expose waffagent as an MCP tool so AI models can query and manage
+**Goal:** Expose wairon as an MCP tool so AI models can query and manage
 topology without manual CLI invocation.
 
 ### Planned
-- [ ] MCP server that wraps the waffagent library API (`src/index.ts`)
+- [ ] MCP server that wraps the wairon library API (`src/index.ts`)
 - [ ] Tools: `listAgents`, `getAgent`, `validateTopology`, `generateOutputs`
 - [ ] Stdio transport for local use with Claude Code / Gemini CLI
 - [ ] HTTP transport for CI/CD or remote use
-- [ ] Documentation for registering waffagent as an MCP server in `.claude/settings.json`
+- [ ] Documentation for registering wairon as an MCP server in `.claude/settings.json`
 
 ---
 
 ## Phase 6: Organization Scale (v0.6+)
 
-**Goal:** Support using waffagent across multiple projects and teams.
+**Goal:** Support using wairon across multiple projects and teams.
 
 ### Planned
 - [ ] Shared template/bundle library — reference templates from a remote URL or
   local path outside the project
 - [ ] Cross-project agent topology standards
-- [ ] CI integration: `waffagent validate --ci` exits 1 on any error
+- [ ] CI integration: `wairon validate --ci` exits 1 on any error
 - [ ] GitHub Actions example workflow
 - [ ] Agent topology diff reporting on PRs
 

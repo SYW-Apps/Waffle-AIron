@@ -12,6 +12,7 @@ import {
   runGenerate,
   runValidate,
   runList,
+  runShow,
   runDelegate,
   runJobsList,
   runJobsShow,
@@ -21,6 +22,8 @@ import {
   runDomainsAdd,
   runDomainsRemove,
   runUpdate,
+  runTemplatesList,
+  runBundlesList,
   runAnalyze,
   runSuggestTopology,
   runCreateAgent,
@@ -94,6 +97,49 @@ program
   .description('List all agents in the registry')
   .action(async () => {
     await runList();
+  });
+
+// ---------------------------------------------------------------------------
+// show
+// ---------------------------------------------------------------------------
+
+program
+  .command('show <agent-id>')
+  .description('Show full details of a single agent')
+  .action(async (agentId: string) => {
+    await runShow(agentId);
+  });
+
+// ---------------------------------------------------------------------------
+// templates
+// ---------------------------------------------------------------------------
+
+const templatesCmd = program
+  .command('templates')
+  .description('Manage and browse agent templates');
+
+templatesCmd
+  .command('list')
+  .alias('ls')
+  .description('List all available templates (built-in, global, project-local)')
+  .action(async () => {
+    await runTemplatesList();
+  });
+
+// ---------------------------------------------------------------------------
+// bundles
+// ---------------------------------------------------------------------------
+
+const bundlesCmd = program
+  .command('bundles')
+  .description('Manage and browse agent bundles');
+
+bundlesCmd
+  .command('list')
+  .alias('ls')
+  .description('List all available bundles (built-in + project-local)')
+  .action(async () => {
+    await runBundlesList();
   });
 
 // ---------------------------------------------------------------------------
