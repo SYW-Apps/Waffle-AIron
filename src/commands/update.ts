@@ -3,7 +3,7 @@ import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { execSync } from 'child_process';
+import { execSync, spawn } from 'child_process';
 import { logger } from '../utils/logger.js';
 import { WAIRON_VERSION, GITHUB_REPO } from '../config/defaults.js';
 import { getChannel, setChannel, UpdateChannel } from '../config/userconfig.js';
@@ -286,12 +286,14 @@ function installBinary(tmpFile: string, destPath: string): void {
   fs.mkdirSync(extractDir, { recursive: true });
 
   if (isZip) {
+    // Use ['ignore', 'pipe', 'pipe'] — piping stdin into PowerShell causes
+    // "Input redirection is not supported" on Windows PowerShell 5.x.
     execSync(
-      `powershell -Command "Expand-Archive -Path '${tmpFile}' -DestinationPath '${extractDir}' -Force"`,
-      { stdio: 'pipe' },
+      `powershell -NoProfile -NonInteractive -Command "Expand-Archive -Path '${tmpFile}' -DestinationPath '${extractDir}' -Force"`,
+      { stdio: ['ignore', 'pipe', 'pipe'] },
     );
   } else {
-    execSync(`tar -xzf "${tmpFile}" -C "${extractDir}"`, { stdio: 'pipe' });
+    execSync(`tar -xzf "${tmpFile}" -C "${extractDir}"`, { stdio: ['ignore', 'pipe', 'pipe'] });
   }
 
   const binaryName = platform === 'win32' ? 'wairon.exe' : 'wairon';
@@ -304,15 +306,25 @@ function installBinary(tmpFile: string, destPath: string): void {
   if (platform === 'win32') {
     const newPath = destPath + '.new';
     fs.copyFileSync(extractedBinary, newPath);
-    const batchScript = path.join(os.tmpdir(), 'wairon_update.bat');
-    fs.writeFileSync(
-      batchScript,
-      `@echo off\r\n` +
-      `timeout /t 2 /nobreak >nul\r\n` +
-      `move /y "${newPath}" "${destPath}"\r\n` +
-      `del "%~f0"\r\n`,
+
+    // Write a PowerShell script that waits for wairon.exe to exit, then
+    // swaps in the new binary. Single-quote paths; escape embedded quotes.
+    const psScript = path.join(os.tmpdir(), 'wairon_update.ps1');
+    const q = (p: string) => p.replace(/'/g, "''");
+    fs.writeFileSync(psScript, [
+      `Start-Sleep -Seconds 3`,
+      `Move-Item -Force '${q(newPath)}' '${q(destPath)}'`,
+      `Remove-Item -Force '${q(psScript)}' -ErrorAction SilentlyContinue`,
+    ].join('\r\n'), 'utf8');
+
+    // spawn() + detached + unref() keeps the child alive after wairon exits.
+    const child = spawn(
+      'powershell',
+      ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-File', psScript],
+      { detached: true, stdio: 'ignore', windowsHide: true },
     );
-    execSync(`cmd /c start /b "" cmd /c "${batchScript}"`);
+    child.unref();
+
     logger.info('Binary will be replaced after wairon exits.');
   } else {
     const tmpDest = destPath + '.new';
