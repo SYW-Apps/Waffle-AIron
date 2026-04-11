@@ -13,7 +13,7 @@ import {
 } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
-// Paths within the .ai/ directory
+// Paths within the .wai/ directory
 // ---------------------------------------------------------------------------
 
 export const AI_PATHS = {
@@ -51,7 +51,7 @@ export function assertProjectInitialized(): void {
 }
 
 /**
- * Load and validate the project config from .ai/project.yaml.
+ * Load and validate the project config from .wai/project.yaml.
  */
 export function loadProjectConfig(): ProjectConfig {
   assertProjectInitialized();
@@ -60,7 +60,7 @@ export function loadProjectConfig(): ProjectConfig {
 }
 
 /**
- * Write the project config to .ai/project.yaml.
+ * Write the project config to .wai/project.yaml.
  */
 export function saveProjectConfig(config: ProjectConfig): void {
   writeYamlFile(AI_PATHS.projectConfig(), config);
@@ -71,7 +71,7 @@ export function saveProjectConfig(config: ProjectConfig): void {
 // ---------------------------------------------------------------------------
 
 /**
- * Load and validate the agent registry from .ai/registry/agents.json.
+ * Load and validate the agent registry from .wai/registry/agents.json.
  * Returns an empty registry if the file doesn't exist yet.
  */
 export function loadRegistry(): Registry {
@@ -82,7 +82,7 @@ export function loadRegistry(): Registry {
 }
 
 /**
- * Write the agent registry to .ai/registry/agents.json.
+ * Write the agent registry to .wai/registry/agents.json.
  */
 export function saveRegistry(registry: Registry): void {
   registry.updatedAt = new Date().toISOString();
@@ -94,7 +94,7 @@ export function saveRegistry(registry: Registry): void {
 // ---------------------------------------------------------------------------
 
 /**
- * Load and validate the domain registry from .ai/registry/domains.json.
+ * Load and validate the domain registry from .wai/registry/domains.json.
  */
 export function loadDomainRegistry(): DomainRegistry {
   assertProjectInitialized();
@@ -104,7 +104,7 @@ export function loadDomainRegistry(): DomainRegistry {
 }
 
 /**
- * Write the domain registry to .ai/registry/domains.json.
+ * Write the domain registry to .wai/registry/domains.json.
  */
 export function saveDomainRegistry(registry: DomainRegistry): void {
   registry.updatedAt = new Date().toISOString();

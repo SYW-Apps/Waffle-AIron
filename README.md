@@ -12,10 +12,10 @@
 `wairon` is a CLI tool that manages the AI coding agent topology for your
 software projects. Instead of manually maintaining agent files for Claude Code,
 Gemini CLI, or other tools, you define your agents once in a structured
-**source of truth** (`.ai/`) and generate the tool-specific files from it.
+**source of truth** (`.wai/`) and generate the tool-specific files from it.
 
 ```
-.ai/ (source of truth)
+.wai/ (source of truth)
   └── project.yaml, registry/agents.json, templates/, bundles/
           │
           ▼  wairon generate
@@ -47,8 +47,8 @@ wairon gives you:
 
 | Concept | Description |
 |---------|-------------|
-| **Source of truth** | `.ai/` — the internal registry, templates, and config. Never edit generated files directly. |
-| **Agent Registry** | `.ai/registry/agents.json` — the authoritative list of all agents for this project. |
+| **Source of truth** | `.wai/` — the internal registry, templates, and config. Never edit generated files directly. |
+| **Agent Registry** | `.wai/registry/agents.json` — the authoritative list of all agents for this project. |
 | **Template** | A reusable agent shape (instructions, role, defaults). Built-ins: architect, domain-owner, implementer, reviewer, tester, guardian. |
 | **Bundle** | A recipe for creating multiple related agents for a scope. Built-ins: service-default, package-family-default. |
 | **Exporter** | Renders agent records into tool-specific files (Claude, Gemini, custom path). |
@@ -193,7 +193,7 @@ wairon init
 #   ◯ Other (custom path)
 
 # What gets created:
-# .ai/
+# .wai/
 #   project.yaml
 #   registry/agents.json
 #   rules/topology.yaml
@@ -219,7 +219,7 @@ After `wairon init` with Claude target selected:
 
 ```
 my-project/
-├── .ai/
+├── .wai/
 │   ├── project.yaml
 │   ├── registry/
 │   │   └── agents.json
@@ -237,7 +237,7 @@ my-project/
 After adding a service scope (once `create-bundle` is implemented):
 
 ```
-.ai/registry/agents.json        ← 5 agents now
+.wai/registry/agents.json        ← 5 agents now
 .claude/agents/
   agent-architect.md
   core-service-owner.md
@@ -248,7 +248,7 @@ After adding a service scope (once `create-bundle` is implemented):
 
 ---
 
-## `.ai/project.yaml` Format
+## `.wai/project.yaml` Format
 
 ```yaml
 schemaVersion: '1.0.0'
@@ -285,7 +285,7 @@ The architect agent:
 
 | Command | Description |
 |---------|-------------|
-| `wairon init` | Initialize project — create `.ai/`, generate architect agent, detect domains |
+| `wairon init` | Initialize project — create `.wai/`, generate architect agent, detect domains |
 | `wairon generate [--target] [--dry-run]` | Regenerate all agent output files from registry |
 | `wairon validate` | Validate config and registry for errors/rule violations |
 | `wairon list` | List all agents in the registry |

@@ -26,10 +26,10 @@ wrapper.
 
 ## Source-of-Truth First
 
-The `.ai/` directory is the canonical home for everything topology-related.
+The `.wai/` directory is the canonical home for everything topology-related.
 
 ```
-.ai/
+.wai/
 ├── project.yaml          # project config: targets, rules, metadata
 ├── registry/
 │   └── agents.json       # the full agent registry (CLI-managed)
@@ -43,7 +43,7 @@ The `.ai/` directory is the canonical home for everything topology-related.
 ```
 
 **Generated files are artifacts.** The files in `.claude/agents/`, `.gemini/agents/`,
-or any custom path are outputs that can always be regenerated from `.ai/`.
+or any custom path are outputs that can always be regenerated from `.wai/`.
 
 This distinction matters because:
 1. You can evolve tool-specific formats without losing your topology model
@@ -82,7 +82,7 @@ This distinction matters because:
 
 **models/** — pure data shapes with Zod schemas. No I/O, no business logic.
 
-**config/** — reads and writes `.ai/` files. The only layer that knows where
+**config/** — reads and writes `.wai/` files. The only layer that knows where
 files live on disk.
 
 **core/** — topology logic: template loading, bundle loading, registry mutations,
@@ -103,9 +103,9 @@ These three concepts are often confused. Here's the distinction:
 
 | Concept | What it is | Mutability | Lives at |
 |---------|-----------|------------|----------|
-| **Template** | A reusable agent shape (instructions, defaults) | Stable, rarely changes | `src/templates/` or `.ai/templates/` |
-| **Bundle** | A recipe for creating multiple related agents for a scope | Stable, occasionally evolves | `src/bundles/` or `.ai/bundles/` |
-| **Registry** | The actual agents in *this project*, with their specific ids, paths, and config | Changes as topology evolves | `.ai/registry/agents.json` |
+| **Template** | A reusable agent shape (instructions, defaults) | Stable, rarely changes | `src/templates/` or `.wai/templates/` |
+| **Bundle** | A recipe for creating multiple related agents for a scope | Stable, occasionally evolves | `src/bundles/` or `.wai/bundles/` |
+| **Registry** | The actual agents in *this project*, with their specific ids, paths, and config | Changes as topology evolves | `.wai/registry/agents.json` |
 
 **Example flow:**
 
@@ -121,7 +121,7 @@ source of truth — you can modify those agents directly without touching the bu
 
 ## Rules Layer
 
-Topology rules live in `.ai/rules/topology.yaml` and are also configurable in
+Topology rules live in `.wai/rules/topology.yaml` and are also configurable in
 `project.yaml`. Rules define invariants the CLI enforces during validation:
 
 - `noOverlappingOwnership` — no two agents should claim the same owned path
@@ -140,11 +140,11 @@ waffagent init
      ├─ prompt: project name
      ├─ prompt: select targets (claude / gemini / custom)
      │
-     ├─ create .ai/ directory structure
-     ├─ write .ai/project.yaml
-     ├─ create empty .ai/registry/agents.json
-     ├─ write .ai/rules/topology.yaml
-     ├─ write .ai/docs/topology.md
+     ├─ create .wai/ directory structure
+     ├─ write .wai/project.yaml
+     ├─ create empty .wai/registry/agents.json
+     ├─ write .wai/rules/topology.yaml
+     ├─ write .wai/docs/topology.md
      │
      ├─ create architect agent in registry
      │

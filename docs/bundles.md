@@ -36,7 +36,7 @@ Use individual templates (via `create-agent`) when:
 
 Bundles resolve in the same order as templates:
 
-1. **Project-local override**: `.ai/bundles/<id>.yaml`
+1. **Project-local override**: `.wai/bundles/<id>.yaml`
 2. **Built-in**: `<waffagent package>/src/bundles/<id>.yaml`
 
 ---
@@ -117,7 +117,7 @@ that share conventions but don't have a single runtime boundary.
 
 ## Creating a Project-Local Bundle
 
-1. Create `.ai/bundles/<your-id>.yaml`
+1. Create `.wai/bundles/<your-id>.yaml`
 2. Follow the YAML format above
 3. Run `waffagent create-bundle --bundle <your-id> ...` to use it _(Phase 2)_
 

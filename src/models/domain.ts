@@ -74,7 +74,7 @@ export const DomainSchema = z.object({
 export type Domain = z.infer<typeof DomainSchema>;
 
 // ---------------------------------------------------------------------------
-// Domain registry — lives at .ai/registry/domains.json
+// Domain registry — lives at .wai/registry/domains.json
 // ---------------------------------------------------------------------------
 
 export const DomainRegistrySchema = z.object({

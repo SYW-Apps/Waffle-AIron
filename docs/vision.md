@@ -27,7 +27,7 @@ waffagent delegate core-utils --prompt "fix JWT expiry bug in auth/middleware.ts
 ```
 
 waffagent:
-1. Creates a structured job file in `.ai/jobs/`
+1. Creates a structured job file in `.wai/jobs/`
 2. Spawns `claude` (or `gemini`) in the subdomain directory as a fully observable subprocess
 3. The sub-session has its own focused context, full domain authority, and project instructions
 4. On completion, the sub-agent writes a result file summarizing what was done
@@ -112,7 +112,7 @@ available.
 
 Configuration per domain:
 ```yaml
-# .ai/registry/domains.json
+# .wai/registry/domains.json
 {
   "id": "core-utils",
   "path": "services/core/packages/core-utils",
@@ -162,7 +162,7 @@ separate tool installation required.
 Even as waffagent grows toward orchestration and backends, it remains:
 
 - **No hidden server process.** Everything runs on-demand.
-- **No database.** All state is files in `.ai/`.
+- **No database.** All state is files in `.wai/`.
 - **No network requirement.** Works fully offline.
 - **Fully observable.** All jobs, all results, all agent definitions are
   human-readable files in the repo.

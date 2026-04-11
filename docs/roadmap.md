@@ -10,7 +10,7 @@
 
 ### Delivered
 - [x] Project scaffold (TypeScript, Commander, Zod, js-yaml)
-- [x] `.ai/` source-of-truth directory structure
+- [x] `.wai/` source-of-truth directory structure
 - [x] `project.yaml` config with schema validation
 - [x] `agents.json` registry with schema validation
 - [x] `wairon init` — interactive project initialization
@@ -77,7 +77,7 @@
 - [ ] `wairon merge <id1> <id2>` — guided agent merging
   - Prompt for merged id, name, combined paths
   - Update registry, deprecate originals, generate merged output
-- [ ] Migration history in `.ai/docs/` (auto-generated log of topology changes)
+- [ ] Migration history in `.wai/docs/` (auto-generated log of topology changes)
 - [ ] `wairon deprecate <agent-id>` — mark agent as deprecated without deleting
 
 ---

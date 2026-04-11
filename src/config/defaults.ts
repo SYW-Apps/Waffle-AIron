@@ -45,7 +45,7 @@ export const ARCHITECT_TEMPLATE_ID = 'architect';
 // Global templates directory
 //
 // Resolution order for templates:
-//   1. Project-local:  .ai/templates/<id>.yaml
+//   1. Project-local:  .wai/templates/<id>.yaml
 //   2. Global user/org: WAIRON_TEMPLATES_DIR or globalTemplatesDir in project.yaml
 //                       or ~/.wairon/templates/<id>.yaml
 //   3. Built-in:        <package>/dist/templates/<id>.yaml

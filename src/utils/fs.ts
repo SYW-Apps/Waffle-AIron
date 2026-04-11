@@ -59,8 +59,20 @@ export function fromProjectRoot(...segments: string[]): string {
 }
 
 /**
- * Return the path to the .ai/ directory in the current project.
+ * Return the path to the wairon project directory (.wai/).
+ *
+ * Resolution order:
+ *   1. .wai/    — primary (new projects)
+ *   2. .wairon/ — legacy fallback (older installs)
+ *
+ * If neither exists (e.g. during `wairon init`), defaults to .wai/.
  */
 export function aiDir(...segments: string[]): string {
-  return fromProjectRoot('.ai', ...segments);
+  const waiPath = fromProjectRoot('.wai');
+  const waiironPath = fromProjectRoot('.wairon');
+
+  const base =
+    !fs.existsSync(waiPath) && fs.existsSync(waiironPath) ? '.wairon' : '.wai';
+
+  return fromProjectRoot(base, ...segments);
 }

@@ -81,7 +81,7 @@ export async function runDelegate(domainId: string, options: DelegateOptions = {
     logger.info(`To start manually:`);
     logger.info(`  cd ${domain.path}`);
     logger.info(`  ${backendCommand(backend)}`);
-    logger.info(`Job file: .ai/jobs/${job.id}.yaml`);
+    logger.info(`Job file: .wai/jobs/${job.id}.yaml`);
     return;
   }
 
@@ -157,7 +157,7 @@ export async function runDelegate(domainId: string, options: DelegateOptions = {
       updateJobStatus(job.id, 'failed');
       logger.warn(`Session exited with code ${exitCode}.`);
     }
-    logger.info(`Job file: .ai/jobs/${job.id}.yaml`);
+    logger.info(`Job file: .wai/jobs/${job.id}.yaml`);
   }
 
   logger.blank();
