@@ -26,7 +26,7 @@ export function defaultTargetConfig(type: 'claude' | 'gemini'): BuiltinTargetCon
 // waffle-airon CLI version embedded at build time
 // ---------------------------------------------------------------------------
 
-export const WAIRON_VERSION = '0.1.3';
+export const WAIRON_VERSION = '0.1.4';
 
 // ---------------------------------------------------------------------------
 // GitHub repository (owner/repo) — used by the update command
