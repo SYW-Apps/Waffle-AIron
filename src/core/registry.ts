@@ -1,7 +1,7 @@
 import { loadRegistry, saveRegistry } from '../config/loader.js';
 import { AgentRecord } from '../models/agent.js';
 import { Registry } from '../models/registry.js';
-import { WaffagentError } from '../utils/errors.js';
+import { WaironError } from '../utils/errors.js';
 
 // ---------------------------------------------------------------------------
 // Registry operations
@@ -17,7 +17,7 @@ export function addAgent(agent: AgentRecord): void {
   const registry = loadRegistry();
 
   if (registry.agents.some((a) => a.id === agent.id)) {
-    throw new WaffagentError(`Agent with id "${agent.id}" already exists in the registry.`);
+    throw new WaironError(`Agent with id "${agent.id}" already exists in the registry.`);
   }
 
   registry.agents.push(agent);
@@ -33,7 +33,7 @@ export function updateAgent(updated: AgentRecord): void {
 
   const index = registry.agents.findIndex((a) => a.id === updated.id);
   if (index === -1) {
-    throw new WaffagentError(`Agent "${updated.id}" not found in registry.`);
+    throw new WaironError(`Agent "${updated.id}" not found in registry.`);
   }
 
   updated.updatedAt = new Date().toISOString();
@@ -66,7 +66,7 @@ export function removeAgent(id: string): void {
 
   const index = registry.agents.findIndex((a) => a.id === id);
   if (index === -1) {
-    throw new WaffagentError(`Agent "${id}" not found in registry.`);
+    throw new WaironError(`Agent "${id}" not found in registry.`);
   }
 
   registry.agents.splice(index, 1);

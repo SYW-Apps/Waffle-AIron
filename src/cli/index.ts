@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import { WAFFAGENT_VERSION } from '../config/defaults.js';
+import { WAIRON_VERSION } from '../config/defaults.js';
 import { logger, setLogLevel } from '../utils/logger.js';
-import { WaffagentError } from '../utils/errors.js';
+import { WaironError } from '../utils/errors.js';
 import {
   runAliasesList,
   runAliasesEnable,
@@ -36,9 +36,9 @@ import {
 const program = new Command();
 
 program
-  .name('waffagent')
+  .name('wairon')
   .description('SYW Waffler Agents — manage AI coding agent topology across projects')
-  .version(WAFFAGENT_VERSION, '-v, --version')
+  .version(WAIRON_VERSION, '-v, --version')
   .option('--verbose', 'enable verbose output')
   .option('--silent', 'suppress all output except errors')
   .hook('preAction', (thisCommand) => {
@@ -53,7 +53,7 @@ program
 
 program
   .command('init')
-  .description('Initialize waffagent in the current project (or rescan if already initialized)')
+  .description('Initialize wairon in the current project (or rescan if already initialized)')
   .option('-y, --yes', 'use defaults without interactive prompts')
   .action(async (opts) => {
     await runInit({ yes: opts.yes });
@@ -199,7 +199,7 @@ domainsCmd
 
 const aliasesCmd = program
   .command('aliases')
-  .description('Manage short command aliases (wagent, …)');
+  .description('Manage short command aliases (wai, …)');
 
 aliasesCmd
   .command('list')
@@ -288,7 +288,7 @@ async function main(): Promise<void> {
   try {
     await program.parseAsync(process.argv);
   } catch (err) {
-    if (err instanceof WaffagentError) {
+    if (err instanceof WaironError) {
       logger.error(err.message);
       process.exit(1);
     }

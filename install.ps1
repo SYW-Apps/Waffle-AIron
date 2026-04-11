@@ -1,15 +1,15 @@
-# waffagent installer for Windows
-# Usage: irm https://raw.githubusercontent.com/SYW-Apps/waffagent/main/install.ps1 | iex
+# wairon installer for Windows
+# Usage: irm https://raw.githubusercontent.com/SYW-Apps/Waffle-AIron/main/install.ps1 | iex
 
 $ErrorActionPreference = 'Stop'
 
-$Repo = "SYW-Apps/waffagent"
-$BinName = "waffagent.exe"
+$Repo = "SYW-Apps/Waffle-AIron"
+$BinName = "wairon.exe"
 
 # Determine install directory (prefer user-local to avoid needing elevation)
-$InstallDir = "$env:LOCALAPPDATA\waffagent\bin"
+$InstallDir = "$env:LOCALAPPDATA\wairon\bin"
 
-Write-Host "waffagent installer" -ForegroundColor Cyan
+Write-Host "wairon installer" -ForegroundColor Cyan
 Write-Host ""
 
 # Fetch latest release info from GitHub
@@ -27,7 +27,7 @@ Write-Host "Latest version: $Version" -ForegroundColor White
 # Detect architecture
 $Arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'arm64' } else { 'x64' }
 $VersionNum = $Version.TrimStart('v')
-$AssetName = "waffagent-$VersionNum-windows-$Arch.zip"
+$AssetName = "wairon-$VersionNum-windows-$Arch.zip"
 
 Write-Host "Downloading $AssetName..." -ForegroundColor Gray
 
@@ -47,7 +47,7 @@ try {
 }
 
 # Extract
-$TmpDir = Join-Path $env:TEMP "waffagent-install"
+$TmpDir = Join-Path $env:TEMP "wairon-install"
 if (Test-Path $TmpDir) { Remove-Item $TmpDir -Recurse -Force }
 Expand-Archive -Path $TmpZip -DestinationPath $TmpDir -Force
 Remove-Item $TmpZip
@@ -78,8 +78,8 @@ if ($UserPath -notlike "*$InstallDir*") {
     Write-Host "$InstallDir is already in your PATH." -ForegroundColor Gray
 }
 
-# Record the install directory in ~/.waffagent/config.json so `waffagent aliases` knows where to work
-$ConfigDir = "$env:USERPROFILE\.waffagent"
+# Record the install directory in ~/.wairon/config.json so `wairon aliases` knows where to work
+$ConfigDir = "$env:USERPROFILE\.wairon"
 $ConfigFile = "$ConfigDir\config.json"
 if (-not (Test-Path $ConfigDir)) { New-Item -ItemType Directory -Path $ConfigDir -Force | Out-Null }
 if (Test-Path $ConfigFile) {
@@ -90,9 +90,9 @@ if (Test-Path $ConfigFile) {
 $cfg | Add-Member -MemberType NoteProperty -Name "installDir" -Value $InstallDir -Force
 $cfg | ConvertTo-Json -Depth 5 | Set-Content $ConfigFile -Encoding UTF8
 
-# Create aliases (wagent → waffagent.exe via .cmd wrapper)
+# Create aliases (wai → wairon.exe via .cmd wrapper)
 # Skip any alias that is already taken by something else
-$Aliases = @("wagent")
+$Aliases = @("wai")
 $DisabledAliases = @()
 if ($cfg.PSObject.Properties["disabledAliases"]) { $DisabledAliases = $cfg.disabledAliases }
 
@@ -104,13 +104,13 @@ foreach ($Alias in $Aliases) {
     $AliasCmd = Join-Path $InstallDir "$Alias.cmd"
     $Existing = Get-Command $Alias -ErrorAction SilentlyContinue
     if ($Existing -and $Existing.Source -ne $AliasCmd) {
-        Write-Host "  $Alias already exists at: $($Existing.Source) — skipping (run 'waffagent aliases enable $Alias' to override)" -ForegroundColor Yellow
+        Write-Host "  $Alias already exists at: $($Existing.Source) — skipping (run 'wairon aliases enable $Alias' to override)" -ForegroundColor Yellow
     } else {
-        "@echo off`r`n""%~dp0waffagent.exe"" %*`r`n" | Set-Content $AliasCmd -Encoding ASCII
+        "@echo off`r`n""%~dp0wairon.exe"" %*`r`n" | Set-Content $AliasCmd -Encoding ASCII
         Write-Host "  Created alias: $AliasCmd" -ForegroundColor Gray
     }
 }
 
 Write-Host ""
-Write-Host "waffagent $Version installed successfully!" -ForegroundColor Cyan
-Write-Host "Run: waffagent --help  (or: wagent --help)" -ForegroundColor White
+Write-Host "wairon $Version installed successfully!" -ForegroundColor Cyan
+Write-Host "Run: wairon --help  (or: wai --help)" -ForegroundColor White

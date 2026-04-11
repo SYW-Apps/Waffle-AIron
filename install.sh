@@ -1,12 +1,12 @@
 #!/usr/bin/env sh
-# waffagent installer for Linux / macOS
-# Usage: curl -fsSL https://raw.githubusercontent.com/SYW-Apps/waffagent/main/install.sh | sh
+# wairon installer for Linux / macOS
+# Usage: curl -fsSL https://raw.githubusercontent.com/SYW-Apps/Waffle-AIron/main/install.sh | sh
 
 set -eu
 
-REPO="SYW-Apps/waffagent"
-BIN_NAME="waffagent"
-INSTALL_DIR="${WAFFAGENT_INSTALL_DIR:-$HOME/.local/bin}"
+REPO="SYW-Apps/Waffle-AIron"
+BIN_NAME="wairon"
+INSTALL_DIR="${WAIRON_INSTALL_DIR:-$HOME/.local/bin}"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -64,7 +64,7 @@ fetch_latest_version() {
 # ---------------------------------------------------------------------------
 
 main() {
-    info "waffagent installer"
+    info "wairon installer"
     printf "\n"
 
     need_cmd curl
@@ -74,7 +74,7 @@ main() {
     fetch_latest_version
 
     VERSION_NUM="${VERSION#v}"
-    ASSET_NAME="waffagent-${VERSION_NUM}-${PLATFORM}-${ARCH_LABEL}.tar.gz"
+    ASSET_NAME="wairon-${VERSION_NUM}-${PLATFORM}-${ARCH_LABEL}.tar.gz"
     DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${ASSET_NAME}"
 
     info "Latest version: $VERSION"
@@ -116,31 +116,31 @@ main() {
             ;;
     esac
 
-    # Record the install directory in ~/.waffagent/config.json
-    WAFFAGENT_CFG_DIR="$HOME/.waffagent"
-    WAFFAGENT_CFG_FILE="$WAFFAGENT_CFG_DIR/config.json"
-    mkdir -p "$WAFFAGENT_CFG_DIR"
-    if [ -f "$WAFFAGENT_CFG_FILE" ]; then
+    # Record the install directory in ~/.wairon/config.json
+    WAIRON_CFG_DIR="$HOME/.wairon"
+    WAIRON_CFG_FILE="$WAIRON_CFG_DIR/config.json"
+    mkdir -p "$WAIRON_CFG_DIR"
+    if [ -f "$WAIRON_CFG_FILE" ]; then
         # Preserve existing config, just update/add installDir
         # Simple sed approach — avoids requiring jq
-        if grep -q '"installDir"' "$WAFFAGENT_CFG_FILE" 2>/dev/null; then
-            sed -i.bak "s|\"installDir\":[^,}]*|\"installDir\": \"${INSTALL_DIR}\"|" "$WAFFAGENT_CFG_FILE" && rm -f "${WAFFAGENT_CFG_FILE}.bak"
+        if grep -q '"installDir"' "$WAIRON_CFG_FILE" 2>/dev/null; then
+            sed -i.bak "s|\"installDir\":[^,}]*|\"installDir\": \"${INSTALL_DIR}\"|" "$WAIRON_CFG_FILE" && rm -f "${WAIRON_CFG_FILE}.bak"
         else
             # Append before closing brace
-            sed -i.bak "s|}$|,\n  \"installDir\": \"${INSTALL_DIR}\"\n}|" "$WAFFAGENT_CFG_FILE" && rm -f "${WAFFAGENT_CFG_FILE}.bak"
+            sed -i.bak "s|}$|,\n  \"installDir\": \"${INSTALL_DIR}\"\n}|" "$WAIRON_CFG_FILE" && rm -f "${WAIRON_CFG_FILE}.bak"
         fi
     else
-        printf '{\n  "installDir": "%s"\n}\n' "$INSTALL_DIR" > "$WAFFAGENT_CFG_FILE"
+        printf '{\n  "installDir": "%s"\n}\n' "$INSTALL_DIR" > "$WAIRON_CFG_FILE"
     fi
 
-    # Create aliases: wagent → waffagent (symlink)
+    # Create aliases: wai → wairon (symlink)
     # Read disabled aliases from config if jq is available, otherwise default to none
     DISABLED_ALIASES=""
-    if command -v jq > /dev/null 2>&1 && [ -f "$WAFFAGENT_CFG_FILE" ]; then
-        DISABLED_ALIASES=$(jq -r '(.disabledAliases // []) | join(" ")' "$WAFFAGENT_CFG_FILE" 2>/dev/null || echo "")
+    if command -v jq > /dev/null 2>&1 && [ -f "$WAIRON_CFG_FILE" ]; then
+        DISABLED_ALIASES=$(jq -r '(.disabledAliases // []) | join(" ")' "$WAIRON_CFG_FILE" 2>/dev/null || echo "")
     fi
 
-    for ALIAS in wagent; do
+    for ALIAS in wai; do
         case " $DISABLED_ALIASES " in
             *" $ALIAS "*) info "Alias $ALIAS is disabled — skipping."; continue ;;
         esac
@@ -149,17 +149,17 @@ main() {
         EXISTING=$(command -v "$ALIAS" 2>/dev/null || true)
 
         if [ -n "$EXISTING" ] && [ "$EXISTING" != "$ALIAS_PATH" ]; then
-            warn "  $ALIAS already exists at $EXISTING — skipping (run 'waffagent aliases enable $ALIAS' to override)"
+            warn "  $ALIAS already exists at $EXISTING — skipping (run 'wairon aliases enable $ALIAS' to override)"
         else
-            ln -sf "${INSTALL_DIR}/waffagent" "$ALIAS_PATH"
+            ln -sf "${INSTALL_DIR}/wairon" "$ALIAS_PATH"
             chmod +x "$ALIAS_PATH"
             info "  Created alias: $ALIAS_PATH"
         fi
     done
 
     printf "\n"
-    success "waffagent ${VERSION} installed successfully!"
-    info "Run: waffagent --help  (or: wagent --help)"
+    success "wairon ${VERSION} installed successfully!"
+    info "Run: wairon --help  (or: wai --help)"
 }
 
 main

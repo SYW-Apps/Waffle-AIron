@@ -57,7 +57,7 @@ jobs:
         run: |
           npx --yes @yao-pkg/pkg dist/cli/index.js \
             --target ${{ matrix.pkg_target }} \
-            --output waffagent \
+            --output wairon \
             --compress GZip \
             --config package.json
 
@@ -80,37 +80,37 @@ jobs:
         if: matrix.asset_ext == '.tar.gz'
         shell: bash
         run: |
-          mkdir -p waffagent-pkg
-          # pkg on Linux/macOS outputs just "waffagent" (no extension)
-          cp waffagent waffagent-pkg/waffagent 2>/dev/null || cp waffagent-bin waffagent-pkg/waffagent
-          chmod +x waffagent-pkg/waffagent
-          tar -czf waffagent-${{ steps.version.outputs.version }}-${{ matrix.target }}.tar.gz \
-            -C waffagent-pkg waffagent
+          mkdir -p wairon-pkg
+          # pkg on Linux/macOS outputs just "wairon" (no extension)
+          cp wairon wairon-pkg/wairon 2>/dev/null || cp wairon-bin wairon-pkg/wairon
+          chmod +x wairon-pkg/wairon
+          tar -czf wairon-${{ steps.version.outputs.version }}-${{ matrix.target }}.tar.gz \
+            -C wairon-pkg wairon
 
       - name: Package (Windows zip)
         if: matrix.asset_ext == '.zip'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Path waffagent-pkg -Force
-          # pkg on Windows outputs "waffagent.exe"
-          Copy-Item "waffagent.exe" "waffagent-pkg\waffagent.exe" -ErrorAction SilentlyContinue
-          if (!(Test-Path "waffagent-pkg\waffagent.exe")) {
-            Copy-Item "waffagent" "waffagent-pkg\waffagent.exe"
+          New-Item -ItemType Directory -Path wairon-pkg -Force
+          # pkg on Windows outputs "wairon.exe"
+          Copy-Item "wairon.exe" "wairon-pkg\wairon.exe" -ErrorAction SilentlyContinue
+          if (!(Test-Path "wairon-pkg\wairon.exe")) {
+            Copy-Item "wairon" "wairon-pkg\wairon.exe"
           }
-          Compress-Archive -Path "waffagent-pkg\waffagent.exe" `
-            -DestinationPath "waffagent-${{ steps.version.outputs.version }}-${{ matrix.target }}.zip" -Force
+          Compress-Archive -Path "wairon-pkg\wairon.exe" `
+            -DestinationPath "wairon-${{ steps.version.outputs.version }}-${{ matrix.target }}.zip" -Force
 
       - name: Generate checksum (Unix)
         if: matrix.asset_ext == '.tar.gz'
         run: |
-          sha256sum waffagent-${{ steps.version.outputs.version }}-${{ matrix.target }}.tar.gz \
-            > waffagent-${{ steps.version.outputs.version }}-${{ matrix.target }}.tar.gz.sha256
+          sha256sum wairon-${{ steps.version.outputs.version }}-${{ matrix.target }}.tar.gz \
+            > wairon-${{ steps.version.outputs.version }}-${{ matrix.target }}.tar.gz.sha256
 
       - name: Generate checksum (Windows)
         if: matrix.asset_ext == '.zip'
         shell: pwsh
         run: |
-          $file = "waffagent-${{ steps.version.outputs.version }}-${{ matrix.target }}.zip"
+          $file = "wairon-${{ steps.version.outputs.version }}-${{ matrix.target }}.zip"
           $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLower()
           "$hash  $file" | Out-File -FilePath "$file.sha256" -Encoding utf8NoBOM
 
@@ -119,8 +119,8 @@ jobs:
         with:
           name: binary-${{ matrix.target }}
           path: |
-            waffagent-${{ steps.version.outputs.version }}-${{ matrix.target }}${{ matrix.asset_ext }}
-            waffagent-${{ steps.version.outputs.version }}-${{ matrix.target }}${{ matrix.asset_ext }}.sha256
+            wairon-${{ steps.version.outputs.version }}-${{ matrix.target }}${{ matrix.asset_ext }}
+            wairon-${{ steps.version.outputs.version }}-${{ matrix.target }}${{ matrix.asset_ext }}.sha256
 
   release:
     name: Publish GitHub Release
@@ -155,7 +155,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "waffagent ${{ github.ref_name }}"
+          name: "wairon ${{ github.ref_name }}"
           prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
           generate_release_notes: true
           files: |

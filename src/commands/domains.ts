@@ -21,7 +21,7 @@ export async function runDomainsList(): Promise<void> {
   const domains = listDomains();
 
   if (domains.length === 0) {
-    logger.info('No domains tracked. Run `waffagent domains scan` to detect candidates.');
+    logger.info('No domains tracked. Run `wairon domains scan` to detect candidates.');
     return;
   }
 
@@ -79,7 +79,7 @@ export async function runDomainsScan(options: { add?: boolean } = {}): Promise<v
   }
 
   if (!options.add) {
-    logger.info('Run `waffagent domains scan --add` to interactively add these domains.');
+    logger.info('Run `wairon domains scan --add` to interactively add these domains.');
     return;
   }
 
@@ -121,7 +121,7 @@ export async function runDomainsScan(options: { add?: boolean } = {}): Promise<v
         choices: [
           { name: 'flat       — agents appear at root and all parent domains', value: 'flat' },
           { name: 'parent-only — agents appear in immediate parent only', value: 'parent-only' },
-          { name: 'none        — no propagation (use waffagent delegate)', value: 'none' },
+          { name: 'none        — no propagation (use wairon delegate)', value: 'none' },
         ],
         default: 'flat',
       },
@@ -223,7 +223,7 @@ export async function runDomainsAdd(options: { path?: string; id?: string } = {}
   scaffoldDomain(domain, enabledTargets);
 
   logger.success(`Domain "${domain.id}" added and scaffolded.`);
-  logger.info(`Now run \`waffagent create-bundle\` to add agents for this domain.`);
+  logger.info(`Now run \`wairon create-bundle\` to add agents for this domain.`);
 }
 
 // ---- remove ----------------------------------------------------------------

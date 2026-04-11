@@ -23,16 +23,16 @@ export function defaultTargetConfig(type: 'claude' | 'gemini'): BuiltinTargetCon
 }
 
 // ---------------------------------------------------------------------------
-// waffagent CLI version embedded at build time
+// waffle-airon CLI version embedded at build time
 // ---------------------------------------------------------------------------
 
-export const WAFFAGENT_VERSION = '0.1.4';
+export const WAIRON_VERSION = '0.1.2';
 
 // ---------------------------------------------------------------------------
 // GitHub repository (owner/repo) — used by the update command
 // ---------------------------------------------------------------------------
 
-export const GITHUB_REPO = 'SYW-Apps/waffagent';
+export const GITHUB_REPO = 'SYW-Apps/Waffle-AIron';
 
 // ---------------------------------------------------------------------------
 // The name of the architect agent created during init
@@ -46,22 +46,22 @@ export const ARCHITECT_TEMPLATE_ID = 'architect';
 //
 // Resolution order for templates:
 //   1. Project-local:  .ai/templates/<id>.yaml
-//   2. Global user/org: WAFFAGENT_TEMPLATES_DIR or globalTemplatesDir in project.yaml
-//                       or ~/.waffagent/templates/<id>.yaml
+//   2. Global user/org: WAIRON_TEMPLATES_DIR or globalTemplatesDir in project.yaml
+//                       or ~/.wairon/templates/<id>.yaml
 //   3. Built-in:        <package>/dist/templates/<id>.yaml
 // ---------------------------------------------------------------------------
 
 export function globalTemplatesDir(projectOverride?: string): string {
   // 1. Environment variable
-  if (process.env.WAFFAGENT_TEMPLATES_DIR) {
-    return process.env.WAFFAGENT_TEMPLATES_DIR;
+  if (process.env.WAIRON_TEMPLATES_DIR) {
+    return process.env.WAIRON_TEMPLATES_DIR;
   }
   // 2. Project config override
   if (projectOverride) {
     return projectOverride;
   }
-  // 3. Default ~/.waffagent/templates
-  return path.join(os.homedir(), '.waffagent', 'templates');
+  // 3. Default ~/.wairon/templates
+  return path.join(os.homedir(), '.wairon', 'templates');
 }
 
 // ---------------------------------------------------------------------------
@@ -81,13 +81,13 @@ export function backendCommand(backend: string): string {
 // ---------------------------------------------------------------------------
 // Command aliases
 //
-// SUPPORTED_ALIASES — every short name waffagent can be reached under.
+// SUPPORTED_ALIASES — every short name wairon can be reached under.
 // These are registered in package.json `bin` for npm installs, and created
 // as symlinks / .cmd wrappers for binary installs.
-// Users can disable any alias via `waffagent aliases disable <name>`.
+// Users can disable any alias via `wairon aliases disable <name>`.
 // ---------------------------------------------------------------------------
 
-export const SUPPORTED_ALIASES = ['wagent'] as const;
+export const SUPPORTED_ALIASES = ['wai'] as const;
 export type SupportedAlias = (typeof SUPPORTED_ALIASES)[number];
 
 // ---------------------------------------------------------------------------

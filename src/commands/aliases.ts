@@ -13,7 +13,7 @@ import {
 // ---------------------------------------------------------------------------
 // aliases command
 //
-// Manages the short command names that point to waffagent.
+// Manages the short command names that point to wairon.
 //
 // For npm installs: the bin entries in package.json already register all
 // aliases — this command reports their status but cannot change npm's setup.
@@ -22,9 +22,9 @@ import {
 // (Unix) or .cmd wrapper files (Windows) in the install directory.
 //
 // Usage:
-//   waffagent aliases list
-//   waffagent aliases enable wagent
-//   waffagent aliases disable wagent
+//   wairon aliases list
+//   wairon aliases enable wai
+//   wairon aliases disable wai
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
@@ -63,7 +63,7 @@ export async function runAliasesList(): Promise<void> {
       const exists = filePath ? fs.existsSync(filePath) : false;
       statusLabel = exists ? chalk.green('active') : chalk.red('missing');
       if (!exists && !isDisabled) {
-        note = '  ← run `waffagent aliases enable ' + alias + '` to create';
+        note = '  ← run `wairon aliases enable ' + alias + '` to create';
       }
     }
 
@@ -76,7 +76,7 @@ export async function runAliasesList(): Promise<void> {
     logger.info(`Install directory: ${installDir}`);
   } else if (!isNpm && !installDir) {
     logger.warn('Install directory unknown. Run the install script to set it, or set it manually:');
-    logger.info('  waffagent aliases enable <name>  (will attempt to derive from current binary)');
+    logger.info('  wairon aliases enable <name>  (will attempt to derive from current binary)');
   }
 }
 
@@ -135,14 +135,14 @@ export async function runAliasesDisable(alias: string): Promise<void> {
 async function enableBinaryAlias(alias: SupportedAlias): Promise<void> {
   const installDir = resolveInstallDir(true);
   if (!installDir) {
-    logger.error('Cannot determine install directory. Is waffagent installed as a binary?');
+    logger.error('Cannot determine install directory. Is wairon installed as a binary?');
     process.exit(1);
   }
 
   const conflict = detectConflict(alias, installDir);
   if (conflict) {
     logger.warn(`"${alias}" already exists at: ${conflict}`);
-    logger.warn(`It does not appear to point to waffagent. Refusing to overwrite.`);
+    logger.warn(`It does not appear to point to wairon. Refusing to overwrite.`);
     logger.info(`Disable or remove the conflicting command first, then re-run this command.`);
     process.exit(1);
   }
@@ -168,9 +168,9 @@ async function disableBinaryAlias(alias: SupportedAlias): Promise<void> {
     return;
   }
 
-  // Safety check: only remove if it points to waffagent
+  // Safety check: only remove if it points to wairon
   if (!isOurAlias(filePath, installDir)) {
-    logger.warn(`"${filePath}" does not appear to be a waffagent alias — not removing.`);
+    logger.warn(`"${filePath}" does not appear to be a wairon alias — not removing.`);
     return;
   }
 
@@ -180,12 +180,12 @@ async function disableBinaryAlias(alias: SupportedAlias): Promise<void> {
 
 function writeWindowsWrapper(_alias: string, _installDir: string, filePath: string): void {
   // Standard Windows .cmd wrapper: passes all args through to the main binary
-  const wrapper = `@echo off\r\n"%~dp0waffagent.exe" %*\r\n`;
+  const wrapper = `@echo off\r\n"%~dp0wairon.exe" %*\r\n`;
   fs.writeFileSync(filePath, wrapper, 'utf-8');
 }
 
 function writeUnixSymlink(_alias: string, installDir: string, filePath: string): void {
-  const target = path.join(installDir, 'waffagent');
+  const target = path.join(installDir, 'wairon');
   if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   fs.symlinkSync(target, filePath);
   fs.chmodSync(filePath, 0o755);
@@ -194,16 +194,16 @@ function writeUnixSymlink(_alias: string, installDir: string, filePath: string):
 function isOurAlias(filePath: string, installDir: string): boolean {
   try {
     if (process.platform === 'win32') {
-      // Check if the .cmd file calls waffagent.exe from the same directory
+      // Check if the .cmd file calls wairon.exe from the same directory
       const content = fs.readFileSync(filePath, 'utf-8');
-      return content.includes('waffagent.exe');
+      return content.includes('wairon.exe');
     } else {
-      // Check if it's a symlink pointing to our waffagent binary
+      // Check if it's a symlink pointing to our wairon binary
       const stat = fs.lstatSync(filePath);
       if (stat.isSymbolicLink()) {
         const target = fs.readlinkSync(filePath);
         const resolvedTarget = path.resolve(path.dirname(filePath), target);
-        return resolvedTarget === path.join(installDir, 'waffagent');
+        return resolvedTarget === path.join(installDir, 'wairon');
       }
     }
   } catch { /* ignore */ }
@@ -235,7 +235,7 @@ function resolveInstallDir(warnIfMissing = false): string | undefined {
   }
   const stored = getInstallDir();
   if (!stored && warnIfMissing) {
-    logger.warn('Install directory not recorded in ~/.waffagent/config.json');
+    logger.warn('Install directory not recorded in ~/.wairon/config.json');
   }
   return stored;
 }

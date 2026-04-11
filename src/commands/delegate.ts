@@ -18,8 +18,8 @@ import { createJob, updateJobStatus, loadJobResult, jobEnvVars } from '../core/j
 // is read after the session exits.
 //
 // Usage:
-//   waffagent delegate <domain-id> --prompt "fix the JWT bug"
-//   waffagent delegate core-utils --backend ollama --model codellama:13b --async
+//   wairon delegate <domain-id> --prompt "fix the JWT bug"
+//   wairon delegate core-utils --backend ollama --model codellama:13b --async
 // ---------------------------------------------------------------------------
 
 export interface DelegateOptions {
@@ -37,7 +37,7 @@ export async function runDelegate(domainId: string, options: DelegateOptions = {
 
   const domain = findDomain(domainId);
   if (!domain) {
-    logger.error(`Domain "${domainId}" not found. Run \`waffagent domains list\` to see available domains.`);
+    logger.error(`Domain "${domainId}" not found. Run \`wairon domains list\` to see available domains.`);
     process.exit(1);
   }
 

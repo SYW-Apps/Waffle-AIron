@@ -11,7 +11,7 @@ import { globalTemplatesDir as resolveGlobalDir } from '../config/defaults.js';
 //
 // Three-tier resolution order (first match wins):
 //   1. Project-local:  .ai/templates/<id>.yaml
-//   2. Global user/org: WAFFAGENT_TEMPLATES_DIR | ~/.waffagent/templates/<id>.yaml
+//   2. Global user/org: WAIRON_TEMPLATES_DIR | ~/.wairon/templates/<id>.yaml
 //   3. Built-in:        <package>/dist/templates/<id>.yaml
 //
 // This lets organizations ship their own default templates (tier 2) while

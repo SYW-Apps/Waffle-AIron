@@ -197,13 +197,13 @@ function contextNoteFor(
 ): string {
   if (context === 'standalone') {
     return `You are operating as a specialized agent within the \`${domain?.path ?? '.'}\` module. ` +
-      `You may be invoked by a parent project agent via the waffagent delegation system. ` +
+      `You may be invoked by a parent project agent via the wairon delegation system. ` +
       `Focus deeply on your domain — you do not need awareness of the broader project.`;
   }
   if (context === 'project-reference') {
     return `This agent is canonically defined in the \`${domain?.path ?? '.'}\` subdomain. ` +
       `From this project context, it is responsible for \`${domain?.path ?? '.'}\`. ` +
-      `For deep work in that domain, invoke via: \`waffagent delegate ${domain?.id ?? ''}\``;
+      `For deep work in that domain, invoke via: \`wairon delegate ${domain?.id ?? ''}\``;
   }
   return '';
 }

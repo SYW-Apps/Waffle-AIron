@@ -5,7 +5,7 @@ import * as fs from 'fs';
 // ---------------------------------------------------------------------------
 // User-level CLI config
 //
-// Stored at: ~/.waffagent/config.json
+// Stored at: ~/.wairon/config.json
 // Created on first write; all fields are optional.
 // ---------------------------------------------------------------------------
 
@@ -22,14 +22,14 @@ export interface UserConfig {
    */
   disabledAliases?: string[];
   /**
-   * Absolute path to the directory where waffagent binaries are installed.
-   * Written by the install script and used by `waffagent aliases` to know
+   * Absolute path to the directory where wairon binaries are installed.
+   * Written by the install script and used by `wairon aliases` to know
    * where to create/remove symlinks or .cmd wrappers.
    */
   installDir?: string;
 }
 
-const CONFIG_DIR = path.join(os.homedir(), '.waffagent');
+const CONFIG_DIR = path.join(os.homedir(), '.wairon');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 
 export function loadUserConfig(): UserConfig {

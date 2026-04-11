@@ -35,7 +35,7 @@ export const AI_PATHS = {
 // ---------------------------------------------------------------------------
 
 /**
- * Check whether the current directory has been initialized as a waffagent project.
+ * Check whether the current directory has been initialized as a wairon project.
  */
 export function isProjectInitialized(): boolean {
   return pathExists(AI_PATHS.root()) && pathExists(AI_PATHS.projectConfig());
