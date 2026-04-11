@@ -46,12 +46,12 @@ jobs:
           echo "new_version=${NEW_VERSION}" >> $GITHUB_OUTPUT
           echo "Bumped to ${NEW_VERSION}"
 
-      - name: Update WAFFAGENT_VERSION in defaults.ts
+      - name: Update WAIRON_VERSION in defaults.ts
         run: |
           VERSION=${{ steps.version.outputs.new_version }}
           # Strip leading 'v'
           VERSION=${VERSION#v}
-          sed -i "s/export const WAFFAGENT_VERSION = '[^']*'/export const WAFFAGENT_VERSION = '${VERSION}'/" src/config/defaults.ts
+          sed -i "s/export const WAIRON_VERSION = '[^']*'/export const WAIRON_VERSION = '${VERSION}'/" src/config/defaults.ts
 
       - name: Commit and tag
         run: |

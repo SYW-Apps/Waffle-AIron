@@ -61,6 +61,6 @@ export async function runAgentLoop(
 ): Promise<AgentLoopResult> {
   throw new Error(
     'AgentLoop is not yet implemented. See docs/roadmap.md Phase 4.\n' +
-    'For now, use `waffagent delegate` to spawn claude or gemini directly.',
+    'For now, use `wairon delegate` to spawn claude or gemini directly.',
   );
 }

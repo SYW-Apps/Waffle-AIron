@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
-// waffagent public library API
+// wairon public library API
 //
-// This module exports the core primitives so waffagent can be used
+// This module exports the core primitives so wairon can be used
 // programmatically by other tools or scripts — without going through the CLI.
 // This is the foundation for a future MCP server wrapper.
 // ---------------------------------------------------------------------------

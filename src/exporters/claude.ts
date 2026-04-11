@@ -14,9 +14,9 @@ import { Exporter, ExportContext, ExportResult } from './base.js';
 //                 keep it concise and action-oriented
 //
 // Note: the `tools:` front-matter field controls which Claude built-in tools
-// (Bash, Read, Write, Edit, …) the sub-agent may use. waffagent does not
+// (Bash, Read, Write, Edit, …) the sub-agent may use. wairon does not
 // manage that list — it belongs in the agent template body. ownedPaths is a
-// waffagent topology concept and is embedded in the rendered instructions.
+// wairon topology concept and is embedded in the rendered instructions.
 //
 // Reference: https://docs.anthropic.com/en/docs/claude-code/sub-agents
 //

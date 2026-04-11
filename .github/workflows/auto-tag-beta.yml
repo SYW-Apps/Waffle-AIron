@@ -68,8 +68,8 @@ jobs:
             pkg.version = '${VERSION_PLAIN}';
             fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
           "
-          # Update WAFFAGENT_VERSION in defaults.ts
-          sed -i "s/export const WAFFAGENT_VERSION = '[^']*'/export const WAFFAGENT_VERSION = '${VERSION_PLAIN}'/" src/config/defaults.ts
+          # Update WAIRON_VERSION in defaults.ts
+          sed -i "s/export const WAIRON_VERSION = '[^']*'/export const WAIRON_VERSION = '${VERSION_PLAIN}'/" src/config/defaults.ts
 
       - name: Commit and tag
         run: |

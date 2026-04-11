@@ -9,7 +9,7 @@ description: >
   not necessarily have a runtime boundary. The owner coordinates the family
   as a whole; implementers and reviewers focus on specific packages within it.
 
-  Example: waffagent create-bundle --bundle package-family-default --scope network-packages --dir packages/network
+  Example: wairon create-bundle --bundle package-family-default --scope network-packages --dir packages/network
 
 agents:
   - idSuffix: owner

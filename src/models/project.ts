@@ -66,7 +66,7 @@ export const ProjectConfigSchema = z.object({
 
   /**
    * Active output targets. At least one must be enabled.
-   * Configured during `waffagent init` and editable afterward.
+   * Configured during `wairon init` and editable afterward.
    */
   targets: z.array(TargetConfigSchema).default([]),
 
@@ -76,18 +76,18 @@ export const ProjectConfigSchema = z.object({
    * Path to a directory containing org/user-level default templates.
    * Resolved before built-in templates but after project-local templates.
    *
-   * Default: ~/.waffagent/templates
-   * Can also be set via WAFFAGENT_TEMPLATES_DIR environment variable.
+   * Default: ~/.wairon/templates
+   * Can also be set via WAIRON_TEMPLATES_DIR environment variable.
    */
   globalTemplatesDir: z.string().optional(),
 
   /**
-   * Default AI backend for waffagent delegate commands.
+   * Default AI backend for wairon delegate commands.
    * Can be overridden per-domain or per-command.
    */
   defaultBackend: z.enum(['claude', 'gemini', 'ollama', 'openai', 'custom']).default('claude'),
 
-  /** Created by waffagent at init time */
+  /** Created by wairon at init time */
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });

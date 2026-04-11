@@ -24,7 +24,7 @@ import { CustomExporter } from '../exporters/custom.js';
 // ---------------------------------------------------------------------------
 // init command
 //
-// Bootstraps a new waffagent project in the current directory.
+// Bootstraps a new wairon project in the current directory.
 // Creates the .ai/ source-of-truth structure, asks which targets to enable,
 // and generates the initial architect agent into all selected targets.
 // ---------------------------------------------------------------------------
@@ -42,7 +42,7 @@ interface TargetSelection {
 }
 
 export async function runInit(options: InitOptions = {}): Promise<void> {
-  logger.header('waffagent init');
+  logger.header('wairon init');
 
   // Already initialized → rescan mode
   if (isProjectInitialized()) {
@@ -204,11 +204,11 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
     id: ARCHITECT_AGENT_ID,
     name: 'Agent Architect',
     description:
-      'Responsible for managing the AI agent topology of this project using the waffagent CLI.',
+      'Responsible for managing the AI agent topology of this project using the wairon CLI.',
     template: ARCHITECT_TEMPLATE_ID,
     ownedPaths: ['.ai/**'],
     tags: ['meta', 'architect'],
-    creationReason: 'Bootstrapped by waffagent init as the root agent for topology management.',
+    creationReason: 'Bootstrapped by wairon init as the root agent for topology management.',
     targets: activeTargets as AgentRecord['targets'],
   });
 
@@ -303,9 +303,9 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
   logger.info('  .ai/docs/          — project-level topology notes');
   logger.blank();
   logger.info('Next steps:');
-  logger.info('  waffagent validate      — check the current topology');
-  logger.info('  waffagent generate      — regenerate all agent files');
-  logger.info('  waffagent create-agent  — add a new agent');
+  logger.info('  wairon validate      — check the current topology');
+  logger.info('  wairon generate      — regenerate all agent files');
+  logger.info('  wairon create-agent  — add a new agent');
   logger.blank();
 }
 
@@ -329,7 +329,7 @@ Describe the overall agent strategy for this project here.
 
 | ID | Template | Purpose |
 |----|----------|---------|
-| agent-architect | architect | Manages agent topology using the waffagent CLI |
+| agent-architect | architect | Manages agent topology using the wairon CLI |
 
 ## Decisions
 

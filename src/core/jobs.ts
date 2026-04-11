@@ -3,7 +3,7 @@ import { Job, JobResult, JobSchema, JobResultSchema, generateJobId } from '../mo
 import { AI_PATHS } from '../config/loader.js';
 import { ensureDir, listFiles, pathExists } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
-import { WaffagentError } from '../utils/errors.js';
+import { WaironError } from '../utils/errors.js';
 
 // ---------------------------------------------------------------------------
 // Job file management
@@ -34,7 +34,7 @@ export function createJob(partial: Omit<Job, 'id' | 'status' | 'createdAt'>): Jo
 
 export function loadJob(jobId: string): Job {
   const raw = readYamlFile(jobFilePath(jobId));
-  if (!raw) throw new WaffagentError(`Job "${jobId}" not found.`);
+  if (!raw) throw new WaironError(`Job "${jobId}" not found.`);
   return JobSchema.parse(raw);
 }
 
@@ -104,9 +104,9 @@ export function cleanJobs(keepStatuses: Job['status'][] = ['pending', 'running']
 
 export function jobEnvVars(job: Job): Record<string, string> {
   return {
-    WAFFAGENT_JOB_ID: job.id,
-    WAFFAGENT_JOB_FILE: path.resolve(jobFilePath(job.id)),
-    WAFFAGENT_RESULT_FILE: path.resolve(resultFilePath(job.id)),
-    WAFFAGENT_DOMAIN: job.domain,
+    WAIRON_JOB_ID: job.id,
+    WAIRON_JOB_FILE: path.resolve(jobFilePath(job.id)),
+    WAIRON_RESULT_FILE: path.resolve(resultFilePath(job.id)),
+    WAIRON_DOMAIN: job.domain,
   };
 }

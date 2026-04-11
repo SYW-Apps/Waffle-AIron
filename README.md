@@ -1,17 +1,15 @@
-# waffagent
+# wairon
 
-**SYW Waffler Agents** — manage AI coding agent topology across projects.
+**SYW Waffle AIron** — manage AI coding agent topology across projects.
 
 > **Status:** v0.1 MVP — core init flow, generation, and validation are working.
 > Several commands are planned but not yet implemented (see [roadmap](docs/roadmap.md)).
->
-> _The product name "waffagent" is a working name and may change._
 
 ---
 
 ## What is it?
 
-`waffagent` is a CLI tool that manages the AI coding agent topology for your
+`wairon` is a CLI tool that manages the AI coding agent topology for your
 software projects. Instead of manually maintaining agent files for Claude Code,
 Gemini CLI, or other tools, you define your agents once in a structured
 **source of truth** (`.ai/`) and generate the tool-specific files from it.
@@ -20,7 +18,7 @@ Gemini CLI, or other tools, you define your agents once in a structured
 .ai/ (source of truth)
   └── project.yaml, registry/agents.json, templates/, bundles/
           │
-          ▼  waffagent generate
+          ▼  wairon generate
           │
   .claude/agents/  .gemini/agents/  .cursor/agents/  (generated outputs)
 ```
@@ -36,7 +34,7 @@ broad roles like "implementer" or "reviewer."
 Managing these manually across multiple AI tools doesn't scale. When agent files
 drift or conflict, there's no validation and no easy way to regenerate.
 
-waffagent gives you:
+wairon gives you:
 - A single, version-controlled source of truth for all your agents
 - Reproducible generation of tool-specific files from that source
 - Validation of topology rules (no overlapping ownership, required paths, etc.)
@@ -54,7 +52,7 @@ waffagent gives you:
 | **Template** | A reusable agent shape (instructions, role, defaults). Built-ins: architect, domain-owner, implementer, reviewer, tester, guardian. |
 | **Bundle** | A recipe for creating multiple related agents for a scope. Built-ins: service-default, package-family-default. |
 | **Exporter** | Renders agent records into tool-specific files (Claude, Gemini, custom path). |
-| **Rules** | Topology invariants enforced by `waffagent validate` (no overlapping ownership, etc.). |
+| **Rules** | Topology invariants enforced by `wairon validate` (no overlapping ownership, etc.). |
 
 ---
 
@@ -66,25 +64,25 @@ No Node.js required — downloads a self-contained binary for your platform.
 
 **Windows** (PowerShell):
 ```powershell
-irm https://raw.githubusercontent.com/SYW-Apps/waffagent/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/SYW-Apps/Waffle-AIron/main/install.ps1 | iex
 ```
 
 **macOS / Linux** (bash/sh):
 ```sh
-curl -fsSL https://raw.githubusercontent.com/SYW-Apps/waffagent/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/SYW-Apps/Waffle-AIron/main/install.sh | sh
 ```
 
 Both scripts:
 - Detect your OS and architecture (x64 / arm64)
 - Download the matching binary from the latest GitHub release
-- Install to `~/.local/bin` (Unix) or `%LOCALAPPDATA%\waffagent\bin` (Windows)
+- Install to `~/.local/bin` (Unix) or `%LOCALAPPDATA%\wairon\bin` (Windows)
 - Add that directory to your PATH if it isn't already
-- Create the `wagent` short alias automatically (see [Aliases](#aliases))
+- Create the `wai` short alias automatically (see [Aliases](#aliases))
 
 To install to a custom directory, set the environment variable before running:
 
 ```sh
-WAFFAGENT_INSTALL_DIR=/usr/local/bin curl -fsSL .../install.sh | sh
+WAIRON_INSTALL_DIR=/usr/local/bin curl -fsSL .../install.sh | sh
 ```
 
 ---
@@ -94,27 +92,27 @@ WAFFAGENT_INSTALL_DIR=/usr/local/bin curl -fsSL .../install.sh | sh
 If you already have Node.js 18+ installed:
 
 ```sh
-npm install -g waffagent
+npm install -g wairon
 ```
 
-Both `waffagent` and `wagent` are registered as bin entries — no extra steps needed.
+Both `wairon` and `wai` are registered as bin entries — no extra steps needed.
 
 ---
 
 ### Local development / contributing
 
 ```sh
-git clone https://github.com/SYW-Apps/waffagent
-cd waffagent
+git clone https://github.com/SYW-Apps/wairon
+cd wairon
 npm install
 npm run build
 
 # Run from the build output:
 node dist/cli/index.js --help
 
-# Or link globally so `waffagent` resolves from anywhere:
+# Or link globally so `wairon` resolves from anywhere:
 npm link
-waffagent --help
+wairon --help
 ```
 
 **Without a build step** (tsx, slower):
@@ -129,8 +127,8 @@ npm run dev -- --help
 ### Updating
 
 ```sh
-waffagent update          # check and install latest stable release
-waffagent update --check  # check only (exits 1 if an update is available)
+wairon update          # check and install latest stable release
+wairon update --check  # check only (exits 1 if an update is available)
 ```
 
 #### Release channels
@@ -142,42 +140,42 @@ waffagent update --check  # check only (exits 1 if an update is available)
 | `preview` | `v1.2.3-preview.1` | Everything, including the earliest previews. |
 
 ```sh
-# Switch to beta channel (persists in ~/.waffagent/config.json)
-waffagent update --channel beta
+# Switch to beta channel (persists in ~/.wairon/config.json)
+wairon update --channel beta
 
 # Switch back to stable
-waffagent update --channel stable
+wairon update --channel stable
 ```
 
 ---
 
 ### Aliases
 
-`wagent` is a built-in short alias for `waffagent`. Both commands are identical.
+`wai` is a built-in short alias for `wairon`. Both commands are identical.
 
 ```sh
-wagent init       # same as: waffagent init
-wagent generate   # same as: waffagent generate
+wai init       # same as: wairon init
+wai generate   # same as: wairon generate
 ```
 
 **For binary installs**, the install script creates the alias automatically.
-If `wagent` is already used by another tool on your system, the script will
+If `wai` is already used by another tool on your system, the script will
 skip creating it and warn you instead.
 
 Manage aliases at any time:
 
 ```sh
-waffagent aliases list              # show all aliases and their status
-waffagent aliases disable wagent    # remove the alias file; persists across updates
-waffagent aliases enable wagent     # re-create it (refuses if there's a conflict)
+wairon aliases list              # show all aliases and their status
+wairon aliases disable wai    # remove the alias file; persists across updates
+wairon aliases enable wai     # re-create it (refuses if there's a conflict)
 ```
 
-The `disable` preference is saved to `~/.waffagent/config.json` and survives
+The `disable` preference is saved to `~/.wairon/config.json` and survives
 reinstalls and updates — the install script will not re-create a disabled alias.
 
-**For npm installs**, both `waffagent` and `wagent` are always registered as bin
+**For npm installs**, both `wairon` and `wai` are always registered as bin
 entries by npm. The `aliases` command reports their status but npm manages the
-files, not waffagent.
+files, not wairon.
 
 ---
 
@@ -186,7 +184,7 @@ files, not waffagent.
 ```sh
 # Initialize a project
 cd my-project
-waffagent init
+wairon init
 
 # > Project name: my-project
 # > Which AI coding tools will you use?
@@ -204,20 +202,20 @@ waffagent init
 #   agent-architect.md     ← generated architect agent
 
 # See what was created:
-waffagent list
+wairon list
 
 # Validate the topology:
-waffagent validate
+wairon validate
 
 # After modifying the registry, regenerate outputs:
-waffagent generate
+wairon generate
 ```
 
 ---
 
 ## Example Generated Structure
 
-After `waffagent init` with Claude target selected:
+After `wairon init` with Claude target selected:
 
 ```
 my-project/
@@ -274,7 +272,7 @@ is the AI's entry point for managing topology. When you ask Claude or Gemini
 to help with agent topology, they will use this agent and its CLI quick-reference.
 
 The architect agent:
-- Explains the waffagent CLI commands
+- Explains the wairon CLI commands
 - Defines when to create new agents (only at durable architectural boundaries)
 - Defines the standard operating workflow (inspect → decide → modify → validate → generate)
 - Lives at `.claude/agents/agent-architect.md` (and other selected targets)
@@ -287,10 +285,10 @@ The architect agent:
 
 | Command | Description |
 |---------|-------------|
-| `waffagent init` | Initialize project — create `.ai/`, generate architect agent, detect domains |
-| `waffagent generate [--target] [--dry-run]` | Regenerate all agent output files from registry |
-| `waffagent validate` | Validate config and registry for errors/rule violations |
-| `waffagent list` | List all agents in the registry |
+| `wairon init` | Initialize project — create `.ai/`, generate architect agent, detect domains |
+| `wairon generate [--target] [--dry-run]` | Regenerate all agent output files from registry |
+| `wairon validate` | Validate config and registry for errors/rule violations |
+| `wairon list` | List all agents in the registry |
 
 ### Domains
 
@@ -299,10 +297,10 @@ local agent files.
 
 | Command | Description |
 |---------|-------------|
-| `waffagent domains list` | Show all tracked domains as a tree |
-| `waffagent domains scan [--add]` | Detect untracked domain candidates; `--add` to interactively add them |
-| `waffagent domains add [--path] [--id]` | Manually register a domain by path |
-| `waffagent domains remove <id>` | Remove a domain from the registry |
+| `wairon domains list` | Show all tracked domains as a tree |
+| `wairon domains scan [--add]` | Detect untracked domain candidates; `--add` to interactively add them |
+| `wairon domains add [--path] [--id]` | Manually register a domain by path |
+| `wairon domains remove <id>` | Remove a domain from the registry |
 
 ### Delegation
 
@@ -310,10 +308,10 @@ Spawn an AI session in a domain's directory with a scoped task.
 
 | Command | Description |
 |---------|-------------|
-| `waffagent delegate <domain-id> -p "task"` | Start an AI session in the domain directory |
-| `waffagent delegate ... --async` | Write a job file and return immediately (no session spawned) |
-| `waffagent delegate ... --backend gemini` | Use Gemini CLI instead of Claude |
-| `waffagent delegate ... --backend ollama --model codellama:13b` | Use a local model |
+| `wairon delegate <domain-id> -p "task"` | Start an AI session in the domain directory |
+| `wairon delegate ... --async` | Write a job file and return immediately (no session spawned) |
+| `wairon delegate ... --backend gemini` | Use Gemini CLI instead of Claude |
+| `wairon delegate ... --backend ollama --model codellama:13b` | Use a local model |
 
 ### Jobs
 
@@ -321,29 +319,29 @@ Inspect the history of delegated tasks.
 
 | Command | Description |
 |---------|-------------|
-| `waffagent jobs list [--domain] [--status]` | List jobs with optional filters |
-| `waffagent jobs show <job-id>` | Show full details and result for a job |
-| `waffagent jobs clean [--all]` | Remove completed/failed/abandoned jobs |
+| `wairon jobs list [--domain] [--status]` | List jobs with optional filters |
+| `wairon jobs show <job-id>` | Show full details and result for a job |
+| `wairon jobs clean [--all]` | Remove completed/failed/abandoned jobs |
 
 ### Tooling
 
 | Command | Description |
 |---------|-------------|
-| `waffagent update [--check] [--channel]` | Check and install latest release; optionally switch channel |
-| `waffagent aliases list` | Show all command aliases and their status |
-| `waffagent aliases enable <name>` | Create alias symlink / wrapper |
-| `waffagent aliases disable <name>` | Remove alias and opt out of future re-creation |
+| `wairon update [--check] [--channel]` | Check and install latest release; optionally switch channel |
+| `wairon aliases list` | Show all command aliases and their status |
+| `wairon aliases enable <name>` | Create alias symlink / wrapper |
+| `wairon aliases disable <name>` | Remove alias and opt out of future re-creation |
 
 ### Planned (not yet implemented)
 
 | Command | Phase | Description |
 |---------|-------|-------------|
-| `waffagent create-agent` | 2 | Interactively create an agent from a template |
-| `waffagent create-bundle` | 2 | Scaffold a set of agents from a bundle |
-| `waffagent analyze` | 3 | Analyze repo for topology coverage gaps |
-| `waffagent suggest-topology` | 3 | Suggest topology improvements |
-| `waffagent split` | 4 | Split an agent into two more focused agents |
-| `waffagent merge` | 4 | Merge two agents into one |
+| `wairon create-agent` | 2 | Interactively create an agent from a template |
+| `wairon create-bundle` | 2 | Scaffold a set of agents from a bundle |
+| `wairon analyze` | 3 | Analyze repo for topology coverage gaps |
+| `wairon suggest-topology` | 3 | Suggest topology improvements |
+| `wairon split` | 4 | Split an agent into two more focused agents |
+| `wairon merge` | 4 | Merge two agents into one |
 
 ### Global flags
 

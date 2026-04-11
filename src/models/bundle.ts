@@ -3,7 +3,7 @@ import { z } from 'zod';
 // ---------------------------------------------------------------------------
 // Bundle definition — a group of related agents created together for a scope
 //
-// When you run `waffagent create-bundle --bundle service-default --scope core-service`,
+// When you run `wairon create-bundle --bundle service-default --scope core-service`,
 // the bundle definition drives which agents get created, with which templates,
 // and what paths they own.
 // ---------------------------------------------------------------------------

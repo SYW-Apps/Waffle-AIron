@@ -20,8 +20,8 @@ Thumbs.db
 
 # pkg compiled binaries
 bin/
-waffagent
-waffagent.exe
+wairon
+wairon.exe
 *.tar.gz
 *.zip
 *.sha256

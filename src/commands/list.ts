@@ -16,7 +16,7 @@ export async function runList(): Promise<void> {
 
   if (registry.agents.length === 0) {
     logger.info('No agents in registry.');
-    logger.info('Run `waffagent create-agent` to add one.');
+    logger.info('Run `wairon create-agent` to add one.');
     return;
   }
 

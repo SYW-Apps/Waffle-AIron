@@ -14,31 +14,31 @@ function notImplemented(commandName: string): void {
 }
 
 export async function runAnalyze(): Promise<void> {
-  notImplemented('waffagent analyze');
+  notImplemented('wairon analyze');
   logger.info('Planned: analyze a repository and suggest agent topology.');
 }
 
 export async function runSuggestTopology(): Promise<void> {
-  notImplemented('waffagent suggest-topology');
+  notImplemented('wairon suggest-topology');
   logger.info('Planned: suggest new agents or restructure based on ownership gaps.');
 }
 
 export async function runCreateAgent(): Promise<void> {
-  notImplemented('waffagent create-agent');
+  notImplemented('wairon create-agent');
   logger.info('Planned: interactively create a new agent from a template.');
 }
 
 export async function runCreateBundle(): Promise<void> {
-  notImplemented('waffagent create-bundle');
+  notImplemented('wairon create-bundle');
   logger.info('Planned: scaffold multiple agents from a bundle definition.');
 }
 
 export async function runSplit(): Promise<void> {
-  notImplemented('waffagent split');
+  notImplemented('wairon split');
   logger.info('Planned: split an agent into two or more focused agents.');
 }
 
 export async function runMerge(): Promise<void> {
-  notImplemented('waffagent merge');
+  notImplemented('wairon merge');
   logger.info('Planned: merge two agents into one.');
 }

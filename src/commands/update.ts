@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { execSync } from 'child_process';
 import { logger } from '../utils/logger.js';
-import { WAFFAGENT_VERSION, GITHUB_REPO } from '../config/defaults.js';
+import { WAIRON_VERSION, GITHUB_REPO } from '../config/defaults.js';
 import { getChannel, setChannel, UpdateChannel } from '../config/userconfig.js';
 
 // ---------------------------------------------------------------------------
@@ -19,10 +19,10 @@ import { getChannel, setChannel, UpdateChannel } from '../config/userconfig.js';
 //   preview — stable + beta + preview pre-releases
 //
 // Usage:
-//   waffagent update                   — check and install if newer (uses saved channel)
-//   waffagent update --check           — check only, exit 0=up-to-date 1=update-available
-//   waffagent update --channel beta    — switch to beta channel and update
-//   waffagent update --channel stable  — switch back to stable channel
+//   wairon update                   — check and install if newer (uses saved channel)
+//   wairon update --check           — check only, exit 0=up-to-date 1=update-available
+//   wairon update --channel beta    — switch to beta channel and update
+//   wairon update --channel stable  — switch back to stable channel
 // ---------------------------------------------------------------------------
 
 export interface UpdateOptions {
@@ -53,7 +53,7 @@ export async function runUpdate(options: UpdateOptions = {}): Promise<void> {
   }
 
   const channel = options.channel ?? getChannel();
-  logger.info(`Current version: ${WAFFAGENT_VERSION}  (channel: ${channel})`);
+  logger.info(`Current version: ${WAIRON_VERSION}  (channel: ${channel})`);
   logger.info('Checking for updates...');
 
   let releases: GithubRelease[];
@@ -68,21 +68,21 @@ export async function runUpdate(options: UpdateOptions = {}): Promise<void> {
   // Filter releases by channel
   const eligible = releases.filter((r) => isEligibleForChannel(r.tag_name, channel));
   if (eligible.length === 0) {
-    logger.success(`Already up to date (${WAFFAGENT_VERSION})`);
+    logger.success(`Already up to date (${WAIRON_VERSION})`);
     return;
   }
 
   const release = eligible[0]; // releases are sorted newest-first by GitHub
   const latestVersion = release.tag_name.replace(/^v/, '');
-  const currentVersion = WAFFAGENT_VERSION.replace(/^v/, '');
+  const currentVersion = WAIRON_VERSION.replace(/^v/, '');
 
   if (!isNewer(currentVersion, latestVersion)) {
-    logger.success(`Already up to date (${WAFFAGENT_VERSION})`);
+    logger.success(`Already up to date (${WAIRON_VERSION})`);
     return;
   }
 
   const channelLabel = release.prerelease ? ` [${releaseChannelLabel(release.tag_name)}]` : '';
-  logger.info(`New version available: ${release.tag_name}${channelLabel}  (current: ${WAFFAGENT_VERSION})`);
+  logger.info(`New version available: ${release.tag_name}${channelLabel}  (current: ${WAIRON_VERSION})`);
 
   if (release.body) {
     logger.blank();
@@ -187,7 +187,7 @@ function fetchReleases(repo: string): Promise<GithubRelease[]> {
     const url = `https://api.github.com/repos/${repo}/releases?per_page=20`;
     const options = {
       headers: {
-        'User-Agent': `waffagent/${WAFFAGENT_VERSION}`,
+        'User-Agent': `wairon/${WAIRON_VERSION}`,
         'Accept': 'application/vnd.github+json',
       },
     };
@@ -220,7 +220,7 @@ function downloadFile(url: string, dest: string): Promise<void> {
     const file = fs.createWriteStream(dest);
     const get = url.startsWith('https://') ? https.get : http.get;
 
-    get(url, { headers: { 'User-Agent': `waffagent/${WAFFAGENT_VERSION}` } }, (res) => {
+    get(url, { headers: { 'User-Agent': `wairon/${WAIRON_VERSION}` } }, (res) => {
       if (res.statusCode === 301 || res.statusCode === 302) {
         file.close();
         downloadFile(res.headers.location!, dest).then(resolve).catch(reject);
@@ -257,9 +257,9 @@ function getPlatformAssetName(version: string): string | null {
   const mappedArch = archMap[arch];
   if (!mappedArch) return null;
 
-  if (platform === 'win32') return `waffagent-${version}-windows-${mappedArch}.zip`;
-  if (platform === 'darwin') return `waffagent-${version}-macos-${mappedArch}.tar.gz`;
-  if (platform === 'linux')  return `waffagent-${version}-linux-${mappedArch}.tar.gz`;
+  if (platform === 'win32') return `wairon-${version}-windows-${mappedArch}.zip`;
+  if (platform === 'darwin') return `wairon-${version}-macos-${mappedArch}.tar.gz`;
+  if (platform === 'linux')  return `wairon-${version}-linux-${mappedArch}.tar.gz`;
 
   return null;
 }
@@ -280,7 +280,7 @@ function isPkgBinary(): boolean {
 function installBinary(tmpFile: string, destPath: string): void {
   const platform = process.platform;
   const isZip = tmpFile.endsWith('.zip');
-  const extractDir = path.join(os.tmpdir(), 'waffagent-extract');
+  const extractDir = path.join(os.tmpdir(), 'wairon-extract');
 
   if (fs.existsSync(extractDir)) fs.rmSync(extractDir, { recursive: true });
   fs.mkdirSync(extractDir, { recursive: true });
@@ -294,7 +294,7 @@ function installBinary(tmpFile: string, destPath: string): void {
     execSync(`tar -xzf "${tmpFile}" -C "${extractDir}"`, { stdio: 'pipe' });
   }
 
-  const binaryName = platform === 'win32' ? 'waffagent.exe' : 'waffagent';
+  const binaryName = platform === 'win32' ? 'wairon.exe' : 'wairon';
   const extractedBinary = path.join(extractDir, binaryName);
 
   if (!fs.existsSync(extractedBinary)) {
@@ -304,7 +304,7 @@ function installBinary(tmpFile: string, destPath: string): void {
   if (platform === 'win32') {
     const newPath = destPath + '.new';
     fs.copyFileSync(extractedBinary, newPath);
-    const batchScript = path.join(os.tmpdir(), 'waffagent_update.bat');
+    const batchScript = path.join(os.tmpdir(), 'wairon_update.bat');
     fs.writeFileSync(
       batchScript,
       `@echo off\r\n` +
@@ -313,7 +313,7 @@ function installBinary(tmpFile: string, destPath: string): void {
       `del "%~f0"\r\n`,
     );
     execSync(`cmd /c start /b "" cmd /c "${batchScript}"`);
-    logger.info('Binary will be replaced after waffagent exits.');
+    logger.info('Binary will be replaced after wairon exits.');
   } else {
     const tmpDest = destPath + '.new';
     fs.copyFileSync(extractedBinary, tmpDest);

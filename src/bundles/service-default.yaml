@@ -8,7 +8,7 @@ description: >
   Use this when you have a distinct service with its own source tree, API
   surface, or deployment unit.
 
-  Example: waffagent create-bundle --bundle service-default --scope core-service --dir services/core
+  Example: wairon create-bundle --bundle service-default --scope core-service --dir services/core
 
 agents:
   - idSuffix: owner

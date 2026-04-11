@@ -25,7 +25,7 @@ export type DomainType = z.infer<typeof DomainTypeSchema>;
 export const PropagationSchema = z.enum([
   'flat',         // propagate lightweight reference agents all the way up to root
   'parent-only',  // propagate one level up only
-  'none',         // no propagation — only accessible via waffagent delegate
+  'none',         // no propagation — only accessible via wairon delegate
 ]);
 export type Propagation = z.infer<typeof PropagationSchema>;
 
@@ -56,7 +56,7 @@ export const DomainSchema = z.object({
    *
    * flat        → lightweight reference agents appear at root and all parents
    * parent-only → only the immediate parent gets reference agents
-   * none        → no propagation; use `waffagent delegate` to work in this domain
+   * none        → no propagation; use `wairon delegate` to work in this domain
    *
    * Default is 'flat' because most users work from the root project.
    */

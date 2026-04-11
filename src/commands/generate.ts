@@ -21,7 +21,7 @@ export async function runGenerate(options: GenerateOptions = {}): Promise<void> 
   const registry = loadRegistry();
 
   if (registry.agents.length === 0) {
-    logger.warn('No agents in registry. Add agents with `waffagent create-agent`.');
+    logger.warn('No agents in registry. Add agents with `wairon create-agent`.');
     return;
   }
 

@@ -3,7 +3,7 @@ import { ClaudeExporter } from './claude.js';
 import { CustomExporter } from './custom.js';
 import { GeminiExporter } from './gemini.js';
 import { TargetConfig } from '../models/project.js';
-import { WaffagentError } from '../utils/errors.js';
+import { WaironError } from '../utils/errors.js';
 
 // ---------------------------------------------------------------------------
 // Exporter registry
@@ -25,7 +25,7 @@ export function getExporter(target: TargetConfig): Exporter {
   const type = typeof target === 'string' ? target : target.type;
   const exporter = EXPORTERS.get(type);
   if (!exporter) {
-    throw new WaffagentError(`No exporter registered for target type: "${type}"`);
+    throw new WaironError(`No exporter registered for target type: "${type}"`);
   }
   return exporter;
 }
