@@ -2,7 +2,8 @@ name: Auto Tag
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
 
 # Only one auto-tag run at a time. If a second push lands while one is
 # already running, queue it rather than cancelling — we want every push
