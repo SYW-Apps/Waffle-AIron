@@ -3,7 +3,8 @@ import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { execSync, spawn } from 'child_process';
+import * as crypto from 'crypto';
+import { execSync } from 'child_process';
 import { logger } from '../utils/logger.js';
 import { WAIRON_VERSION, GITHUB_REPO } from '../config/defaults.js';
 import { getChannel, setChannel, UpdateChannel } from '../config/userconfig.js';
@@ -131,10 +132,28 @@ export async function runUpdate(options: UpdateOptions = {}): Promise<void> {
 
   const selfPath = getSelfPath();
   if (!selfPath) {
-    logger.warn('Could not determine the path of the current binary.');
-    logger.info(`Update downloaded to: ${tmpFile}`);
-    logger.info('Replace the binary manually.');
+    logger.warn('Cannot self-update: wairon was installed via npm.');
+    logger.info('Run `npm update -g waffle-airon` to update.');
     process.exit(1);
+  }
+
+  // Verify checksum before touching the installed binary
+  const checksumAssetName = assetName + '.sha256';
+  const checksumAsset = release.assets.find((a) => a.name === checksumAssetName);
+  if (checksumAsset) {
+    const tmpChecksum = path.join(tmpDir, checksumAssetName);
+    logger.info(`Verifying checksum...`);
+    try {
+      await downloadFile(checksumAsset.browser_download_url, tmpChecksum);
+      verifyChecksum(tmpFile, tmpChecksum, assetName);
+      fs.unlinkSync(tmpChecksum);
+    } catch (err) {
+      logger.error(`Checksum verification failed: ${(err as Error).message}`);
+      try { fs.unlinkSync(tmpFile); } catch { /* ignore */ }
+      process.exit(1);
+    }
+  } else {
+    logger.verbose(`No checksum file found for ${assetName} — skipping verification.`);
   }
 
   logger.info(`Installing to ${selfPath}...`);
@@ -246,6 +265,31 @@ function downloadFile(url: string, dest: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Checksum verification
+// ---------------------------------------------------------------------------
+
+/**
+ * Verify the SHA-256 checksum of a downloaded file.
+ *
+ * The .sha256 file format produced by sha256sum / Get-FileHash is:
+ *   <hex-hash>  <filename>
+ */
+function verifyChecksum(filePath: string, checksumFile: string, expectedFilename: string): void {
+  const checksumContent = fs.readFileSync(checksumFile, 'utf-8').trim();
+  // Handle both "hash  filename" and bare "hash" formats
+  const expectedHash = checksumContent.split(/\s+/)[0].toLowerCase();
+
+  const fileBuffer = fs.readFileSync(filePath);
+  const actualHash = crypto.createHash('sha256').update(fileBuffer).digest('hex').toLowerCase();
+
+  if (actualHash !== expectedHash) {
+    throw new Error(
+      `SHA-256 mismatch for ${expectedFilename}\n  expected: ${expectedHash}\n  actual:   ${actualHash}`,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Platform detection
 // ---------------------------------------------------------------------------
 
@@ -304,28 +348,17 @@ function installBinary(tmpFile: string, destPath: string): void {
   }
 
   if (platform === 'win32') {
-    const newPath = destPath + '.new';
-    fs.copyFileSync(extractedBinary, newPath);
-
-    // Write a PowerShell script that waits for wairon.exe to exit, then
-    // swaps in the new binary. Single-quote paths; escape embedded quotes.
-    const psScript = path.join(os.tmpdir(), 'wairon_update.ps1');
-    const q = (p: string) => p.replace(/'/g, "''");
-    fs.writeFileSync(psScript, [
-      `Start-Sleep -Seconds 3`,
-      `Move-Item -Force '${q(newPath)}' '${q(destPath)}'`,
-      `Remove-Item -Force '${q(psScript)}' -ErrorAction SilentlyContinue`,
-    ].join('\r\n'), 'utf8');
-
-    // spawn() + detached + unref() keeps the child alive after wairon exits.
-    const child = spawn(
-      'powershell',
-      ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-File', psScript],
-      { detached: true, stdio: 'ignore', windowsHide: true },
-    );
-    child.unref();
-
-    logger.info('Binary will be replaced after wairon exits.');
+    // On Windows you cannot overwrite a running exe, but you CAN rename it
+    // (executables are opened with FILE_SHARE_DELETE). So we:
+    //   1. Rename the running exe to .old  (instant, atomic on same volume)
+    //   2. Copy the new binary into the now-free slot
+    //   3. Attempt to delete .old immediately (succeeds when this process exits;
+    //      if it fails here, cleanStaleBinary() removes it on next run)
+    const oldPath = destPath + '.old';
+    cleanStaleBinary(oldPath);
+    fs.renameSync(destPath, oldPath);
+    fs.copyFileSync(extractedBinary, destPath);
+    try { fs.unlinkSync(oldPath); } catch { /* deleted on next startup */ }
   } else {
     const tmpDest = destPath + '.new';
     fs.copyFileSync(extractedBinary, tmpDest);
@@ -335,6 +368,18 @@ function installBinary(tmpFile: string, destPath: string): void {
 
   try { fs.unlinkSync(tmpFile); } catch { /* ignore */ }
   try { fs.rmSync(extractDir, { recursive: true }); } catch { /* ignore */ }
+}
+
+/**
+ * Remove a leftover .old binary from a previous update attempt.
+ * Called at startup (cli/index.ts) and before each rename.
+ */
+export function cleanStaleBinary(oldPath?: string): void {
+  const target = oldPath ?? (isPkgBinary() ? process.execPath + '.old' : null);
+  if (!target) return;
+  if (fs.existsSync(target)) {
+    try { fs.unlinkSync(target); } catch { /* still locked — ignore */ }
+  }
 }
 
 // ---------------------------------------------------------------------------

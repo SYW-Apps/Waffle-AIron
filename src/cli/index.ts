@@ -30,7 +30,11 @@ import {
   runCreateBundle,
   runSplit,
   runMerge,
+  cleanStaleBinary,
 } from '../commands/index.js';
+
+// Clean up any .old binary left over from a previous Windows self-update
+cleanStaleBinary();
 
 // ---------------------------------------------------------------------------
 // CLI definition
