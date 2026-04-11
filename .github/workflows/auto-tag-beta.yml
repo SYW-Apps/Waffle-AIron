@@ -4,6 +4,13 @@ on:
   push:
     branches: [beta]
 
+# Only one auto-tag run at a time. If a second push lands while one is
+# already running, queue it rather than cancelling — we want every push
+# to eventually get a version bump.
+concurrency:
+  group: auto-tag-beta
+  cancel-in-progress: false
+
 jobs:
   tag:
     name: Bump beta version and tag
@@ -24,6 +31,13 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+
+      # Pull the latest state of beta so we always start from the
+      # most recently committed package.json, not the version at the
+      # time the trigger fired (which may be stale if a concurrent run
+      # already bumped it).
+      - name: Pull latest beta
+        run: git pull --rebase origin beta
 
       - name: Compute next beta version
         id: version
@@ -58,7 +72,18 @@ jobs:
           echo "new_version_plain=${NEW_VERSION}" >> $GITHUB_OUTPUT
           echo "Next version: v${NEW_VERSION}"
 
+      - name: Check tag does not already exist
+        run: |
+          TAG=${{ steps.version.outputs.new_version }}
+          if git tag -l "$TAG" | grep -q "$TAG"; then
+            echo "Tag $TAG already exists — skipping release."
+            echo "skip=true" >> $GITHUB_ENV
+          else
+            echo "skip=false" >> $GITHUB_ENV
+          fi
+
       - name: Update package.json and defaults.ts
+        if: env.skip == 'false'
         run: |
           VERSION_PLAIN=${{ steps.version.outputs.new_version_plain }}
           # Update package.json version field
@@ -72,6 +97,7 @@ jobs:
           sed -i "s/export const WAIRON_VERSION = '[^']*'/export const WAIRON_VERSION = '${VERSION_PLAIN}'/" src/config/defaults.ts
 
       - name: Commit and tag
+        if: env.skip == 'false'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
