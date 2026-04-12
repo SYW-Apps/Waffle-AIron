@@ -39,16 +39,32 @@ export async function runGenerate(options: GenerateOptions = {}): Promise<void> 
     dryRun: options.dryRun,
   });
 
+  let written = 0;
+  let skipped = 0;
+
   for (const summary of summaries) {
     if (options.dryRun) {
       logger.info(`[dry-run] Would generate: ${summary.agent.id}`);
     } else {
       for (const result of summary.results) {
-        logger.success(`Generated: ${result.outputPath}`);
+        if (result.unchanged) {
+          logger.verbose(`Unchanged: ${result.outputPath}`);
+          skipped++;
+        } else {
+          logger.success(`Written:   ${result.outputPath}`);
+          written++;
+        }
       }
     }
   }
 
   logger.blank();
-  logger.success(`Done. ${summaries.length} agent(s) processed.`);
+  if (options.dryRun) {
+    logger.success(`Dry run complete. ${summaries.length} agent(s) would be processed.`);
+  } else {
+    const parts = [];
+    if (written > 0) parts.push(`${written} written`);
+    if (skipped > 0) parts.push(`${skipped} unchanged`);
+    logger.success(`Done. ${summaries.length} agent(s) processed — ${parts.join(', ') || 'none'}.`);
+  }
 }

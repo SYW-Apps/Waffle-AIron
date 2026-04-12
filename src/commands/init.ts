@@ -81,7 +81,7 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
       {
         type: 'checkbox',
         name: 'targets',
-        message: 'Which AI coding tools will you use? (select all that apply)',
+        message: 'Which AI coding tools will you use? (Space to select · Enter to confirm)',
         choices: [
           { name: 'Claude Code (.claude/agents/)', value: 'claude', checked: true },
           { name: 'Gemini CLI (.gemini/agents/)', value: 'gemini' },

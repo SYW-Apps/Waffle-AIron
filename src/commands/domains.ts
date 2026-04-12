@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { logger } from '../utils/logger.js';
 import { fromProjectRoot } from '../utils/fs.js';
+import { filteredCheckbox } from '../utils/filteredCheckbox.js';
 import { assertProjectInitialized, loadDomainRegistry, loadProjectConfig } from '../config/loader.js';
 import { detectDomainCandidates } from '../core/detection.js';
 import {
@@ -83,72 +84,74 @@ export async function runDomainsScan(options: { add?: boolean } = {}): Promise<v
     return;
   }
 
-  // Interactive selection
-  const { selected } = await inquirer.prompt<{ selected: string[] }>([
-    {
-      type: 'checkbox',
-      name: 'selected',
-      message: 'Select domains to add:',
-      choices: newCandidates.map((c) => ({
-        name: `${c.suggestedId}  ${chalk.gray(c.path)}  [${c.type}]`,
-        value: c.path,
-        checked: true,
-      })),
-    },
-  ]);
+  // Interactive selection with live type-filter (press f to cycle, Space to toggle)
+  const selected = await filteredCheckbox({
+    message: 'Select domains to add',
+    items: newCandidates.map((c) => ({
+      label: c.suggestedId,
+      subtext: c.path,
+      value: c.path,
+      itemType: c.type,
+    })),
+  });
 
   if (selected.length === 0) {
     logger.info('No domains selected.');
     return;
   }
 
+  // Step 3: Single bulk propagation default
+  const { defaultPropagation } = await inquirer.prompt<{ defaultPropagation: Propagation }>([
+    {
+      type: 'list',
+      name: 'defaultPropagation',
+      message: 'Default propagation for all selected domains:',
+      choices: [
+        { name: 'flat        — agents appear at root and all parent domains (recommended)', value: 'flat' },
+        { name: 'parent-only — agents appear in immediate parent only', value: 'parent-only' },
+        { name: 'none        — no propagation (use wairon delegate)', value: 'none' },
+      ],
+      default: 'flat',
+    },
+  ]);
+
   const projectConfig = loadProjectConfig();
   const enabledTargets = projectConfig.targets
     .filter((t) => !('enabled' in t) || t.enabled)
     .map((t) => 'type' in t ? t.type : t as string);
 
+  let added = 0;
+  let skipped = 0;
+
   for (const selectedPath of selected) {
     const candidate = newCandidates.find((c) => c.path === selectedPath)!;
-
-    const { propagation, parentId } = await inquirer.prompt<{
-      propagation: Propagation;
-      parentId: string;
-    }>([
-      {
-        type: 'list',
-        name: 'propagation',
-        message: `Propagation for "${candidate.suggestedId}":`,
-        choices: [
-          { name: 'flat       — agents appear at root and all parent domains', value: 'flat' },
-          { name: 'parent-only — agents appear in immediate parent only', value: 'parent-only' },
-          { name: 'none        — no propagation (use wairon delegate)', value: 'none' },
-        ],
-        default: 'flat',
-      },
-      {
-        type: 'input',
-        name: 'parentId',
-        message: `Parent domain id (leave blank for root):`,
-        default: '',
-      },
-    ]);
 
     const domain = DomainSchema.parse({
       id: candidate.suggestedId,
       name: candidate.suggestedName,
       path: candidate.path,
       type: candidate.type,
-      parent: parentId.trim() || 'root',
-      propagation,
+      parent: 'root',
+      propagation: defaultPropagation,
       status: 'active',
       detectedAt: new Date().toISOString(),
       addedAt: new Date().toISOString(),
     });
 
-    addDomain(domain);
-    scaffoldDomain(domain, enabledTargets);
-    logger.success(`Added domain: ${domain.id} (${domain.path})`);
+    try {
+      addDomain(domain);
+      scaffoldDomain(domain, enabledTargets);
+      logger.success(`Added domain: ${domain.id} (${domain.path})`);
+      added++;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.warn(`Skipped "${domain.id}": ${msg}`);
+      skipped++;
+    }
   }
+
+  logger.blank();
+  logger.info(`Done: ${added} added, ${skipped} skipped.`);
 }
 
 // ---- add (manual) ----------------------------------------------------------

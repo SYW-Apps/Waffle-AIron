@@ -30,6 +30,8 @@ export interface ExportResult {
   outputPath: string;
   /** The content that was written */
   content: string;
+  /** True if the file already existed with identical content and was not rewritten */
+  unchanged: boolean;
 }
 
 export interface Exporter {

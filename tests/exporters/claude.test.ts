@@ -10,6 +10,7 @@ vi.mock('../../src/utils/fs.js', async (importOriginal) => {
   return {
     ...actual,
     writeFile: vi.fn(),
+    writeFileIfChanged: vi.fn(() => true),
   };
 });
 

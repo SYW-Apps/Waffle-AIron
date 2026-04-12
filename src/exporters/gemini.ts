@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { writeFile } from '../utils/fs.js';
+import { writeFileIfChanged } from '../utils/fs.js';
 import { Exporter, ExportContext, ExportResult } from './base.js';
 
 // ---------------------------------------------------------------------------
@@ -50,8 +50,8 @@ export class GeminiExporter implements Exporter {
       '',
     ].join('\n');
 
-    writeFile(filePath, content);
-    return { outputPath: filePath, content };
+    const changed = writeFileIfChanged(filePath, content);
+    return { outputPath: filePath, content, unchanged: !changed };
   }
 }
 
