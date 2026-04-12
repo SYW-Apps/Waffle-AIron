@@ -1,10 +1,8 @@
 import * as fs from 'fs';
-import * as path from 'path';
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
 import { assertProjectInitialized, loadRegistry, loadProjectConfig } from '../config/loader.js';
 import { listBundleIds, loadBundle } from '../core/bundles.js';
-import { AgentRecord } from '../models/agent.js';
 
 // ---------------------------------------------------------------------------
 // suggest-topology command
@@ -140,7 +138,7 @@ export async function runSuggestTopology(): Promise<void> {
     const agentTargetTypes = agent.targets.map((t) =>
       typeof t === 'string' ? t : (t as { type: string }).type,
     );
-    const hasEnabledTarget = agentTargetTypes.some((t) => enabledTargetTypes.includes(t));
+    const hasEnabledTarget = agentTargetTypes.some((t) => (enabledTargetTypes as string[]).includes(t));
     if (!hasEnabledTarget) {
       suggestions.push({
         type: 'no-target',

@@ -1,7 +1,7 @@
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
-import { assertProjectInitialized, loadProjectConfig, AI_PATHS } from '../config/loader.js';
+import { assertProjectInitialized, loadProjectConfig } from '../config/loader.js';
 import { findAgent, addAgent, updateAgent } from '../core/registry.js';
 import { createAgentRecord } from '../models/agent.js';
 import { WaironError } from '../utils/errors.js';
