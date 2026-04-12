@@ -31,6 +31,11 @@ import {
   runUpdate,
   runTemplatesList,
   runBundlesList,
+  runTargetsList,
+  runTargetsAdd,
+  runTargetsRemove,
+  runTargetsEnable,
+  runTargetsDisable,
   cleanStaleBinary,
 } from '../commands/index.js';
 
@@ -146,6 +151,50 @@ bundlesCmd
   .description('List all available bundles (built-in + project-local)')
   .action(async () => {
     await runBundlesList();
+  });
+
+// ---------------------------------------------------------------------------
+// targets
+// ---------------------------------------------------------------------------
+
+const targetsCmd = program
+  .command('targets')
+  .description('Manage output targets (Claude Code, Gemini CLI, custom)');
+
+targetsCmd
+  .command('list')
+  .alias('ls')
+  .description('List all configured targets and their status')
+  .action(async () => {
+    await runTargetsList();
+  });
+
+targetsCmd
+  .command('add')
+  .description('Add a new output target to this project')
+  .action(async () => {
+    await runTargetsAdd();
+  });
+
+targetsCmd
+  .command('remove <key>')
+  .description('Remove a target (use the type or label shown in `targets list`)')
+  .action(async (key: string) => {
+    await runTargetsRemove(key);
+  });
+
+targetsCmd
+  .command('enable <key>')
+  .description('Enable a disabled target')
+  .action(async (key: string) => {
+    await runTargetsEnable(key);
+  });
+
+targetsCmd
+  .command('disable <key>')
+  .description('Disable a target without removing it')
+  .action(async (key: string) => {
+    await runTargetsDisable(key);
   });
 
 // ---------------------------------------------------------------------------

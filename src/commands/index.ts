@@ -14,6 +14,7 @@ export * from './merge.js';
 export * from './show.js';
 export * from './split.js';
 export * from './suggest-topology.js';
+export * from './targets.js';
 export * from './templates.js';
 export * from './topology-history.js';
 export * from './update.js';

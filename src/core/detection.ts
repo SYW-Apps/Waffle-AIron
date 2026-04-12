@@ -45,6 +45,7 @@ const MAX_SCAN_DEPTH = 5;
 export function detectDomainCandidates(
   projectRoot: string,
   alreadyTrackedPaths: Set<string> = new Set(),
+  alreadyTrackedIds: Set<string> = new Set(),
 ): DetectedDomainCandidate[] {
   const candidates = new Map<string, DetectedDomainCandidate>();
 
@@ -79,8 +80,8 @@ export function detectDomainCandidates(
 
   const sorted = Array.from(candidates.values()).sort((a, b) => a.path.localeCompare(b.path));
 
-  // Resolve duplicate suggestedIds by prepending the parent path segment
-  return deduplicateIds(sorted);
+  // Resolve duplicate suggestedIds — also counting ids already claimed in the registry
+  return deduplicateIds(sorted, alreadyTrackedIds);
 }
 
 /**
@@ -88,8 +89,16 @@ export function detectDomainCandidates(
  * directory segment (e.g. "shared" in packages/ vs services/ → "packages-shared"
  * and "services-shared").
  */
-function deduplicateIds(candidates: DetectedDomainCandidate[]): DetectedDomainCandidate[] {
+function deduplicateIds(
+  candidates: DetectedDomainCandidate[],
+  existingIds: Set<string> = new Set(),
+): DetectedDomainCandidate[] {
   const idCount = new Map<string, number>();
+  // Pre-seed counts with ids already claimed in the registry so that a single
+  // new candidate whose basename matches an existing domain still gets qualified.
+  for (const id of existingIds) {
+    idCount.set(id, (idCount.get(id) ?? 0) + 1);
+  }
   for (const c of candidates) {
     idCount.set(c.suggestedId, (idCount.get(c.suggestedId) ?? 0) + 1);
   }

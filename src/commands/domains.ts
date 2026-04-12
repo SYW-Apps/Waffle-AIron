@@ -58,7 +58,8 @@ export async function runDomainsScan(options: { add?: boolean } = {}): Promise<v
   const registry = loadDomainRegistry();
 
   const trackedPaths = new Set(registry.domains.map((d) => d.path));
-  const candidates = detectDomainCandidates(projectRoot, trackedPaths);
+  const trackedIds = new Set(registry.domains.map((d) => d.id));
+  const candidates = detectDomainCandidates(projectRoot, trackedPaths, trackedIds);
 
   const newCandidates = candidates.filter((c) => !c.alreadyTracked);
 
