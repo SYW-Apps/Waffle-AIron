@@ -35,6 +35,12 @@ const MAX_SCAN_DEPTH = 5;
 /**
  * Scan a project root and return all domain candidates.
  * Already-tracked domain paths are marked with alreadyTracked: true.
+ *
+ * De-duplication rules applied after detection:
+ *   - package-root entries whose path is inside a git-submodule or git-repo
+ *     are suppressed (the submodule already represents that boundary)
+ *   - candidates with conflicting suggestedIds get their parent path segment
+ *     prepended to produce a unique id (e.g. shared → packages-shared)
  */
 export function detectDomainCandidates(
   projectRoot: string,
@@ -54,14 +60,49 @@ export function detectDomainCandidates(
     }
   }
 
-  // 3. Package roots (monorepo packages etc.)
+  // 3. Package roots — but skip any that live inside a git-submodule / git-repo
+  const gitPaths = new Set(
+    Array.from(candidates.values())
+      .filter((c) => c.type === 'git-submodule' || c.type === 'git-repo')
+      .map((c) => c.path),
+  );
+
   for (const c of detectPackageRoots(projectRoot)) {
-    if (!candidates.has(c.path)) {
-      candidates.set(c.path, { ...c, alreadyTracked: alreadyTrackedPaths.has(c.path) });
-    }
+    if (candidates.has(c.path)) continue;
+    // Suppress if the package root is inside any git boundary
+    const insideGit = Array.from(gitPaths).some(
+      (gp) => c.path === gp || c.path.startsWith(gp + '/'),
+    );
+    if (insideGit) continue;
+    candidates.set(c.path, { ...c, alreadyTracked: alreadyTrackedPaths.has(c.path) });
   }
 
-  return Array.from(candidates.values()).sort((a, b) => a.path.localeCompare(b.path));
+  const sorted = Array.from(candidates.values()).sort((a, b) => a.path.localeCompare(b.path));
+
+  // Resolve duplicate suggestedIds by prepending the parent path segment
+  return deduplicateIds(sorted);
+}
+
+/**
+ * If two candidates share the same suggestedId, qualify each with its parent
+ * directory segment (e.g. "shared" in packages/ vs services/ → "packages-shared"
+ * and "services-shared").
+ */
+function deduplicateIds(candidates: DetectedDomainCandidate[]): DetectedDomainCandidate[] {
+  const idCount = new Map<string, number>();
+  for (const c of candidates) {
+    idCount.set(c.suggestedId, (idCount.get(c.suggestedId) ?? 0) + 1);
+  }
+
+  return candidates.map((c) => {
+    if ((idCount.get(c.suggestedId) ?? 0) <= 1) return c;
+    // Qualify with parent segment
+    const parts = c.path.split('/');
+    const qualifiedId = parts.length >= 2
+      ? pathToId(`${parts[parts.length - 2]}-${parts[parts.length - 1]}`)
+      : c.suggestedId;
+    return { ...c, suggestedId: qualifiedId };
+  });
 }
 
 // ---------------------------------------------------------------------------

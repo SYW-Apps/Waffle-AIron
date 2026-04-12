@@ -14,9 +14,12 @@ import {
   runList,
   runShow,
   runAnalyze,
+  runSuggestTopology,
   runCreateAgent,
   runCreateBundle,
   runDeprecate,
+  runSplit,
+  runMerge,
   runDelegate,
   runJobsList,
   runJobsShow,
@@ -28,9 +31,6 @@ import {
   runUpdate,
   runTemplatesList,
   runBundlesList,
-  runSuggestTopology,
-  runSplit,
-  runMerge,
   cleanStaleBinary,
 } from '../commands/index.js';
 
@@ -88,8 +88,9 @@ program
 program
   .command('validate')
   .description('Validate project config and agent registry')
-  .action(async () => {
-    await runValidate();
+  .option('--ci', 'treat warnings as errors and exit 1 (for CI pipelines)')
+  .action(async (opts) => {
+    await runValidate({ ci: opts.ci });
   });
 
 // ---------------------------------------------------------------------------
@@ -335,23 +336,31 @@ program
   .action(async (agentId: string) => { await runDeprecate(agentId); });
 
 // ---------------------------------------------------------------------------
-// Remaining planned commands (stubs)
+// suggest-topology
 // ---------------------------------------------------------------------------
 
 program
   .command('suggest-topology')
-  .description('[planned] Suggest topology improvements based on current state')
+  .description('Suggest topology improvements based on current state')
   .action(async () => { await runSuggestTopology(); });
 
-program
-  .command('split')
-  .description('[planned] Split an agent into more focused agents')
-  .action(async () => { await runSplit(); });
+// ---------------------------------------------------------------------------
+// split
+// ---------------------------------------------------------------------------
 
 program
-  .command('merge')
-  .description('[planned] Merge two agents into one')
-  .action(async () => { await runMerge(); });
+  .command('split <agent-id>')
+  .description('Split an agent into two or more focused agents')
+  .action(async (agentId: string) => { await runSplit(agentId); });
+
+// ---------------------------------------------------------------------------
+// merge
+// ---------------------------------------------------------------------------
+
+program
+  .command('merge <agent-id-1> <agent-id-2>')
+  .description('Merge two agents into one')
+  .action(async (idA: string, idB: string) => { await runMerge(idA, idB); });
 
 // ---------------------------------------------------------------------------
 // Utilities

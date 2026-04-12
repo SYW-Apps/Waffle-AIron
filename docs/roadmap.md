@@ -41,8 +41,8 @@
   - Prompt for: bundle id, scope name, scope directory
   - Expand bundle spec into registry entries
   - Support `--dry-run` to preview before writing
-- [ ] Diff-aware generation — only update files where the agent or template changed
-- [ ] Full glob-based ownership overlap detection (not just exact-match)
+- [x] Diff-aware generation — only update files where the agent or template changed
+- [ ] Full glob-based ownership overlap detection (micromatch, not just prefix heuristics)
 - [x] `wairon show <agent-id>` — display full details of a single agent
 - [x] `wairon templates list` — list all available templates
 - [x] `wairon bundles list` — list all available bundles
@@ -59,9 +59,9 @@
   - Which agents have overlapping ownership?
   - Which agents are drafts or deprecated?
   - Coverage percentage of top-level paths
-- [ ] `wairon suggest-topology` — propose new agents or path rebalancing
-  - Output: human-readable suggestions (not auto-applied)
-  - Suggest bundle use when a scope has no agent family
+- [x] `wairon suggest-topology` — propose new agents or path rebalancing
+  - Human-readable suggestions, nothing auto-applied
+  - Suggests bundles for gaps, flags broad ownership, merge/split candidates
 - [ ] Full `.gitignore`-aware path walking (currently skips common dirs)
 
 ---
@@ -71,13 +71,9 @@
 **Goal:** Guided refactoring of agent topology as projects evolve.
 
 ### Planned
-- [ ] `wairon split <agent-id>` — guided agent splitting into two or more agents
-  - Prompt for new ids, names, path reassignment
-  - Update registry, deprecate original, generate new outputs
-- [ ] `wairon merge <id1> <id2>` — guided agent merging
-  - Prompt for merged id, name, combined paths
-  - Update registry, deprecate originals, generate merged output
-- [ ] Migration history in `.wai/docs/` (auto-generated log of topology changes)
+- [x] `wairon split <agent-id>` — guided agent splitting into two or more agents
+- [x] `wairon merge <id1> <id2>` — guided agent merging
+- [x] Migration history in `.wai/docs/topology-history.md`
 - [x] `wairon deprecate <agent-id>` — mark agent as deprecated without deleting
 
 ---
@@ -104,7 +100,7 @@ topology without manual CLI invocation.
 - [ ] Shared template/bundle library — reference templates from a remote URL or
   local path outside the project
 - [ ] Cross-project agent topology standards
-- [ ] CI integration: `wairon validate --ci` exits 1 on any error
+- [x] CI integration: `wairon validate --ci` exits 1 on warnings too
 - [ ] GitHub Actions example workflow
 - [ ] Agent topology diff reporting on PRs
 

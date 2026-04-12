@@ -21,6 +21,20 @@ export function writeFile(filePath: string, content: string): void {
 }
 
 /**
+ * Write a file only if the content differs from what is already on disk.
+ * Returns true if the file was written (new or changed), false if unchanged.
+ */
+export function writeFileIfChanged(filePath: string, content: string): boolean {
+  if (fs.existsSync(filePath)) {
+    const existing = fs.readFileSync(filePath, 'utf-8');
+    if (existing === content) return false;
+  }
+  ensureDir(path.dirname(filePath));
+  fs.writeFileSync(filePath, content, 'utf-8');
+  return true;
+}
+
+/**
  * Read a file as a string, or return null if it doesn't exist.
  */
 export function readFileOrNull(filePath: string): string | null {

@@ -7,16 +7,21 @@ import { validateRegistry, validateProjectConfig } from '../core/validation.js';
 // validate command
 //
 // Checks the project config and registry for issues.
-// Exits with code 1 if there are errors, 0 if clean (warnings allowed).
+// Exits with code 1 if there are errors (or warnings in --ci mode).
 // ---------------------------------------------------------------------------
 
-export async function runValidate(): Promise<void> {
+export interface ValidateOptions {
+  ci?: boolean; // treat warnings as errors (for CI pipelines)
+}
+
+export async function runValidate(options: ValidateOptions = {}): Promise<void> {
   assertProjectInitialized();
 
   const projectConfig = loadProjectConfig();
   const registry = loadRegistry();
 
   let hasErrors = false;
+  let hasWarnings = false;
 
   // --- Project config ---
   logger.header('Project Config');
@@ -30,6 +35,7 @@ export async function runValidate(): Promise<void> {
         hasErrors = true;
       } else {
         logger.warn(`[${issue.code}] ${issue.message}`);
+        hasWarnings = true;
       }
     }
   }
@@ -49,16 +55,27 @@ export async function runValidate(): Promise<void> {
         hasErrors = true;
       } else {
         logger.warn(`${prefix}[${issue.code}] ${issue.message}`);
+        hasWarnings = true;
       }
     }
   }
 
   logger.blank();
 
-  if (hasErrors) {
-    logger.error('Validation failed. Fix the errors above.');
+  const failOnWarnings = options.ci && hasWarnings;
+
+  if (hasErrors || failOnWarnings) {
+    if (options.ci && failOnWarnings && !hasErrors) {
+      logger.error('Validation failed: warnings are treated as errors in --ci mode.');
+    } else {
+      logger.error('Validation failed. Fix the errors above.');
+    }
     process.exit(1);
   } else {
-    logger.success('All checks passed.');
+    if (options.ci) {
+      logger.success('All checks passed (CI mode — warnings treated as errors).');
+    } else {
+      logger.success('All checks passed.');
+    }
   }
 }
