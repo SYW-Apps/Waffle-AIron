@@ -1,6 +1,6 @@
 {
   "name": "waffle-airon",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "SYW Waffle AIron — CLI for managing AI coding agent topology across projects",
   "keywords": [
     "ai",
