@@ -33,11 +33,11 @@
 **Goal:** Make it easy to add agents and bundles through guided CLI flows.
 
 ### Planned
-- [ ] `wairon create-agent` — interactive agent creation from a template
+- [x] `wairon create-agent` — interactive agent creation from a template
   - Prompt for: id, name, template, owned paths, tags, targets
   - Write to registry immediately
   - Optionally generate right away
-- [ ] `wairon create-bundle` — scaffold multiple agents from a bundle
+- [x] `wairon create-bundle` — scaffold multiple agents from a bundle
   - Prompt for: bundle id, scope name, scope directory
   - Expand bundle spec into registry entries
   - Support `--dry-run` to preview before writing
@@ -54,15 +54,15 @@
 **Goal:** Let wairon analyze the repository and surface topology gaps.
 
 ### Planned
-- [ ] `wairon analyze` — walk repo, report coverage vs agent ownership
+- [x] `wairon analyze` — walk repo, report coverage vs agent ownership
   - Which paths have no owning agent?
-  - Which agents have overlapping or redundant ownership?
-  - Which agents are drafts or deprecated but still generating files?
+  - Which agents have overlapping ownership?
+  - Which agents are drafts or deprecated?
+  - Coverage percentage of top-level paths
 - [ ] `wairon suggest-topology` — propose new agents or path rebalancing
   - Output: human-readable suggestions (not auto-applied)
   - Suggest bundle use when a scope has no agent family
-- [ ] Coverage report: percentage of repo paths with an owning agent
-- [ ] `.gitignore`-aware path walking (skip ignored paths)
+- [ ] Full `.gitignore`-aware path walking (currently skips common dirs)
 
 ---
 
@@ -78,7 +78,7 @@
   - Prompt for merged id, name, combined paths
   - Update registry, deprecate originals, generate merged output
 - [ ] Migration history in `.wai/docs/` (auto-generated log of topology changes)
-- [ ] `wairon deprecate <agent-id>` — mark agent as deprecated without deleting
+- [x] `wairon deprecate <agent-id>` — mark agent as deprecated without deleting
 
 ---
 
