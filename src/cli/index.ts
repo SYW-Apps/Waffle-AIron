@@ -13,6 +13,10 @@ import {
   runValidate,
   runList,
   runShow,
+  runAnalyze,
+  runCreateAgent,
+  runCreateBundle,
+  runDeprecate,
   runDelegate,
   runJobsList,
   runJobsShow,
@@ -24,10 +28,7 @@ import {
   runUpdate,
   runTemplatesList,
   runBundlesList,
-  runAnalyze,
   runSuggestTopology,
-  runCreateAgent,
-  runCreateBundle,
   runSplit,
   runMerge,
   cleanStaleBinary,
@@ -287,28 +288,60 @@ program
   });
 
 // ---------------------------------------------------------------------------
-// Planned commands (stubs)
+// analyze
 // ---------------------------------------------------------------------------
 
 program
   .command('analyze')
-  .description('[planned] Analyze the repository and suggest agent topology')
+  .description('Analyze repository coverage and surface topology gaps')
   .action(async () => { await runAnalyze(); });
+
+// ---------------------------------------------------------------------------
+// create-agent
+// ---------------------------------------------------------------------------
+
+program
+  .command('create-agent')
+  .description('Interactively create a new agent from a template')
+  .action(async () => { await runCreateAgent(); });
+
+// ---------------------------------------------------------------------------
+// create-bundle
+// ---------------------------------------------------------------------------
+
+program
+  .command('create-bundle')
+  .description('Scaffold multiple agents from a bundle definition')
+  .option('--bundle <id>', 'bundle id to use')
+  .option('--scope <name>', 'scope name (becomes agent id prefix)')
+  .option('--dir <path>', 'scope directory relative to project root')
+  .option('--dry-run', 'preview agents without writing to registry')
+  .action(async (opts) => {
+    await runCreateBundle({
+      bundle: opts.bundle,
+      scope: opts.scope,
+      dir: opts.dir,
+      dryRun: opts.dryRun,
+    });
+  });
+
+// ---------------------------------------------------------------------------
+// deprecate
+// ---------------------------------------------------------------------------
+
+program
+  .command('deprecate <agent-id>')
+  .description('Mark an agent as deprecated without removing it')
+  .action(async (agentId: string) => { await runDeprecate(agentId); });
+
+// ---------------------------------------------------------------------------
+// Remaining planned commands (stubs)
+// ---------------------------------------------------------------------------
 
 program
   .command('suggest-topology')
   .description('[planned] Suggest topology improvements based on current state')
   .action(async () => { await runSuggestTopology(); });
-
-program
-  .command('create-agent')
-  .description('[planned] Create a new agent from a template')
-  .action(async () => { await runCreateAgent(); });
-
-program
-  .command('create-bundle')
-  .description('[planned] Scaffold multiple agents from a bundle')
-  .action(async () => { await runCreateBundle(); });
 
 program
   .command('split')
