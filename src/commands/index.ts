@@ -1,4 +1,5 @@
 export * from './aliases.js';
+export * from './context.js';
 export * from './analyze.js';
 export * from './bundles.js';
 export * from './create-agent.js';
@@ -13,8 +14,10 @@ export * from './list.js';
 export * from './merge.js';
 export * from './show.js';
 export * from './split.js';
+export * from './scaffold-domains.js';
 export * from './suggest-topology.js';
 export * from './targets.js';
+export * from './profiles.js';
 export * from './templates.js';
 export * from './topology-history.js';
 export * from './update.js';

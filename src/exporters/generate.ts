@@ -26,6 +26,11 @@ export type RenderContext = 'standalone' | 'project-reference' | 'root';
 export interface GenerateOptions {
   projectRoot?: string;
   filterTargets?: string[];
+  /**
+   * If set, only generate agents whose domainRoot is in this set.
+   * Use the special value 'root' to select agents with no domainRoot.
+   */
+  filterDomainIds?: string[];
   dryRun?: boolean;
 }
 
@@ -52,7 +57,17 @@ export function generateAll(
   projectConfig: ProjectConfig,
   options: GenerateOptions = {},
 ): GenerateSummary[] {
-  return agents.map((agent) => generateAgent(agent, projectConfig, options));
+  let pool = agents;
+
+  if (options.filterDomainIds && options.filterDomainIds.length > 0) {
+    const ids = new Set(options.filterDomainIds);
+    pool = agents.filter((a) => {
+      const effectiveDomain = a.domainRoot ?? 'root';
+      return ids.has(effectiveDomain);
+    });
+  }
+
+  return pool.map((agent) => generateAgent(agent, projectConfig, options));
 }
 
 // ---------------------------------------------------------------------------

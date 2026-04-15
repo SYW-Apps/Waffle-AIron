@@ -28,6 +28,11 @@ export const AI_PATHS = {
   docsDir: () => aiDir('docs'),
   generatedDir: () => aiDir('generated'),
   jobsDir: () => aiDir('jobs'),
+  contextDir: () => aiDir('context'),
+  contextProjectMd: () => aiDir('context', 'project.md'),
+  contextArchitectureMd: () => aiDir('context', 'architecture.md'),
+  contextDomainsMd: () => aiDir('context', 'domains.md'),
+  contextWaironGuideMd: () => aiDir('context', 'wairon-guide.md'),
 } as const;
 
 // ---------------------------------------------------------------------------

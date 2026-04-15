@@ -36,6 +36,18 @@ import {
   runTargetsRemove,
   runTargetsEnable,
   runTargetsDisable,
+  runScaffoldDomains,
+  runProfilesList,
+  runProfilesCreate,
+  runProfilesSetup,
+  runProfilesUse,
+  runProfilesSetGlobal,
+  runProfilesDelete,
+  runProfilesShow,
+  runContextInit,
+  runContextEdit,
+  runContextSync,
+  runContextShow,
   cleanStaleBinary,
 } from '../commands/index.js';
 
@@ -79,11 +91,19 @@ program
 program
   .command('generate')
   .description('Generate agent output files from the registry')
-  .option('--target <type>', 'limit generation to a specific target (claude|gemini|custom)')
-  .option('--domain <id>', 'limit generation to agents in a specific domain')
+  .option('--target <type>', 'limit to a specific target (claude|gemini|custom)')
+  .option('--domain <id>', 'limit to agents in a single domain (use "root" for root agents)')
+  .option('--domains <ids>', 'limit to a comma-separated list of domain ids')
+  .option('--root', 'only generate root-level agents (no domain)')
   .option('--dry-run', 'preview what would be generated without writing files')
   .action(async (opts) => {
-    await runGenerate({ target: opts.target, dryRun: opts.dryRun });
+    await runGenerate({
+      target: opts.target,
+      domain: opts.domain,
+      domains: opts.domains,
+      root: opts.root,
+      dryRun: opts.dryRun,
+    });
   });
 
 // ---------------------------------------------------------------------------
@@ -335,6 +355,113 @@ program
   .option('--channel <channel>', 'set update channel: stable (default), beta, or preview')
   .action(async (opts) => {
     await runUpdate({ check: opts.check, channel: opts.channel });
+  });
+
+// ---------------------------------------------------------------------------
+// scaffold-domains
+// ---------------------------------------------------------------------------
+
+program
+  .command('scaffold-domains')
+  .description('Create bundle agents for domains that do not have any agents yet')
+  .option('--rescan', 'scan for new domain candidates first, then scaffold')
+  .action(async (opts) => {
+    await runScaffoldDomains({ rescan: opts.rescan });
+  });
+
+// ---------------------------------------------------------------------------
+// profiles
+// ---------------------------------------------------------------------------
+
+const profilesCmd = program
+  .command('profiles')
+  .description('Manage work/personal profiles for AI tool command separation');
+
+profilesCmd
+  .command('list')
+  .alias('ls')
+  .description('List all profiles and their tool configurations')
+  .action(async () => {
+    await runProfilesList();
+  });
+
+profilesCmd
+  .command('create')
+  .description('Create a new profile interactively')
+  .action(async () => {
+    await runProfilesCreate();
+  });
+
+profilesCmd
+  .command('setup <id>')
+  .description('Create wrapper scripts and copy config dirs for a profile')
+  .action(async (id: string) => {
+    await runProfilesSetup(id);
+  });
+
+profilesCmd
+  .command('use <id>')
+  .description('Set the active profile for the current project')
+  .action(async (id: string) => {
+    await runProfilesUse(id);
+  });
+
+profilesCmd
+  .command('set-global <id>')
+  .description('Set the global default profile (used when no project profile is set)')
+  .action(async (id: string) => {
+    await runProfilesSetGlobal(id);
+  });
+
+profilesCmd
+  .command('show <id>')
+  .description('Show details of a profile')
+  .action(async (id: string) => {
+    await runProfilesShow(id);
+  });
+
+profilesCmd
+  .command('delete <id>')
+  .description('Delete a profile (wrapper scripts and config dirs are kept)')
+  .action(async (id: string) => {
+    await runProfilesDelete(id);
+  });
+
+// ---------------------------------------------------------------------------
+// context
+// ---------------------------------------------------------------------------
+
+const contextCmd = program
+  .command('context')
+  .description('Manage shared project context for all AI sessions');
+
+contextCmd
+  .command('init')
+  .description('Set up the shared project context with a guided wizard')
+  .action(async () => {
+    await runContextInit();
+  });
+
+contextCmd
+  .command('edit')
+  .description('Open the project context in your editor')
+  .option('--architecture', 'edit architecture.md instead of project.md')
+  .action(async (opts) => {
+    await runContextEdit({ architecture: opts.architecture });
+  });
+
+contextCmd
+  .command('sync')
+  .description('Regenerate domains.md and wairon-guide.md from the current registry')
+  .action(async () => {
+    await runContextSync();
+  });
+
+contextCmd
+  .command('show')
+  .description('Display the current shared project context')
+  .action(async () => {
+    await runContextShow();
   });
 
 // ---------------------------------------------------------------------------

@@ -1,173 +1,244 @@
-# waffagent — Vision
+# wairon — Vision
 
 > This document captures the long-term product direction.
 > It is intentionally aspirational. Implementation is phased.
+> See roadmap.md for the concrete implementation plan.
 
 ---
 
-## What waffagent becomes
+## What wairon becomes
 
-waffagent starts as a topology manager and agent scaffold tool. Over time it
+wairon starts as a topology manager and agent scaffold tool. Over time it
 grows into a **local AI orchestration hub** — the single tool through which
 AI coding work is defined, delegated, observed, and controlled across any
-project structure.
+project structure, using any mix of AI backends.
+
+The north star: type `wairon session` in any initialized project and get the
+right AI tool, with the right context, working within the right boundaries,
+with full observability — regardless of whether that means Claude Code, Gemini
+CLI, an Ollama model, or all three in sequence.
+
+---
+
+## The `.wai/` ownership principle
+
+wairon owns `.wai/`. Everything else in the project belongs to the user.
+
+This means:
+- All orchestration state (jobs, runs, workspaces, worktrees, pipelines) lives under `.wai/`
+- No files are written to the project root or the user's home directory for
+  automated/orchestrated sessions without explicit opt-in
+- `.wai/` can be cleaned, backed up, or gitignored as a unit
+- The user's workspace and git history are never modified without permission
+
+The one exception — injecting a guide into `CLAUDE.md` or `GEMINI.md` — is
+an explicit opt-in during `wairon init`, and even that is being superseded by
+a cleaner pattern: wairon generates `.wai/context/wairon-guide.md` and the
+user adds a single `@.wai/context/wairon-guide.md` import line to their own
+CLAUDE.md once.
+
+---
+
+## Shared context as the backbone
+
+AI tools auto-generate their own project descriptions independently — Claude
+writes its own CLAUDE.md, Gemini writes its own GEMINI.md, and they diverge
+over time. This is the root cause of inconsistent multi-tool behavior.
+
+wairon solves this with a single shared context under `.wai/context/`:
+
+```
+.wai/context/
+  project.md          ← source of truth: project description, stack, conventions
+  architecture.md     ← system design, component map (optional, human-curated)
+  domains.md          ← auto-generated: current domain list with paths and owners
+  wairon-guide.md     ← auto-generated: wairon usage guide for AI tools
+```
+
+Every orchestrated session — whether a single `delegate`, a pipeline step,
+or a `wairon session` — reads from this context as its starting point.
+The context evolves as the project evolves; `wairon context sync` keeps
+`domains.md` and `wairon-guide.md` current.
 
 ---
 
 ## The Delegation Loop
 
-The most valuable near-term extension: **`waffagent delegate`**.
+The core primitive: **`wairon delegate`**.
 
-A parent AI agent (running at the project root in Claude Code or Gemini CLI)
-identifies a task that belongs to a specific subdomain. Rather than context-
-switching or copy-pasting instructions, it runs:
-
-```
-waffagent delegate core-utils --prompt "fix JWT expiry bug in auth/middleware.ts"
-```
-
-waffagent:
-1. Creates a structured job file in `.wai/jobs/`
-2. Spawns `claude` (or `gemini`) in the subdomain directory as a fully observable subprocess
-3. The sub-session has its own focused context, full domain authority, and project instructions
-4. On completion, the sub-agent writes a result file summarizing what was done
-5. waffagent surfaces the result to the parent session — summary, files changed, flagged observations
-
-The parent agent continues with updated context. The sub-agent never needed to know about the broader project.
-
-### Async delegation
+A parent session (running in the project root) identifies a task scoped to
+one domain. Instead of context-switching or copy-pasting, it runs:
 
 ```
-waffagent delegate core-utils --async --prompt "..."
-waffagent delegate blueprints --async --prompt "..."
-waffagent jobs wait --all
+wairon delegate auth-service --prompt "add OAuth2 login flow"
 ```
 
-Multiple domains can work in parallel. All results available when both complete.
+wairon:
+1. Creates a job file in `.wai/jobs/` or `.wai/runs/<run-id>/steps/<step-id>/`
+2. Scaffolds an isolated tool config dir inside `.wai/` with a generated CLAUDE.md:
+   project context + task brief + domain constraints
+3. Spawns the AI tool with `CLAUDE_HOME` / `GEMINI_CONFIG_DIR` pointed at that dir
+4. The sub-session has focused context, full domain authority, and knows nothing
+   irrelevant about the rest of the project
+5. On completion, the sub-agent writes a result file; wairon surfaces it to the
+   parent — summary, files changed, flagged observations
+
+The parent continues with updated context. The workspace is cleaned up when done.
 
 ---
 
-## The Writer Agent
+## Multi-model orchestration
 
-The agentic loop for local/custom models introduces a dedicated **Writer Agent**
-— a specialized, isolated component responsible for all file write operations.
-
-**Why a separate agent for writes?**
-
-The main agent reasons about what to do. The Writer does the mechanical,
-error-prone work of applying changes to real files. These are different skills
-and different failure modes. Separating them:
-
-- Keeps the main agent's context clean (no raw file diffs or post-write analysis)
-- Makes writes independently reliable (pre + post validation)
-- Lets the Writer run on a different model — a local Ollama model is ideal:
-  - Small, fast, instruction-following models are well-suited for this task
-  - Validation overhead runs on local hardware, not cloud tokens
-  - Reliability is maximized at near-zero marginal cost
-
-**The Writer's internal cycle for each write:**
+Different tasks suit different models. wairon routes based on what's declared:
 
 ```
-Receive change request
-  │
-  ├─ 1. Scope check         — is this path in the allowed write scope?
-  ├─ 2. Pre-validate        — does the change parse? Does the diff apply cleanly?
-  ├─ 3. Apply to temp file  — never touch the original until validation passes
-  ├─ 4. Post-validate       — does the written file parse without errors?
-  ├─ 5. Content verify      — re-read and confirm the expected change is present
-  └─ 6. Swap                — atomic rename temp → real file
-         OR
-         Reject with structured explanation → main agent adjusts and retries
+                        wairon orchestration layer
+                                    │
+             ┌──────────────────────┼────────────────────┐
+             │                      │                    │
+       claude code             gemini cli           ollama (local)
+   (complex reasoning,     (long context,        (fast write validation,
+    code execution)         planning, review)     analysis, free)
 ```
 
-The main agent's context only sees:
-```
-{ status: "applied", summary: "fixed duplicate offset call at line 45" }
-```
-or:
-```
-{ status: "rejected", reason: "post-write syntax error at line 47",
-  suggestion: "diff may be incomplete — missing closing brace" }
-```
+A concrete pipeline:
+1. **Ollama** (local, cheap) — brainstorm the feature approach, write a concept doc
+2. **Gemini** (long context) — read the concept + the entire codebase plan, produce
+   a detailed implementation plan with explicit domain boundaries
+3. **Claude Code** (parallel instances) — implement each domain on its own git
+   branch in a sparse worktree, each aware of the other's job file and contract surface
+4. **Ollama** (fast, local) — validate each file write before it lands on disk
+5. **wairon** — gate on test pass, then merge both branches
 
-No file contents. No diff text. Just the outcome.
-
----
-
-## Multi-Backend Orchestration
-
-The long-term goal: **route different tasks to different AI models** based on
-what each model is best suited for, what each costs, and what hardware is
-available.
-
-```
-                          waffagent orchestration layer
-                                      │
-               ┌──────────────────────┼───────────────────┐
-               │                      │                   │
-         claude code             gemini cli           local ollama
-      (complex reasoning)   (long context tasks)   (write validation,
-                                                    analysis, free)
-```
-
-Configuration per domain:
+The user configures which model handles which backend:
 ```yaml
-# .wai/registry/domains.json
-{
-  "id": "core-utils",
-  "path": "services/core/packages/core-utils",
-  "backend": { "type": "ollama", "model": "deepseek-coder:6.7b" }
-}
+# .wai/project.yaml
+defaultBackend: claude
+pipelines:
+  defaultIdeateBackend: ollama
+  defaultPlanBackend: gemini
+  defaultImplBackend: claude
 ```
 
-A domain configured with Ollama uses the local model for its agent sessions.
-The main project still uses Claude or Gemini. The orchestration layer routes
-transparently.
+Or per-domain:
+```json
+// .wai/registry/domains.json
+{ "id": "core-utils", "backend": { "type": "ollama", "model": "deepseek-coder:6.7b" } }
+```
 
 ---
 
-## The AIBackend Abstraction
+## Git worktrees: parallel branches without the waste
 
-All AI calls (once the agentic loop is implemented) go through the `AIBackend`
-interface defined in `src/backends/base.ts`.
+Claude Code's built-in worktree feature copies the entire working directory to
+`.claude/worktrees/` — fine for small repos, impractical for large monorepos.
 
-The OpenAI-compatible REST protocol covers most of the landscape:
-- OpenAI (`/v1/chat/completions`)
-- Ollama (`http://localhost:11434/v1`)
-- LM Studio
-- LocalAI
-- Any custom endpoint
+wairon's approach:
+- Worktrees live under `.wai/worktrees/` (not `.claude/`, not the project root)
+- Sparse checkout limits each worktree to only the relevant domain paths
+- The `.git` object store is shared — no history duplication, only working files
+- Cross-agent contract surface: both worktrees include `shared/contracts/` in
+  their sparse set, so interface definitions land in a shared location both can see
 
-Adding a new model source = adding one `AIBackend` implementation.
+```
+Main workspace:  C:\project\              branch: develop     (full checkout)
+Auth worktree:   .wai/worktrees/feat-oauth   branch: feature/oauth   (sparse: auth-service/)
+API worktree:    .wai/worktrees/feat-rate    branch: feature/rate-limit (sparse: api-gateway/)
+```
 
----
-
-## The Built-in Agent Loop
-
-For local/custom models that don't have their own CLI tool, waffagent will
-eventually provide its own agentic loop (`src/agent-loop/loop.ts`) with:
-
-- File system tools (read, list, search, write via WriterAgent)
-- Shell execution
-- Context window management
-- Structured tool use (OpenAI function calling protocol)
-
-This makes any Ollama-compatible model a first-class coding agent — no
-separate tool installation required.
+wairon manages the full lifecycle: branch creation, worktree add, sparse config,
+agent context generation, monitoring, validation gate, merge (with human approval
+by default).
 
 ---
 
-## Architecture boundary: what stays CLI-first
+## `wairon session`: the single entry point
 
-Even as waffagent grows toward orchestration and backends, it remains:
+Long-term, `wairon session` replaces typing `claude` or `gemini` directly:
 
-- **No hidden server process.** Everything runs on-demand.
-- **No database.** All state is files in `.wai/`.
-- **No network requirement.** Works fully offline.
-- **Fully observable.** All jobs, all results, all agent definitions are
-  human-readable files in the repo.
-- **Fully controllable.** Every subprocess is inherited stdio — you see
-  exactly what the sub-agent is doing and can intervene at any time.
+```bash
+wairon session                    # uses project's defaultBackend + active profile
+wairon session --backend gemini   # override for this session
+wai                               # short alias
+```
 
-The MCP server wrapping (Phase 5) is additive — it exposes the same library
-API over a transport. It does not change any of the above.
+What it provides beyond just running the tool:
+
+| Now (thin wrapper) | Later (PTY wrapper) | Long-term (native TUI) |
+|--------------------|--------------------|-----------------------|
+| Sets correct CLAUDE_HOME | Intercepts output for logging | Direct API calls |
+| Injects project context | `/switch gemini` mid-session | Model-agnostic |
+| Profile-aware command | `/delegate <domain> <task>` | Seamless switching |
+| Starts right tool | `/jobs` live status | Shared context across backends |
+| Clean workspace setup | `/context` to inspect | Local context manager AI |
+
+The project's `defaultBackend` means the user never has to remember which tool
+they use for this project. `wairon session` always does the right thing.
+
+---
+
+## The Writer Agent (local model reliability)
+
+For local/custom models without their own agentic loop, wairon provides a
+**Writer Agent** — a fast local model dedicated to file write operations:
+
+```
+Main agent (reasons about what to change)
+    │
+    └─ Writer Agent (applies changes, validates, confirms)
+           1. Scope check — is this path in the allowed write scope?
+           2. Pre-validate — does the diff apply cleanly?
+           3. Apply to temp file — never touch the original until validation passes
+           4. Post-validate — does the written file parse?
+           5. Atomic swap — temp → real file
+              OR reject with structured reason → main agent adjusts
+```
+
+Main agent context sees only:
+```json
+{ "status": "applied", "summary": "fixed duplicate offset call at line 45" }
+```
+
+No raw diffs in context. Validation runs locally at near-zero cost.
+
+---
+
+## Cross-instance awareness
+
+When two agents work in parallel on related domains, their generated CLAUDE.md
+files tell each one about the other:
+
+```markdown
+## Parallel work awareness
+
+The `api-gateway` domain is being implemented concurrently on branch
+`feature/rate-limiting` in `.wai/worktrees/feat-rate/`. Its job status is:
+  .wai/runs/run-001/steps/impl-api/job.yaml
+
+The contract surface between your domain and api-gateway is:
+  shared/contracts/auth.ts
+
+Write your auth interface there. The API agent will poll that path before
+it implements the gateway's auth integration.
+```
+
+No real-time messaging required. Shared files under `shared/` (included in both
+worktrees' sparse sets) are the handoff surface. Job files are the status channel.
+wairon generates all of this context automatically from the pipeline definition.
+
+---
+
+## Architecture invariants
+
+These never change regardless of how large wairon grows:
+
+| Invariant | Reason |
+|-----------|--------|
+| **`.wai/` boundary** | The user's workspace is theirs. wairon never writes outside `.wai/` without explicit opt-in. |
+| **No hidden server** | Everything runs on-demand. `wairon session` is a subprocess, not a daemon. |
+| **No database** | All state is human-readable YAML/JSON files. Observable, debuggable, deletable. |
+| **No network requirement** | Works fully offline. |
+| **Fully observable** | Every job, run, worktree, context file is a file you can read, edit, or delete. |
+| **Fully controllable** | Subprocesses use `stdio: inherit`. User can see and interrupt everything. |
+| **Opt-in for external actions** | Git management, auto-merge, guide injection — always explicit opt-in. |
+| **Additive, not replacing** | wairon wraps existing tools; it doesn't replace Claude Code or Gemini CLI. |

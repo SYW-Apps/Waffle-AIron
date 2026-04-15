@@ -1,6 +1,7 @@
 import { logger } from '../utils/logger.js';
 import { assertProjectInitialized, loadProjectConfig, loadRegistry } from '../config/loader.js';
 import { generateAll } from '../exporters/generate.js';
+import { hasContext, syncContextFiles } from '../core/context.js';
 
 // ---------------------------------------------------------------------------
 // generate command
@@ -10,7 +11,14 @@ import { generateAll } from '../exporters/generate.js';
 // ---------------------------------------------------------------------------
 
 interface GenerateOptions {
-  target?: string; // limit to a specific target type
+  /** Limit to a specific target type: claude, gemini, custom */
+  target?: string;
+  /** Limit to a single domain id (or 'root' for root-level agents) */
+  domain?: string;
+  /** Comma-separated list of domain ids */
+  domains?: string;
+  /** Only generate root-level agents (no domainRoot) */
+  root?: boolean;
   dryRun?: boolean;
 }
 
@@ -27,15 +35,29 @@ export async function runGenerate(options: GenerateOptions = {}): Promise<void> 
 
   const filterTargets = options.target ? [options.target] : undefined;
 
+  let filterDomainIds: string[] | undefined;
+  if (options.root) {
+    filterDomainIds = ['root'];
+  } else if (options.domains) {
+    filterDomainIds = options.domains.split(',').map((s) => s.trim()).filter(Boolean);
+  } else if (options.domain) {
+    filterDomainIds = [options.domain];
+  }
+
+  const agentPool = filterDomainIds
+    ? registry.agents.filter((a) => filterDomainIds!.includes(a.domainRoot ?? 'root'))
+    : registry.agents;
+
   if (options.dryRun) {
     logger.info('Dry run — no files will be written.');
   }
 
-  logger.info(`Generating ${registry.agents.length} agent(s)...`);
+  logger.info(`Generating ${agentPool.length} agent(s)...`);
   logger.blank();
 
   const summaries = generateAll(registry.agents, projectConfig, {
     filterTargets,
+    filterDomainIds,
     dryRun: options.dryRun,
   });
 
@@ -66,5 +88,11 @@ export async function runGenerate(options: GenerateOptions = {}): Promise<void> 
     if (written > 0) parts.push(`${written} written`);
     if (skipped > 0) parts.push(`${skipped} unchanged`);
     logger.success(`Done. ${summaries.length} agent(s) processed — ${parts.join(', ') || 'none'}.`);
+
+    // Keep context files current if context has been initialised
+    if (!options.dryRun && hasContext()) {
+      syncContextFiles();
+      logger.verbose('Context files synced.');
+    }
   }
 }

@@ -87,6 +87,29 @@ export const ProjectConfigSchema = z.object({
    */
   defaultBackend: z.enum(['claude', 'gemini', 'ollama', 'openai', 'custom']).default('claude'),
 
+  /**
+   * Default bundle id applied to every domain during init / scaffold-domains.
+   * Users can override per-domain at scaffold time.
+   */
+  defaultBundle: z.string().optional(),
+
+  /**
+   * Profile id to use for this project (overrides the global activeProfile).
+   * e.g. "work" or "personal"
+   */
+  profile: z.string().optional(),
+
+  /**
+   * Tracks whether the wairon usage guide has been injected into each target's
+   * AI tool configuration files so the tool knows how to use wairon.
+   */
+  aiGuide: z.object({
+    claudeGlobal: z.boolean().default(false),
+    claudeLocal: z.boolean().default(false),
+    geminiGlobal: z.boolean().default(false),
+    geminiLocal: z.boolean().default(false),
+  }).optional(),
+
   /** Created by wairon at init time */
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),

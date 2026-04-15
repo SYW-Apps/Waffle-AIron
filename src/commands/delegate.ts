@@ -2,8 +2,8 @@ import { spawn } from 'child_process';
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
 import { fromProjectRoot } from '../utils/fs.js';
-import { assertProjectInitialized } from '../config/loader.js';
-import { backendCommand } from '../config/defaults.js';
+import { assertProjectInitialized, loadProjectConfig } from '../config/loader.js';
+import { resolveToolCommand } from '../config/profiles.js';
 import { findDomain } from '../core/domains.js';
 import { createJob, updateJobStatus, loadJobResult, jobEnvVars } from '../core/jobs.js';
 
@@ -34,6 +34,7 @@ export interface DelegateOptions {
 
 export async function runDelegate(domainId: string, options: DelegateOptions = {}): Promise<void> {
   assertProjectInitialized();
+  const projectConfig = loadProjectConfig();
 
   const domain = findDomain(domainId);
   if (!domain) {
@@ -80,7 +81,7 @@ export async function runDelegate(domainId: string, options: DelegateOptions = {
     logger.info(`Async mode — session not started automatically.`);
     logger.info(`To start manually:`);
     logger.info(`  cd ${domain.path}`);
-    logger.info(`  ${backendCommand(backend)}`);
+    logger.info(`  ${resolveToolCommand(backend, projectConfig.profile)}`);
     logger.info(`Job file: .wai/jobs/${job.id}.yaml`);
     return;
   }
@@ -90,7 +91,7 @@ export async function runDelegate(domainId: string, options: DelegateOptions = {
   // -----------------------------------------------------------------------
 
   const domainAbsPath = fromProjectRoot(domain.path);
-  const cmd = backendCommand(backend);
+  const cmd = resolveToolCommand(backend, projectConfig.profile);
   const env = { ...process.env, ...jobEnvVars(job) };
 
   logger.info(`Starting ${chalk.bold(cmd)} in ${chalk.cyan(domain.path)}`);
