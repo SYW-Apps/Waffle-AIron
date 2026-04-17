@@ -329,7 +329,7 @@ wairon IS the chat interface — model-agnostic, using provider APIs directly
 
 ---
 
-## Phase 7: MCP Server Wrapper ⬜ (v0.7 / parallel track — next)
+## Phase 7: MCP Server Wrapper ✅ (v0.7 — delivered)
 
 **Goal:** Expose wairon as an MCP tool so AI models can query and manage
 topology, run pipelines, and check job status without manual CLI invocation.
@@ -343,7 +343,7 @@ topology, run pipelines, and check job status without manual CLI invocation.
 
 ---
 
-## Phase 8: Built-in Agent Loop for Local Models ⬜ (v0.8)
+## Phase 8: Built-in Agent Loop for Local Models ⬜ (v0.8 — next)
 
 **Goal:** Any Ollama-compatible model becomes a first-class coding agent — no
 separate tool installation required.
@@ -368,6 +368,69 @@ as reliable as hosted ones.
 - GitHub Actions: `wairon validate --ci` in PR checks
 - Agent topology diff reporting on PRs
 - Multi-repo orchestration (monorepo root delegates to sub-repos)
+
+---
+
+## Phase 10: Waffler Integration ⬜ (v1.0+)
+
+**Goal:** Make wairon the built-in AI agent layer for the Waffler programming
+language ecosystem — the same role Make's Maia plays for Make.com, but for a
+language explicitly designed to be both human-readable and AI-writable.
+
+### The Waffler opportunity
+
+Waffler is a visual/textual programming language that represents logic as
+step-by-step node blueprints (similar to Unreal Engine Blueprints or Make.com
+workflows). This makes it uniquely suited to AI code generation:
+
+- **Less error-prone for AIs:** Step-by-step node graphs eliminate entire
+  classes of syntax and scoping errors that plague AI-generated code. Each node
+  does one thing; connections are explicit. An AI that misplaces a node is
+  visually obvious; an AI that misplaces a brace is not.
+- **Human-readable output:** The blueprints AI generates can be directly
+  visualized in Waffler IDE (waffler_ui) — humans review logic, not line diffs.
+- **Equivalent capability:** Despite the simplified semantics, Waffler targets
+  full software capability — it is not a macro language. AI-generated Waffler
+  blueprints can produce real programs.
+
+### wairon's role in the Waffler ecosystem
+
+1. **Waffler blueprint agents** — wairon agent topology for Waffler projects:
+   architect, domain-owner, implementer, reviewer roles all expressed as
+   Waffler-aware agents with blueprint generation as their primary output format.
+
+2. **Blueprint generation pipeline** — a wairon pipeline template for Waffler
+   projects: requirements → blueprint design → parallel domain implementation →
+   blueprint validation → visualization review.
+
+3. **"Maia for Waffler"** — `wairon waffler generate --prompt "..."` triggers
+   the pipeline and produces a Waffler blueprint from a natural-language prompt,
+   reviewable in waffler_ui before execution.
+
+4. **Blueprint context format** — wairon context files for Waffler projects
+   describe the blueprint schema, existing node library, and domain constraints
+   so AI agents know what nodes are available and how to wire them correctly.
+
+5. **Feedback loop** — blueprints that execute successfully feed back into
+   wairon's context store, teaching future agents which patterns work.
+
+### Why this matters
+
+Waffler + wairon creates a human-AI hybrid programming surface:
+- Humans describe intent in natural language
+- wairon orchestrates AI agents to produce a Waffler blueprint
+- Humans review the visual flow in waffler_ui (no code literacy required)
+- Waffler executes the blueprint as real software
+
+This is the path where AI-assisted development becomes genuinely accessible
+to non-programmers — not through natural language execution (too unpredictable),
+but through AI → visual blueprint → validated execution.
+
+### Open questions (track before implementation)
+- Waffler blueprint format: JSON/YAML schema? Binary? How do nodes reference types?
+- waffler_ui API: can blueprints be submitted programmatically for visualization?
+- Node library: how does wairon know what nodes exist in a given Waffler version?
+- Validation: can Waffler validate a blueprint for type correctness before execution?
 
 ---
 

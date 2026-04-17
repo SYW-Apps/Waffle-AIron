@@ -13,6 +13,7 @@ export * from './deprecate.js';
 export * from './domains.js';
 export * from './generate.js';
 export * from './init.js';
+export * from './mcp.js';
 export * from './jobs.js';
 export * from './list.js';
 export * from './merge.js';

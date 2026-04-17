@@ -68,6 +68,9 @@ import {
   runSessionList,
   runSessionShow,
   runSessionClean,
+  runMcpServe,
+  runMcpInstall,
+  runMcpStatus,
   cleanStaleBinary,
 } from '../commands/index.js';
 
@@ -780,6 +783,36 @@ program
   .command('merge <agent-id-1> <agent-id-2>')
   .description('Merge two agents into one')
   .action(async (idA: string, idB: string) => { await runMerge(idA, idB); });
+
+// ---------------------------------------------------------------------------
+// mcp
+// ---------------------------------------------------------------------------
+
+const mcpCmd = program
+  .command('mcp')
+  .description('MCP (Model Context Protocol) server for wairon — lets AI tools query and manage this project');
+
+mcpCmd
+  .command('serve')
+  .description('Start the wairon MCP server (stdio transport — use in mcpServers config)')
+  .action(async () => {
+    await runMcpServe();
+  });
+
+mcpCmd
+  .command('install')
+  .description('Register the wairon MCP server in the Claude Code settings.json')
+  .option('--global', 'install in global ~/.claude/settings.json instead of project .claude/')
+  .action(async (opts) => {
+    await runMcpInstall({ global: opts.global });
+  });
+
+mcpCmd
+  .command('status')
+  .description('Show whether the wairon MCP server is registered in Claude Code settings')
+  .action(async () => {
+    await runMcpStatus();
+  });
 
 // ---------------------------------------------------------------------------
 // Utilities

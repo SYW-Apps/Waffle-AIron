@@ -115,6 +115,7 @@ wairon analyze                    analyze coverage gaps
 wairon targets list               show configured output targets
 wairon jobs list                  view all delegated jobs
 wairon profiles list              view configured profiles (work/personal/etc.)
+wairon mcp install                register the wairon MCP server in Claude Code
 \`\`\`
 
 To update an agent: edit \`.wai/registry/agents.json\` and run \`wairon generate\`.`;

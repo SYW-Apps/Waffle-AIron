@@ -160,6 +160,42 @@ export function renderWaironGuide(): string {
   lines.push('---');
   lines.push('');
 
+  // MCP server note (when installed in this project's .claude/settings.json)
+  const mcpSettingsPath = require('path').join(process.cwd(), '.claude', 'settings.json');
+  let mcpInstalled = false;
+  try {
+    const s = JSON.parse(require('fs').readFileSync(mcpSettingsPath, 'utf8'));
+    mcpInstalled = !!(s?.mcpServers?.wairon);
+  } catch { /* not installed */ }
+
+  if (mcpInstalled) {
+    lines.push('# wairon MCP Tools');
+    lines.push('');
+    lines.push('The **wairon MCP server** is active in this project. You can call these tools directly:');
+    lines.push('');
+    lines.push('| Tool | Purpose |');
+    lines.push('|------|---------|');
+    lines.push('| `listAgents` | List all registered agents (optionally filter by domainId) |');
+    lines.push('| `getAgent` | Get full details of an agent by id |');
+    lines.push('| `listDomains` | List all project domains |');
+    lines.push('| `validateTopology` | Check for topology errors/warnings |');
+    lines.push('| `getProjectConfig` | Get the project configuration |');
+    lines.push('| `listRuns` | List orchestration run records |');
+    lines.push('| `getRunStatus` | Get status of a specific run |');
+    lines.push('| `getStepResult` | Get the result from a pipeline step |');
+    lines.push('| `listPipelines` | List all pipeline definitions |');
+    lines.push('| `getPipeline` | Get a pipeline definition |');
+    lines.push('| `getPipelineStatus` | Get status of recent pipeline runs |');
+    lines.push('| `listSessions` | List AI session workspaces |');
+    lines.push('| `listJobs` | List delegated jobs |');
+    lines.push('| `getJob` | Get details of a specific job |');
+    lines.push('');
+    lines.push('Prefer MCP tools over running `wairon` CLI commands when querying project state.');
+    lines.push('');
+    lines.push('---');
+    lines.push('');
+  }
+
   // Full wairon usage guide
   lines.push(GLOBAL_GUIDE_BODY);
   lines.push('');
