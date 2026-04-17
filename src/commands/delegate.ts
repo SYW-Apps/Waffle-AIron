@@ -6,6 +6,18 @@ import { assertProjectInitialized, loadProjectConfig } from '../config/loader.js
 import { resolveToolCommand } from '../config/profiles.js';
 import { findDomain } from '../core/domains.js';
 import { createJob, updateJobStatus, loadJobResult, jobEnvVars } from '../core/jobs.js';
+import {
+  createRun,
+  updateRunStatus,
+  updateStepStatus,
+  scaffoldStep,
+  loadStepResult,
+  stepEnvVars,
+  stepJobPath,
+  generateStepId,
+} from '../core/workspace.js';
+import { Step } from '../models/run.js';
+import { writeYamlFile } from '../utils/yaml.js';
 
 // ---------------------------------------------------------------------------
 // delegate command
@@ -87,18 +99,67 @@ export async function runDelegate(domainId: string, options: DelegateOptions = {
   }
 
   // -----------------------------------------------------------------------
-  // Sync mode: spawn the AI tool in the domain directory
+  // Sync mode: scaffold workspace + spawn the AI tool
   // -----------------------------------------------------------------------
+
+  // Create a run + step workspace so the session gets isolated context
+  const run    = createRun(`delegate:${domain.id}`);
+  const stepId = generateStepId(domain.id);
+
+  const step: Step = {
+    id:          stepId,
+    label:       task.slice(0, 60),
+    status:      'pending',
+    domain:      domain.id,
+    backend:     backend as Step['backend'],
+    backendModel: options.model,
+    task,
+    dependsOn:   [],
+    awareOf:     [],
+    createdAt:   new Date().toISOString(),
+  };
+  run.steps.push(step);
+  updateRunStatus(run.id, 'running');
+
+  logger.info('Scaffolding isolated workspace...');
+  const toolConfigDir = scaffoldStep({
+    runId:   run.id,
+    stepId,
+    task,
+    domainId: domain.id,
+    backend,
+  });
+  logger.verbose(`Workspace: .wai/runs/${run.id}/steps/${stepId}/`);
+  logger.verbose(`Tool config dir: ${toolConfigDir}`);
+
+  // Write the job file into the workspace (mirrors legacy .wai/jobs/ format)
+  writeYamlFile(stepJobPath(run.id, stepId), {
+    id:          job.id,
+    status:      'pending',
+    domain:      domain.id,
+    domainPath:  domain.path,
+    createdBy:   options.createdBy ?? 'user',
+    backend,
+    backendModel: options.model,
+    task,
+    createdAt:   job.createdAt,
+    context:     { files: options.contextFiles ?? [], notes: options.notes ?? [] },
+  });
 
   const domainAbsPath = fromProjectRoot(domain.path);
   const cmd = resolveToolCommand(backend, projectConfig.profile);
-  const env = { ...process.env, ...jobEnvVars(job) };
+  const env = {
+    ...process.env,
+    ...jobEnvVars(job),
+    ...stepEnvVars(run.id, stepId, job.id, backend),
+  };
 
   logger.info(`Starting ${chalk.bold(cmd)} in ${chalk.cyan(domain.path)}`);
-  logger.info(chalk.gray('─── subprocess start ────────────────────────────────────────────'));
+  logger.info(chalk.gray('─── workspace session start ─────────────────────────────────────'));
   logger.blank();
 
   updateJobStatus(job.id, 'running');
+  updateStepStatus(run.id, stepId, 'running');
 
   const exitCode = await new Promise<number>((resolve) => {
     const child = spawn(cmd, [], {
@@ -117,17 +178,21 @@ export async function runDelegate(domainId: string, options: DelegateOptions = {
   });
 
   logger.blank();
-  logger.info(chalk.gray('─── subprocess end ──────────────────────────────────────────────'));
+  logger.info(chalk.gray('─── workspace session end ───────────────────────────────────────'));
   logger.blank();
 
   // -----------------------------------------------------------------------
-  // Read and display the result
+  // Read and display the result (check workspace result first, then legacy)
   // -----------------------------------------------------------------------
 
-  const result = loadJobResult(job.id);
+  const wsResult  = loadStepResult(run.id, stepId);
+  const legResult = loadJobResult(job.id);
+  const result    = wsResult ?? legResult;
 
   if (result) {
     updateJobStatus(job.id, 'completed');
+    updateStepStatus(run.id, stepId, 'completed');
+    updateRunStatus(run.id, 'completed');
     logger.success(`Job completed: ${job.id}`);
     logger.blank();
 
@@ -149,16 +214,19 @@ export async function runDelegate(domainId: string, options: DelegateOptions = {
       console.log(chalk.yellow(result.flagged));
     }
   } else {
-    // Session exited without writing a result
     if (exitCode === 0) {
       updateJobStatus(job.id, 'abandoned');
+      updateStepStatus(run.id, stepId, 'abandoned');
+      updateRunStatus(run.id, 'completed');
       logger.warn(`Session ended without writing a result file.`);
       logger.info(`Job status set to: abandoned`);
     } else {
       updateJobStatus(job.id, 'failed');
+      updateStepStatus(run.id, stepId, 'failed');
+      updateRunStatus(run.id, 'failed');
       logger.warn(`Session exited with code ${exitCode}.`);
     }
-    logger.info(`Job file: .wai/jobs/${job.id}.yaml`);
+    logger.info(`Workspace: .wai/runs/${run.id}/steps/${stepId}/`);
   }
 
   logger.blank();

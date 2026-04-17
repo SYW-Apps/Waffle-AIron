@@ -48,6 +48,10 @@ import {
   runContextEdit,
   runContextSync,
   runContextShow,
+  runRunStart,
+  runRunStatus,
+  runRunList,
+  runRunClean,
   cleanStaleBinary,
 } from '../commands/index.js';
 
@@ -425,6 +429,56 @@ profilesCmd
   .description('Delete a profile (wrapper scripts and config dirs are kept)')
   .action(async (id: string) => {
     await runProfilesDelete(id);
+  });
+
+// ---------------------------------------------------------------------------
+// run
+// ---------------------------------------------------------------------------
+
+const runCmd = program
+  .command('run')
+  .description('Start and manage isolated AI sessions with per-session context workspaces');
+
+runCmd
+  .command('start')
+  .description('Start an isolated AI session with a scaffolded workspace under .wai/runs/')
+  .option('-p, --prompt <text>', 'task description for the session')
+  .option('--domain <id>', 'scope session to a specific domain')
+  .option('--backend <type>', 'AI backend: claude (default), gemini, ollama, custom')
+  .option('--model <name>', 'model name for ollama/custom backends')
+  .option('--label <text>', 'human-readable label for this run')
+  .action(async (opts) => {
+    await runRunStart({
+      prompt:  opts.prompt,
+      domain:  opts.domain,
+      backend: opts.backend,
+      model:   opts.model,
+      label:   opts.label,
+    });
+  });
+
+runCmd
+  .command('status [run-id]')
+  .description('Show status of all runs, or details of a specific run')
+  .action(async (runId?: string) => {
+    await runRunStatus(runId);
+  });
+
+runCmd
+  .command('list')
+  .alias('ls')
+  .description('List all run workspaces')
+  .action(async () => {
+    await runRunList();
+  });
+
+runCmd
+  .command('clean')
+  .description('Remove completed, failed, and cancelled run workspaces')
+  .option('--all', 'remove all run workspaces including pending/running')
+  .option('--older <days>', 'only remove runs older than N days', parseInt)
+  .action(async (opts) => {
+    await runRunClean({ all: opts.all, olderThanDays: opts.older });
   });
 
 // ---------------------------------------------------------------------------
