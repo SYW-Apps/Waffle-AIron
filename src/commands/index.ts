@@ -2,6 +2,7 @@ export * from './aliases.js';
 export * from './context.js';
 export * from './run.js';
 export * from './pipeline.js';
+export * from './worktrees.js';
 export * from './analyze.js';
 export * from './bundles.js';
 export * from './create-agent.js';

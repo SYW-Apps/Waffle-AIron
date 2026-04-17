@@ -51,6 +51,33 @@ export const RulesConfigSchema = z.object({
 });
 export type RulesConfig = z.infer<typeof RulesConfigSchema>;
 
+export const GitConfigSchema = z.object({
+  /**
+   * Whether wairon is allowed to run git commands (create branches, worktrees,
+   * merge, etc.). Must be explicitly set to true — default is false.
+   */
+  waironManaged: z.boolean().default(false),
+
+  /**
+   * Whether wairon should auto-merge worktree branches after validation.
+   * Default: false — wairon prepares the merge but waits for human approval.
+   */
+  autoMerge: z.boolean().default(false),
+
+  /**
+   * Base directory for worktrees, relative to project root.
+   * Default: .wai/worktrees
+   */
+  worktreeBase: z.string().default('.wai/worktrees'),
+
+  /**
+   * Branch names that wairon will never auto-merge into without explicit
+   * user confirmation, even when autoMerge is true.
+   */
+  protectedBranches: z.array(z.string()).default(['main', 'master', 'develop']),
+});
+export type GitConfig = z.infer<typeof GitConfigSchema>;
+
 export const ProjectConfigSchema = z.object({
   /**
    * Schema version — used to detect incompatible config formats in future
@@ -109,6 +136,12 @@ export const ProjectConfigSchema = z.object({
     geminiGlobal: z.boolean().default(false),
     geminiLocal: z.boolean().default(false),
   }).optional(),
+
+  /**
+   * Git integration settings.
+   * waironManaged must be true before wairon will run any git commands.
+   */
+  git: GitConfigSchema.optional(),
 
   /** Created by wairon at init time */
   createdAt: z.string().datetime(),

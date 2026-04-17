@@ -58,6 +58,12 @@ import {
   runPipelineStatus,
   runPipelineLogs,
   runPipelineInit,
+  runWorktreesEnable,
+  runWorktreesCreate,
+  runWorktreesList,
+  runWorktreesShow,
+  runWorktreesMerge,
+  runWorktreesClean,
   cleanStaleBinary,
 } from '../commands/index.js';
 
@@ -485,6 +491,74 @@ runCmd
   .option('--older <days>', 'only remove runs older than N days', parseInt)
   .action(async (opts) => {
     await runRunClean({ all: opts.all, olderThanDays: opts.older });
+  });
+
+// ---------------------------------------------------------------------------
+// worktrees
+// ---------------------------------------------------------------------------
+
+const worktreesCmd = program
+  .command('worktrees')
+  .alias('wt')
+  .description('Manage git worktrees for parallel branch-isolated AI sessions');
+
+worktreesCmd
+  .command('enable')
+  .description('Enable wairon git management for this project (required before other worktree commands)')
+  .action(async () => {
+    await runWorktreesEnable();
+  });
+
+worktreesCmd
+  .command('create')
+  .description('Create a new sparse-checkout worktree for parallel work')
+  .option('--branch <name>', 'branch name (created if it does not exist)')
+  .option('--domain <id>', 'scope to a specific domain (drives sparse-checkout paths)')
+  .option('--sparse <paths>', 'comma-separated sparse-checkout paths (overrides domain auto-detect)')
+  .option('--base <branch>', 'base branch for the new branch (default: current branch)')
+  .option('--target <branch>', 'branch to merge into when done (default: current branch)')
+  .option('--label <text>', 'human-readable label (used for id + default branch name)')
+  .action(async (opts) => {
+    await runWorktreesCreate({
+      branch: opts.branch,
+      domain: opts.domain,
+      sparse: opts.sparse,
+      base:   opts.base,
+      target: opts.target,
+      label:  opts.label,
+    });
+  });
+
+worktreesCmd
+  .command('list')
+  .alias('ls')
+  .description('List all worktrees and their status')
+  .action(async () => {
+    await runWorktreesList();
+  });
+
+worktreesCmd
+  .command('show <id>')
+  .description('Show details of a specific worktree')
+  .action(async (id: string) => {
+    await runWorktreesShow(id);
+  });
+
+worktreesCmd
+  .command('merge <id>')
+  .description('Merge a worktree branch back into its target branch')
+  .option('--target <branch>', 'override the target branch')
+  .option('-y, --yes', 'skip confirmation prompts')
+  .action(async (id: string, opts) => {
+    await runWorktreesMerge(id, { targetBranch: opts.target, yes: opts.yes });
+  });
+
+worktreesCmd
+  .command('clean [id]')
+  .description('Remove merged/abandoned worktrees (or a specific one by id)')
+  .option('--all', 'remove all worktrees including active ones')
+  .action(async (id: string | undefined, opts) => {
+    await runWorktreesClean(id, { all: opts.all });
   });
 
 // ---------------------------------------------------------------------------
