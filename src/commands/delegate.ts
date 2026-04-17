@@ -110,6 +110,7 @@ export async function runDelegate(domainId: string, options: DelegateOptions = {
     id:          stepId,
     label:       task.slice(0, 60),
     status:      'pending',
+    type:        'ai',
     domain:      domain.id,
     backend:     backend as Step['backend'],
     backendModel: options.model,

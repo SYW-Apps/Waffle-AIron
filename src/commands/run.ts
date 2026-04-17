@@ -81,6 +81,7 @@ export async function runRunStart(options: RunStartOptions = {}): Promise<void> 
     id:        stepId,
     label:     label,
     status:    'pending',
+    type:      'ai',
     domain:    domainId,
     backend:   backend as Step['backend'],
     backendModel: options.model,

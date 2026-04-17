@@ -52,6 +52,12 @@ import {
   runRunStatus,
   runRunList,
   runRunClean,
+  runPipelineList,
+  runPipelineShow,
+  runPipelineRun,
+  runPipelineStatus,
+  runPipelineLogs,
+  runPipelineInit,
   cleanStaleBinary,
 } from '../commands/index.js';
 
@@ -479,6 +485,59 @@ runCmd
   .option('--older <days>', 'only remove runs older than N days', parseInt)
   .action(async (opts) => {
     await runRunClean({ all: opts.all, olderThanDays: opts.older });
+  });
+
+// ---------------------------------------------------------------------------
+// pipeline
+// ---------------------------------------------------------------------------
+
+const pipelineCmd = program
+  .command('pipeline')
+  .description('Define and run multi-step, multi-model AI pipelines');
+
+pipelineCmd
+  .command('list')
+  .alias('ls')
+  .description('List all pipeline definitions in .wai/pipelines/')
+  .action(async () => {
+    await runPipelineList();
+  });
+
+pipelineCmd
+  .command('show <id>')
+  .description('Show pipeline definition and step dependency graph')
+  .action(async (id: string) => {
+    await runPipelineShow(id);
+  });
+
+pipelineCmd
+  .command('init')
+  .description('Create a new pipeline with a guided wizard')
+  .action(async () => {
+    await runPipelineInit();
+  });
+
+pipelineCmd
+  .command('run <id>')
+  .description('Execute a pipeline')
+  .option('--var <keyvalue>', 'set a pipeline variable (key=value); repeatable', collect, [])
+  .option('--dry-run', 'preview execution plan without running anything')
+  .action(async (id: string, opts) => {
+    await runPipelineRun(id, { variables: opts.var, dryRun: opts.dryRun });
+  });
+
+pipelineCmd
+  .command('status [run-id]')
+  .description('Show status of all pipeline runs, or details of a specific run')
+  .action(async (runId?: string) => {
+    await runPipelineStatus(runId);
+  });
+
+pipelineCmd
+  .command('logs <run-id> <step-id>')
+  .description('Show logs and result for a specific pipeline step')
+  .action(async (runId: string, stepId: string) => {
+    await runPipelineLogs(runId, stepId);
   });
 
 // ---------------------------------------------------------------------------

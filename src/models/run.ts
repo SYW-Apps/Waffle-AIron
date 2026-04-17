@@ -46,16 +46,23 @@ export const StepSchema = z.object({
 
   status: StepStatusSchema.default('pending'),
 
+  /**
+   * Step type:
+   *   'ai'    — spawn an AI tool session (default)
+   *   'shell' — run a shell command (validation gate, build, test, etc.)
+   */
+  type: z.enum(['ai', 'shell']).default('ai'),
+
   /** Which domain this step operates on (optional — null means project root) */
   domain: z.string().nullable().default(null),
 
-  /** Which AI backend to use */
+  /** Which AI backend to use (ai steps only) */
   backend: z.enum(['claude', 'gemini', 'ollama', 'openai', 'custom']).default('claude'),
 
   /** Model name for ollama/custom */
   backendModel: z.string().optional(),
 
-  /** The task prompt */
+  /** The task prompt (ai steps) or shell command (shell steps) */
   task: z.string(),
 
   /** Step ids whose results this step receives as context */
@@ -63,6 +70,12 @@ export const StepSchema = z.object({
 
   /** Step ids running in parallel that this step is aware of */
   awareOf: z.array(z.string()).default([]),
+
+  /** Shell step exit code (populated after completion) */
+  exitCode: z.number().optional(),
+
+  /** Shell step stdout/stderr (truncated to last 4000 chars) */
+  shellOutput: z.string().optional(),
 
   createdAt: z.string().datetime(),
   startedAt: z.string().datetime().optional(),
@@ -80,8 +93,14 @@ export const RunSchema = z.object({
 
   steps: z.array(StepSchema).default([]),
 
-  /** Pipeline id, if this run was triggered by a pipeline (Phase 4) */
+  /** Pipeline id, if this run was triggered by a pipeline */
   pipelineId: z.string().optional(),
+
+  /** Template variables passed at `pipeline run` time (e.g. {{goal}}) */
+  variables: z.record(z.string()).optional(),
+
+  /** Error message if the run failed at the orchestration level */
+  errorMessage: z.string().optional(),
 
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
