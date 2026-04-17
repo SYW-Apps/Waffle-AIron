@@ -64,6 +64,10 @@ import {
   runWorktreesShow,
   runWorktreesMerge,
   runWorktreesClean,
+  runSessionStart,
+  runSessionList,
+  runSessionShow,
+  runSessionClean,
   cleanStaleBinary,
 } from '../commands/index.js';
 
@@ -98,6 +102,58 @@ program
   .option('-y, --yes', 'use defaults without interactive prompts')
   .action(async (opts) => {
     await runInit({ yes: opts.yes });
+  });
+
+// ---------------------------------------------------------------------------
+// session
+// ---------------------------------------------------------------------------
+
+program
+  .command('session')
+  .description('Start or resume an AI working session with full project context (the recommended entry point)')
+  .option('--backend <type>', 'AI backend: claude (default), gemini, ollama, custom')
+  .option('--domain <id>', 'scope session to a specific domain')
+  .option('--model <name>', 'model name for ollama/custom backends')
+  .option('--label <text>', 'human-readable label for this session')
+  .option('--new', 'start a fresh session instead of resuming the most recent one')
+  .option('--print-dir', 'print the tool config dir path and exit (for shell integration)')
+  .action(async (opts) => {
+    await runSessionStart({
+      backend:  opts.backend,
+      domain:   opts.domain,
+      model:    opts.model,
+      label:    opts.label,
+      new:      opts.new,
+      printDir: opts.printDir,
+    });
+  });
+
+const sessionsCmd = program
+  .command('sessions')
+  .description('List and manage AI session workspaces');
+
+sessionsCmd
+  .command('list')
+  .alias('ls')
+  .description('List all session workspaces')
+  .action(async () => {
+    await runSessionList();
+  });
+
+sessionsCmd
+  .command('show <id>')
+  .description('Show details of a specific session')
+  .action(async (id: string) => {
+    await runSessionShow(id);
+  });
+
+sessionsCmd
+  .command('clean')
+  .description('Remove old session workspaces (keeps 3 most recent by default)')
+  .option('--all', 'remove all session workspaces')
+  .option('--keep <n>', 'number of recent sessions to keep', parseInt)
+  .action(async (opts) => {
+    await runSessionClean({ all: opts.all, keepRecent: opts.keep });
   });
 
 // ---------------------------------------------------------------------------

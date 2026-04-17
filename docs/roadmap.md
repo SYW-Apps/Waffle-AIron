@@ -36,7 +36,7 @@
 
 ---
 
-## Phase 2: Shared Project Context ⬜ (v0.2 — next)
+## Phase 2: Shared Project Context ✅ (v0.2 — delivered)
 
 **Goal:** Single source of truth for project description and conventions, shared
 across all AI tools and all orchestrated sessions. No more divergence between
@@ -74,7 +74,7 @@ This keeps the user's files clean while wairon fully controls the guide content.
 
 ---
 
-## Phase 3: Isolated Task Workspaces ⬜ (v0.3)
+## Phase 3: Isolated Task Workspaces ✅ (v0.3 — delivered)
 
 **Goal:** Every delegated session — whether a single `wairon delegate` or a
 pipeline step — runs in a fully scaffolded, self-contained environment inside
@@ -136,7 +136,7 @@ The tool's config dir inside the workspace contains:
 
 ---
 
-## Phase 4: Pipelines ⬜ (v0.4)
+## Phase 4: Pipelines ✅ (v0.4 — delivered)
 
 **Goal:** Multi-step, multi-model workflows defined in a YAML file, orchestrated
 by wairon. Sequential and parallel steps, output passing between steps,
@@ -207,7 +207,7 @@ steps:
 
 ---
 
-## Phase 5: Git Worktree Integration ⬜ (v0.5)
+## Phase 5: Git Worktree Integration ✅ (v0.5 — delivered)
 
 **Goal:** Parallel agents work on isolated git branches without duplicating the
 repository. Each domain's work is separated until both complete, then merged
@@ -271,7 +271,7 @@ git:
 
 ---
 
-## Phase 6: Native `wairon session` CLI UI ⬜ (v0.6)
+## Phase 6: Native `wairon session` CLI UI ✅ (v0.6 — delivered)
 
 **Goal:** `wairon session` becomes the single entry point for all AI-assisted
 work on a project. It wraps the underlying tool (claude, gemini, ollama, custom)
@@ -329,7 +329,7 @@ wairon IS the chat interface — model-agnostic, using provider APIs directly
 
 ---
 
-## Phase 7: MCP Server Wrapper ⬜ (v0.7 / parallel track)
+## Phase 7: MCP Server Wrapper ⬜ (v0.7 / parallel track — next)
 
 **Goal:** Expose wairon as an MCP tool so AI models can query and manage
 topology, run pipelines, and check job status without manual CLI invocation.
