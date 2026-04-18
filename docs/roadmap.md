@@ -373,64 +373,247 @@ as reliable as hosted ones.
 
 ## Phase 10: Waffler Integration ⬜ (v1.0+)
 
-**Goal:** Make wairon the built-in AI agent layer for the Waffler programming
-language ecosystem — the same role Make's Maia plays for Make.com, but for a
-language explicitly designed to be both human-readable and AI-writable.
+**Goal:** An AI agent integrated directly into Waffler that builds blueprints
+from natural language, step by step, with per-step validation.
 
-### The Waffler opportunity
+### Why Waffler is uniquely suited to AI generation
 
-Waffler is a visual/textual programming language that represents logic as
-step-by-step node blueprints (similar to Unreal Engine Blueprints or Make.com
-workflows). This makes it uniquely suited to AI code generation:
+Waffler represents logic as step-by-step node graphs (similar to Unreal Engine
+Blueprints). This architecture has structural advantages over traditional code:
 
-- **Less error-prone for AIs:** Step-by-step node graphs eliminate entire
-  classes of syntax and scoping errors that plague AI-generated code. Each node
-  does one thing; connections are explicit. An AI that misplaces a node is
-  visually obvious; an AI that misplaces a brace is not.
-- **Human-readable output:** The blueprints AI generates can be directly
-  visualized in Waffler IDE (waffler_ui) — humans review logic, not line diffs.
-- **Equivalent capability:** Despite the simplified semantics, Waffler targets
-  full software capability — it is not a macro language. AI-generated Waffler
-  blueprints can produce real programs.
+- **Isolated failure surface.** Each node does one thing. A mistake in one node
+  does not corrupt the rest of the blueprint. The AI receives exact, field-level
+  error messages and corrects only the failing node.
+- **Human-reviewable output.** The blueprint AI generates can be visualized in
+  waffler_ui before execution. Humans review logic flow, not raw diffs or JSON.
+- **No syntax to misplace.** Connections between nodes are explicit references —
+  there is no concept of a misplaced brace, wrong indentation, or wrong scope.
+- **Explicit variable scope.** The runtime scope is a stack of named variables.
+  The AI can ask exactly which variables exist at node X before writing any
+  expression that references them.
+- **Equivalent capability.** Waffler is not a macro language. It has packages
+  for HTTP, databases, file system, websockets, desktop notifications, and more.
 
-### wairon's role in the Waffler ecosystem
+### Architecture decision: two separate components (decided Apr 2026)
 
-1. **Waffler blueprint agents** — wairon agent topology for Waffler projects:
-   architect, domain-owner, implementer, reviewer roles all expressed as
-   Waffler-aware agents with blueprint generation as their primary output format.
+The integration consists of two parts with a clean boundary:
 
-2. **Blueprint generation pipeline** — a wairon pipeline template for Waffler
-   projects: requirements → blueprint design → parallel domain implementation →
-   blueprint validation → visualization review.
+```
+AI model (claude / gemini / etc.)
+    ↕  MCP protocol
+Waffler MCP package  ← lives in the Waffler project
+    ↕  waffler_core internals
+TypeRegistry · CapabilityIndex · VFS · ExecutionContext
 
-3. **"Maia for Waffler"** — `wairon waffler generate --prompt "..."` triggers
-   the pipeline and produces a Waffler blueprint from a natural-language prompt,
-   reviewable in waffler_ui before execution.
+wairon  ← orchestration client, agent templates, project config
+    ↕  starts / connects AI sessions to the Waffler MCP server
+AI model
+```
 
-4. **Blueprint context format** — wairon context files for Waffler projects
-   describe the blueprint schema, existing node library, and domain constraints
-   so AI agents know what nodes are available and how to wire them correctly.
+**Why not implement the MCP server in wairon (TypeScript)?**
 
-5. **Feedback loop** — blueprints that execute successfully feed back into
-   wairon's context store, teaching future agents which patterns work.
+The authoritative capability index, type validation, scope inspection, and VFS
+blueprint storage all live inside `waffler_core`. A TypeScript reimplementation
+would be an approximation — it would drift from the real Waffler semantics as
+the language evolves. The MCP server must be a first-class Waffler package with
+direct access to the kernel.
 
-### Why this matters
+**What lives where:**
 
-Waffler + wairon creates a human-AI hybrid programming surface:
-- Humans describe intent in natural language
-- wairon orchestrates AI agents to produce a Waffler blueprint
-- Humans review the visual flow in waffler_ui (no code literacy required)
-- Waffler executes the blueprint as real software
+| Component | Repo | Language |
+|-----------|------|----------|
+| Waffler MCP package (server) | Waffler `packages/mcp_server/` | Rust |
+| MCP interface spec (tool names, schemas, error formats) | wairon `docs/roadmap.md` | Markdown |
+| wairon-side integration (project config, session routing) | wairon | TypeScript |
+| AI agent templates for Waffler blueprint building | wairon `src/templates/` | YAML |
+| Waffler bundle (builder + reviewer agents) | wairon `src/bundles/` | YAML |
 
-This is the path where AI-assisted development becomes genuinely accessible
-to non-programmers — not through natural language execution (too unpredictable),
-but through AI → visual blueprint → validated execution.
+### Blueprint format reference (explored Apr 2026)
 
-### Open questions (track before implementation)
-- Waffler blueprint format: JSON/YAML schema? Binary? How do nodes reference types?
-- waffler_ui API: can blueprints be submitted programmatically for visualization?
-- Node library: how does wairon know what nodes exist in a given Waffler version?
-- Validation: can Waffler validate a blueprint for type correctness before execution?
+**Blueprint JSON** at `.../vfs/<Name>/blueprint.json`:
+
+```json
+{
+  "id": "uuid",
+  "name": "My Blueprint",
+  "context": { "invocation_mode": "OnDemand", "ownership": "Independent" },
+  "entry_node": "trigger_0",
+  "nodes": {
+    "trigger_0": {
+      "operation": { "module": "syw.core.flow", "capability": "basic_trigger" },
+      "inputs": {},
+      "outputs": { "next": { "target_node_id": "set_name" } },
+      "store_result": null
+    },
+    "set_name": {
+      "operation": { "module": "syw.core.flow", "capability": "set_variable" },
+      "inputs": {
+        "path":  { "value": "name",          "metadata": { "mapped": false } },
+        "value": { "value": "vars.user_input","metadata": { "mapped": true, "type": "variable" } }
+      },
+      "outputs": { "next": { "target_node_id": "http_call" } },
+      "store_result": null
+    }
+  }
+}
+```
+
+**Input value types:**
+- Static:     `{ "value": 42,          "metadata": { "mapped": false } }`
+- FromScope:  `{ "value": "vars.x",    "metadata": { "mapped": true, "type": "variable" } }`
+- Expression: `{ "value": "{{add(x,1)}}", "metadata": { "mapped": true } }`
+
+**Expression syntax:** `{{expr}}` — 50+ built-in functions confirmed:
+`add`, `subtract`, `multiply`, `divide`, `mod`, `concat`, `split`, `replace`,
+`trim`, `to_lower_case`, `to_upper_case`, `contains`, `starts_with`, `ends_with`,
+`equals`, `not_equals`, `greater_than`, `less_than`, `and`, `or`, `not`, `if`,
+`switch`, `is_null`, `is_empty`, `coalesce`, `to_string`, `to_number`,
+`to_boolean`, `parse_json`, `stringify_json`, `now`, `unix_timestamp`,
+`format_date`, `parse_date`, `add_time`, `subtract_time`, `diff_time`, and more.
+
+**Built-in flow capabilities** (module `syw.core.flow`):
+`basic_trigger`, `set_variable`, `reassign_variable`, `if`, `for_loop`,
+`while_loop`, `switch_case`, `call_subroutine`, `call_blueprint`, `call_function`,
+`return`, `throw`, `try_catch`, `break`, `continue`, `yield`, `sleep`, `noop`,
+`create_udt`
+
+**Connector names by category:**
+- Linear flow: `next`
+- Conditionals: `then`, `else`
+- Loops: `loop_body`
+- Error handling: `error`, `try_body`, `catch_handler`
+- Switch cases: `case_<label>`, `default`
+
+**Packages confirmed** (from `../Waffler/packages/`):
+`network/http`, `network/api`, `network/websocket`, `network/tcp`,
+`db/postgres`, `db/mysql`, `db/sqlite`, `db/mongodb`, `db/redis`,
+`db/bigquery`, `db/dynamodb`, `db/elasticsearch`, `db/mariadb`, `db/mssql`,
+`system/fs`, `web_app`, `desktop_notifications`, `identity`, `compiler`,
+`diagnostics`, and more.
+
+### Waffler MCP package specification
+
+This spec is the contract between the Waffler MCP package (Rust, server) and
+wairon (TypeScript, client). Both sides must implement to this interface.
+
+**Protocol:** MCP over stdio (local) or HTTP (remote/networked Waffler instance)
+
+**Error response format** (returned when `ok: false`):
+```json
+{
+  "ok": false,
+  "errors": [
+    { "node_id": "action_1", "field": "url", "message": "Required field 'url' is missing.", "severity": "error" },
+    { "node_id": "action_1", "field": "method", "message": "Unknown HTTP method 'FETCH'. Use GET, POST, PUT, PATCH, or DELETE.", "severity": "error" }
+  ]
+}
+```
+Error messages must be **actionable** — they tell the AI exactly what to change,
+not just that something is wrong. Field-level precision is required.
+
+#### Discovery tools
+
+| Tool | Input | Output |
+|------|-------|--------|
+| `waffler_list_packages` | — | `[{id, namespace, display_name, description, version, capability_count}]` |
+| `waffler_search_capabilities` | `query: string`, `category?: "Action"\|"Trigger"\|"FlowControl"\|"Query"` | `[{module, capability, name, description, category, package_name}]` |
+| `waffler_get_capability` | `module: string`, `capability: string` | Full capability: input fields (key, label, type, required, description, default), output fields, connector names, async flag |
+| `waffler_list_functions` | `category?: string` | `[{name, signature, description, returns, category}]` |
+| `waffler_get_function` | `name: string` | Full function: signature, all params with types, return type, description, examples |
+
+#### Blueprint session tools
+
+| Tool | Input | Output |
+|------|-------|--------|
+| `waffler_blueprint_create` | `name: string`, `mode?: "OnDemand"\|"Autonomous"` | `{session_id, entry_node_id}` — entry node auto-created |
+| `waffler_blueprint_show` | — | Summary: node list with ids/capabilities, connections, variable declarations |
+| `waffler_blueprint_discard` | — | Session discarded |
+
+#### Node construction tools
+
+| Tool | Input | Output |
+|------|-------|--------|
+| `waffler_add_node` | `node_id`, `module`, `capability`, `inputs: {key: InputValueSpec}`, `store_result?: {variable_name, kind, source_field?}` | `{ok, errors[]}` with field-level validation |
+| `waffler_update_node` | `node_id`, `inputs?`, `store_result?`, `label?` | `{ok, errors[]}` |
+| `waffler_remove_node` | `node_id` | `{ok, errors[]}` |
+| `waffler_connect` | `from_node_id`, `connector`, `to_node_id` | `{ok, errors[]}` — validates connector name |
+| `waffler_disconnect` | `from_node_id`, `connector` | `{ok, errors[]}` |
+
+**InputValueSpec** (one of):
+- `{"static": <json_value>}` — literal value
+- `{"from_scope": "vars.name"}` — variable reference
+- `{"expression": "{{add(x,1)}}"}` — inline expression
+
+#### Context and validation tools
+
+| Tool | Input | Output |
+|------|-------|--------|
+| `waffler_context_at` | `node_id: string` | `[{name, type, kind: "var"\|"const", declared_by_node}]` — variables in scope at this node |
+| `waffler_validate_expression` | `expression: string`, `node_id?: string` | `{valid, inferred_type, errors[]}` — checks syntax + scope refs |
+| `waffler_blueprint_validate` | — | `{valid, errors[], warnings[]}` — full blueprint check |
+
+#### Output tools
+
+| Tool | Input | Output |
+|------|-------|--------|
+| `waffler_blueprint_save` | `blueprint_name?: string` | Writes to Waffler VFS, returns VFS path |
+| `waffler_blueprint_export` | — | Full blueprint JSON as string (for review) |
+
+### Preference mode (AI behavior contract)
+
+The AI agent template for Waffler blueprint building must include this explicit
+instruction:
+
+> **Before making a design choice, ask the user.** Specifically:
+> - Package selection: "I can use `network/http` or `network/api` for this. Which do you prefer?"
+> - Data structure: "Should the user data be stored as an Object or as individual variables?"
+> - Error handling: "Should this step fail the whole blueprint on error, or continue with a fallback?"
+> - Loop strategy: "Should I process these items in sequence or is parallelism acceptable?"
+>
+> Do not infer preferences from context. Do not guess. Ask, receive the answer,
+> then proceed. This keeps the human in control of design decisions while the AI
+> handles structural correctness.
+
+### wairon's implementation scope (Phase 10 deliverables)
+
+1. **wairon project config for Waffler** (`project.yaml` extension)
+   ```yaml
+   waffler:
+     mcpServerUrl: "stdio"   # or "http://localhost:7700"
+     rootPath: "../Waffler"  # path to Waffler project (for offline index)
+   ```
+
+4. **Waffler agent templates** (`src/templates/waffler-builder.yaml`, `waffler-reviewer.yaml`)
+   Agent templates that know the Waffler MCP tool surface, include the full
+   preference-mode contract, and describe the expression syntax.
+
+5. **Waffler bundle** (`src/bundles/waffler-default.yaml`)
+   Default bundle: blueprint-builder + blueprint-reviewer agents.
+
+6. **`wairon waffler` command group**
+   - `wairon waffler session` — start a session connected to the Waffler MCP server
+   - `wairon waffler index` — rebuild the offline capability index
+   - `wairon waffler install` — register the Waffler MCP server in Claude Code settings
+
+### Waffler MCP package scope (separate Waffler deliverable)
+
+To be developed under `../Waffler/packages/mcp_server/` as a Rust Waffler package:
+
+- MCP server exposing all tools from the spec above
+- Backed by live `waffler_core` internals: real `TypeRegistry`, real `CapabilityIndex`, real VFS
+- Strict error messages per the error format contract above
+- Supports both stdio (local) and HTTP (remote) transports
+- Registered in Waffler's package system — installable like any other package
+- Can serve any MCP-compatible client, not just wairon
+
+### Waffler project file locations
+
+- Root: `../Waffler/` (sibling directory)
+- Package manifests: `../Waffler/packages/*/package.json`
+- Built-in node specs: `../Waffler/waffler_core/src/nodes/internal/flow/`
+- Shared Rust types: `../Waffler/shared/src/`
+- VFS (dev): `../Waffler/live_dev/sim_full/data/vfs/`
+- SDK: `../Waffler/sdk/` (Rust, Node.js, Python, Go, .NET, Java SDKs available)
 
 ---
 
