@@ -7,6 +7,8 @@ import {
   loadComponentSpecs,
   loadInterfaceSpecs,
   loadImplementationSpecs,
+  clearLoaderIssues,
+  getLoaderIssues,
 } from './specs.js';
 
 // ---------------------------------------------------------------------------
@@ -155,16 +157,21 @@ export function validateSddTree(): ValidationResult {
   const issues: ValidationIssue[] = [];
 
   // Load specs
+  clearLoaderIssues();
   const system = loadSystemSpec();
-  if (!system) {
-    issues.push(issue('error', 'MISSING_SYSTEM_SPEC', 'L0 System specification (system.yaml) is missing.'));
-    return { valid: false, issues };
-  }
-
   const subsystems = loadSubsystemSpecs();
   const components = loadComponentSpecs();
   const interfaces = loadInterfaceSpecs();
   const implementations = loadImplementationSpecs();
+
+  // Retrieve any loader schema validation issues
+  const loaderErrors = getLoaderIssues();
+  issues.push(...loaderErrors);
+
+  if (!system) {
+    issues.push(issue('error', 'MISSING_SYSTEM_SPEC', 'L0 System specification (system.yaml) is missing.'));
+    return { valid: false, issues };
+  }
 
   // 1. Hierarchy & Integrity Checks
   const subsystemIds = new Set(subsystems.map(s => s.id));
@@ -298,6 +305,20 @@ export function validateSddTree(): ValidationResult {
             continue;
           }
 
+          // Check if calling component declares targetComponent as dependency
+          const callingComponent = componentMap.get(contract.component);
+          if (callingComponent && step.targetComponent !== callingComponent.id) {
+            if (!callingComponent.dependencies.includes(step.targetComponent)) {
+              issues.push(issue(
+                'error',
+                'UNDECLARED_DEPENDENCY_CALL',
+                `Method "${implMethod.name}" in implementation "${impl.id}" (component "${callingComponent.id}") calls component "${step.targetComponent}" (step ${step.stepNumber}) but component "${callingComponent.id}" does not list "${step.targetComponent}" as a dependency.`,
+                undefined,
+                impl.id
+              ));
+            }
+          }
+
           // Check if target component has an interface containing targetMethod
           const targetInterfaces = interfaces.filter(i => i.component === step.targetComponent);
           let methodFound = false;
@@ -378,6 +399,46 @@ export function validateSddTree(): ValidationResult {
           ));
         }
       }
+    }
+  }
+
+  // 5. Directed Acyclic Graph (DAG) Cycle Detection
+  const visited = new Set<string>();
+  const recStack = new Set<string>();
+
+  function dfs(compId: string, pathTrace: string[]): boolean {
+    visited.add(compId);
+    recStack.add(compId);
+    pathTrace.push(compId);
+
+    const comp = componentMap.get(compId);
+    if (comp) {
+      for (const depId of comp.dependencies) {
+        if (!visited.has(depId)) {
+          if (dfs(depId, pathTrace)) return true;
+        } else if (recStack.has(depId)) {
+          pathTrace.push(depId);
+          const cyclePath = pathTrace.slice(pathTrace.indexOf(depId)).join(' -> ');
+          issues.push(issue(
+            'error',
+            'CIRCULAR_DEPENDENCY',
+            `Circular dependency detected: ${cyclePath}`,
+            undefined,
+            compId
+          ));
+          return true;
+        }
+      }
+    }
+
+    recStack.delete(compId);
+    pathTrace.pop();
+    return false;
+  }
+
+  for (const comp of components) {
+    if (!visited.has(comp.id)) {
+      dfs(comp.id, []);
     }
   }
 

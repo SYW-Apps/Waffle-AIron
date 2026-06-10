@@ -15,10 +15,21 @@ import {
   ImplementationSpecSchema,
   AgentRecord,
 } from '../models/index.js';
+import { ValidationIssue } from './validation.js';
 
 // ---------------------------------------------------------------------------
-// Path Builders
+// Path Builders and Loader Issues Tracking
 // ---------------------------------------------------------------------------
+let loaderIssues: ValidationIssue[] = [];
+
+export function getLoaderIssues(): ValidationIssue[] {
+  return loaderIssues;
+}
+
+export function clearLoaderIssues(): void {
+  loaderIssues = [];
+}
+
 export function getSubsystemPath(id: string): string {
   return path.join(AI_PATHS.specsSubsystemsDir(), `${id}.yaml`);
 }
@@ -41,8 +52,18 @@ export function getImplementationPath(id: string): string {
 export function loadSystemSpec(): SystemSpec | null {
   const p = AI_PATHS.specsSystem();
   if (!pathExists(p)) return null;
-  const raw = readYamlFile(p);
-  return SystemSpecSchema.parse(raw);
+  try {
+    const raw = readYamlFile(p);
+    return SystemSpecSchema.parse(raw);
+  } catch (e: any) {
+    loaderIssues.push({
+      severity: 'error',
+      code: 'SCHEMA_VALIDATION_ERROR',
+      message: `Failed to parse system spec: ${e.message || String(e)}`,
+      specId: 'system',
+    });
+    return null;
+  }
 }
 
 export function saveSystemSpec(spec: SystemSpec): void {
@@ -61,9 +82,15 @@ export function loadSubsystemSpecs(): SubsystemSpec[] {
   for (const file of files) {
     try {
       const raw = readYamlFile(file);
+      if (raw === null) continue;
       specs.push(SubsystemSpecSchema.parse(raw));
-    } catch (e) {
-      // Skip or warn
+    } catch (e: any) {
+      loaderIssues.push({
+        severity: 'error',
+        code: 'SCHEMA_VALIDATION_ERROR',
+        message: `Failed to parse subsystem spec: ${e.message || String(e)}`,
+        specId: path.basename(file, '.yaml'),
+      });
     }
   }
   return specs;
@@ -72,8 +99,18 @@ export function loadSubsystemSpecs(): SubsystemSpec[] {
 export function loadSubsystemSpec(id: string): SubsystemSpec | null {
   const p = getSubsystemPath(id);
   if (!pathExists(p)) return null;
-  const raw = readYamlFile(p);
-  return SubsystemSpecSchema.parse(raw);
+  try {
+    const raw = readYamlFile(p);
+    return SubsystemSpecSchema.parse(raw);
+  } catch (e: any) {
+    loaderIssues.push({
+      severity: 'error',
+      code: 'SCHEMA_VALIDATION_ERROR',
+      message: `Failed to parse subsystem spec "${id}": ${e.message || String(e)}`,
+      specId: id,
+    });
+    return null;
+  }
 }
 
 export function saveSubsystemSpec(spec: SubsystemSpec): void {
@@ -93,9 +130,15 @@ export function loadComponentSpecs(): ComponentSpec[] {
   for (const file of files) {
     try {
       const raw = readYamlFile(file);
+      if (raw === null) continue;
       specs.push(ComponentSpecSchema.parse(raw));
-    } catch (e) {
-      // Skip
+    } catch (e: any) {
+      loaderIssues.push({
+        severity: 'error',
+        code: 'SCHEMA_VALIDATION_ERROR',
+        message: `Failed to parse component spec: ${e.message || String(e)}`,
+        specId: path.basename(file, '.yaml'),
+      });
     }
   }
   return specs;
@@ -104,8 +147,18 @@ export function loadComponentSpecs(): ComponentSpec[] {
 export function loadComponentSpec(id: string): ComponentSpec | null {
   const p = getComponentPath(id);
   if (!pathExists(p)) return null;
-  const raw = readYamlFile(p);
-  return ComponentSpecSchema.parse(raw);
+  try {
+    const raw = readYamlFile(p);
+    return ComponentSpecSchema.parse(raw);
+  } catch (e: any) {
+    loaderIssues.push({
+      severity: 'error',
+      code: 'SCHEMA_VALIDATION_ERROR',
+      message: `Failed to parse component spec "${id}": ${e.message || String(e)}`,
+      specId: id,
+    });
+    return null;
+  }
 }
 
 export function saveComponentSpec(spec: ComponentSpec): void {
@@ -125,9 +178,15 @@ export function loadInterfaceSpecs(): InterfaceSpec[] {
   for (const file of files) {
     try {
       const raw = readYamlFile(file);
+      if (raw === null) continue;
       specs.push(InterfaceSpecSchema.parse(raw));
-    } catch (e) {
-      // Skip
+    } catch (e: any) {
+      loaderIssues.push({
+        severity: 'error',
+        code: 'SCHEMA_VALIDATION_ERROR',
+        message: `Failed to parse interface spec: ${e.message || String(e)}`,
+        specId: path.basename(file, '.yaml'),
+      });
     }
   }
   return specs;
@@ -136,8 +195,18 @@ export function loadInterfaceSpecs(): InterfaceSpec[] {
 export function loadInterfaceSpec(id: string): InterfaceSpec | null {
   const p = getInterfacePath(id);
   if (!pathExists(p)) return null;
-  const raw = readYamlFile(p);
-  return InterfaceSpecSchema.parse(raw);
+  try {
+    const raw = readYamlFile(p);
+    return InterfaceSpecSchema.parse(raw);
+  } catch (e: any) {
+    loaderIssues.push({
+      severity: 'error',
+      code: 'SCHEMA_VALIDATION_ERROR',
+      message: `Failed to parse interface spec "${id}": ${e.message || String(e)}`,
+      specId: id,
+    });
+    return null;
+  }
 }
 
 export function saveInterfaceSpec(spec: InterfaceSpec): void {
@@ -157,9 +226,15 @@ export function loadImplementationSpecs(): ImplementationSpec[] {
   for (const file of files) {
     try {
       const raw = readYamlFile(file);
+      if (raw === null) continue;
       specs.push(ImplementationSpecSchema.parse(raw));
-    } catch (e) {
-      // Skip
+    } catch (e: any) {
+      loaderIssues.push({
+        severity: 'error',
+        code: 'SCHEMA_VALIDATION_ERROR',
+        message: `Failed to parse implementation spec: ${e.message || String(e)}`,
+        specId: path.basename(file, '.yaml'),
+      });
     }
   }
   return specs;
@@ -168,8 +243,18 @@ export function loadImplementationSpecs(): ImplementationSpec[] {
 export function loadImplementationSpec(id: string): ImplementationSpec | null {
   const p = getImplementationPath(id);
   if (!pathExists(p)) return null;
-  const raw = readYamlFile(p);
-  return ImplementationSpecSchema.parse(raw);
+  try {
+    const raw = readYamlFile(p);
+    return ImplementationSpecSchema.parse(raw);
+  } catch (e: any) {
+    loaderIssues.push({
+      severity: 'error',
+      code: 'SCHEMA_VALIDATION_ERROR',
+      message: `Failed to parse implementation spec "${id}": ${e.message || String(e)}`,
+      specId: id,
+    });
+    return null;
+  }
 }
 
 export function saveImplementationSpec(spec: ImplementationSpec): void {
@@ -178,6 +263,7 @@ export function saveImplementationSpec(spec: ImplementationSpec): void {
   spec.updatedAt = new Date().toISOString();
   writeYamlFile(p, spec);
 }
+
 
 // ---------------------------------------------------------------------------
 // Topology Resolver: Translates SDD Spec Tree into Agent Topology
