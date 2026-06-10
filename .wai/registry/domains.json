@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1.0.0",
+  "domains": [
+    {
+      "id": "root",
+      "name": "Waffle-AIron",
+      "path": ".",
+      "type": "root",
+      "parent": null,
+      "propagation": "flat",
+      "status": "active",
+      "addedAt": "2026-06-10T20:23:10.714Z"
+    }
+  ],
+  "updatedAt": "2026-06-10T20:23:10.714Z"
+}

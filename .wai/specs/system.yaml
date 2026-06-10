@@ -1,0 +1,18 @@
+schemaVersion: "1.0.0"
+name: "Waffle-AIron"
+vision: >
+  To provide a local, spec-driven development (SDD) orchestration environment that enforces
+  top-down design, interface contract compatibility, and dynamic agent topology sandboxing
+  across software projects, guaranteeing blueprint-to-code symmetry.
+boundaries:
+  - "The system only operates within the workspace boundaries of initialized wairon projects (directories containing a .wai/ folder)."
+  - "All spec definitions, metadata, and cache structures must be stored locally under .wai/."
+  - "AI tooling configuration injection is limited to user-approved standard folders (.gemini/skills/ and .claude/)."
+globalRequirements:
+  - "Enforce strict top-down spec dependencies (cannot define lower-level specs without parent specs)."
+  - "Expose an MCP server with tools for spec manipulation, validation, and analysis."
+  - "Verify method implementation contracts against interface method signatures."
+  - "Enforce component interaction boundaries based on component type categories (Orchestrator, Store, Adapter, Repository, Resolver, Supervisor, Registry)."
+  - "Export structured workflow skills to local AI agent configurations on project initialization and generation."
+createdAt: "2026-06-10T20:23:00.000Z"
+updatedAt: "2026-06-10T20:23:00.000Z"

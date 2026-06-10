@@ -1,0 +1,11 @@
+id: "cli_runner"
+name: "CLI Runner"
+description: "Coordinates terminal subcommand actions and flags, mapping CLI input to core engine execution."
+subsystem: "sdd_cli"
+componentType: "Orchestrator"
+dependencies:
+  - "spec_loader"
+  - "spec_validator"
+  - "skills_exporter"
+createdAt: "2026-06-10T19:28:00.000Z"
+updatedAt: "2026-06-10T19:28:00.000Z"

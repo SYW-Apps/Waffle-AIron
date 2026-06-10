@@ -1,0 +1,7 @@
+id: "sdd_skills"
+name: "SDD Skills Exporter"
+description: "Bootstraps and synchronizes the 4 SDD AI Skills to local AI CLI directories."
+parentSystem: "Waffle-AIron"
+publicInterfaces: []
+createdAt: "2026-06-10T19:28:00.000Z"
+updatedAt: "2026-06-10T19:28:00.000Z"

@@ -1,0 +1,9 @@
+id: "agent_resolver"
+name: "Agent Topology Resolver"
+description: "Resolves legacy-compatible AgentRecord structures dynamically from the loaded spec tree."
+subsystem: "sdd_core"
+componentType: "Orchestrator"
+dependencies:
+  - "spec_loader"
+createdAt: "2026-06-10T19:28:00.000Z"
+updatedAt: "2026-06-10T19:28:00.000Z"
