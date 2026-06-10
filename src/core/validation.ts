@@ -415,7 +415,11 @@ export function validateSddTree(): ValidationResult {
     if (comp) {
       for (const depId of comp.dependencies) {
         if (!visited.has(depId)) {
-          if (dfs(depId, pathTrace)) return true;
+          if (dfs(depId, pathTrace)) {
+            recStack.delete(compId);
+            pathTrace.pop();
+            return true;
+          }
         } else if (recStack.has(depId)) {
           pathTrace.push(depId);
           const cyclePath = pathTrace.slice(pathTrace.indexOf(depId)).join(' -> ');
@@ -426,6 +430,9 @@ export function validateSddTree(): ValidationResult {
             undefined,
             compId
           ));
+          pathTrace.pop();
+          recStack.delete(compId);
+          pathTrace.pop();
           return true;
         }
       }
@@ -438,7 +445,9 @@ export function validateSddTree(): ValidationResult {
 
   for (const comp of components) {
     if (!visited.has(comp.id)) {
-      dfs(comp.id, []);
+      if (dfs(comp.id, [])) {
+        break;
+      }
     }
   }
 

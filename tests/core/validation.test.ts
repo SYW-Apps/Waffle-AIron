@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { validateRegistry, validateProjectConfig } from '../../src/core/validation.js';
+import { describe, it, expect, vi } from 'vitest';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+import { validateRegistry, validateProjectConfig, validateSddTree } from '../../src/core/validation.js';
 import { createEmptyRegistry } from '../../src/models/registry.js';
 import { createAgentRecord } from '../../src/models/agent.js';
 import { RulesConfig } from '../../src/models/project.js';
@@ -121,5 +124,318 @@ describe('validateProjectConfig', () => {
 
     const result = validateProjectConfig(config);
     expect(result.valid).toBe(true);
+  });
+});
+
+describe('validateSddTree', () => {
+  function createTempProject() {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-sdd-test-'));
+    const originalCwd = process.cwd();
+
+    // Create .wai directory and project.yaml
+    const waiDir = path.join(tempDir, '.wai');
+    fs.mkdirSync(waiDir);
+    fs.writeFileSync(path.join(waiDir, 'project.yaml'), JSON.stringify({
+      schemaVersion: '1.0.0',
+      name: 'test-project',
+      targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+      rules: defaultRules,
+    }));
+
+    const specsDir = path.join(waiDir, 'specs');
+    fs.mkdirSync(specsDir);
+    fs.mkdirSync(path.join(specsDir, 'subsystems'));
+    fs.mkdirSync(path.join(specsDir, 'components'));
+    fs.mkdirSync(path.join(specsDir, 'interfaces'));
+    fs.mkdirSync(path.join(specsDir, 'implementations'));
+
+    return {
+      tempDir,
+      originalCwd,
+      writeSpec: (type: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation', name: string, content: string) => {
+        let filePath = '';
+        if (type === 'system') {
+          filePath = path.join(specsDir, 'system.yaml');
+        } else {
+          filePath = path.join(specsDir, `${type}s`, `${name}.yaml`);
+        }
+        fs.writeFileSync(filePath, content);
+      },
+      activate: () => {
+        vi.spyOn(process, 'cwd').mockReturnValue(tempDir);
+      },
+      cleanup: () => {
+        vi.restoreAllMocks();
+        try {
+          fs.rmSync(tempDir, { recursive: true, force: true });
+        } catch (e) {
+          // ignore cleanup errors on windows if file locks occur
+        }
+      }
+    };
+  }
+
+  it('passes validation for a clean, correct spec tree', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: Subsystem A description
+parentSystem: TestSystem
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('component', 'comp-a', `
+schemaVersion: 1.0.0
+id: comp-a
+name: ComponentA
+description: Component A description
+subsystem: sub-a
+componentType: Orchestrator
+dependencies: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('interface', 'icomp-a', `
+schemaVersion: 1.0.0
+id: icomp-a
+name: InterfaceA
+description: Interface A description
+component: comp-a
+methods:
+  - name: doSomething
+    description: Do something
+    signature: "doSomething(): Promise<void>"
+    returns: "Promise<void>"
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('implementation', 'impl-a', `
+schemaVersion: 1.0.0
+id: impl-a
+name: ImplementationA
+description: Implementation A description
+contract: icomp-a
+sourcePath: src/comp-a.ts
+methods:
+  - name: doSomething
+    narrative:
+      - stepNumber: 1
+        description: Local work step
+        type: local
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.valid).toBe(true);
+      expect(res.issues).toHaveLength(0);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('collects and reports schema validation errors (Zod errors) rather than swallowing them', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    // Invalid component ID (not matching regex: lowercase alphanumeric with dashes/underscores)
+    proj.writeSpec('component', 'invalid-comp', `
+schemaVersion: 1.0.0
+id: INVALID_ID_WITH_CAPS
+name: ComponentA
+description: Invalid component ID
+subsystem: sub-a
+componentType: Orchestrator
+dependencies: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.valid).toBe(false);
+      expect(res.issues.some(i => i.code === 'SCHEMA_VALIDATION_ERROR')).toBe(true);
+      const schemaErr = res.issues.find(i => i.code === 'SCHEMA_VALIDATION_ERROR');
+      expect(schemaErr?.message).toContain('Failed to parse component spec');
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('fails with UNDECLARED_DEPENDENCY_CALL when a call step targets a component not in dependencies', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: Subsystem A description
+parentSystem: TestSystem
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    // comp-a has NO dependencies
+    proj.writeSpec('component', 'comp-a', `
+schemaVersion: 1.0.0
+id: comp-a
+name: ComponentA
+description: Component A description
+subsystem: sub-a
+componentType: Orchestrator
+dependencies: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('component', 'comp-b', `
+schemaVersion: 1.0.0
+id: comp-b
+name: ComponentB
+description: Component B description
+subsystem: sub-a
+componentType: Store
+dependencies: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+    proj.writeSpec('interface', 'icomp-a', `
+schemaVersion: 1.0.0
+id: icomp-a
+name: InterfaceA
+description: Interface A description
+component: comp-a
+methods:
+  - name: doSomething
+    description: Do something
+    signature: "doSomething(): Promise<void>"
+    returns: "Promise<void>"
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('interface', 'icomp-b', `
+schemaVersion: 1.0.0
+id: icomp-b
+name: InterfaceB
+description: Interface B description
+component: comp-b
+methods:
+  - name: getData
+    description: Get data
+    signature: "getData(): Promise<void>"
+    returns: "Promise<void>"
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+    // impl-a calls comp-b, but comp-a does not list comp-b as a dependency!
+    proj.writeSpec('implementation', 'impl-a', `
+schemaVersion: 1.0.0
+id: impl-a
+name: ImplementationA
+description: Implementation A description
+contract: icomp-a
+sourcePath: src/comp-a.ts
+methods:
+  - name: doSomething
+    narrative:
+      - stepNumber: 1
+        description: Call comp-b which is not a dependency
+        type: call
+        targetComponent: comp-b
+        targetMethod: getData
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.valid).toBe(false);
+      expect(res.issues.some(i => i.code === 'UNDECLARED_DEPENDENCY_CALL')).toBe(true);
+      const depErr = res.issues.find(i => i.code === 'UNDECLARED_DEPENDENCY_CALL');
+      expect(depErr?.message).toContain('calls component "comp-b" (step 1) but component "comp-a" does not list "comp-b" as a dependency');
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('detects circular dependency loops with CIRCULAR_DEPENDENCY and lists the path cycle', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: Subsystem A description
+parentSystem: TestSystem
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    // comp-a depends on comp-b
+    proj.writeSpec('component', 'comp-a', `
+schemaVersion: 1.0.0
+id: comp-a
+name: ComponentA
+description: Component A description
+subsystem: sub-a
+componentType: Orchestrator
+dependencies: [comp-b]
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    // comp-b depends on comp-a (Cycle: comp-a -> comp-b -> comp-a)
+    proj.writeSpec('component', 'comp-b', `
+schemaVersion: 1.0.0
+id: comp-b
+name: ComponentB
+description: Component B description
+subsystem: sub-a
+componentType: Store
+dependencies: [comp-a]
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.valid).toBe(false);
+      expect(res.issues.some(i => i.code === 'CIRCULAR_DEPENDENCY')).toBe(true);
+      const cycleErr = res.issues.find(i => i.code === 'CIRCULAR_DEPENDENCY');
+      expect(cycleErr?.message).toContain('Circular dependency detected');
+      // Should show the path cycle
+      expect(cycleErr?.message).toContain('comp-a -> comp-b -> comp-a');
+    } finally {
+      proj.cleanup();
+    }
   });
 });
