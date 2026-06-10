@@ -593,6 +593,26 @@ async function executeInit(
   syncContextFiles();
   logger.verbose('Context files seeded in .wai/context/');
 
+  // Bootstrap L0 System Spec and export SDD Skills for AI toolings
+  try {
+    const { saveSystemSpec } = require('../core/specs.js') as typeof import('../core/specs.js');
+    saveSystemSpec({
+      schemaVersion: '1.0.0',
+      name: projectName,
+      vision: `Core vision for ${projectName}`,
+      boundaries: [],
+      globalRequirements: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const { exportSddSkills } = require('../core/skills.js') as typeof import('../core/skills.js');
+    exportSddSkills();
+    logger.success('Bootstrapped SDD specs system and exported AI Skills to .gemini/skills/ and .claude/.');
+  } catch (err) {
+    logger.warn(`Failed to bootstrap SDD Specs: ${String(err)}`);
+  }
+
   // Done
   logger.blank();
   logger.success(`Project "${projectName}" initialized.`);

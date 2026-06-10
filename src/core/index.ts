@@ -5,3 +5,5 @@ export * from './jobs.js';
 export * from './registry.js';
 export * from './templates.js';
 export * from './validation.js';
+export * from './specs.js';
+export * from './skills.js';

@@ -33,6 +33,12 @@ export const AI_PATHS = {
   contextArchitectureMd: () => aiDir('context', 'architecture.md'),
   contextDomainsMd: () => aiDir('context', 'domains.md'),
   contextWaironGuideMd: () => aiDir('context', 'wairon-guide.md'),
+  specsDir: () => aiDir('specs'),
+  specsSystem: () => aiDir('specs', 'system.yaml'),
+  specsSubsystemsDir: () => aiDir('specs', 'subsystems'),
+  specsComponentsDir: () => aiDir('specs', 'components'),
+  specsInterfacesDir: () => aiDir('specs', 'interfaces'),
+  specsImplementationsDir: () => aiDir('specs', 'implementations'),
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -81,6 +87,19 @@ export function saveProjectConfig(config: ProjectConfig): void {
  */
 export function loadRegistry(): Registry {
   assertProjectInitialized();
+  const systemSpecPath = AI_PATHS.specsSystem();
+  if (pathExists(systemSpecPath)) {
+    try {
+      const { resolveAgentTopology } = require('../core/specs.js') as typeof import('../core/specs.js');
+      return {
+        schemaVersion: '1.0.0',
+        agents: resolveAgentTopology(),
+        updatedAt: new Date().toISOString(),
+      };
+    } catch (e) {
+      // Fallback if load fails
+    }
+  }
   const raw = readJsonFile(AI_PATHS.agentsRegistry());
   if (raw === null) return createEmptyRegistry();
   return RegistrySchema.parse(raw);

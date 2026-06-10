@@ -71,6 +71,10 @@ import {
   runMcpServe,
   runMcpInstall,
   runMcpStatus,
+  runWafflerSession,
+  runWafflerConnect,
+  runWafflerSetUrl,
+  runWafflerStatus,
   cleanStaleBinary,
 } from '../commands/index.js';
 
@@ -812,6 +816,54 @@ mcpCmd
   .description('Show whether the wairon MCP server is registered in Claude Code settings')
   .action(async () => {
     await runMcpStatus();
+  });
+
+// ---------------------------------------------------------------------------
+// waffler
+// ---------------------------------------------------------------------------
+
+const wafflerCmd = program
+  .command('waffler')
+  .description('Waffler visual-programming integration — connect an AI agent to a Waffler MCP server');
+
+wafflerCmd
+  .command('session')
+  .description('Start an AI session connected to the Waffler MCP server')
+  .option('--url <url>', 'Waffler MCP server URL (skips auto-detection and config lookup)')
+  .option('--backend <type>', 'AI backend: claude (default), gemini, ollama, custom')
+  .option('--model <name>', 'model name for ollama/custom backends')
+  .option('--label <text>', 'human-readable label for this session')
+  .option('--new', 'start a fresh session instead of resuming the most recent one')
+  .action(async (opts) => {
+    await runWafflerSession({
+      url:     opts.url,
+      backend: opts.backend,
+      model:   opts.model,
+      label:   opts.label,
+      new:     opts.new,
+    });
+  });
+
+wafflerCmd
+  .command('connect')
+  .description('Test the connection to the Waffler MCP server and show status')
+  .option('--url <url>', 'Waffler MCP server URL to test')
+  .action(async (opts) => {
+    await runWafflerConnect({ url: opts.url });
+  });
+
+wafflerCmd
+  .command('set-url <url>')
+  .description('Save the Waffler MCP server URL to project config')
+  .action(async (url: string) => {
+    await runWafflerSetUrl(url);
+  });
+
+wafflerCmd
+  .command('status')
+  .description('Show current Waffler integration config for this project')
+  .action(async () => {
+    await runWafflerStatus();
   });
 
 // ---------------------------------------------------------------------------

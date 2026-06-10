@@ -31,6 +31,8 @@ export interface SessionStartOptions {
   new?:      boolean;
   /** Print the tool config dir path and exit (for shell integration) */
   printDir?: boolean;
+  /** Extra environment variables merged into the subprocess env */
+  extraEnv?: Record<string, string>;
 }
 
 export async function runSessionStart(options: SessionStartOptions = {}): Promise<void> {
@@ -98,6 +100,7 @@ export async function runSessionStart(options: SessionStartOptions = {}): Promis
   const env: Record<string, string> = {
     ...process.env as Record<string, string>,
     ...sessionEnvVars(session.id, backend),
+    ...(options.extraEnv ?? {}),
   };
   if (options.model) {
     env['WAIRON_MODEL'] = options.model;

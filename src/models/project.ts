@@ -143,6 +143,21 @@ export const ProjectConfigSchema = z.object({
    */
   git: GitConfigSchema.optional(),
 
+  /**
+   * Waffler integration settings.
+   * When set, `wairon waffler session` connects to the Waffler MCP server
+   * to let AI agents build and manage Waffler blueprints.
+   */
+  waffler: z.object({
+    /**
+     * URL of the Waffler MCP server endpoint.
+     * If omitted, wairon tries the local default (localhost:42069/_mcp)
+     * and prompts for a custom URL if unreachable.
+     * Set explicitly to skip auto-detection, e.g. for a remote instance.
+     */
+    mcpServerUrl: z.string().optional(),
+  }).optional(),
+
   /** Created by wairon at init time */
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),

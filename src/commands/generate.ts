@@ -94,5 +94,18 @@ export async function runGenerate(options: GenerateOptions = {}): Promise<void> 
       syncContextFiles();
       logger.verbose('Context files synced.');
     }
+
+    // Also re-export SDD skills if spec tree exists
+    const { AI_PATHS: sddPaths } = require('../config/loader.js') as typeof import('../config/loader.js');
+    const { pathExists: sddPathExists } = require('../utils/fs.js') as typeof import('../utils/fs.js');
+    if (!options.dryRun && sddPathExists(sddPaths.specsSystem())) {
+      try {
+        const { exportSddSkills } = require('../core/skills.js') as typeof import('../core/skills.js');
+        exportSddSkills();
+        logger.verbose('SDD AI Skills synced.');
+      } catch (err) {
+        logger.warn(`Failed to export SDD Skills: ${String(err)}`);
+      }
+    }
   }
 }

@@ -60,6 +60,29 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
     }
   }
 
+  // --- SDD Spec Tree ---
+  const { AI_PATHS: sddPaths } = require('../config/loader.js') as typeof import('../config/loader.js');
+  const { pathExists: sddPathExists } = require('../utils/fs.js') as typeof import('../utils/fs.js');
+  if (sddPathExists(sddPaths.specsSystem())) {
+    logger.header('SDD Architectural Specs');
+    const { validateSddTree } = require('../core/validation.js') as typeof import('../core/validation.js');
+    const sddResult = validateSddTree();
+    if (sddResult.issues.length === 0) {
+      logger.success('Spec tree is valid and component type boundaries are enforced.');
+    } else {
+      for (const issue of sddResult.issues) {
+        const prefix = issue.specId ? chalk.gray(`[${issue.specId}] `) : '';
+        if (issue.severity === 'error') {
+          logger.error(`${prefix}[${issue.code}] ${issue.message}`);
+          hasErrors = true;
+        } else {
+          logger.warn(`${prefix}[${issue.code}] ${issue.message}`);
+          hasWarnings = true;
+        }
+      }
+    }
+  }
+
   logger.blank();
 
   const failOnWarnings = options.ci && hasWarnings;

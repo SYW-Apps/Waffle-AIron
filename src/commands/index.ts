@@ -27,3 +27,4 @@ export * from './templates.js';
 export * from './topology-history.js';
 export * from './update.js';
 export * from './validate.js';
+export * from './waffler.js';

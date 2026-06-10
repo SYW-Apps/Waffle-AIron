@@ -26,6 +26,11 @@ function requireValidation() {
   return require('../core/validation.js') as typeof import('../core/validation.js');
 }
 
+function requireSpecs() {
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  return require('../core/specs.js') as typeof import('../core/specs.js');
+}
+
 function requireWorkspace() {
   /* eslint-disable @typescript-eslint/no-require-imports */
   return require('../core/workspace.js') as typeof import('../core/workspace.js');
@@ -393,6 +398,215 @@ export function createMcpServer(): McpServer {
         const { loadJob } = requireJobs();
         const job = loadJob(id);
         return json(job);
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  // ── SDD Spec-Driven Development Tools ─────────────────────────────────────
+
+  reg<{ name: string; vision: string; boundaries?: string[]; globalRequirements?: string[] }>(server,
+    'sdd_initialize_system',
+    {
+      description: 'Initialize the L0 System Specification (system.yaml).',
+      inputSchema: {
+        name: z.string().describe('Overarching name of the project/system'),
+        vision: z.string().describe('Vision, mission, and core goals of the system'),
+        boundaries: z.array(z.string()).optional().describe('System boundary rules or scope statements'),
+        globalRequirements: z.array(z.string()).optional().describe('Global functional and non-functional requirements'),
+      },
+    },
+    ({ name, vision, boundaries, globalRequirements }) => {
+      try {
+        const { saveSystemSpec } = requireSpecs();
+        const now = new Date().toISOString();
+        saveSystemSpec({
+          schemaVersion: '1.0.0',
+          name,
+          vision,
+          boundaries: boundaries ?? [],
+          globalRequirements: globalRequirements ?? [],
+          createdAt: now,
+          updatedAt: now,
+        });
+        return text(`Successfully initialized L0 System Spec for "${name}".`);
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  reg<{ id: string; name: string; description: string; publicInterfaces?: { type: 'REST' | 'GraphQL' | 'MessageBus' | 'RPC' | 'Custom'; details: string }[] }>(server,
+    'sdd_add_subsystem',
+    {
+      description: 'Add an L1 Subsystem / Service under the system boundary.',
+      inputSchema: {
+        id: z.string().describe('Lowercase identifier for the subsystem'),
+        name: z.string().describe('Human-readable display name'),
+        description: z.string().describe('Purpose and details of the subsystem'),
+        publicInterfaces: z.array(z.object({
+          type: z.enum(['REST', 'GraphQL', 'MessageBus', 'RPC', 'Custom']),
+          details: z.string(),
+        })).optional().describe('Public entrypoints or endpoints exposed by this subsystem'),
+      },
+    },
+    ({ id, name, description, publicInterfaces }) => {
+      try {
+        const { loadSystemSpec, saveSubsystemSpec } = requireSpecs();
+        const system = loadSystemSpec();
+        if (!system) return errText('System spec must be initialized (sdd_initialize_system) first.');
+        const now = new Date().toISOString();
+        saveSubsystemSpec({
+          id,
+          name,
+          description,
+          parentSystem: system.name,
+          publicInterfaces: publicInterfaces ?? [],
+          createdAt: now,
+          updatedAt: now,
+        });
+        return text(`Successfully added L1 Subsystem Spec "${name}" (${id}).`);
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  reg<{ id: string; name: string; description: string; subsystem: string; componentType: 'Orchestrator' | 'Store' | 'Adapter' | 'Repository' | 'Resolver' | 'Supervisor' | 'Registry'; dependencies?: string[] }>(server,
+    'sdd_add_component',
+    {
+      description: 'Add an L2 Component under a specific subsystem, enforcing component types.',
+      inputSchema: {
+        id: z.string().describe('Lowercase identifier for the component'),
+        name: z.string().describe('Human-readable display name'),
+        description: z.string().describe('Internal architecture details'),
+        subsystem: z.string().describe('The L1 subsystem ID this component belongs to'),
+        componentType: z.enum(['Orchestrator', 'Store', 'Adapter', 'Repository', 'Resolver', 'Supervisor', 'Registry']).describe('The architectural pattern type'),
+        dependencies: z.array(z.string()).optional().describe('IDs of other components this component depends on'),
+      },
+    },
+    ({ id, name, description, subsystem, componentType, dependencies }) => {
+      try {
+        const { loadSubsystemSpec, saveComponentSpec } = requireSpecs();
+        const sub = loadSubsystemSpec(subsystem);
+        if (!sub) return errText(`Parent subsystem "${subsystem}" does not exist.`);
+        const now = new Date().toISOString();
+        saveComponentSpec({
+          id,
+          name,
+          description,
+          subsystem,
+          componentType,
+          dependencies: dependencies ?? [],
+          createdAt: now,
+          updatedAt: now,
+        });
+        return text(`Successfully added L2 Component Spec "${name}" (${id}, ${componentType}).`);
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  reg<{ id: string; name: string; description: string; component: string; methods?: { name: string; description: string; signature: string; returns: string }[] }>(server,
+    'sdd_define_interface',
+    {
+      description: 'Define an L3 Contract / Interface with method signatures for a component.',
+      inputSchema: {
+        id: z.string().describe('Lowercase identifier prefixed with "i", e.g. "istorage"'),
+        name: z.string().describe('Human-readable contract name'),
+        description: z.string().describe('Contract description and obligations'),
+        component: z.string().describe('The L2 component ID this interface belongs to'),
+        methods: z.array(z.object({
+          name: z.string(),
+          description: z.string(),
+          signature: z.string(),
+          returns: z.string(),
+        })).optional().describe('List of method signature contracts'),
+      },
+    },
+    ({ id, name, description, component, methods }) => {
+      try {
+        const { loadComponentSpec, saveInterfaceSpec } = requireSpecs();
+        const comp = loadComponentSpec(component);
+        if (!comp) return errText(`Component "${component}" does not exist.`);
+        const now = new Date().toISOString();
+        saveInterfaceSpec({
+          id,
+          name,
+          description,
+          component,
+          methods: methods ?? [],
+          createdAt: now,
+          updatedAt: now,
+        });
+        return text(`Successfully defined L3 Interface Contract "${name}" (${id}).`);
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  reg<{ id: string; name: string; description: string; contract: string; sourcePath?: string; methods?: { name: string; narrative: { stepNumber: number; description: string; type: 'local' | 'call'; targetComponent?: string; targetMethod?: string }[] }[] }>(server,
+    'sdd_write_narrative',
+    {
+      description: 'Write L4 Concrete Implementation spec containing L5 method narratives.',
+      inputSchema: {
+        id: z.string().describe('Lowercase identifier, e.g. "vfs_storage"'),
+        name: z.string().describe('Human-readable implementation name'),
+        description: z.string().describe('Implementation details'),
+        contract: z.string().describe('The L3 Interface contract ID this implements'),
+        sourcePath: z.string().optional().describe('Optional: target source code file path relative to project root'),
+        methods: z.array(z.object({
+          name: z.string(),
+          narrative: z.array(z.object({
+            stepNumber: z.number().int().positive(),
+            description: z.string(),
+            type: z.enum(['local', 'call']),
+            targetComponent: z.string().optional(),
+            targetMethod: z.string().optional(),
+          })),
+        })).optional().describe('Method implementations containing L5 narratives'),
+      },
+    },
+    ({ id, name, description, contract, sourcePath, methods }) => {
+      try {
+        const { loadInterfaceSpec, saveImplementationSpec } = requireSpecs();
+        const intf = loadInterfaceSpec(contract);
+        if (!intf) return errText(`Interface contract "${contract}" does not exist.`);
+        const now = new Date().toISOString();
+        saveImplementationSpec({
+          id,
+          name,
+          description,
+          contract,
+          sourcePath,
+          methods: methods ?? [],
+          createdAt: now,
+          updatedAt: now,
+        });
+        return text(`Successfully saved L4 Implementation Spec "${name}" (${id}) with method narratives.`);
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  reg<Record<string, never>>(server,
+    'sdd_validate_tree',
+    {
+      description: 'Validate the entire SDD spec tree, checking parent references, contract compatibility, narratives, and component type boundaries.',
+    },
+    () => {
+      try {
+        const { validateSddTree } = requireValidation();
+        const result = validateSddTree();
+        return json({
+          valid: result.valid,
+          errors: result.issues.filter((i) => i.severity === 'error'),
+          warnings: result.issues.filter((i) => i.severity === 'warning'),
+        });
       } catch (e) {
         return errText(String(e));
       }
