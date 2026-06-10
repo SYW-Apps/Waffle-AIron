@@ -31,6 +31,25 @@ function requireSpecs() {
   return require('../core/specs.js') as typeof import('../core/specs.js');
 }
 
+function requireWorkspace() {
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  return require('../core/workspace.js') as typeof import('../core/workspace.js');
+}
+
+function requirePipeline() {
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  return require('../core/pipeline.js') as typeof import('../core/pipeline.js');
+}
+
+function requireSessions() {
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  return require('../core/sessions.js') as typeof import('../core/sessions.js');
+}
+
+function requireJobs() {
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  return require('../core/jobs.js') as typeof import('../core/jobs.js');
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -175,6 +194,215 @@ export function createMcpServer(): McpServer {
     },
   );
 
+  // ── Run / workspace tools ─────────────────────────────────────────────────
+
+  reg<{ limit: number }>(server,
+    'listRuns',
+    {
+      description: 'List all run records for this project (most recent first). Each run corresponds to a `wairon run start` or pipeline execution.',
+      inputSchema: { limit: z.number().min(1).max(50).default(20) },
+    },
+    ({ limit }) => {
+      try {
+        const { listRuns } = requireWorkspace();
+        const runs = listRuns().slice(0, limit);
+        return json(runs.map((r) => ({
+          id:        r.id,
+          status:    r.status,
+          label:     r.label,
+          createdAt: r.createdAt,
+          steps:     r.steps.length,
+        })));
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  reg<{ runId: string }>(server,
+    'getRunStatus',
+    {
+      description: 'Get full status of a specific run including all steps, their status, backends, and domain scope.',
+      inputSchema: { runId: z.string() },
+    },
+    ({ runId }) => {
+      try {
+        const { loadRun } = requireWorkspace();
+        const run = loadRun(runId);
+        return json({
+          id:         run.id,
+          status:     run.status,
+          label:      run.label,
+          pipelineId: run.pipelineId,
+          createdAt:  run.createdAt,
+          steps: run.steps.map((s) => ({
+            id:      s.id,
+            label:   s.label,
+            status:  s.status,
+            backend: s.backend,
+            domain:  s.domain,
+          })),
+        });
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  reg<{ runId: string; stepId: string }>(server,
+    'getStepResult',
+    {
+      description: 'Get the result (summary, output, status) from a specific step of a run.',
+      inputSchema: { runId: z.string(), stepId: z.string() },
+    },
+    ({ runId, stepId }) => {
+      try {
+        const { loadStepResult } = requireWorkspace();
+        const result = loadStepResult(runId, stepId);
+        if (!result) return text('No result found for this step yet.');
+        return json(result);
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  // ── Pipeline tools ────────────────────────────────────────────────────────
+
+  reg<Record<string, never>>(server,
+    'listPipelines',
+    {
+      description: 'List all pipeline definitions for this project.',
+    },
+    () => {
+      try {
+        const { listPipelines } = requirePipeline();
+        const pipelines = listPipelines();
+        return json(pipelines.map((p) => ({
+          id:          p.id,
+          name:        p.name,
+          description: p.description,
+          steps:       p.steps.length,
+          variables:   Object.keys(p.variables ?? {}),
+        })));
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  reg<{ id: string }>(server,
+    'getPipeline',
+    {
+      description: 'Get the full definition of a specific pipeline including all steps, dependencies, and variables.',
+      inputSchema: { id: z.string() },
+    },
+    ({ id }) => {
+      try {
+        const { loadPipeline } = requirePipeline();
+        const pipeline = loadPipeline(id);
+        return json(pipeline);
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  reg<{ pipelineId: string; limit: number }>(server,
+    'getPipelineStatus',
+    {
+      description: 'Get the status of runs associated with a specific pipeline (most recent runs first).',
+      inputSchema: {
+        pipelineId: z.string(),
+        limit:      z.number().min(1).max(20).default(5),
+      },
+    },
+    ({ pipelineId, limit }) => {
+      try {
+        const { listRuns } = requireWorkspace();
+        const runs = listRuns()
+          .filter((r) => r.pipelineId === pipelineId)
+          .slice(0, limit);
+        return json(runs.map((r) => ({
+          id:        r.id,
+          status:    r.status,
+          createdAt: r.createdAt,
+          steps:     r.steps.map((s) => ({ id: s.id, status: s.status })),
+        })));
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  // ── Session tools ─────────────────────────────────────────────────────────
+
+  reg<Record<string, never>>(server,
+    'listSessions',
+    {
+      description: 'List all active and recent AI session workspaces for this project.',
+    },
+    () => {
+      try {
+        const { listSessions } = requireSessions();
+        const sessions = listSessions();
+        return json(sessions.map((s) => ({
+          id:            s.id,
+          label:         s.label,
+          status:        s.status,
+          backend:       s.backend,
+          domainId:      s.domainId,
+          startCount:    s.startCount,
+          lastStartedAt: s.lastStartedAt,
+        })));
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  // ── Job tools ─────────────────────────────────────────────────────────────
+
+  reg<{ limit: number }>(server,
+    'listJobs',
+    {
+      description: 'List all delegated jobs for this project (most recent first). Jobs are created by `wairon delegate`.',
+      inputSchema: { limit: z.number().min(1).max(50).default(20) },
+    },
+    ({ limit }) => {
+      try {
+        const { listJobs } = requireJobs();
+        const jobs = listJobs().slice(0, limit);
+        return json(jobs.map((j) => ({
+          id:      j.id,
+          status:  j.status,
+          task:    j.task,
+          domain:  j.domain,
+          backend: j.backend,
+          created: j.createdAt,
+        })));
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  reg<{ id: string }>(server,
+    'getJob',
+    {
+      description: 'Get details and result of a specific delegated job.',
+      inputSchema: { id: z.string() },
+    },
+    ({ id }) => {
+      try {
+        const { loadJob } = requireJobs();
+        const job = loadJob(id);
+        return json(job);
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
 
   // ── SDD Spec-Driven Development Tools ─────────────────────────────────────
 
