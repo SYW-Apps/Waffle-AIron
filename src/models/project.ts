@@ -78,6 +78,12 @@ export const GitConfigSchema = z.object({
 });
 export type GitConfig = z.infer<typeof GitConfigSchema>;
 
+export const PathsConfigSchema = z.object({
+  /** Base directory containing SDD specification files, relative to project root */
+  specsDir: z.string().default('.wai/specs'),
+});
+export type PathsConfig = z.infer<typeof PathsConfigSchema>;
+
 export const ProjectConfigSchema = z.object({
   /**
    * Schema version — used to detect incompatible config formats in future
@@ -98,6 +104,8 @@ export const ProjectConfigSchema = z.object({
   targets: z.array(TargetConfigSchema).default([]),
 
   rules: RulesConfigSchema.default({}),
+
+  paths: PathsConfigSchema.default({}),
 
   /**
    * Path to a directory containing org/user-level default templates.

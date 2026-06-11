@@ -438,4 +438,46 @@ updatedAt: '2026-06-10T22:00:00Z'
       proj.cleanup();
     }
   });
+
+  it('enforces Portal type validation rules and boundary constraints', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: Subsystem A description
+parentSystem: TestSystem
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    // comp-a has type Portal but missing portalType
+    proj.writeSpec('component', 'comp-a', `
+schemaVersion: 1.0.0
+id: comp-a
+name: ComponentA
+description: Component A description
+subsystem: sub-a
+componentType: Portal
+dependencies: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.valid).toBe(false);
+      expect(res.issues.some(i => i.code === 'MISSING_PORTAL_TYPE')).toBe(true);
+    } finally {
+      proj.cleanup();
+    }
+  });
 });
+

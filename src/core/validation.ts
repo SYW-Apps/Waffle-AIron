@@ -345,6 +345,45 @@ export function validateSddTree(): ValidationResult {
 
   // 4. Component Type Interaction Rules (Architectural Boundaries)
   for (const comp of components) {
+    // Portal validations
+    if (comp.componentType === 'Portal') {
+      if (!comp.portalType) {
+        issues.push(issue(
+          'error',
+          'MISSING_PORTAL_TYPE',
+          `Component "${comp.id}" has type "Portal" but is missing "portalType" field.`,
+          undefined,
+          comp.id
+        ));
+      } else if (comp.portalType === 'HTTP_API') {
+        // Find interfaces for this component
+        const compInterfaces = interfaces.filter(i => i.component === comp.id);
+        for (const intf of compInterfaces) {
+          for (const m of intf.methods) {
+            if (!m.httpEndpoint) {
+              issues.push(issue(
+                'error',
+                'MISSING_HTTP_ENDPOINT',
+                `Method "${m.name}" on interface "${intf.id}" (Portal HTTP_API) is missing "httpEndpoint" mapping.`,
+                undefined,
+                intf.id
+              ));
+            }
+          }
+        }
+      }
+    } else {
+      if (comp.portalType !== undefined || comp.basePath !== undefined) {
+        issues.push(issue(
+          'error',
+          'UNEXPECTED_PORTAL_FIELD',
+          `Component "${comp.id}" does not have type "Portal" but has "portalType" or "basePath" configured.`,
+          undefined,
+          comp.id
+        ));
+      }
+    }
+
     const dependencies = comp.dependencies;
     for (const depId of dependencies) {
       const depComp = componentMap.get(depId);
@@ -357,6 +396,17 @@ export function validateSddTree(): ValidationResult {
           comp.id
         ));
         continue;
+      }
+
+      // Check Portal dependency boundary: components cannot depend on Portals
+      if (depComp.componentType === 'Portal') {
+        issues.push(issue(
+          'error',
+          'ARCHITECTURE_VIOLATION_PORTAL_DEP',
+          `Architectural violation: Component "${comp.id}" cannot depend on Portal component "${depComp.id}". Portals are top-level entry points and cannot be dependencies.`,
+          undefined,
+          comp.id
+        ));
       }
 
       // Check Component boundaries:

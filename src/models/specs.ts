@@ -55,9 +55,13 @@ export const ComponentTypeSchema = z.enum([
   'Repository',
   'Resolver',
   'Supervisor',
-  'Registry'
+  'Registry',
+  'Portal'
 ]);
 export type ComponentType = z.infer<typeof ComponentTypeSchema>;
+
+export const PortalTypeSchema = z.enum(['HTTP_API', 'CLI', 'GraphQL', 'MessageBus', 'Custom']);
+export type PortalType = z.infer<typeof PortalTypeSchema>;
 
 export const ComponentSpecSchema = z.object({
   id: SpecIdSchema,
@@ -66,6 +70,8 @@ export const ComponentSpecSchema = z.object({
   subsystem: z.string(), // References L1 Subsystem id
   componentType: ComponentTypeSchema,
   dependencies: z.array(z.string()).default([]), // References other L2 Component ids
+  portalType: PortalTypeSchema.optional(),
+  basePath: z.string().optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -75,11 +81,18 @@ export type ComponentSpec = z.infer<typeof ComponentSpecSchema>;
 // ---------------------------------------------------------------------------
 // Level 3: Interface / Contract Spec (interfaces/*.yaml)
 // ---------------------------------------------------------------------------
+export const HttpEndpointSchema = z.object({
+  method: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD']),
+  path: z.string(),
+});
+export type HttpEndpoint = z.infer<typeof HttpEndpointSchema>;
+
 export const MethodSignatureSchema = z.object({
   name: z.string().regex(/^[a-zA-Z0-9_]+$/, 'Method name must be alphanumeric'),
   description: z.string(),
   signature: z.string(), // e.g. "save(key: string, data: Buffer): Promise<void>"
   returns: z.string(),   // e.g. "Promise<void>"
+  httpEndpoint: HttpEndpointSchema.optional(),
 });
 
 export type MethodSignature = z.infer<typeof MethodSignatureSchema>;

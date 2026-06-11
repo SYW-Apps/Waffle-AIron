@@ -4,6 +4,6 @@ description: "Manages orders placement, status updates, and fulfillment."
 parentSystem: "Ecommerce-Platform"
 publicInterfaces:
   - type: "REST"
-    details: "POST /orders"
+    details: "POST /orders, list()"
 createdAt: "2026-06-11T15:00:00Z"
 updatedAt: "2026-06-11T15:00:00Z"

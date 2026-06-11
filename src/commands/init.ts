@@ -652,6 +652,9 @@ function buildProjectConfig(
       metaAgentTags: ['meta', 'guardian', 'architect'],
       enforceReproducibility: true,
     },
+    paths: {
+      specsDir: '.wai/specs',
+    },
     defaultBackend: 'claude',
     defaultBundle: defaultBundle ?? undefined,
     createdAt: now,

@@ -9,5 +9,7 @@ rules:
   requireOwnedPaths: true
   metaAgentTags: ["meta", "guardian", "architect"]
   enforceReproducibility: true
+paths:
+  specsDir: "specs"
 createdAt: "2026-06-11T15:00:00Z"
 updatedAt: "2026-06-11T15:00:00Z"

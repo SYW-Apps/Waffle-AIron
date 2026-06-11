@@ -1,0 +1,15 @@
+schemaVersion: "1.0.0"
+id: "iorder_portal"
+name: "Order API Portal Interface"
+description: "REST API routing specifications for the Order service."
+component: "order_portal"
+methods:
+  - name: "submitOrder"
+    description: "Accepts incoming POST requests to submit a new checkout order"
+    signature: "submitOrder(req: Request): Response"
+    returns: "Response"
+    httpEndpoint:
+      method: "POST"
+      path: "/"
+createdAt: "2026-06-11T19:00:00Z"
+updatedAt: "2026-06-11T19:00:00Z"

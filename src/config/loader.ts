@@ -1,4 +1,5 @@
-import { aiDir, pathExists } from '../utils/fs.js';
+import * as path from 'path';
+import { aiDir, pathExists, fromProjectRoot } from '../utils/fs.js';
 import { readJsonFile, readYamlFile, writeJsonFile, writeYamlFile } from '../utils/yaml.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
 import {
@@ -33,12 +34,25 @@ export const AI_PATHS = {
   contextArchitectureMd: () => aiDir('context', 'architecture.md'),
   contextDomainsMd: () => aiDir('context', 'domains.md'),
   contextWaironGuideMd: () => aiDir('context', 'wairon-guide.md'),
-  specsDir: () => aiDir('specs'),
-  specsSystem: () => aiDir('specs', 'system.yaml'),
-  specsSubsystemsDir: () => aiDir('specs', 'subsystems'),
-  specsComponentsDir: () => aiDir('specs', 'components'),
-  specsInterfacesDir: () => aiDir('specs', 'interfaces'),
-  specsImplementationsDir: () => aiDir('specs', 'implementations'),
+  specsDir: () => {
+    try {
+      const projConfig = aiDir('project.yaml');
+      if (pathExists(projConfig)) {
+        const raw = readYamlFile(projConfig) as any;
+        if (raw && raw.paths && raw.paths.specsDir) {
+          return fromProjectRoot(raw.paths.specsDir);
+        }
+      }
+    } catch {
+      // ignore and fallback
+    }
+    return aiDir('specs');
+  },
+  specsSystem: () => path.join(AI_PATHS.specsDir(), 'system.yaml'),
+  specsSubsystemsDir: () => path.join(AI_PATHS.specsDir(), 'subsystems'),
+  specsComponentsDir: () => path.join(AI_PATHS.specsDir(), 'components'),
+  specsInterfacesDir: () => path.join(AI_PATHS.specsDir(), 'interfaces'),
+  specsImplementationsDir: () => path.join(AI_PATHS.specsDir(), 'implementations'),
 } as const;
 
 // ---------------------------------------------------------------------------
