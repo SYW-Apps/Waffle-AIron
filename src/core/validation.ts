@@ -371,6 +371,36 @@ export function validateSddTree(): ValidationResult {
             }
           }
         }
+      } else if (comp.portalType === 'gRPC') {
+        const compInterfaces = interfaces.filter(i => i.component === comp.id);
+        for (const intf of compInterfaces) {
+          for (const m of intf.methods) {
+            if (!m.grpcEndpoint) {
+              issues.push(issue(
+                'error',
+                'MISSING_GRPC_ENDPOINT',
+                `Method "${m.name}" on interface "${intf.id}" (Portal gRPC) is missing "grpcEndpoint" mapping.`,
+                undefined,
+                intf.id
+              ));
+            }
+          }
+        }
+      } else if (comp.portalType === 'MessageBus') {
+        const compInterfaces = interfaces.filter(i => i.component === comp.id);
+        for (const intf of compInterfaces) {
+          for (const m of intf.methods) {
+            if (!m.eventSubscription) {
+              issues.push(issue(
+                'error',
+                'MISSING_EVENT_SUBSCRIPTION',
+                `Method "${m.name}" on interface "${intf.id}" (Portal MessageBus) is missing "eventSubscription" mapping.`,
+                undefined,
+                intf.id
+              ));
+            }
+          }
+        }
       }
     } else {
       if (comp.portalType !== undefined || comp.basePath !== undefined) {

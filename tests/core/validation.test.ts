@@ -479,5 +479,63 @@ updatedAt: '2026-06-10T22:00:00Z'
       proj.cleanup();
     }
   });
+
+  it('enforces gRPC and MessageBus endpoint validations on Portals', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: Subsystem A description
+parentSystem: TestSystem
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    // comp-grpc is type Portal, portalType: gRPC
+    proj.writeSpec('component', 'comp-grpc', `
+schemaVersion: 1.0.0
+id: comp-grpc
+name: ComponentGrpc
+description: gRPC component
+subsystem: sub-a
+componentType: Portal
+portalType: gRPC
+dependencies: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    // interface is missing grpcEndpoint
+    proj.writeSpec('interface', 'icomp-grpc', `
+schemaVersion: 1.0.0
+id: icomp-grpc
+name: InterfaceGrpc
+description: Interface gRPC
+component: comp-grpc
+methods:
+  - name: doRpc
+    description: RPC method
+    signature: "doRpc(): Promise<void>"
+    returns: "Promise<void>"
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.valid).toBe(false);
+      expect(res.issues.some(i => i.code === 'MISSING_GRPC_ENDPOINT')).toBe(true);
+    } finally {
+      proj.cleanup();
+    }
+  });
 });
+
 

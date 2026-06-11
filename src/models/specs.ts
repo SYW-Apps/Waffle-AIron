@@ -60,7 +60,7 @@ export const ComponentTypeSchema = z.enum([
 ]);
 export type ComponentType = z.infer<typeof ComponentTypeSchema>;
 
-export const PortalTypeSchema = z.enum(['HTTP_API', 'CLI', 'GraphQL', 'MessageBus', 'Custom']);
+export const PortalTypeSchema = z.enum(['HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'Custom']);
 export type PortalType = z.infer<typeof PortalTypeSchema>;
 
 export const ComponentSpecSchema = z.object({
@@ -87,12 +87,27 @@ export const HttpEndpointSchema = z.object({
 });
 export type HttpEndpoint = z.infer<typeof HttpEndpointSchema>;
 
+export const GrpcEndpointSchema = z.object({
+  service: z.string(),
+  method: z.string(),
+});
+export type GrpcEndpoint = z.infer<typeof GrpcEndpointSchema>;
+
+export const EventSubscriptionSchema = z.object({
+  topic: z.string(),
+  queue: z.string().optional(),
+  event: z.string(),
+});
+export type EventSubscription = z.infer<typeof EventSubscriptionSchema>;
+
 export const MethodSignatureSchema = z.object({
   name: z.string().regex(/^[a-zA-Z0-9_]+$/, 'Method name must be alphanumeric'),
   description: z.string(),
   signature: z.string(), // e.g. "save(key: string, data: Buffer): Promise<void>"
   returns: z.string(),   // e.g. "Promise<void>"
   httpEndpoint: HttpEndpointSchema.optional(),
+  grpcEndpoint: GrpcEndpointSchema.optional(),
+  eventSubscription: EventSubscriptionSchema.optional(),
 });
 
 export type MethodSignature = z.infer<typeof MethodSignatureSchema>;
