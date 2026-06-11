@@ -32,7 +32,7 @@ export type AgentStatus = z.infer<typeof AgentStatusSchema>;
 
 export const AgentRecordSchema = z.object({
   /** Unique identifier within this project, e.g. "core-service-owner" */
-  id: z.string().regex(/^[a-z0-9-]+$/, 'Agent id must be lowercase alphanumeric with dashes'),
+  id: z.string().regex(/^[a-z0-9-_]+$/, 'Agent id must be lowercase alphanumeric with dashes or underscores'),
 
   /** Human-readable display name */
   name: z.string(),
