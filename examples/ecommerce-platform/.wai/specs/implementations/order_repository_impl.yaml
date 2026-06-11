@@ -1,0 +1,14 @@
+schemaVersion: "1.0.0"
+id: "order_repository_impl"
+name: "Order Repository Implementation"
+description: "Concrete database repository using raw SQL or ORM mapping."
+contract: "iorder_repository"
+sourcePath: "src/order/order_repository.ts"
+methods:
+  - name: "insertOrder"
+    narrative:
+      - stepNumber: 1
+        description: "Execute INSERT query to save order to PostgreSQL"
+        type: "local"
+createdAt: "2026-06-11T15:00:00Z"
+updatedAt: "2026-06-11T15:00:00Z"

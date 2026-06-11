@@ -1,0 +1,9 @@
+id: "notification_subsystem"
+name: "Notification Dispatcher"
+description: "Sends notifications on events."
+parentSystem: "Ecommerce-Platform"
+publicInterfaces:
+  - type: "MessageBus"
+    details: "Subscribes to order events"
+createdAt: "2026-06-11T15:00:00Z"
+updatedAt: "2026-06-11T15:00:00Z"

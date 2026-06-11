@@ -1,0 +1,13 @@
+schemaVersion: "1.0.0"
+name: "Todo-Service"
+targets:
+  - type: "claude"
+    outputDir: ".claude/agents"
+    enabled: true
+rules:
+  noOverlappingOwnership: true
+  requireOwnedPaths: true
+  metaAgentTags: ["meta", "guardian", "architect"]
+  enforceReproducibility: true
+createdAt: "2026-06-11T15:00:00Z"
+updatedAt: "2026-06-11T15:00:00Z"

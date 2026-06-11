@@ -1,0 +1,12 @@
+schemaVersion: "1.0.0"
+id: "iorder_repository"
+name: "Order Repository Interface"
+description: "Interface contract for persisting order data."
+component: "order_repository"
+methods:
+  - name: "insertOrder"
+    description: "Saves a new order record into the database"
+    signature: "insertOrder(order: Order): void"
+    returns: "void"
+createdAt: "2026-06-11T15:00:00Z"
+updatedAt: "2026-06-11T15:00:00Z"

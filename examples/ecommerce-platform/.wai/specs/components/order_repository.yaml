@@ -1,0 +1,8 @@
+id: "order_repository"
+name: "Order Repository"
+description: "Handles persistence operations for orders in the database."
+subsystem: "order_subsystem"
+componentType: "Repository"
+dependencies: []
+createdAt: "2026-06-11T15:00:00Z"
+updatedAt: "2026-06-11T15:00:00Z"

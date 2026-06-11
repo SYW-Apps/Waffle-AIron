@@ -1,0 +1,9 @@
+schemaVersion: "1.0.0"
+name: "Todo-Service"
+vision: "A simple task management backend serving REST endpoints and managing task records."
+boundaries:
+  - "The service only runs locally."
+globalRequirements:
+  - "Support task creation, update, and retrieval."
+createdAt: "2026-06-11T15:00:00Z"
+updatedAt: "2026-06-11T15:00:00Z"

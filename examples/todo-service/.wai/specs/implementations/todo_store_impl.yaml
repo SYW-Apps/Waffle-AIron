@@ -1,0 +1,19 @@
+schemaVersion: "1.0.0"
+id: "todo_store_impl"
+name: "Todo Store Implementation"
+description: "Concrete implementation of the Todo Store using an in-memory Map."
+contract: "itodo_store"
+sourcePath: "src/store/todo_store.ts"
+methods:
+  - name: "saveTask"
+    narrative:
+      - stepNumber: 1
+        description: "Insert or update task record in local Map"
+        type: "local"
+  - name: "getTask"
+    narrative:
+      - stepNumber: 1
+        description: "Retrieve task record from local Map, returning null if not found"
+        type: "local"
+createdAt: "2026-06-11T15:00:00Z"
+updatedAt: "2026-06-11T15:00:00Z"

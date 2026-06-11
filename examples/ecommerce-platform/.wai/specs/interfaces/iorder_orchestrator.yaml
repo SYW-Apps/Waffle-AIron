@@ -1,0 +1,12 @@
+schemaVersion: "1.0.0"
+id: "iorder_orchestrator"
+name: "Order Orchestrator Interface"
+description: "Interface contract for handling order creation workflows."
+component: "order_orchestrator"
+methods:
+  - name: "createOrder"
+    description: "Orchestrates order placement steps"
+    signature: "createOrder(customerId: string, items: Array<{itemId: string, qty: number}>): Order"
+    returns: "Order"
+createdAt: "2026-06-11T15:00:00Z"
+updatedAt: "2026-06-11T15:00:00Z"
