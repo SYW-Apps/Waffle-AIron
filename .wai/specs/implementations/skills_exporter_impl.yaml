@@ -1,0 +1,20 @@
+schemaVersion: "1.0.0"
+id: "skills_exporter_impl"
+name: "Skills Exporter Implementation"
+description: "Concrete implementation of the Skills Exporter Interface copying Markdown templates."
+contract: "iskills_exporter"
+sourcePath: "src/core/skills.ts"
+methods:
+  - name: "exportSddSkills"
+    narrative:
+      - stepNumber: 1
+        description: "Determine build template directory for skills"
+        type: "local"
+      - stepNumber: 2
+        description: "Ensure destination .gemini/skills/ and .claude/ folders are created"
+        type: "local"
+      - stepNumber: 3
+        description: "Iterate over static skill template files and copy them to destination directories"
+        type: "local"
+createdAt: "2026-06-11T14:50:00Z"
+updatedAt: "2026-06-11T14:50:00Z"

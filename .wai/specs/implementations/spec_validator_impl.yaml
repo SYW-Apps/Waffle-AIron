@@ -1,0 +1,76 @@
+schemaVersion: "1.0.0"
+id: "spec_validator_impl"
+name: "Spec Validator Implementation"
+description: "Concrete implementation of the Spec Validator Interface containing validation logic and rules."
+contract: "ispec_validator"
+sourcePath: "src/core/validation.ts"
+methods:
+  - name: "validateSddTree"
+    narrative:
+      - stepNumber: 1
+        description: "Clear loader issues"
+        type: "local"
+      - stepNumber: 2
+        description: "Load system spec"
+        type: "call"
+        targetComponent: "spec_loader"
+        targetMethod: "loadSystemSpec"
+      - stepNumber: 3
+        description: "Load subsystem specs"
+        type: "call"
+        targetComponent: "spec_loader"
+        targetMethod: "loadSubsystemSpecs"
+      - stepNumber: 4
+        description: "Load component specs"
+        type: "call"
+        targetComponent: "spec_loader"
+        targetMethod: "loadComponentSpecs"
+      - stepNumber: 5
+        description: "Load interface specs"
+        type: "call"
+        targetComponent: "spec_loader"
+        targetMethod: "loadInterfaceSpecs"
+      - stepNumber: 6
+        description: "Load implementation specs"
+        type: "call"
+        targetComponent: "spec_loader"
+        targetMethod: "loadImplementationSpecs"
+      - stepNumber: 7
+        description: "Integrate Zod schema loader errors"
+        type: "local"
+      - stepNumber: 8
+        description: "Validate spec hierarchy and entity references"
+        type: "local"
+      - stepNumber: 9
+        description: "Validate method implementation signatures against contracts"
+        type: "local"
+      - stepNumber: 10
+        description: "Validate narrative call steps target declared dependencies"
+        type: "local"
+      - stepNumber: 11
+        description: "Enforce architectural component type interaction boundaries"
+        type: "local"
+      - stepNumber: 12
+        description: "Run DFS circular dependency cycle detection"
+        type: "local"
+  - name: "validateRegistry"
+    narrative:
+      - stepNumber: 1
+        description: "Validate agent ID uniqueness"
+        type: "local"
+      - stepNumber: 2
+        description: "Validate per-agent properties like owned paths"
+        type: "local"
+      - stepNumber: 3
+        description: "Check for overlapping workspace file ownerships"
+        type: "local"
+  - name: "validateProjectConfig"
+    narrative:
+      - stepNumber: 1
+        description: "Ensure at least one output target is configured in project.yaml"
+        type: "local"
+      - stepNumber: 2
+        description: "Verify that configured targets are enabled"
+        type: "local"
+createdAt: "2026-06-11T14:50:00Z"
+updatedAt: "2026-06-11T14:50:00Z"

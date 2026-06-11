@@ -1,0 +1,12 @@
+schemaVersion: "1.0.0"
+id: "imcp_server"
+name: "MCP Server Interface"
+description: "Interface contract for starting and configuring the wairon Model Context Protocol (MCP) server."
+component: "mcp_server"
+methods:
+  - name: "createMcpServer"
+    description: "Factory method to create, configure, and register standard tools on the MCP server"
+    signature: "createMcpServer(): McpServer"
+    returns: "McpServer"
+createdAt: "2026-06-11T14:50:00Z"
+updatedAt: "2026-06-11T14:50:00Z"

@@ -90,7 +90,7 @@ export function loadRegistry(): Registry {
   const systemSpecPath = AI_PATHS.specsSystem();
   if (pathExists(systemSpecPath)) {
     try {
-      const { resolveAgentTopology } = require('../core/specs.js') as typeof import('../core/specs.js');
+      const { resolveAgentTopology } = require('../core/agent_resolver.js') as typeof import('../core/agent_resolver.js');
       return {
         schemaVersion: '1.0.0',
         agents: resolveAgentTopology(),
