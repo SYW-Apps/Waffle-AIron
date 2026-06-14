@@ -3,11 +3,9 @@ import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { logger } from '../utils/logger.js';
 import { ensureDir, writeFile, fromProjectRoot } from '../utils/fs.js';
-import { filteredCheckbox } from '../utils/filteredCheckbox.js';
 import {
   globalGuideFilePath,
   localGuideFilePath,
-  hasWaironGuide,
   injectGuide,
   writeRootGuideDelegator,
 } from '../utils/ai-guide.js';
@@ -23,11 +21,9 @@ import { createEmptyRegistry } from '../models/registry.js';
 import { Domain, DomainSchema } from '../models/domain.js';
 import { ProjectConfig, TargetConfig } from '../models/project.js';
 import { loadTemplate, renderTemplateInstructions } from '../core/templates.js';
-import { detectDomainCandidates } from '../core/detection.js';
 import { DetectedDomainCandidate } from '../models/domain.js';
 import { scaffoldDomain } from '../core/domains.js';
 import { expandBundleForDomain } from '../core/scaffold.js';
-import { listBundleIds, loadBundle } from '../core/bundles.js';
 import { getExporter } from '../exporters/index.js';
 import { runScaffoldDomains } from './scaffold-domains.js';
 import { runGenerate } from './generate.js';
@@ -183,7 +179,6 @@ async function runInitInteractive(): Promise<void> {
   // ------------------------------------------------------------------
   // Phase 3 — Guide scopes (Determined automatically to reduce prompts)
   // ------------------------------------------------------------------
-  const projectRoot = fromProjectRoot();
   const guidePlan: AiGuidePlan = {
     claudeGlobal: false,
     claudeLocal: false,
@@ -525,6 +520,7 @@ function buildProjectConfig(
       requireOwnedPaths: true,
       metaAgentTags: ['meta', 'guardian', 'architect'],
       enforceReproducibility: true,
+      sddRuleSeverity: {},
     },
     paths: {
       specsDir: '.wai/specs',

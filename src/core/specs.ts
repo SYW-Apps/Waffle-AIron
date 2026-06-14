@@ -75,6 +75,7 @@ export function scanAllSpecs(): SpecIndex {
     const normFile = path.normalize(file);
     if (normFile === systemYaml) continue; // skip L0 System Spec
 
+    let detectedType = 'spec';
     try {
       const raw = readYamlFile(file);
       if (raw === null || typeof raw !== 'object') {
@@ -87,30 +88,29 @@ export function scanAllSpecs(): SpecIndex {
         continue;
       }
 
-      let matched = false;
       if ('parentSystem' in raw) {
-        matched = true;
+        detectedType = 'subsystem';
         const parsed = SubsystemSpecSchema.parse(raw);
         index.subsystems.push(parsed);
         index.paths.subsystem[parsed.id] = file;
       } else if ('componentType' in raw) {
-        matched = true;
+        detectedType = 'component';
         const parsed = ComponentSpecSchema.parse(raw);
         index.components.push(parsed);
         index.paths.component[parsed.id] = file;
       } else if ('component' in raw) {
-        matched = true;
+        detectedType = 'interface';
         const parsed = InterfaceSpecSchema.parse(raw);
         index.interfaces.push(parsed);
         index.paths.interface[parsed.id] = file;
       } else if ('contract' in raw) {
-        matched = true;
+        detectedType = 'implementation';
         const parsed = ImplementationSpecSchema.parse(raw);
         index.implementations.push(parsed);
         index.paths.implementation[parsed.id] = file;
       }
 
-      if (!matched) {
+      if (detectedType === 'spec') {
         loaderIssues.push({
           severity: 'error',
           code: 'UNKNOWN_SPEC_TYPE',
@@ -123,7 +123,7 @@ export function scanAllSpecs(): SpecIndex {
       loaderIssues.push({
         severity: 'error',
         code: 'SCHEMA_VALIDATION_ERROR',
-        message: `Failed to parse spec file "${file}": ${e.message || String(e)}`,
+        message: `Failed to parse ${detectedType} spec "${file}": ${e.message || String(e)}`,
         specId: filename,
       });
     }

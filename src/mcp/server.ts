@@ -235,6 +235,7 @@ export function createMcpServer(): McpServer {
           description,
           parentSystem: system.name,
           publicInterfaces: publicInterfaces ?? [],
+          status: 'draft',
           createdAt: now,
           updatedAt: now,
         });
@@ -271,6 +272,7 @@ export function createMcpServer(): McpServer {
           subsystem,
           componentType,
           dependencies: dependencies ?? [],
+          status: 'draft',
           createdAt: now,
           updatedAt: now,
         });
@@ -310,6 +312,7 @@ export function createMcpServer(): McpServer {
           description,
           component,
           methods: methods ?? [],
+          status: 'draft',
           createdAt: now,
           updatedAt: now,
         });
@@ -355,6 +358,7 @@ export function createMcpServer(): McpServer {
           contract,
           sourcePath,
           methods: methods ?? [],
+          status: 'draft',
           createdAt: now,
           updatedAt: now,
         });
