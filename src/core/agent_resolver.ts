@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { AgentRecord } from '../models/agent.js';
-import { loadProjectConfig, AI_PATHS } from '../config/loader.js';
+import { loadProjectConfig, AI_PATHS, loadTopologyConfig } from '../config/loader.js';
 import {
   loadSystemSpec,
   loadSubsystemSpecs,
@@ -120,6 +120,28 @@ export function resolveAgentTopology(): AgentRecord[] {
       targets: activeTargets,
       createdAt: comp.createdAt,
       updatedAt: comp.updatedAt,
+    });
+  }
+
+  // 4. Free-standing domain owners (declared in .wai/topology.yaml)
+  const now = new Date().toISOString();
+  for (const dom of loadTopologyConfig().domains) {
+    agents.push({
+      id: `${dom.id}-owner`,
+      name: `${dom.name ?? dom.id} Owner`,
+      description: dom.description ?? `Owner agent for the free-standing "${dom.id}" domain.`,
+      template: 'domain-owner',
+      creationReason: 'Inferred from a free-standing domain in .wai/topology.yaml',
+      domainRoot: dom.id,
+      ownedPaths: dom.ownedPaths,
+      readPaths: ['**'],
+      writePaths: dom.ownedPaths,
+      tags: ['owner', 'domain'],
+      dependencies: [],
+      status: 'active',
+      targets: activeTargets,
+      createdAt: now,
+      updatedAt: now,
     });
   }
 

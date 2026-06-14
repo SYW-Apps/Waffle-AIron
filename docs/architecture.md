@@ -1,229 +1,59 @@
 # wairon — Architecture
 
-> Last updated: 2026-04-10 | Version: 0.1.0
+> Last updated: 2026-06-14
 
 ---
 
-## Design Philosophy
+## Overview
 
-wairon is built around one central idea: **the source of truth for AI agent
-topology should live inside the repository, be version-controlled, and be
-independent of any specific AI coding tool.**
-
-Claude Code, Gemini CLI, and similar tools each have their own agent definition
-formats, directory conventions, and file schemas. If you manage agents by editing
-those tool-specific files directly, you end up with:
-
-- No single place to understand the full agent topology
-- No easy way to regenerate if tool formats change
-- No ability to target multiple tools from one definition
-- No validation of topology rules (overlapping ownership, missing paths, etc.)
-
-wairon solves this by being a **topology registry and exporter**, not a tool
-wrapper.
-
----
-
-## Source-of-Truth First
-
-The `.wai/` directory is the canonical home for everything topology-related.
+wairon is a TypeScript CLI. Its data flow is a single pipeline from the spec tree
+to the artifacts the host AI tool consumes:
 
 ```
-.wai/
-├── project.yaml          # project config: targets, rules, metadata
-├── registry/
-│   └── agents.json       # the full agent registry (CLI-managed)
-├── templates/            # project-local template overrides
-├── bundles/              # project-local bundle definitions
-├── rules/
-│   └── topology.yaml     # governance rules
-├── docs/
-│   └── topology.md       # human notes and decisions
-└── generated/            # optional: cached generation metadata
+.wai/specs/ ──┬─ validate ─▶ conformance result (gate)
+              │
+              └─ resolve ──▶ agent topology ──▶ generate ──▶ .claude/agents/ …
+                                                          └─▶ skills installed
+                                                          └─▶ MCP server (sdd_*)
 ```
 
-**Generated files are artifacts.** The files in `.claude/agents/`, `.gemini/agents/`,
-or any custom path are outputs that can always be regenerated from `.wai/`.
+---
 
-This distinction matters because:
-1. You can evolve tool-specific formats without losing your topology model
-2. You can target new tools by adding an exporter, without changing existing agents
-3. CI can validate the topology (rules, conflicts, coverage) independently of
-   which tools are installed
+## Layers (`src/`)
+
+| Directory | Responsibility |
+|-----------|----------------|
+| `cli/` | Commander entrypoint; wires commands |
+| `commands/` | Command implementations (init, validate, status, generate, list, show, domains, skills, mcp, update, aliases) |
+| `core/` | The engine: `specs` (load/scan the tree), `validation` (conformance), `agent_resolver` (spec → agents), `domains` (resolve + free-standing CRUD), `skills` (export), `context`, `detection`, `templates` |
+| `config/` | `loader` (paths, project config, topology config, derived registry), defaults |
+| `models/` | Zod schemas: `specs`, `agent`, `domain`/topology, `project`, `template`, `registry` |
+| `exporters/` | Render an agent into a tool-specific file (Claude, Gemini, custom) |
+| `mcp/` | The MCP server (topology + `sdd_*` tools) |
+| `templates/` | Built-in agent templates + the SDD skill files |
+| `utils/` | Logger, fs, yaml, errors, the AI guide |
 
 ---
 
-## Layer Separation
+## Key design points
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                      CLI (commands/)                    │
-│       init · generate · validate · list · ...           │
-└───────────────────────────┬─────────────────────────────┘
-                            │
-┌───────────────────────────▼─────────────────────────────┐
-│                    Core (core/)                         │
-│    templates · bundles · registry ops · validation      │
-└──────┬────────────────────┬────────────────────────────┘
-       │                    │
-┌──────▼──────┐   ┌─────────▼───────────────────────────┐
-│  Config      │   │         Exporters (exporters/)      │
-│  (config/)  │   │  claude · gemini · custom · generate │
-│  loader     │   └─────────────────────────────────────┘
-│  defaults   │
-└──────┬──────┘
-       │
-┌──────▼──────────────────────────────────────────────────┐
-│                    Models (models/)                     │
-│    AgentRecord · Template · Bundle · ProjectConfig      │
-│    Registry · all Zod schemas                           │
-└─────────────────────────────────────────────────────────┘
-```
-
-**models/** — pure data shapes with Zod schemas. No I/O, no business logic.
-
-**config/** — reads and writes `.wai/` files. The only layer that knows where
-files live on disk.
-
-**core/** — topology logic: template loading, bundle loading, registry mutations,
-validation rules. Depends on models and config, never on exporters.
-
-**exporters/** — tool-specific rendering. Each exporter knows how to turn an
-`AgentRecord + Template` into a file at a target path. Completely independent
-of core topology logic.
-
-**CLI (commands/ + cli/)** — glues everything together for user interaction.
-Thin layer: reads options, calls core/exporter functions, handles errors, formats output.
+- **Specs are the single source of truth.** `loadRegistry()` always derives the
+  agent set from the spec tree via `resolveAgentTopology()`. There is no
+  hand-maintained `agents.json`.
+- **Domains are a superset of subsystems.** `resolveDomains()` returns
+  subsystem-derived domains (`boundTo` set) plus free-standing domains from
+  `.wai/topology.yaml`. A subsystem is a software unit; a domain is an ownership
+  scope.
+- **Generation is a single native-subagent render** per agent into each target's
+  output directory. wairon does not do per-directory or session-based rendering.
+- **Conformance is centralized** in `core/validation.ts` (`validateSddTree`),
+  reused by both the `validate` command and the `sdd_validate_tree` MCP tool.
+- **Everything is file-based** under `.wai/` — no database, no daemon.
 
 ---
 
-## Templates vs Bundles vs Registry
+## Stack
 
-These three concepts are often confused. Here's the distinction:
-
-| Concept | What it is | Mutability | Lives at |
-|---------|-----------|------------|----------|
-| **Template** | A reusable agent shape (instructions, defaults) | Stable, rarely changes | `src/templates/` or `.wai/templates/` |
-| **Bundle** | A recipe for creating multiple related agents for a scope | Stable, occasionally evolves | `src/bundles/` or `.wai/bundles/` |
-| **Registry** | The actual agents in *this project*, with their specific ids, paths, and config | Changes as topology evolves | `.wai/registry/agents.json` |
-
-**Example flow:**
-
-1. You have a `service-default` bundle
-2. You run `wairon create-bundle --bundle service-default --scope core-service --dir services/core`
-3. The bundle creates registry entries for `core-service-owner`, `core-service-implementer`, etc.
-4. Running `wairon generate` exports those registry entries into `.claude/agents/`
-
-The bundle was used once to *populate* the registry. Afterward, the registry is the
-source of truth — you can modify those agents directly without touching the bundle.
-
----
-
-## Rules Layer
-
-Topology rules live in `.wai/rules/topology.yaml` and are also configurable in
-`project.yaml`. Rules define invariants the CLI enforces during validation:
-
-- `noOverlappingOwnership` — no two agents should claim the same owned path
-- `requireOwnedPaths` — non-meta agents must have at least one owned path
-- `enforceReproducibility` — generated files should match what the registry would produce
-
-Validation runs on every `wairon validate` call and can be integrated into CI.
-
----
-
-## Init Flow
-
-```
-wairon init
-     │
-     ├─ prompt: project name
-     ├─ prompt: select targets (claude / gemini / custom)
-     │
-     ├─ create .wai/ directory structure
-     ├─ write .wai/project.yaml
-     ├─ create empty .wai/registry/agents.json
-     ├─ write .wai/rules/topology.yaml
-     ├─ write .wai/docs/topology.md
-     │
-     ├─ create architect agent in registry
-     │
-     └─ generate architect agent → each selected target
-           └─ .claude/agents/agent-architect.md
-           └─ .gemini/agents/agent-architect.md
-```
-
-The architect agent is always created. It is the entry point for any AI model
-working with the project's agent topology.
-
----
-
-## Why CLI-First (Not MCP-First)
-
-MCP (Model Context Protocol) servers are a powerful pattern for giving AI models
-structured tool access to external systems. However, building MCP-first introduces
-several premature complexities:
-
-- Requires a running server process
-- Complicates local development and testing
-- Adds transport layer concerns (stdio/HTTP)
-- Forces a specific integration model
-
-By building a clean CLI first, we get:
-
-- A tool that works immediately without any AI model
-- A library API (`src/index.ts`) that any integration can use
-- Easy testing of all logic through standard CLI invocation
-- A solid foundation that an MCP server can wrap later
-
-### MCP in the Future
-
-The `src/index.ts` exports are designed to be the public API for a future MCP
-wrapper. An MCP server would simply:
-
-1. Import the wairon library
-2. Map MCP tool calls to library function calls
-3. Return structured results to the model
-
-No architectural changes to core logic would be needed.
-
----
-
-## Output Format
-
-Generated agent files use **YAML front-matter + Markdown body**. This format is:
-
-- Human-readable
-- Compatible with Claude Code's sub-agent spec
-- Easy to extend with tool-specific front-matter fields
-- Diff-friendly in version control
-
-Each exporter can customize the front-matter fields it emits. The body is always
-the rendered template instructions.
-
----
-
-## Configuration Format Choices
-
-| File | Format | Reason |
-|------|--------|--------|
-| `project.yaml` | YAML | Human-edited; benefits from comments and readability |
-| `agents.json` | JSON | CLI-managed; strict, predictable, universal parsing |
-| `templates/*.yaml` | YAML | Human-authored multi-line instructions; YAML handles this well |
-| `bundles/*.yaml` | YAML | Human-authored; benefits from comments |
-| `rules/topology.yaml` | YAML | Human-authored; evolves slowly |
-| Generated outputs | Markdown | Tool-specific; front-matter + prose |
-
----
-
-## Future: Topology Analysis
-
-The `analyze` and `suggest-topology` commands (Phase 3) will:
-
-1. Walk the repository structure
-2. Identify paths not covered by any agent's `ownedPaths`
-3. Identify agents with overly broad ownership (e.g., `/**`)
-4. Suggest new agents or path rebalancing
-
-This analysis will be read-only — suggestions are presented to the user,
-who then decides whether to apply them.
+TypeScript + Node 18+, Commander, Inquirer, Zod, js-yaml, the MCP SDK, Vitest,
+and tsup for bundling. See [docs/standards/](standards/INDEX.md) for the
+architecture standards the SDD component model is built on.

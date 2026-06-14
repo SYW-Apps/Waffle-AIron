@@ -116,8 +116,8 @@ export async function runMcpInstall(options: McpInstallOptions = {}): Promise<vo
     logger.blank();
     logger.info('AI tools using this config will have access to these wairon tools:');
     logger.info('  listAgents · getAgent · listDomains · validateTopology · getProjectConfig');
-    logger.info('  listRuns · getRunStatus · getStepResult · listPipelines · getPipeline');
-    logger.info('  getPipelineStatus · listSessions · listJobs · getJob');
+    logger.info('  sdd_initialize_system · sdd_add_subsystem · sdd_add_component · sdd_define_interface');
+    logger.info('  sdd_write_narrative · sdd_validate_tree · sdd_get_status');
     logger.blank();
     const restartApp = backend === 'gemini' ? 'Antigravity CLI (agy)' : 'claude';
     logger.info(`Restart ${chalk.bold(restartApp)} (or reload MCP servers) to activate.`);
@@ -241,7 +241,7 @@ Wairon generates a dedicated topology of specialized developer agents (e.g. \`sy
 - **Task Delegation Workflow:**
   - For all design tasks (L0–L3 specs), delegate to the **\`system-architect\`** subagent (or invoke the \`/sdd architect\` skill).
   - For all method narrative tasks (L4–L5 specs), delegate to the **\`sdd-narrative\`** subagent (or invoke the \`/sdd narrative\` skill).
-  - For compiling specs into concrete implementation code (Stage 6), delegate the task to the specific **\`<component-id>-implementer\`** subagent (using the \`wairon delegate\` command or spawning the specific implementer subagent).
+  - For compiling specs into concrete implementation code (Stage 6), spawn the specific **\`<component-id>-implementer\`** subagent using your tool's native subagent mechanism.
   - Always coordinate through the specialized subagents rather than making direct edits in the root session.
 
 ---

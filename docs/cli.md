@@ -1,181 +1,89 @@
 # wairon — CLI Reference
 
-> Version: 0.1.0
+All commands operate on the `.wai/` directory in the current project. Global
+flags: `--verbose`, `--silent`, `-v`/`--version`.
 
 ---
 
-## Global Options
+## Project
 
-```
---verbose    Enable verbose output (shows file paths, debug info)
---silent     Suppress all output except errors
--v, --version  Print version and exit
--h, --help   Show help
-```
+### `wairon init [-y, --yes]`
+Bootstrap `.wai/` in the current project: project config, the SDD spec tree
+(an L0 `system.yaml` is seeded), the shared `.wai/context/`, the architect agent
+file, and the SDD skills installed into each selected target tool. `--yes` uses
+defaults without prompts. Re-running on an initialized project is a no-op that
+points you back to the SDD flow.
 
----
+### `wairon status`
+Print a hierarchical completeness dashboard of the SDD spec tree (which
+subsystems/components/interfaces/implementations are drafted vs complete).
 
-## Commands
+### `wairon validate [--ci]`
+Run the architecture-conformance gate over the spec tree: reference integrity,
+contract↔implementation method symmetry, narrative-call resolution, component
+stereotype dependency rules, and dependency-cycle detection. `--ci` treats
+warnings as errors.
 
-### `wairon init`
+### `wairon generate [--target <type>] [--domain <id>] [--domains <ids>] [--root] [--dry-run]`
+Regenerate agent output files from the spec-derived topology and (re)install the
+SDD skills. Filters limit generation to a target type or to specific domains.
+`--dry-run` previews without writing.
 
-Initialize wairon in the current project directory.
-
-**Creates:**
-- `.wai/` — source-of-truth directory
-- `.wai/project.yaml` — project config
-- `.wai/registry/agents.json` — agent registry (initially contains only the architect agent)
-- `.wai/rules/topology.yaml` — topology rules
-- `.wai/docs/topology.md` — starter topology notes
-- `<target>/agent-architect.md` — architect agent for each selected target
-
-**Options:**
-
-| Flag | Description |
-|------|-------------|
-| `-y, --yes` | Skip interactive prompts, use defaults (claude target, project name = cwd name) |
-
-**Interactive prompts:**
-1. Project name (default: current directory name)
-2. Which AI coding tools to target (multi-select: Claude Code, Gemini CLI, Other)
-3. If "Other" selected: output directory and label
-
-**Example:**
-```sh
-cd my-project
-wairon init
-```
-
-```sh
-# Non-interactive, use defaults
-wairon init --yes
-```
+### `wairon list` (alias `ls`) / `wairon show <id>`
+List, or show full details of, the agents resolved from the spec tree
+(`system-architect`, `<subsystem>-owner`, `<component>-implementer`, and owners
+for free-standing domains).
 
 ---
 
-### `wairon generate`
+## Domains
 
-Regenerate all agent output files from the registry.
+A domain is a unit of agent ownership. Subsystem-derived domains come from the
+spec tree (read-only); free-standing domains live in `.wai/topology.yaml`.
 
-This command is **idempotent** — running it multiple times produces the same output.
-
-**Options:**
-
-| Flag | Description |
-|------|-------------|
-| `--target <type>` | Limit generation to one target: `claude`, `gemini`, or `custom` |
-| `--dry-run` | Preview what would be generated without writing any files |
-
-**Example:**
-```sh
-# Regenerate everything
-wairon generate
-
-# Only regenerate Claude outputs
-wairon generate --target claude
-
-# Preview without writing
-wairon generate --dry-run
-```
+| Command | Description |
+|---------|-------------|
+| `wairon domains list` | List all domains (subsystem-derived + free-standing) |
+| `wairon domains scan [--add]` | Detect physical directory candidates; `--add` adds selected ones as free-standing domains |
+| `wairon domains add [--path] [--id]` | Manually add a free-standing domain |
+| `wairon domains remove <id>` | Remove a free-standing domain (subsystem-derived domains cannot be removed here) |
 
 ---
 
-### `wairon validate`
+## Skills
 
-Validate the project config and agent registry for errors and rule violations.
+The SDD skills (`sdd-architect`, `sdd-narrative`, `sdd-auditor`, `sdd-implement`)
+drive the spec-driven workflow inside your AI tool.
 
-Exits with code `1` if there are errors. Exits with `0` if only warnings or clean.
-
-**Checks performed:**
-- Project config is valid and has at least one enabled target
-- No duplicate agent ids in the registry
-- No overlapping `ownedPaths` between agents (if rule enabled)
-- All non-meta agents have `ownedPaths` (if rule enabled)
-- All agents have at least one output target
-
-**Example:**
-```sh
-wairon validate
-
-# Use in CI:
-wairon validate && echo "Topology is valid"
-```
+| Command | Description |
+|---------|-------------|
+| `wairon skills list` | List the built-in SDD skills |
+| `wairon skills install` (alias `sync`) | Install/refresh the skills into each active target's skills dir |
 
 ---
 
-### `wairon list` / `wairon ls`
+## MCP
 
-List all agents currently in the registry.
+The wairon MCP server exposes topology and `sdd_*` tools so AI tools can query
+and author specs directly.
 
-**Example output:**
-```
-Agents (3)
-──────────
+| Command | Description |
+|---------|-------------|
+| `wairon mcp serve` | Start the MCP server (stdio transport) |
+| `wairon mcp install [--global] [--backend claude\|gemini]` | Register the server in Claude Code / Antigravity settings |
+| `wairon mcp status` | Show whether the server is registered |
 
-agent-architect [architect] active
-  Responsible for managing the AI agent topology of this project.
-  owns: .wai/**
-  tags: meta, architect
-  targets: claude
-
-core-service-owner [domain-owner] active
-  Primary decision-maker for the core service.
-  owns: services/core/**
-  tags: service, owner
-  targets: claude, gemini
-```
+**Tools:** `listAgents`, `getAgent`, `listDomains`, `validateTopology`,
+`getProjectConfig`, `sdd_initialize_system`, `sdd_add_subsystem`,
+`sdd_add_component`, `sdd_define_interface`, `sdd_write_narrative`,
+`sdd_validate_tree`, `sdd_get_status`.
 
 ---
 
-### `wairon analyze` _(planned — Phase 3)_
+## Tooling
 
-Analyze the repository structure and report coverage against agent ownership.
-
----
-
-### `wairon suggest-topology` _(planned — Phase 3)_
-
-Suggest topology improvements based on the current registry and repository structure.
-
----
-
-### `wairon create-agent` _(planned — Phase 2)_
-
-Interactively create a new agent from a template and add it to the registry.
-
----
-
-### `wairon create-bundle` _(planned — Phase 2)_
-
-Scaffold multiple related agents from a bundle definition.
-
----
-
-### `wairon split` _(planned — Phase 4)_
-
-Split an existing agent into two or more focused agents.
-
----
-
-### `wairon merge` _(planned — Phase 4)_
-
-Merge two agents into one.
-
----
-
-## Exit Codes
-
-| Code | Meaning |
-|------|---------|
-| `0` | Success |
-| `1` | Error (validation failure, not initialized, invalid config, etc.) |
-
----
-
-## Environment
-
-wairon always runs in the **current working directory**. Run it from your
-project root.
-
-There are no environment variables, global config files, or daemon processes.
-All state is in `.wai/` inside the project.
+| Command | Description |
+|---------|-------------|
+| `wairon update [--check] [--channel <name>]` | Check/install the latest release; switch channel |
+| `wairon aliases list` | Show command aliases (`wai`) and their status |
+| `wairon aliases enable <name>` / `disable <name>` | Create / remove an alias |

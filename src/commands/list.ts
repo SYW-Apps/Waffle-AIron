@@ -15,8 +15,8 @@ export async function runList(): Promise<void> {
   const registry = loadRegistry();
 
   if (registry.agents.length === 0) {
-    logger.info('No agents in registry.');
-    logger.info('Run `wairon create-agent` to add one.');
+    logger.info('No agents resolved from the spec tree.');
+    logger.info('Define subsystems and components first — see `wairon status`.');
     return;
   }
 

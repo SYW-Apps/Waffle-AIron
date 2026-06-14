@@ -57,33 +57,6 @@ export const RulesConfigSchema = z.object({
 });
 export type RulesConfig = z.infer<typeof RulesConfigSchema>;
 
-export const GitConfigSchema = z.object({
-  /**
-   * Whether wairon is allowed to run git commands (create branches, worktrees,
-   * merge, etc.). Must be explicitly set to true — default is false.
-   */
-  waironManaged: z.boolean().default(false),
-
-  /**
-   * Whether wairon should auto-merge worktree branches after validation.
-   * Default: false — wairon prepares the merge but waits for human approval.
-   */
-  autoMerge: z.boolean().default(false),
-
-  /**
-   * Base directory for worktrees, relative to project root.
-   * Default: .wai/worktrees
-   */
-  worktreeBase: z.string().default('.wai/worktrees'),
-
-  /**
-   * Branch names that wairon will never auto-merge into without explicit
-   * user confirmation, even when autoMerge is true.
-   */
-  protectedBranches: z.array(z.string()).default(['main', 'master', 'develop']),
-});
-export type GitConfig = z.infer<typeof GitConfigSchema>;
-
 export const PathsConfigSchema = z.object({
   /** Base directory containing SDD specification files, relative to project root */
   specsDir: z.string().default('.wai/specs'),
@@ -123,24 +96,6 @@ export const ProjectConfigSchema = z.object({
   globalTemplatesDir: z.string().optional(),
 
   /**
-   * Default AI backend for wairon delegate commands.
-   * Can be overridden per-domain or per-command.
-   */
-  defaultBackend: z.enum(['claude', 'gemini', 'ollama', 'openai', 'custom']).default('claude'),
-
-  /**
-   * Default bundle id applied to every domain during init / scaffold-domains.
-   * Users can override per-domain at scaffold time.
-   */
-  defaultBundle: z.string().optional(),
-
-  /**
-   * Profile id to use for this project (overrides the global activeProfile).
-   * e.g. "work" or "personal"
-   */
-  profile: z.string().optional(),
-
-  /**
    * Tracks whether the wairon usage guide has been injected into each target's
    * AI tool configuration files so the tool knows how to use wairon.
    */
@@ -149,27 +104,6 @@ export const ProjectConfigSchema = z.object({
     claudeLocal: z.boolean().default(false),
     geminiGlobal: z.boolean().default(false),
     geminiLocal: z.boolean().default(false),
-  }).optional(),
-
-  /**
-   * Git integration settings.
-   * waironManaged must be true before wairon will run any git commands.
-   */
-  git: GitConfigSchema.optional(),
-
-  /**
-   * Waffler integration settings.
-   * When set, `wairon waffler session` connects to the Waffler MCP server
-   * to let AI agents build and manage Waffler blueprints.
-   */
-  waffler: z.object({
-    /**
-     * URL of the Waffler MCP server endpoint.
-     * If omitted, wairon tries the local default (localhost:42069/_mcp)
-     * and prompts for a custom URL if unreachable.
-     * Set explicitly to skip auto-detection, e.g. for a remote instance.
-     */
-    mcpServerUrl: z.string().optional(),
   }).optional(),
 
   /** Created by wairon at init time */

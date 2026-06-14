@@ -3,51 +3,54 @@ import inquirer from 'inquirer';
 import { logger } from '../utils/logger.js';
 import { fromProjectRoot } from '../utils/fs.js';
 import { filteredCheckbox } from '../utils/filteredCheckbox.js';
-import { assertProjectInitialized, loadDomainRegistry, loadProjectConfig } from '../config/loader.js';
+import { assertProjectInitialized } from '../config/loader.js';
 import { detectDomainCandidates } from '../core/detection.js';
 import {
-  addDomain, removeDomain, listDomains, findDomain,
-  getDomainChildren, scaffoldDomain,
+  resolveDomains,
+  addFreeStandingDomain,
+  removeFreeStandingDomain,
+  findDomain,
 } from '../core/domains.js';
-import { Domain, DomainSchema, Propagation } from '../models/domain.js';
+import { Domain, DomainSchema } from '../models/domain.js';
 
 // ---------------------------------------------------------------------------
 // domains subcommands
+//
+// Domains come from two sources:
+//   - subsystem-derived (boundTo set) — read-only, from the spec tree
+//   - free-standing — authored in .wai/topology.yaml (scan / add / remove)
 // ---------------------------------------------------------------------------
 
 // ---- list ------------------------------------------------------------------
 
 export async function runDomainsList(): Promise<void> {
   assertProjectInitialized();
-  const domains = listDomains();
+  const domains = resolveDomains();
 
   if (domains.length === 0) {
-    logger.info('No domains tracked. Run `wairon domains scan` to detect candidates.');
+    logger.info('No domains yet.');
+    logger.info('Define subsystems in the spec tree, or run `wairon domains scan --add` for free-standing domains.');
     return;
   }
 
   logger.header(`Domains (${domains.length})`);
   logger.blank();
-  printDomainTree(domains);
+  for (const d of domains) {
+    printDomain(d);
+  }
 }
 
-function printDomainTree(domains: Domain[], parentId: string | null = null, indent = 0): void {
-  const children = domains.filter((d) => d.parent === parentId);
-  for (const domain of children) {
-    const prefix = indent === 0 ? '' : '  '.repeat(indent) + '└─ ';
-    const status = domain.status === 'active'
-      ? chalk.green('active')
-      : domain.status === 'excluded'
-        ? chalk.gray('excluded')
-        : chalk.yellow('pending');
-
-    console.log(`${prefix}${chalk.bold(domain.id)}  ${chalk.gray(`[${domain.type}]`)}  ${status}`);
-    console.log(`${'  '.repeat(indent + 1)}${chalk.gray(domain.path)}`);
-    console.log(`${'  '.repeat(indent + 1)}${chalk.gray(`propagation: ${domain.propagation}`)}`);
-    console.log();
-
-    printDomainTree(domains, domain.id, indent + 1);
+function printDomain(domain: Domain): void {
+  const source = domain.boundTo
+    ? chalk.gray(`[subsystem: ${domain.boundTo}]`)
+    : chalk.cyan('[free-standing]');
+  console.log(`${chalk.bold(domain.id)}  ${source}`);
+  if (domain.name) console.log(`  ${chalk.gray(domain.name)}`);
+  if (domain.path) console.log(`  ${chalk.gray(`path: ${domain.path}`)}`);
+  if (domain.ownedPaths.length > 0) {
+    console.log(`  ${chalk.gray(`owns: ${domain.ownedPaths.join(', ')}`)}`);
   }
+  console.log();
 }
 
 // ---- scan ------------------------------------------------------------------
@@ -55,19 +58,16 @@ function printDomainTree(domains: Domain[], parentId: string | null = null, inde
 export async function runDomainsScan(options: { add?: boolean } = {}): Promise<void> {
   assertProjectInitialized();
   const projectRoot = fromProjectRoot();
-  const registry = loadDomainRegistry();
+  const existing = resolveDomains();
 
-  const trackedPaths = new Set(registry.domains.map((d) => d.path));
-  const trackedIds = new Set(registry.domains.map((d) => d.id));
+  const trackedPaths = new Set(existing.map((d) => d.path).filter((p): p is string => !!p));
+  const trackedIds = new Set(existing.map((d) => d.id));
   const candidates = detectDomainCandidates(projectRoot, trackedPaths, trackedIds);
 
-  const newCandidates = candidates.filter((c) => !c.alreadyTracked);
+  const newCandidates = candidates.filter((c) => !c.alreadyTracked && !trackedIds.has(c.suggestedId));
 
   if (newCandidates.length === 0) {
     logger.success('No new domain candidates found.');
-    if (candidates.length > 0) {
-      logger.info(`${candidates.length} already-tracked domain(s) re-confirmed.`);
-    }
     return;
   }
 
@@ -81,13 +81,12 @@ export async function runDomainsScan(options: { add?: boolean } = {}): Promise<v
   }
 
   if (!options.add) {
-    logger.info('Run `wairon domains scan --add` to interactively add these domains.');
+    logger.info('Run `wairon domains scan --add` to add these as free-standing domains.');
     return;
   }
 
-  // Interactive selection with live type-filter (press f to cycle, Space to toggle)
   const selected = await filteredCheckbox({
-    message: 'Select domains to add',
+    message: 'Select domains to add (as free-standing domains in .wai/topology.yaml)',
     items: newCandidates.map((c) => ({
       label: c.suggestedId,
       subtext: c.path,
@@ -101,133 +100,87 @@ export async function runDomainsScan(options: { add?: boolean } = {}): Promise<v
     return;
   }
 
-  // Step 3: Single bulk propagation default
-  const { defaultPropagation } = await inquirer.prompt<{ defaultPropagation: Propagation }>([
-    {
-      type: 'list',
-      name: 'defaultPropagation',
-      message: 'Default propagation for all selected domains:',
-      choices: [
-        { name: 'flat        — agents appear at root and all parent domains (recommended)', value: 'flat' },
-        { name: 'parent-only — agents appear in immediate parent only', value: 'parent-only' },
-        { name: 'none        — no propagation (use wairon delegate)', value: 'none' },
-      ],
-      default: 'flat',
-    },
-  ]);
-
-  const projectConfig = loadProjectConfig();
-  const enabledTargets = projectConfig.targets
-    .filter((t) => !('enabled' in t) || t.enabled)
-    .map((t) => 'type' in t ? t.type : (t as any).type || t);
-
   let added = 0;
   let skipped = 0;
 
   for (const selectedPath of selected) {
     const candidate = newCandidates.find((c) => c.path === selectedPath)!;
-
     const domain = DomainSchema.parse({
       id: candidate.suggestedId,
       name: candidate.suggestedName,
       path: candidate.path,
-      type: candidate.type,
-      parent: 'root',
-      propagation: defaultPropagation,
-      status: 'active',
-      detectedAt: new Date().toISOString(),
-      addedAt: new Date().toISOString(),
+      ownedPaths: [`${candidate.path}/**`],
     });
 
     try {
-      addDomain(domain);
-      scaffoldDomain(domain, enabledTargets);
-      logger.success(`Added domain: ${domain.id} (${domain.path})`);
+      addFreeStandingDomain(domain);
+      logger.success(`Added free-standing domain: ${domain.id} (${candidate.path})`);
       added++;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      logger.warn(`Skipped "${domain.id}": ${msg}`);
+      logger.warn(`Skipped "${candidate.suggestedId}": ${msg}`);
       skipped++;
     }
   }
 
   logger.blank();
   logger.info(`Done: ${added} added, ${skipped} skipped.`);
+  if (added > 0) logger.info('Run `wairon generate` to produce owner agents for the new domains.');
 }
 
 // ---- add (manual) ----------------------------------------------------------
 
 export async function runDomainsAdd(options: { path?: string; id?: string } = {}): Promise<void> {
   assertProjectInitialized();
-  const projectConfig = loadProjectConfig();
 
-  const { domainPath, domainId, domainName, propagation, parentId } = await inquirer.prompt<{
-    domainPath: string;
+  const { domainId, domainName, domainPath, ownedPathsRaw } = await inquirer.prompt<{
     domainId: string;
     domainName: string;
-    propagation: Propagation;
-    parentId: string;
+    domainPath: string;
+    ownedPathsRaw: string;
   }>([
     {
       type: 'input',
-      name: 'domainPath',
-      message: 'Domain directory (relative to project root):',
-      default: options.path,
-      validate: (v: string) => v.trim().length > 0 || 'Path is required',
-    },
-    {
-      type: 'input',
       name: 'domainId',
-      message: 'Domain id (lowercase-alphanumeric-dashes):',
+      message: 'Domain id (lowercase-alphanumeric, dashes/underscores):',
       default: options.id,
-      validate: (v: string) => /^[a-z0-9-]+$/.test(v) || 'Must be lowercase alphanumeric with dashes',
+      validate: (v: string) => /^[a-z0-9-_]+$/.test(v) || 'Must be lowercase alphanumeric with dashes or underscores',
     },
     {
       type: 'input',
       name: 'domainName',
       message: 'Display name:',
       default: (answers: { domainId: string }) =>
-        answers.domainId.split('-').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
-    },
-    {
-      type: 'list',
-      name: 'propagation',
-      message: 'Agent propagation:',
-      choices: [
-        { name: 'flat (recommended — agents appear at root)', value: 'flat' },
-        { name: 'parent-only', value: 'parent-only' },
-        { name: 'none (delegation only)', value: 'none' },
-      ],
-      default: 'flat',
+        answers.domainId.split(/[-_]/).map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
     },
     {
       type: 'input',
-      name: 'parentId',
-      message: 'Parent domain id (leave blank for root):',
-      default: '',
+      name: 'domainPath',
+      message: 'Physical directory (optional, relative to project root):',
+      default: options.path ?? '',
+    },
+    {
+      type: 'input',
+      name: 'ownedPathsRaw',
+      message: 'Owned path globs (comma-separated):',
+      default: (answers: { domainPath: string }) => (answers.domainPath ? `${answers.domainPath}/**` : ''),
+      validate: (v: string) => v.trim().length > 0 || 'At least one owned path is required',
     },
   ]);
 
-  const enabledTargets = projectConfig.targets
-    .filter((t) => !('enabled' in t) || t.enabled)
-    .map((t) => 'type' in t ? t.type : (t as any).type || t);
+  const ownedPaths = ownedPathsRaw.split(',').map((s) => s.trim()).filter(Boolean);
 
   const domain = DomainSchema.parse({
     id: domainId,
     name: domainName,
-    path: domainPath.trim(),
-    type: 'manual',
-    parent: parentId.trim() || 'root',
-    propagation,
-    status: 'active',
-    addedAt: new Date().toISOString(),
+    path: domainPath.trim() || undefined,
+    ownedPaths,
   });
 
-  addDomain(domain);
-  scaffoldDomain(domain, enabledTargets);
+  addFreeStandingDomain(domain);
 
-  logger.success(`Domain "${domain.id}" added and scaffolded.`);
-  logger.info(`Now run \`wairon create-bundle\` to add agents for this domain.`);
+  logger.success(`Free-standing domain "${domain.id}" added to .wai/topology.yaml.`);
+  logger.info('Run `wairon generate` to produce its owner agent.');
 }
 
 // ---- remove ----------------------------------------------------------------
@@ -241,12 +194,9 @@ export async function runDomainsRemove(id: string): Promise<void> {
     process.exit(1);
   }
 
-  const registry = loadDomainRegistry();
-  const children = getDomainChildren(id, registry);
-
-  if (children.length > 0) {
-    logger.warn(`Domain "${id}" has ${children.length} child domain(s): ${children.map((c) => c.id).join(', ')}`);
-    logger.warn('Remove child domains first, or reassign their parent.');
+  if (domain.boundTo) {
+    logger.error(`Domain "${id}" is derived from subsystem "${domain.boundTo}" and cannot be removed here.`);
+    logger.info('Remove or rename the subsystem in the spec tree instead.');
     process.exit(1);
   }
 
@@ -254,7 +204,7 @@ export async function runDomainsRemove(id: string): Promise<void> {
     {
       type: 'confirm',
       name: 'confirm',
-      message: `Remove domain "${id}" (${domain.path})? Generated agent files will NOT be deleted.`,
+      message: `Remove free-standing domain "${id}" from .wai/topology.yaml?`,
       default: false,
     },
   ]);
@@ -264,7 +214,6 @@ export async function runDomainsRemove(id: string): Promise<void> {
     return;
   }
 
-  removeDomain(id);
-  logger.success(`Domain "${id}" removed from registry.`);
-  logger.info('Agent files in the domain directory were not deleted. Remove manually if needed.');
+  removeFreeStandingDomain(id);
+  logger.success(`Domain "${id}" removed. Run \`wairon generate\` to refresh agent files.`);
 }

@@ -47,22 +47,14 @@ export const AgentRecordSchema = z.object({
   bundleOrigin: z.string().optional(),
 
   /**
-   * The domain id this agent is canonically owned by.
-   * null / undefined = root project agent.
-   *
-   * When set, the agent is generated in two forms:
-   *   1. Standalone (full authority) → written to <domainPath>/<target>/agents/<id>.md
-   *   2. Project reference (scoped)  → written to <root>/<target>/agents/<id>.md
-   *      (only if domain.propagation !== 'none')
+   * The domain id this agent is responsible for (a subsystem id or a
+   * free-standing domain id). Undefined = root-level agent.
    */
   domainRoot: z.string().optional(),
 
   /**
    * Paths this agent owns, expressed relative to the project root.
    * e.g. ["services/core/**"]
-   *
-   * When generating the standalone (subdomain) version, these are automatically
-   * converted to domain-relative paths (e.g. ["**"]).
    */
   ownedPaths: z.array(z.string()).default([]),
 

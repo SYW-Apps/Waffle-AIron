@@ -9,7 +9,7 @@ import {
   injectGuide,
   writeRootGuideDelegator,
 } from '../utils/ai-guide.js';
-import { writeYamlFile, writeJsonFile } from '../utils/yaml.js';
+import { writeYamlFile } from '../utils/yaml.js';
 import { isProjectInitialized, AI_PATHS } from '../config/loader.js';
 import {
   defaultTargetConfig,
@@ -17,16 +17,9 @@ import {
   ARCHITECT_TEMPLATE_ID,
 } from '../config/defaults.js';
 import { createAgentRecord, AgentRecord } from '../models/agent.js';
-import { createEmptyRegistry } from '../models/registry.js';
-import { Domain, DomainSchema } from '../models/domain.js';
 import { ProjectConfig, TargetConfig } from '../models/project.js';
 import { loadTemplate, renderTemplateInstructions } from '../core/templates.js';
-import { DetectedDomainCandidate } from '../models/domain.js';
-import { scaffoldDomain } from '../core/domains.js';
-import { expandBundleForDomain } from '../core/scaffold.js';
 import { getExporter } from '../exporters/index.js';
-import { runScaffoldDomains } from './scaffold-domains.js';
-import { runGenerate } from './generate.js';
 import { syncContextFiles } from '../core/context.js';
 
 // ---------------------------------------------------------------------------
@@ -35,11 +28,6 @@ import { syncContextFiles } from '../core/context.js';
 
 interface InitOptions {
   yes?: boolean;
-}
-
-interface DomainAssignment {
-  candidate: DetectedDomainCandidate;
-  bundleId: string | null; // null = skip bundle for this domain
 }
 
 interface AiGuidePlan {
@@ -52,11 +40,10 @@ interface AiGuidePlan {
 export async function runInit(options: InitOptions = {}): Promise<void> {
   logger.header('wairon init');
 
-  // Already initialized → offer rescan + scaffold
+  // Already initialized → nothing to bootstrap; agents derive from the spec tree
   if (isProjectInitialized()) {
     logger.info('Project already initialized.');
-    logger.blank();
-    await runScaffoldDomains({ rescan: true });
+    logger.info('Design your spec tree with the SDD architect skill, then run `wairon generate`.');
     return;
   }
 
@@ -79,7 +66,7 @@ async function runInitNonInteractive(): Promise<void> {
 
   // Claude and Antigravity are active by default
   const targets: TargetConfig[] = [defaultTargetConfig('claude'), defaultTargetConfig('agy')];
-  const projectConfig = buildProjectConfig(projectName, targets, null, now);
+  const projectConfig = buildProjectConfig(projectName, targets, now);
 
   const guidePlan: AiGuidePlan = {
     claudeGlobal: false,
@@ -92,8 +79,6 @@ async function runInitNonInteractive(): Promise<void> {
     projectName,
     targets,
     projectConfig,
-    [],
-    null,
     guidePlan,
     now,
   );
@@ -226,14 +211,12 @@ async function runInitInteractive(): Promise<void> {
   // ------------------------------------------------------------------
 
   const now = new Date().toISOString();
-  const projectConfig = buildProjectConfig(projectName, targets, null, now);
+  const projectConfig = buildProjectConfig(projectName, targets, now);
 
   await executeInit(
     projectName,
     targets,
     projectConfig,
-    [], // empty domainAssignments since we resolve dynamic topology from specs
-    null,
     guidePlan,
     now,
   );
@@ -247,8 +230,6 @@ async function executeInit(
   projectName: string,
   targets: TargetConfig[],
   projectConfig: ProjectConfig,
-  domainAssignments: DomainAssignment[],
-  _defaultBundleId: string | null,
   guidePlan: AiGuidePlan,
   now: string,
 ): Promise<void> {
@@ -260,60 +241,22 @@ async function executeInit(
 
   // Directories
   ensureDir(AI_PATHS.root());
-  ensureDir(AI_PATHS.registryDir());
   ensureDir(AI_PATHS.templatesDir());
-  ensureDir(AI_PATHS.bundlesDir());
   ensureDir(AI_PATHS.rulesDir());
   ensureDir(AI_PATHS.docsDir());
   ensureDir(AI_PATHS.generatedDir());
 
   writeYamlFile(AI_PATHS.projectConfig(), projectConfig);
 
-  // Domain registry + root domain
-  const rootDomain: Domain = DomainSchema.parse({
-    id: 'root',
-    name: projectName,
-    path: '.',
-    type: 'root',
-    parent: null,
-    propagation: 'flat',
-    status: 'active',
-    addedAt: now,
-  });
-
-  const domainRegistry = {
-    schemaVersion: '1.0.0',
-    domains: [rootDomain] as Domain[],
-    updatedAt: now,
-  };
-
-  // Add selected domains to the domain registry and scaffold their directories
+  // Agents (including domain owners) are derived from the SDD spec tree and the
+  // free-standing domains in .wai/topology.yaml at read time — nothing persisted here.
   const activeTargetTypes = targets
     .filter((t) => !('enabled' in t) || t.enabled)
     .map((t) => t.type);
 
-  for (const assignment of domainAssignments) {
-    const { candidate } = assignment;
-    const domain: Domain = DomainSchema.parse({
-      id: candidate.suggestedId,
-      name: candidate.suggestedName,
-      path: candidate.path,
-      type: candidate.type,
-      parent: 'root',
-      propagation: 'flat',
-      status: 'active',
-      detectedAt: now,
-      addedAt: now,
-    });
-    domainRegistry.domains.push(domain);
-    scaffoldDomain(domain, activeTargetTypes);
-  }
-
-  writeJsonFile(AI_PATHS.domainsRegistry(), domainRegistry);
-
-  // Agent registry: start with architect
-  const registry = createEmptyRegistry();
-
+  // The architect agent is generated as a file directly below. All other agents
+  // are derived from the SDD spec tree at read time (resolveAgentTopology), so
+  // no agents.json is persisted.
   const architectAgent = createAgentRecord({
     id: ARCHITECT_AGENT_ID,
     name: 'Agent Architect',
@@ -324,30 +267,6 @@ async function executeInit(
     creationReason: 'Bootstrapped by wairon init as the root agent for topology management.',
     targets: activeTargetTypes as AgentRecord['targets'],
   });
-
-  registry.agents.push(architectAgent);
-
-  // Create bundle agents for each selected domain
-  let agentsCreated = 0;
-  for (const assignment of domainAssignments) {
-    if (!assignment.bundleId) continue;
-
-    const domain = domainRegistry.domains.find((d) => d.id === assignment.candidate.suggestedId);
-    if (!domain) continue;
-
-    const bundleAgents = expandBundleForDomain(domain, assignment.bundleId, activeTargetTypes);
-    for (const agent of bundleAgents) {
-      if (!registry.agents.some((a) => a.id === agent.id)) {
-        registry.agents.push(agent);
-        agentsCreated++;
-      } else {
-        logger.warn(`Skipped duplicate agent id: ${agent.id}`);
-      }
-    }
-  }
-
-  writeJsonFile(AI_PATHS.agentsRegistry(), registry);
-  logger.verbose(`Wrote ${AI_PATHS.agentsRegistry()} (${registry.agents.length} agents)`);
 
   // Generate architect agent file into each target
   logger.info('Generating architect agent files...');
@@ -449,13 +368,6 @@ async function executeInit(
     }
   }
 
-  // Generate all domain agents
-  if (agentsCreated > 0) {
-    logger.blank();
-    logger.info(`Generating ${agentsCreated} domain agent(s)...`);
-    await runGenerate();
-  }
-
   // Seed the context directory with auto-generated files (domains.md + wairon-guide.md)
   syncContextFiles();
   logger.verbose('Context files seeded in .wai/context/');
@@ -474,8 +386,8 @@ async function executeInit(
     });
 
     const { exportSddSkills } = require('../core/skills.js') as typeof import('../core/skills.js');
-    exportSddSkills();
-    logger.success('Bootstrapped SDD specs system and exported AI Skills to .gemini/skills/ and .claude/.');
+    const skillsResult = exportSddSkills(activeTargetTypes);
+    logger.success(`Bootstrapped SDD spec system and installed SDD skills into ${skillsResult.destinations.length} target(s).`);
   } catch (err) {
     logger.warn(`Failed to bootstrap SDD Specs: ${String(err)}`);
   }
@@ -488,16 +400,14 @@ async function executeInit(
   logger.info('  .wai/               — source of truth for agent topology');
   logger.info('  .wai/project.yaml   — project config');
   logger.info('  .wai/phased_design.md — spec kit alternative design workbook');
-  logger.info(`  .wai/registry/      — ${registry.agents.length} agent(s) registered`);
-  logger.info(`  domains             — ${domainAssignments.length} domain(s) added`);
+  logger.info('  .wai/specs/         — SDD spec tree (L0 system.yaml bootstrapped)');
   logger.info('  .wai/context/       — shared context directory (domains.md, wairon-guide.md)');
   logger.blank();
   logger.info('Next steps:');
   logger.info('  Edit .wai/context/project.md — describe the project concept and stack details for the AI');
   logger.info('  wairon status               — view the architecture completeness dashboard');
   logger.info('  wairon validate             — check the spec tree & component boundaries');
-  logger.info('  wairon scaffold-domains     — add agents for any remaining domains');
-  logger.info('  wairon create-agent         — add a custom agent');
+  logger.info('  Design your spec tree with the SDD architect skill or the wairon MCP sdd_* tools');
   logger.blank();
 }
 
@@ -508,7 +418,6 @@ async function executeInit(
 function buildProjectConfig(
   name: string,
   targets: TargetConfig[],
-  defaultBundle: string | null,
   now: string,
 ): ProjectConfig {
   return {
@@ -525,8 +434,6 @@ function buildProjectConfig(
     paths: {
       specsDir: '.wai/specs',
     },
-    defaultBackend: 'claude',
-    defaultBundle: defaultBundle ?? undefined,
     createdAt: now,
     updatedAt: now,
   };

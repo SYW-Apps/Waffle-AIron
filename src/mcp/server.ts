@@ -9,8 +9,8 @@ import type { ValidationIssue } from '../core/validation.js';
 // wairon MCP Server
 //
 // Exposes the wairon library over the Model Context Protocol so AI tools can
-// query agent topology, validate configuration, run pipelines, and check job
-// and run status — all without manual CLI invocation.
+// query agent topology, validate configuration, and author/validate the SDD
+// spec tree — all without manual CLI invocation.
 //
 // Transport: stdio (for use with Claude Code / Gemini CLI MCP config)
 // Usage: wairon mcp serve  (add to .claude/settings.json mcpServers)
@@ -124,13 +124,12 @@ export function createMcpServer(): McpServer {
   reg<Record<string, never>>(server,
     'listDomains',
     {
-      description: 'List all domains registered in this project with their paths and types.',
+      description: 'List all domains in this project: subsystem-derived (boundTo set) plus free-standing domains from .wai/topology.yaml.',
     },
     () => {
       try {
-        const { loadDomainRegistry } = requireLoader();
-        const reg = loadDomainRegistry();
-        return json(reg.domains);
+        const { resolveDomains } = require('../core/domains.js') as typeof import('../core/domains.js');
+        return json(resolveDomains());
       } catch (e) {
         return errText(String(e));
       }
@@ -163,7 +162,7 @@ export function createMcpServer(): McpServer {
   reg<Record<string, never>>(server,
     'getProjectConfig',
     {
-      description: 'Get the current project configuration (name, defaultBackend, profile, targets, git settings).',
+      description: 'Get the current project configuration (name, targets, rules, paths).',
     },
     () => {
       try {

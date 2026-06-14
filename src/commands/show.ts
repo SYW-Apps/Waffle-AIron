@@ -17,7 +17,7 @@ export async function runShow(agentId: string): Promise<void> {
   const agent = registry.agents.find((a) => a.id === agentId);
 
   if (!agent) {
-    throw new WaironError(`Agent "${agentId}" not found in registry.`);
+    throw new WaironError(`Agent "${agentId}" not found in the resolved spec topology.`);
   }
 
   printAgentDetails(agent);

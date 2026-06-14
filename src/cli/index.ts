@@ -19,11 +19,12 @@ import {
   runUpdate,
   runStatus,
   cleanStaleBinary,
-  runScaffoldDomains,
   runDomainsList,
   runDomainsScan,
   runDomainsAdd,
   runDomainsRemove,
+  runSkillsList,
+  runSkillsInstall,
 } from '../commands/index.js';
 
 // Clean up any .old binary left over from a previous Windows self-update
@@ -207,7 +208,7 @@ program
 
 const domainsCmd = program
   .command('domains')
-  .description('Manage project domains (submodules, repos, packages)');
+  .description('List domains (subsystem-derived) and manage free-standing ones');
 
 domainsCmd
   .command('list')
@@ -237,21 +238,33 @@ domainsCmd
 domainsCmd
   .command('remove <id>')
   .alias('rm')
-  .description('Remove a domain from the registry')
+  .description('Remove a free-standing domain from .wai/topology.yaml')
   .action(async (id: string) => {
     await runDomainsRemove(id);
   });
 
 // ---------------------------------------------------------------------------
-// scaffold-domains
+// skills
 // ---------------------------------------------------------------------------
 
-program
-  .command('scaffold-domains')
-  .description('Scaffold agents for registry domains that do not have any agents yet')
-  .option('--rescan', 'also scan for new domain candidates and add them first')
-  .action(async (opts) => {
-    await runScaffoldDomains({ rescan: opts.rescan });
+const skillsCmd = program
+  .command('skills')
+  .description('Manage the SDD skills installed into your AI tools');
+
+skillsCmd
+  .command('list')
+  .alias('ls')
+  .description('List the built-in SDD skills')
+  .action(async () => {
+    await runSkillsList();
+  });
+
+skillsCmd
+  .command('install')
+  .alias('sync')
+  .description('Install/refresh the SDD skills into each active target tool')
+  .action(async () => {
+    await runSkillsInstall();
   });
 
 // ---------------------------------------------------------------------------

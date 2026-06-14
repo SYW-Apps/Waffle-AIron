@@ -68,9 +68,8 @@ export function writeArchitectureContext(content: string): void {
  */
 export function renderDomainsDoc(): string {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { loadDomainRegistry } = require('../config/loader.js') as typeof import('../config/loader.js');
-  const registry = loadDomainRegistry();
-  const domains = registry.domains;
+  const { resolveDomains } = require('./domains.js') as typeof import('./domains.js');
+  const domains = resolveDomains();
 
   const today = new Date().toISOString().split('T')[0];
   const lines: string[] = [
@@ -82,16 +81,16 @@ export function renderDomainsDoc(): string {
   ];
 
   if (domains.length === 0) {
-    lines.push('_No domains tracked yet. Run `wairon domains scan --add` to add domains._');
+    lines.push('_No domains yet. Define subsystems in the spec tree, or add free-standing domains with `wairon domains add`._');
   } else {
-    lines.push(`**${domains.length} domain(s) tracked.**`);
+    lines.push(`**${domains.length} domain(s).**`);
     lines.push('');
-    lines.push('| ID | Name | Path | Status |');
-    lines.push('|----|------|------|--------|');
+    lines.push('| ID | Name | Source | Owned paths |');
+    lines.push('|----|------|--------|-------------|');
     for (const d of domains) {
       const name = d.name ?? d.id;
-      const status = d.status ?? 'active';
-      lines.push(`| \`${d.id}\` | ${name} | \`${d.path}\` | ${status} |`);
+      const source = d.boundTo ? `subsystem \`${d.boundTo}\`` : 'free-standing';
+      lines.push(`| \`${d.id}\` | ${name} | ${source} | \`${d.ownedPaths.join('`, `') || '—'}\` |`);
     }
   }
 
@@ -104,10 +103,11 @@ export function renderDomainsDoc(): string {
  */
 export function renderWaironGuide(): string {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { loadDomainRegistry, loadProjectConfig } = require('../config/loader.js') as typeof import('../config/loader.js');
+  const { loadProjectConfig } = require('../config/loader.js') as typeof import('../config/loader.js');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { resolveDomains } = require('./domains.js') as typeof import('./domains.js');
 
-  const registry = loadDomainRegistry();
-  const domains = registry.domains;
+  const domains = resolveDomains();
 
   let projectName = 'this project';
   try {
@@ -147,13 +147,14 @@ export function renderWaironGuide(): string {
   lines.push(`# Domain Map (${domains.length} domain${domains.length !== 1 ? 's' : ''})`);
   lines.push('');
   if (domains.length === 0) {
-    lines.push('_No domains tracked yet._');
+    lines.push('_No domains yet._');
   } else {
-    lines.push('| ID | Path | Name |');
-    lines.push('|----|------|------|');
+    lines.push('| ID | Source | Name |');
+    lines.push('|----|--------|------|');
     for (const d of domains) {
       const name = d.name ?? d.id;
-      lines.push(`| \`${d.id}\` | \`${d.path}\` | ${name} |`);
+      const source = d.boundTo ? `subsystem \`${d.boundTo}\`` : 'free-standing';
+      lines.push(`| \`${d.id}\` | ${source} | ${name} |`);
     }
   }
   lines.push('');
@@ -175,20 +176,18 @@ export function renderWaironGuide(): string {
     lines.push('');
     lines.push('| Tool | Purpose |');
     lines.push('|------|---------|');
-    lines.push('| `listAgents` | List all registered agents (optionally filter by domainId) |');
+    lines.push('| `listAgents` | List agents resolved from the spec tree (optionally filter by domainId) |');
     lines.push('| `getAgent` | Get full details of an agent by id |');
-    lines.push('| `listDomains` | List all project domains |');
+    lines.push('| `listDomains` | List domains (subsystem-derived + free-standing) |');
     lines.push('| `validateTopology` | Check for topology errors/warnings |');
     lines.push('| `getProjectConfig` | Get the project configuration |');
-    lines.push('| `listRuns` | List orchestration run records |');
-    lines.push('| `getRunStatus` | Get status of a specific run |');
-    lines.push('| `getStepResult` | Get the result from a pipeline step |');
-    lines.push('| `listPipelines` | List all pipeline definitions |');
-    lines.push('| `getPipeline` | Get a pipeline definition |');
-    lines.push('| `getPipelineStatus` | Get status of recent pipeline runs |');
-    lines.push('| `listSessions` | List AI session workspaces |');
-    lines.push('| `listJobs` | List delegated jobs |');
-    lines.push('| `getJob` | Get details of a specific job |');
+    lines.push('| `sdd_initialize_system` | Create the L0 system spec |');
+    lines.push('| `sdd_add_subsystem` | Add an L1 subsystem |');
+    lines.push('| `sdd_add_component` | Add an L2 component |');
+    lines.push('| `sdd_define_interface` | Define an L3 interface contract |');
+    lines.push('| `sdd_write_narrative` | Write an L4 implementation + L5 narrative |');
+    lines.push('| `sdd_validate_tree` | Validate the whole spec tree |');
+    lines.push('| `sdd_get_status` | Spec-tree completeness dashboard |');
     lines.push('');
     lines.push('Prefer MCP tools over running `wairon` CLI commands when querying project state.');
     lines.push('');

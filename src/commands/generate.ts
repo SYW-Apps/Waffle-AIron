@@ -29,7 +29,7 @@ export async function runGenerate(options: GenerateOptions = {}): Promise<void> 
   const registry = loadRegistry();
 
   if (registry.agents.length === 0) {
-    logger.warn('No agents in registry. Add agents with `wairon create-agent`.');
+    logger.warn('No agents resolved from the spec tree. Define subsystems and components first — see `wairon status`.');
     return;
   }
 

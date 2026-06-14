@@ -1,100 +1,73 @@
 import { z } from 'zod';
 
 // ---------------------------------------------------------------------------
-// Domain — a tracked architectural scope within the project
+// Domain — a unit of agent ownership / responsibility in the topology.
 //
-// A domain maps to a real directory boundary: a git submodule, a nested
-// git repo, a package root, or a manually defined path.
+// A *subsystem* (L1 spec) is a software unit; a *domain* is who owns a scope.
+// Every subsystem yields a domain; not every domain comes from a subsystem.
 //
-// Domains are the unit of agent ownership and delegation. Each domain:
-//   - owns a directory subtree
-//   - has its own agent files co-located in that directory
-//   - can have lightweight reference agents propagated to parent domains
-//   - can receive delegated jobs from parent agents
+// Two flavours:
+//   - Spec-backed: derived from an L1 subsystem (boundTo = subsystem id).
+//     Not hand-maintained — produced by resolveDomains() from the spec tree.
+//   - Free-standing: declared in .wai/topology.yaml for cross-cutting scopes
+//     (docs, infra, packages) that are not a software subsystem.
 // ---------------------------------------------------------------------------
 
-export const DomainTypeSchema = z.enum([
-  'root',           // the master project root — always exactly one
-  'git-submodule',  // declared in .gitmodules
-  'git-repo',       // directory containing a .git folder (not declared as submodule)
-  'package-root',   // directory containing package.json / pyproject.toml / Cargo.toml / go.mod
-  'manual',         // explicitly added by the user — no auto-detection signal
-]);
-export type DomainType = z.infer<typeof DomainTypeSchema>;
-
-export const PropagationSchema = z.enum([
-  'flat',         // propagate lightweight reference agents all the way up to root
-  'parent-only',  // propagate one level up only
-  'none',         // no propagation — only accessible via wairon delegate
-]);
-export type Propagation = z.infer<typeof PropagationSchema>;
-
-export const DomainStatusSchema = z.enum([
-  'active',    // tracked and generating agents
-  'excluded',  // detected but deliberately excluded by user
-  'pending',   // detected but not yet confirmed by user
-]);
-export type DomainStatus = z.infer<typeof DomainStatusSchema>;
-
 export const DomainSchema = z.object({
-  /** Unique identifier within the project, e.g. "core-service" */
-  id: z.string().regex(/^[a-z0-9-]+$/, 'Domain id must be lowercase alphanumeric with dashes'),
+  /** Unique identifier within the project, e.g. "billing" or "docs". */
+  id: z.string().regex(/^[a-z0-9-_]+$/, 'Domain id must be lowercase alphanumeric with dashes or underscores'),
 
-  /** Display name */
-  name: z.string(),
+  /** Optional display name. */
+  name: z.string().optional(),
 
-  /** Path relative to project root, e.g. "services/core" */
-  path: z.string(),
-
-  type: DomainTypeSchema,
-
-  /** Parent domain id. null for root. */
-  parent: z.string().nullable().default(null),
+  /** Optional description of the domain's responsibility. */
+  description: z.string().optional(),
 
   /**
-   * How agents from this domain propagate to parent domains.
-   *
-   * flat        → lightweight reference agents appear at root and all parents
-   * parent-only → only the immediate parent gets reference agents
-   * none        → no propagation; use `wairon delegate` to work in this domain
-   *
-   * Default is 'flat' because most users work from the root project.
+   * The spec node this domain binds to: a subsystem id (the common case) or a
+   * component id. Omitted means the domain is free-standing.
    */
-  propagation: PropagationSchema.default('flat'),
+  boundTo: z.string().optional(),
 
-  status: DomainStatusSchema.default('active'),
+  /** Glob patterns this domain owns. Derived for spec-backed, authored for free-standing. */
+  ownedPaths: z.array(z.string()).default([]),
 
-  /** When this domain was first detected by the scanner */
-  detectedAt: z.string().datetime().optional(),
-
-  /** When this domain was added to the registry */
-  addedAt: z.string().datetime(),
+  /** Optional physical directory (e.g. a monorepo package or submodule root). */
+  path: z.string().optional(),
 });
 
 export type Domain = z.infer<typeof DomainSchema>;
 
 // ---------------------------------------------------------------------------
-// Domain registry — lives at .wai/registry/domains.json
+// Topology config — lives at .wai/topology.yaml
+//
+// Holds only FREE-STANDING domains. Spec-backed domains are derived from the
+// spec tree at read time (resolveDomains) and are never stored here.
 // ---------------------------------------------------------------------------
 
-export const DomainRegistrySchema = z.object({
+export const TopologyConfigSchema = z.object({
   schemaVersion: z.string().default('1.0.0'),
   domains: z.array(DomainSchema).default([]),
-  updatedAt: z.string().datetime(),
 });
-export type DomainRegistry = z.infer<typeof DomainRegistrySchema>;
+export type TopologyConfig = z.infer<typeof TopologyConfigSchema>;
 
-export function createEmptyDomainRegistry(): DomainRegistry {
-  return {
-    schemaVersion: '1.0.0',
-    domains: [],
-    updatedAt: new Date().toISOString(),
-  };
+export function createEmptyTopologyConfig(): TopologyConfig {
+  return { schemaVersion: '1.0.0', domains: [] };
 }
 
 // ---------------------------------------------------------------------------
-// Detected domain candidate — result of the scanner before user confirmation
+// Detection — physical directory candidates (the `domains scan` helper).
+// These describe *candidates* before the user adds them as free-standing
+// domains; they are not the stored domain shape.
 // ---------------------------------------------------------------------------
+
+export const DomainTypeSchema = z.enum([
+  'git-submodule',  // declared in .gitmodules
+  'git-repo',       // directory containing a .git folder
+  'package-root',   // directory with package.json / pyproject.toml / Cargo.toml / go.mod
+  'manual',         // explicitly added by the user
+]);
+export type DomainType = z.infer<typeof DomainTypeSchema>;
 
 export interface DetectedDomainCandidate {
   /** Suggested id derived from path */
@@ -104,6 +77,6 @@ export interface DetectedDomainCandidate {
   /** Path relative to project root */
   path: string;
   type: DomainType;
-  /** Whether this domain is already tracked */
+  /** Whether this path is already covered by an existing domain */
   alreadyTracked: boolean;
 }
