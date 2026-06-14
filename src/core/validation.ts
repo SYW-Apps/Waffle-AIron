@@ -153,7 +153,7 @@ export function validateProjectConfig(config: ProjectConfig): ValidationResult {
 // SDD Spec Tree Validation
 // ---------------------------------------------------------------------------
 
-export function validateSddTree(): ValidationResult {
+export function validateSddTree(rules?: RulesConfig): ValidationResult {
   const issues: ValidationIssue[] = [];
 
   // Load specs
@@ -173,70 +173,149 @@ export function validateSddTree(): ValidationResult {
     return { valid: false, issues };
   }
 
-  // 1. Hierarchy & Integrity Checks
+  const componentMap = new Map(components.map(c => [c.id, c]));
   const subsystemIds = new Set(subsystems.map(s => s.id));
   const componentIds = new Set(components.map(c => c.id));
   const interfaceIds = new Set(interfaces.map(i => i.id));
 
+  // Helper to check if component or parent subsystem is draft/design
+  const isComponentDraft = (compId: string): boolean => {
+    const comp = componentMap.get(compId);
+    if (!compId || !comp) return false;
+    if (comp.status === 'draft' || comp.status === 'design') return true;
+    
+    const sub = subsystems.find(s => s.id === comp.subsystem);
+    if (sub && (sub.status === 'draft' || sub.status === 'design')) return true;
+    
+    return false;
+  };
+
+  // Helper to determine rule severity based on user config and draft status
+  const getRuleSeverity = (
+    ruleCode: string,
+    defaultSeverity: 'error' | 'warning',
+    isDraftContext?: boolean
+  ): 'error' | 'warning' | 'off' => {
+    if (rules?.sddRuleSeverity?.[ruleCode]) {
+      return rules.sddRuleSeverity[ruleCode];
+    }
+
+    if (isDraftContext) {
+      const completenessRules = [
+        'MISSING_IMPLEMENTATION_METHOD',
+        'MISSING_HTTP_ENDPOINT',
+        'MISSING_GRPC_ENDPOINT',
+        'MISSING_EVENT_SUBSCRIPTION',
+        'MISSING_PORTAL_TYPE',
+        'INVALID_TARGET_METHOD_REFERENCE',
+        'INVALID_TARGET_COMPONENT_REFERENCE',
+        'MISSING_TARGET_METHOD',
+        'MISSING_TARGET_COMPONENT',
+        'UNEXPECTED_IMPLEMENTATION_METHOD',
+        'INVALID_INTERFACE_REFERENCE',
+        'INVALID_COMPONENT_REFERENCE',
+        'INVALID_SUBSYSTEM_REFERENCE',
+        'ORPHANED_SUBSYSTEM',
+      ];
+      if (completenessRules.includes(ruleCode)) {
+        return 'warning';
+      }
+    }
+
+    return defaultSeverity;
+  };
+
+  const addIssue = (
+    defaultSeverity: 'error' | 'warning',
+    code: string,
+    message: string,
+    specId?: string,
+    isDraftContext?: boolean
+  ) => {
+    const severity = getRuleSeverity(code, defaultSeverity, isDraftContext);
+    if (severity !== 'off') {
+      issues.push(issue(severity, code, message, undefined, specId));
+    }
+  };
+
+  // Add draft warnings for informational purposes
+  for (const sub of subsystems) {
+    if (sub.status === 'draft' || sub.status === 'design') {
+      addIssue('warning', 'DRAFT_SUBSYSTEM_WARNING', `Subsystem "${sub.id}" is in draft/design status.`, sub.id, true);
+    }
+  }
+  for (const comp of components) {
+    if (isComponentDraft(comp.id)) {
+      addIssue('warning', 'DRAFT_COMPONENT_WARNING', `Component "${comp.id}" is in draft/design status.`, comp.id, true);
+    }
+  }
+
+  // 1. Hierarchy & Integrity Checks
   // Check subsystems reference parent system
   for (const sub of subsystems) {
+    const isDraftCtx = sub.status === 'draft' || sub.status === 'design';
     if (!sub.parentSystem || sub.parentSystem !== system.name) {
-      issues.push(issue(
+      addIssue(
         'warning',
         'ORPHANED_SUBSYSTEM',
         `Subsystem "${sub.id}" does not reference system "${system.name}".`,
-        undefined,
-        sub.id
-      ));
+        sub.id,
+        isDraftCtx
+      );
     }
   }
 
   // Check components reference existing subsystem
   for (const comp of components) {
+    const isDraftCtx = isComponentDraft(comp.id);
     if (!subsystemIds.has(comp.subsystem)) {
-      issues.push(issue(
+      addIssue(
         'error',
         'INVALID_SUBSYSTEM_REFERENCE',
         `Component "${comp.id}" references non-existent subsystem "${comp.subsystem}".`,
-        undefined,
-        comp.id
-      ));
+        comp.id,
+        isDraftCtx
+      );
     }
   }
 
   // Check interfaces reference existing component
   for (const intf of interfaces) {
+    const isDraftCtx = isComponentDraft(intf.component) || intf.status === 'draft' || intf.status === 'design';
     if (!componentIds.has(intf.component)) {
-      issues.push(issue(
+      addIssue(
         'error',
         'INVALID_COMPONENT_REFERENCE',
         `Interface "${intf.id}" references non-existent component "${intf.component}".`,
-        undefined,
-        intf.id
-      ));
+        intf.id,
+        isDraftCtx
+      );
     }
   }
 
   // Check implementations reference existing interface
   for (const impl of implementations) {
+    const contract = interfaces.find(i => i.id === impl.contract);
+    const isDraftCtx = impl.status === 'draft' || impl.status === 'design' || (contract && (isComponentDraft(contract.component) || contract.status === 'draft' || contract.status === 'design'));
     if (!interfaceIds.has(impl.contract)) {
-      issues.push(issue(
+      addIssue(
         'error',
         'INVALID_INTERFACE_REFERENCE',
         `Implementation "${impl.id}" references non-existent interface contract "${impl.contract}".`,
-        undefined,
-        impl.id
-      ));
+        impl.id,
+        isDraftCtx
+      );
     }
   }
 
   // 2. Interface / Implementation Method Contract Validation
   const interfaceMap = new Map(interfaces.map(i => [i.id, i]));
-  const componentMap = new Map(components.map(c => [c.id, c]));
 
   for (const impl of implementations) {
     const contract = interfaceMap.get(impl.contract);
     if (!contract) continue;
+
+    const isDraftCtx = impl.status === 'draft' || impl.status === 'design' || isComponentDraft(contract.component) || contract.status === 'draft' || contract.status === 'design';
 
     const contractMethodNames = new Set(contract.methods.map(m => m.name));
     const implMethodNames = new Set(impl.methods.map(m => m.name));
@@ -244,26 +323,26 @@ export function validateSddTree(): ValidationResult {
     // Check implementation has extra methods not defined in interface
     for (const implMethod of impl.methods) {
       if (!contractMethodNames.has(implMethod.name)) {
-        issues.push(issue(
+        addIssue(
           'error',
           'UNEXPECTED_IMPLEMENTATION_METHOD',
           `Implementation "${impl.id}" implements method "${implMethod.name}" which is not defined on contract "${contract.id}".`,
-          undefined,
-          impl.id
-        ));
+          impl.id,
+          isDraftCtx
+        );
       }
     }
 
     // Check implementation is missing methods defined in interface
     for (const contractMethod of contract.methods) {
       if (!implMethodNames.has(contractMethod.name)) {
-        issues.push(issue(
+        addIssue(
           'warning',
           'MISSING_IMPLEMENTATION_METHOD',
           `Implementation "${impl.id}" is missing implementation for contract method "${contractMethod.name}" from interface "${contract.id}".`,
-          undefined,
-          impl.id
-        ));
+          impl.id,
+          isDraftCtx
+        );
       }
     }
 
@@ -272,36 +351,36 @@ export function validateSddTree(): ValidationResult {
       for (const step of implMethod.narrative) {
         if (step.type === 'call') {
           if (!step.targetComponent) {
-            issues.push(issue(
+            addIssue(
               'error',
               'MISSING_TARGET_COMPONENT',
               `Method "${implMethod.name}" in implementation "${impl.id}" has a call step (${step.stepNumber}) missing "targetComponent".`,
-              undefined,
-              impl.id
-            ));
+              impl.id,
+              isDraftCtx
+            );
             continue;
           }
 
           if (!step.targetMethod) {
-            issues.push(issue(
+            addIssue(
               'error',
               'MISSING_TARGET_METHOD',
               `Method "${implMethod.name}" in implementation "${impl.id}" has a call step (${step.stepNumber}) missing "targetMethod".`,
-              undefined,
-              impl.id
-            ));
+              impl.id,
+              isDraftCtx
+            );
             continue;
           }
 
           const targetComp = componentMap.get(step.targetComponent);
           if (!targetComp) {
-            issues.push(issue(
+            addIssue(
               'error',
               'INVALID_TARGET_COMPONENT_REFERENCE',
               `Method "${implMethod.name}" in implementation "${impl.id}" calls component "${step.targetComponent}" which does not exist (step ${step.stepNumber}).`,
-              undefined,
-              impl.id
-            ));
+              impl.id,
+              isDraftCtx || isComponentDraft(step.targetComponent)
+            );
             continue;
           }
 
@@ -309,13 +388,13 @@ export function validateSddTree(): ValidationResult {
           const callingComponent = componentMap.get(contract.component);
           if (callingComponent && step.targetComponent !== callingComponent.id) {
             if (!callingComponent.dependencies.includes(step.targetComponent)) {
-              issues.push(issue(
+              addIssue(
                 'error',
                 'UNDECLARED_DEPENDENCY_CALL',
                 `Method "${implMethod.name}" in implementation "${impl.id}" (component "${callingComponent.id}") calls component "${step.targetComponent}" (step ${step.stepNumber}) but component "${callingComponent.id}" does not list "${step.targetComponent}" as a dependency.`,
-                undefined,
-                impl.id
-              ));
+                impl.id,
+                isDraftCtx || isComponentDraft(callingComponent.id)
+              );
             }
           }
 
@@ -330,13 +409,13 @@ export function validateSddTree(): ValidationResult {
           }
 
           if (!methodFound) {
-            issues.push(issue(
+            addIssue(
               'error',
               'INVALID_TARGET_METHOD_REFERENCE',
               `Method "${implMethod.name}" in implementation "${impl.id}" calls method "${step.targetMethod}" on component "${step.targetComponent}" which is not defined on any of its interfaces (step ${step.stepNumber}).`,
-              undefined,
-              impl.id
-            ));
+              impl.id,
+              isDraftCtx || isComponentDraft(step.targetComponent)
+            );
           }
         }
       }
@@ -345,72 +424,76 @@ export function validateSddTree(): ValidationResult {
 
   // 4. Component Type Interaction Rules (Architectural Boundaries)
   for (const comp of components) {
+    const isDraftCtx = isComponentDraft(comp.id);
+
     // Portal validations
     if (comp.componentType === 'Portal') {
       if (!comp.portalType) {
-        issues.push(issue(
+        addIssue(
           'error',
           'MISSING_PORTAL_TYPE',
           `Component "${comp.id}" has type "Portal" but is missing "portalType" field.`,
-          undefined,
-          comp.id
-        ));
+          comp.id,
+          isDraftCtx
+        );
       } else if (comp.portalType === 'HTTP_API') {
-        // Find interfaces for this component
         const compInterfaces = interfaces.filter(i => i.component === comp.id);
         for (const intf of compInterfaces) {
+          const isIntfDraft = intf.status === 'draft' || intf.status === 'design';
           for (const m of intf.methods) {
             if (!m.httpEndpoint) {
-              issues.push(issue(
+              addIssue(
                 'error',
                 'MISSING_HTTP_ENDPOINT',
                 `Method "${m.name}" on interface "${intf.id}" (Portal HTTP_API) is missing "httpEndpoint" mapping.`,
-                undefined,
-                intf.id
-              ));
+                intf.id,
+                isDraftCtx || isIntfDraft
+              );
             }
           }
         }
       } else if (comp.portalType === 'gRPC') {
         const compInterfaces = interfaces.filter(i => i.component === comp.id);
         for (const intf of compInterfaces) {
+          const isIntfDraft = intf.status === 'draft' || intf.status === 'design';
           for (const m of intf.methods) {
             if (!m.grpcEndpoint) {
-              issues.push(issue(
+              addIssue(
                 'error',
                 'MISSING_GRPC_ENDPOINT',
                 `Method "${m.name}" on interface "${intf.id}" (Portal gRPC) is missing "grpcEndpoint" mapping.`,
-                undefined,
-                intf.id
-              ));
+                intf.id,
+                isDraftCtx || isIntfDraft
+              );
             }
           }
         }
       } else if (comp.portalType === 'MessageBus') {
         const compInterfaces = interfaces.filter(i => i.component === comp.id);
         for (const intf of compInterfaces) {
+          const isIntfDraft = intf.status === 'draft' || intf.status === 'design';
           for (const m of intf.methods) {
             if (!m.eventSubscription) {
-              issues.push(issue(
+              addIssue(
                 'error',
                 'MISSING_EVENT_SUBSCRIPTION',
                 `Method "${m.name}" on interface "${intf.id}" (Portal MessageBus) is missing "eventSubscription" mapping.`,
-                undefined,
-                intf.id
-              ));
+                intf.id,
+                isDraftCtx || isIntfDraft
+              );
             }
           }
         }
       }
     } else {
       if (comp.portalType !== undefined || comp.basePath !== undefined) {
-        issues.push(issue(
+        addIssue(
           'error',
           'UNEXPECTED_PORTAL_FIELD',
           `Component "${comp.id}" does not have type "Portal" but has "portalType" or "basePath" configured.`,
-          undefined,
-          comp.id
-        ));
+          comp.id,
+          isDraftCtx
+        );
       }
     }
 
@@ -418,38 +501,66 @@ export function validateSddTree(): ValidationResult {
     for (const depId of dependencies) {
       const depComp = componentMap.get(depId);
       if (!depComp) {
-        issues.push(issue(
+        addIssue(
           'error',
           'INVALID_DEPENDENCY_REFERENCE',
           `Component "${comp.id}" lists dependency "${depId}" which does not exist.`,
-          undefined,
-          comp.id
-        ));
+          comp.id,
+          isDraftCtx
+        );
         continue;
       }
 
-      // Check Portal dependency boundary: components cannot depend on Portals
-      if (depComp.componentType === 'Portal') {
-        issues.push(issue(
+      // Check Portal/Observer dependency boundary: components cannot depend on Portals or Observers
+      if (depComp.componentType === 'Portal' || depComp.componentType === 'Observer') {
+        addIssue(
           'error',
           'ARCHITECTURE_VIOLATION_PORTAL_DEP',
-          `Architectural violation: Component "${comp.id}" cannot depend on Portal component "${depComp.id}". Portals are top-level entry points and cannot be dependencies.`,
-          undefined,
-          comp.id
-        ));
+          `Architectural violation: Component "${comp.id}" cannot depend on ${depComp.componentType} component "${depComp.id}". ${depComp.componentType}s are top-level entry points/subscribers and cannot be dependencies.`,
+          comp.id,
+          isDraftCtx || isComponentDraft(depComp.id)
+        );
+      }
+
+      // Check Portal/Observer dependencies: Portal/Observer should not bypass Orchestrator to call Store/Repository/Adapter
+      if (comp.componentType === 'Portal' || comp.componentType === 'Observer') {
+        const forbiddenTypes = ['Store', 'Repository', 'Adapter'];
+        if (forbiddenTypes.includes(depComp.componentType)) {
+          addIssue(
+            'error',
+            'ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP',
+            `Architectural violation: ${comp.componentType} component "${comp.id}" cannot depend directly on "${depComp.componentType}" component "${depComp.id}". ${comp.componentType}s should coordinate through Orchestrators, Resolvers, Registries, or Supervisors, and cannot depend directly on Stores, Repositories, or Adapters.`,
+            comp.id,
+            isDraftCtx || isComponentDraft(depComp.id)
+          );
+        }
+      }
+
+      // Check Specialist rule: Specialists are narrow functional logic and cannot depend on stateful or orchestrational components
+      if (comp.componentType === 'Specialist') {
+        const forbiddenTypes = ['Portal', 'Observer', 'Orchestrator', 'Store', 'Repository', 'Adapter', 'Supervisor'];
+        if (forbiddenTypes.includes(depComp.componentType)) {
+          addIssue(
+            'error',
+            'ARCHITECTURE_VIOLATION_SPECIALIST_DEP',
+            `Architectural violation: Specialist component "${comp.id}" cannot depend on "${depComp.componentType}" component "${depComp.id}". Specialists should contain narrow, functional domain logic and cannot depend on stateful or orchestrational components.`,
+            comp.id,
+            isDraftCtx || isComponentDraft(depComp.id)
+          );
+        }
       }
 
       // Check Component boundaries:
       // Store rule: Store can only depend on other Store components or Registry
       if (comp.componentType === 'Store') {
         if (depComp.componentType !== 'Store' && depComp.componentType !== 'Registry') {
-          issues.push(issue(
+          addIssue(
             'error',
             'ARCHITECTURE_VIOLATION_STORE_DEP',
             `Architectural violation: Store component "${comp.id}" cannot depend on "${depComp.componentType}" component "${depComp.id}". Stores may only depend on other Stores or Registries.`,
-            undefined,
-            comp.id
-          ));
+            comp.id,
+            isDraftCtx || isComponentDraft(depComp.id)
+          );
         }
       }
 
@@ -457,26 +568,26 @@ export function validateSddTree(): ValidationResult {
       if (comp.componentType === 'Repository') {
         const allowedTypes = ['Store', 'Repository', 'Adapter'];
         if (!allowedTypes.includes(depComp.componentType)) {
-          issues.push(issue(
+          addIssue(
             'error',
             'ARCHITECTURE_VIOLATION_REPO_DEP',
             `Architectural violation: Repository component "${comp.id}" cannot depend on "${depComp.componentType}" component "${depComp.id}". Repositories may only depend on Store, Repository, or Adapter.`,
-            undefined,
-            comp.id
-          ));
+            comp.id,
+            isDraftCtx || isComponentDraft(depComp.id)
+          );
         }
       }
 
       // Adapter rule: Adapter should act as a leaf node; it cannot call Orchestrators or Stores
       if (comp.componentType === 'Adapter') {
         if (depComp.componentType === 'Orchestrator' || depComp.componentType === 'Store') {
-          issues.push(issue(
+          addIssue(
             'error',
             'ARCHITECTURE_VIOLATION_ADAPTER_DEP',
             `Architectural violation: Adapter component "${comp.id}" cannot depend on "${depComp.componentType}" component "${depComp.id}". Adapters cannot depend on Orchestrators or Stores.`,
-            undefined,
-            comp.id
-          ));
+            comp.id,
+            isDraftCtx || isComponentDraft(depComp.id)
+          );
         }
       }
     }
@@ -503,13 +614,14 @@ export function validateSddTree(): ValidationResult {
         } else if (recStack.has(depId)) {
           pathTrace.push(depId);
           const cyclePath = pathTrace.slice(pathTrace.indexOf(depId)).join(' -> ');
-          issues.push(issue(
+          const isDraftCtx = isComponentDraft(compId) || isComponentDraft(depId);
+          addIssue(
             'error',
             'CIRCULAR_DEPENDENCY',
             `Circular dependency detected: ${cyclePath}`,
-            undefined,
-            compId
-          ));
+            compId,
+            isDraftCtx
+          );
           pathTrace.pop();
           recStack.delete(compId);
           pathTrace.pop();

@@ -9,7 +9,7 @@ import { CustomTargetSchema } from './agent.js';
 // ---------------------------------------------------------------------------
 
 export const BuiltinTargetConfigSchema = z.object({
-  type: z.enum(['claude', 'gemini']),
+  type: z.enum(['claude', 'gemini', 'agy', 'cursor', 'copilot', 'codex']),
   /** Output directory for generated agent files, relative to project root */
   outputDir: z.string(),
   /** Whether this target is active */
@@ -48,6 +48,12 @@ export const RulesConfigSchema = z.object({
    * Warn if generated files differ from what the registry would produce.
    */
   enforceReproducibility: z.boolean().default(true),
+
+  /**
+   * Severity overrides for SDD validation rules.
+   * Key: rule code (e.g. CIRCULAR_DEPENDENCY), Value: error | warning | off
+   */
+  sddRuleSeverity: z.record(z.enum(['error', 'warning', 'off'])).default({}),
 });
 export type RulesConfig = z.infer<typeof RulesConfigSchema>;
 

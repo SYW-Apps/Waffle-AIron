@@ -178,15 +178,15 @@ export function createMcpServer(): McpServer {
 
   // ── SDD Spec-Driven Development Tools ─────────────────────────────────────
 
-  reg<{ name: string; vision: string; boundaries?: string[]; globalRequirements?: string[] }>(server,
+  reg<{ name: string; vision: string; boundaries?: any[]; globalRequirements?: any[] }>(server,
     'sdd_initialize_system',
     {
       description: 'Initialize the L0 System Specification (system.yaml).',
       inputSchema: {
         name: z.string().describe('Overarching name of the project/system'),
         vision: z.string().describe('Vision, mission, and core goals of the system'),
-        boundaries: z.array(z.string()).optional().describe('System boundary rules or scope statements'),
-        globalRequirements: z.array(z.string()).optional().describe('Global functional and non-functional requirements'),
+        boundaries: z.array(z.union([z.string(), z.object({ name: z.string(), description: z.string().optional() })])).optional().describe('System boundary rules or scope statements (strings or name/description objects)'),
+        globalRequirements: z.array(z.union([z.string(), z.object({ description: z.string() })])).optional().describe('Global functional and non-functional requirements (strings or description objects)'),
       },
     },
     ({ name, vision, boundaries, globalRequirements }) => {
@@ -372,13 +372,30 @@ export function createMcpServer(): McpServer {
     },
     () => {
       try {
+        const { loadProjectConfig } = requireLoader();
+        const config = loadProjectConfig();
         const { validateSddTree } = requireValidation();
-        const result = validateSddTree();
+        const result = validateSddTree(config.rules);
         return json({
           valid: result.valid,
           errors: result.issues.filter((i) => i.severity === 'error'),
           warnings: result.issues.filter((i) => i.severity === 'warning'),
         });
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  reg<Record<string, never>>(server,
+    'sdd_get_status',
+    {
+      description: 'Get the completeness status dashboard of the SDD spec tree.',
+    },
+    () => {
+      try {
+        const { getStatusReport } = require('../commands/status.js') as typeof import('../commands/status.js');
+        return text(getStatusReport());
       } catch (e) {
         return errText(String(e));
       }

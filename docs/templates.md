@@ -1,4 +1,4 @@
-# waffagent — Templates
+# wairon — Templates
 
 > Version: 0.1.0
 
@@ -23,11 +23,11 @@ Templates are the building blocks. The registry holds the instances.
 Templates are resolved in this order (first match wins):
 
 1. **Project-local override**: `.wai/templates/<id>.yaml`
-2. **Built-in**: `<waffagent package>/src/templates/<id>.yaml`
+2. **Built-in**: `<wairon package>/src/templates/<id>.yaml`
 
 This means you can override any built-in template by placing a file with the
 same id in `.wai/templates/`. Your override is only applied to this project — it
-does not affect other projects using waffagent.
+does not affect other projects using wairon.
 
 ---
 
@@ -70,7 +70,7 @@ Unknown variables are left as `{{variable}}` in the output.
 ### `architect`
 
 The meta-agent responsible for managing agent topology. Created automatically
-during `waffagent init`. Should not be used as a basis for domain agents.
+during `wairon init`. Should not be used as a basis for domain agents.
 
 - `requiresOwnedPaths: false`
 - Default tags: `meta`, `architect`
@@ -118,7 +118,7 @@ A cross-cutting agent that enforces a specific concern across the project
 
 1. Create `.wai/templates/<your-id>.yaml`
 2. Follow the YAML format above
-3. Run `waffagent validate` to check for issues
+3. Run `wairon validate` to check for issues
 
 The template will automatically be available when creating agents.
 

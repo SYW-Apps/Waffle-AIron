@@ -12,9 +12,13 @@ import { BuiltinTargetConfig } from '../models/project.js';
 export const DEFAULT_TARGET_DIRS: Record<string, string> = {
   claude: '.claude/agents',
   gemini: '.gemini/agents',
+  agy: '.gemini/agents',
+  cursor: '.cursor/rules',
+  copilot: '.github/prompts',
+  codex: '.codex/agents',
 };
 
-export function defaultTargetConfig(type: 'claude' | 'gemini'): BuiltinTargetConfig {
+export function defaultTargetConfig(type: 'claude' | 'gemini' | 'agy' | 'cursor' | 'copilot' | 'codex'): BuiltinTargetConfig {
   return {
     type,
     outputDir: DEFAULT_TARGET_DIRS[type],

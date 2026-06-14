@@ -66,7 +66,7 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
   if (sddPathExists(sddPaths.specsSystem())) {
     logger.header('SDD Architectural Specs');
     const { validateSddTree } = require('../core/validation.js') as typeof import('../core/validation.js');
-    const sddResult = validateSddTree();
+    const sddResult = validateSddTree(projectConfig.rules);
     if (sddResult.issues.length === 0) {
       logger.success('Spec tree is valid and component type boundaries are enforced.');
     } else {
@@ -92,6 +92,7 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
       logger.error('Validation failed: warnings are treated as errors in --ci mode.');
     } else {
       logger.error('Validation failed. Fix the errors above.');
+      logger.info(chalk.cyan('Tip: If you need to temporarily bypass an architectural rule, you can override its severity level in your `.wai/project.yaml` config (e.g. `rules.sddRuleSeverity.CIRCULAR_DEPENDENCY: warning`).'));
     }
     process.exit(1);
   } else {

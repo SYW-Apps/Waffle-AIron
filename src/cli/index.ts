@@ -17,7 +17,13 @@ import {
   runMcpInstall,
   runMcpStatus,
   runUpdate,
+  runStatus,
   cleanStaleBinary,
+  runScaffoldDomains,
+  runDomainsList,
+  runDomainsScan,
+  runDomainsAdd,
+  runDomainsRemove,
 } from '../commands/index.js';
 
 // Clean up any .old binary left over from a previous Windows self-update
@@ -85,6 +91,17 @@ program
   .option('--ci', 'treat warnings as errors for CI pipelines')
   .action(async (opts) => {
     await runValidate({ ci: opts.ci });
+  });
+
+// ---------------------------------------------------------------------------
+// status
+// ---------------------------------------------------------------------------
+
+program
+  .command('status')
+  .description('Show a hierarchical completeness graph of the SDD Spec Tree')
+  .action(async () => {
+    await runStatus();
   });
 
 // ---------------------------------------------------------------------------
@@ -157,15 +174,16 @@ mcpCmd
 
 mcpCmd
   .command('install')
-  .description('Register the wairon MCP server in the Claude Code settings.json')
-  .option('--global', 'install in global ~/.claude/settings.json instead of project .claude/')
+  .description('Register the wairon MCP server in the Claude Code settings.json or Antigravity mcp_config.json')
+  .option('--global', 'install in global settings (Claude Code only)')
+  .option('--backend <type>', 'target AI assistant: claude | gemini')
   .action(async (opts) => {
-    await runMcpInstall({ global: opts.global });
+    await runMcpInstall({ global: opts.global, backend: opts.backend as 'claude' | 'gemini' | undefined });
   });
 
 mcpCmd
   .command('status')
-  .description('Show whether the wairon MCP server is registered in Claude Code settings')
+  .description('Show whether the wairon MCP server is registered in Claude Code and Antigravity settings')
   .action(async () => {
     await runMcpStatus();
   });
@@ -181,6 +199,59 @@ program
   .option('--channel <name>', 'switch release channel (stable|beta|preview)')
   .action(async (opts) => {
     await runUpdate({ check: opts.check, channel: opts.channel });
+  });
+
+// ---------------------------------------------------------------------------
+// domains
+// ---------------------------------------------------------------------------
+
+const domainsCmd = program
+  .command('domains')
+  .description('Manage project domains (submodules, repos, packages)');
+
+domainsCmd
+  .command('list')
+  .alias('ls')
+  .description('List all tracked domains')
+  .action(async () => {
+    await runDomainsList();
+  });
+
+domainsCmd
+  .command('scan')
+  .description('Scan process workspace for new domain candidates')
+  .option('--add', 'interactively select and add candidates')
+  .action(async (opts) => {
+    await runDomainsScan({ add: opts.add });
+  });
+
+domainsCmd
+  .command('add')
+  .description('Manually register a new domain')
+  .option('--path <path>', 'relative path to the domain directory')
+  .option('--id <id>', 'stable identifier for the domain')
+  .action(async (opts) => {
+    await runDomainsAdd({ path: opts.path, id: opts.id });
+  });
+
+domainsCmd
+  .command('remove <id>')
+  .alias('rm')
+  .description('Remove a domain from the registry')
+  .action(async (id: string) => {
+    await runDomainsRemove(id);
+  });
+
+// ---------------------------------------------------------------------------
+// scaffold-domains
+// ---------------------------------------------------------------------------
+
+program
+  .command('scaffold-domains')
+  .description('Scaffold agents for registry domains that do not have any agents yet')
+  .option('--rescan', 'also scan for new domain candidates and add them first')
+  .action(async (opts) => {
+    await runScaffoldDomains({ rescan: opts.rescan });
   });
 
 // ---------------------------------------------------------------------------

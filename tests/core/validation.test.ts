@@ -536,6 +536,225 @@ updatedAt: '2026-06-10T22:00:00Z'
       proj.cleanup();
     }
   });
+
+  it('downgrades completeness rules to warnings when status is draft or design', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: Subsystem A description
+parentSystem: TestSystem
+status: draft
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    // comp-a has type Portal, portalType: HTTP_API, and is draft because subsystem is draft
+    proj.writeSpec('component', 'comp-a', `
+schemaVersion: 1.0.0
+id: comp-a
+name: ComponentA
+description: Component A description
+subsystem: sub-a
+componentType: Portal
+portalType: HTTP_API
+dependencies: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    // interface is missing httpEndpoint (normally a hard error)
+    proj.writeSpec('interface', 'icomp-a', `
+schemaVersion: 1.0.0
+id: icomp-a
+name: InterfaceA
+description: Interface A description
+component: comp-a
+methods:
+  - name: callApi
+    description: Api method
+    signature: "callApi(): Promise<void>"
+    returns: "Promise<void>"
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      // Since it's in draft mode, it should be valid (errors downgraded to warnings)
+      expect(res.valid).toBe(true);
+      expect(res.issues.some(i => i.code === 'MISSING_HTTP_ENDPOINT' && i.severity === 'warning')).toBe(true);
+      expect(res.issues.some(i => i.code === 'DRAFT_COMPONENT_WARNING')).toBe(true);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('allows user overrides for rule severity', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: Subsystem A description
+parentSystem: TestSystem
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    // comp-a has type Portal, portalType: HTTP_API, and is complete (default)
+    proj.writeSpec('component', 'comp-a', `
+schemaVersion: 1.0.0
+id: comp-a
+name: ComponentA
+description: Component A description
+subsystem: sub-a
+componentType: Portal
+portalType: HTTP_API
+dependencies: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    // interface is missing httpEndpoint (normally a hard error)
+    proj.writeSpec('interface', 'icomp-a', `
+schemaVersion: 1.0.0
+id: icomp-a
+name: InterfaceA
+description: Interface A description
+component: comp-a
+methods:
+  - name: callApi
+    description: Api method
+    signature: "callApi(): Promise<void>"
+    returns: "Promise<void>"
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+    proj.activate();
+    try {
+      // 1. By default, it fails with error severity
+      const resDefault = validateSddTree();
+      expect(resDefault.valid).toBe(false);
+      expect(resDefault.issues.some(i => i.code === 'MISSING_HTTP_ENDPOINT' && i.severity === 'error')).toBe(true);
+
+      // 2. With override severity to warning, it passes
+      const rulesWithWarningOverride = {
+        ...defaultRules,
+        sddRuleSeverity: {
+          'MISSING_HTTP_ENDPOINT': 'warning' as const
+        }
+      };
+      const resWarning = validateSddTree(rulesWithWarningOverride);
+      expect(resWarning.valid).toBe(true);
+      expect(resWarning.issues.some(i => i.code === 'MISSING_HTTP_ENDPOINT' && i.severity === 'warning')).toBe(true);
+
+      // 3. With override severity to off, it ignores the issue completely
+      const rulesWithOffOverride = {
+        ...defaultRules,
+        sddRuleSeverity: {
+          'MISSING_HTTP_ENDPOINT': 'off' as const
+        }
+      };
+      const resOff = validateSddTree(rulesWithOffOverride);
+      expect(resOff.valid).toBe(true);
+      expect(resOff.issues.some(i => i.code === 'MISSING_HTTP_ENDPOINT')).toBe(false);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('parses system.yaml boundaries and globalRequirements containing objects', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+boundaries:
+  - name: test-boundary
+    description: A boundary defined as an object
+globalRequirements:
+  - description: A requirement defined as an object
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      // It should successfully parse and not throw MISSING_SYSTEM_SPEC or SCHEMA_VALIDATION_ERROR for this
+      expect(res.issues.some(i => i.code === 'SCHEMA_VALIDATION_ERROR')).toBe(false);
+      expect(res.issues.some(i => i.code === 'MISSING_SYSTEM_SPEC')).toBe(false);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('fails validation when a Portal depends directly on a Store, Repository, or Adapter', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: Subsystem A description
+parentSystem: TestSystem
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    // comp-a is a Portal depending on comp-b (Store)
+    proj.writeSpec('component', 'comp-a', `
+schemaVersion: 1.0.0
+id: comp-a
+name: PortalComponent
+description: A portal entry point
+subsystem: sub-a
+componentType: Portal
+portalType: HTTP_API
+dependencies:
+  - comp-b
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('component', 'comp-b', `
+schemaVersion: 1.0.0
+id: comp-b
+name: StoreComponent
+description: A store component
+subsystem: sub-a
+componentType: Store
+dependencies: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.valid).toBe(false);
+      expect(res.issues.some(i => i.code === 'ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP')).toBe(true);
+    } finally {
+      proj.cleanup();
+    }
+  });
 });
 
 

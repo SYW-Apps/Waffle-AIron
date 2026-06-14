@@ -16,8 +16,7 @@ export function exportSddSkills(): void {
 
   const destinations = [
     fromProjectRoot('.gemini', 'skills'),
-    fromProjectRoot('.claude'),
-    fromProjectRoot('.claude', 'skills') // Write to both root and subfolder for safety
+    fromProjectRoot('.claude')
   ];
 
   // Ensure destinations exist
@@ -31,7 +30,11 @@ export function exportSddSkills(): void {
       continue;
     }
 
-    const content = fs.readFileSync(srcPath, 'utf-8');
+    let content = fs.readFileSync(srcPath, 'utf-8');
+
+    const { getCliCommandString } = require('../utils/ai-guide.js') as typeof import('../utils/ai-guide.js');
+    const command = getCliCommandString();
+    content = content.replace(/\bwairon\b/g, command);
 
     for (const destDir of destinations) {
       const destPath = path.join(destDir, file);

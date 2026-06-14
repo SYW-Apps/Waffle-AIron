@@ -1,4 +1,4 @@
-# waffagent — Architecture
+# wairon — Architecture
 
 > Last updated: 2026-04-10 | Version: 0.1.0
 
@@ -6,7 +6,7 @@
 
 ## Design Philosophy
 
-waffagent is built around one central idea: **the source of truth for AI agent
+wairon is built around one central idea: **the source of truth for AI agent
 topology should live inside the repository, be version-controlled, and be
 independent of any specific AI coding tool.**
 
@@ -19,7 +19,7 @@ those tool-specific files directly, you end up with:
 - No ability to target multiple tools from one definition
 - No validation of topology rules (overlapping ownership, missing paths, etc.)
 
-waffagent solves this by being a **topology registry and exporter**, not a tool
+wairon solves this by being a **topology registry and exporter**, not a tool
 wrapper.
 
 ---
@@ -110,9 +110,9 @@ These three concepts are often confused. Here's the distinction:
 **Example flow:**
 
 1. You have a `service-default` bundle
-2. You run `waffagent create-bundle --bundle service-default --scope core-service --dir services/core`
+2. You run `wairon create-bundle --bundle service-default --scope core-service --dir services/core`
 3. The bundle creates registry entries for `core-service-owner`, `core-service-implementer`, etc.
-4. Running `waffagent generate` exports those registry entries into `.claude/agents/`
+4. Running `wairon generate` exports those registry entries into `.claude/agents/`
 
 The bundle was used once to *populate* the registry. Afterward, the registry is the
 source of truth — you can modify those agents directly without touching the bundle.
@@ -128,14 +128,14 @@ Topology rules live in `.wai/rules/topology.yaml` and are also configurable in
 - `requireOwnedPaths` — non-meta agents must have at least one owned path
 - `enforceReproducibility` — generated files should match what the registry would produce
 
-Validation runs on every `waffagent validate` call and can be integrated into CI.
+Validation runs on every `wairon validate` call and can be integrated into CI.
 
 ---
 
 ## Init Flow
 
 ```
-waffagent init
+wairon init
      │
      ├─ prompt: project name
      ├─ prompt: select targets (claude / gemini / custom)
@@ -181,7 +181,7 @@ By building a clean CLI first, we get:
 The `src/index.ts` exports are designed to be the public API for a future MCP
 wrapper. An MCP server would simply:
 
-1. Import the waffagent library
+1. Import the wairon library
 2. Map MCP tool calls to library function calls
 3. Return structured results to the model
 

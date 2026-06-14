@@ -5,15 +5,33 @@ import { z } from 'zod';
 // ---------------------------------------------------------------------------
 export const SpecIdSchema = z.string().regex(/^[a-z0-9-_]+$/, 'Identifier must be lowercase alphanumeric with dashes or underscores');
 
-// ---------------------------------------------------------------------------
-// Level 0: System Spec (system.yaml)
-// ---------------------------------------------------------------------------
+export const SpecStatusSchema = z.enum(['draft', 'design', 'complete']).default('complete');
+export type SpecStatus = z.infer<typeof SpecStatusSchema>;
+
+
+export const BoundaryItemSchema = z.union([
+  z.string(),
+  z.object({
+    name: z.string(),
+    description: z.string().optional(),
+  }),
+]);
+export type BoundaryItem = z.infer<typeof BoundaryItemSchema>;
+
+export const RequirementItemSchema = z.union([
+  z.string(),
+  z.object({
+    description: z.string(),
+  }),
+]);
+export type RequirementItem = z.infer<typeof RequirementItemSchema>;
+
 export const SystemSpecSchema = z.object({
   schemaVersion: z.string().default('1.0.0'),
   name: z.string(),
   vision: z.string(),
-  boundaries: z.array(z.string()).default([]),
-  globalRequirements: z.array(z.string()).default([]),
+  boundaries: z.array(BoundaryItemSchema).default([]),
+  globalRequirements: z.array(RequirementItemSchema).default([]),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -39,6 +57,7 @@ export const SubsystemSpecSchema = z.object({
   description: z.string(),
   parentSystem: z.string(), // References L0 System Name or file
   publicInterfaces: z.array(PublicInterfaceSchema).default([]),
+  status: SpecStatusSchema.optional().default('complete'),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -56,7 +75,9 @@ export const ComponentTypeSchema = z.enum([
   'Resolver',
   'Supervisor',
   'Registry',
-  'Portal'
+  'Portal',
+  'Specialist',
+  'Observer'
 ]);
 export type ComponentType = z.infer<typeof ComponentTypeSchema>;
 
@@ -72,6 +93,7 @@ export const ComponentSpecSchema = z.object({
   dependencies: z.array(z.string()).default([]), // References other L2 Component ids
   portalType: PortalTypeSchema.optional(),
   basePath: z.string().optional(),
+  status: SpecStatusSchema.optional().default('complete'),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -118,6 +140,7 @@ export const InterfaceSpecSchema = z.object({
   description: z.string(),
   component: z.string(), // References L2 Component id
   methods: z.array(MethodSignatureSchema).default([]),
+  status: SpecStatusSchema.optional().default('complete'),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -157,6 +180,7 @@ export const ImplementationSpecSchema = z.object({
   contract: z.string(), // References L3 Interface id
   sourcePath: z.string().optional(), // Path to the concrete source code file (e.g. "src/storage/vfs.ts")
   methods: z.array(MethodImplementationSchema).default([]),
+  status: SpecStatusSchema.optional().default('complete'),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });

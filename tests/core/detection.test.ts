@@ -7,7 +7,7 @@ import { detectDomainCandidates } from '../../src/core/detection.js';
 // Creates a temporary directory structure for testing detection logic
 
 function makeTempDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'waffagent-test-'));
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-test-'));
 }
 
 function rmTempDir(dir: string): void {

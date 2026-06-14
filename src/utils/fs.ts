@@ -65,6 +65,25 @@ export function listFiles(dirPath: string, ext: string): string[] {
 }
 
 /**
+ * List all files recursively in a directory with a given extension.
+ * Returns an empty array if the directory does not exist.
+ */
+export function listFilesRecursive(dirPath: string, ext: string): string[] {
+  if (!fs.existsSync(dirPath)) return [];
+  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...listFilesRecursive(fullPath, ext));
+    } else if (entry.isFile() && entry.name.endsWith(ext)) {
+      files.push(fullPath);
+    }
+  }
+  return files;
+}
+
+/**
  * Resolve a path relative to the project root.
  * The project root is always the cwd at the time the CLI runs.
  */

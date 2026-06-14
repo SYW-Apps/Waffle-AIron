@@ -9,6 +9,7 @@ import {
   localGuideFilePath,
   hasWaironGuide,
   injectGuide,
+  writeRootGuideDelegator,
 } from '../utils/ai-guide.js';
 import { writeYamlFile, writeJsonFile } from '../utils/yaml.js';
 import { isProjectInitialized, AI_PATHS } from '../config/loader.js';
@@ -27,9 +28,7 @@ import { DetectedDomainCandidate } from '../models/domain.js';
 import { scaffoldDomain } from '../core/domains.js';
 import { expandBundleForDomain } from '../core/scaffold.js';
 import { listBundleIds, loadBundle } from '../core/bundles.js';
-import { ClaudeExporter } from '../exporters/claude.js';
-import { GeminiExporter } from '../exporters/gemini.js';
-import { CustomExporter } from '../exporters/custom.js';
+import { getExporter } from '../exporters/index.js';
 import { runScaffoldDomains } from './scaffold-domains.js';
 import { runGenerate } from './generate.js';
 import { syncContextFiles } from '../core/context.js';
@@ -82,13 +81,29 @@ async function runInitNonInteractive(): Promise<void> {
   const projectName = path.basename(cwd);
   const now = new Date().toISOString();
 
-  const targets: TargetConfig[] = [defaultTargetConfig('claude')];
+  // Claude and Antigravity are active by default
+  const targets: TargetConfig[] = [defaultTargetConfig('claude'), defaultTargetConfig('agy')];
   const projectConfig = buildProjectConfig(projectName, targets, null, now);
 
-  executeInit(projectName, targets, projectConfig, [], null, { claudeGlobal: false, claudeLocal: false, geminiGlobal: false, geminiLocal: false }, now);
+  const guidePlan: AiGuidePlan = {
+    claudeGlobal: false,
+    claudeLocal: true,
+    geminiGlobal: false,
+    geminiLocal: true,
+  };
+
+  await executeInit(
+    projectName,
+    targets,
+    projectConfig,
+    [],
+    null,
+    guidePlan,
+    now,
+  );
 
   logger.success(`Project "${projectName}" initialized (non-interactive).`);
-  logger.info('Run `wairon domains scan --add` to add domains, then `wairon scaffold-domains` to create agents.');
+  logger.info('Run `wairon status` to view your spec dashboard, or edit `.wai/phased_design.md` to begin designing.');
 }
 
 // ---------------------------------------------------------------------------
@@ -113,11 +128,11 @@ async function runInitInteractive(): Promise<void> {
   ]);
 
   // ------------------------------------------------------------------
-  // Phase 2 — Targets
+  // Phase 2 — Targets selection
   // ------------------------------------------------------------------
 
   const { targetTypes, customPath, customLabel } = await inquirer.prompt<{
-    targetTypes: string[];
+    targetTypes: ('claude' | 'gemini' | 'agy' | 'cursor' | 'copilot' | 'codex' | 'custom')[];
     customPath: string;
     customLabel: string;
   }>([
@@ -126,9 +141,13 @@ async function runInitInteractive(): Promise<void> {
       name: 'targetTypes',
       message: 'Which AI coding tools will you use? (Space to select · Enter to confirm)',
       choices: [
-        { name: 'Claude Code  (.claude/agents/)', value: 'claude', checked: true },
-        { name: 'Gemini CLI   (.gemini/agents/)', value: 'gemini' },
-        { name: 'Custom path  (any other tool)',  value: 'custom' },
+        { name: 'Claude Code           (.claude/agents/)', value: 'claude', checked: true },
+        { name: 'Antigravity CLI (agy) (.gemini/agents/)', value: 'agy', checked: true },
+        { name: 'Cursor Rules          (.cursor/rules/)', value: 'cursor' },
+        { name: 'GitHub Copilot        (.github/prompts/)', value: 'copilot' },
+        { name: 'Codex CLI             (.codex/agents/)',  value: 'codex' },
+        { name: 'Gemini CLI (Legacy)   (.gemini/agents/)', value: 'gemini' },
+        { name: 'Custom path           (any other tool)',  value: 'custom' },
       ],
     },
     {
@@ -148,139 +167,23 @@ async function runInitInteractive(): Promise<void> {
   ]);
 
   const targets: TargetConfig[] = [];
-  if (targetTypes.includes('claude')) targets.push(defaultTargetConfig('claude'));
-  if (targetTypes.includes('gemini')) targets.push(defaultTargetConfig('gemini'));
-  if (targetTypes.includes('custom') && customPath) {
-    targets.push({ type: 'custom', label: customLabel ?? 'Custom', outputDir: customPath, enabled: true });
+  for (const t of targetTypes) {
+    if (t !== 'custom') {
+      targets.push(defaultTargetConfig(t));
+    } else if (customPath) {
+      targets.push({ type: 'custom', label: customLabel ?? 'Custom', outputDir: customPath, enabled: true });
+    }
   }
+
   if (targets.length === 0) {
     targets.push(defaultTargetConfig('claude'));
     logger.warn('No targets selected — defaulting to Claude Code.');
   }
 
-  const activeTargetTypes = targets
-    .filter((t) => !('enabled' in t) || t.enabled)
-    .map((t) => t.type);
-
   // ------------------------------------------------------------------
-  // Phase 3 — Default bundle
+  // Phase 3 — Guide scopes (Determined automatically to reduce prompts)
   // ------------------------------------------------------------------
-
-  const bundleIds = listBundleIds();
-  let defaultBundleId: string | null = null;
-
-  if (bundleIds.length > 0) {
-    const bundleChoices = [
-      { name: chalk.gray('none  — scaffold agents manually later'), value: '__none__' },
-      ...bundleIds.map((id) => {
-        try {
-          const b = loadBundle(id);
-          return { name: `${chalk.bold(id)}  — ${b.description.split('\n')[0].trim()}`, value: id };
-        } catch {
-          return { name: id, value: id };
-        }
-      }),
-    ];
-
-    const { selectedBundle } = await inquirer.prompt<{ selectedBundle: string }>([
-      {
-        type: 'list',
-        name: 'selectedBundle',
-        message: 'Default bundle for domain scaffolding:',
-        choices: bundleChoices,
-      },
-    ]);
-
-    defaultBundleId = selectedBundle === '__none__' ? null : selectedBundle;
-  }
-
-  // ------------------------------------------------------------------
-  // Phase 4 — Domain detection + selection
-  // ------------------------------------------------------------------
-
   const projectRoot = fromProjectRoot();
-  const allCandidates = detectDomainCandidates(projectRoot);
-  const domainAssignments: DomainAssignment[] = [];
-
-  if (allCandidates.length > 0) {
-    logger.blank();
-    logger.info(`Detected ${allCandidates.length} potential domain candidate(s).`);
-    logger.blank();
-
-    const selectedPaths = await filteredCheckbox({
-      message: 'Select domains to include',
-      items: allCandidates.map((c) => ({
-        label: c.suggestedId,
-        subtext: c.path,
-        value: c.path,
-        itemType: c.type,
-      })),
-    });
-
-    const selected = allCandidates.filter((c) => selectedPaths.includes(c.path));
-
-    // Phase 5 — Per-domain bundle overrides
-    if (selected.length > 0 && defaultBundleId !== null && bundleIds.length > 1) {
-      const { doOverride } = await inquirer.prompt<{ doOverride: boolean }>([
-        {
-          type: 'confirm',
-          name: 'doOverride',
-          message: `Use a different bundle for specific domains? (default: ${chalk.bold(defaultBundleId)})`,
-          default: false,
-        },
-      ]);
-
-      if (doOverride) {
-        const overridePaths = await filteredCheckbox({
-          message: 'Select domains to override',
-          items: selected.map((c) => ({
-            label: c.suggestedId,
-            subtext: c.path,
-            value: c.path,
-            itemType: c.type,
-          })),
-        });
-
-        const overrideSet = new Set(overridePaths);
-
-        // Group override domains and pick bundles for them
-        for (const c of selected) {
-          if (overrideSet.has(c.path)) {
-            const { bundleId } = await inquirer.prompt<{ bundleId: string }>([
-              {
-                type: 'list',
-                name: 'bundleId',
-                message: `Bundle for "${c.suggestedId}":`,
-                choices: [
-                  { name: chalk.gray('none'), value: '__none__' },
-                  ...bundleIds,
-                ],
-              },
-            ]);
-            domainAssignments.push({
-              candidate: c,
-              bundleId: bundleId === '__none__' ? null : bundleId,
-            });
-          } else {
-            domainAssignments.push({ candidate: c, bundleId: defaultBundleId });
-          }
-        }
-      } else {
-        for (const c of selected) {
-          domainAssignments.push({ candidate: c, bundleId: defaultBundleId });
-        }
-      }
-    } else {
-      for (const c of selected) {
-        domainAssignments.push({ candidate: c, bundleId: defaultBundleId });
-      }
-    }
-  }
-
-  // ------------------------------------------------------------------
-  // Phase 6 — AI guide injection
-  // ------------------------------------------------------------------
-
   const guidePlan: AiGuidePlan = {
     claudeGlobal: false,
     claudeLocal: false,
@@ -288,51 +191,17 @@ async function runInitInteractive(): Promise<void> {
     geminiLocal: false,
   };
 
-  for (const targetType of ['claude', 'gemini'] as const) {
-    if (!activeTargetTypes.includes(targetType)) continue;
+  const activeTargetTypes = targets.map((t) => t.type);
 
-    const globalPath = globalGuideFilePath(targetType);
-    const localPath  = localGuideFilePath(projectRoot, targetType);
-    const toolName   = targetType === 'claude' ? 'Claude Code' : 'Gemini CLI';
-
-    const globalAlready = globalPath ? hasWaironGuide(globalPath) : false;
-
-    logger.blank();
-    logger.info(`${chalk.bold(toolName)} guide injection:`);
-    if (globalAlready) {
-      logger.info(`  ${chalk.green('✔')} Global config already contains wairon guide.`);
-    }
-
-    const choices = [];
-    if (!globalAlready && globalPath) {
-      choices.push({ name: `Global config  (${globalPath})`, value: 'global' });
-    }
-    if (localPath) {
-      choices.push({ name: `Local project  (${path.relative(projectRoot, localPath)})`, value: 'local' });
-    }
-    if (choices.length === 0) continue;
-
-    const { guideScopes } = await inquirer.prompt<{ guideScopes: string[] }>([
-      {
-        type: 'checkbox',
-        name: 'guideScopes',
-        message: `Add wairon usage guide to: (Space to select · Enter to confirm)`,
-        choices,
-        default: globalAlready ? [] : choices.slice(0, 1).map((c) => c.value),
-      },
-    ]);
-
-    if (targetType === 'claude') {
-      guidePlan.claudeGlobal = guideScopes.includes('global');
-      guidePlan.claudeLocal  = guideScopes.includes('local');
-    } else {
-      guidePlan.geminiGlobal = guideScopes.includes('global');
-      guidePlan.geminiLocal  = guideScopes.includes('local');
-    }
+  if (activeTargetTypes.includes('claude')) {
+    guidePlan.claudeLocal = true;
+  }
+  if (activeTargetTypes.includes('gemini') || activeTargetTypes.includes('agy')) {
+    guidePlan.geminiLocal = true;
   }
 
   // ------------------------------------------------------------------
-  // Phase 7 — Confirmation summary
+  // Phase 4 — Confirmation summary
   // ------------------------------------------------------------------
 
   logger.blank();
@@ -340,40 +209,7 @@ async function runInitInteractive(): Promise<void> {
   logger.blank();
   console.log(`  ${chalk.bold('Project:')}  ${projectName}`);
   console.log(`  ${chalk.bold('Targets:')}  ${targets.map((t) => t.type).join(', ')}`);
-  console.log(`  ${chalk.bold('Bundle:')}   ${defaultBundleId ?? chalk.gray('none')}`);
-
-  if (domainAssignments.length > 0) {
-    console.log(`  ${chalk.bold('Domains:')}  ${domainAssignments.length} selected`);
-    const withBundle    = domainAssignments.filter((a) => a.bundleId !== null);
-    const withoutBundle = domainAssignments.filter((a) => a.bundleId === null);
-    if (withBundle.length > 0) {
-      console.log(chalk.gray(`    ${withBundle.length} will have agents scaffolded`));
-    }
-    if (withoutBundle.length > 0) {
-      console.log(chalk.gray(`    ${withoutBundle.length} added without agents (manual later)`));
-    }
-    const totalAgents = withBundle.reduce((sum, a) => {
-      try {
-        return sum + loadBundle(a.bundleId!).agents.length;
-      } catch {
-        return sum;
-      }
-    }, 0);
-    if (totalAgents > 0) {
-      console.log(chalk.gray(`    ~${totalAgents} agents to create`));
-    }
-  } else {
-    console.log(`  ${chalk.bold('Domains:')}  none selected`);
-  }
-
-  const guideLines = [
-    guidePlan.claudeGlobal && 'Claude global',
-    guidePlan.claudeLocal  && 'Claude local',
-    guidePlan.geminiGlobal && 'Gemini global',
-    guidePlan.geminiLocal  && 'Gemini local',
-  ].filter(Boolean);
-
-  console.log(`  ${chalk.bold('Guide:')}    ${guideLines.length > 0 ? guideLines.join(', ') : chalk.gray('skip')}`);
+  console.log(`  ${chalk.bold('Guide:')}    Auto-inject local AI rules card (${activeTargetTypes.filter(t => ['claude', 'gemini', 'agy'].includes(t)).join(', ') || 'none'})`);
   logger.blank();
 
   const { confirmed } = await inquirer.prompt<{ confirmed: boolean }>([
@@ -391,18 +227,18 @@ async function runInitInteractive(): Promise<void> {
   }
 
   // ------------------------------------------------------------------
-  // Phase 8 — Execute
+  // Phase 5 — Execute
   // ------------------------------------------------------------------
 
   const now = new Date().toISOString();
-  const projectConfig = buildProjectConfig(projectName, targets, defaultBundleId, now);
+  const projectConfig = buildProjectConfig(projectName, targets, null, now);
 
   await executeInit(
     projectName,
     targets,
     projectConfig,
-    domainAssignments,
-    defaultBundleId,
+    [], // empty domainAssignments since we resolve dynamic topology from specs
+    null,
     guidePlan,
     now,
   );
@@ -539,11 +375,7 @@ async function executeInit(
     const renderedInstructions = renderTemplateInstructions(template, vars);
 
     for (const targetConfig of targets) {
-      const targetType = targetConfig.type;
-      let exporter;
-      if (targetType === 'claude') exporter = new ClaudeExporter();
-      else if (targetType === 'gemini') exporter = new GeminiExporter();
-      else exporter = new CustomExporter();
+      const exporter = getExporter(targetConfig);
 
       const result = exporter.export({
         agent: architectAgent,
@@ -559,6 +391,8 @@ async function executeInit(
   // Starter docs + rules
   writeStarterDocs(projectName);
   writeStarterRules();
+  writeStarterDesignGuide(projectName);
+  writeStarterProjectContext(projectName);
 
   // Inject AI guides
   if (guidePlan.claudeGlobal) {
@@ -570,6 +404,8 @@ async function executeInit(
     const p = localGuideFilePath(projectRoot, 'claude')!;
     injectGuide(p, 'local');
     logger.success(`Injected wairon guide into ${path.relative(cwd, p)}`);
+    writeRootGuideDelegator(projectRoot, 'claude');
+    logger.success(`Created root CLAUDE.md delegator pointing to .claude/CLAUDE.md`);
   }
   if (guidePlan.geminiGlobal) {
     const p = globalGuideFilePath('gemini')!;
@@ -580,6 +416,42 @@ async function executeInit(
     const p = localGuideFilePath(projectRoot, 'gemini')!;
     injectGuide(p, 'local');
     logger.success(`Injected wairon guide into ${path.relative(cwd, p)}`);
+    writeRootGuideDelegator(projectRoot, 'gemini');
+    logger.success(`Created root GEMINI.md delegator pointing to .gemini/GEMINI.md`);
+  }
+
+  // Root instructions/rules for other targets if active
+  if (activeTargetTypes.includes('cursor')) {
+    writeRootGuideDelegator(projectRoot, 'cursor');
+    logger.success(`Created root .cursorrules pointing to .cursor/rules/`);
+  }
+  if (activeTargetTypes.includes('copilot')) {
+    writeRootGuideDelegator(projectRoot, 'copilot');
+    logger.success(`Created root .github/copilot-instructions.md pointing to .github/prompts/`);
+  }
+  if (activeTargetTypes.includes('codex')) {
+    writeRootGuideDelegator(projectRoot, 'codex');
+    logger.success(`Created root .codexrules pointing to .codex/agents/`);
+  }
+
+  // Register MCP server locally for Claude Code target
+  if (activeTargetTypes.includes('claude')) {
+    try {
+      const { runMcpInstall } = require('./mcp.js') as typeof import('./mcp.js');
+      await runMcpInstall({ global: false, backend: 'claude' });
+    } catch (err) {
+      logger.warn(`Failed to automatically register MCP server for Claude: ${err}`);
+    }
+  }
+
+  // Register MCP server for Antigravity (agy) target
+  if (activeTargetTypes.includes('gemini') || activeTargetTypes.includes('agy')) {
+    try {
+      const { runMcpInstall } = require('./mcp.js') as typeof import('./mcp.js');
+      await runMcpInstall({ backend: 'gemini' });
+    } catch (err) {
+      logger.warn(`Failed to automatically register MCP server for Antigravity: ${err}`);
+    }
   }
 
   // Generate all domain agents
@@ -620,13 +492,15 @@ async function executeInit(
   logger.info('What was created:');
   logger.info('  .wai/               — source of truth for agent topology');
   logger.info('  .wai/project.yaml   — project config');
+  logger.info('  .wai/phased_design.md — spec kit alternative design workbook');
   logger.info(`  .wai/registry/      — ${registry.agents.length} agent(s) registered`);
   logger.info(`  domains             — ${domainAssignments.length} domain(s) added`);
   logger.info('  .wai/context/       — shared context directory (domains.md, wairon-guide.md)');
   logger.blank();
   logger.info('Next steps:');
-  logger.info('  wairon context init         — describe the project so all AI sessions share context');
-  logger.info('  wairon validate             — check the topology');
+  logger.info('  Edit .wai/context/project.md — describe the project concept and stack details for the AI');
+  logger.info('  wairon status               — view the architecture completeness dashboard');
+  logger.info('  wairon validate             — check the spec tree & component boundaries');
   logger.info('  wairon scaffold-domains     — add agents for any remaining domains');
   logger.info('  wairon create-agent         — add a custom agent');
   logger.blank();
@@ -669,7 +543,7 @@ This directory contains project-specific notes about the agent topology.
 
 ## Overview
 
-Describe the overall agent strategy for this project here.
+Describe the overall agent strategy for this project here. See also [.wai/phased_design.md](../phased_design.md) for the active system design log.
 
 ## Agents
 
@@ -697,3 +571,99 @@ function writeStarterRules(): void {
   };
   writeYamlFile(AI_PATHS.rulesDir() + '/topology.yaml', rules);
 }
+
+function writeStarterDesignGuide(projectName: string): void {
+  const content = `# SDD Phased Design Blueprint & Quest Log
+
+This document serves as your living system-design workbook and project-level guide for AI Spec-Driven Development (SDD) in **${projectName}**. 
+It aligns developer intent with structured, verified specifications under the \`wairon\` framework.
+
+---
+
+## Stage 1: The Constitution (Guardrails & Rules)
+
+Define the non-negotiable architectural guardrails here. The AI agent must follow these constraints.
+
+*   [ ] **Primary Language & Runtime:** Node.js (TypeScript) / Python / etc.
+*   [ ] **Architectural Style:** Clean Architecture / Hexagonal / Domain-Driven Design (DDD).
+*   [ ] **Data Persistence Rules:** E.g. No raw SQL in controllers; all DB operations must use a \`Store\` / \`Repository\`.
+*   [ ] **Stereotype Dependencies:**
+    *   \`Store\` components can only call other \`Stores\` or \`Registries\`.
+    *   \`Adapter\` components cannot depend on \`Orchestrators\` or \`Stores\` directly.
+    *   Only \`Portal\` components can accept external traffic.
+
+---
+
+## Stage 2: System Definition (Level 0 & Level 1)
+
+*   [ ] **System Vision (L0):** Define \`.wai/specs/system.yaml\`.
+    *   *AI Action:* Run \`sdd_initialize_system\` to create the system vision.
+*   [ ] **Subsystem Isolation (L1):** Define subsystems in \`.wai/specs/subsystems/*.yaml\`.
+    *   *AI Action:* Run \`sdd_add_subsystem\` to declare the core bounded contexts (e.g. \`billing\`, \`catalog\`, \`users\`).
+
+---
+
+## Stage 3: Ingress/Egress Portals (Level 2 & Level 3)
+
+Portals are the boundaries of your subsystems. Define how requests enter and leave.
+
+*   [ ] **Define Ingress Portals (REST / gRPC / MessageBus):**
+    *   *AI Action:* Create L2 Portal components with \`status: draft\` and map their L3 interfaces.
+    *   *Design check:* Ensure HTTP endpoints (method, path) or gRPC names are correctly declared in the method bindings.
+*   [ ] **Define Egress Portals (Clients / Publishers):**
+    *   *AI Action:* Declare any external event publishing or client communication Portals.
+
+---
+
+## Stage 4: Subsystem Core & Stereotypes (Level 2 & Level 3)
+
+Flesh out the internal components that do the actual work.
+
+*   [ ] **Orchestrators:** Handle transaction scripts and workflow coordination.
+*   [ ] **Stores & Repositories:** Handle persistence.
+*   [ ] **Adapters:** Call external third-party APIs (e.g. Stripe, SendGrid).
+*   *AI Action:* Create components with \`status: draft\` and define their interfaces/signatures.
+
+---
+
+## Stage 5: Execution Flow Narratives (Level 4 & Level 5)
+
+Map the behavior step-by-step.
+
+*   [ ] **Write Narratives:** Write Level 5 narrative steps mapping methods to internal calls.
+    *   *AI Action:* For each interface method, describe the sequential call stack (e.g. Call \`payment_store.save\`, then Call \`stripe_adapter.charge\`).
+    *   *Verification:* Run \`wairon status\` to verify completeness, and \`wairon validate\` to ensure no circular loops or dependency leaks exist.
+
+---
+
+## Stage 6: Sandbox Implementation
+
+Once the specs are clean and compiled, mark the components as \`status: complete\` to lock them, then generate the agents and write code!
+
+*   [ ] **Validation Check:** Run \`wairon validate\` (must return 0 errors).
+*   [ ] **Agent Generation:** Run \`wairon generate\` to instantiate agent sandboxes.
+*   [ ] **Code Implementation:** Let the agent implement the component code matching the narrative.
+`;
+  const { getCliCommandString } = require('../utils/ai-guide.js') as typeof import('../utils/ai-guide.js');
+  const command = getCliCommandString();
+  const customizedContent = content.replace(/\bwairon\b/g, command);
+  writeFile(fromProjectRoot('.wai', 'phased_design.md'), customizedContent);
+}
+
+function writeStarterProjectContext(projectName: string): void {
+  const content = `# ${projectName}
+
+## Overview
+A new project initialized with Wairon.
+(The AI agent should overwrite this description with a complete overview of the project concept and stack once the user specifies their choices)
+
+## Tech Stack
+- [Specify Language, Framework, and Databases here]
+
+## Key Conventions
+- Follow Spec-Driven Development (SDD) using Wairon.
+- Refrain from writing code implementation until specifications are approved.
+`;
+  writeFile(AI_PATHS.contextProjectMd(), content);
+}
+

@@ -4,7 +4,7 @@ import { z } from 'zod';
 // Output target definitions
 // ---------------------------------------------------------------------------
 
-export const BuiltinTargetSchema = z.enum(['claude', 'gemini']);
+export const BuiltinTargetSchema = z.enum(['claude', 'gemini', 'agy', 'cursor', 'copilot', 'codex']);
 export type BuiltinTarget = z.infer<typeof BuiltinTargetSchema>;
 
 export const CustomTargetSchema = z.object({

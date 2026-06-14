@@ -1,4 +1,4 @@
-# waffagent — CLI Reference
+# wairon — CLI Reference
 
 > Version: 0.1.0
 
@@ -17,9 +17,9 @@
 
 ## Commands
 
-### `waffagent init`
+### `wairon init`
 
-Initialize waffagent in the current project directory.
+Initialize wairon in the current project directory.
 
 **Creates:**
 - `.wai/` — source-of-truth directory
@@ -43,17 +43,17 @@ Initialize waffagent in the current project directory.
 **Example:**
 ```sh
 cd my-project
-waffagent init
+wairon init
 ```
 
 ```sh
 # Non-interactive, use defaults
-waffagent init --yes
+wairon init --yes
 ```
 
 ---
 
-### `waffagent generate`
+### `wairon generate`
 
 Regenerate all agent output files from the registry.
 
@@ -69,18 +69,18 @@ This command is **idempotent** — running it multiple times produces the same o
 **Example:**
 ```sh
 # Regenerate everything
-waffagent generate
+wairon generate
 
 # Only regenerate Claude outputs
-waffagent generate --target claude
+wairon generate --target claude
 
 # Preview without writing
-waffagent generate --dry-run
+wairon generate --dry-run
 ```
 
 ---
 
-### `waffagent validate`
+### `wairon validate`
 
 Validate the project config and agent registry for errors and rule violations.
 
@@ -95,15 +95,15 @@ Exits with code `1` if there are errors. Exits with `0` if only warnings or clea
 
 **Example:**
 ```sh
-waffagent validate
+wairon validate
 
 # Use in CI:
-waffagent validate && echo "Topology is valid"
+wairon validate && echo "Topology is valid"
 ```
 
 ---
 
-### `waffagent list` / `waffagent ls`
+### `wairon list` / `wairon ls`
 
 List all agents currently in the registry.
 
@@ -127,37 +127,37 @@ core-service-owner [domain-owner] active
 
 ---
 
-### `waffagent analyze` _(planned — Phase 3)_
+### `wairon analyze` _(planned — Phase 3)_
 
 Analyze the repository structure and report coverage against agent ownership.
 
 ---
 
-### `waffagent suggest-topology` _(planned — Phase 3)_
+### `wairon suggest-topology` _(planned — Phase 3)_
 
 Suggest topology improvements based on the current registry and repository structure.
 
 ---
 
-### `waffagent create-agent` _(planned — Phase 2)_
+### `wairon create-agent` _(planned — Phase 2)_
 
 Interactively create a new agent from a template and add it to the registry.
 
 ---
 
-### `waffagent create-bundle` _(planned — Phase 2)_
+### `wairon create-bundle` _(planned — Phase 2)_
 
 Scaffold multiple related agents from a bundle definition.
 
 ---
 
-### `waffagent split` _(planned — Phase 4)_
+### `wairon split` _(planned — Phase 4)_
 
 Split an existing agent into two or more focused agents.
 
 ---
 
-### `waffagent merge` _(planned — Phase 4)_
+### `wairon merge` _(planned — Phase 4)_
 
 Merge two agents into one.
 
@@ -174,7 +174,7 @@ Merge two agents into one.
 
 ## Environment
 
-waffagent always runs in the **current working directory**. Run it from your
+wairon always runs in the **current working directory**. Run it from your
 project root.
 
 There are no environment variables, global config files, or daemon processes.

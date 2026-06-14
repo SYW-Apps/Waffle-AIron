@@ -15,6 +15,10 @@ import { WaironError } from '../utils/errors.js';
 const EXPORTERS = new Map<string, Exporter>([
   ['claude', new ClaudeExporter()],
   ['gemini', new GeminiExporter()],
+  ['agy', new GeminiExporter()],
+  ['cursor', new ClaudeExporter()],
+  ['copilot', new ClaudeExporter()],
+  ['codex', new ClaudeExporter()],
   ['custom', new CustomExporter()],
 ]);
 

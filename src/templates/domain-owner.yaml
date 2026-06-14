@@ -42,3 +42,12 @@ instructions: |
 
   Do not make decisions about code outside your owned paths. If a change
   touches multiple domains, coordinate with the owning agents for each domain.
+
+  ## Spec-Driven Development (SDD)
+
+  This project uses the Wairon Spec-Driven Development (SDD) framework.
+  When designing or modifying features within your scope:
+  - You must follow the **sdd-implement** and **sdd-narrative** skill rules.
+  - Read `.gemini/skills/sdd-implement.md` and `.gemini/skills/sdd-narrative.md` (or `.claude/` equivalents) for detailed instructions before coding/designing.
+  - Ensure all source code implementations conform exactly to the L3 interfaces and L5 narratives.
+  - Verify changes against architectural boundaries using the `sdd_validate_tree` MCP tool before declaring a task complete.

@@ -6,3 +6,7 @@ export * from './list.js';
 export * from './show.js';
 export * from './update.js';
 export * from './validate.js';
+export * from './status.js';
+export * from './scaffold-domains.js';
+export * from './domains.js';
+

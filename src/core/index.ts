@@ -9,5 +9,4 @@ export * from './agent_resolver.js';
 export * from './skills.js';
 export * from './context.js';
 export * from './scaffold.js';
-export * from './git.js';
 

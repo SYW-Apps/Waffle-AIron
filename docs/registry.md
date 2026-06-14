@@ -1,4 +1,4 @@
-# waffagent — Registry
+# wairon — Registry
 
 > Version: 0.1.0
 
@@ -124,8 +124,8 @@ The registry is designed to be managed by the CLI. Direct editing is discouraged
 but possible for power users. If you edit it manually:
 
 1. Keep valid JSON
-2. Run `waffagent validate` immediately after to catch any issues
-3. Run `waffagent generate` to sync output files
+2. Run `wairon validate` immediately after to catch any issues
+3. Run `wairon generate` to sync output files
 
 ---
 
@@ -139,7 +139,7 @@ Commit `.wai/registry/agents.json` to version control. This gives you:
 Whether to commit generated output files (`.claude/agents/*.md`, etc.) is your
 choice. Arguments for committing:
 - Reviewers can inspect agent instructions in PRs without running the CLI
-- Ensures consistency if team members don't have waffagent installed
+- Ensures consistency if team members don't have wairon installed
 
 Arguments against:
 - Generated files are redundant with the registry

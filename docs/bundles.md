@@ -1,4 +1,4 @@
-# waffagent — Bundles
+# wairon — Bundles
 
 > Version: 0.1.0
 
@@ -37,7 +37,7 @@ Use individual templates (via `create-agent`) when:
 Bundles resolve in the same order as templates:
 
 1. **Project-local override**: `.wai/bundles/<id>.yaml`
-2. **Built-in**: `<waffagent package>/src/bundles/<id>.yaml`
+2. **Built-in**: `<wairon package>/src/bundles/<id>.yaml`
 
 ---
 
@@ -88,7 +88,7 @@ Standard four-agent set for a backend service.
 
 **Example:**
 ```sh
-waffagent create-bundle \
+wairon create-bundle \
   --bundle service-default \
   --scope core-service \
   --dir services/core
@@ -119,7 +119,7 @@ that share conventions but don't have a single runtime boundary.
 
 1. Create `.wai/bundles/<your-id>.yaml`
 2. Follow the YAML format above
-3. Run `waffagent create-bundle --bundle <your-id> ...` to use it _(Phase 2)_
+3. Run `wairon create-bundle --bundle <your-id> ...` to use it _(Phase 2)_
 
 ---
 
