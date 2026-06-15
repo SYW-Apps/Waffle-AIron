@@ -200,7 +200,7 @@ name: ComponentA
 description: Component A description
 subsystem: sub-a
 componentType: Orchestrator
-dependencies: []
+dependsOn: []
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);
@@ -262,7 +262,7 @@ name: ComponentA
 description: Invalid component ID
 subsystem: sub-a
 componentType: Orchestrator
-dependencies: []
+dependsOn: []
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);
@@ -305,7 +305,7 @@ name: ComponentA
 description: Component A description
 subsystem: sub-a
 componentType: Orchestrator
-dependencies: []
+dependsOn: []
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);
@@ -316,7 +316,7 @@ name: ComponentB
 description: Component B description
 subsystem: sub-a
 componentType: Store
-dependencies: []
+dependsOn: []
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);
@@ -408,7 +408,7 @@ name: ComponentA
 description: Component A description
 subsystem: sub-a
 componentType: Orchestrator
-dependencies: [comp-b]
+dependsOn: [comp-b]
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);
@@ -420,7 +420,7 @@ name: ComponentB
 description: Component B description
 subsystem: sub-a
 componentType: Store
-dependencies: [comp-a]
+dependsOn: [comp-a]
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);
@@ -465,7 +465,7 @@ name: ComponentA
 description: Component A description
 subsystem: sub-a
 componentType: Portal
-dependencies: []
+dependsOn: []
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);
@@ -507,7 +507,7 @@ description: gRPC component
 subsystem: sub-a
 componentType: Portal
 portalType: gRPC
-dependencies: []
+dependsOn: []
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);
@@ -565,7 +565,7 @@ description: Component A description
 subsystem: sub-a
 componentType: Portal
 portalType: HTTP_API
-dependencies: []
+dependsOn: []
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);
@@ -624,7 +624,7 @@ description: Component A description
 subsystem: sub-a
 componentType: Portal
 portalType: HTTP_API
-dependencies: []
+dependsOn: []
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);
@@ -729,7 +729,7 @@ description: A portal entry point
 subsystem: sub-a
 componentType: Portal
 portalType: HTTP_API
-dependencies:
+dependsOn:
   - comp-b
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
@@ -741,7 +741,7 @@ name: StoreComponent
 description: A store component
 subsystem: sub-a
 componentType: Store
-dependencies: []
+dependsOn: []
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);

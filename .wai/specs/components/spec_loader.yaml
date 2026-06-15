@@ -3,6 +3,6 @@ name: "Spec Loader"
 description: "I/O manager for specification YAML files under .wai/specs/"
 subsystem: "sdd_core"
 componentType: "Registry"
-dependencies: []
+dependsOn: []
 createdAt: "2026-06-10T19:28:00.000Z"
 updatedAt: "2026-06-10T19:28:00.000Z"

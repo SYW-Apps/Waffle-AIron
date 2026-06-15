@@ -94,7 +94,7 @@ export function resolveAgentTopology(): AgentRecord[] {
       if (impl.sourcePath) ownedPaths.push(impl.sourcePath);
     }
 
-    const dependencies = comp.dependencies.map((depId) => `${depId}-implementer`);
+    const dependencies = comp.dependsOn.map((depId) => `${depId}-implementer`);
 
     // An implementer needs to read specs, interfaces, and direct dependency component files
     const readPaths = [

@@ -387,7 +387,7 @@ export function validateSddTree(rules?: RulesConfig): ValidationResult {
           // Check if calling component declares targetComponent as dependency
           const callingComponent = componentMap.get(contract.component);
           if (callingComponent && step.targetComponent !== callingComponent.id) {
-            if (!callingComponent.dependencies.includes(step.targetComponent)) {
+            if (!callingComponent.dependsOn.includes(step.targetComponent)) {
               addIssue(
                 'error',
                 'UNDECLARED_DEPENDENCY_CALL',
@@ -497,7 +497,7 @@ export function validateSddTree(rules?: RulesConfig): ValidationResult {
       }
     }
 
-    const dependencies = comp.dependencies;
+    const dependencies = comp.dependsOn;
     for (const depId of dependencies) {
       const depComp = componentMap.get(depId);
       if (!depComp) {
@@ -522,63 +522,54 @@ export function validateSddTree(rules?: RulesConfig): ValidationResult {
         );
       }
 
-      // Check Portal/Observer dependencies: Portal/Observer should not bypass Orchestrator to call Store/Repository/Adapter
+      // Portal dispatches to Orchestrators (and may read Indexes); it must not reach
+      // the data layer directly. Observer forwards to one Orchestrator/Supervisor and
+      // may use a message-bus Adapter to subscribe.
       if (comp.componentType === 'Portal' || comp.componentType === 'Observer') {
-        const forbiddenTypes = ['Store', 'Repository', 'Adapter'];
+        const forbiddenTypes = comp.componentType === 'Portal'
+          ? ['Store', 'Registry', 'Repository', 'Adapter']
+          : ['Store', 'Registry', 'Repository', 'Index'];
         if (forbiddenTypes.includes(depComp.componentType)) {
           addIssue(
             'error',
             'ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP',
-            `Architectural violation: ${comp.componentType} component "${comp.id}" cannot depend directly on "${depComp.componentType}" component "${depComp.id}". ${comp.componentType}s should coordinate through Orchestrators, Resolvers, Registries, or Supervisors, and cannot depend directly on Stores, Repositories, or Adapters.`,
+            `Architectural violation: ${comp.componentType} component "${comp.id}" cannot depend directly on "${depComp.componentType}" component "${depComp.id}". ${comp.componentType}s coordinate through Orchestrators (and Supervisors); they do not reach the data layer directly.`,
             comp.id,
             isDraftCtx || isComponentDraft(depComp.id)
           );
         }
       }
 
-      // Check Specialist rule: Specialists are narrow functional logic and cannot depend on stateful or orchestrational components
+      // Specialist rule: narrow capability. It MAY use Repositories, Indexes, and
+      // Adapters, but must not own/drive bus, persistence, or runtime concerns.
       if (comp.componentType === 'Specialist') {
-        const forbiddenTypes = ['Portal', 'Observer', 'Orchestrator', 'Store', 'Repository', 'Adapter', 'Supervisor'];
+        const forbiddenTypes = ['Portal', 'Observer', 'Orchestrator', 'Store', 'Supervisor'];
         if (forbiddenTypes.includes(depComp.componentType)) {
           addIssue(
             'error',
             'ARCHITECTURE_VIOLATION_SPECIALIST_DEP',
-            `Architectural violation: Specialist component "${comp.id}" cannot depend on "${depComp.componentType}" component "${depComp.id}". Specialists should contain narrow, functional domain logic and cannot depend on stateful or orchestrational components.`,
+            `Architectural violation: Specialist component "${comp.id}" cannot depend on "${depComp.componentType}" component "${depComp.id}". Specialists are narrow capabilities — they may use Repositories, Indexes, and Adapters, but not Orchestrators, Supervisors, Stores, Portals, or Observers.`,
             comp.id,
             isDraftCtx || isComponentDraft(depComp.id)
           );
         }
       }
 
-      // Check Component boundaries:
-      // Store rule: Store can only depend on other Store components or Registry
+      // Store rule: a Store may depend only on another Store or its backend Adapter.
+      // It is depended upon by Registries/Indexes — never the reverse.
       if (comp.componentType === 'Store') {
-        if (depComp.componentType !== 'Store' && depComp.componentType !== 'Registry') {
+        if (depComp.componentType !== 'Store' && depComp.componentType !== 'Adapter') {
           addIssue(
             'error',
             'ARCHITECTURE_VIOLATION_STORE_DEP',
-            `Architectural violation: Store component "${comp.id}" cannot depend on "${depComp.componentType}" component "${depComp.id}". Stores may only depend on other Stores or Registries.`,
+            `Architectural violation: Store component "${comp.id}" cannot depend on "${depComp.componentType}" component "${depComp.id}". Stores may only depend on other Stores or a backend Adapter.`,
             comp.id,
             isDraftCtx || isComponentDraft(depComp.id)
           );
         }
       }
 
-      // Repository rule: Repository can only depend on Store, Repository, or Adapter
-      if (comp.componentType === 'Repository') {
-        const allowedTypes = ['Store', 'Repository', 'Adapter'];
-        if (!allowedTypes.includes(depComp.componentType)) {
-          addIssue(
-            'error',
-            'ARCHITECTURE_VIOLATION_REPO_DEP',
-            `Architectural violation: Repository component "${comp.id}" cannot depend on "${depComp.componentType}" component "${depComp.id}". Repositories may only depend on Store, Repository, or Adapter.`,
-            comp.id,
-            isDraftCtx || isComponentDraft(depComp.id)
-          );
-        }
-      }
-
-      // Adapter rule: Adapter should act as a leaf node; it cannot call Orchestrators or Stores
+      // Adapter rule: Adapter is a sink toward the system; it cannot call Orchestrators or Stores
       if (comp.componentType === 'Adapter') {
         if (depComp.componentType === 'Orchestrator' || depComp.componentType === 'Store') {
           addIssue(
@@ -604,7 +595,7 @@ export function validateSddTree(rules?: RulesConfig): ValidationResult {
 
     const comp = componentMap.get(compId);
     if (comp) {
-      for (const depId of comp.dependencies) {
+      for (const depId of comp.dependsOn) {
         if (!visited.has(depId)) {
           if (dfs(depId, pathTrace)) {
             recStack.delete(compId);

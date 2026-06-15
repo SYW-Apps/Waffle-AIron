@@ -3,6 +3,6 @@ name: "Notification Event Publisher"
 description: "Adapter to publish notification message bus events for orders."
 subsystem: "order_subsystem"
 componentType: "Adapter"
-dependencies: []
+dependsOn: []
 createdAt: "2026-06-11T15:00:00Z"
 updatedAt: "2026-06-11T15:00:00Z"

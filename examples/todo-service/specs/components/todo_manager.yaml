@@ -3,7 +3,7 @@ name: "Todo Manager"
 description: "Orchestrator for managing todo task requests."
 subsystem: "todo"
 componentType: "Orchestrator"
-dependencies:
+dependsOn:
   - "todo_store"
 createdAt: "2026-06-11T15:00:00Z"
 updatedAt: "2026-06-11T15:00:00Z"

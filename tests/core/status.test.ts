@@ -77,7 +77,7 @@ name: ComponentComplete
 description: Complete component
 subsystem: sub-a
 componentType: Orchestrator
-dependencies: []
+dependsOn: []
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);
@@ -125,7 +125,7 @@ name: ComponentDraft
 description: Draft component
 subsystem: sub-a
 componentType: Store
-dependencies: []
+dependsOn: []
 status: draft
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'

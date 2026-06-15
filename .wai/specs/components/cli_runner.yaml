@@ -3,7 +3,7 @@ name: "CLI Runner"
 description: "Coordinates terminal subcommand actions and flags, mapping CLI input to core engine execution."
 subsystem: "sdd_cli"
 componentType: "Orchestrator"
-dependencies:
+dependsOn:
   - "spec_loader"
   - "spec_validator"
   - "skills_exporter"

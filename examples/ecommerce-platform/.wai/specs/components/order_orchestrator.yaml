@@ -3,7 +3,7 @@ name: "Order Orchestrator"
 description: "Coordinates order placement, database persistence, inventory reservation, and notification publishing."
 subsystem: "order_subsystem"
 componentType: "Orchestrator"
-dependencies:
+dependsOn:
   - "order_repository"
   - "inventory_client"
   - "notification_publisher"

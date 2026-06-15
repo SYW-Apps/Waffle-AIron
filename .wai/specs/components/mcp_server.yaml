@@ -3,7 +3,7 @@ name: "MCP Server Manager"
 description: "Exposes the 6 standard SDD tools and manages their request/response lifecycles."
 subsystem: "sdd_mcp"
 componentType: "Supervisor"
-dependencies:
+dependsOn:
   - "spec_loader"
   - "agent_resolver"
   - "spec_validator"

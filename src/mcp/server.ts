@@ -245,20 +245,22 @@ export function createMcpServer(): McpServer {
     },
   );
 
-  reg<{ id: string; name: string; description: string; subsystem: string; componentType: 'Orchestrator' | 'Store' | 'Adapter' | 'Repository' | 'Resolver' | 'Supervisor' | 'Registry'; dependencies?: string[] }>(server,
+  reg<{ id: string; name: string; description: string; subsystem: string; componentType: 'Portal' | 'Orchestrator' | 'Supervisor' | 'Actor' | 'Store' | 'Index' | 'Registry' | 'Adapter' | 'Observer' | 'Specialist' | 'Repository' | 'Gateway'; owns?: string[]; dependsOn?: string[]; portalType?: 'HTTP_API' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'CLI' | 'Custom' }>(server,
     'sdd_add_component',
     {
-      description: 'Add an L2 Component under a specific subsystem, enforcing component types.',
+      description: 'Add an L2 Component under a subsystem. componentType is a building block (Portal, Orchestrator, Supervisor, Actor, Store, Index, Registry, Adapter, Observer, Specialist) or a pattern (Repository, Gateway). Patterns set "owns" (their private member blocks); all components set "dependsOn" (collaborators — facades or standalone blocks).',
       inputSchema: {
         id: z.string().describe('Lowercase identifier for the component'),
         name: z.string().describe('Human-readable display name'),
-        description: z.string().describe('Internal architecture details'),
+        description: z.string().describe('Responsibility / internal architecture details'),
         subsystem: z.string().describe('The L1 subsystem ID this component belongs to'),
-        componentType: z.enum(['Orchestrator', 'Store', 'Adapter', 'Repository', 'Resolver', 'Supervisor', 'Registry']).describe('The architectural pattern type'),
-        dependencies: z.array(z.string()).optional().describe('IDs of other components this component depends on'),
+        componentType: z.enum(['Portal', 'Orchestrator', 'Supervisor', 'Actor', 'Store', 'Index', 'Registry', 'Adapter', 'Observer', 'Specialist', 'Repository', 'Gateway']).describe('The building block, or pattern (Repository/Gateway)'),
+        owns: z.array(z.string()).optional().describe('Member block ids privately owned by this component (patterns only)'),
+        dependsOn: z.array(z.string()).optional().describe('IDs of other components this collaborates with (facades or standalone blocks)'),
+        portalType: z.enum(['HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'Custom']).optional().describe('Required when componentType is Portal'),
       },
     },
-    ({ id, name, description, subsystem, componentType, dependencies }) => {
+    ({ id, name, description, subsystem, componentType, owns, dependsOn, portalType }) => {
       try {
         const { loadSubsystemSpec, saveComponentSpec } = requireSpecs();
         const sub = loadSubsystemSpec(subsystem);
@@ -270,7 +272,9 @@ export function createMcpServer(): McpServer {
           description,
           subsystem,
           componentType,
-          dependencies: dependencies ?? [],
+          owns: owns ?? [],
+          dependsOn: dependsOn ?? [],
+          ...(portalType ? { portalType } : {}),
           status: 'draft',
           createdAt: now,
           updatedAt: now,

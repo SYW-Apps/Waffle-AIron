@@ -3,6 +3,6 @@ name: "Todo Store"
 description: "In-memory database store for todo tasks."
 subsystem: "todo"
 componentType: "Store"
-dependencies: []
+dependsOn: []
 createdAt: "2026-06-11T15:00:00Z"
 updatedAt: "2026-06-11T15:00:00Z"

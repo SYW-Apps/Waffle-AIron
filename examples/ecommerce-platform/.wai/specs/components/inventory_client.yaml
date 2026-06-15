@@ -3,6 +3,6 @@ name: "Inventory gRPC Client"
 description: "Adapter client to communicate with the remote Inventory Management Service."
 subsystem: "order_subsystem"
 componentType: "Adapter"
-dependencies: []
+dependsOn: []
 createdAt: "2026-06-11T15:00:00Z"
 updatedAt: "2026-06-11T15:00:00Z"

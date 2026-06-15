@@ -68,18 +68,25 @@ export type SubsystemSpec = z.infer<typeof SubsystemSpecSchema>;
 // Level 2: Component Spec (components/*.yaml)
 // ---------------------------------------------------------------------------
 export const ComponentTypeSchema = z.enum([
-  'Orchestrator',
-  'Store',
-  'Adapter',
-  'Repository',
-  'Resolver',
-  'Supervisor',
-  'Registry',
+  // Building blocks
   'Portal',
+  'Orchestrator',
+  'Supervisor',
+  'Actor',
+  'Store',
+  'Index',
+  'Registry',
+  'Adapter',
+  'Observer',
   'Specialist',
-  'Observer'
+  // Patterns (compositions of blocks)
+  'Repository',
+  'Gateway',
 ]);
 export type ComponentType = z.infer<typeof ComponentTypeSchema>;
+
+/** Component types that are patterns (own member blocks) rather than building blocks. */
+export const PATTERN_TYPES: ReadonlySet<ComponentType> = new Set(['Repository', 'Gateway']);
 
 export const PortalTypeSchema = z.enum(['HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'Custom']);
 export type PortalType = z.infer<typeof PortalTypeSchema>;
@@ -90,7 +97,10 @@ export const ComponentSpecSchema = z.object({
   description: z.string(),
   subsystem: z.string(), // References L1 Subsystem id
   componentType: ComponentTypeSchema,
-  dependencies: z.array(z.string()).default([]), // References other L2 Component ids
+  /** Member block ids privately owned by this component (patterns only; one hop). */
+  owns: z.array(z.string()).default([]),
+  /** Other L2 component ids this component collaborates with (facades / standalone blocks). */
+  dependsOn: z.array(z.string()).default([]),
   portalType: PortalTypeSchema.optional(),
   basePath: z.string().optional(),
   status: SpecStatusSchema.optional().default('complete'),
