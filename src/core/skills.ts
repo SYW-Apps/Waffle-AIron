@@ -50,10 +50,6 @@ export interface SkillsExportResult {
 export function exportSddSkills(targetTypes?: string[]): SkillsExportResult {
   const types = targetTypes ?? activeTargetTypes();
 
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { getCliCommandString } = require('../utils/ai-guide.js') as typeof import('../utils/ai-guide.js');
-  const command = getCliCommandString();
-
   const sourceDir = builtinSkillsDir();
   const destinations: string[] = [];
   const skipped: string[] = [];
@@ -71,7 +67,9 @@ export function exportSddSkills(targetTypes?: string[]): SkillsExportResult {
     for (const file of SKILL_FILES) {
       const srcPath = path.join(sourceDir, file);
       if (!fs.existsSync(srcPath)) continue;
-      const content = fs.readFileSync(srcPath, 'utf-8').replace(/\bwairon\b/g, command);
+      // Copy verbatim — skills are agent-facing and reference MCP tools, not the
+      // `wairon` CLI, so there is no dev-path command to substitute.
+      const content = fs.readFileSync(srcPath, 'utf-8');
       fs.writeFileSync(path.join(destDir, file), content, 'utf-8');
       fileCount++;
     }

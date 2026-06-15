@@ -536,7 +536,7 @@ Map the behavior step-by-step.
 
 *   [ ] **Write Narratives:** Write Level 5 narrative steps mapping methods to internal calls.
     *   *AI Action:* For each interface method, describe the sequential call stack (e.g. Call \`payment_store.save\`, then Call \`stripe_adapter.charge\`).
-    *   *Verification:* Run \`wairon status\` to verify completeness, and \`wairon validate\` to ensure no circular loops or dependency leaks exist.
+    *   *AI Action:* Call the \`sdd_get_status\` MCP tool to verify completeness, and \`sdd_validate_tree\` to ensure no circular loops or dependency leaks exist.
 
 ---
 
@@ -544,14 +544,13 @@ Map the behavior step-by-step.
 
 Once the specs are clean and compiled, mark the components as \`status: complete\` to lock them, then generate the agents and write code!
 
-*   [ ] **Validation Check:** Run \`wairon validate\` (must return 0 errors).
-*   [ ] **Agent Generation:** Run \`wairon generate\` to instantiate agent sandboxes.
+*   [ ] **Validation Check (AI):** Call the \`sdd_validate_tree\` MCP tool (must return 0 errors).
+*   [ ] **Agent Generation (human):** The developer runs \`wairon generate\` from their terminal to instantiate agent sandboxes — the AI does not run this.
 *   [ ] **Code Implementation:** Let the agent implement the component code matching the narrative.
 `;
-  const { getCliCommandString } = require('../utils/ai-guide.js') as typeof import('../utils/ai-guide.js');
-  const command = getCliCommandString();
-  const customizedContent = content.replace(/\bwairon\b/g, command);
-  writeFile(fromProjectRoot('.wai', 'phased_design.md'), customizedContent);
+  // Written verbatim: AI steps reference MCP tools; the one CLI step is explicitly
+  // human-run, so `wairon` stays literal (no dev-path substitution).
+  writeFile(fromProjectRoot('.wai', 'phased_design.md'), content);
 }
 
 function writeStarterProjectContext(projectName: string): void {

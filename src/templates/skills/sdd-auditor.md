@@ -20,4 +20,4 @@ You must coordinate with `.wai/phased_design.md` (Stage 6: Sandbox Implementatio
    - Propose architectural redesigns to solve errors (e.g., introducing an Orchestrator to resolve a direct Store-to-Adapter leak).
    - If the project requires a more legacy-friendly or relaxed structure, instruct the user to configure custom rule severities in `.wai/project.yaml` (e.g., `rules.sddRuleSeverity.CIRCULAR_DEPENDENCY: warning`).
 4. **Final Gate Lock**:
-   - Once all specs compile cleanly (`valid: true` with zero errors), check off Stage 6 in `.wai/phased_design.md` to unlock agent generation (`wairon generate`).
+   - Once all specs compile cleanly (`valid: true` with zero errors), check off Stage 6 in `.wai/phased_design.md`. This unlocks agent generation, which the **human developer** runs from their terminal (`wairon generate`) — you do not run it yourself.
