@@ -36,19 +36,27 @@ sessions — it *equips* yours.
   L3 Interface → L4 Implementation → L5 Narrative. It is the source of truth for
   the project's **architecture**.
 - Agent files in \`.claude/agents/\` (and other tools) are **generated from the
-  spec tree** — never edit them by hand. Run \`wairon generate\` to refresh them.
-- \`wairon validate\` is an architecture-conformance gate: reference integrity,
-  contract↔implementation method symmetry, component-stereotype dependency rules
-  (e.g. Portals may not depend on Stores), and dependency-cycle detection.
+  spec tree** — never edit them by hand.
+- A conformance gate enforces reference integrity, contract↔implementation method
+  symmetry, component-stereotype dependency rules (e.g. Portals may not depend on
+  Stores), and dependency-cycle detection. You run it via the \`sdd_validate_tree\`
+  MCP tool.
 
-### How wairon fits your session
+### How you work in an SDD project
 
-- **Subagents:** the generated agent files (a \`system-architect\`, a \`*-owner\`
-  per subsystem/domain, a \`*-implementer\` per component). Spawn them with your
-  tool's own native subagent mechanism — wairon does not spawn sessions itself.
-- **Skills:** \`sdd-architect\`, \`sdd-narrative\`, \`sdd-auditor\`, \`sdd-implement\` —
-  run them in-session to drive the workflow.
-- **MCP tools:** \`sdd_*\` tools to author and validate specs (see the project guide).
+- **Skills:** invoke \`sdd-architect\` to design (plus \`sdd-narrative\`, \`sdd-auditor\`,
+  \`sdd-implement\`). The project's own \`.claude/CLAUDE.md\` / \`.gemini/GEMINI.md\` guide
+  is your full playbook — read it and follow it; you don't need to search for more.
+- **MCP tools:** author and validate specs through the \`sdd_*\` tools
+  (\`sdd_initialize_system\`, \`sdd_add_subsystem\`, \`sdd_add_component\`,
+  \`sdd_define_interface\`, \`sdd_write_narrative\`, \`sdd_add_type\`, \`sdd_validate_tree\`,
+  \`sdd_get_status\`).
+- **You never run the \`wairon\` CLI — it is the human developer's tool.** Everything
+  it does, you do through MCP: validate with \`sdd_validate_tree\` (not \`wairon
+  validate\`); check status with \`sdd_get_status\` (not \`wairon status\`). Don't run
+  shell commands for these.
+- **Subagents:** spawn the generated \`<component>-implementer\` agents via your tool's
+  own native subagent mechanism — wairon does not spawn sessions itself.
 
 ### Strict once enabled
 
@@ -58,18 +66,7 @@ If the SDD workflow is active, follow it strictly:
 2. **Spec is law.** Generated code maps 1:1 to the interfaces and narrative steps.
    If the spec is incomplete, stop and extend the spec — do not improvise.
 3. **Human-in-the-loop.** Present each drafted spec layer for approval before
-   moving on; do not design several layers ahead unprompted.
-
-### Key commands (human-run)
-\`\`\`
-wairon status                spec-tree completeness dashboard
-wairon validate              architecture-conformance gate
-wairon generate              regenerate agent files + (re)install skills
-wairon list                  list agents resolved from the spec tree
-wairon domains list          list domains (subsystem-derived + free-standing)
-wairon skills install        (re)install the SDD skills into your tools
-wairon mcp install           register the wairon MCP server
-\`\`\``;
+   moving on; do not design several layers ahead unprompted.`;
 
 const LOCAL_GUIDE_BODY = `\
 ## Wairon — Spec-Driven Development (you are operating inside it)

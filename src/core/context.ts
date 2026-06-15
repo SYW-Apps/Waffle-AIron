@@ -189,7 +189,7 @@ export function renderWaironGuide(): string {
     lines.push('| `sdd_validate_tree` | Validate the whole spec tree |');
     lines.push('| `sdd_get_status` | Spec-tree completeness dashboard |');
     lines.push('');
-    lines.push('Prefer MCP tools over running `wairon` CLI commands when querying project state.');
+    lines.push('Use these MCP tools to query and change project state — never the `wairon` CLI (that is the human developer\'s tool).');
     lines.push('');
     lines.push('---');
     lines.push('');
