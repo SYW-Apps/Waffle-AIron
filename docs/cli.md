@@ -76,7 +76,7 @@ and author specs directly.
 **Tools:** `listAgents`, `getAgent`, `listDomains`, `validateTopology`,
 `getProjectConfig`, `sdd_initialize_system`, `sdd_add_subsystem`,
 `sdd_add_component`, `sdd_define_interface`, `sdd_write_narrative`,
-`sdd_validate_tree`, `sdd_get_status`.
+`sdd_add_type`, `sdd_validate_tree`, `sdd_get_status`.
 
 ---
 

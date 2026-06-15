@@ -1,7 +1,7 @@
 import * as path from 'path';
 import { aiDir, pathExists, fromProjectRoot } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
-import { ProjectNotInitializedError } from '../utils/errors.js';
+import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';
 import {
   ProjectConfig,
   ProjectConfigSchema,
@@ -77,7 +77,11 @@ export function assertProjectInitialized(): void {
 export function loadProjectConfig(): ProjectConfig {
   assertProjectInitialized();
   const raw = readYamlFile(AI_PATHS.projectConfig());
-  return ProjectConfigSchema.parse(raw);
+  try {
+    return ProjectConfigSchema.parse(raw);
+  } catch (e: unknown) {
+    throw new WaironError(`Invalid .wai/project.yaml: ${e instanceof Error ? e.message : String(e)}`);
+  }
 }
 
 /**

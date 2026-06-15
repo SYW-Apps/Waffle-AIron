@@ -44,7 +44,7 @@ A complete system is specified top-down across six levels:
 |-------|------|-----------------|
 | **L0 System** | `.wai/specs/system.yaml` | Vision, boundaries, global requirements |
 | **L1 Subsystem** | `.wai/specs/<sub>/subsystem.yaml` | An isolated software service and its public interfaces |
-| **L2 Component** | `…/<component>/component.yaml` | A typed component (Portal, Orchestrator, Store, Registry, Repository, Adapter, Resolver, Supervisor, Specialist, Observer) + dependencies |
+| **L2 Component** | `…/<component>/component.yaml` | A building block (Portal, Orchestrator, Supervisor, Actor, Store, Index, Registry, Adapter, Observer, Specialist) or pattern (Repository, Gateway) + `owns`/`dependsOn` |
 | **L3 Interface** | `…/<component>/interface.yaml` | Method signatures (+ optional HTTP/gRPC/event bindings) |
 | **L4 Implementation** | `…/<component>/implementation.yaml` | Maps a contract to a source file |
 | **L5 Narrative** | (within L4) | Step-by-step method logic; each `call` step resolves to a real dependency method |

@@ -261,12 +261,9 @@ Wairon generates a dedicated topology of specialized developer agents (e.g. \`sy
    - Do NOT create temporary/intermediate markdown review files in the brain or workspace.
    - Wait for explicit user confirmation before proceeding. Do not work ahead.
 4. **Component Stereotypes (Boundaries)**:
-   - \\\`Orchestrator\\\`: Controls flow and coordinates logic. Can call Orchestrators, Resolvers, Supervisors, Registries, Stores, Adapters, Repositories.
-   - \\\`Store\\\`: Manages state/DB. Can call Repositories and Adapters, but **never** Orchestrators.
-   - \\\`Adapter\\\` / \\\`Repository\\\`: External integrations or low-level data access. Can call other Adapters, but **never** Stores or Orchestrators.
-   - \\\`Resolver\\\`: Functional rule/value resolution.
-   - \\\`Supervisor\\\`: Oversees running processes.
-   - \\\`Registry\\\`: Manages static/dynamic registrations.
+   - Building blocks: \\\`Portal\\\` (inbound entrypoint), \\\`Orchestrator\\\` (owns one workflow), \\\`Supervisor\\\` (owns the set of Actors), \\\`Actor\\\` (owns one live process/loop), \\\`Store\\\` (authoritative state), \\\`Index\\\` (read projection over a Store), \\\`Registry\\\` (write path / CUD), \\\`Adapter\\\` (the only external-I/O client — DB/HTTP/bus), \\\`Observer\\\` (subscribes to events), \\\`Specialist\\\` (one focused capability).
+   - Patterns (set \\\`owns\\\`): \\\`Repository\\\` (owns Store + Registry + Indexes + optional Adapter) and \\\`Gateway\\\` (Portal + ingress Orchestrator + interceptor Specialists). A pattern owns only building blocks, never another pattern.
+   - Dependencies: a Store depends only on a backend Adapter; Registry (write) and Index (read) are decoupled and both work on the Store; any component may depend on an Adapter; Portals/Observers are top-level (never depended upon). Use \\\`owns\\\` for a pattern's private members and \\\`dependsOn\\\` for collaborators.
 
 ---
 
@@ -348,9 +345,10 @@ id: "billing-store" # lowercase-alphanumeric-dashes
 name: "Billing Store"
 description: "Authoritative state storage for billing data"
 subsystem: "billing" # references L1 Subsystem ID
-componentType: "Store" # Orchestrator | Store | Adapter | Repository | Resolver | Supervisor | Registry | Portal | Specialist | Observer
-dependencies:
-  - "database-adapter" # array of other L2 component IDs
+componentType: "Store" # Blocks: Portal|Orchestrator|Supervisor|Actor|Store|Index|Registry|Adapter|Observer|Specialist — Patterns: Repository|Gateway
+owns: [] # member block ids (Repository/Gateway patterns only)
+dependsOn:
+  - "database-adapter" # other L2 component ids this collaborates with
 status: "draft" # draft | design | complete
 createdAt: "2026-06-12T20:00:00Z"
 updatedAt: "2026-06-12T20:00:00Z"
