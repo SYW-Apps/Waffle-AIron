@@ -312,6 +312,31 @@ updatedAt: '2026-06-10T22:00:00Z'
     }
   });
 
+  it('allows intra-group member dependencies but rejects outside access to a private member', () => {
+    const proj = createTempProject();
+    const meta = `status: complete\ncreatedAt: '2026-06-10T22:00:00Z'\nupdatedAt: '2026-06-10T22:00:00Z'`;
+    proj.writeSpec('system', 'system', `\nschemaVersion: 1.0.0\nname: TestSystem\nvision: A system for testing\ncreatedAt: '2026-06-10T22:00:00Z'\nupdatedAt: '2026-06-10T22:00:00Z'\n`);
+    proj.writeSpec('subsystem', 'sub-a', `\nid: sub-a\nname: Sub A\ndescription: test\nparentSystem: TestSystem\n${meta}\n`);
+    proj.writeSpec('component', 'repo', `\nid: repo\nname: Repo\ndescription: data access\nsubsystem: sub-a\ncomponentType: Repository\nowns: [repo-store, repo-registry, repo-index, repo-adapter]\ndependsOn: []\n${meta}\n`);
+    proj.writeSpec('component', 'repo-store', `\nid: repo-store\nname: Store\ndescription: state\nsubsystem: sub-a\ncomponentType: Store\nowns: []\ndependsOn: [repo-adapter]\n${meta}\n`);
+    proj.writeSpec('component', 'repo-registry', `\nid: repo-registry\nname: Registry\ndescription: writes\nsubsystem: sub-a\ncomponentType: Registry\nowns: []\ndependsOn: [repo-store]\n${meta}\n`);
+    proj.writeSpec('component', 'repo-index', `\nid: repo-index\nname: Index\ndescription: reads\nsubsystem: sub-a\ncomponentType: Index\nowns: []\ndependsOn: [repo-store]\n${meta}\n`);
+    proj.writeSpec('component', 'repo-adapter', `\nid: repo-adapter\nname: Adapter\ndescription: backend\nsubsystem: sub-a\ncomponentType: Adapter\nowns: []\ndependsOn: []\n${meta}\n`);
+    // Outside orchestrator: depends on the repo facade (OK) and reaches into a private member (BAD)
+    proj.writeSpec('component', 'orch', `\nid: orch\nname: Orchestrator\ndescription: workflow\nsubsystem: sub-a\ncomponentType: Orchestrator\nowns: []\ndependsOn: [repo, repo-store]\n${meta}\n`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      const vis = res.issues.filter(i => i.code === 'VISIBILITY_VIOLATION');
+      // Intra-group member deps (store->adapter, registry->store, index->store) must NOT be flagged.
+      expect(vis.some(i => i.specId === 'repo-store' || i.specId === 'repo-registry' || i.specId === 'repo-index')).toBe(false);
+      // The outside orchestrator reaching into the private member `repo-store` MUST be flagged.
+      expect(vis.some(i => i.specId === 'orch')).toBe(true);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
   it('collects and reports schema validation errors (Zod errors) rather than swallowing them', () => {
     const proj = createTempProject();
     proj.writeSpec('system', 'system', `

@@ -650,14 +650,17 @@ export function validateSddTree(rules?: RulesConfig): ValidationResult {
     }
   }
 
-  // 4c. Visibility rule: depend on a facade or a standalone block — never on a block
-  // privately owned by another pattern.
+  // 4c. Visibility rule: a component may depend on (a) blocks within its OWN group
+  // (it is the owning pattern, or a sibling member of the same pattern), (b) any
+  // pattern facade, or (c) a standalone block — never on a block privately owned by
+  // ANOTHER pattern.
   for (const comp of components) {
     for (const depId of comp.dependsOn) {
       const owner = ownedBy.get(depId);
-      if (owner && owner !== comp.id) {
-        addIssue('error', 'VISIBILITY_VIOLATION', `Component "${comp.id}" depends on "${depId}", which is privately owned by pattern "${owner}". Depend on the facade "${owner}" instead.`, comp.id, isComponentDraft(comp.id) || isComponentDraft(depId));
-      }
+      if (!owner) continue;                       // dep is a facade or standalone block — fine
+      if (owner === comp.id) continue;            // the owning pattern depending on its own member — fine
+      if (ownedBy.get(comp.id) === owner) continue; // a sibling member of the same group — fine
+      addIssue('error', 'VISIBILITY_VIOLATION', `Component "${comp.id}" depends on "${depId}", which is privately owned by pattern "${owner}". Depend on the facade "${owner}" instead.`, comp.id, isComponentDraft(comp.id) || isComponentDraft(depId));
     }
   }
 
