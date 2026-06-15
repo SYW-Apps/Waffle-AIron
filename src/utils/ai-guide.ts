@@ -117,8 +117,9 @@ wairon domains list          list domains (subsystem-derived + free-standing)
 // ---------------------------------------------------------------------------
 
 export function globalGuideFilePath(targetType: string): string | null {
-  if (targetType === 'claude') return path.join(os.homedir(), '.claude', 'CLAUDE.md');
-  if (targetType === 'gemini') return path.join(os.homedir(), '.gemini', 'GEMINI.md');
+  // Respect custom config dirs (account aliases) — same as MCP install.
+  if (targetType === 'claude') return path.join(process.env['CLAUDE_CONFIG_DIR'] || path.join(os.homedir(), '.claude'), 'CLAUDE.md');
+  if (targetType === 'gemini') return path.join(process.env['GEMINI_CONFIG_DIR'] || path.join(os.homedir(), '.gemini'), 'GEMINI.md');
   return null;
 }
 
