@@ -176,7 +176,7 @@ mcpCmd
 mcpCmd
   .command('install')
   .description('Register the wairon MCP server in the Claude Code settings.json or Antigravity mcp_config.json')
-  .option('--global', 'install in global settings (Claude Code only)')
+  .option('--global', 'install into the global/home config instead of the project (respects CLAUDE_CONFIG_DIR / GEMINI_CONFIG_DIR)')
   .option('--backend <type>', 'target AI assistant: claude | gemini')
   .action(async (opts) => {
     await runMcpInstall({ global: opts.global, backend: opts.backend as 'claude' | 'gemini' | undefined });

@@ -1,9 +1,21 @@
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
 import { assertProjectInitialized, loadProjectConfig } from '../config/loader.js';
 import { aiDir } from '../utils/fs.js';
+
+/** The Claude config dir for global installs — respects CLAUDE_CONFIG_DIR so custom
+ *  config-dir setups / account aliases (e.g. `claude-syw`, `claude-work`) work. */
+function claudeGlobalDir(): string {
+  return process.env['CLAUDE_CONFIG_DIR'] || path.join(os.homedir(), '.claude');
+}
+
+/** The Gemini/Antigravity home dir — respects GEMINI_CONFIG_DIR. */
+function geminiGlobalDir(): string {
+  return process.env['GEMINI_CONFIG_DIR'] || path.join(os.homedir(), '.gemini');
+}
 
 // ---------------------------------------------------------------------------
 // wairon mcp serve
@@ -64,13 +76,19 @@ export async function runMcpInstall(options: McpInstallOptions = {}): Promise<vo
     let settingsPath: string;
 
     if (backend === 'gemini') {
-      configBase = path.join(process.env['USERPROFILE'] ?? process.env['HOME'] ?? '', '.gemini', 'antigravity-cli');
-      settingsPath = path.join(configBase, 'mcp_config.json');
-      installGlobalPluginForGemini();
+      if (options.global) {
+        // Global install (opt-in): home config + the global Antigravity plugin.
+        configBase = path.join(geminiGlobalDir(), 'antigravity-cli');
+        settingsPath = path.join(configBase, 'mcp_config.json');
+        installGlobalPluginForGemini();
+      } else {
+        // Project-local Gemini/Antigravity settings — stays within the project.
+        configBase = path.join(process.cwd(), '.gemini');
+        settingsPath = path.join(configBase, 'settings.json');
+      }
     } else {
-      configBase = options.global
-        ? path.join(process.env['HOME'] ?? process.env['USERPROFILE'] ?? '', '.claude')
-        : path.join(process.cwd(), '.claude');
+      // Claude: --global respects CLAUDE_CONFIG_DIR; otherwise project-local.
+      configBase = options.global ? claudeGlobalDir() : path.join(process.cwd(), '.claude');
       settingsPath = path.join(configBase, 'settings.json');
     }
 
@@ -133,24 +151,20 @@ export async function runMcpStatus(): Promise<void> {
   assertProjectInitialized();
 
   const projectConfig = loadProjectConfig();
-  const projectSettings = path.join(process.cwd(), '.claude', 'settings.json');
-  const globalSettings  = path.join(
-    process.env['HOME'] ?? process.env['USERPROFILE'] ?? '',
-    '.claude', 'settings.json',
-  );
-  const geminiSettings = path.join(
-    process.env['USERPROFILE'] ?? process.env['HOME'] ?? '',
-    '.gemini', 'antigravity-cli', 'mcp_config.json',
-  );
+  const claudeProject = path.join(process.cwd(), '.claude', 'settings.json');
+  const claudeGlobal  = path.join(claudeGlobalDir(), 'settings.json');
+  const geminiProject = path.join(process.cwd(), '.gemini', 'settings.json');
+  const geminiGlobal  = path.join(geminiGlobalDir(), 'antigravity-cli', 'mcp_config.json');
 
   logger.blank();
   logger.info(`${chalk.bold('wairon MCP Server')}`);
   logger.blank();
 
   const checks = [
-    { label: 'Claude Project', filePath: projectSettings, fallbackName: 'settings.json' },
-    { label: 'Claude Global', filePath: globalSettings, fallbackName: 'settings.json' },
-    { label: 'Antigravity (agy)', filePath: geminiSettings, fallbackName: 'mcp_config.json' },
+    { label: 'Claude (project)', filePath: claudeProject, fallbackName: 'settings.json' },
+    { label: 'Claude (global)', filePath: claudeGlobal, fallbackName: 'settings.json' },
+    { label: 'Antigravity (project)', filePath: geminiProject, fallbackName: 'settings.json' },
+    { label: 'Antigravity (global)', filePath: geminiGlobal, fallbackName: 'mcp_config.json' },
   ];
 
   for (const { label, filePath, fallbackName } of checks) {
