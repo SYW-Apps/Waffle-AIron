@@ -132,6 +132,13 @@ export const EventSubscriptionSchema = z.object({
 });
 export type EventSubscription = z.infer<typeof EventSubscriptionSchema>;
 
+/** Producer-side event contract (mirror of eventSubscription) — used to validate producer↔consumer events. */
+export const EventPublicationSchema = z.object({
+  topic: z.string(),
+  event: z.string(),
+});
+export type EventPublication = z.infer<typeof EventPublicationSchema>;
+
 export const MethodSignatureSchema = z.object({
   name: z.string().regex(/^[a-zA-Z0-9_]+$/, 'Method name must be alphanumeric'),
   description: z.string(),
@@ -140,6 +147,7 @@ export const MethodSignatureSchema = z.object({
   httpEndpoint: HttpEndpointSchema.optional(),
   grpcEndpoint: GrpcEndpointSchema.optional(),
   eventSubscription: EventSubscriptionSchema.optional(),
+  eventPublication: EventPublicationSchema.optional(),
 });
 
 export type MethodSignature = z.infer<typeof MethodSignatureSchema>;

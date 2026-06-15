@@ -245,6 +245,73 @@ updatedAt: '2026-06-10T22:00:00Z'
     }
   });
 
+  it('enforces pattern ownership rules (owns): containment + block-owns-members', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+id: sub-a
+name: Sub A
+description: test subsystem
+parentSystem: TestSystem
+status: complete
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    // Repository owning an Orchestrator (not a data block) -> REPOSITORY_CONTAINMENT
+    proj.writeSpec('component', 'bad-repo', `
+id: bad-repo
+name: Bad Repo
+description: repo owning a non-data block
+subsystem: sub-a
+componentType: Repository
+owns: [some-orch]
+dependsOn: []
+status: complete
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('component', 'some-orch', `
+id: some-orch
+name: Some Orchestrator
+description: wrongly owned by a repo and a store
+subsystem: sub-a
+componentType: Orchestrator
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    // A Store (building block) that wrongly declares owns -> BLOCK_OWNS_MEMBERS
+    proj.writeSpec('component', 'bad-store', `
+id: bad-store
+name: Bad Store
+description: a block that wrongly owns members
+subsystem: sub-a
+componentType: Store
+owns: [some-orch]
+dependsOn: []
+status: complete
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.valid).toBe(false);
+      expect(res.issues.some(i => i.code === 'REPOSITORY_CONTAINMENT')).toBe(true);
+      expect(res.issues.some(i => i.code === 'BLOCK_OWNS_MEMBERS')).toBe(true);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
   it('collects and reports schema validation errors (Zod errors) rather than swallowing them', () => {
     const proj = createTempProject();
     proj.writeSpec('system', 'system', `

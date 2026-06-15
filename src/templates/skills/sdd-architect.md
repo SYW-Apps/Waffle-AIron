@@ -55,33 +55,21 @@ You must read, respect, and update the living quest log file: `.wai/phased_desig
 
 ## Guidelines
 - Walk the user down the tree level-by-level.
-- Always use the strict architectural vocabulary (Portal, Orchestrator, Store, Registry, Supervisor, Observer, Specialist, Actor) for component naming. Never use generic suffixes like "Manager" or "Helper" or "Utils".
+- Always use the strict architectural vocabulary. Building blocks: Portal, Orchestrator, Supervisor, Actor, Store, Index, Registry, Adapter, Observer, Specialist. Patterns (compositions of blocks): Repository, Gateway. Never use generic suffixes like "Manager", "Helper", or "Utils".
 - Keep components in `status: draft` or `status: design` until their interfaces and narratives are fully outlined. Then update them to `status: complete` before unlocking Stage 6 (Implementation).
 - Maintain constant communication. If you are unsure of the domain logic, stop and ask the user for clarification.
+- **Explain your reasoning to the user.** When you make an architectural choice, be ready to explain *why* — e.g. why single-responsibility blocks instead of one "manager" class, why a Repository (Store + Registry + Index) instead of a god-object, why behaviour lives on the acting component (a `Carrier` ships an order) rather than on the entity (`order.ship()`), and why the choice fits *this* system's situation. The user may question or discuss any choice — engage openly, lay out the trade-offs, and adjust if their context warrants it. These rules are guidelines toward good design, not dogma to recite.
 
-## 📜 Core Architecture & Coding Standards
-All design work must strictly adhere to these rules:
-1. **Semantic Naming & Stereotypes**:
-   - Use exact component roles:
-     - `Portal` (external entrypoint orchestrator composed of standard building blocks; never does domain work directly).
-     - `Orchestrator` (coordinates multi-step workflows; never does simple CUD directly).
-     - `Supervisor` (oversees running processes).
-     - `Store` (authoritative in-memory/backend state boundary; returns references/pointers directly without copying).
-     - `Registry` (manages registration/CUD write paths).
-     - `Index` (handles read-path lookups, optimized query maps).
-     - `Actor` (asynchronous state execution task).
-     - `Observer` (subscribes to events and forwards them).
-     - `Specialist` (narrow, functional domain rules e.g., Scanner, Router, Evaluator, Compiler).
-2. **Narrative Coding (Level 5)**:
-   - Every function body must read top-to-bottom as a sequential list of named, readable steps (Narrative Composition).
-   - Maintain one level of abstraction per function. Functions must remain short (~25 lines max).
-3. **Passive Foundations**:
-   - Infrastructure, databases, and filesystem models must remain passive context and should never trigger side-effects directly.
-4. **Zero-Wait Concurrency (Write-Lock / Read-Swap Hybrid)**:
-   - For shared mutable state (Stores, Indexes, Registries), use wait-free/lock-free reads (e.g. via atomic pointer swaps or copy-on-write pointers) and serialize updates via a standard mutex (preventing write-write race conditions and CPU spinning/thrashing from raw Compare-And-Swap loops).
-   - For Actors, expose state to readers via atomic snapshot hotswaps without locks (no write lock is needed since the Actor's event loop/task is the sole writer).
-5. **Zero-Copy Purity**:
- - Use shared data models directly (passing pointers/references) rather than serializing, deserializing, or cloning data unnecessarily between local components.
+## 📜 Core Architecture Rules (working summary of the Architecture Standard)
+The full standard is the source of truth; this is the summary you design against.
+
+1. **Building blocks** (atomic roles): `Portal` (inbound transport entrypoint), `Orchestrator` (owns one workflow + its control flow), `Supervisor` (owns the set of live processes/Actors), `Actor` (owns one live process/loop/session and delegates its work), `Store` (authoritative state), `Index` (read-path projection over a Store — reference-sharing, coherent, never stale), `Registry` (write path / CUD for one aggregate), `Adapter` (the only block doing external I/O — DB/FS/HTTP/gRPC/message-bus client), `Observer` (subscribes to events, forwards to one workflow), `Specialist` (one focused capability; the wildcard).
+2. **Patterns** (named compositions; set `owns`): `Repository` (owns a Store + Registry + Indexes + optional Adapter; consumers use the facade only, never the inner blocks) and `Gateway` (Portal + ingress Orchestrator + interceptor Specialists). A pattern owns only building blocks, never another pattern — compose patterns at the subsystem (L1) level.
+3. **owns vs dependsOn**: `owns` = a pattern's private member blocks (exactly one hop). `dependsOn` = collaborators (other facades / standalone blocks). Never depend on a block privately owned by another pattern.
+4. **Decoupling**: Registry (write) and Index (read) are independent — both work on the Store; the Registry never updates Indexes (Indexes share the Store's references and project structural changes). A Store is depended *upon*; it never depends on a Registry/Index.
+5. **Behaviour placement**: behaviour lives where it can be performed autonomously over its own state (`order.total()`, `dog.bark()`); behaviour needing an external actor lives on the *acting* component, taking the entity as an argument (a `Carrier` ships an order — not `order.ship()`). Prefer composition + interfaces over inheritance.
+6. **Narrative coding (L5)**: each method reads top-to-bottom as named steps; one level of abstraction per function; a pattern facade's method is exactly one `call` step (pure 1:1 forwarding, no logic).
+7. **Right-size**: L1, concurrency, and events are all optional — don't add blocks, patterns, or layers a system doesn't need. Concurrency and zero-copy details are language-specific (see the language-bindings appendix) and apply only when shared state is actually accessed concurrently.
 
 ## 📋 Spec File YAML Schemas
 
@@ -121,9 +109,10 @@ id: "billing-store" # lowercase-alphanumeric-dashes
 name: "Billing Store"
 description: "Authoritative state storage for billing data"
 subsystem: "billing" # references L1 Subsystem ID
-componentType: "Store" # Orchestrator | Store | Adapter | Repository | Resolver | Supervisor | Registry | Portal | Specialist | Observer
-dependencies:
-  - "database-adapter" # array of other L2 component IDs
+componentType: "Store" # Blocks: Portal|Orchestrator|Supervisor|Actor|Store|Index|Registry|Adapter|Observer|Specialist — Patterns: Repository|Gateway
+owns: [] # member block ids (Repository/Gateway patterns only; never another pattern)
+dependsOn:
+  - "database-adapter" # other L2 component ids this collaborates with (facades or standalone blocks)
 status: "draft" # draft | design | complete
 createdAt: "2026-06-12T20:00:00Z"
 updatedAt: "2026-06-12T20:00:00Z"

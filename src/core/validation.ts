@@ -387,7 +387,8 @@ export function validateSddTree(rules?: RulesConfig): ValidationResult {
           // Check if calling component declares targetComponent as dependency
           const callingComponent = componentMap.get(contract.component);
           if (callingComponent && step.targetComponent !== callingComponent.id) {
-            if (!callingComponent.dependsOn.includes(step.targetComponent)) {
+            if (!callingComponent.dependsOn.includes(step.targetComponent) &&
+                !callingComponent.owns.includes(step.targetComponent)) {
               addIssue(
                 'error',
                 'UNDECLARED_DEPENDENCY_CALL',
@@ -580,6 +581,82 @@ export function validateSddTree(rules?: RulesConfig): ValidationResult {
             isDraftCtx || isComponentDraft(depComp.id)
           );
         }
+      }
+
+      // Index rule: a read projection — may depend only on its Store or a backend Adapter.
+      if (comp.componentType === 'Index') {
+        if (depComp.componentType !== 'Store' && depComp.componentType !== 'Adapter') {
+          addIssue(
+            'error',
+            'ARCHITECTURE_VIOLATION_INDEX_DEP',
+            `Architectural violation: Index component "${comp.id}" cannot depend on "${depComp.componentType}" component "${depComp.id}". An Index is a read projection and may depend only on its Store or a backend Adapter.`,
+            comp.id,
+            isDraftCtx || isComponentDraft(depComp.id)
+          );
+        }
+      }
+    }
+  }
+
+  // 4b. Pattern / ownership rules (owns)
+  const ownedBy = new Map<string, string>(); // member block id -> owning pattern id
+  for (const comp of components) {
+    const isDraftCtx = isComponentDraft(comp.id);
+    const isPattern = comp.componentType === 'Repository' || comp.componentType === 'Gateway';
+
+    if (isPattern && comp.owns.length === 0) {
+      addIssue('error', 'EMPTY_PATTERN', `Pattern "${comp.id}" (${comp.componentType}) must own member blocks via "owns".`, comp.id, isDraftCtx);
+    }
+    if (!isPattern && comp.owns.length > 0) {
+      addIssue('error', 'BLOCK_OWNS_MEMBERS', `Building block "${comp.id}" (${comp.componentType}) cannot own members; only patterns (Repository/Gateway) use "owns".`, comp.id, isDraftCtx);
+    }
+
+    for (const memberId of comp.owns) {
+      const member = componentMap.get(memberId);
+      if (!member) {
+        addIssue('error', 'INVALID_OWNED_MEMBER', `Component "${comp.id}" owns "${memberId}" which does not exist.`, comp.id, isDraftCtx);
+        continue;
+      }
+      if (member.componentType === 'Repository' || member.componentType === 'Gateway') {
+        addIssue('error', 'PATTERN_OWNS_PATTERN', `Pattern "${comp.id}" owns "${memberId}", which is itself a pattern. Patterns own only building blocks — compose patterns at the subsystem (L1) level.`, comp.id, isDraftCtx);
+      }
+      const prev = ownedBy.get(memberId);
+      if (prev && prev !== comp.id) {
+        addIssue('error', 'SHARED_OWNED_MEMBER', `Block "${memberId}" is owned by both "${prev}" and "${comp.id}"; a block has exactly one owner.`, comp.id, isDraftCtx);
+      }
+      ownedBy.set(memberId, comp.id);
+    }
+
+    // Repository containment: only Store / Registry / Index / Adapter
+    if (comp.componentType === 'Repository') {
+      const allowed = new Set(['Store', 'Registry', 'Index', 'Adapter']);
+      for (const memberId of comp.owns) {
+        const t = componentMap.get(memberId)?.componentType;
+        if (t && !allowed.has(t)) {
+          addIssue('error', 'REPOSITORY_CONTAINMENT', `Repository "${comp.id}" owns "${memberId}" of type ${t}; a Repository may own only Store, Registry, Index, and (optionally) Adapter.`, comp.id, isDraftCtx);
+        }
+      }
+    }
+
+    // Gateway containment: only Portal / Orchestrator / Specialist
+    if (comp.componentType === 'Gateway') {
+      const allowed = new Set(['Portal', 'Orchestrator', 'Specialist']);
+      for (const memberId of comp.owns) {
+        const t = componentMap.get(memberId)?.componentType;
+        if (t && !allowed.has(t)) {
+          addIssue('error', 'GATEWAY_CONTAINMENT', `Gateway "${comp.id}" owns "${memberId}" of type ${t}; a Gateway may own only a Portal, Orchestrators, and Specialists.`, comp.id, isDraftCtx);
+        }
+      }
+    }
+  }
+
+  // 4c. Visibility rule: depend on a facade or a standalone block — never on a block
+  // privately owned by another pattern.
+  for (const comp of components) {
+    for (const depId of comp.dependsOn) {
+      const owner = ownedBy.get(depId);
+      if (owner && owner !== comp.id) {
+        addIssue('error', 'VISIBILITY_VIOLATION', `Component "${comp.id}" depends on "${depId}", which is privately owned by pattern "${owner}". Depend on the facade "${owner}" instead.`, comp.id, isComponentDraft(comp.id) || isComponentDraft(depId));
       }
     }
   }
