@@ -81,6 +81,11 @@ Do NOT search the filesystem or read agent files to figure out what wairon or SD
 is — you have the full context right here. When the user describes what they want,
 get to work.**
 
+**Your first move: call the \`sdd_get_status\` MCP tool** to see the current spec
+tree. (Your client may list wairon tools namespaced — e.g. \`wairon/sdd_get_status\`;
+call that.) Do NOT read \`.wai/\` files, inspect the wairon plugin, or check the CLI
+binary to orient yourself — the MCP tools give you the project state directly.
+
 ### How you operate
 - **To design or change the system** (subsystems, components, interfaces, narratives):
   invoke the **\`sdd-architect\`** skill (in \`.claude/skills/\` or \`.gemini/skills/\`).
@@ -90,7 +95,7 @@ get to work.**
   \`sdd_define_interface\`, \`sdd_write_narrative\`, \`sdd_add_type\`,
   \`sdd_validate_tree\`, \`sdd_get_status\`. These come from the connected **\`wairon\`
   MCP server** and are already in your available tools — your client may list them
-  namespaced (e.g. \`wairon\` ▸ \`sdd_get_status\`); just call them. Do NOT read files
+  namespaced (e.g. \`wairon/sdd_get_status\`); just call that form. Do NOT read files
   or run \`--help\` / \`mcp status\` to "discover" tool names, and don't hand-edit spec YAML.
 - **You never run the \`wairon\` CLI — that is the human developer's tool.**
   Everything the CLI does, you do through MCP: to validate the tree call

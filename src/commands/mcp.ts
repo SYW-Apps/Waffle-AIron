@@ -337,6 +337,10 @@ the project's own \`.gemini/GEMINI.md\` plus the \`sdd-architect\` skill in
 \`.gemini/skills/\` — read those and follow them. You already have full context; do
 NOT search the filesystem to figure out what wairon or SDD is.**
 
+**First move: call the \`sdd_get_status\` MCP tool** (listed as \`wairon/sdd_get_status\`)
+to see the spec tree — don't inspect this plugin, the CLI binary, or \`.wai/\` files to
+orient; the tools give you the project state directly.
+
 - To design or change the system, invoke the **\`sdd-architect\`** skill — it is the
   single source for the component model, naming rules, and YAML schemas.
 - Author and validate specs through the **\`sdd_*\` MCP tools** (\`sdd_initialize_system\`,
