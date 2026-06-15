@@ -119,7 +119,7 @@ export function renderWaironGuide(): string {
 
   const lines: string[] = [
     `<!-- wairon-generated — do not edit directly -->`,
-    `<!-- source: .wai/context/project.md — run \`wairon context sync\` to rebuild -->`,
+    `<!-- source: .wai/context/project.md — the human developer rebuilds this with \`wairon generate\` -->`,
     ``,
   ];
 
@@ -213,7 +213,7 @@ export interface SyncResult {
 
 /**
  * Regenerate domains.md and wairon-guide.md from the current registry state.
- * Called by `wairon context sync` and silently by `wairon generate`.
+ * Called by `wairon generate` and `wairon init`.
  */
 export function syncContextFiles(): SyncResult {
   const domainsContent  = renderDomainsDoc();
