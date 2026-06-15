@@ -107,5 +107,18 @@ export async function runGenerate(options: GenerateOptions = {}): Promise<void> 
         logger.warn(`Failed to export SDD Skills: ${String(err)}`);
       }
     }
+
+    // Re-inject the project-local guides so .claude/CLAUDE.md / .gemini/GEMINI.md
+    // stay current with the installed wairon (otherwise only `init` writes them).
+    if (!options.dryRun) {
+      try {
+        const { reinjectLocalGuides } = require('../utils/ai-guide.js') as typeof import('../utils/ai-guide.js');
+        const { activeTargetTypes } = require('../core/skills.js') as typeof import('../core/skills.js');
+        reinjectLocalGuides(process.cwd(), activeTargetTypes());
+        logger.verbose('Local AI guides re-injected.');
+      } catch (err) {
+        logger.warn(`Failed to re-inject AI guides: ${String(err)}`);
+      }
+    }
   }
 }

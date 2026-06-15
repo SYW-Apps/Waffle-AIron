@@ -113,8 +113,9 @@ program
 program
   .command('doctor')
   .description('Health check: flags stale generated guides/skills, an unregistered MCP server, and spec-tree issues')
-  .action(async () => {
-    await runDoctor();
+  .option('--fix', 'regenerate stale in-project guides/context/skills and register the MCP server')
+  .action(async (opts) => {
+    await runDoctor({ fix: opts.fix });
   });
 
 // ---------------------------------------------------------------------------

@@ -227,3 +227,28 @@ Refer to [.codex/agents/](.codex/agents/) for full instructions.
     fs.writeFileSync(filePath, content, 'utf-8');
   }
 }
+
+// Target types that carry a guide-bearing root delegator file.
+const GUIDE_TARGETS = ['claude', 'gemini', 'agy', 'cursor', 'copilot', 'codex'];
+
+/**
+ * Re-inject the project-LOCAL wairon guide for each active target and refresh
+ * its root delegator. This is what keeps `.claude/CLAUDE.md` / `.gemini/GEMINI.md`
+ * current with the installed wairon — without it, `init` is the only thing that
+ * ever writes the guide, so it silently goes stale. Global (home) guides are not
+ * touched here; those remain opt-in via `wairon init`. Returns the guide file
+ * paths that were (re)written.
+ */
+export function reinjectLocalGuides(projectRoot: string, targetTypes: string[]): string[] {
+  const written: string[] = [];
+  for (const type of targetTypes) {
+    if (!GUIDE_TARGETS.includes(type)) continue;
+    const guidePath = localGuideFilePath(projectRoot, type);
+    if (guidePath) {
+      injectGuide(guidePath, 'local');
+      if (!written.includes(guidePath)) written.push(guidePath);
+    }
+    writeRootGuideDelegator(projectRoot, type);
+  }
+  return written;
+}

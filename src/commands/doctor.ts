@@ -10,10 +10,10 @@ import {
   AI_PATHS,
 } from '../config/loader.js';
 import { pathExists, readFileOrNull, fromProjectRoot } from '../utils/fs.js';
-import { CONTEXT_PATHS } from '../core/context.js';
+import { CONTEXT_PATHS, syncContextFiles } from '../core/context.js';
 import { readStampVersion } from '../core/stamp.js';
-import { localGuideFilePath } from '../utils/ai-guide.js';
-import { activeTargetTypes, checkSkillFreshness } from '../core/skills.js';
+import { localGuideFilePath, reinjectLocalGuides } from '../utils/ai-guide.js';
+import { activeTargetTypes, checkSkillFreshness, exportSddSkills } from '../core/skills.js';
 
 // ---------------------------------------------------------------------------
 // doctor command
@@ -64,12 +64,22 @@ function mcpRegistered(settingsPath: string): boolean | null {
   }
 }
 
-export async function runDoctor(): Promise<void> {
+export interface DoctorOptions {
+  /** Regenerate stale in-project guides/context/skills and register the MCP server. */
+  fix?: boolean;
+}
+
+export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
   const tally: Tally = { warn: 0, error: 0 };
 
   logger.blank();
   console.log(`${chalk.bold('wairon doctor')} ${chalk.gray(`— installed v${WAIRON_VERSION}`)}`);
   logger.blank();
+
+  // --fix runs before the report so the output reflects the repaired state.
+  if (options.fix) {
+    await applyFixes();
+  }
 
   // ── Project ───────────────────────────────────────────────────────────────
   console.log(chalk.bold('Project'));
@@ -197,6 +207,64 @@ export async function runDoctor(): Promise<void> {
 
   printSummary(tally);
   if (tally.error > 0) process.exit(1);
+}
+
+/**
+ * Apply the safe, in-project fixes: regenerate context files, skills, and local
+ * guides (so their version stamps match the installed wairon), and register the
+ * MCP server for any active backend that lacks it. The global Antigravity plugin
+ * writes outside the project, so it is reported but not auto-fixed.
+ */
+async function applyFixes(): Promise<void> {
+  if (!isProjectInitialized()) return; // the report below will flag this
+
+  let targets: string[];
+  try {
+    loadProjectConfig();
+    targets = activeTargetTypes();
+  } catch (e) {
+    logger.warn(`--fix skipped: .wai/project.yaml is invalid (${e instanceof Error ? e.message : String(e)}). Fix it first.`);
+    logger.blank();
+    return;
+  }
+
+  console.log(chalk.bold('Applying fixes…'));
+
+  try {
+    syncContextFiles();
+    exportSddSkills(targets);
+    const guides = reinjectLocalGuides(process.cwd(), targets);
+    console.log(`  ${icon('ok')} Regenerated context files, skills, and ${guides.length} local guide(s).`);
+  } catch (e) {
+    console.log(`  ${icon('error')} Regeneration failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  // Register the MCP server (project-local) for any active backend missing it.
+  const backends = new Set<'claude' | 'gemini'>();
+  for (const t of targets) {
+    if (t === 'claude') backends.add('claude');
+    if (t === 'gemini' || t === 'agy') backends.add('gemini');
+  }
+  for (const backend of backends) {
+    const settingsPath = backend === 'gemini'
+      ? fromProjectRoot('.gemini', 'settings.json')
+      : fromProjectRoot('.claude', 'settings.json');
+    if (mcpRegistered(settingsPath) === true) continue;
+    try {
+      const { runMcpInstall } = require('./mcp.js') as typeof import('./mcp.js');
+      await runMcpInstall({ backend, global: false });
+    } catch (e) {
+      console.log(`  ${icon('warn')} MCP install for ${backend} failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  // The global plugin lives in ~/.gemini — out of project scope, so don't auto-write it.
+  const pluginSkill = path.join(os.homedir(), '.gemini', 'config', 'plugins', 'wairon', 'skills', 'wairon', 'SKILL.md');
+  if (fs.existsSync(pluginSkill) && readStampVersion(readFileOrNull(pluginSkill) ?? '') !== WAIRON_VERSION) {
+    console.log(`  ${icon('warn')} Global Antigravity plugin is stale — run \`wairon mcp install --backend gemini --global\` (not auto-fixed; it writes outside the project).`);
+  }
+
+  logger.blank();
 }
 
 function printSummary(tally: Tally): void {
