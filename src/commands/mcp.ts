@@ -75,10 +75,28 @@ export async function runMcpServe(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export interface McpInstallOptions {
-  backend?: 'claude' | 'gemini';
+  /** Target AI assistant. Accepts aliases (agy/antigravity → gemini); see normalizeBackend. */
+  backend?: string;
   global?:  boolean;
   /** Explicit config dir to install into (highest precedence; validated). Requires backend. */
   configDir?: string;
+}
+
+/**
+ * Map a user-supplied --backend value to a supported MCP backend. wairon only
+ * writes Claude (settings.json) and Gemini/Antigravity (settings.json /
+ * mcp_config.json) configs, so every alias resolves to one of those. Unknown
+ * backends throw rather than silently defaulting to Claude.
+ */
+export function normalizeBackend(input: string): 'claude' | 'gemini' {
+  const v = input.trim().toLowerCase();
+  if (['claude', 'claude-code', 'claudecode', 'cc'].includes(v)) return 'claude';
+  if (['gemini', 'gemini-cli', 'google', 'agy', 'antigravity'].includes(v)) return 'gemini';
+  throw new WaironError(
+    `Unknown --backend "${input}". Supported: claude (Claude Code) or gemini ` +
+    `(a.k.a. agy / antigravity — both are Gemini-based). MCP auto-registration ` +
+    `for codex / cursor / copilot is not yet supported; configure those manually.`
+  );
 }
 
 export async function runMcpInstall(options: McpInstallOptions = {}): Promise<void> {
@@ -90,7 +108,7 @@ export async function runMcpInstall(options: McpInstallOptions = {}): Promise<vo
 
   let backends: ('claude' | 'gemini')[] = [];
   if (options.backend) {
-    backends = [options.backend];
+    backends = [normalizeBackend(options.backend)];
   } else {
     try {
       const config = loadProjectConfig();

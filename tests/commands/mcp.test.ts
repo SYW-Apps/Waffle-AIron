@@ -2,11 +2,30 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { validateConfigDir } from '../../src/commands/mcp.js';
+import { validateConfigDir, normalizeBackend } from '../../src/commands/mcp.js';
 
 function tmp(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-cfgdir-'));
 }
+
+describe('normalizeBackend', () => {
+  it('maps Claude aliases to claude', () => {
+    for (const v of ['claude', 'Claude', 'claude-code', 'CC']) {
+      expect(normalizeBackend(v)).toBe('claude');
+    }
+  });
+
+  it('maps Gemini/Antigravity aliases to gemini', () => {
+    for (const v of ['gemini', 'agy', 'Antigravity', 'google', 'gemini-cli']) {
+      expect(normalizeBackend(v)).toBe('gemini');
+    }
+  });
+
+  it('throws on an unknown backend instead of defaulting to claude', () => {
+    expect(() => normalizeBackend('codex')).toThrow(/Unknown --backend/);
+    expect(() => normalizeBackend('cursor')).toThrow(/Unknown --backend/);
+  });
+});
 
 describe('validateConfigDir', () => {
   it('accepts a directory with Claude markers', () => {
