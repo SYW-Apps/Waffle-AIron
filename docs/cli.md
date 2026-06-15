@@ -70,7 +70,7 @@ and author specs directly.
 | Command | Description |
 |---------|-------------|
 | `wairon mcp serve` | Start the MCP server (stdio transport) |
-| `wairon mcp install [--global] [--backend claude\|gemini]` | Register the server in Claude Code / Antigravity settings |
+| `wairon mcp install [--global] [--config-dir <path>] [--backend claude\|gemini]` | Register the server. Default: project-local. `--global` uses the home config (respects `CLAUDE_CONFIG_DIR`/`GEMINI_CONFIG_DIR`); `--config-dir` installs into an explicit, validated config dir (requires `--backend`) |
 | `wairon mcp status` | Show whether the server is registered |
 
 **Tools:** `listAgents`, `getAgent`, `listDomains`, `validateTopology`,

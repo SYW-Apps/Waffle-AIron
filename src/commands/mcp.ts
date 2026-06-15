@@ -5,16 +5,51 @@ import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
 import { assertProjectInitialized, loadProjectConfig } from '../config/loader.js';
 import { aiDir } from '../utils/fs.js';
+import { WaironError } from '../utils/errors.js';
 
-/** The Claude config dir for global installs — respects CLAUDE_CONFIG_DIR so custom
- *  config-dir setups / account aliases (e.g. `claude-syw`, `claude-work`) work. */
-function claudeGlobalDir(): string {
-  return process.env['CLAUDE_CONFIG_DIR'] || path.join(os.homedir(), '.claude');
+/** The Claude config dir for global installs. Precedence: explicit override (--config-dir)
+ *  > CLAUDE_CONFIG_DIR > ~/.claude. Lets account aliases (`claude-syw`, …) work. */
+function claudeGlobalDir(override?: string): string {
+  return override || process.env['CLAUDE_CONFIG_DIR'] || path.join(os.homedir(), '.claude');
 }
 
-/** The Gemini/Antigravity home dir — respects GEMINI_CONFIG_DIR. */
-function geminiGlobalDir(): string {
-  return process.env['GEMINI_CONFIG_DIR'] || path.join(os.homedir(), '.gemini');
+/** The Gemini/Antigravity home dir. Precedence: override > GEMINI_CONFIG_DIR > ~/.gemini. */
+function geminiGlobalDir(override?: string): string {
+  return override || process.env['GEMINI_CONFIG_DIR'] || path.join(os.homedir(), '.gemini');
+}
+
+/** Validate that `dir` looks like a real config directory for the selected agent. */
+function validateConfigDir(dir: string, backend: 'claude' | 'gemini'): void {
+  const resolved = path.resolve(dir);
+  const agent = backend === 'claude' ? 'Claude' : 'Gemini/Antigravity';
+
+  if (!fs.existsSync(resolved)) {
+    const parent = path.dirname(resolved);
+    if (!fs.existsSync(parent)) {
+      throw new WaironError(`--config-dir "${dir}" does not exist and its parent is missing — check the path.`);
+    }
+    logger.warn(`Config dir "${resolved}" does not exist yet; it will be created.`);
+    return;
+  }
+  if (!fs.statSync(resolved).isDirectory()) {
+    throw new WaironError(`--config-dir "${dir}" is not a directory.`);
+  }
+
+  const markers = backend === 'claude'
+    ? ['settings.json', 'settings.local.json', '.credentials.json', 'projects', 'statsig', 'todos', 'shell-snapshots', 'CLAUDE.md']
+    : ['settings.json', 'GEMINI.md', 'oauth_creds.json', 'antigravity-cli', 'tmp'];
+
+  const entries = fs.readdirSync(resolved);
+  if (entries.length === 0) {
+    logger.warn(`Config dir "${resolved}" is empty; proceeding (treating it as a fresh ${agent} config dir).`);
+    return;
+  }
+  if (!markers.some((m) => fs.existsSync(path.join(resolved, m)))) {
+    throw new WaironError(
+      `"${dir}" does not look like a ${agent} config directory (none of ${markers.slice(0, 4).join(', ')} found). ` +
+      `Point --config-dir at the agent's config directory.`,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -41,10 +76,16 @@ export async function runMcpServe(): Promise<void> {
 export interface McpInstallOptions {
   backend?: 'claude' | 'gemini';
   global?:  boolean;
+  /** Explicit config dir to install into (highest precedence; validated). Requires backend. */
+  configDir?: string;
 }
 
 export async function runMcpInstall(options: McpInstallOptions = {}): Promise<void> {
   assertProjectInitialized();
+
+  if (options.configDir && !options.backend) {
+    throw new WaironError('--config-dir requires --backend (claude or gemini), since a config dir is agent-specific.');
+  }
 
   let backends: ('claude' | 'gemini')[] = [];
   if (options.backend) {
@@ -71,14 +112,18 @@ export async function runMcpInstall(options: McpInstallOptions = {}): Promise<vo
   }
 
   for (const backend of backends) {
+    if (options.configDir) validateConfigDir(options.configDir, backend);
+    // An explicit --config-dir implies a global-style install into that dir.
+    const useGlobal = options.global || !!options.configDir;
+
     // ── Resolve where to write settings ──────────────────────────────────────
     let configBase: string;
     let settingsPath: string;
 
     if (backend === 'gemini') {
-      if (options.global) {
+      if (useGlobal) {
         // Global install (opt-in): home config + the global Antigravity plugin.
-        configBase = path.join(geminiGlobalDir(), 'antigravity-cli');
+        configBase = path.join(geminiGlobalDir(options.configDir), 'antigravity-cli');
         settingsPath = path.join(configBase, 'mcp_config.json');
         installGlobalPluginForGemini();
       } else {
@@ -87,8 +132,8 @@ export async function runMcpInstall(options: McpInstallOptions = {}): Promise<vo
         settingsPath = path.join(configBase, 'settings.json');
       }
     } else {
-      // Claude: --global respects CLAUDE_CONFIG_DIR; otherwise project-local.
-      configBase = options.global ? claudeGlobalDir() : path.join(process.cwd(), '.claude');
+      // Claude: global resolves --config-dir > CLAUDE_CONFIG_DIR > ~/.claude; else project-local.
+      configBase = useGlobal ? claudeGlobalDir(options.configDir) : path.join(process.cwd(), '.claude');
       settingsPath = path.join(configBase, 'settings.json');
     }
 
