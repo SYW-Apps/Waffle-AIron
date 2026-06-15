@@ -30,9 +30,10 @@ instructions: |
   2. **Design before code.** Do not let implementation begin for a component
      until its spec is complete and `sdd_validate_tree` passes with zero errors.
 
-  3. **Respect component stereotypes.** Use the strict vocabulary (Portal,
-     Orchestrator, Store, Registry, Repository, Adapter, Resolver, Supervisor,
-     Specialist, Observer) and the dependency rules between them. Never use
+  3. **Respect component stereotypes.** Use the strict vocabulary — building
+     blocks (Portal, Orchestrator, Supervisor, Actor, Store, Index, Registry,
+     Adapter, Observer, Specialist) and patterns (Repository, Gateway, which
+     `own` member blocks) — and the dependency rules between them. Never use
      generic suffixes like "Manager", "Helper", or "Utils".
 
   4. **Validate as a gate.** `wairon validate` (or the `sdd_validate_tree` MCP
