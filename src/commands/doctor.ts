@@ -54,14 +54,29 @@ function stampVerdict(content: string | null): { mark: Mark; note: string } {
   return { mark: 'warn', note: `v${v} — stale, installed is v${WAIRON_VERSION}` };
 }
 
-function mcpRegistered(settingsPath: string): boolean | null {
-  if (!fs.existsSync(settingsPath)) return null;
+/**
+ * Health of a wairon MCP entry in a settings/mcp_config file. Beyond "is it
+ * registered", this validates that a node-launched server actually points at a
+ * file that exists — a stale path (moved repo, wrong machine) registers fine but
+ * silently fails to launch, leaving the agent with zero wairon tools.
+ */
+function mcpEntryHealth(settingsPath: string): { mark: Mark; note: string } {
+  if (!fs.existsSync(settingsPath)) return { mark: 'warn', note: 'not registered' };
+  let entry: { command?: string; args?: unknown[] } | undefined;
   try {
-    const s = JSON.parse(fs.readFileSync(settingsPath, 'utf8')) as { mcpServers?: Record<string, unknown> };
-    return !!s.mcpServers?.['wairon'];
+    const s = JSON.parse(fs.readFileSync(settingsPath, 'utf8')) as { mcpServers?: Record<string, { command?: string; args?: unknown[] }> };
+    entry = s.mcpServers?.['wairon'];
   } catch {
-    return null;
+    return { mark: 'error', note: 'parse error' };
   }
+  if (!entry) return { mark: 'warn', note: 'not registered' };
+  if (entry.command === 'node' && Array.isArray(entry.args) && typeof entry.args[0] === 'string') {
+    const scriptPath = entry.args[0];
+    if (!fs.existsSync(scriptPath)) {
+      return { mark: 'error', note: `registered but the server path is missing — ${scriptPath}` };
+    }
+  }
+  return { mark: 'ok', note: 'registered' };
 }
 
 export interface DoctorOptions {
@@ -180,20 +195,25 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
 
   // ── MCP server ──────────────────────────────────────────────────────────────
   console.log(chalk.bold('MCP server'));
-  const backends = new Set<string>();
-  for (const t of targets) {
-    if (t === 'claude') backends.add('claude');
-    if (t === 'gemini' || t === 'agy') backends.add('gemini');
+  const wantClaude = targets.includes('claude') || targets.length === 0;
+  const wantGemini = targets.includes('gemini') || targets.includes('agy');
+
+  if (wantClaude) {
+    const h = mcpEntryHealth(fromProjectRoot('.claude', 'settings.json'));
+    line(tally, h.mark, `Claude (project): ${h.note}${h.mark === 'ok' ? '' : ' — run `wairon mcp install --backend claude`'}`);
   }
-  if (backends.size === 0) backends.add('claude');
-  for (const backend of backends) {
-    const label = backend === 'gemini' ? 'Antigravity (project)' : 'Claude (project)';
-    const settingsPath = backend === 'gemini'
-      ? fromProjectRoot('.gemini', 'settings.json')
-      : fromProjectRoot('.claude', 'settings.json');
-    const reg = mcpRegistered(settingsPath);
-    if (reg === true) line(tally, 'ok', `${label}: registered`);
-    else line(tally, 'warn', `${label}: not registered — run \`wairon mcp install --backend ${backend}\``);
+  if (wantGemini) {
+    // Antigravity loads MCP from its GLOBAL mcp_config.json — that's the file that
+    // actually controls whether the agy agent sees the sdd_* tools.
+    const globalCfg = path.join(os.homedir(), '.gemini', 'antigravity-cli', 'mcp_config.json');
+    const hg = mcpEntryHealth(globalCfg);
+    line(tally, hg.mark, `Antigravity (global mcp_config.json): ${hg.note}${hg.mark === 'ok' ? '' : ' — run `wairon mcp install --backend gemini --global`'}`);
+    // The project .gemini/settings.json is the Gemini-CLI convention; Antigravity ignores it.
+    const projPath = fromProjectRoot('.gemini', 'settings.json');
+    if (fs.existsSync(projPath)) {
+      const hp = mcpEntryHealth(projPath);
+      line(tally, hp.mark === 'error' ? 'error' : 'ok', `Gemini CLI (project): ${hp.note} ${chalk.gray('(Antigravity ignores this file)')}`);
+    }
   }
 
   // ── Global Antigravity plugin (best-effort; only if installed) ──────────────
@@ -239,29 +259,25 @@ async function applyFixes(): Promise<void> {
     console.log(`  ${icon('error')} Regeneration failed: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  // Register the MCP server (project-local) for any active backend missing it.
-  const backends = new Set<'claude' | 'gemini'>();
-  for (const t of targets) {
-    if (t === 'claude') backends.add('claude');
-    if (t === 'gemini' || t === 'agy') backends.add('gemini');
-  }
-  for (const backend of backends) {
-    const settingsPath = backend === 'gemini'
-      ? fromProjectRoot('.gemini', 'settings.json')
-      : fromProjectRoot('.claude', 'settings.json');
-    if (mcpRegistered(settingsPath) === true) continue;
+  // Register / repair the MCP server. The install is now self-healing, so this
+  // also rewrites a stale launch path. Claude uses the project config; Antigravity
+  // (agy) only reads its GLOBAL mcp_config.json, so register there for it.
+  const { runMcpInstall } = require('./mcp.js') as typeof import('./mcp.js');
+  if (targets.includes('claude')) {
     try {
-      const { runMcpInstall } = require('./mcp.js') as typeof import('./mcp.js');
-      await runMcpInstall({ backend, global: false });
+      await runMcpInstall({ backend: 'claude', global: false });
     } catch (e) {
-      console.log(`  ${icon('warn')} MCP install for ${backend} failed: ${e instanceof Error ? e.message : String(e)}`);
+      console.log(`  ${icon('warn')} MCP install for claude failed: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
-
-  // The global plugin lives in ~/.gemini — out of project scope, so don't auto-write it.
-  const pluginSkill = path.join(os.homedir(), '.gemini', 'config', 'plugins', 'wairon', 'skills', 'wairon', 'SKILL.md');
-  if (fs.existsSync(pluginSkill) && readStampVersion(readFileOrNull(pluginSkill) ?? '') !== WAIRON_VERSION) {
-    console.log(`  ${icon('warn')} Global Antigravity plugin is stale — run \`wairon mcp install --backend gemini --global\` (not auto-fixed; it writes outside the project).`);
+  if (targets.includes('gemini') || targets.includes('agy')) {
+    // Global for Antigravity (the file it reads); also fine for the Gemini CLI.
+    const global = targets.includes('agy');
+    try {
+      await runMcpInstall({ backend: 'gemini', global });
+    } catch (e) {
+      console.log(`  ${icon('warn')} MCP install for gemini failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   logger.blank();

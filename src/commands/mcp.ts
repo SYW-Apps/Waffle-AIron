@@ -166,35 +166,36 @@ export async function runMcpInstall(options: McpInstallOptions = {}): Promise<vo
       }
     }
 
-    // ── Build the mcpServers entry ────────────────────────────────────────────
+    // ── Build the desired mcpServers entry ────────────────────────────────────
     const mcpServers = (settings['mcpServers'] ?? {}) as Record<string, unknown>;
-
-    if (mcpServers['wairon']) {
-      logger.info(`wairon MCP server is already registered for ${backend === 'gemini' ? 'Antigravity' : 'Claude'} in ${chalk.gray(settingsPath)}.`);
-      continue;
-    }
+    const agentLabel = backend === 'gemini' ? 'Antigravity' : 'Claude';
 
     const scriptPath = process.argv[1] ? path.resolve(process.argv[1]).replace(/\\/g, '/') : null;
     const useDirectNode = scriptPath && (scriptPath.endsWith('.js') || scriptPath.endsWith('.ts'));
 
-    mcpServers['wairon'] = useDirectNode
-      ? {
-          command: 'node',
-          args:    [scriptPath, 'mcp', 'serve'],
-          env:     {},
-        }
-      : {
-          command: 'wairon',
-          args:    ['mcp', 'serve'],
-          env:     {},
-        };
+    const desiredEntry = useDirectNode
+      ? { command: 'node', args: [scriptPath, 'mcp', 'serve'], env: {} }
+      : { command: 'wairon', args: ['mcp', 'serve'], env: {} };
+
+    // Self-heal: if an entry already exists but points somewhere else (e.g. a
+    // stale path from a moved repo or an earlier machine), rewrite it instead of
+    // skipping. Skipping is exactly how a broken `command`/`args` path survives
+    // and leaves the agent with no wairon tools.
+    const existingEntry = mcpServers['wairon'];
+    if (existingEntry && JSON.stringify(existingEntry) === JSON.stringify(desiredEntry)) {
+      logger.info(`wairon MCP server already registered (up to date) for ${agentLabel} in ${chalk.gray(settingsPath)}.`);
+      continue;
+    }
+    const wasStale = !!existingEntry;
+
+    mcpServers['wairon'] = desiredEntry;
     settings['mcpServers'] = mcpServers;
 
     // ── Write back ────────────────────────────────────────────────────────────
     if (!fs.existsSync(configBase)) fs.mkdirSync(configBase, { recursive: true });
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
 
-    logger.success(`wairon MCP server registered for ${backend === 'gemini' ? 'Antigravity' : 'Claude'} in ${chalk.cyan(settingsPath)}.`);
+    logger.success(`wairon MCP server ${wasStale ? 'updated (was stale)' : 'registered'} for ${agentLabel} in ${chalk.cyan(settingsPath)}.`);
     logger.blank();
     logger.info('AI tools using this config will have access to these wairon tools:');
     logger.info('  listAgents · getAgent · listDomains · validateTopology · getProjectConfig');
@@ -203,6 +204,13 @@ export async function runMcpInstall(options: McpInstallOptions = {}): Promise<vo
     logger.blank();
     const restartApp = backend === 'gemini' ? 'Antigravity CLI (agy)' : 'claude';
     logger.info(`Restart ${chalk.bold(restartApp)} (or reload MCP servers) to activate.`);
+
+    // Antigravity loads MCP from its global mcp_config.json, NOT the project's
+    // .gemini/settings.json — so a project-local install won't surface tools there.
+    if (backend === 'gemini' && !useGlobal) {
+      logger.warn('Note: Antigravity (agy) reads MCP servers from its global ~/.gemini/antigravity-cli/mcp_config.json, not this project file.');
+      logger.warn('If the agent cannot see the sdd_* tools, run: ' + chalk.bold('wairon mcp install --backend gemini --global'));
+    }
     logger.blank();
   }
 }
