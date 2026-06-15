@@ -13,6 +13,8 @@ import {
   InterfaceSpecSchema,
   ImplementationSpec,
   ImplementationSpecSchema,
+  TypeSpec,
+  TypeSpecSchema,
 } from '../models/index.js';
 import { ValidationIssue } from './validation.js';
 
@@ -35,11 +37,13 @@ interface SpecIndex {
   components: ComponentSpec[];
   interfaces: InterfaceSpec[];
   implementations: ImplementationSpec[];
+  types: TypeSpec[];
   paths: {
     subsystem: Record<string, string>;
     component: Record<string, string>;
     interface: Record<string, string>;
     implementation: Record<string, string>;
+    type: Record<string, string>;
   };
 }
 
@@ -57,11 +61,13 @@ export function scanAllSpecs(): SpecIndex {
     components: [],
     interfaces: [],
     implementations: [],
+    types: [],
     paths: {
       subsystem: {},
       component: {},
       interface: {},
       implementation: {},
+      type: {},
     },
   };
 
@@ -108,6 +114,11 @@ export function scanAllSpecs(): SpecIndex {
         const parsed = ImplementationSpecSchema.parse(raw);
         index.implementations.push(parsed);
         index.paths.implementation[parsed.id] = file;
+      } else if ('kind' in raw) {
+        detectedType = 'type';
+        const parsed = TypeSpecSchema.parse(raw);
+        index.types.push(parsed);
+        index.paths.type[parsed.id] = file;
       }
 
       if (detectedType === 'spec') {
@@ -371,6 +382,42 @@ export function loadImplementationSpec(id: string): ImplementationSpec | null {
 
 export function saveImplementationSpec(spec: ImplementationSpec): void {
   const p = getImplementationPath(spec.id, spec.contract);
+  ensureDir(path.dirname(p));
+  spec.updatedAt = new Date().toISOString();
+  writeYamlFile(p, spec);
+  invalidateSpecCache();
+}
+
+// ---------------------------------------------------------------------------
+// Types (entities / value objects) Loader/Writer
+//
+// Entities/value objects live in a `types/` directory — at the subsystem that
+// owns them, or at the system level for shared value objects.
+// ---------------------------------------------------------------------------
+export function getTypePath(id: string, subsystemId?: string): string {
+  const index = scanAllSpecs();
+  if (index.paths.type[id]) return index.paths.type[id];
+
+  if (subsystemId) {
+    const subPath = getSubsystemPath(subsystemId);
+    const subDir = path.dirname(subPath);
+    if (subPath.endsWith('subsystem.yaml')) {
+      return path.join(subDir, 'types', `${id}.yaml`);
+    }
+  }
+  return path.join(AI_PATHS.specsTypesDir(), `${id}.yaml`);
+}
+
+export function loadTypeSpecs(): TypeSpec[] {
+  return scanAllSpecs().types;
+}
+
+export function loadTypeSpec(id: string): TypeSpec | null {
+  return scanAllSpecs().types.find((t) => t.id === id) ?? null;
+}
+
+export function saveTypeSpec(spec: TypeSpec): void {
+  const p = getTypePath(spec.id, spec.subsystem);
   ensureDir(path.dirname(p));
   spec.updatedAt = new Date().toISOString();
   writeYamlFile(p, spec);

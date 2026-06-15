@@ -372,6 +372,42 @@ export function createMcpServer(): McpServer {
     },
   );
 
+  reg<{ kind: 'entity' | 'value-object'; id: string; name: string; description?: string; subsystem?: string; fields?: { name: string; type: string; description?: string; optional?: boolean }[]; methods?: { name: string; signature: string; returns: string; description?: string }[] }>(server,
+    'sdd_add_type',
+    {
+      description: 'Define an entity or value-object type (the data components operate on). Entities are owned by a subsystem; shared value objects omit subsystem (system-level). Fields are data; methods are PURE intrinsic behaviour only — anything needing a collaborator belongs on a component, taking the entity as an argument.',
+      inputSchema: {
+        kind: z.enum(['entity', 'value-object']).describe('entity (owned by a subsystem) or value-object (often system-level shared)'),
+        id: z.string().describe('Lowercase identifier'),
+        name: z.string().describe('Human-readable name'),
+        description: z.string().optional(),
+        subsystem: z.string().optional().describe('Owning subsystem id; omit for a system-level shared value object'),
+        fields: z.array(z.object({ name: z.string(), type: z.string(), description: z.string().optional(), optional: z.boolean().optional() })).optional().describe('Data fields (type is a primitive or a qualified type id, e.g. "billing.Invoice")'),
+        methods: z.array(z.object({ name: z.string(), signature: z.string(), returns: z.string(), description: z.string().optional() })).optional().describe('Pure intrinsic methods only'),
+      },
+    },
+    ({ kind, id, name, description, subsystem, fields, methods }) => {
+      try {
+        const { saveTypeSpec } = requireSpecs();
+        const now = new Date().toISOString();
+        saveTypeSpec({
+          kind,
+          id,
+          name,
+          ...(description ? { description } : {}),
+          ...(subsystem ? { subsystem } : {}),
+          fields: (fields ?? []).map((f) => ({ name: f.name, type: f.type, description: f.description, optional: f.optional ?? false })),
+          methods: methods ?? [],
+          createdAt: now,
+          updatedAt: now,
+        });
+        return text(`Successfully defined ${kind} type "${name}" (${id}).`);
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
   reg<Record<string, never>>(server,
     'sdd_validate_tree',
     {

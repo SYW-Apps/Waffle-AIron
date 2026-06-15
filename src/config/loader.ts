@@ -48,6 +48,7 @@ export const AI_PATHS = {
   specsComponentsDir: () => path.join(AI_PATHS.specsDir(), 'components'),
   specsInterfacesDir: () => path.join(AI_PATHS.specsDir(), 'interfaces'),
   specsImplementationsDir: () => path.join(AI_PATHS.specsDir(), 'implementations'),
+  specsTypesDir: () => path.join(AI_PATHS.specsDir(), 'types'),
 } as const;
 
 // ---------------------------------------------------------------------------

@@ -204,3 +204,42 @@ export const ImplementationSpecSchema = z.object({
 });
 
 export type ImplementationSpec = z.infer<typeof ImplementationSpecSchema>;
+
+// ---------------------------------------------------------------------------
+// Types: entities and value objects (the data the components operate on).
+// Defined once by their owner; referenced — never redefined — elsewhere.
+// ---------------------------------------------------------------------------
+export const TypeKindSchema = z.enum(['entity', 'value-object']);
+export type TypeKind = z.infer<typeof TypeKindSchema>;
+
+export const TypeFieldSchema = z.object({
+  name: z.string(),
+  type: z.string(), // a primitive, or another type id (qualified across subsystems, e.g. "billing.Invoice")
+  description: z.string().optional(),
+  optional: z.boolean().default(false),
+});
+export type TypeField = z.infer<typeof TypeFieldSchema>;
+
+/** A pure, self-contained method on an entity (no external collaborators). */
+export const TypeMethodSchema = z.object({
+  name: z.string(),
+  signature: z.string(),
+  returns: z.string(),
+  description: z.string().optional(),
+});
+export type TypeMethod = z.infer<typeof TypeMethodSchema>;
+
+export const TypeSpecSchema = z.object({
+  kind: TypeKindSchema, // discriminator — entity | value-object
+  id: SpecIdSchema,
+  name: z.string(),
+  description: z.string().optional(),
+  /** Owning subsystem id (entities). Omit for system-level shared value objects. */
+  subsystem: z.string().optional(),
+  fields: z.array(TypeFieldSchema).default([]),
+  /** Pure intrinsic behaviour only — anything needing a collaborator belongs on a component. */
+  methods: z.array(TypeMethodSchema).default([]),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type TypeSpec = z.infer<typeof TypeSpecSchema>;
