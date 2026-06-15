@@ -22,7 +22,7 @@ export function skillsDirForTarget(type: string): string | null {
   switch (type) {
     case 'claude': return fromProjectRoot('.claude', 'skills');
     case 'gemini': return fromProjectRoot('.gemini', 'skills');
-    case 'agy':    return fromProjectRoot('.agy', 'skills');
+    case 'agy':    return fromProjectRoot('.gemini', 'skills'); // Antigravity is Gemini-based
     case 'codex':  return fromProjectRoot('.codex', 'skills');
     case 'cursor': return fromProjectRoot('.cursor', 'skills');
     default:       return null;
