@@ -78,7 +78,40 @@ export function exportSddSkills(targetTypes?: string[]): SkillsExportResult {
   return { destinations, fileCount, skipped };
 }
 
-function activeTargetTypes(): string[] {
+export interface SkillFreshness {
+  /** The skills directory for this target, or null if the target has none. */
+  dir: string | null;
+  /** Skill files that are missing on disk. */
+  missing: string[];
+  /** Skill files present on disk but differing from the current built-in template. */
+  stale: string[];
+  /** Skill files present and byte-identical to the built-in template. */
+  ok: string[];
+}
+
+/**
+ * Compare a target's installed SDD skills against the built-in templates, so
+ * `wairon doctor` can report missing or stale (out-of-date) skill files.
+ */
+export function checkSkillFreshness(type: string): SkillFreshness {
+  const dir = skillsDirForTarget(type);
+  const result: SkillFreshness = { dir, missing: [], stale: [], ok: [] };
+  if (!dir) return result;
+
+  const sourceDir = builtinSkillsDir();
+  for (const file of SKILL_FILES) {
+    const destPath = path.join(dir, file);
+    if (!fs.existsSync(destPath)) { result.missing.push(file); continue; }
+    const srcPath = path.join(sourceDir, file);
+    const want = fs.existsSync(srcPath) ? fs.readFileSync(srcPath, 'utf-8') : '';
+    const have = fs.readFileSync(destPath, 'utf-8');
+    if (have === want) result.ok.push(file);
+    else result.stale.push(file);
+  }
+  return result;
+}
+
+export function activeTargetTypes(): string[] {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { loadProjectConfig } = require('../config/loader.js') as typeof import('../config/loader.js');
   const config = loadProjectConfig();

@@ -14,6 +14,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { versionStamp } from '../core/stamp.js';
 
 export const GUIDE_MARKER_START = '<!-- wairon-guide-start -->';
 export const GUIDE_MARKER_END = '<!-- wairon-guide-end -->';
@@ -146,7 +147,7 @@ export function injectGuide(filePath: string, scope: 'global' | 'local'): void {
   // Use `wairon` literally in injected docs — never substitute a dev path. The
   // guide is documentation (the AI uses MCP tools; the human runs `wairon`).
   const body = scope === 'global' ? GLOBAL_GUIDE_BODY : LOCAL_GUIDE_BODY;
-  const section = `\n\n${GUIDE_MARKER_START}\n${body}\n${GUIDE_MARKER_END}\n`;
+  const section = `\n\n${GUIDE_MARKER_START}\n${versionStamp()}\n${body}\n${GUIDE_MARKER_END}\n`;
 
   const existing = fs.existsSync(filePath)
     ? fs.readFileSync(filePath, 'utf-8')

@@ -25,6 +25,7 @@ import {
   runDomainsRemove,
   runSkillsList,
   runSkillsInstall,
+  runDoctor,
 } from '../commands/index.js';
 
 // Clean up any .old binary left over from a previous Windows self-update
@@ -103,6 +104,17 @@ program
   .description('Show a hierarchical completeness graph of the SDD Spec Tree')
   .action(async () => {
     await runStatus();
+  });
+
+// ---------------------------------------------------------------------------
+// doctor
+// ---------------------------------------------------------------------------
+
+program
+  .command('doctor')
+  .description('Health check: flags stale generated guides/skills, an unregistered MCP server, and spec-tree issues')
+  .action(async () => {
+    await runDoctor();
   });
 
 // ---------------------------------------------------------------------------

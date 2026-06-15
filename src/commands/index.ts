@@ -9,4 +9,5 @@ export * from './validate.js';
 export * from './status.js';
 export * from './domains.js';
 export * from './skills.js';
+export * from './doctor.js';
 

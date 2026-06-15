@@ -6,6 +6,7 @@ import { logger } from '../utils/logger.js';
 import { assertProjectInitialized, loadProjectConfig } from '../config/loader.js';
 import { aiDir } from '../utils/fs.js';
 import { WaironError } from '../utils/errors.js';
+import { versionStamp } from '../core/stamp.js';
 
 /** The Claude config dir for global installs. Precedence: explicit override (--config-dir)
  *  > CLAUDE_CONFIG_DIR > ~/.claude. Lets account aliases (`claude-syw`, …) work. */
@@ -303,6 +304,8 @@ NOT search the filesystem to figure out what wairon or SDD is.**
   call \`sdd_get_status\` (not \`wairon status\`).
 - Present each spec layer to the user for approval before moving on, and never write
   source for a component until its spec is \`complete\` and validates with zero errors.
+
+${versionStamp()}
 `;
     fs.writeFileSync(path.join(skillDir, 'SKILL.md'), skillContent, 'utf8');
     logger.success(`wairon global Antigravity plugin installed at ${chalk.cyan(pluginDir)}.`);
