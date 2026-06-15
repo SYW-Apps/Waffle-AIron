@@ -88,7 +88,10 @@ get to work.**
 - **Author and validate specs through the wairon MCP tools only** —
   \`sdd_initialize_system\`, \`sdd_add_subsystem\`, \`sdd_add_component\`,
   \`sdd_define_interface\`, \`sdd_write_narrative\`, \`sdd_add_type\`,
-  \`sdd_validate_tree\`, \`sdd_get_status\`. Don't hand-edit spec YAML.
+  \`sdd_validate_tree\`, \`sdd_get_status\`. These come from the connected **\`wairon\`
+  MCP server** and are already in your available tools — your client may list them
+  namespaced (e.g. \`wairon\` ▸ \`sdd_get_status\`); just call them. Do NOT read files
+  or run \`--help\` / \`mcp status\` to "discover" tool names, and don't hand-edit spec YAML.
 - **You never run the \`wairon\` CLI — that is the human developer's tool.**
   Everything the CLI does, you do through MCP: to validate the tree call
   \`sdd_validate_tree\` (never \`wairon validate\`); to check completeness/status call
@@ -186,17 +189,14 @@ the \`wairon\` CLI is the human developer's tool, not yours.
     fs.writeFileSync(filePath, content, 'utf-8');
   } else if (targetType === 'gemini' || targetType === 'agy') {
     const filePath = path.join(projectRoot, 'GEMINI.md');
-    const content = `@.gemini/GEMINI.md
-
-# Wairon SDD Project
-
-This project uses the Wairon Spec-Driven Development (SDD) framework. The imported
-\`.gemini/GEMINI.md\` above is your complete operating guide — you already have the
-full context, so don't search the project to learn how wairon or SDD works.
-
-To design or modify the system, invoke the **\`sdd-architect\`** skill
-(in \`.gemini/skills/\`). Author and validate specs with the \`sdd_*\` MCP tools;
-the \`wairon\` CLI is the human developer's tool, not yours.
+    // Gemini CLI / Antigravity auto-load the ROOT GEMINI.md but NOT .gemini/GEMINI.md,
+    // and @-import expansion is not guaranteed — so inline the full guide here so the
+    // agent actually has it (otherwise it's told "the guide is above" when it isn't).
+    const content = `# Wairon SDD Project
+${GUIDE_MARKER_START}
+${versionStamp()}
+${LOCAL_GUIDE_BODY}
+${GUIDE_MARKER_END}
 `;
     fs.writeFileSync(filePath, content, 'utf-8');
   } else if (targetType === 'cursor') {

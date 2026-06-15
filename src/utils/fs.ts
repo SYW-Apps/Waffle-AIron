@@ -87,9 +87,10 @@ export function listFilesRecursive(dirPath: string, ext: string): string[] {
 // MCP server, which a host (e.g. Antigravity) may launch with an unrelated cwd.
 let projectRootOverride: string | null = null;
 
-/** Override the project root. Pass an absolute path to the dir containing .wai/. */
-export function setProjectRoot(dir: string): void {
-  projectRootOverride = path.resolve(dir);
+/** Override the project root. Pass an absolute path to the dir containing .wai/,
+ *  or null to clear the override and fall back to process.cwd(). */
+export function setProjectRoot(dir: string | null): void {
+  projectRootOverride = dir === null ? null : path.resolve(dir);
 }
 
 /** The resolved project root: the explicit override if set, else process.cwd(). */

@@ -26,8 +26,9 @@ describe('findProjectRoot', () => {
 });
 
 describe('project root override', () => {
-  // Restore the default (cwd) after each test so other suites are unaffected.
-  afterEach(() => setProjectRoot(process.cwd()));
+  // Clear the override after each test so other suites (which chdir into temp
+  // projects and rely on cwd-based resolution) are unaffected.
+  afterEach(() => setProjectRoot(null));
 
   it('setProjectRoot redirects fromProjectRoot away from cwd', () => {
     const dir = tmpDir('wairon-override-');
