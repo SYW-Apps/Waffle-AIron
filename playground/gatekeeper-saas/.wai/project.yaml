@@ -15,8 +15,8 @@ rules:
     - guardian
     - architect
   enforceReproducibility: true
+  sddRuleSeverity: {}
 paths:
   specsDir: .wai/specs
-defaultBackend: claude
-createdAt: '2026-06-14T14:40:36.297Z'
-updatedAt: '2026-06-14T14:40:36.297Z'
+createdAt: '2026-06-15T13:57:40.220Z'
+updatedAt: '2026-06-15T13:57:40.220Z'

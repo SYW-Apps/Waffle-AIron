@@ -1,8 +1,8 @@
 @.claude/CLAUDE.md
-@.claude/sdd-architect.md
-@.claude/sdd-narrative.md
-@.claude/sdd-auditor.md
-@.claude/sdd-implement.md
+@.claude/skills/sdd-architect.md
+@.claude/skills/sdd-narrative.md
+@.claude/skills/sdd-auditor.md
+@.claude/skills/sdd-implement.md
 
 # Wairon SDD Project
 
