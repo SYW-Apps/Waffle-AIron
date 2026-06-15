@@ -19,7 +19,7 @@ function geminiGlobalDir(override?: string): string {
 }
 
 /** Validate that `dir` looks like a real config directory for the selected agent. */
-function validateConfigDir(dir: string, backend: 'claude' | 'gemini'): void {
+export function validateConfigDir(dir: string, backend: 'claude' | 'gemini'): void {
   const resolved = path.resolve(dir);
   const agent = backend === 'claude' ? 'Claude' : 'Gemini/Antigravity';
 
