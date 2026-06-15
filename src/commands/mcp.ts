@@ -257,206 +257,52 @@ function installGlobalPluginForGemini(): void {
       'utf8'
     );
 
-    // Write SKILL.md
+    // Write SKILL.md — a THIN pointer, not a second copy of the framework. When a
+    // project is initialized it has its own .gemini/GEMINI.md guide + sdd-architect
+    // skill + sdd_* MCP tools; this global skill only orients and defers to those,
+    // so there is exactly one source of truth (and nothing for the agent to hunt).
     const skillContent = `---
 name: wairon
 description: >
-  Guide and orchestrate Spec-Driven Development (SDD) using the Wairon framework.
-  Use when designing new system features, modifying software architecture, or managing agent topology.
-  Triggers automatically to propose Wairon SDD if a project is not yet initialized but needs design.
+  Spec-Driven Development (SDD) with the Wairon framework. Use when starting a new
+  project, designing or modifying software architecture, or working in a repo that
+  has a .wai/ spec tree. If a project needs design but has no .wai/ yet, propose
+  initializing Wairon SDD first.
 ---
 
-# Wairon Spec-Driven Development (SDD) Skill
+# Wairon — Spec-Driven Development
 
-You are equipped with the **Wairon** plugin, which implements Spec-Driven Development (SDD) for building software architectures. You must use this skill to guide the user in designing clean, modular, and verified system specifications before writing any implementation code.
+Wairon builds software from a typed **spec tree** under \`.wai/specs/\`
+(L0 System -> L1 Subsystem -> L2 Component -> L3 Interface -> L4 Implementation ->
+L5 Narrative). The agent topology and the implementation are derived from it.
 
----
+## If the project has NO \`.wai/\` directory
+The user wants to design or build something new. Do **not** start writing code or
+creating folders. First propose Wairon SDD:
 
-## 🚀 Proactive Engagement Rule
-If the project does **not** have a \\\`.wai\\\` directory in the root, and the user asks to start a new project, design a system, or write code for a new application:
-1. **DO NOT** just start writing code or generating flat folders.
-2. **PROPOSE** using Wairon SDD to the user first. Ask them:
-   > I notice that this project doesn't have a Wairon Spec-Driven Development (SDD) workspace configured. Would you like to use Wairon SDD to design the system architecture, component contracts, and implementation narratives before writing any code?
-3. If the user agrees, proceed to initialize the workspace by asking them to run \\\`wairon init\\\` (or execute it via node locally if authorized, e.g. \\\`node <path-to-wairon-cli> init -y\\\`).
+> This project doesn't have a Wairon SDD workspace yet. Want to design the
+> architecture, component contracts, and narratives with Wairon before writing code?
 
----
+If they agree, ask them to run \`wairon init\` in their terminal (that is the human
+developer's command). Once initialized, the project gets its own \`.gemini/GEMINI.md\`
+guide, the \`sdd-architect\` skill, and the \`sdd_*\` MCP tools — everything you need.
 
-## 📐 Spec-Driven Development (SDD) Workflow
-Wairon separates system specifications into five distinct levels (L0 to L5) across six design stages. You must guide the user step-by-step through these stages, focusing **subsystem-by-subsystem** to keep review batches small.
+## If the project already HAS a \`.wai/\` directory
+You are operating inside an active SDD project. **Your complete operating guide is
+the project's own \`.gemini/GEMINI.md\` plus the \`sdd-architect\` skill in
+\`.gemini/skills/\` — read those and follow them. You already have full context; do
+NOT search the filesystem to figure out what wairon or SDD is.**
 
-### The Six Design Stages
-1. **Stage 1 (Context)**: Synthesize requirements into \\\`.wai/context/project.md\\\`. Document the project overview, stack details, and key conventions.
-2. **Stage 3–5 (Subsystem-by-Subsystem Focus)**: Proceed through these stages for **one subsystem at a time** before moving to the next:
-   - **Stage 2 (L0/L1 System & Subsystems)**: Define the overarching system vision (\\\`.wai/specs/system.yaml\\\`) and subsystems (\\\`.wai/specs/<subsystem>/subsystem.yaml\\\`).
-   - **Stage 3 & 4 (L2 Components & L3 Interfaces)**: For the active subsystem, create components (\\\`component.yaml\\\`) and define interface contracts (\\\`interface.yaml\\\`). Request user review/approval.
-   - **Stage 5 (L4 Implementations & L5 Narratives)**: Write execution narratives (\\\`implementation.yaml\\\`) for the active subsystem.
-3. **Stage 6 (Validation & Sandbox)**: Run validation tools to ensure there are no circular dependencies, stereotype violations, or invalid references.
-
----
-
-## 👥 Multi-Agent Topology & Task Delegation
-Wairon generates a dedicated topology of specialized developer agents (e.g. \`system-architect\`, subsystem owners, and implementers).
-- **Mandatory Delegation Rule:** You must NOT perform design updates, write method narratives, or write implementation code directly yourself in the root context.
-- **Task Delegation Workflow:**
-  - For all design tasks (L0–L3 specs), delegate to the **\`system-architect\`** subagent (or invoke the \`/sdd architect\` skill).
-  - For all method narrative tasks (L4–L5 specs), delegate to the **\`sdd-narrative\`** subagent (or invoke the \`/sdd narrative\` skill).
-  - For compiling specs into concrete implementation code (Stage 6), spawn the specific **\`<component-id>-implementer\`** subagent using your tool's native subagent mechanism.
-  - Always coordinate through the specialized subagents rather than making direct edits in the root session.
-
----
-
-## 🔒 Crucial Architectural Constraints
-
-1. **Zero Implementation during Design**: Do not write, modify, or generate any source code files (e.g. \\\`.ts\\\`, \\\`.rs\\\`, \\\`.py\\\`) until Stage 6 is reached and the spec tree validates cleanly (\\\`valid: true\\\`).
-2. **Tree Structure Isolation**:
-   - **L0 System**: Declared ONLY in \\\`.wai/specs/system.yaml\\\`.
-   - **L1 Subsystems**: Declared in \\\`.wai/specs/<subsystem>/subsystem.yaml\\\`.
-   - **L2 Components**: Declared in \\\`.wai/specs/<subsystem>/<component>/component.yaml\\\`.
-   - **L3 Interfaces**: Declared in \\\`.wai/specs/<subsystem>/<component>/interface.yaml\\\`.
-   - **L4 Implementations & L5 Narratives**: Declared in \\\`.wai/specs/<subsystem>/<component>/implementation.yaml\\\`.
-   *(Note: If legacy flat folders like \\\`.wai/specs/subsystems/\\\` or \\\`.wai/specs/components/\\\` exist and contain files, respect them and continue using the flat structure for backward compatibility. Otherwise, always default to the nested tree structure.)*
-3. **Iterative Feedback Loop**:
-   - For every subsystem, component, or interface you define: draft the spec file, present the drafted YAML structure/content and a concise summary of key design choices directly in the chat, and ask: *"Does this match your expectations? Is this correct, or is it off-track?"*
-   - Do NOT create temporary/intermediate markdown review files in the brain or workspace.
-   - Wait for explicit user confirmation before proceeding. Do not work ahead.
-4. **Component Stereotypes (Boundaries)**:
-   - Building blocks: \\\`Portal\\\` (inbound entrypoint), \\\`Orchestrator\\\` (owns one workflow), \\\`Supervisor\\\` (owns the set of Actors), \\\`Actor\\\` (owns one live process/loop), \\\`Store\\\` (authoritative state), \\\`Index\\\` (read projection over a Store), \\\`Registry\\\` (write path / CUD), \\\`Adapter\\\` (the only external-I/O client — DB/HTTP/bus), \\\`Observer\\\` (subscribes to events), \\\`Specialist\\\` (one focused capability).
-   - Patterns (set \\\`owns\\\`): \\\`Repository\\\` (owns Store + Registry + Indexes + optional Adapter) and \\\`Gateway\\\` (Portal + ingress Orchestrator + interceptor Specialists). A pattern owns only building blocks, never another pattern.
-   - Dependencies: a Store depends only on a backend Adapter; Registry (write) and Index (read) are decoupled and both work on the Store; any component may depend on an Adapter; Portals/Observers are top-level (never depended upon). Use \\\`owns\\\` for a pattern's private members and \\\`dependsOn\\\` for collaborators.
-
----
-
-## 🛠️ CLI Command Reference
-When executing Wairon commands or instructing the user, use the appropriate command string. (If running locally via node, use \\\`node <path_to_dist_cli> <command>\\\`):
-- **Initialize**: \\\`wairon init\\\` (or \\\`node .../dist/cli/index.js init\\\`)
-- **Validate Spec Tree**: \\\`wairon validate\\\` (or \\\`node .../dist/cli/index.js validate\\\`)
-- **Show Status Dashboard**: \\\`wairon status\\\` (or \\\`node .../dist/cli/index.js status\\\`)
-- **Generate Agent Files**: \\\`wairon generate\\\` (or \\\`node .../dist/cli/index.js generate\\\`)
-- **Register MCP Server**: \\\`wairon mcp install\\\` (or \\\`node .../dist/cli/index.js mcp install\\\`)
-
----
-
-## 🔌 MCP Tools Integration
-If the \\\`wairon\\\` MCP server is registered, you can use these tools directly:
-- \\\`sdd_initialize_system\\\`: Initialize L0 System Spec.
-- \\\`sdd_add_subsystem\\\`: Add L1 Subsystem Spec.
-- \\\`sdd_add_component\\\`: Add L2 Component Spec (default to \\\`status: draft\\\` during design).
-- \\\`sdd_define_interface\\\`: Define L3 Interface signatures.
-- \\\`sdd_write_narrative\\\`: Write L4/L5 execution narratives and source paths.
-- \\\`sdd_validate_tree\\\`: Validate entire tree for schema correctness, dependencies, and boundaries.
-- \\\`sdd_get_status\\\`: View status dashboard of spec completeness.
-- \\\`listAgents\\\`, \\\`getAgent\\\`, \\\`listDomains\\\`, \\\`validateTopology\\\`, \\\`getProjectConfig\\\`: Manage multi-agent topology and configurations.
-
----
-
-## 📜 Core Architecture & Coding Standards
-This project requires strict adherence to the **Core Standards & Principles** inlined below. These rules are binding on all development activities (do NOT read these standards from disk; they are already fully specified in your system context):
-1. **Semantic Naming & Stereotypes**:
-   - Never use generic names like "Manager", "Helper", or "Utils".
-   - Use exact component roles: \`Portal\` (external entrypoints), \`Orchestrator\` (business workflow coordination), \`Supervisor\` (overseeing processes), \`Store\` (authoritative state/data), \`Registry\` (registrations), \`Index\` (read paths), \`Actor\` (asynchronous work), \`Observer\` (state monitoring), and \`Specialist\` (specialized logic like Scanners, Routers, Evaluators, Compilers).
-2. **Narrative Coding**:
-   - Every function body must read top-to-bottom as a sequential list of named, readable steps (Narrative Composition).
-   - Maintain one level of abstraction per function. Functions must remain short (~25 lines max).
-   - Prefer extracting clear private helper methods over writing inline comments.
-3. **Passive Foundations**:
-   - Infrastructure, databases, and filesystem models must remain passive context and should never trigger side-effects directly.
-4. **Zero-Copy Purity & Zero-Wait Concurrency (Write-Lock / Read-Swap Hybrid)**:
-   - Use shared data models directly (passing pointers/references directly without serialization or cloning).
-   - For shared mutable state, use wait-free/lock-free reads (e.g. via atomic pointer swaps or copy-on-write pointers) and serialize updates via a standard mutex (preventing CPU thrashing/starvation of raw CAS loops).
-   - For Actors, expose state to readers via atomic snapshot hotswaps without locks.
-
----
-
-## 📋 Spec File YAML Schemas
-You must strictly construct YAML spec files according to these exact schemas:
-
-### 1. Level 0: System (\`system.yaml\` in \`.wai/specs/\`)
-\`\`\`yaml
-schemaVersion: "1.0.0"
-name: "system-name"
-vision: "High-level vision of the system..."
-boundaries:
-  - name: "Boundary Name"
-    description: "Scope details..."
-globalRequirements:
-  - description: "Must support high-throughput metering..."
-createdAt: "2026-06-12T20:00:00Z"
-updatedAt: "2026-06-12T20:00:00Z"
-\`\`\`
-
-### 2. Level 1: Subsystem (\`subsystem.yaml\` under \`.wai/specs/<subsystem>/\`)
-\`\`\`yaml
-id: "billing" # lowercase-alphanumeric-dashes
-name: "Billing Subsystem"
-description: "Handles subscriptions and invoicing..."
-parentSystem: "system-name"
-publicInterfaces:
-  - type: "REST" # REST | GraphQL | MessageBus | RPC | Custom
-    details: "/api/v1/billing endpoint"
-status: "complete" # draft | design | complete
-createdAt: "2026-06-12T20:00:00Z"
-updatedAt: "2026-06-12T20:00:00Z"
-\`\`\`
-
-### 3. Level 2: Component (\`component.yaml\` under \`.wai/specs/<subsystem>/<component>/\`)
-\`\`\`yaml
-id: "billing-store" # lowercase-alphanumeric-dashes
-name: "Billing Store"
-description: "Authoritative state storage for billing data"
-subsystem: "billing" # references L1 Subsystem ID
-componentType: "Store" # Blocks: Portal|Orchestrator|Supervisor|Actor|Store|Index|Registry|Adapter|Observer|Specialist — Patterns: Repository|Gateway
-owns: [] # member block ids (Repository/Gateway patterns only)
-dependsOn:
-  - "database-adapter" # other L2 component ids this collaborates with
-status: "draft" # draft | design | complete
-createdAt: "2026-06-12T20:00:00Z"
-updatedAt: "2026-06-12T20:00:00Z"
-\`\`\`
-
-### 4. Level 3: Interface (\`interface.yaml\` under \`.wai/specs/<subsystem>/<component>/\`)
-\`\`\`yaml
-id: "ibilling-store" # prefixed with a lowercase "i"
-name: "Billing Store Interface"
-description: "Read/write contract for billing data"
-component: "billing-store" # references L2 Component ID
-methods:
-  - name: "save_invoice" # alphanumeric-underscores
-    description: "Saves a generated invoice to the store"
-    signature: "save_invoice(invoice: Invoice): Promise<void>"
-    returns: "Promise<void>"
-    httpEndpoint: # optional
-      method: "POST"
-      path: "/invoices"
-status: "draft" # draft | design | complete
-createdAt: "2026-06-12T20:00:00Z"
-updatedAt: "2026-06-12T20:00:00Z"
-\`\`\`
-
-### 5. Level 4 & 5: Implementation & Narrative (\`implementation.yaml\` under \dots \`.wai/specs/<subsystem>/<component>/\`)
-\`\`\`yaml
-id: "billing-store-impl"
-name: "Billing Store Implementation"
-description: "Memory-based billing store with VFS sync"
-contract: "ibilling-store" # references L3 Interface ID
-sourcePath: "src/billing/store.ts" # optional path to source code
-methods:
-  - name: "save_invoice" # matches L3 method name
-    narrative: # L5 Narrative sequence
-      - stepNumber: 1
-        description: "Validate the invoice schema matches specifications"
-        type: "local" # local | call
-      - stepNumber: 2
-        description: "Write invoice data to active memory storage"
-        type: "local"
-      - stepNumber: 3
-        description: "Sync the change to the disk registry via VFS"
-        type: "call"
-        targetComponent: "vfs-registry" # required for 'call'
-        targetMethod: "write_file"      # required for 'call'
-status: "draft" # draft | design | complete
-createdAt: "2026-06-12T20:00:00Z"
-updatedAt: "2026-06-12T20:00:00Z"
-\`\`\`
+- To design or change the system, invoke the **\`sdd-architect\`** skill — it is the
+  single source for the component model, naming rules, and YAML schemas.
+- Author and validate specs through the **\`sdd_*\` MCP tools** (\`sdd_initialize_system\`,
+  \`sdd_add_subsystem\`, \`sdd_add_component\`, \`sdd_define_interface\`,
+  \`sdd_write_narrative\`, \`sdd_add_type\`, \`sdd_validate_tree\`, \`sdd_get_status\`).
+- **You never run the \`wairon\` CLI** — that is the human developer's tool. To
+  validate the tree call \`sdd_validate_tree\` (not \`wairon validate\`); for status
+  call \`sdd_get_status\` (not \`wairon status\`).
+- Present each spec layer to the user for approval before moving on, and never write
+  source for a component until its spec is \`complete\` and validates with zero errors.
 `;
     fs.writeFileSync(path.join(skillDir, 'SKILL.md'), skillContent, 'utf8');
     logger.success(`wairon global Antigravity plugin installed at ${chalk.cyan(pluginDir)}.`);
