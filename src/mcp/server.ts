@@ -2,6 +2,11 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { RootsListChangedNotificationSchema } from '@modelcontextprotocol/sdk/types.js';
+import * as fs from 'fs';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
+import { setProjectRoot } from '../utils/fs.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import type { ValidationIssue } from '../core/validation.js';
 
@@ -452,9 +457,48 @@ export function createMcpServer(): McpServer {
 // Start server with stdio transport
 // ---------------------------------------------------------------------------
 
+/**
+ * Scope the server to the client's actual workspace via MCP "roots". This is how
+ * a server launched with an unrelated cwd (e.g. a single global Antigravity
+ * registration) attaches to the right project — and it stays correct per client
+ * connection, so multiple projects each get their own server scoped to their own
+ * .wai/ tree. If the client doesn't support roots, we keep the cwd/env fallback.
+ */
+async function scopeToClientWorkspace(server: McpServer): Promise<void> {
+  let roots: { uri: string; name?: string }[];
+  try {
+    const result = await server.server.listRoots();
+    roots = (result?.roots ?? []) as { uri: string; name?: string }[];
+  } catch {
+    return; // client did not advertise the roots capability
+  }
+
+  for (const r of roots) {
+    let dir: string | null = null;
+    try { dir = r.uri.startsWith('file:') ? fileURLToPath(r.uri) : r.uri; } catch { dir = null; }
+    if (dir && (fs.existsSync(path.join(dir, '.wai')) || fs.existsSync(path.join(dir, '.wairon')))) {
+      setProjectRoot(dir);
+      process.stderr.write(`[wairon mcp] scoped to client workspace root: ${dir}\n`);
+      return;
+    }
+  }
+  if (roots.length > 0) {
+    process.stderr.write(`[wairon mcp] client provided ${roots.length} root(s), none containing .wai/ — keeping current project root\n`);
+  }
+}
+
 export async function startMcpServer(): Promise<void> {
   const server    = createMcpServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
+
+  // Prefer the client's workspace over the launch cwd, and follow workspace changes.
+  await scopeToClientWorkspace(server);
+  try {
+    server.server.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
+      await scopeToClientWorkspace(server);
+    });
+  } catch { /* roots-changed notifications unsupported — ignore */ }
+
   // server runs until process is killed — stdio transport keeps it alive
 }
