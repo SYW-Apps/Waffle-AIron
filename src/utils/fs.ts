@@ -83,12 +83,42 @@ export function listFilesRecursive(dirPath: string, ext: string): string[] {
   return files;
 }
 
+// The project root defaults to the cwd, but can be overridden — notably by the
+// MCP server, which a host (e.g. Antigravity) may launch with an unrelated cwd.
+let projectRootOverride: string | null = null;
+
+/** Override the project root. Pass an absolute path to the dir containing .wai/. */
+export function setProjectRoot(dir: string): void {
+  projectRootOverride = path.resolve(dir);
+}
+
+/** The resolved project root: the explicit override if set, else process.cwd(). */
+export function getProjectRoot(): string {
+  return projectRootOverride ?? process.cwd();
+}
+
 /**
- * Resolve a path relative to the project root.
- * The project root is always the cwd at the time the CLI runs.
+ * Resolve a path relative to the project root (override if set, else cwd).
  */
 export function fromProjectRoot(...segments: string[]): string {
-  return path.resolve(process.cwd(), ...segments);
+  return path.resolve(getProjectRoot(), ...segments);
+}
+
+/**
+ * Walk up from startDir to the nearest ancestor containing a wairon project
+ * marker (.wai/ or legacy .wairon/). Returns null if none is found.
+ */
+export function findProjectRoot(startDir: string): string | null {
+  let dir = path.resolve(startDir);
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    if (fs.existsSync(path.join(dir, '.wai')) || fs.existsSync(path.join(dir, '.wairon'))) {
+      return dir;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
 }
 
 /**

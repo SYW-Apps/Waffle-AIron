@@ -3,10 +3,11 @@ import * as os from 'os';
 import * as path from 'path';
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
-import { assertProjectInitialized, loadProjectConfig } from '../config/loader.js';
+import { assertProjectInitialized, isProjectInitialized, loadProjectConfig } from '../config/loader.js';
 import { aiDir } from '../utils/fs.js';
 import { WaironError } from '../utils/errors.js';
 import { versionStamp } from '../core/stamp.js';
+import { WAIRON_VERSION } from '../config/defaults.js';
 
 /** The Claude config dir for global installs. Precedence: explicit override (--config-dir)
  *  > CLAUDE_CONFIG_DIR > ~/.claude. Lets account aliases (`claude-syw`, …) work. */
@@ -58,8 +59,24 @@ export function validateConfigDir(dir: string, backend: 'claude' | 'gemini'): vo
 // ---------------------------------------------------------------------------
 
 export async function runMcpServe(): Promise<void> {
-  // Validate that we're in an initialized project before starting.
-  assertProjectInitialized();
+  // A host (e.g. Antigravity) may launch this server with a cwd that is NOT the
+  // project — especially a globally-registered server shared across projects.
+  // Resolve the project root explicitly so the sdd_* tools operate on the right
+  // .wai/ tree: WAIRON_PROJECT_DIR env > nearest .wai/ above cwd > cwd.
+  const { setProjectRoot, getProjectRoot, findProjectRoot } = await import('../utils/fs.js');
+  const envDir = process.env['WAIRON_PROJECT_DIR'];
+  const resolved = (envDir && fs.existsSync(path.join(envDir, '.wai')) ? path.resolve(envDir) : null)
+    ?? findProjectRoot(process.cwd())
+    ?? process.cwd();
+  setProjectRoot(resolved);
+
+  const initialized = isProjectInitialized();
+  // Log to stderr (never stdout — stdout is the JSON-RPC channel). Visible in the
+  // host's MCP server logs, so you can confirm which project the server attached to.
+  process.stderr.write(
+    `[wairon mcp] v${WAIRON_VERSION} — project root: ${getProjectRoot()} ` +
+    `(.wai ${initialized ? 'found' : 'NOT found — sdd_* tools will report no project'})\n`,
+  );
 
   // Dynamic import so the MCP server module is only loaded when this command
   // runs (avoids pulling @modelcontextprotocol/sdk into every command).
