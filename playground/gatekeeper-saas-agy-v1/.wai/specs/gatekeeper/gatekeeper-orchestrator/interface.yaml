@@ -1,0 +1,12 @@
+id: "igatekeeper-orchestrator"
+name: "Gatekeeper Orchestrator Interface"
+description: "Coordinates request validation flow: key authentication, rate-limiting, usage verification, and warning events."
+component: "gatekeeper-orchestrator"
+methods:
+  - name: "authorize_request"
+    description: "Orchestrates API key validation, checks subscription limits, checks rate limits, increments usage metrics, and dispatches warnings."
+    signature: "async fn authorize_request(api_key: String) -> Result<AuthDecision, GatekeeperError>"
+    returns: "Result<AuthDecision, GatekeeperError>"
+status: "complete"
+createdAt: "2026-06-15T23:16:00Z"
+updatedAt: "2026-06-15T23:17:40Z"

@@ -1,0 +1,13 @@
+id: notifier-repository
+name: Notifier Repository
+description: Facade coordinating notifier database operations.
+subsystem: notifier
+componentType: Repository
+owns:
+  - notifier-store
+  - notifier-registry
+  - notifier-index
+dependsOn: []
+status: complete
+createdAt: '2026-06-16T17:42:47.004Z'
+updatedAt: '2026-06-16T17:42:47.005Z'

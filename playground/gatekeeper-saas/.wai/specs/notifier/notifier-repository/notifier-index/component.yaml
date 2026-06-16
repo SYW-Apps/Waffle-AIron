@@ -1,0 +1,11 @@
+id: notifier-index
+name: Notifier Index
+description: Queries usage alert logs to prevent duplicate notifications.
+subsystem: notifier
+componentType: Index
+owns: []
+dependsOn:
+  - notifier-store
+status: complete
+createdAt: '2026-06-16T17:42:46.740Z'
+updatedAt: '2026-06-16T17:42:46.741Z'

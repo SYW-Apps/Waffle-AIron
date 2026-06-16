@@ -1,0 +1,29 @@
+kind: entity
+id: customer
+name: Customer
+description: Represents a registered platform customer with associated billing account information.
+subsystem: identity-billing
+fields:
+  - name: id
+    type: String
+    description: Unique identifier for the customer (UUID).
+    optional: false
+  - name: email
+    type: String
+    description: Customer notification email address.
+    optional: false
+  - name: stripe_customer_id
+    type: String
+    description: Associated Stripe Customer ID.
+    optional: true
+  - name: created_at
+    type: DateTime
+    description: Timestamp when the record was created.
+    optional: false
+  - name: updated_at
+    type: DateTime
+    description: Timestamp when the record was last updated.
+    optional: false
+methods: []
+createdAt: '2026-06-16T16:26:50.816Z'
+updatedAt: '2026-06-16T16:26:50.820Z'

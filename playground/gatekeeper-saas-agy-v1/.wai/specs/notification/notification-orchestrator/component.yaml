@@ -1,0 +1,13 @@
+id: "notification-orchestrator"
+name: "Notification Orchestrator"
+description: "Coordinates customer contact lookup, notification template building, and dispatching via email and push adapters."
+subsystem: "notification"
+componentType: "Orchestrator"
+owns: []
+dependsOn:
+  - "customer-repository"
+  - "email-adapter"
+  - "push-adapter"
+status: "complete"
+createdAt: "2026-06-15T23:16:00Z"
+updatedAt: "2026-06-15T23:25:00Z"

@@ -1,0 +1,36 @@
+id: ibilling-portal
+name: Billing Portal Interface
+description: Inbound HTTP contracts exposing webhook endpoints and CRUD routes.
+component: billing-portal
+methods:
+  - name: create_customer
+    description: Handles POST /customers to register a new user.
+    signature: 'create_customer(req: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    httpEndpoint:
+      method: POST
+      path: /customers
+  - name: create_api_key
+    description: Handles POST /keys to issue a key credential.
+    signature: 'create_api_key(req: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    httpEndpoint:
+      method: POST
+      path: /keys
+  - name: revoke_api_key
+    description: Handles DELETE /keys/:id to revoke key access.
+    signature: 'revoke_api_key(req: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    httpEndpoint:
+      method: DELETE
+      path: /keys/:id
+  - name: stripe_webhook
+    description: Handles POST /webhooks/stripe to ingest subscription events.
+    signature: 'stripe_webhook(req: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    httpEndpoint:
+      method: POST
+      path: /webhooks/stripe
+status: complete
+createdAt: '2026-06-16T16:30:01.153Z'
+updatedAt: '2026-06-16T16:30:01.153Z'

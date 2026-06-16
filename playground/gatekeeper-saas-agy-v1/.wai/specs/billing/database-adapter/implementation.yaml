@@ -1,0 +1,31 @@
+id: "database-adapter-impl"
+name: "Database Adapter Implementation"
+description: "SQLx connection adapter executing raw PostgreSQL queries."
+contract: "idatabase-adapter"
+sourcePath: "src/billing/database_adapter.rs"
+methods:
+  - name: "execute_query"
+    narrative:
+      - stepNumber: 1
+        description: "Acquire a database connection from the SQLx connection pool"
+        type: "local"
+      - stepNumber: 2
+        description: "Execute SQL query mapping query parameters"
+        type: "local"
+      - stepNumber: 3
+        description: "Return number of rows affected"
+        type: "local"
+  - name: "fetch_row"
+    narrative:
+      - stepNumber: 1
+        description: "Acquire a database connection from the SQLx connection pool"
+        type: "local"
+      - stepNumber: 2
+        description: "Execute SQL select query mapping parameters"
+        type: "local"
+      - stepNumber: 3
+        description: "Serialize row data into JSON string and return Option"
+        type: "local"
+status: "complete"
+createdAt: "2026-06-15T23:19:00Z"
+updatedAt: "2026-06-15T23:20:00Z"

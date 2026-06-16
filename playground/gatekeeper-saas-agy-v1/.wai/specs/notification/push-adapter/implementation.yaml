@@ -1,0 +1,23 @@
+id: "push-adapter-impl"
+name: "Push Adapter Implementation"
+description: "Adapter managing outbound FCM (Firebase Cloud Messaging) or Webhook-based push notifications."
+contract: "ipush-adapter"
+sourcePath: "src/notification/push_adapter.rs"
+methods:
+  - name: "send_push"
+    narrative:
+      - stepNumber: 1
+        description: "Initialize HTTP client with push/webhook server credentials"
+        type: "local"
+      - stepNumber: 2
+        description: "Assemble push notification JSON payload matching FCM/Webhook signature"
+        type: "local"
+      - stepNumber: 3
+        description: "Post push request to FCM REST endpoint or webhook URL"
+        type: "local"
+      - stepNumber: 4
+        description: "Return response result status"
+        type: "local"
+status: "complete"
+createdAt: "2026-06-15T23:21:00Z"
+updatedAt: "2026-06-15T23:25:00Z"

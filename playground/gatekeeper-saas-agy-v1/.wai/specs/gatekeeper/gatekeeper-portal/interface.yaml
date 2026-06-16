@@ -1,0 +1,15 @@
+id: "igatekeeper-portal"
+name: "Gatekeeper Portal Interface"
+description: "Inbound HTTP middleware interceptor interface for API authentication and rate-limiting enforcement."
+component: "gatekeeper-portal"
+methods:
+  - name: "handle_request"
+    description: "Intercepts an HTTP request, extracts the API key, coordinates validation, and returns the authorization result."
+    signature: "async fn handle_request(req_headers: HashMap<String, String>, path: String) -> Result<AuthDecision, PortalError>"
+    returns: "Result<AuthDecision, PortalError>"
+    httpEndpoint:
+      method: "POST"
+      path: "/authorize"
+status: "complete"
+createdAt: "2026-06-15T23:16:00Z"
+updatedAt: "2026-06-15T23:17:40Z"

@@ -1,0 +1,20 @@
+id: "stripe-adapter-impl"
+name: "Stripe Adapter Implementation"
+description: "Adapter managing outgoing HTTPS communication with the external Stripe API."
+contract: "istripe-adapter"
+sourcePath: "src/billing/stripe_adapter.rs"
+methods:
+  - name: "retrieve_subscription"
+    narrative:
+      - stepNumber: 1
+        description: "Construct Stripe API request URL and headers with Stripe Secret Key"
+        type: "local"
+      - stepNumber: 2
+        description: "Send HTTP GET request to external Stripe API billing endpoint"
+        type: "local"
+      - stepNumber: 3
+        description: "Deserialize Stripe API JSON response and return subscription metadata"
+        type: "local"
+status: "complete"
+createdAt: "2026-06-15T23:19:00Z"
+updatedAt: "2026-06-15T23:20:00Z"

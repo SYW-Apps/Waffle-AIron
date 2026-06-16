@@ -1,0 +1,10 @@
+id: "email-adapter"
+name: "Email Adapter"
+description: "Adapter managing outbound SMTP email delivery or SendGrid API integration."
+subsystem: "notification"
+componentType: "Adapter"
+owns: []
+dependsOn: []
+status: "complete"
+createdAt: "2026-06-15T23:21:00Z"
+updatedAt: "2026-06-15T23:25:00Z"

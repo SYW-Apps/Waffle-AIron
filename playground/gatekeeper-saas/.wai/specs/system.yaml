@@ -1,7 +1,18 @@
 schemaVersion: 1.0.0
 name: gatekeeper-saas
-vision: Core vision for gatekeeper-saas
-boundaries: []
-globalRequirements: []
-createdAt: '2026-06-15T13:57:40.220Z'
-updatedAt: '2026-06-15T13:57:40.220Z'
+vision: >-
+  A secure, low-latency microservice for API metering, subscription enforcement via Stripe, and
+  customer usage notifications.
+boundaries:
+  - name: API Gatekeeping
+    description: Rate-limiting and checking API access authorization in real-time.
+  - name: Billing Lifecycle
+    description: Tracking subscription states from Stripe webhooks and managing customer billing details.
+  - name: Alerting and Notifications
+    description: Detecting over-limit usage and notifying customers via email.
+globalRequirements:
+  - description: Real-time rate limit checks must complete in under 5ms.
+  - description: Billing webhook processing must be idempotent and resilient.
+  - description: Notification thresholds should be configurable per customer.
+createdAt: '2026-06-16T16:22:12.114Z'
+updatedAt: '2026-06-16T16:22:12.114Z'

@@ -1,0 +1,13 @@
+id: billing-registry
+name: Billing Registry
+description: >-
+  Handles CUD (Create, Update, Delete) operations and transaction persistence for billing database
+  entities.
+subsystem: identity-billing
+componentType: Registry
+owns: []
+dependsOn:
+  - billing-store
+status: complete
+createdAt: '2026-06-16T16:58:50.004Z'
+updatedAt: '2026-06-16T16:58:50.004Z'

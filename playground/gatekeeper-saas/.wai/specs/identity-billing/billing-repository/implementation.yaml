@@ -1,0 +1,88 @@
+id: billing-repository-impl
+name: Billing Repository Implementation
+description: Unified database access facade. Forwards requests directly to registry/index.
+contract: ibilling-repository
+sourcePath: src/identity-billing/repository.rs
+methods:
+  - name: save_customer
+    narrative:
+      - stepNumber: 1
+        description: Forward to billing-registry to insert/upsert Customer.
+        type: call
+        targetComponent: billing-registry
+        targetMethod: insert_customer
+  - name: find_customer_by_id
+    narrative:
+      - stepNumber: 1
+        description: Forward to billing-index to lookup Customer by ID.
+        type: call
+        targetComponent: billing-index
+        targetMethod: lookup_customer_by_id
+  - name: find_customer_by_api_key
+    narrative:
+      - stepNumber: 1
+        description: Forward to billing-index to lookup Customer by API Key hash.
+        type: call
+        targetComponent: billing-index
+        targetMethod: lookup_customer_by_key_hash
+  - name: save_api_key
+    narrative:
+      - stepNumber: 1
+        description: Forward to billing-registry to save key credential.
+        type: call
+        targetComponent: billing-registry
+        targetMethod: insert_api_key
+  - name: revoke_api_key
+    narrative:
+      - stepNumber: 1
+        description: Forward to billing-registry to update api key status to revoked.
+        type: call
+        targetComponent: billing-registry
+        targetMethod: update_api_key_status
+  - name: save_subscription
+    narrative:
+      - stepNumber: 1
+        description: Forward to billing-registry to save Subscription details.
+        type: call
+        targetComponent: billing-registry
+        targetMethod: insert_subscription
+  - name: find_subscription_by_customer_id
+    narrative:
+      - stepNumber: 1
+        description: Forward to billing-index to look up active Subscription by customer_id.
+        type: call
+        targetComponent: billing-index
+        targetMethod: lookup_subscription_by_customer_id
+  - name: find_tier_by_id
+    narrative:
+      - stepNumber: 1
+        description: Forward to billing-index to lookup SubscriptionTier detail boundaries.
+        type: call
+        targetComponent: billing-index
+        targetMethod: lookup_tier_by_id
+  - name: save_tier
+    narrative:
+      - stepNumber: 1
+        description: Forward to billing-registry to save SubscriptionTier metadata.
+        type: call
+        targetComponent: billing-registry
+        targetMethod: insert_tier
+  - name: find_customer_by_stripe_customer_id
+    narrative:
+      - stepNumber: 1
+        description: Forward to billing-index to lookup Customer by Stripe customer ID.
+        type: call
+        targetComponent: billing-index
+        targetMethod: lookup_customer_by_stripe_customer_id
+  - name: find_customer_by_subscription_id
+    narrative:
+      - stepNumber: 1
+        description: Forward to billing-store to lookup Customer by subscription ID.
+        type: call
+        targetComponent: billing-store
+        targetMethod: get_connection
+status: complete
+
+
+createdAt: '2026-06-16T16:57:24.048Z'
+updatedAt: '2026-06-16T16:57:24.048Z'

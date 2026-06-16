@@ -1,0 +1,22 @@
+id: imetering-cache-store
+name: Metering Cache Store Interface
+description: Direct rate-limiting caching in Redis.
+component: metering-cache-store
+methods:
+  - name: check_limits_cache
+    description: Fetches cached subscription limits profile.
+    signature: 'check_limits_cache(key_hash: String): Promise<Option<CachedLimits>>'
+    returns: Promise<Option<CachedLimits>>
+  - name: write_limits_cache
+    description: Caches subscription limits profile.
+    signature: 'write_limits_cache(key_hash: String, limits: CachedLimits): Promise<void>'
+    returns: Promise<void>
+  - name: increment_usage
+    description: Increments sliding-window atomic Redis usage.
+    signature: >-
+      increment_usage(key_hash: String, cost: Int32, limit: Int64, window_seconds: Int64):
+      Promise<IncrementResult>
+    returns: Promise<IncrementResult>
+status: complete
+createdAt: '2026-06-16T17:33:25.122Z'
+updatedAt: '2026-06-16T17:33:25.122Z'

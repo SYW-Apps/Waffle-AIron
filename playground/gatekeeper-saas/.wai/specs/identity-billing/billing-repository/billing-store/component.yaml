@@ -1,0 +1,12 @@
+id: billing-store
+name: Billing Store
+description: >-
+  In-memory database connection and authoritative persistence wrapper for customers, subscriptions,
+  and keys.
+subsystem: identity-billing
+componentType: Store
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-06-16T16:27:13.148Z'
+updatedAt: '2026-06-16T16:27:13.149Z'

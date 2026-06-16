@@ -1,0 +1,21 @@
+id: notifier-billing-client-impl
+name: Notifier Billing Client Implementation
+description: Fetches profile details from billing subsystem context.
+contract: inotifier-billing-client
+sourcePath: src/notifier/billing_client.rs
+methods:
+  - name: get_customer_email
+    narrative:
+      - stepNumber: 1
+        description: Resolve customer profile from billing repository database context.
+        type: call
+        targetComponent: billing-repository
+        targetMethod: find_customer_by_subscription_id
+      - stepNumber: 2
+        description: Return parsed email address.
+        type: local
+status: complete
+
+
+createdAt: '2026-06-16T18:39:09.534Z'
+updatedAt: '2026-06-16T18:39:09.535Z'

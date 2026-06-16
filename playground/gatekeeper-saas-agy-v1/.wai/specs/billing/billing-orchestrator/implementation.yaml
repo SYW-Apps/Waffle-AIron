@@ -1,0 +1,32 @@
+id: "billing-orchestrator-impl"
+name: "Billing Orchestrator Implementation"
+description: "Coordinates subscription updates, parses customer info, updates PostgreSQL records, and syncs plans/limits."
+contract: "ibilling-orchestrator"
+sourcePath: "src/billing/billing_orchestrator.rs"
+methods:
+  - name: "handle_stripe_event"
+    narrative:
+      - stepNumber: 1
+        description: "Evaluate the Stripe event type"
+        type: "local"
+      - stepNumber: 2
+        description: "Call the Stripe adapter to retrieve subscription details"
+        type: "call"
+        targetComponent: "stripe-adapter"
+        targetMethod: "retrieve_subscription"
+      - stepNumber: 3
+        description: "Call the customer repository to get or register the customer"
+        type: "call"
+        targetComponent: "customer-repository"
+        targetMethod: "register_customer"
+      - stepNumber: 4
+        description: "Call the subscription repository to update active status and limits for the subscriber"
+        type: "call"
+        targetComponent: "subscription-repository"
+        targetMethod: "update_subscription_status"
+      - stepNumber: 5
+        description: "Return success status"
+        type: "local"
+status: "complete"
+createdAt: "2026-06-15T23:19:00Z"
+updatedAt: "2026-06-15T23:20:00Z"

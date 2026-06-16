@@ -1,0 +1,12 @@
+id: "stripe-webhook-portal"
+name: "Stripe Webhook Portal"
+description: "Axum endpoint receiving and validating Stripe webhook signature and event payloads."
+subsystem: "billing"
+componentType: "Portal"
+portalType: "HTTP_API"
+owns: []
+dependsOn:
+  - "billing-orchestrator"
+status: "complete"
+createdAt: "2026-06-15T23:18:00Z"
+updatedAt: "2026-06-15T23:20:00Z"

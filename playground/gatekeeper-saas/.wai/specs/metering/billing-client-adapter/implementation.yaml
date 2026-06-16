@@ -1,0 +1,29 @@
+id: billing-client-adapter-impl
+name: Billing Client Adapter Implementation
+description: Adapter querying relational billing repository context.
+contract: ibilling-client-adapter
+sourcePath: src/metering/billing_client.rs
+methods:
+  - name: fetch_customer_limits_by_key
+    narrative:
+      - stepNumber: 1
+        description: Query database for Customer matching API key hash.
+        type: call
+        targetComponent: billing-repository
+        targetMethod: find_customer_by_api_key
+      - stepNumber: 2
+        description: Query database for active Subscription mapped to Customer ID.
+        type: call
+        targetComponent: billing-repository
+        targetMethod: find_subscription_by_customer_id
+      - stepNumber: 3
+        description: Query database for SubscriptionTier limit bounds matching active Subscription tier.
+        type: call
+        targetComponent: billing-repository
+        targetMethod: find_tier_by_id
+      - stepNumber: 4
+        description: Construct and return mapped CustomerLimits details.
+        type: local
+status: complete
+createdAt: '2026-06-16T17:35:14.198Z'
+updatedAt: '2026-06-16T17:35:14.198Z'

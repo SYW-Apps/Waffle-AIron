@@ -1,0 +1,12 @@
+id: "ipush-adapter"
+name: "Push Adapter Interface"
+description: "Interface representing outgoing push notification client operations."
+component: "push-adapter"
+methods:
+  - name: "send_push"
+    description: "Sends a push notification or webhook event to the recipient."
+    signature: "async fn send_push(recipient: String, title: String, message: String) -> Result<(), AdapterError>"
+    returns: "Result<(), AdapterError>"
+status: "complete"
+createdAt: "2026-06-15T23:21:00Z"
+updatedAt: "2026-06-15T23:25:00Z"

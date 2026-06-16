@@ -1,0 +1,12 @@
+id: "gatekeeper-portal"
+name: "Gatekeeper Portal"
+description: "Axum middleware entrypoint that intercepts API requests, extracts key headers, and routes authorization checks."
+subsystem: "gatekeeper"
+componentType: "Portal"
+portalType: "HTTP_API"
+owns: []
+dependsOn:
+  - "gatekeeper-orchestrator"
+status: "complete"
+createdAt: "2026-06-15T23:12:00Z"
+updatedAt: "2026-06-15T23:17:40Z"

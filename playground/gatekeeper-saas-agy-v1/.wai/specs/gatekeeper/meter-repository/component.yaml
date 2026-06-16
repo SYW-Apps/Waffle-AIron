@@ -1,0 +1,12 @@
+id: "meter-repository"
+name: "Meter Repository"
+description: "Repository pattern facade providing unified operations for reading/writing rate-limiting windows and usage counters."
+subsystem: "gatekeeper"
+componentType: "Repository"
+owns:
+  - "meter-store"
+  - "redis-adapter"
+dependsOn: []
+status: "complete"
+createdAt: "2026-06-15T23:12:00Z"
+updatedAt: "2026-06-15T23:17:40Z"

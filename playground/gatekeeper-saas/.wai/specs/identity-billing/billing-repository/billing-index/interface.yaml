@@ -1,0 +1,29 @@
+id: ibilling-index
+name: Billing Index Interface
+description: Fast projection query interfaces.
+component: billing-index
+methods:
+  - name: lookup_customer_by_key_hash
+    description: Finds customer mapped to a specific active api key.
+    signature: 'lookup_customer_by_key_hash(key_hash: String): Promise<Option<Customer>>'
+    returns: Promise<Option<Customer>>
+  - name: lookup_customer_by_id
+    description: Finds customer by unique identifier (UUID).
+    signature: 'lookup_customer_by_id(id: String): Promise<Option<Customer>>'
+    returns: Promise<Option<Customer>>
+  - name: lookup_subscription_by_customer_id
+    description: Retrieves current subscription status for customer.
+    signature: 'lookup_subscription_by_customer_id(customer_id: String): Promise<Option<Subscription>>'
+    returns: Promise<Option<Subscription>>
+  - name: lookup_tier_by_id
+    description: Looks up tier rates and limit bounds.
+    signature: 'lookup_tier_by_id(tier_id: String): Promise<Option<SubscriptionTier>>'
+    returns: Promise<Option<SubscriptionTier>>
+  - name: lookup_customer_by_stripe_customer_id
+    description: Finds customer by Stripe customer identifier.
+    signature: 'lookup_customer_by_stripe_customer_id(stripe_customer_id: String): Promise<Option<Customer>>'
+    returns: Promise<Option<Customer>>
+status: complete
+
+createdAt: '2026-06-16T16:31:29.852Z'
+updatedAt: '2026-06-16T16:31:29.853Z'

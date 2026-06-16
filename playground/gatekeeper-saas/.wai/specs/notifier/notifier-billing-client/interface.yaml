@@ -1,0 +1,13 @@
+id: inotifier-billing-client
+name: Notifier Billing Client Interface
+description: Client boundary port interface communicating with identity-billing.
+component: notifier-billing-client
+methods:
+  - name: get_customer_email
+    description: Looks up email contact details by subscription ID.
+    signature: 'get_customer_email(subscription_id: String): Promise<Option<String>>'
+    returns: Promise<Option<String>>
+status: complete
+
+createdAt: '2026-06-16T17:47:05.794Z'
+updatedAt: '2026-06-16T17:47:05.795Z'

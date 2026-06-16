@@ -1,0 +1,15 @@
+id: "istripe-webhook-portal"
+name: "Stripe Webhook Portal Interface"
+description: "Inbound HTTP interface for receiving incoming Stripe webhook calls."
+component: "stripe-webhook-portal"
+methods:
+  - name: "receive_webhook"
+    description: "Validates Stripe signature header, parses the payload body, and forwards event details to the orchestrator."
+    signature: "async fn receive_webhook(body: String, signature: String) -> Result<WebhookResponse, PortalError>"
+    returns: "Result<WebhookResponse, PortalError>"
+    httpEndpoint:
+      method: "POST"
+      path: "/billing/webhooks"
+status: "complete"
+createdAt: "2026-06-15T23:18:00Z"
+updatedAt: "2026-06-15T23:20:00Z"

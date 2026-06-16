@@ -1,0 +1,58 @@
+id: metering-orchestrator-impl
+name: Metering Orchestrator Implementation
+description: Orchestrates real-time limit checks and count increments.
+contract: imetering-orchestrator
+sourcePath: src/metering/orchestrator.rs
+methods:
+  - name: verify_access
+    narrative:
+      - stepNumber: 1
+        description: Compute SHA-256 hash of API key credentials.
+        type: local
+      - stepNumber: 2
+        description: Query limits profile in Redis cache store.
+        type: call
+        targetComponent: metering-cache-store
+        targetMethod: check_limits_cache
+      - stepNumber: 3
+        description: If cache miss, fetch active limits metadata from billing client.
+        type: call
+        targetComponent: billing-client-adapter
+        targetMethod: fetch_customer_limits_by_key
+      - stepNumber: 4
+        description: If fetched from billing db, save profile in Redis cache.
+        type: call
+        targetComponent: metering-cache-store
+        targetMethod: write_limits_cache
+      - stepNumber: 5
+        description: Evaluate if customer is active and current requests are under rate limit threshold.
+        type: local
+      - stepNumber: 6
+        description: Return AccessValidation verdict.
+        type: local
+  - name: increment_count
+    narrative:
+      - stepNumber: 1
+        description: Compute SHA-256 hash of API key credentials.
+        type: local
+      - stepNumber: 2
+        description: Resolve active client limits profile, querying billing DB if uncached.
+        type: call
+        targetComponent: billing-client-adapter
+        targetMethod: fetch_customer_limits_by_key
+      - stepNumber: 3
+        description: Atomically increment sliding window Redis usage counter.
+        type: call
+        targetComponent: metering-cache-store
+        targetMethod: increment_usage
+      - stepNumber: 4
+        description: >-
+          Check if increment breaches 80% or 100% notification alert bounds, dispatching async
+          warning event if met.
+        type: local
+      - stepNumber: 5
+        description: Return active UsageStatus details.
+        type: local
+status: complete
+createdAt: '2026-06-16T17:35:14.445Z'
+updatedAt: '2026-06-16T17:35:14.446Z'

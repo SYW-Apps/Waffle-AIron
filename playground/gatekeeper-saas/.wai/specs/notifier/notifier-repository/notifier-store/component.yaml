@@ -1,0 +1,10 @@
+id: notifier-store
+name: Notifier Store
+description: PostgreSQL connection wrapper for usage alert logs.
+subsystem: notifier
+componentType: Store
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-06-16T17:42:46.239Z'
+updatedAt: '2026-06-16T17:42:46.240Z'

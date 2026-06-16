@@ -1,0 +1,42 @@
+id: "redis-adapter-impl"
+name: "Redis Adapter Implementation"
+description: "Direct connection adapter to Redis client, performing raw queries and commands."
+contract: "iredis-adapter"
+sourcePath: "src/gatekeeper/redis_adapter.rs"
+methods:
+  - name: "incr_rate_limit"
+    narrative:
+      - stepNumber: 1
+        description: "Obtain a client connection from the Redis pool"
+        type: "local"
+      - stepNumber: 2
+        description: "Atomically increment the key counter and set the expiration TTL if counter is 1"
+        type: "local"
+      - stepNumber: 3
+        description: "Return the current counter value or Redis error"
+        type: "local"
+  - name: "incr_monthly_usage"
+    narrative:
+      - stepNumber: 1
+        description: "Obtain a client connection from the Redis pool"
+        type: "local"
+      - stepNumber: 2
+        description: "Increment the hash field or string value for the billing cycle key"
+        type: "local"
+      - stepNumber: 3
+        description: "Return the newly updated count value"
+        type: "local"
+  - name: "get_string"
+    narrative:
+      - stepNumber: 1
+        description: "Obtain a client connection from the Redis pool"
+        type: "local"
+      - stepNumber: 2
+        description: "Execute GET command for the specified key"
+        type: "local"
+      - stepNumber: 3
+        description: "Return the string value if found, or None"
+        type: "local"
+status: "complete"
+createdAt: "2026-06-15T23:17:00Z"
+updatedAt: "2026-06-15T23:17:40Z"

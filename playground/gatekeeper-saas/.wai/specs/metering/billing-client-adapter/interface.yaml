@@ -1,0 +1,12 @@
+id: ibilling-client-adapter
+name: Billing Client Adapter Interface
+description: Queries the identity-billing subsystem to fetch active limits metadata.
+component: billing-client-adapter
+methods:
+  - name: fetch_customer_limits_by_key
+    description: Resolves subscription rate limits linked to key hash.
+    signature: 'fetch_customer_limits_by_key(key_hash: String): Promise<Option<CustomerLimits>>'
+    returns: Promise<Option<CustomerLimits>>
+status: complete
+createdAt: '2026-06-16T17:33:25.368Z'
+updatedAt: '2026-06-16T17:33:25.369Z'

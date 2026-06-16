@@ -14,6 +14,7 @@ import { CONTEXT_PATHS, syncContextFiles } from '../core/context.js';
 import { readStampVersion } from '../core/stamp.js';
 import { localGuideFilePath, reinjectLocalGuides } from '../utils/ai-guide.js';
 import { activeTargetTypes, checkSkillFreshness, exportSddSkills } from '../core/skills.js';
+import { claudeMcpConfigPath } from './mcp.js';
 
 // ---------------------------------------------------------------------------
 // doctor command
@@ -199,8 +200,10 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
   const wantGemini = targets.includes('gemini') || targets.includes('agy');
 
   if (wantClaude) {
-    const h = mcpEntryHealth(fromProjectRoot('.claude', 'settings.json'));
-    line(tally, h.mark, `Claude (project): ${h.note}${h.mark === 'ok' ? '' : ' — run `wairon mcp install --backend claude`'}`);
+    // Claude loads server definitions from .mcp.json (project scope) — NOT
+    // .claude/settings.json, whose mcpServers block it ignores.
+    const h = mcpEntryHealth(claudeMcpConfigPath(false));
+    line(tally, h.mark, `Claude (project .mcp.json): ${h.note}${h.mark === 'ok' ? '' : ' — run `wairon mcp install --backend claude`'}`);
   }
   if (wantGemini) {
     // Antigravity loads MCP from its GLOBAL mcp_config.json — that's the file that
@@ -220,7 +223,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
   //    the wairon MCP server). Flag it for removal if a stale copy is present.
   const pluginDir = path.join(os.homedir(), '.gemini', 'config', 'plugins', 'wairon');
   if (fs.existsSync(pluginDir)) {
-    line(tally, 'warn', `Legacy Antigravity plugin present (${pluginDir}) — it collides with the wairon MCP server. Remove it (re-run \`wairon mcp install --backend gemini --global\`, which now deletes it).`);
+    line(tally, 'warn', `Legacy Antigravity plugin present (${pluginDir}) — it collides with the wairon MCP server. Remove it with \`wairon doctor --fix\`.`);
   }
   logger.blank();
 

@@ -1,0 +1,19 @@
+id: notifier-observer-impl
+name: Notifier Event Observer Implementation
+description: Event listener forwarding alerts warnings to orchestrator.
+contract: inotifier-observer
+sourcePath: src/notifier/observer.rs
+methods:
+  - name: handle_usage_event
+    narrative:
+      - stepNumber: 1
+        description: Extract threshold alerts metadata values from event payload.
+        type: local
+      - stepNumber: 2
+        description: Call Orchestrator to evaluate and dispatch alert warnings.
+        type: call
+        targetComponent: notifier-orchestrator
+        targetMethod: notify_threshold_reached
+status: complete
+createdAt: '2026-06-16T18:39:10.036Z'
+updatedAt: '2026-06-16T18:39:10.037Z'

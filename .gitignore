@@ -14,6 +14,7 @@ Thumbs.db
 .idea/
 .claude/
 .gemini/
+.codex/
 
 # Test outputs
 .vitest/
@@ -25,3 +26,7 @@ wairon.exe
 *.tar.gz
 *.zip
 *.sha256
+
+# Rust
+.cargo
+target/

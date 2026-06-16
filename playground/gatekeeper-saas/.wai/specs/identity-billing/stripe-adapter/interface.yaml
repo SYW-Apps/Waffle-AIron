@@ -1,0 +1,16 @@
+id: istripe-adapter
+name: Stripe Adapter Interface
+description: Contracts for external communications with Stripe.
+component: stripe-adapter
+methods:
+  - name: create_stripe_customer
+    description: Creates a Stripe customer entry and returns its ID.
+    signature: 'create_stripe_customer(email: String): Promise<String>'
+    returns: Promise<String>
+  - name: fetch_subscription
+    description: Queries details of a stripe subscription.
+    signature: 'fetch_subscription(stripe_sub_id: String): Promise<StripeSubscriptionDetails>'
+    returns: Promise<StripeSubscriptionDetails>
+status: complete
+createdAt: '2026-06-16T16:30:01.608Z'
+updatedAt: '2026-06-16T16:30:01.609Z'

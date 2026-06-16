@@ -1,0 +1,33 @@
+kind: entity
+id: subscription-tier
+name: SubscriptionTier
+description: Defines the request limits and rate limits for a given subscription level.
+subsystem: identity-billing
+fields:
+  - name: id
+    type: String
+    description: Unique slug for the tier (e.g., free, pro, enterprise).
+    optional: false
+  - name: name
+    type: String
+    description: Display name of the tier.
+    optional: false
+  - name: request_limit
+    type: Int64
+    description: Total requests allowed per billing period.
+    optional: false
+  - name: rate_limit_per_minute
+    type: Int32
+    description: Maximum allowed concurrent requests per minute.
+    optional: false
+  - name: created_at
+    type: DateTime
+    description: Timestamp when the tier definition was created.
+    optional: false
+  - name: updated_at
+    type: DateTime
+    description: Timestamp when the tier definition was last modified.
+    optional: false
+methods: []
+createdAt: '2026-06-16T16:26:51.279Z'
+updatedAt: '2026-06-16T16:26:51.284Z'

@@ -1,26 +1,33 @@
-<!-- wairon-generated — do not edit directly -->
-<!-- source: .wai/context/project.md — run `wairon context sync` to rebuild -->
+<!-- wairon-version: 0.1.0 -->
+<!-- wairon-generated — do not edit directly; the human developer rebuilds this with `wairon generate` -->
 
 # Project Context — gatekeeper-saas
 
 # gatekeeper-saas
 
 ## Overview
-A new project initialized with Wairon.
-(The AI agent should overwrite this description with a complete overview of the project concept and stack once the user specifies their choices)
+The `gatekeeper-saas` is a high-performance, resilient microservice designed to track customers, meter API access, enforce subscription limits, and handle notification alerts for over-limit/warning usage. It integrates with Stripe for lifecycle billing and subscription events, and manages client access token authentication and rate-limiting.
 
 ## Tech Stack
-- [Specify Language, Framework, and Databases here]
+- **Language/Runtime:** Rust (stable)
+- **Primary Database:** PostgreSQL (for relational metadata: users, subscriptions, configurations)
+- **Caching & Metering Store:** Redis (for low-latency, high-throughput token-bucket or sliding-window rate-limiting and usage counters)
+- **External Services:** Stripe (Billing/Subscriptions), SMTP/SendGrid (Email Notifications)
 
 ## Key Conventions
-- Follow Spec-Driven Development (SDD) using Wairon.
-- Refrain from writing code implementation until specifications are approved.
+- **Spec-Driven Development (SDD):** Built using the Wairon SDD framework. Spec tree under `.wai/specs/` is the single source of truth.
+- **Architectural Perfection:** Narrative composition, semantic naming, zero-copy models, zero-wait concurrency, and passive foundations.
+- **Testing Gate:** Unit and integration test coverage must be developed test-first before component implementation.
 
 ---
 
-# Domain Map (0 domains)
+# Domain Map (3 domains)
 
-_No domains yet._
+| ID | Source | Name |
+|----|--------|------|
+| `identity-billing` | subsystem `identity-billing` | Identity & Billing Subsystem |
+| `metering` | subsystem `metering` | Metering & Enforcement Subsystem |
+| `notifier` | subsystem `notifier` | Alerts & Notifications Subsystem |
 
 ---
 
@@ -43,7 +50,7 @@ The **wairon MCP server** is active in this project. You can call these tools di
 | `sdd_validate_tree` | Validate the whole spec tree |
 | `sdd_get_status` | Spec-tree completeness dashboard |
 
-Prefer MCP tools over running `wairon` CLI commands when querying project state.
+Use these MCP tools to query and change project state — never the `wairon` CLI (that is the human developer's tool).
 
 ---
 
@@ -60,19 +67,27 @@ sessions — it *equips* yours.
   L3 Interface → L4 Implementation → L5 Narrative. It is the source of truth for
   the project's **architecture**.
 - Agent files in `.claude/agents/` (and other tools) are **generated from the
-  spec tree** — never edit them by hand. Run `wairon generate` to refresh them.
-- `wairon validate` is an architecture-conformance gate: reference integrity,
-  contract↔implementation method symmetry, component-stereotype dependency rules
-  (e.g. Portals may not depend on Stores), and dependency-cycle detection.
+  spec tree** — never edit them by hand.
+- A conformance gate enforces reference integrity, contract↔implementation method
+  symmetry, component-stereotype dependency rules (e.g. Portals may not depend on
+  Stores), and dependency-cycle detection. You run it via the `sdd_validate_tree`
+  MCP tool.
 
-### How wairon fits your session
+### How you work in an SDD project
 
-- **Subagents:** the generated agent files (a `system-architect`, a `*-owner`
-  per subsystem/domain, a `*-implementer` per component). Spawn them with your
-  tool's own native subagent mechanism — wairon does not spawn sessions itself.
-- **Skills:** `sdd-architect`, `sdd-narrative`, `sdd-auditor`, `sdd-implement` —
-  run them in-session to drive the workflow.
-- **MCP tools:** `sdd_*` tools to author and validate specs (see the project guide).
+- **Skills:** invoke `sdd-architect` to design (plus `sdd-narrative`, `sdd-auditor`,
+  `sdd-implement`). The project's own `.claude/CLAUDE.md` / `.gemini/GEMINI.md` guide
+  is your full playbook — read it and follow it; you don't need to search for more.
+- **MCP tools:** author and validate specs through the `sdd_*` tools
+  (`sdd_initialize_system`, `sdd_add_subsystem`, `sdd_add_component`,
+  `sdd_define_interface`, `sdd_write_narrative`, `sdd_add_type`, `sdd_validate_tree`,
+  `sdd_get_status`).
+- **You never run the `wairon` CLI — it is the human developer's tool.** Everything
+  it does, you do through MCP: validate with `sdd_validate_tree` (not `wairon
+  validate`); check status with `sdd_get_status` (not `wairon status`). Don't run
+  shell commands for these.
+- **Subagents:** spawn the generated `<component>-implementer` agents via your tool's
+  own native subagent mechanism — wairon does not spawn sessions itself.
 
 ### Strict once enabled
 
@@ -83,14 +98,3 @@ If the SDD workflow is active, follow it strictly:
    If the spec is incomplete, stop and extend the spec — do not improvise.
 3. **Human-in-the-loop.** Present each drafted spec layer for approval before
    moving on; do not design several layers ahead unprompted.
-
-### Key commands (human-run)
-```
-wairon status                spec-tree completeness dashboard
-wairon validate              architecture-conformance gate
-wairon generate              regenerate agent files + (re)install skills
-wairon list                  list agents resolved from the spec tree
-wairon domains list          list domains (subsystem-derived + free-standing)
-wairon skills install        (re)install the SDD skills into your tools
-wairon mcp install           register the wairon MCP server
-```

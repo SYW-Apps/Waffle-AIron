@@ -1,0 +1,12 @@
+id: stripe-adapter
+name: Stripe Adapter
+description: >-
+  Handles direct external HTTP communication with Stripe API for checking subscriptions and syncing
+  customer details.
+subsystem: identity-billing
+componentType: Adapter
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-06-16T16:27:13.880Z'
+updatedAt: '2026-06-16T16:27:13.881Z'

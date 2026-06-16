@@ -1,0 +1,31 @@
+id: stripe-adapter-impl
+name: Stripe Adapter Implementation
+description: Stripe HTTP API client wrapper using stripe-node crate/bindings.
+contract: istripe-adapter
+sourcePath: src/identity-billing/stripe_adapter.rs
+methods:
+  - name: create_stripe_customer
+    narrative:
+      - stepNumber: 1
+        description: Initialize Stripe client using secret API key.
+        type: local
+      - stepNumber: 2
+        description: Send HTTP POST request to Stripe Customer API.
+        type: local
+      - stepNumber: 3
+        description: Extract and return stripe_customer_id from response.
+        type: local
+  - name: fetch_subscription
+    narrative:
+      - stepNumber: 1
+        description: Initialize Stripe client using secret API key.
+        type: local
+      - stepNumber: 2
+        description: Send HTTP GET request to Stripe Subscription API.
+        type: local
+      - stepNumber: 3
+        description: Format and return subscription details.
+        type: local
+status: complete
+createdAt: '2026-06-16T16:57:23.044Z'
+updatedAt: '2026-06-16T16:57:23.045Z'

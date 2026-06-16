@@ -1,0 +1,44 @@
+id: "customer-repository-impl"
+name: "Customer Repository Implementation"
+description: "Handles customer repository operations, caching read hits and coordinating registrations."
+contract: "icustomer-repository"
+sourcePath: "src/billing/customer_repository.rs"
+methods:
+  - name: "get_customer"
+    narrative:
+      - stepNumber: 1
+        description: "Call the customer store to check for cached customer details"
+        type: "call"
+        targetComponent: "customer-store"
+        targetMethod: "get_cached_customer"
+      - stepNumber: 2
+        description: "If cache missed, call the database adapter to fetch customer from PostgreSQL"
+        type: "call"
+        targetComponent: "database-adapter"
+        targetMethod: "fetch_row"
+      - stepNumber: 3
+        description: "If found, call the customer store to cache the customer details"
+        type: "call"
+        targetComponent: "customer-store"
+        targetMethod: "update_cached_customer"
+      - stepNumber: 4
+        description: "Return customer details"
+        type: "local"
+  - name: "register_customer"
+    narrative:
+      - stepNumber: 1
+        description: "Call the customer registry to save the new customer details in PostgreSQL"
+        type: "call"
+        targetComponent: "customer-registry"
+        targetMethod: "save_customer"
+      - stepNumber: 2
+        description: "Call the customer store to cache the new customer details"
+        type: "call"
+        targetComponent: "customer-store"
+        targetMethod: "update_cached_customer"
+      - stepNumber: 3
+        description: "Return registered customer details"
+        type: "local"
+status: "complete"
+createdAt: "2026-06-15T23:19:00Z"
+updatedAt: "2026-06-15T23:20:00Z"

@@ -1,0 +1,19 @@
+id: notifier-registry-impl
+name: Notifier Registry Implementation
+description: Executes SQL insert commands for alerts logs.
+contract: inotifier-registry
+sourcePath: src/notifier/registry.rs
+methods:
+  - name: insert_alert_log
+    narrative:
+      - stepNumber: 1
+        description: Acquire database connection.
+        type: call
+        targetComponent: notifier-store
+        targetMethod: get_connection
+      - stepNumber: 2
+        description: Execute INSERT query writing alert log details.
+        type: local
+status: complete
+createdAt: '2026-06-16T18:39:08.562Z'
+updatedAt: '2026-06-16T18:39:08.563Z'

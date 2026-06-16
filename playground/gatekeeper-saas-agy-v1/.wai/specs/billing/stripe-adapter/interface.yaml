@@ -1,0 +1,12 @@
+id: "istripe-adapter"
+name: "Stripe Adapter Interface"
+description: "Interface representing operations directly on the external Stripe API client."
+component: "stripe-adapter"
+methods:
+  - name: "retrieve_subscription"
+    description: "Fetches active subscription data matching Stripe Subscription ID."
+    signature: "async fn retrieve_subscription(stripe_sub_id: String) -> Result<StripeSubscriptionDetails, StripeError>"
+    returns: "Result<StripeSubscriptionDetails, StripeError>"
+status: "complete"
+createdAt: "2026-06-15T23:18:00Z"
+updatedAt: "2026-06-15T23:20:00Z"

@@ -1,0 +1,10 @@
+id: "redis-adapter"
+name: "Redis Adapter"
+description: "Adapter handling outbound Redis client operations, performing atomic counts and TTL sets."
+subsystem: "gatekeeper"
+componentType: "Adapter"
+owns: []
+dependsOn: []
+status: "complete"
+createdAt: "2026-06-15T23:12:00Z"
+updatedAt: "2026-06-15T23:17:40Z"

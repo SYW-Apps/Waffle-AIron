@@ -1,0 +1,15 @@
+id: billing-repository
+name: Billing Repository
+description: >-
+  Encapsulates billing database operations into a unified facade. Controls access to billing store,
+  registry, and indexes.
+subsystem: identity-billing
+componentType: Repository
+owns:
+  - billing-store
+  - billing-registry
+  - billing-index
+dependsOn: []
+status: complete
+createdAt: '2026-06-16T16:27:14.115Z'
+updatedAt: '2026-06-16T16:27:14.116Z'

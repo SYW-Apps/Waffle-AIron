@@ -1,0 +1,12 @@
+id: "icustomer-registry"
+name: "Customer Registry Interface"
+description: "Durable write path contract for managing customer registration details."
+component: "customer-registry"
+methods:
+  - name: "save_customer"
+    description: "Saves or updates customer registration records to durable SQL storage."
+    signature: "async fn save_customer(customer: CustomerDetails) -> Result<(), RegistryError>"
+    returns: "Result<(), RegistryError>"
+status: "complete"
+createdAt: "2026-06-15T23:18:00Z"
+updatedAt: "2026-06-15T23:20:00Z"

@@ -1,0 +1,12 @@
+id: identity-billing
+name: Identity & Billing Subsystem
+description: >-
+  Manages customers, API access credentials (keys), Stripe subscription states, and tier usage
+  limits.
+parentSystem: gatekeeper-saas
+publicInterfaces:
+  - type: REST
+    details: REST API for customer management and Stripe Webhook ingest
+status: complete
+createdAt: '2026-06-16T16:22:34.254Z'
+updatedAt: '2026-06-16T16:22:34.255Z'

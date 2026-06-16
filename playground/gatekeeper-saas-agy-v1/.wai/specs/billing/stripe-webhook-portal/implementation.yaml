@@ -1,0 +1,25 @@
+id: "stripe-webhook-portal-impl"
+name: "Stripe Webhook Portal Implementation"
+description: "Axum endpoint receiving and validating Stripe webhook signature and event payloads."
+contract: "istripe-webhook-portal"
+sourcePath: "src/billing/stripe_webhook_portal.rs"
+methods:
+  - name: "receive_webhook"
+    narrative:
+      - stepNumber: 1
+        description: "Verify the Stripe signature header using the webhook secret"
+        type: "local"
+      - stepNumber: 2
+        description: "Parse the request body into a Stripe Event payload structure"
+        type: "local"
+      - stepNumber: 3
+        description: "Call the billing orchestrator to process the webhook event details"
+        type: "call"
+        targetComponent: "billing-orchestrator"
+        targetMethod: "handle_stripe_event"
+      - stepNumber: 4
+        description: "Return HTTP 200 OK webhook response to Stripe"
+        type: "local"
+status: "complete"
+createdAt: "2026-06-15T23:19:00Z"
+updatedAt: "2026-06-15T23:20:00Z"

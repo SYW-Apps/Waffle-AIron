@@ -1,0 +1,10 @@
+id: "notification"
+name: "Notification Subsystem"
+description: "Listens to usage updates and triggers email warnings and push/webhook alerts when limits are approached (80%) or reached (100%)."
+parentSystem: "gatekeeper-saas"
+publicInterfaces:
+  - type: "MessageBus"
+    details: "Asynchronous notification dispatcher queue listening for limit warning events"
+status: "complete"
+createdAt: "2026-06-15T23:11:00Z"
+updatedAt: "2026-06-15T23:11:00Z"

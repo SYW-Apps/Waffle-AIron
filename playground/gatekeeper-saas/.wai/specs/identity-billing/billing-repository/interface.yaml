@@ -1,0 +1,54 @@
+id: ibilling-repository
+name: Billing Repository Interface
+description: Facade interface for billing database retrieval and updates.
+component: billing-repository
+methods:
+  - name: save_customer
+    description: Saves or updates a customer entity.
+    signature: 'save_customer(customer: Customer): Promise<void>'
+    returns: Promise<void>
+  - name: find_customer_by_id
+    description: Resolves a customer entity from its unique UUID.
+    signature: 'find_customer_by_id(id: String): Promise<Option<Customer>>'
+    returns: Promise<Option<Customer>>
+  - name: find_customer_by_api_key
+    description: Looks up a customer by verifying hashed credentials.
+    signature: 'find_customer_by_api_key(key_hash: String): Promise<Option<Customer>>'
+    returns: Promise<Option<Customer>>
+  - name: save_api_key
+    description: Saves or updates an ApiKey entity.
+    signature: 'save_api_key(key: ApiKey): Promise<void>'
+    returns: Promise<void>
+  - name: revoke_api_key
+    description: Revokes access for a specific api key ID.
+    signature: 'revoke_api_key(id: String): Promise<void>'
+    returns: Promise<void>
+  - name: save_subscription
+    description: Saves or updates a customer subscription.
+    signature: 'save_subscription(sub: Subscription): Promise<void>'
+    returns: Promise<void>
+  - name: find_subscription_by_customer_id
+    description: Resolves a subscription record for a customer.
+    signature: 'find_subscription_by_customer_id(customer_id: String): Promise<Option<Subscription>>'
+    returns: Promise<Option<Subscription>>
+  - name: find_tier_by_id
+    description: Retrieves metadata about subscription limits.
+    signature: 'find_tier_by_id(tier_id: String): Promise<Option<SubscriptionTier>>'
+    returns: Promise<Option<SubscriptionTier>>
+  - name: save_tier
+    description: Creates or updates limits metadata for a subscription level.
+    signature: 'save_tier(tier: SubscriptionTier): Promise<void>'
+    returns: Promise<void>
+  - name: find_customer_by_stripe_customer_id
+    description: Resolves a customer entity from their Stripe customer identifier.
+    signature: 'find_customer_by_stripe_customer_id(stripe_customer_id: String): Promise<Option<Customer>>'
+    returns: Promise<Option<Customer>>
+  - name: find_customer_by_subscription_id
+    description: Resolves a customer entity from their subscription identifier.
+    signature: 'find_customer_by_subscription_id(subscription_id: String): Promise<Option<Customer>>'
+    returns: Promise<Option<Customer>>
+status: complete
+
+
+createdAt: '2026-06-16T16:30:01.891Z'
+updatedAt: '2026-06-16T16:30:01.892Z'

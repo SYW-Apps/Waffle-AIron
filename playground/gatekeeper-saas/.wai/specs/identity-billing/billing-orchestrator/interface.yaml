@@ -1,0 +1,24 @@
+id: ibilling-orchestrator
+name: Billing Orchestrator Interface
+description: Executes coordinating logic for workflows.
+component: billing-orchestrator
+methods:
+  - name: register_customer
+    description: Onboards a client and links Stripe records.
+    signature: 'register_customer(email: String): Promise<Customer>'
+    returns: Promise<Customer>
+  - name: generate_api_key
+    description: Creates a hashed access key linked to the customer.
+    signature: 'generate_api_key(customer_id: String): Promise<ApiKey>'
+    returns: Promise<ApiKey>
+  - name: revoke_api_key
+    description: Marks a customer API key as revoked.
+    signature: 'revoke_api_key(key_id: String): Promise<void>'
+    returns: Promise<void>
+  - name: handle_stripe_event
+    description: Parses stripe payloads and synchronizes active tier limits.
+    signature: 'handle_stripe_event(event_type: String, payload: String): Promise<void>'
+    returns: Promise<void>
+status: complete
+createdAt: '2026-06-16T16:30:01.383Z'
+updatedAt: '2026-06-16T16:30:01.384Z'

@@ -1,0 +1,11 @@
+id: notifier-registry
+name: Notifier Registry
+description: Transactional write access to record dispatched usage alert logs.
+subsystem: notifier
+componentType: Registry
+owns: []
+dependsOn:
+  - notifier-store
+status: complete
+createdAt: '2026-06-16T17:42:46.489Z'
+updatedAt: '2026-06-16T17:42:46.490Z'

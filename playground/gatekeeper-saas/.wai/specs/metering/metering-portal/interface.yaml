@@ -1,0 +1,22 @@
+id: imetering-portal
+name: Metering Portal Interface
+description: Inbound HTTP contracts for rate limit checks and usage increments.
+component: metering-portal
+methods:
+  - name: check_access
+    description: Handles POST /check to verify key limits.
+    signature: 'check_access(req: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    httpEndpoint:
+      method: POST
+      path: /check
+  - name: report_usage
+    description: Handles POST /meter to increment usage count.
+    signature: 'report_usage(req: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    httpEndpoint:
+      method: POST
+      path: /meter
+status: complete
+createdAt: '2026-06-16T17:33:24.646Z'
+updatedAt: '2026-06-16T17:33:24.647Z'

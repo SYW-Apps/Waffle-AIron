@@ -1,0 +1,14 @@
+id: billing-portal
+name: Billing REST Portal
+description: >-
+  HTTP endpoint entrypoint exposing customer CRUD routes, API key routes, and the Stripe webhook
+  callback ingest path.
+subsystem: identity-billing
+componentType: Portal
+owns: []
+dependsOn:
+  - billing-orchestrator
+portalType: HTTP_API
+status: complete
+createdAt: '2026-06-16T16:27:14.600Z'
+updatedAt: '2026-06-16T16:27:14.601Z'

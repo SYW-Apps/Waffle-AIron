@@ -1,0 +1,13 @@
+id: notifier-billing-client
+name: Notifier Billing Client
+description: Client adapter resolving customer contact profiles from identity-billing database context.
+subsystem: notifier
+componentType: Adapter
+owns: []
+dependsOn:
+  - billing-repository
+status: complete
+
+
+createdAt: '2026-06-16T17:42:47.542Z'
+updatedAt: '2026-06-16T17:42:47.543Z'

@@ -1,0 +1,25 @@
+id: "customer-store-impl"
+name: "Customer Store Implementation"
+description: "In-memory cache for customer metadata."
+contract: "icustomer-store"
+sourcePath: "src/billing/customer_store.rs"
+methods:
+  - name: "get_cached_customer"
+    narrative:
+      - stepNumber: 1
+        description: "Read the local customer memory map using lock-free read swaps"
+        type: "local"
+      - stepNumber: 2
+        description: "Return the CustomerDetails if found, otherwise return None"
+        type: "local"
+  - name: "update_cached_customer"
+    narrative:
+      - stepNumber: 1
+        description: "Acquire the write lock for the customer memory map safely"
+        type: "local"
+      - stepNumber: 2
+        description: "Insert or update the customer details in active memory storage"
+        type: "local"
+status: "complete"
+createdAt: "2026-06-15T23:19:00Z"
+updatedAt: "2026-06-15T23:20:00Z"

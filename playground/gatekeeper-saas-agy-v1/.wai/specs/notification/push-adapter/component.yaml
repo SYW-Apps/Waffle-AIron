@@ -1,0 +1,10 @@
+id: "push-adapter"
+name: "Push Adapter"
+description: "Adapter managing outbound FCM (Firebase Cloud Messaging) or Webhook-based push notifications."
+subsystem: "notification"
+componentType: "Adapter"
+owns: []
+dependsOn: []
+status: "complete"
+createdAt: "2026-06-15T23:21:00Z"
+updatedAt: "2026-06-15T23:25:00Z"

@@ -1,0 +1,10 @@
+id: "customer-store"
+name: "Customer Store"
+description: "Authoritative local in-memory representation/cache of customer metadata."
+subsystem: "billing"
+componentType: "Store"
+owns: []
+dependsOn: []
+status: "complete"
+createdAt: "2026-06-15T23:18:00Z"
+updatedAt: "2026-06-15T23:20:00Z"

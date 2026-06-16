@@ -1,0 +1,30 @@
+id: "notification-orchestrator-impl"
+name: "Notification Orchestrator Implementation"
+description: "Coordinates customer contact lookup, notification template building, and dispatching via email and push adapters."
+contract: "inotification-orchestrator"
+sourcePath: "src/notification/orchestrator.rs"
+methods:
+  - name: "dispatch_alert"
+    narrative:
+      - stepNumber: 1
+        description: "Format the alert subject and HTML email body template based on the current usage and limit details"
+        type: "local"
+      - stepNumber: 2
+        description: "Call the email adapter to send the warning email to the customer's billing email address"
+        type: "call"
+        targetComponent: "email-adapter"
+        targetMethod: "send_email"
+      - stepNumber: 3
+        description: "Format the push notification payload message"
+        type: "local"
+      - stepNumber: 4
+        description: "Call the push adapter to dispatch the push notification alert"
+        type: "call"
+        targetComponent: "push-adapter"
+        targetMethod: "send_push"
+      - stepNumber: 5
+        description: "Return success"
+        type: "local"
+status: "complete"
+createdAt: "2026-06-15T23:21:00Z"
+updatedAt: "2026-06-15T23:25:00Z"

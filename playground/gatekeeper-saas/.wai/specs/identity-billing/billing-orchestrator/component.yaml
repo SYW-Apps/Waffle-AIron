@@ -1,0 +1,14 @@
+id: billing-orchestrator
+name: Billing Orchestrator
+description: >-
+  Executes transaction scripts and flows like customer registration, API key lifecycle, and
+  processing incoming webhook events.
+subsystem: identity-billing
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - billing-repository
+  - stripe-adapter
+status: complete
+createdAt: '2026-06-16T16:27:14.370Z'
+updatedAt: '2026-06-16T16:27:14.371Z'

@@ -8,15 +8,25 @@ import { aiDir } from '../utils/fs.js';
 import { WaironError } from '../utils/errors.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 
-/** The Claude config dir for global installs. Precedence: explicit override (--config-dir)
- *  > CLAUDE_CONFIG_DIR > ~/.claude. Lets account aliases (`claude-syw`, …) work. */
-function claudeGlobalDir(override?: string): string {
-  return override || process.env['CLAUDE_CONFIG_DIR'] || path.join(os.homedir(), '.claude');
-}
-
 /** The Gemini/Antigravity home dir. Precedence: override > GEMINI_CONFIG_DIR > ~/.gemini. */
 function geminiGlobalDir(override?: string): string {
   return override || process.env['GEMINI_CONFIG_DIR'] || path.join(os.homedir(), '.gemini');
+}
+
+/**
+ * Where Claude Code reads MCP *server definitions* from.
+ *   - project scope: `<projectRoot>/.mcp.json` (shared/committed; same file `claude mcp add -s project` writes)
+ *   - user scope (global): the Claude state file `.claude.json` — in CLAUDE_CONFIG_DIR / --config-dir if set,
+ *     else `~/.claude.json`; the wairon entry goes under its top-level `mcpServers`.
+ *
+ * IMPORTANT: `.claude/settings.json` is NOT a server-definition source. It only governs permissions and
+ * which `.mcp.json` servers are enabled — so an `mcpServers` block written there is silently ignored by
+ * Claude (the tools never load). That mis-targeting was the long-standing reason the sdd_* tools were invisible.
+ */
+export function claudeMcpConfigPath(useGlobal: boolean, override?: string): string {
+  if (!useGlobal) return path.join(process.cwd(), '.mcp.json');
+  const dir = override || process.env['CLAUDE_CONFIG_DIR'];
+  return dir ? path.join(dir, '.claude.json') : path.join(os.homedir(), '.claude.json');
 }
 
 /** Validate that `dir` looks like a real config directory for the selected agent. */
@@ -191,9 +201,10 @@ export async function runMcpInstall(options: McpInstallOptions = {}): Promise<vo
         settingsPath = path.join(configBase, 'settings.json');
       }
     } else {
-      // Claude: global resolves --config-dir > CLAUDE_CONFIG_DIR > ~/.claude; else project-local.
-      configBase = useGlobal ? claudeGlobalDir(options.configDir) : path.join(process.cwd(), '.claude');
-      settingsPath = path.join(configBase, 'settings.json');
+      // Claude reads server definitions from .mcp.json (project) or .claude.json (user scope),
+      // NOT .claude/settings.json. claudeMcpConfigPath resolves the correct one.
+      settingsPath = claudeMcpConfigPath(useGlobal, options.configDir);
+      configBase = path.dirname(settingsPath);
     }
 
     // ── Read existing settings (or start fresh) ───────────────────────────────
@@ -254,6 +265,12 @@ export async function runMcpInstall(options: McpInstallOptions = {}): Promise<vo
     const restartApp = backend === 'gemini' ? 'Antigravity CLI (agy)' : 'claude';
     logger.info(`Restart ${chalk.bold(restartApp)} (or reload MCP servers) to activate.`);
 
+    // A project-scoped .mcp.json server needs a one-time trust approval the next
+    // time Claude launches in this project (it shows as "⏸ Pending approval").
+    if (backend === 'claude' && !useGlobal) {
+      logger.warn('Claude shows project .mcp.json servers as "⏸ Pending approval" — approve wairon once on next launch (or run `claude` and accept the trust prompt).');
+    }
+
     // Antigravity loads MCP from its global mcp_config.json, NOT the project's
     // .gemini/settings.json — so a project-local install won't surface tools there.
     if (backend === 'gemini' && !useGlobal) {
@@ -272,8 +289,8 @@ export async function runMcpStatus(): Promise<void> {
   assertProjectInitialized();
 
   const projectConfig = loadProjectConfig();
-  const claudeProject = path.join(process.cwd(), '.claude', 'settings.json');
-  const claudeGlobal  = path.join(claudeGlobalDir(), 'settings.json');
+  const claudeProject = claudeMcpConfigPath(false);
+  const claudeGlobal  = claudeMcpConfigPath(true);
   const geminiProject = path.join(process.cwd(), '.gemini', 'settings.json');
   const geminiGlobal  = path.join(geminiGlobalDir(), 'antigravity-cli', 'mcp_config.json');
 
@@ -282,8 +299,8 @@ export async function runMcpStatus(): Promise<void> {
   logger.blank();
 
   const checks = [
-    { label: 'Claude (project)', filePath: claudeProject, fallbackName: 'settings.json' },
-    { label: 'Claude (global)', filePath: claudeGlobal, fallbackName: 'settings.json' },
+    { label: 'Claude (project)', filePath: claudeProject, fallbackName: '.mcp.json' },
+    { label: 'Claude (user/global)', filePath: claudeGlobal, fallbackName: '.claude.json' },
     { label: 'Antigravity (project)', filePath: geminiProject, fallbackName: 'settings.json' },
     { label: 'Antigravity (global)', filePath: geminiGlobal, fallbackName: 'mcp_config.json' },
   ];
