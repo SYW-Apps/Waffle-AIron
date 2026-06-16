@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import * as path from 'path';
 import { AI_PATHS } from '../config/loader.js';
 import { ensureDir, listFiles, listFilesRecursive, pathExists } from '../utils/fs.js';
@@ -155,10 +156,30 @@ export function getSubsystemPath(id: string): string {
   return path.join(AI_PATHS.specsDir(), id, 'subsystem.yaml');
 }
 
+/**
+ * The pattern component that owns `id` via its `owns` list (at most one — the
+ * SHARED_OWNED_MEMBER rule forbids two owners), or null. An owned member nests
+ * physically under its owner because the owner owns its *implementation*; an
+ * interface/port reference uses `dependsOn` and stays a flat sibling instead.
+ */
+function findOwner(id: string, components: ComponentSpec[]): ComponentSpec | null {
+  return components.find((c) => c.id !== id && (c.owns ?? []).includes(id)) ?? null;
+}
+
 export function getComponentPath(id: string, subsystemId?: string): string {
   const index = scanAllSpecs();
   if (index.paths.component[id]) {
     return index.paths.component[id];
+  }
+
+  // Owned members nest one level deep inside their owning pattern's folder
+  // (patterns never own patterns, so it is exactly one level).
+  const owner = findOwner(id, index.components);
+  if (owner) {
+    const ownerPath = index.paths.component[owner.id];
+    if (ownerPath && ownerPath.endsWith('component.yaml')) {
+      return path.join(path.dirname(ownerPath), id, 'component.yaml');
+    }
   }
 
   if (subsystemId) {
@@ -314,6 +335,57 @@ export function saveComponentSpec(spec: ComponentSpec): void {
   spec.updatedAt = new Date().toISOString();
   writeYamlFile(p, spec);
   invalidateSpecCache();
+  // Keep the physical layout in sync with ownership: nest owned members under
+  // their pattern, and move anything an `owns` change has displaced.
+  normalizeComponentLayout();
+}
+
+/** The directory a component's folder should live in, given current ownership. */
+function desiredComponentDir(comp: ComponentSpec, index: SpecIndex): string | null {
+  const currentPath = index.paths.component[comp.id];
+  // Only the nested-tree layout is normalized (skip the legacy flat components/ dir).
+  if (!currentPath || !currentPath.endsWith('component.yaml')) return null;
+
+  const owner = findOwner(comp.id, index.components);
+  if (owner) {
+    const ownerPath = index.paths.component[owner.id];
+    if (ownerPath && ownerPath.endsWith('component.yaml')) {
+      // The owner (a pattern) lives flat under its subsystem; the member nests inside it.
+      const ownerSubDir = path.dirname(getSubsystemPath(owner.subsystem));
+      return path.join(ownerSubDir, owner.id, comp.id);
+    }
+  }
+  // Patterns, standalone blocks, and shared (interface-referenced) blocks stay flat.
+  const subDir = path.dirname(getSubsystemPath(comp.subsystem));
+  return path.join(subDir, comp.id);
+}
+
+function moveComponentFolder(fromDir: string, toDir: string): boolean {
+  if (path.normalize(fromDir) === path.normalize(toDir)) return false;
+  if (!fs.existsSync(fromDir) || fs.existsSync(toDir)) return false; // don't clobber
+  ensureDir(path.dirname(toDir));
+  fs.renameSync(fromDir, toDir);
+  return true;
+}
+
+/**
+ * Move component folders so the physical tree mirrors ownership: each owned
+ * member sits inside its pattern's folder, everything else flat under its
+ * subsystem. Idempotent — only misplaced folders move. Returns the ids moved.
+ * The interface.yaml / implementation.yaml travel with the folder.
+ */
+export function normalizeComponentLayout(): string[] {
+  const index = scanAllSpecs();
+  const moved: string[] = [];
+  for (const comp of index.components) {
+    const currentPath = index.paths.component[comp.id];
+    if (!currentPath) continue;
+    const desiredDir = desiredComponentDir(comp, index);
+    if (!desiredDir) continue;
+    if (moveComponentFolder(path.dirname(currentPath), desiredDir)) moved.push(comp.id);
+  }
+  if (moved.length) invalidateSpecCache();
+  return moved;
 }
 
 // ---------------------------------------------------------------------------
