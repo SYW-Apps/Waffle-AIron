@@ -277,6 +277,12 @@ async function applyFixes(): Promise<void> {
     } catch (e) {
       console.log(`  ${icon('warn')} MCP install for gemini failed: ${e instanceof Error ? e.message : String(e)}`);
     }
+    // Cleanup/migration (belongs in --fix, not install): drop the legacy plugin
+    // whose name collides with the wairon MCP server.
+    try {
+      const { removeLegacyGlobalPlugin } = require('./mcp.js') as typeof import('./mcp.js');
+      if (removeLegacyGlobalPlugin()) console.log(`  ${icon('ok')} Removed the legacy global Antigravity plugin (name collided with the MCP server).`);
+    } catch { /* ignore */ }
   }
 
   logger.blank();

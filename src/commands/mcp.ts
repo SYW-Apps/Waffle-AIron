@@ -159,10 +159,10 @@ export async function runMcpInstall(options: McpInstallOptions = {}): Promise<vo
       if (useGlobal) {
         // Global install (opt-in): just the Antigravity home MCP config. We do NOT
         // install a plugin — a plugin named "wairon" collides with the "wairon" MCP
-        // server in Antigravity. Clean up any plugin left by an older install.
+        // server. (Any leftover plugin from older installs is cleaned up by
+        // `wairon doctor --fix`, not here — install only installs.)
         configBase = path.join(geminiGlobalDir(options.configDir), 'antigravity-cli');
         settingsPath = path.join(configBase, 'mcp_config.json');
-        removeGlobalPluginForGemini();
       } else {
         // Project-local Gemini/Antigravity settings — stays within the project.
         configBase = path.join(process.cwd(), '.gemini');
@@ -288,21 +288,23 @@ export async function runMcpStatus(): Promise<void> {
 }
 
 /**
- * Remove the legacy global Antigravity plugin (~/.gemini/config/plugins/wairon).
- * A plugin named "wairon" collides with the "wairon" MCP server in Antigravity
- * ("server wairon is not allowed in this context"), so we no longer install one —
- * the MCP server plus the project's own GEMINI.md guide cover everything it did.
- * This cleans up any copy left by an older `mcp install --global`.
+ * Remove the legacy global Antigravity plugin (~/.gemini/config/plugins/wairon)
+ * if present. A plugin named "wairon" collides with the "wairon" MCP server in
+ * Antigravity ("server wairon is not allowed in this context"); we no longer
+ * install one. This is a cleanup/migration helper (called by `wairon doctor
+ * --fix`), not part of install. Returns true if a plugin was removed.
  */
-function removeGlobalPluginForGemini(): void {
+export function removeLegacyGlobalPlugin(): boolean {
   const home = process.env['USERPROFILE'] ?? process.env['HOME'] ?? os.homedir();
   const pluginDir = path.join(home, '.gemini', 'config', 'plugins', 'wairon');
   try {
     if (fs.existsSync(pluginDir)) {
       fs.rmSync(pluginDir, { recursive: true, force: true });
       logger.info(`Removed legacy global Antigravity plugin at ${chalk.gray(pluginDir)} (it collides with the wairon MCP server).`);
+      return true;
     }
   } catch (e) {
     logger.warn(`Could not remove legacy wairon Antigravity plugin: ${String(e)}`);
   }
+  return false;
 }
