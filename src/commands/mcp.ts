@@ -63,17 +63,39 @@ export async function runMcpServe(): Promise<void> {
   // Resolve the project root explicitly so the sdd_* tools operate on the right
   // .wai/ tree: WAIRON_PROJECT_DIR env > nearest .wai/ above cwd > cwd.
   const { setProjectRoot, getProjectRoot, findProjectRoot } = await import('../utils/fs.js');
+  const cwd = path.resolve(process.cwd());
   const envDir = process.env['WAIRON_PROJECT_DIR'];
-  const resolved = (envDir && fs.existsSync(path.join(envDir, '.wai')) ? path.resolve(envDir) : null)
-    ?? findProjectRoot(process.cwd())
-    ?? process.cwd();
+
+  // Resolve the project root and record HOW we got it, so the stderr log makes a
+  // silent mis-attachment (walking up to an ANCESTOR .wai) observable.
+  let resolved: string;
+  let how: string;
+  if (envDir && fs.existsSync(path.join(envDir, '.wai'))) {
+    resolved = path.resolve(envDir);
+    how = 'WAIRON_PROJECT_DIR (pinned at install)';
+  } else {
+    const found = findProjectRoot(cwd);
+    if (found && found === cwd) {
+      resolved = found;
+      how = 'cwd';
+    } else if (found) {
+      resolved = found;
+      // cwd has no .wai of its own — we climbed to an ancestor. For nested
+      // projects this can attach to the WRONG tree; roots (if the client sends
+      // them) will correct it post-connect via scopeToClientWorkspace.
+      how = `walked up to ancestor — cwd (${cwd}) has no .wai`;
+    } else {
+      resolved = cwd;
+      how = 'cwd (no .wai found anywhere above)';
+    }
+  }
   setProjectRoot(resolved);
 
   const initialized = isProjectInitialized();
   // Log to stderr (never stdout — stdout is the JSON-RPC channel). Visible in the
   // host's MCP server logs, so you can confirm which project the server attached to.
   process.stderr.write(
-    `[wairon mcp] v${WAIRON_VERSION} — project root: ${getProjectRoot()} ` +
+    `[wairon mcp] v${WAIRON_VERSION} — project root: ${getProjectRoot()} [via ${how}] ` +
     `(.wai ${initialized ? 'found' : 'NOT found — sdd_* tools will report no project'})\n`,
   );
 
@@ -191,9 +213,18 @@ export async function runMcpInstall(options: McpInstallOptions = {}): Promise<vo
     const scriptPath = process.argv[1] ? path.resolve(process.argv[1]).replace(/\\/g, '/') : null;
     const useDirectNode = scriptPath && (scriptPath.endsWith('.js') || scriptPath.endsWith('.ts'));
 
+    // Project-local installs know the exact project, so pin it: the server then
+    // attaches deterministically regardless of the cwd the host spawns it with,
+    // and never silently climbs to an ancestor .wai (e.g. a parent repo's tree).
+    // Global installs are intentionally shared across projects, so they stay
+    // unpinned and rely on MCP roots / cwd to scope per session.
+    const env: Record<string, string> = useGlobal
+      ? {}
+      : { WAIRON_PROJECT_DIR: process.cwd().replace(/\\/g, '/') };
+
     const desiredEntry = useDirectNode
-      ? { command: 'node', args: [scriptPath, 'mcp', 'serve'], env: {} }
-      : { command: 'wairon', args: ['mcp', 'serve'], env: {} };
+      ? { command: 'node', args: [scriptPath, 'mcp', 'serve'], env }
+      : { command: 'wairon', args: ['mcp', 'serve'], env };
 
     // Self-heal: if an entry already exists but points somewhere else (e.g. a
     // stale path from a moved repo or an earlier machine), rewrite it instead of
