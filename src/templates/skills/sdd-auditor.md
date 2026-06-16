@@ -1,3 +1,8 @@
+---
+name: sdd-auditor
+description: Audit the SDD spec tree for syntax, reference, completeness, and boundary violations before implementation, coordinating .wai/phased_design.md Stage 6. Use when validating or auditing specifications for conformance.
+---
+
 # Skill: sdd-auditor
 
 ## Trigger

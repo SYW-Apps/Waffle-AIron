@@ -1,3 +1,8 @@
+---
+name: sdd-implement
+description: Generate concrete source code implementing a specified L2 component strictly from its finalized specs, with hard gating checks. Use when implementing or writing code for a fully-spec'd component.
+---
+
 # Skill: sdd-implement
 
 ## Trigger

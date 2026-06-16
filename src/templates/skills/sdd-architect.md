@@ -1,3 +1,8 @@
+---
+name: sdd-architect
+description: Guide top-down architecture design of an SDD system through the spec tree (system → subsystems → components → interfaces), coordinating .wai/phased_design.md. Use when starting a new SDD project or structuring a system's architecture before writing code.
+---
+
 # Skill: sdd-architect
 
 ## Trigger

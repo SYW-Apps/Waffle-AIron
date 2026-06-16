@@ -1,3 +1,8 @@
+---
+name: sdd-narrative
+description: Draft the precise step-by-step execution narrative (L5) for a specific implementation method, updating .wai/phased_design.md Stage 5. Use when designing or writing the narrative/flow for a method or component.
+---
+
 # Skill: sdd-narrative
 
 ## Trigger

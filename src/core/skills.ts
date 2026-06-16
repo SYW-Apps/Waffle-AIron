@@ -11,10 +11,28 @@ import { ensureDir, fromProjectRoot } from '../utils/fs.js';
 // not orchestrate sessions itself.
 // ---------------------------------------------------------------------------
 
-const SKILL_FILES = ['sdd-architect.md', 'sdd-narrative.md', 'sdd-auditor.md', 'sdd-implement.md'];
+const SKILL_NAMES = ['sdd-architect', 'sdd-narrative', 'sdd-auditor', 'sdd-implement'];
 
 function builtinSkillsDir(): string {
   return path.resolve(__dirname, '..', 'templates', 'skills');
+}
+
+/** Built-in template source for a skill (always flat <name>.md). */
+function skillTemplatePath(name: string): string {
+  return path.join(builtinSkillsDir(), `${name}.md`);
+}
+
+/**
+ * Destination path for a skill inside a target's skills dir.
+ *
+ * Claude Code discovers skills as directories — `.claude/skills/<name>/SKILL.md`
+ * with YAML frontmatter — NOT flat `<name>.md` files (those are silently ignored,
+ * so `Skill(<name>)` reports "Unknown skill"). Other targets keep the flat layout
+ * until their discovery format is verified.
+ */
+function skillDestPath(type: string, destDir: string, name: string): string {
+  if (type === 'claude') return path.join(destDir, name, 'SKILL.md');
+  return path.join(destDir, `${name}.md`);
 }
 
 /** The skills directory for a given target tool, or null if the tool has none. */
@@ -31,7 +49,7 @@ export function skillsDirForTarget(type: string): string | null {
 
 /** Names (without extension) of the built-in SDD skills. */
 export function listSkillNames(): string[] {
-  return SKILL_FILES.map((f) => f.replace(/\.md$/, ''));
+  return [...SKILL_NAMES];
 }
 
 export interface SkillsExportResult {
@@ -50,7 +68,6 @@ export interface SkillsExportResult {
 export function exportSddSkills(targetTypes?: string[]): SkillsExportResult {
   const types = targetTypes ?? activeTargetTypes();
 
-  const sourceDir = builtinSkillsDir();
   const destinations: string[] = [];
   const skipped: string[] = [];
   let fileCount = 0;
@@ -64,13 +81,15 @@ export function exportSddSkills(targetTypes?: string[]): SkillsExportResult {
     ensureDir(destDir);
     destinations.push(destDir);
 
-    for (const file of SKILL_FILES) {
-      const srcPath = path.join(sourceDir, file);
+    for (const name of SKILL_NAMES) {
+      const srcPath = skillTemplatePath(name);
       if (!fs.existsSync(srcPath)) continue;
       // Copy verbatim — skills are agent-facing and reference MCP tools, not the
       // `wairon` CLI, so there is no dev-path command to substitute.
       const content = fs.readFileSync(srcPath, 'utf-8');
-      fs.writeFileSync(path.join(destDir, file), content, 'utf-8');
+      const destPath = skillDestPath(type, destDir, name);
+      ensureDir(path.dirname(destPath));
+      fs.writeFileSync(destPath, content, 'utf-8');
       fileCount++;
     }
   }
@@ -98,15 +117,14 @@ export function checkSkillFreshness(type: string): SkillFreshness {
   const result: SkillFreshness = { dir, missing: [], stale: [], ok: [] };
   if (!dir) return result;
 
-  const sourceDir = builtinSkillsDir();
-  for (const file of SKILL_FILES) {
-    const destPath = path.join(dir, file);
-    if (!fs.existsSync(destPath)) { result.missing.push(file); continue; }
-    const srcPath = path.join(sourceDir, file);
+  for (const name of SKILL_NAMES) {
+    const destPath = skillDestPath(type, dir, name);
+    if (!fs.existsSync(destPath)) { result.missing.push(name); continue; }
+    const srcPath = skillTemplatePath(name);
     const want = fs.existsSync(srcPath) ? fs.readFileSync(srcPath, 'utf-8') : '';
     const have = fs.readFileSync(destPath, 'utf-8');
-    if (have === want) result.ok.push(file);
-    else result.stale.push(file);
+    if (have === want) result.ok.push(name);
+    else result.stale.push(name);
   }
   return result;
 }
