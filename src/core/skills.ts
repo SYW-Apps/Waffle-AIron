@@ -25,23 +25,31 @@ function skillTemplatePath(name: string): string {
 /**
  * Destination path for a skill inside a target's skills dir.
  *
- * Claude Code discovers skills as directories — `.claude/skills/<name>/SKILL.md`
- * with YAML frontmatter — NOT flat `<name>.md` files (those are silently ignored,
- * so `Skill(<name>)` reports "Unknown skill"). Other targets keep the flat layout
- * until their discovery format is verified.
+ * Claude, Codex, and Antigravity have all converged on the same packaging:
+ * a `<name>/SKILL.md` directory with YAML frontmatter (name + description).
+ * Flat `<name>.md` files are silently ignored by these tools (so `Skill(<name>)`
+ * reports "Unknown skill"). Only unverified targets fall back to a flat layout.
  */
 function skillDestPath(type: string, destDir: string, name: string): string {
-  if (type === 'claude') return path.join(destDir, name, 'SKILL.md');
+  if (type === 'claude' || type === 'codex' || type === 'gemini' || type === 'agy') {
+    return path.join(destDir, name, 'SKILL.md');
+  }
   return path.join(destDir, `${name}.md`);
 }
 
-/** The skills directory for a given target tool, or null if the tool has none. */
+/**
+ * The skills directory for a given target tool, or null if the tool has none.
+ *
+ * Codex and Antigravity both discover project-scoped skills from `.agents/skills/`
+ * (Codex scans it from cwd up to the repo root; Antigravity reads it as project
+ * scope), so they share one directory. Claude uses its own `.claude/skills/`.
+ */
 export function skillsDirForTarget(type: string): string | null {
   switch (type) {
     case 'claude': return fromProjectRoot('.claude', 'skills');
-    case 'gemini': return fromProjectRoot('.gemini', 'skills');
-    case 'agy':    return fromProjectRoot('.gemini', 'skills'); // Antigravity is Gemini-based
-    case 'codex':  return fromProjectRoot('.codex', 'skills');
+    case 'gemini': // Gemini-based Antigravity
+    case 'agy':
+    case 'codex':  return fromProjectRoot('.agents', 'skills');
     case 'cursor': return fromProjectRoot('.cursor', 'skills');
     default:       return null;
   }
