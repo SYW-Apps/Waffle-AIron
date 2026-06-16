@@ -6,7 +6,6 @@ import { logger } from '../utils/logger.js';
 import { assertProjectInitialized, isProjectInitialized, loadProjectConfig } from '../config/loader.js';
 import { aiDir } from '../utils/fs.js';
 import { WaironError } from '../utils/errors.js';
-import { versionStamp } from '../core/stamp.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 
 /** The Claude config dir for global installs. Precedence: explicit override (--config-dir)
@@ -158,10 +157,12 @@ export async function runMcpInstall(options: McpInstallOptions = {}): Promise<vo
 
     if (backend === 'gemini') {
       if (useGlobal) {
-        // Global install (opt-in): home config + the global Antigravity plugin.
+        // Global install (opt-in): just the Antigravity home MCP config. We do NOT
+        // install a plugin — a plugin named "wairon" collides with the "wairon" MCP
+        // server in Antigravity. Clean up any plugin left by an older install.
         configBase = path.join(geminiGlobalDir(options.configDir), 'antigravity-cli');
         settingsPath = path.join(configBase, 'mcp_config.json');
-        installGlobalPluginForGemini();
+        removeGlobalPluginForGemini();
       } else {
         // Project-local Gemini/Antigravity settings — stays within the project.
         configBase = path.join(process.cwd(), '.gemini');
@@ -286,77 +287,22 @@ export async function runMcpStatus(): Promise<void> {
   }
 }
 
-function installGlobalPluginForGemini(): void {
-  const home = process.env['USERPROFILE'] ?? process.env['HOME'] ?? '';
+/**
+ * Remove the legacy global Antigravity plugin (~/.gemini/config/plugins/wairon).
+ * A plugin named "wairon" collides with the "wairon" MCP server in Antigravity
+ * ("server wairon is not allowed in this context"), so we no longer install one —
+ * the MCP server plus the project's own GEMINI.md guide cover everything it did.
+ * This cleans up any copy left by an older `mcp install --global`.
+ */
+function removeGlobalPluginForGemini(): void {
+  const home = process.env['USERPROFILE'] ?? process.env['HOME'] ?? os.homedir();
   const pluginDir = path.join(home, '.gemini', 'config', 'plugins', 'wairon');
-  const skillDir = path.join(pluginDir, 'skills', 'wairon');
-
   try {
-    fs.mkdirSync(skillDir, { recursive: true });
-
-    // Write plugin.json
-    fs.writeFileSync(
-      path.join(pluginDir, 'plugin.json'),
-      JSON.stringify({ name: 'wairon' }, null, 2) + '\n',
-      'utf8'
-    );
-
-    // Write SKILL.md — a THIN pointer, not a second copy of the framework. When a
-    // project is initialized it has its own .gemini/GEMINI.md guide + sdd-architect
-    // skill + sdd_* MCP tools; this global skill only orients and defers to those,
-    // so there is exactly one source of truth (and nothing for the agent to hunt).
-    const skillContent = `---
-name: wairon
-description: >
-  Spec-Driven Development (SDD) with the Wairon framework. Use when starting a new
-  project, designing or modifying software architecture, or working in a repo that
-  has a .wai/ spec tree. If a project needs design but has no .wai/ yet, propose
-  initializing Wairon SDD first.
----
-
-# Wairon — Spec-Driven Development
-
-Wairon builds software from a typed **spec tree** under \`.wai/specs/\`
-(L0 System -> L1 Subsystem -> L2 Component -> L3 Interface -> L4 Implementation ->
-L5 Narrative). The agent topology and the implementation are derived from it.
-
-## If the project has NO \`.wai/\` directory
-The user wants to design or build something new. Do **not** start writing code or
-creating folders. First propose Wairon SDD:
-
-> This project doesn't have a Wairon SDD workspace yet. Want to design the
-> architecture, component contracts, and narratives with Wairon before writing code?
-
-If they agree, ask them to run \`wairon init\` in their terminal (that is the human
-developer's command). Once initialized, the project gets its own \`.gemini/GEMINI.md\`
-guide, the \`sdd-architect\` skill, and the \`sdd_*\` MCP tools — everything you need.
-
-## If the project already HAS a \`.wai/\` directory
-You are operating inside an active SDD project. **Your complete operating guide is
-the project's own \`.gemini/GEMINI.md\` plus the \`sdd-architect\` skill in
-\`.gemini/skills/\` — read those and follow them. You already have full context; do
-NOT search the filesystem to figure out what wairon or SDD is.**
-
-**First move: call the \`sdd_get_status\` MCP tool** (listed as \`wairon/sdd_get_status\`)
-to see the spec tree — don't inspect this plugin, the CLI binary, or \`.wai/\` files to
-orient; the tools give you the project state directly.
-
-- To design or change the system, invoke the **\`sdd-architect\`** skill — it is the
-  single source for the component model, naming rules, and YAML schemas.
-- Author and validate specs through the **\`sdd_*\` MCP tools** (\`sdd_initialize_system\`,
-  \`sdd_add_subsystem\`, \`sdd_add_component\`, \`sdd_define_interface\`,
-  \`sdd_write_narrative\`, \`sdd_add_type\`, \`sdd_validate_tree\`, \`sdd_get_status\`).
-- **You never run the \`wairon\` CLI** — that is the human developer's tool. To
-  validate the tree call \`sdd_validate_tree\` (not \`wairon validate\`); for status
-  call \`sdd_get_status\` (not \`wairon status\`).
-- Present each spec layer to the user for approval before moving on, and never write
-  source for a component until its spec is \`complete\` and validates with zero errors.
-
-${versionStamp()}
-`;
-    fs.writeFileSync(path.join(skillDir, 'SKILL.md'), skillContent, 'utf8');
-    logger.success(`wairon global Antigravity plugin installed at ${chalk.cyan(pluginDir)}.`);
+    if (fs.existsSync(pluginDir)) {
+      fs.rmSync(pluginDir, { recursive: true, force: true });
+      logger.info(`Removed legacy global Antigravity plugin at ${chalk.gray(pluginDir)} (it collides with the wairon MCP server).`);
+    }
   } catch (e) {
-    logger.warn(`Could not install wairon global Antigravity plugin: ${String(e)}`);
+    logger.warn(`Could not remove legacy wairon Antigravity plugin: ${String(e)}`);
   }
 }

@@ -216,12 +216,11 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
     }
   }
 
-  // ── Global Antigravity plugin (best-effort; only if installed) ──────────────
-  const pluginSkill = path.join(os.homedir(), '.gemini', 'config', 'plugins', 'wairon', 'skills', 'wairon', 'SKILL.md');
-  if (fs.existsSync(pluginSkill)) {
-    const { mark, note } = stampVerdict(readFileOrNull(pluginSkill));
-    if (mark === 'ok') line(tally, 'ok', `Global plugin SKILL.md (${note})`);
-    else line(tally, 'warn', `Global plugin SKILL.md (${note}) — run \`wairon mcp install --backend gemini --global\``);
+  // ── Legacy global Antigravity plugin — should NOT exist (name collides with
+  //    the wairon MCP server). Flag it for removal if a stale copy is present.
+  const pluginDir = path.join(os.homedir(), '.gemini', 'config', 'plugins', 'wairon');
+  if (fs.existsSync(pluginDir)) {
+    line(tally, 'warn', `Legacy Antigravity plugin present (${pluginDir}) — it collides with the wairon MCP server. Remove it (re-run \`wairon mcp install --backend gemini --global\`, which now deletes it).`);
   }
   logger.blank();
 
