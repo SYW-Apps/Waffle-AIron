@@ -724,6 +724,12 @@ export function validateSddTree(rules?: RulesConfig): ValidationResult {
       default:           return true;
     }
   };
+  // Strong event/async signal words. Used only to flag a Custom-typed public
+  // interface whose prose describes eventing but whose backing component can't
+  // realize it (see PUBLIC_INTERFACE_EVENT_MISTYPED below).
+  // Verb-form "subscribe" signals eventing; the noun "subscription" is deliberately
+  // omitted — it collides with domain nouns (e.g. billing "subscription plans").
+  const EVENT_VOCAB = /\b(async|asynchronous|queue|queued|queues|event|events|event-driven|listen|listens|listening|listener|subscribe|subscribes|pub\/sub|stream|streams|streaming|emit|emits|emitted|message[\s-]?bus)\b/i;
   const expectedFor = (t: string): string => {
     switch (t) {
       case 'REST':       return 'a Portal with portalType HTTP_API';
@@ -758,6 +764,20 @@ export function validateSddTree(rules?: RulesConfig): ValidationResult {
           addIssue('error', 'PUBLIC_INTERFACE_INVALID_INTERFACE', `Subsystem "${sub.id}" public interface references interface "${pi.interface}" which does not exist.`, sub.id, isDraftCtx);
         } else if (intf.component !== pi.component) {
           addIssue('error', 'PUBLIC_INTERFACE_INVALID_INTERFACE', `Subsystem "${sub.id}" binds interface "${pi.interface}" to component "${pi.component}", but that interface belongs to component "${intf.component}".`, sub.id, isDraftCtx);
+        }
+      }
+      // Heuristic — closes the "escape to Custom" hole. `Custom` is the only public
+      // interface type that carries no backing obligation, so an unrealized event
+      // boundary can hide there: declare an async queue/event contract as Custom and
+      // back it with an ordinary Orchestrator (a synchronous push). The type matrix
+      // can't catch that, but the contradiction is legible in the prose — event/async
+      // vocabulary in `details` while the backing component cannot actually realize
+      // eventing. Warn so the mislabel surfaces; override via rules.sddRuleSeverity.
+      if (pi.type === 'Custom' && EVENT_VOCAB.test(pi.details)) {
+        const eventCapable = backing.componentType === 'Observer'
+          || (backing.componentType === 'Portal' && backing.portalType === 'MessageBus');
+        if (!eventCapable) {
+          addIssue('warning', 'PUBLIC_INTERFACE_EVENT_MISTYPED', `Subsystem "${sub.id}" declares a Custom public interface whose description implies an event/async boundary ("${pi.details}"), but it is backed by "${pi.component}" (${backing.componentType}${backing.portalType ? `/${backing.portalType}` : ''}), which cannot realize eventing. If this is genuinely event-driven, type it MessageBus and back it with an Observer or a Portal(MessageBus); otherwise reword the description to match the synchronous contract.`, sub.id, isDraftCtx);
         }
       }
     }

@@ -116,6 +116,13 @@ updatedAt: "2026-06-12T20:00:00Z"
 > backing component fails the gate. Components are L2, so if they don't exist yet
 > when you create the subsystem, **backfill the bindings later with
 > `sdd_set_public_interfaces`**.
+>
+> Pick the `type` that matches the *real* contract — don't reach for `Custom` to
+> dodge the type check. `Custom` is for genuinely bespoke surfaces, not an escape
+> hatch. If a boundary is event-driven (a queue/stream others subscribe to), type
+> it **MessageBus** and back it with an **Observer** or a **Portal/MessageBus** — a
+> `Custom` interface whose `details` describe async/eventing but is backed by an
+> Orchestrator (a synchronous push) is flagged as an unrealized event boundary.
 
 ### 3. Level 2: Component (`component.yaml` under `.wai/specs/<subsystem>/<component>/`)
 ```yaml

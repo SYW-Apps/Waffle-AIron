@@ -977,6 +977,53 @@ updatedAt: '2026-06-10T22:00:00Z'
       proj.cleanup();
     }
   });
+
+  it('warns when a Custom interface describes eventing but is backed by a non-event component (EVENT_MISTYPED)', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', SYS);
+    proj.writeSpec('subsystem', 'sub-b', sub('sub-b',
+      'publicInterfaces:\n  - type: Custom\n    details: Asynchronous dispatcher queue listening for limit warning events\n    component: orch-b\n'));
+    proj.writeSpec('component', 'orch-b', comp('orch-b', 'sub-b', 'Orchestrator'));
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      const issue = res.issues.find(i => i.code === 'PUBLIC_INTERFACE_EVENT_MISTYPED');
+      expect(issue).toBeDefined();
+      expect(issue!.severity).toBe('warning');
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('does NOT warn when a Custom event interface is genuinely backed by an Observer', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', SYS);
+    proj.writeSpec('subsystem', 'sub-b', sub('sub-b',
+      'publicInterfaces:\n  - type: Custom\n    details: Asynchronous queue listening for events\n    component: obs-b\n'));
+    proj.writeSpec('component', 'obs-b', comp('obs-b', 'sub-b', 'Observer'));
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.issues.some(i => i.code === 'PUBLIC_INTERFACE_EVENT_MISTYPED')).toBe(false);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('does NOT warn on a Custom interface with no event vocabulary', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', SYS);
+    proj.writeSpec('subsystem', 'sub-b', sub('sub-b',
+      'publicInterfaces:\n  - type: Custom\n    details: Synchronous facade for account lookups\n    component: orch-b\n'));
+    proj.writeSpec('component', 'orch-b', comp('orch-b', 'sub-b', 'Orchestrator'));
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.issues.some(i => i.code === 'PUBLIC_INTERFACE_EVENT_MISTYPED')).toBe(false);
+    } finally {
+      proj.cleanup();
+    }
+  });
 });
 
 
