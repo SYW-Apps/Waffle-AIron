@@ -847,6 +847,136 @@ updatedAt: '2026-06-10T22:00:00Z'
       proj.cleanup();
     }
   });
+
+  // ---- Subsystem boundary rules (cross-subsystem + public interface binding) ----
+
+  const SYS = `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`;
+  const sub = (id: string, publicInterfaces = ''): string => `
+schemaVersion: 1.0.0
+id: ${id}
+name: ${id}
+description: ${id} description
+parentSystem: TestSystem
+${publicInterfaces}createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`;
+  const comp = (id: string, subsystem: string, componentType: string, opts: { dependsOn?: string[]; portalType?: string } = {}): string => `
+schemaVersion: 1.0.0
+id: ${id}
+name: ${id}
+description: ${id} description
+subsystem: ${subsystem}
+componentType: ${componentType}
+${opts.portalType ? `portalType: ${opts.portalType}\n` : ''}dependsOn: [${(opts.dependsOn ?? []).join(', ')}]
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`;
+
+  it('flags a non-Adapter reaching another subsystem (CROSS_SUBSYSTEM_NON_ADAPTER + PRIVATE_ACCESS)', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', SYS);
+    proj.writeSpec('subsystem', 'sub-a', sub('sub-a'));
+    proj.writeSpec('subsystem', 'sub-b', sub('sub-b'));
+    proj.writeSpec('component', 'orch-a', comp('orch-a', 'sub-a', 'Orchestrator', { dependsOn: ['store-b'] }));
+    proj.writeSpec('component', 'store-b', comp('store-b', 'sub-b', 'Store'));
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.valid).toBe(false);
+      expect(res.issues.some(i => i.code === 'CROSS_SUBSYSTEM_NON_ADAPTER')).toBe(true);
+      expect(res.issues.some(i => i.code === 'CROSS_SUBSYSTEM_PRIVATE_ACCESS')).toBe(true);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('allows an Adapter reaching another subsystem\'s published public component', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', SYS);
+    proj.writeSpec('subsystem', 'sub-a', sub('sub-a'));
+    proj.writeSpec('subsystem', 'sub-b', sub('sub-b',
+      'publicInterfaces:\n  - type: Custom\n    details: facade\n    component: facade-b\n'));
+    proj.writeSpec('component', 'adapter-a', comp('adapter-a', 'sub-a', 'Adapter', { dependsOn: ['facade-b'] }));
+    proj.writeSpec('component', 'facade-b', comp('facade-b', 'sub-b', 'Orchestrator'));
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.issues.some(i => i.code.startsWith('CROSS_SUBSYSTEM_'))).toBe(false);
+      expect(res.valid).toBe(true);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('flags an Adapter reaching another subsystem\'s INTERNAL (non-public) component', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', SYS);
+    proj.writeSpec('subsystem', 'sub-a', sub('sub-a'));
+    proj.writeSpec('subsystem', 'sub-b', sub('sub-b'));
+    proj.writeSpec('component', 'adapter-a', comp('adapter-a', 'sub-a', 'Adapter', { dependsOn: ['store-b'] }));
+    proj.writeSpec('component', 'store-b', comp('store-b', 'sub-b', 'Store'));
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.issues.some(i => i.code === 'CROSS_SUBSYSTEM_PRIVATE_ACCESS')).toBe(true);
+      expect(res.issues.some(i => i.code === 'CROSS_SUBSYSTEM_NON_ADAPTER')).toBe(false);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('flags a public interface with no backing component (PUBLIC_INTERFACE_UNBOUND)', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', SYS);
+    proj.writeSpec('subsystem', 'sub-b', sub('sub-b',
+      'publicInterfaces:\n  - type: MessageBus\n    details: queue\n'));
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.valid).toBe(false);
+      expect(res.issues.some(i => i.code === 'PUBLIC_INTERFACE_UNBOUND')).toBe(true);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('flags a MessageBus interface backed by an incompatible component (TYPE_MISMATCH)', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', SYS);
+    proj.writeSpec('subsystem', 'sub-b', sub('sub-b',
+      'publicInterfaces:\n  - type: MessageBus\n    details: queue\n    component: orch-b\n'));
+    proj.writeSpec('component', 'orch-b', comp('orch-b', 'sub-b', 'Orchestrator'));
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.valid).toBe(false);
+      expect(res.issues.some(i => i.code === 'PUBLIC_INTERFACE_TYPE_MISMATCH')).toBe(true);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('accepts a MessageBus interface backed by an Observer', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', SYS);
+    proj.writeSpec('subsystem', 'sub-b', sub('sub-b',
+      'publicInterfaces:\n  - type: MessageBus\n    details: queue\n    component: obs-b\n'));
+    proj.writeSpec('component', 'obs-b', comp('obs-b', 'sub-b', 'Observer'));
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.issues.some(i => i.code.startsWith('PUBLIC_INTERFACE_'))).toBe(false);
+      expect(res.valid).toBe(true);
+    } finally {
+      proj.cleanup();
+    }
+  });
 });
 
 

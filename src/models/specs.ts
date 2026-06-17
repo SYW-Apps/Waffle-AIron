@@ -47,6 +47,10 @@ export type PublicInterfaceType = z.infer<typeof PublicInterfaceTypeSchema>;
 export const PublicInterfaceSchema = z.object({
   type: PublicInterfaceTypeSchema,
   details: z.string(),
+  /** The L2 component that realizes this public interface (the subsystem's published surface). */
+  component: SpecIdSchema.optional(),
+  /** Optional L3 interface on that component backing this entry. */
+  interface: SpecIdSchema.optional(),
 });
 
 export type PublicInterface = z.infer<typeof PublicInterfaceSchema>;

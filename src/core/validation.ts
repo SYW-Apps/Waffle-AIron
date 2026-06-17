@@ -178,6 +178,16 @@ export function validateSddTree(rules?: RulesConfig): ValidationResult {
   const componentIds = new Set(components.map(c => c.id));
   const interfaceIds = new Set(interfaces.map(i => i.id));
 
+  // A subsystem's published public surface: the component ids bound via its
+  // publicInterfaces. Cross-subsystem dependencies may only target these.
+  const publicSet = new Map<string, Set<string>>();
+  for (const sub of subsystems) {
+    publicSet.set(
+      sub.id,
+      new Set(sub.publicInterfaces.map(pi => pi.component).filter((c): c is string => !!c)),
+    );
+  }
+
   // Helper to check if component or parent subsystem is draft/design
   const isComponentDraft = (compId: string): boolean => {
     const comp = componentMap.get(compId);
@@ -216,6 +226,8 @@ export function validateSddTree(rules?: RulesConfig): ValidationResult {
         'INVALID_COMPONENT_REFERENCE',
         'INVALID_SUBSYSTEM_REFERENCE',
         'ORPHANED_SUBSYSTEM',
+        'PUBLIC_INTERFACE_UNBOUND',
+        'PUBLIC_INTERFACE_TYPE_MISMATCH',
       ];
       if (completenessRules.includes(ruleCode)) {
         return 'warning';
@@ -512,6 +524,40 @@ export function validateSddTree(rules?: RulesConfig): ValidationResult {
         continue;
       }
 
+      // Cross-subsystem boundary: a dependency crossing into another subsystem is
+      // governed ONLY by the boundary rules below — the intra-subsystem type matrix
+      // does not apply across a bounded-context boundary, where the sanctioned
+      // crosser is an Adapter and the target is an explicitly published component.
+      if (depComp.subsystem !== comp.subsystem) {
+        const crossDraft = isDraftCtx || isComponentDraft(depComp.id);
+
+        // "Always an Adapter": only a (local) client Adapter may reach another
+        // subsystem; an Orchestrator/etc. must depend on a local Adapter that
+        // abstracts the hop (in-process forwarding, REST, gRPC, IPC).
+        if (comp.componentType !== 'Adapter') {
+          addIssue(
+            'error',
+            'CROSS_SUBSYSTEM_NON_ADAPTER',
+            `Boundary violation: ${comp.componentType} "${comp.id}" (subsystem "${comp.subsystem}") depends directly on "${depComp.id}" in subsystem "${depComp.subsystem}". Only a local client Adapter may cross a subsystem boundary — route this hop through an Adapter that calls "${depComp.subsystem}"'s public interface.`,
+            comp.id,
+            crossDraft
+          );
+        }
+
+        // The target must be part of the other subsystem's published public surface.
+        if (!(publicSet.get(depComp.subsystem)?.has(depComp.id))) {
+          addIssue(
+            'error',
+            'CROSS_SUBSYSTEM_PRIVATE_ACCESS',
+            `Boundary violation: "${comp.id}" depends on "${depComp.id}", which is not part of subsystem "${depComp.subsystem}"'s published public surface. Depend on one of its publicInterfaces components instead.`,
+            comp.id,
+            crossDraft
+          );
+        }
+
+        continue;
+      }
+
       // Check Portal/Observer dependency boundary: components cannot depend on Portals or Observers
       if (depComp.componentType === 'Portal' || depComp.componentType === 'Observer') {
         addIssue(
@@ -661,6 +707,59 @@ export function validateSddTree(rules?: RulesConfig): ValidationResult {
       if (owner === comp.id) continue;            // the owning pattern depending on its own member — fine
       if (ownedBy.get(comp.id) === owner) continue; // a sibling member of the same group — fine
       addIssue('error', 'VISIBILITY_VIOLATION', `Component "${comp.id}" depends on "${depId}", which is privately owned by pattern "${owner}". Depend on the facade "${owner}" instead.`, comp.id, isComponentDraft(comp.id) || isComponentDraft(depId));
+    }
+  }
+
+  // 4d. Public interface binding: each declared publicInterface must be backed by
+  // a real component in the SAME subsystem whose type can realize the declared
+  // interface. This is what makes "which components are public" machine-checkable
+  // (and catches a declared interface that no component actually implements).
+  const pubTypeMatches = (piType: string, ct: string, portalType?: string): boolean => {
+    switch (piType) {
+      case 'REST':       return ct === 'Portal' && portalType === 'HTTP_API';
+      case 'GraphQL':    return ct === 'Portal' && portalType === 'GraphQL';
+      case 'RPC':        return ct === 'Portal' && portalType === 'gRPC';
+      case 'MessageBus': return (ct === 'Portal' && portalType === 'MessageBus') || ct === 'Observer';
+      case 'Custom':     return true;
+      default:           return true;
+    }
+  };
+  const expectedFor = (t: string): string => {
+    switch (t) {
+      case 'REST':       return 'a Portal with portalType HTTP_API';
+      case 'GraphQL':    return 'a Portal with portalType GraphQL';
+      case 'RPC':        return 'a Portal with portalType gRPC';
+      case 'MessageBus': return 'a Portal with portalType MessageBus, or an Observer';
+      default:           return 'a compatible component';
+    }
+  };
+
+  for (const sub of subsystems) {
+    const isDraftCtx = sub.status === 'draft' || sub.status === 'design';
+    for (const pi of sub.publicInterfaces) {
+      if (!pi.component) {
+        addIssue('error', 'PUBLIC_INTERFACE_UNBOUND', `Subsystem "${sub.id}" declares a ${pi.type} public interface with no backing component. Bind it to the component that realizes it (publicInterfaces[].component).`, sub.id, isDraftCtx);
+        continue;
+      }
+      const backing = componentMap.get(pi.component);
+      if (!backing) {
+        addIssue('error', 'PUBLIC_INTERFACE_INVALID_COMPONENT', `Subsystem "${sub.id}" public interface references component "${pi.component}" which does not exist.`, sub.id, isDraftCtx);
+        continue;
+      }
+      if (backing.subsystem !== sub.id) {
+        addIssue('error', 'PUBLIC_INTERFACE_FOREIGN_COMPONENT', `Subsystem "${sub.id}" publishes component "${pi.component}", but it belongs to subsystem "${backing.subsystem}". A subsystem may only publish its own components.`, sub.id, isDraftCtx);
+      }
+      if (!pubTypeMatches(pi.type, backing.componentType, backing.portalType)) {
+        addIssue('error', 'PUBLIC_INTERFACE_TYPE_MISMATCH', `Subsystem "${sub.id}" declares a ${pi.type} public interface backed by "${pi.component}" (${backing.componentType}${backing.portalType ? `/${backing.portalType}` : ''}), which cannot realize ${pi.type}. Expected ${expectedFor(pi.type)}.`, sub.id, isDraftCtx);
+      }
+      if (pi.interface) {
+        const intf = interfaceMap.get(pi.interface);
+        if (!intf) {
+          addIssue('error', 'PUBLIC_INTERFACE_INVALID_INTERFACE', `Subsystem "${sub.id}" public interface references interface "${pi.interface}" which does not exist.`, sub.id, isDraftCtx);
+        } else if (intf.component !== pi.component) {
+          addIssue('error', 'PUBLIC_INTERFACE_INVALID_INTERFACE', `Subsystem "${sub.id}" binds interface "${pi.interface}" to component "${pi.component}", but that interface belongs to component "${intf.component}".`, sub.id, isDraftCtx);
+        }
+      }
     }
   }
 

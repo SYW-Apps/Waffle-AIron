@@ -213,10 +213,10 @@ export function createMcpServer(): McpServer {
     },
   );
 
-  reg<{ id: string; name: string; description: string; publicInterfaces?: { type: 'REST' | 'GraphQL' | 'MessageBus' | 'RPC' | 'Custom'; details: string }[] }>(server,
+  reg<{ id: string; name: string; description: string; publicInterfaces?: { type: 'REST' | 'GraphQL' | 'MessageBus' | 'RPC' | 'Custom'; details: string; component?: string; interface?: string }[] }>(server,
     'sdd_add_subsystem',
     {
-      description: 'Add an L1 Subsystem / Service under the system boundary.',
+      description: 'Add an L1 Subsystem / Service under the system boundary. publicInterfaces should bind each entry to the component that realizes it (the subsystem\'s published surface); if components do not exist yet, add them later with sdd_set_public_interfaces.',
       inputSchema: {
         id: z.string().describe('Lowercase identifier for the subsystem'),
         name: z.string().describe('Human-readable display name'),
@@ -224,7 +224,9 @@ export function createMcpServer(): McpServer {
         publicInterfaces: z.array(z.object({
           type: z.enum(['REST', 'GraphQL', 'MessageBus', 'RPC', 'Custom']),
           details: z.string(),
-        })).optional().describe('Public entrypoints or endpoints exposed by this subsystem'),
+          component: z.string().optional().describe('The L2 component id that realizes this interface (this subsystem\'s published surface)'),
+          interface: z.string().optional().describe('Optional L3 interface id on that component backing this entry'),
+        })).optional().describe('Public entrypoints exposed by this subsystem, each bound to a realizing component'),
       },
     },
     ({ id, name, description, publicInterfaces }) => {
@@ -244,6 +246,37 @@ export function createMcpServer(): McpServer {
           updatedAt: now,
         });
         return text(`Successfully added L1 Subsystem Spec "${name}" (${id}).`);
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  reg<{ subsystem: string; publicInterfaces: { type: 'REST' | 'GraphQL' | 'MessageBus' | 'RPC' | 'Custom'; details: string; component?: string; interface?: string }[] }>(server,
+    'sdd_set_public_interfaces',
+    {
+      description: 'Set (replace) an existing subsystem\'s publicInterfaces, binding each to the component (and optional interface) that realizes it. Use this to backfill bindings once the subsystem\'s components exist — cross-subsystem dependencies may only target a published public component.',
+      inputSchema: {
+        subsystem: z.string().describe('The L1 subsystem id to update'),
+        publicInterfaces: z.array(z.object({
+          type: z.enum(['REST', 'GraphQL', 'MessageBus', 'RPC', 'Custom']),
+          details: z.string(),
+          component: z.string().optional().describe('The L2 component id that realizes this interface'),
+          interface: z.string().optional().describe('Optional L3 interface id on that component'),
+        })).describe('The full replacement list of public interfaces for this subsystem'),
+      },
+    },
+    ({ subsystem, publicInterfaces }) => {
+      try {
+        const { loadSubsystemSpec, saveSubsystemSpec } = requireSpecs();
+        const sub = loadSubsystemSpec(subsystem);
+        if (!sub) return errText(`Subsystem "${subsystem}" does not exist.`);
+        saveSubsystemSpec({
+          ...sub,
+          publicInterfaces,
+          updatedAt: new Date().toISOString(),
+        });
+        return text(`Updated public interfaces for subsystem "${subsystem}" (${publicInterfaces.length} ${publicInterfaces.length === 1 ? 'entry' : 'entries'}).`);
       } catch (e) {
         return errText(String(e));
       }

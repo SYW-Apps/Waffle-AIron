@@ -75,6 +75,7 @@ The full standard is the source of truth; this is the summary you design against
 5. **Behaviour placement**: behaviour lives where it can be performed autonomously over its own state (`order.total()`, `dog.bark()`); behaviour needing an external actor lives on the *acting* component, taking the entity as an argument (a `Carrier` ships an order — not `order.ship()`). Prefer composition + interfaces over inheritance.
 6. **Narrative coding (L5)**: each method reads top-to-bottom as named steps; one level of abstraction per function; a pattern facade's method is exactly one `call` step (pure 1:1 forwarding, no logic).
 7. **Right-size**: L1, concurrency, and events are all optional — don't add blocks, patterns, or layers a system doesn't need. Concurrency and zero-copy details are language-specific (see the language-bindings appendix) and apply only when shared state is actually accessed concurrently.
+8. **Subsystem boundaries (bounded contexts)**: each L1 subsystem publishes a *public surface* — the components named in its `publicInterfaces`. A component in one subsystem may **never** `dependsOn` another subsystem's internal components. Cross-subsystem access is *always* routed through a **local client `Adapter`** that calls the other subsystem's published public component. The Adapter abstracts *how* the hop happens (in-process forwarding, REST, gRPC, IPC, network) — the Orchestrator just takes one step and never changes if the other subsystem later becomes a separate microservice. Rule: a cross-subsystem `dependsOn` is valid only when (a) the source is an `Adapter` and (b) the target is in the other subsystem's `publicInterfaces`.
 
 ## 📋 Spec File YAML Schemas
 
@@ -103,10 +104,18 @@ parentSystem: "system-name"
 publicInterfaces:
   - type: "REST" # REST | GraphQL | MessageBus | RPC | Custom
     details: "/api/v1/billing endpoint"
+    component: "billing-gateway" # the L2 component that REALIZES this interface (this subsystem's published surface)
+    interface: "ibilling-gateway" # optional: the L3 interface on that component
 status: "complete" # draft | design | complete
 createdAt: "2026-06-12T20:00:00Z"
 updatedAt: "2026-06-12T20:00:00Z"
 ```
+> Each `publicInterface` MUST name the `component` that realizes it, and its `type`
+> must match that component (REST→Portal/HTTP_API, RPC→Portal/gRPC,
+> MessageBus→Portal/MessageBus or Observer, …). A declared interface with no
+> backing component fails the gate. Components are L2, so if they don't exist yet
+> when you create the subsystem, **backfill the bindings later with
+> `sdd_set_public_interfaces`**.
 
 ### 3. Level 2: Component (`component.yaml` under `.wai/specs/<subsystem>/<component>/`)
 ```yaml
