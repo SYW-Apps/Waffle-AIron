@@ -1,0 +1,15 @@
+id: accounts-portal
+name: Accounts Portal
+description: >-
+  HTTP/JSON ingress for /v1/accounts and /v1/customers. The only inbound surface for the accounts
+  subsystem; forwards validated requests to the account orchestrator. Never touches stores or
+  adapters directly.
+subsystem: accounts
+componentType: Portal
+owns: []
+dependsOn:
+  - account-orchestrator
+portalType: HTTP_API
+status: draft
+createdAt: '2026-06-16T22:40:22.840Z'
+updatedAt: '2026-06-16T22:40:22.841Z'

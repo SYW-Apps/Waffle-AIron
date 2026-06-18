@@ -623,7 +623,125 @@ updatedAt: '2026-06-10T22:00:00Z'
     try {
       const res = validateSddTree();
       expect(res.valid).toBe(false);
-      expect(res.issues.some(i => i.code === 'MISSING_GRPC_ENDPOINT')).toBe(true);
+      expect(res.issues.some(i => i.code === 'MISSING_ENDPOINT')).toBe(true);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('flags an endpoint whose transport does not match the Portal portalType (ENDPOINT_TRANSPORT_MISMATCH)', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: Subsystem A description
+parentSystem: TestSystem
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('component', 'comp-http', `
+schemaVersion: 1.0.0
+id: comp-http
+name: ComponentHttp
+description: HTTP component
+subsystem: sub-a
+componentType: Portal
+portalType: HTTP_API
+dependsOn: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    // method declares a gRPC endpoint, but the Portal is HTTP_API
+    proj.writeSpec('interface', 'icomp-http', `
+schemaVersion: 1.0.0
+id: icomp-http
+name: InterfaceHttp
+description: Interface HTTP
+component: comp-http
+methods:
+  - name: callApi
+    description: Api method
+    signature: "callApi(): Promise<void>"
+    returns: "Promise<void>"
+    endpoint:
+      transport: gRPC
+      service: SvcA
+      method: CallApi
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.valid).toBe(false);
+      expect(res.issues.some(i => i.code === 'ENDPOINT_TRANSPORT_MISMATCH')).toBe(true);
+      expect(res.issues.some(i => i.code === 'MISSING_ENDPOINT')).toBe(false);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('accepts a Portal method with a matching endpoint', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: Subsystem A description
+parentSystem: TestSystem
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('component', 'comp-http', `
+schemaVersion: 1.0.0
+id: comp-http
+name: ComponentHttp
+description: HTTP component
+subsystem: sub-a
+componentType: Portal
+portalType: HTTP_API
+dependsOn: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('interface', 'icomp-http', `
+schemaVersion: 1.0.0
+id: icomp-http
+name: InterfaceHttp
+description: Interface HTTP
+component: comp-http
+methods:
+  - name: callApi
+    description: Api method
+    signature: "callApi(): Promise<void>"
+    returns: "Promise<void>"
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /call
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.issues.some(i => i.code === 'MISSING_ENDPOINT')).toBe(false);
+      expect(res.issues.some(i => i.code === 'ENDPOINT_TRANSPORT_MISMATCH')).toBe(false);
     } finally {
       proj.cleanup();
     }
@@ -682,7 +800,7 @@ updatedAt: '2026-06-10T22:00:00Z'
       const res = validateSddTree();
       // Since it's in draft mode, it should be valid (errors downgraded to warnings)
       expect(res.valid).toBe(true);
-      expect(res.issues.some(i => i.code === 'MISSING_HTTP_ENDPOINT' && i.severity === 'warning')).toBe(true);
+      expect(res.issues.some(i => i.code === 'MISSING_ENDPOINT' && i.severity === 'warning')).toBe(true);
       expect(res.issues.some(i => i.code === 'DRAFT_COMPONENT_WARNING')).toBe(true);
     } finally {
       proj.cleanup();
@@ -741,29 +859,29 @@ updatedAt: '2026-06-10T22:00:00Z'
       // 1. By default, it fails with error severity
       const resDefault = validateSddTree();
       expect(resDefault.valid).toBe(false);
-      expect(resDefault.issues.some(i => i.code === 'MISSING_HTTP_ENDPOINT' && i.severity === 'error')).toBe(true);
+      expect(resDefault.issues.some(i => i.code === 'MISSING_ENDPOINT' && i.severity === 'error')).toBe(true);
 
       // 2. With override severity to warning, it passes
       const rulesWithWarningOverride = {
         ...defaultRules,
         sddRuleSeverity: {
-          'MISSING_HTTP_ENDPOINT': 'warning' as const
+          'MISSING_ENDPOINT': 'warning' as const
         }
       };
       const resWarning = validateSddTree(rulesWithWarningOverride);
       expect(resWarning.valid).toBe(true);
-      expect(resWarning.issues.some(i => i.code === 'MISSING_HTTP_ENDPOINT' && i.severity === 'warning')).toBe(true);
+      expect(resWarning.issues.some(i => i.code === 'MISSING_ENDPOINT' && i.severity === 'warning')).toBe(true);
 
       // 3. With override severity to off, it ignores the issue completely
       const rulesWithOffOverride = {
         ...defaultRules,
         sddRuleSeverity: {
-          'MISSING_HTTP_ENDPOINT': 'off' as const
+          'MISSING_ENDPOINT': 'off' as const
         }
       };
       const resOff = validateSddTree(rulesWithOffOverride);
       expect(resOff.valid).toBe(true);
-      expect(resOff.issues.some(i => i.code === 'MISSING_HTTP_ENDPOINT')).toBe(false);
+      expect(resOff.issues.some(i => i.code === 'MISSING_ENDPOINT')).toBe(false);
     } finally {
       proj.cleanup();
     }

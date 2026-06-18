@@ -150,17 +150,16 @@ methods:
     description: "Saves a generated invoice to the store"
     signature: "save_invoice(invoice: Invoice): Promise<void>"
     returns: "Promise<void>"
-    # Optional http/grpc/event bindings:
-    httpEndpoint: # optional
-      method: "POST" # GET | POST | PUT | DELETE | PATCH | OPTIONS | HEAD
+    # Concrete wire binding — ONE generic `endpoint` field, discriminated by `transport`.
+    # Set it via the `sdd_set_endpoints` MCP tool (don't hand-author). Required on every
+    # method whose component is a Portal; the gate flags MISSING_ENDPOINT otherwise.
+    endpoint:
+      transport: "HTTP" # HTTP | gRPC | GraphQL | MessageBus | NamedPipe | IPC | CLI | Custom
+      method: "POST"    # HTTP: GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD ; path: "/invoices"
       path: "/invoices"
-    # grpcEndpoint: # optional
-    #   service: "BillingService"
-    #   method: "SaveInvoice"
-    # eventSubscription: # optional
-    #   topic: "invoice.generated"
-    #   queue: "billing-worker"
-    #   event: "InvoiceGenerated"
+    # Other transports (same slot): gRPC {service, method} · GraphQL {operation, field} ·
+    # MessageBus {topic, event, queue?, direction} · NamedPipe {pipe} · IPC {channel} ·
+    # CLI {command} · Custom {address}. The endpoint's transport MUST match the Portal's portalType.
 status: "draft" # draft | design | complete
 createdAt: "2026-06-12T20:00:00Z"
 updatedAt: "2026-06-12T20:00:00Z"

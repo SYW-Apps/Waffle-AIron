@@ -1,0 +1,16 @@
+id: icredential-registry
+name: Credential Registry Interface
+description: 'Write path for credentials: applies mutations to the store and persists via the Postgres adapter.'
+component: credential-registry
+methods:
+  - name: create_key
+    description: Insert into store and upsert via adapter
+    signature: 'async fn create_key(&self, key: ApiKey) -> Result<(), GateError>'
+    returns: Result<(), GateError>
+  - name: set_status
+    description: Apply status change to store and persist
+    signature: 'async fn set_status(&self, key_id: ApiKeyId, status: ApiKeyStatus) -> Result<(), GateError>'
+    returns: Result<(), GateError>
+status: draft
+createdAt: '2026-06-17T18:08:11.922Z'
+updatedAt: '2026-06-17T18:08:11.923Z'

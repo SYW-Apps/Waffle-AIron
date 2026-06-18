@@ -92,7 +92,7 @@ export type ComponentType = z.infer<typeof ComponentTypeSchema>;
 /** Component types that are patterns (own member blocks) rather than building blocks. */
 export const PATTERN_TYPES: ReadonlySet<ComponentType> = new Set(['Repository', 'Gateway']);
 
-export const PortalTypeSchema = z.enum(['HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'Custom']);
+export const PortalTypeSchema = z.enum(['HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'Custom']);
 export type PortalType = z.infer<typeof PortalTypeSchema>;
 
 export const ComponentSpecSchema = z.object({
@@ -117,41 +117,36 @@ export type ComponentSpec = z.infer<typeof ComponentSpecSchema>;
 // ---------------------------------------------------------------------------
 // Level 3: Interface / Contract Spec (interfaces/*.yaml)
 // ---------------------------------------------------------------------------
-export const HttpEndpointSchema = z.object({
-  method: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD']),
-  path: z.string(),
-});
-export type HttpEndpoint = z.infer<typeof HttpEndpointSchema>;
+export const HttpMethodSchema = z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD']);
+export type HttpMethod = z.infer<typeof HttpMethodSchema>;
 
-export const GrpcEndpointSchema = z.object({
-  service: z.string(),
-  method: z.string(),
-});
-export type GrpcEndpoint = z.infer<typeof GrpcEndpointSchema>;
+/** The wire protocols a Portal can expose. Mirrors PortalType (sans the *_API suffix). */
+export const TransportSchema = z.enum(['HTTP', 'gRPC', 'GraphQL', 'MessageBus', 'NamedPipe', 'IPC', 'CLI', 'Custom']);
+export type Transport = z.infer<typeof TransportSchema>;
 
-export const EventSubscriptionSchema = z.object({
-  topic: z.string(),
-  queue: z.string().optional(),
-  event: z.string(),
-});
-export type EventSubscription = z.infer<typeof EventSubscriptionSchema>;
-
-/** Producer-side event contract (mirror of eventSubscription) — used to validate producer↔consumer events. */
-export const EventPublicationSchema = z.object({
-  topic: z.string(),
-  event: z.string(),
-});
-export type EventPublication = z.infer<typeof EventPublicationSchema>;
+// A method's concrete wire endpoint — ONE generic field, discriminated by `transport`,
+// so HTTP / gRPC / GraphQL / MessageBus / NamedPipe / IPC / CLI / Custom all bind
+// through the same slot (set via the `sdd_set_endpoints` MCP tool). Each transport keeps
+// its own precise address fields, so the gate validates exact shape, not just presence.
+export const EndpointSchema = z.discriminatedUnion('transport', [
+  z.object({ transport: z.literal('HTTP'), method: HttpMethodSchema, path: z.string() }),
+  z.object({ transport: z.literal('gRPC'), service: z.string(), method: z.string() }),
+  z.object({ transport: z.literal('GraphQL'), operation: z.enum(['query', 'mutation', 'subscription']), field: z.string() }),
+  z.object({ transport: z.literal('MessageBus'), topic: z.string(), event: z.string(), queue: z.string().optional(), direction: z.enum(['subscribe', 'publish']).default('subscribe') }),
+  z.object({ transport: z.literal('NamedPipe'), pipe: z.string() }),
+  z.object({ transport: z.literal('IPC'), channel: z.string() }),
+  z.object({ transport: z.literal('CLI'), command: z.string() }),
+  z.object({ transport: z.literal('Custom'), address: z.string() }),
+]);
+export type Endpoint = z.infer<typeof EndpointSchema>;
 
 export const MethodSignatureSchema = z.object({
   name: z.string().regex(/^[a-zA-Z0-9_]+$/, 'Method name must be alphanumeric'),
   description: z.string(),
   signature: z.string(), // e.g. "save(key: string, data: Buffer): Promise<void>"
   returns: z.string(),   // e.g. "Promise<void>"
-  httpEndpoint: HttpEndpointSchema.optional(),
-  grpcEndpoint: GrpcEndpointSchema.optional(),
-  eventSubscription: EventSubscriptionSchema.optional(),
-  eventPublication: EventPublicationSchema.optional(),
+  /** Concrete wire binding for this method when its component is a Portal (set via sdd_set_endpoints). */
+  endpoint: EndpointSchema.optional(),
 });
 
 export type MethodSignature = z.infer<typeof MethodSignatureSchema>;

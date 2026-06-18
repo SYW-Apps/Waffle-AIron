@@ -1,0 +1,13 @@
+id: subscription-index
+name: Subscription Index
+description: >-
+  Read path over the subscription store: find a subscription by id or by billing account, and check
+  whether a Stripe event id has already been processed. Projects the store state; never mutates it.
+subsystem: subscriptions
+componentType: Index
+owns: []
+dependsOn:
+  - subscription-store
+status: draft
+createdAt: '2026-06-17T17:43:32.613Z'
+updatedAt: '2026-06-17T17:43:32.613Z'

@@ -1,0 +1,39 @@
+id: plan-index-impl
+name: Plan Index Implementation
+description: Read projection over the plan store.
+contract: iplan-index
+sourcePath: src/subscriptions/plan_index.rs
+methods:
+  - name: find_plan
+    narrative:
+      - stepNumber: 1
+        description: Read the plan from the store by id
+        type: call
+        targetComponent: plan-store
+        targetMethod: get
+      - stepNumber: 2
+        description: Return the result
+        type: local
+  - name: list_plans
+    narrative:
+      - stepNumber: 1
+        description: Read all plans from the store
+        type: call
+        targetComponent: plan-store
+        targetMethod: list
+      - stepNumber: 2
+        description: Return the list
+        type: local
+  - name: find_tier_limits
+    narrative:
+      - stepNumber: 1
+        description: Read the plan from the store
+        type: call
+        targetComponent: plan-store
+        targetMethod: get
+      - stepNumber: 2
+        description: Locate the tier by id and return its LimitSet, or None
+        type: local
+status: draft
+createdAt: '2026-06-17T18:36:44.924Z'
+updatedAt: '2026-06-17T18:36:44.925Z'

@@ -1,0 +1,16 @@
+id: iusage-rollup-registry
+name: Usage Rollup Registry Interface
+description: >-
+  Write path for usage rollups: increments period totals in the store and persists via the Postgres
+  adapter.
+component: usage-rollup-registry
+methods:
+  - name: increment
+    description: Add amount to the period rollup in the store and persist
+    signature: >-
+      async fn increment(&self, subscription_id: SubscriptionId, resource: String, period: String,
+      amount: i64) -> Result<(), MeteringError>
+    returns: Result<(), MeteringError>
+status: draft
+createdAt: '2026-06-17T17:59:50.563Z'
+updatedAt: '2026-06-17T17:59:50.563Z'

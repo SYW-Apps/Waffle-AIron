@@ -1,0 +1,31 @@
+id: stripe-event-orchestrator-impl
+name: Stripe Event Orchestrator Implementation
+description: Verifies and idempotently reconciles Stripe webhook events.
+contract: istripe-event-orchestrator
+sourcePath: src/subscriptions/stripe_event_orchestrator.rs
+methods:
+  - name: process_event
+    narrative:
+      - stepNumber: 1
+        description: Verify the signature and parse the raw body into a typed StripeEvent
+        type: call
+        targetComponent: stripe-adapter
+        targetMethod: verify_and_parse_event
+      - stepNumber: 2
+        description: >-
+          From the event payload, extract our subscription_id (set as Stripe metadata at creation)
+          and derive the new status + current_period_end implied by the event kind
+        type: local
+      - stepNumber: 3
+        description: >-
+          Idempotently record the event id and apply the status change in one transaction; returns
+          false if the event was already processed (no-op)
+        type: call
+        targetComponent: subscription-repository
+        targetMethod: mark_event_processed
+      - stepNumber: 4
+        description: Return Ok(()) (skipping silently if the event was a duplicate)
+        type: local
+status: draft
+createdAt: '2026-06-17T18:36:10.808Z'
+updatedAt: '2026-06-17T18:36:10.808Z'

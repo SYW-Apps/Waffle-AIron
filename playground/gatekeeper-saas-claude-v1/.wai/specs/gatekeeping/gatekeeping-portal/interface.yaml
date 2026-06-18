@@ -1,0 +1,34 @@
+id: igatekeeping-portal
+name: Gatekeeping Portal Interface
+description: >-
+  HTTP/JSON contract for the gate. Forwards authorize to the gate orchestrator and key management to
+  the credential orchestrator.
+component: gatekeeping-portal
+methods:
+  - name: authorize
+    description: POST /v1/authorize — authorize a single protected API call
+    signature: 'async fn authorize(&self, body: AuthorizeRequest) -> Result<AuthorizeDecision, ApiError>'
+    returns: Result<AuthorizeDecision, ApiError>
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /v1/authorize
+  - name: issue_api_key
+    description: POST /v1/api-keys — issue a new API key for a subscription
+    signature: 'async fn issue_api_key(&self, subscription_id: SubscriptionId) -> Result<IssuedKey, ApiError>'
+    returns: Result<IssuedKey, ApiError>
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /v1/api-keys
+  - name: revoke_api_key
+    description: DELETE /v1/api-keys/{key_id} — revoke an API key
+    signature: 'async fn revoke_api_key(&self, key_id: ApiKeyId) -> Result<(), ApiError>'
+    returns: Result<(), ApiError>
+    endpoint:
+      transport: HTTP
+      method: DELETE
+      path: /v1/api-keys/{key_id}
+status: draft
+createdAt: '2026-06-17T18:08:11.791Z'
+updatedAt: '2026-06-18T11:26:33.004Z'

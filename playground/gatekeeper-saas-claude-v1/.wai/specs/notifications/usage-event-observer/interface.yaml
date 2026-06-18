@@ -1,0 +1,18 @@
+id: iusage-event-observer
+name: Usage Event Observer Interface
+description: >-
+  Consumer of the usage.threshold topic. Forwards each event to the notification orchestrator.
+  Subscribes to bus topic usage.threshold.
+component: usage-event-observer
+methods:
+  - name: on_usage_threshold
+    description: >-
+      Handle a usage.threshold event (topic usage.threshold) by forwarding to the notification
+      orchestrator
+    signature: >-
+      async fn on_usage_threshold(&self, event: UsageThresholdEvent) -> Result<(),
+      NotificationError>
+    returns: Result<(), NotificationError>
+status: draft
+createdAt: '2026-06-17T18:17:32.000Z'
+updatedAt: '2026-06-17T18:17:32.000Z'

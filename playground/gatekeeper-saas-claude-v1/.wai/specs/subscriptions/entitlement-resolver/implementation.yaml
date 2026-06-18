@@ -1,0 +1,47 @@
+id: entitlement-resolver-impl
+name: Entitlement Resolver Implementation
+description: Resolves effective entitlements by merging tier limits with subscription overrides.
+contract: ientitlement-resolver
+sourcePath: src/subscriptions/entitlement_resolver.rs
+methods:
+  - name: resolve
+    narrative:
+      - stepNumber: 1
+        description: Load the subscription by id (NotFound if absent)
+        type: call
+        targetComponent: subscription-repository
+        targetMethod: find_subscription
+      - stepNumber: 2
+        description: Read the tier's limit set from the plan (InvalidTier if missing)
+        type: call
+        targetComponent: plan-repository
+        targetMethod: find_tier_limits
+      - stepNumber: 3
+        description: >-
+          Merge tier limits with the subscription's overrides (override by resource key) into the
+          effective limit list
+        type: local
+      - stepNumber: 4
+        description: Build and return Entitlements {subscription_id, billing_account_id, status, limits}
+        type: local
+  - name: resolve_for_account
+    narrative:
+      - stepNumber: 1
+        description: Find the billing account's subscription (NotFound if absent)
+        type: call
+        targetComponent: subscription-repository
+        targetMethod: find_by_account
+      - stepNumber: 2
+        description: Read the tier's limit set from the plan (InvalidTier if missing)
+        type: call
+        targetComponent: plan-repository
+        targetMethod: find_tier_limits
+      - stepNumber: 3
+        description: Merge tier limits with subscription overrides into the effective limit list
+        type: local
+      - stepNumber: 4
+        description: Build and return Entitlements
+        type: local
+status: draft
+createdAt: '2026-06-17T18:36:16.533Z'
+updatedAt: '2026-06-17T18:36:16.533Z'

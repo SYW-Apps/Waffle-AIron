@@ -1,0 +1,16 @@
+id: notification-orchestrator
+name: Notification Orchestrator
+description: >-
+  Workflow triggered by a usage.threshold event: resolve the billing email via the accounts client
+  adapter, compose the alert message, send it via the email adapter, and record the delivery via the
+  notification log adapter.
+subsystem: notifications
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - accounts-client-adapter
+  - email-adapter
+  - notification-log-adapter
+status: draft
+createdAt: '2026-06-17T18:17:02.237Z'
+updatedAt: '2026-06-17T18:17:02.237Z'

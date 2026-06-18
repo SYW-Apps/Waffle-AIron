@@ -1,0 +1,14 @@
+id: account-directory
+name: Account Directory
+description: >-
+  Published read capability of the accounts subsystem for in-process cross-subsystem lookups.
+  Resolves the billing email for a billing account by delegating to the account repository. Does not
+  expose write access.
+subsystem: accounts
+componentType: Specialist
+owns: []
+dependsOn:
+  - account-repository
+status: draft
+createdAt: '2026-06-17T18:16:58.049Z'
+updatedAt: '2026-06-17T18:16:58.050Z'

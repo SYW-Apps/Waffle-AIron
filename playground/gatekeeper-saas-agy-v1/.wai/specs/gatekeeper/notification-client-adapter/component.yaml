@@ -1,0 +1,11 @@
+id: "notification-client-adapter"
+name: "Notification Client Adapter"
+description: "Adapter that bridges calls from the Gatekeeper subsystem to the Notification subsystem's public orchestrator interface."
+subsystem: "gatekeeper"
+componentType: "Adapter"
+owns: []
+dependsOn:
+  - "notification-orchestrator"
+status: "complete"
+createdAt: "2026-06-17T14:12:00Z"
+updatedAt: "2026-06-17T14:12:00Z"

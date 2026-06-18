@@ -1,0 +1,15 @@
+id: notifications
+name: Notifications Subsystem
+description: >-
+  Sends usage-threshold and billing-related alerts to each account's billing email. Observer-driven:
+  subscribes to usage.threshold events from metering, resolves the billing contact via accounts, and
+  dispatches email through the Email Adapter. Owns the Email Adapter.
+parentSystem: gatekeeper-saas-claude-v1
+publicInterfaces:
+  - type: MessageBus
+    details: Subscribes to usage.threshold events and dispatches billing-email alerts
+    component: usage-event-observer
+    interface: iusage-event-observer
+status: draft
+createdAt: '2026-06-16T22:25:44.066Z'
+updatedAt: '2026-06-17T18:17:44.979Z'

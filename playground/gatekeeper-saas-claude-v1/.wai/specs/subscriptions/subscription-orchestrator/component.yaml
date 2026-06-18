@@ -1,0 +1,18 @@
+id: subscription-orchestrator
+name: Subscription Orchestrator
+description: >-
+  Coordinates subscription lifecycle: create, change tier, and cancel. Validates the target tier
+  against the plan catalog, provisions/reuses the Stripe customer (reading the billing email from
+  accounts via the billing-account client adapter), syncs the subscription to Stripe, and persists
+  local state via the subscription repository.
+subsystem: subscriptions
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - subscription-repository
+  - plan-repository
+  - stripe-adapter
+  - billing-account-client-adapter
+status: draft
+createdAt: '2026-06-17T18:34:36.992Z'
+updatedAt: '2026-06-17T18:34:36.992Z'

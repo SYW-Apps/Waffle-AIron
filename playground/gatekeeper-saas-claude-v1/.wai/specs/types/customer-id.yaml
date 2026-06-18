@@ -1,0 +1,12 @@
+kind: value-object
+id: customer-id
+name: Customer Id
+description: Newtype identifier for a Customer. Shared system-wide.
+fields:
+  - name: value
+    type: string
+    description: Opaque unique id
+    optional: false
+methods: []
+createdAt: '2026-06-17T18:44:06.952Z'
+updatedAt: '2026-06-17T18:44:06.952Z'

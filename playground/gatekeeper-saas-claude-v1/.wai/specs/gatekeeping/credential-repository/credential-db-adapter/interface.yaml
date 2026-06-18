@@ -1,0 +1,16 @@
+id: icredential-db-adapter
+name: Credential Postgres Adapter Interface
+description: The only block doing Postgres I/O for credentials (sqlx). No domain logic.
+component: credential-db-adapter
+methods:
+  - name: load_all
+    description: Load all credentials (for store hydration)
+    signature: async fn load_all(&self) -> Result<Vec<ApiKey>, DbError>
+    returns: Result<Vec<ApiKey>, DbError>
+  - name: upsert_key
+    description: Insert or update a credential row
+    signature: 'async fn upsert_key(&self, key: &ApiKey) -> Result<(), DbError>'
+    returns: Result<(), DbError>
+status: draft
+createdAt: '2026-06-17T18:08:11.983Z'
+updatedAt: '2026-06-17T18:08:11.983Z'

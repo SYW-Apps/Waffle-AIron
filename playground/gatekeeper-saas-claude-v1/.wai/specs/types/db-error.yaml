@@ -1,0 +1,18 @@
+kind: value-object
+id: db-error
+name: Db Error
+description: >-
+  Shared persistence error surfaced by Postgres adapters (sqlx). Wraps connection, query, and
+  mapping failures.
+fields:
+  - name: variant
+    type: string
+    description: One of Connection | Query | Mapping | NotFound | Conflict
+    optional: false
+  - name: message
+    type: string
+    description: Human-readable detail
+    optional: false
+methods: []
+createdAt: '2026-06-17T18:44:20.521Z'
+updatedAt: '2026-06-17T18:44:20.537Z'

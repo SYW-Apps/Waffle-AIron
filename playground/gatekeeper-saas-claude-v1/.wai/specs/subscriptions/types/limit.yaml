@@ -1,0 +1,21 @@
+kind: value-object
+id: limit
+name: Limit
+description: 'A single usage limit: how much of a resource is allowed per time window.'
+subsystem: subscriptions
+fields:
+  - name: resource
+    type: string
+    description: Metered resource key, e.g. api_calls
+    optional: false
+  - name: quota
+    type: i64
+    description: Maximum allowed count in the window
+    optional: false
+  - name: window
+    type: string
+    description: 'Reset window: minute | day | month'
+    optional: false
+methods: []
+createdAt: '2026-06-17T17:48:29.708Z'
+updatedAt: '2026-06-17T17:48:29.718Z'

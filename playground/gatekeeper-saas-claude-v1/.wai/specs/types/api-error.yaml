@@ -1,0 +1,20 @@
+kind: value-object
+id: api-error
+name: API Error
+description: Shared HTTP-facing error returned by Portals. Maps a domain error to an HTTP status and message.
+fields:
+  - name: status
+    type: i64
+    description: HTTP status code (e.g. 400, 401, 404, 429, 500)
+    optional: false
+  - name: code
+    type: string
+    description: Stable machine-readable error code
+    optional: false
+  - name: message
+    type: string
+    description: Human-readable detail
+    optional: false
+methods: []
+createdAt: '2026-06-17T18:44:18.166Z'
+updatedAt: '2026-06-17T18:44:18.183Z'

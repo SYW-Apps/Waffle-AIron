@@ -1,0 +1,12 @@
+id: usage-rollup-db-adapter
+name: Usage Rollup Postgres Adapter
+description: >-
+  The only block doing Postgres I/O for usage rollups (sqlx). Loads and upserts period total rows.
+  No domain logic.
+subsystem: metering
+componentType: Adapter
+owns: []
+dependsOn: []
+status: draft
+createdAt: '2026-06-17T17:52:56.735Z'
+updatedAt: '2026-06-17T17:52:56.735Z'

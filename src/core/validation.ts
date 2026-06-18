@@ -213,9 +213,8 @@ export function validateSddTree(rules?: RulesConfig): ValidationResult {
     if (isDraftContext) {
       const completenessRules = [
         'MISSING_IMPLEMENTATION_METHOD',
-        'MISSING_HTTP_ENDPOINT',
-        'MISSING_GRPC_ENDPOINT',
-        'MISSING_EVENT_SUBSCRIPTION',
+        'MISSING_ENDPOINT',
+        'ENDPOINT_TRANSPORT_MISMATCH',
         'MISSING_PORTAL_TYPE',
         'INVALID_TARGET_METHOD_REFERENCE',
         'INVALID_TARGET_COMPONENT_REFERENCE',
@@ -436,6 +435,12 @@ export function validateSddTree(rules?: RulesConfig): ValidationResult {
   }
 
   // 4. Component Type Interaction Rules (Architectural Boundaries)
+  // Maps a Portal's portalType to the wire `transport` its interface methods must
+  // declare on each `endpoint`. Custom is free-form (carries no endpoint obligation).
+  const PORTAL_TRANSPORT: Record<string, string | undefined> = {
+    HTTP_API: 'HTTP', gRPC: 'gRPC', GraphQL: 'GraphQL', MessageBus: 'MessageBus',
+    NamedPipe: 'NamedPipe', IPC: 'IPC', CLI: 'CLI', Custom: undefined,
+  };
   for (const comp of components) {
     const isDraftCtx = isComponentDraft(comp.id);
 
@@ -449,51 +454,35 @@ export function validateSddTree(rules?: RulesConfig): ValidationResult {
           comp.id,
           isDraftCtx
         );
-      } else if (comp.portalType === 'HTTP_API') {
-        const compInterfaces = interfaces.filter(i => i.component === comp.id);
-        for (const intf of compInterfaces) {
-          const isIntfDraft = intf.status === 'draft' || intf.status === 'design';
-          for (const m of intf.methods) {
-            if (!m.httpEndpoint) {
-              addIssue(
-                'error',
-                'MISSING_HTTP_ENDPOINT',
-                `Method "${m.name}" on interface "${intf.id}" (Portal HTTP_API) is missing "httpEndpoint" mapping.`,
-                intf.id,
-                isDraftCtx || isIntfDraft
-              );
-            }
-          }
-        }
-      } else if (comp.portalType === 'gRPC') {
-        const compInterfaces = interfaces.filter(i => i.component === comp.id);
-        for (const intf of compInterfaces) {
-          const isIntfDraft = intf.status === 'draft' || intf.status === 'design';
-          for (const m of intf.methods) {
-            if (!m.grpcEndpoint) {
-              addIssue(
-                'error',
-                'MISSING_GRPC_ENDPOINT',
-                `Method "${m.name}" on interface "${intf.id}" (Portal gRPC) is missing "grpcEndpoint" mapping.`,
-                intf.id,
-                isDraftCtx || isIntfDraft
-              );
-            }
-          }
-        }
-      } else if (comp.portalType === 'MessageBus') {
-        const compInterfaces = interfaces.filter(i => i.component === comp.id);
-        for (const intf of compInterfaces) {
-          const isIntfDraft = intf.status === 'draft' || intf.status === 'design';
-          for (const m of intf.methods) {
-            if (!m.eventSubscription) {
-              addIssue(
-                'error',
-                'MISSING_EVENT_SUBSCRIPTION',
-                `Method "${m.name}" on interface "${intf.id}" (Portal MessageBus) is missing "eventSubscription" mapping.`,
-                intf.id,
-                isDraftCtx || isIntfDraft
-              );
+      } else {
+        // Generic endpoint check (replaces the old per-transport rules): every Portal
+        // whose portalType maps to a transport requires each interface method to
+        // declare a concrete `endpoint` of the MATCHING transport. One mechanism for
+        // HTTP / gRPC / GraphQL / MessageBus / NamedPipe / IPC / CLI — bound via the
+        // generic sdd_set_endpoints tool. Custom carries no obligation.
+        const expected = PORTAL_TRANSPORT[comp.portalType];
+        if (expected) {
+          const compInterfaces = interfaces.filter(i => i.component === comp.id);
+          for (const intf of compInterfaces) {
+            const isIntfDraft = intf.status === 'draft' || intf.status === 'design';
+            for (const m of intf.methods) {
+              if (!m.endpoint) {
+                addIssue(
+                  'error',
+                  'MISSING_ENDPOINT',
+                  `Method "${m.name}" on interface "${intf.id}" (Portal ${comp.portalType}) is missing an "endpoint" mapping. Bind it with sdd_set_endpoints (transport "${expected}").`,
+                  intf.id,
+                  isDraftCtx || isIntfDraft
+                );
+              } else if (m.endpoint.transport !== expected) {
+                addIssue(
+                  'error',
+                  'ENDPOINT_TRANSPORT_MISMATCH',
+                  `Method "${m.name}" on interface "${intf.id}" declares a "${m.endpoint.transport}" endpoint, but its Portal "${comp.id}" is portalType "${comp.portalType}" (expects transport "${expected}").`,
+                  intf.id,
+                  isDraftCtx || isIntfDraft
+                );
+              }
             }
           }
         }

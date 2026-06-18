@@ -1,0 +1,64 @@
+id: account-registry-impl
+name: Account Registry Implementation
+description: 'Write path: mutate store then persist.'
+contract: iaccount-registry
+sourcePath: src/accounts/account_registry.rs
+methods:
+  - name: create_account
+    narrative:
+      - stepNumber: 1
+        description: Insert the aggregate into the store
+        type: call
+        targetComponent: account-store
+        targetMethod: insert
+      - stepNumber: 2
+        description: Persist the aggregate to Postgres
+        type: call
+        targetComponent: account-db-adapter
+        targetMethod: upsert_account
+      - stepNumber: 3
+        description: Return Ok(())
+        type: local
+  - name: update_billing_email
+    narrative:
+      - stepNumber: 1
+        description: Apply the billing email change in the store (NotFound if absent)
+        type: call
+        targetComponent: account-store
+        targetMethod: apply_billing_email
+      - stepNumber: 2
+        description: Read back the updated aggregate
+        type: call
+        targetComponent: account-store
+        targetMethod: get
+      - stepNumber: 3
+        description: Persist the updated aggregate
+        type: call
+        targetComponent: account-db-adapter
+        targetMethod: upsert_account
+      - stepNumber: 4
+        description: Return Ok(())
+        type: local
+  - name: set_status
+    narrative:
+      - stepNumber: 1
+        description: Apply the status change in the store (NotFound if absent)
+        type: call
+        targetComponent: account-store
+        targetMethod: set_status
+      - stepNumber: 2
+        description: Read back the updated aggregate
+        type: call
+        targetComponent: account-store
+        targetMethod: get
+      - stepNumber: 3
+        description: Persist the updated aggregate
+        type: call
+        targetComponent: account-db-adapter
+        targetMethod: upsert_account
+      - stepNumber: 4
+        description: Return Ok(())
+        type: local
+status: draft
+createdAt: '2026-06-17T18:40:41.375Z'
+updatedAt: '2026-06-17T18:40:41.375Z'

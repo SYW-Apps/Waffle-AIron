@@ -1,0 +1,14 @@
+id: usage-rollup-registry
+name: Usage Rollup Registry
+description: >-
+  Write path for usage rollups: increments/writes period totals into the store and persists via the
+  Postgres adapter.
+subsystem: metering
+componentType: Registry
+owns: []
+dependsOn:
+  - usage-rollup-store
+  - usage-rollup-db-adapter
+status: draft
+createdAt: '2026-06-17T17:52:53.670Z'
+updatedAt: '2026-06-17T17:52:53.670Z'

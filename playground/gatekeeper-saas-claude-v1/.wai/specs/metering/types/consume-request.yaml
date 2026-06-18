@@ -1,0 +1,35 @@
+kind: value-object
+id: consume-request
+name: Consume Request
+description: >-
+  Hot-path request to consume usage: which subscription/resource, the quota and window to enforce,
+  and the amount to decrement.
+subsystem: metering
+fields:
+  - name: subscription_id
+    type: string
+    description: SubscriptionId
+    optional: false
+  - name: billing_account_id
+    type: string
+    description: BillingAccountId, carried for downstream threshold notifications
+    optional: false
+  - name: resource
+    type: string
+    description: Metered resource key
+    optional: false
+  - name: quota
+    type: i64
+    description: Allowed count in the window
+    optional: false
+  - name: window
+    type: string
+    description: 'Reset window: minute | day | month'
+    optional: false
+  - name: amount
+    type: i64
+    description: Units to consume (usually 1)
+    optional: false
+methods: []
+createdAt: '2026-06-17T17:59:05.714Z'
+updatedAt: '2026-06-17T17:59:05.724Z'

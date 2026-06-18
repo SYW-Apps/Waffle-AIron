@@ -1,0 +1,25 @@
+kind: entity
+id: tier
+name: Tier
+description: A subscription tier within a plan, mapped to a Stripe price and carrying its limit set.
+subsystem: subscriptions
+fields:
+  - name: id
+    type: string
+    description: TierId newtype
+    optional: false
+  - name: name
+    type: string
+    description: Display name, e.g. Pro
+    optional: false
+  - name: stripe_price_id
+    type: string
+    description: Stripe price id this tier maps to
+    optional: false
+  - name: limits
+    type: subscriptions.limit[]
+    description: Per-tier limits
+    optional: false
+methods: []
+createdAt: '2026-06-17T17:48:34.790Z'
+updatedAt: '2026-06-17T17:48:34.800Z'

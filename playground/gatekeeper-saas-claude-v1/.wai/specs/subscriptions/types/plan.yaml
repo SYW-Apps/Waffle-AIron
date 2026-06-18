@@ -1,0 +1,25 @@
+kind: entity
+id: plan
+name: Plan
+description: 'A catalog plan: a named set of tiers offered to customers.'
+subsystem: subscriptions
+fields:
+  - name: id
+    type: string
+    description: PlanId newtype
+    optional: false
+  - name: name
+    type: string
+    description: Plan display name
+    optional: false
+  - name: active
+    type: bool
+    description: Whether the plan is offered
+    optional: false
+  - name: tiers
+    type: subscriptions.tier[]
+    description: Tiers within the plan
+    optional: false
+methods: []
+createdAt: '2026-06-17T17:48:36.757Z'
+updatedAt: '2026-06-17T17:48:36.767Z'

@@ -1,0 +1,20 @@
+id: ientitlement-resolver
+name: Entitlement Resolver Interface
+description: >-
+  Resolves the effective entitlements for a subscription. Published read contract consumed by
+  gatekeeping.
+component: entitlement-resolver
+methods:
+  - name: resolve
+    description: Resolve effective limits + status for a subscription (tier limits merged with overrides)
+    signature: 'async fn resolve(&self, id: SubscriptionId) -> Result<Entitlements, SubscriptionError>'
+    returns: Result<Entitlements, SubscriptionError>
+  - name: resolve_for_account
+    description: Resolve entitlements for a billing account's active subscription
+    signature: >-
+      async fn resolve_for_account(&self, id: BillingAccountId) -> Result<Entitlements,
+      SubscriptionError>
+    returns: Result<Entitlements, SubscriptionError>
+status: draft
+createdAt: '2026-06-17T17:49:23.898Z'
+updatedAt: '2026-06-17T17:49:23.898Z'

@@ -1,0 +1,91 @@
+id: subscriptions-portal-impl
+name: Subscriptions Portal Implementation
+description: Axum HTTP handlers for plans and subscriptions; forwards to orchestrators.
+contract: isubscriptions-portal
+sourcePath: src/subscriptions/portal.rs
+methods:
+  - name: create_plan
+    narrative:
+      - stepNumber: 1
+        description: Deserialize and validate the Plan from the request body
+        type: local
+      - stepNumber: 2
+        description: Forward to the plan orchestrator
+        type: call
+        targetComponent: plan-orchestrator
+        targetMethod: create_plan
+      - stepNumber: 3
+        description: Map result to 201 Created or error response
+        type: local
+  - name: list_plans
+    narrative:
+      - stepNumber: 1
+        description: List plans via the plan orchestrator
+        type: call
+        targetComponent: plan-orchestrator
+        targetMethod: list_plans
+      - stepNumber: 2
+        description: Return 200 with the plan list
+        type: local
+  - name: update_tier_limits
+    narrative:
+      - stepNumber: 1
+        description: Parse plan_id, tier_id, and the LimitSet body
+        type: local
+      - stepNumber: 2
+        description: Forward to the plan orchestrator
+        type: call
+        targetComponent: plan-orchestrator
+        targetMethod: update_tier_limits
+      - stepNumber: 3
+        description: Return 200 with the refreshed plan or error
+        type: local
+  - name: create_subscription
+    narrative:
+      - stepNumber: 1
+        description: Deserialize and validate the CreateSubscriptionCommand
+        type: local
+      - stepNumber: 2
+        description: Forward to the subscription orchestrator
+        type: call
+        targetComponent: subscription-orchestrator
+        targetMethod: create_subscription
+      - stepNumber: 3
+        description: Return 201 Created or error response
+        type: local
+  - name: get_subscription
+    narrative:
+      - stepNumber: 1
+        description: Fetch via the subscription orchestrator
+        type: call
+        targetComponent: subscription-orchestrator
+        targetMethod: get_subscription
+      - stepNumber: 2
+        description: Return 200 or 404
+        type: local
+  - name: change_tier
+    narrative:
+      - stepNumber: 1
+        description: Parse subscription id and target tier_id
+        type: local
+      - stepNumber: 2
+        description: Forward to the subscription orchestrator
+        type: call
+        targetComponent: subscription-orchestrator
+        targetMethod: change_tier
+      - stepNumber: 3
+        description: Return 200 with the updated subscription or error
+        type: local
+  - name: cancel_subscription
+    narrative:
+      - stepNumber: 1
+        description: Cancel via the subscription orchestrator
+        type: call
+        targetComponent: subscription-orchestrator
+        targetMethod: cancel_subscription
+      - stepNumber: 2
+        description: Return 204 No Content or error
+        type: local
+status: draft
+createdAt: '2026-06-17T18:35:43.047Z'
+updatedAt: '2026-06-17T18:35:43.047Z'

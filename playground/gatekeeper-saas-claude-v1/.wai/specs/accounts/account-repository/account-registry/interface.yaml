@@ -1,0 +1,26 @@
+id: iaccount-registry
+name: Account Registry Interface
+description: >-
+  Write path for the Account aggregate: applies mutations to the store and persists via the Postgres
+  adapter.
+component: account-registry
+methods:
+  - name: create_account
+    description: Insert into store and upsert via adapter
+    signature: 'async fn create_account(&self, account: Account) -> Result<(), AccountError>'
+    returns: Result<(), AccountError>
+  - name: update_billing_email
+    description: Apply email change to store and persist
+    signature: >-
+      async fn update_billing_email(&self, id: BillingAccountId, email: Email) -> Result<(),
+      AccountError>
+    returns: Result<(), AccountError>
+  - name: set_status
+    description: Apply status change to store and persist
+    signature: >-
+      async fn set_status(&self, id: BillingAccountId, status: AccountStatus) -> Result<(),
+      AccountError>
+    returns: Result<(), AccountError>
+status: draft
+createdAt: '2026-06-17T17:39:09.313Z'
+updatedAt: '2026-06-17T17:39:09.313Z'

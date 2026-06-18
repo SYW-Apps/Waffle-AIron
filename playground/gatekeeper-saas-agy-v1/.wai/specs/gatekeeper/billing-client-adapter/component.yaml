@@ -1,0 +1,11 @@
+id: "billing-client-adapter"
+name: "Billing Client Adapter"
+description: "Adapter that bridges calls from the Gatekeeper subsystem to the Billing subsystem's public subscription interface."
+subsystem: "gatekeeper"
+componentType: "Adapter"
+owns: []
+dependsOn:
+  - "subscription-repository"
+status: "complete"
+createdAt: "2026-06-17T14:12:00Z"
+updatedAt: "2026-06-17T14:12:00Z"

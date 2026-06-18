@@ -1,0 +1,12 @@
+id: account-store
+name: Account Store
+description: >-
+  Authoritative state for the Account aggregate. Holds customers, billing accounts, and contacts.
+  Depended upon by the registry and index; never depends on them.
+subsystem: accounts
+componentType: Store
+owns: []
+dependsOn: []
+status: draft
+createdAt: '2026-06-16T22:40:22.986Z'
+updatedAt: '2026-06-16T22:40:22.986Z'

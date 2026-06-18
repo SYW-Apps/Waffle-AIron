@@ -1,0 +1,12 @@
+id: account-db-adapter
+name: Account Postgres Adapter
+description: >-
+  The only block doing Postgres I/O (sqlx) for the accounts subsystem. Loads and persists account
+  aggregate rows. Performs no domain logic and depends on no other accounts components.
+subsystem: accounts
+componentType: Adapter
+owns: []
+dependsOn: []
+status: draft
+createdAt: '2026-06-16T22:40:23.040Z'
+updatedAt: '2026-06-16T22:40:23.040Z'

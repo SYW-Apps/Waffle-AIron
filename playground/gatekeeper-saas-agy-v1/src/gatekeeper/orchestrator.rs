@@ -1,7 +1,7 @@
 use crate::models::{AuthDecision, GatekeeperError, SubscriptionDetails, MeterResult, MeterError, RepositoryError, NotificationError};
-use crate::billing::subscription_repository::SubscriptionRepository;
+use crate::gatekeeper::billing_client_adapter::BillingClientAdapter;
 use crate::gatekeeper::meter_repository::MeterRepository;
-use crate::notification::orchestrator::NotificationOrchestrator;
+use crate::gatekeeper::notification_client_adapter::NotificationClientAdapter;
 use async_trait::async_trait;
 use std::sync::Arc;
 
@@ -14,21 +14,21 @@ pub trait GatekeeperOrchestrator {
 }
 
 pub struct GatekeeperOrchestratorImpl {
-    subscription_repo: Arc<dyn SubscriptionRepository + Send + Sync>,
+    billing_client: Arc<dyn BillingClientAdapter + Send + Sync>,
     meter_repo: Arc<dyn MeterRepository + Send + Sync>,
-    notification_orchestrator: Arc<dyn NotificationOrchestrator + Send + Sync>,
+    notification_client: Arc<dyn NotificationClientAdapter + Send + Sync>,
 }
 
 impl GatekeeperOrchestratorImpl {
     pub fn new(
-        subscription_repo: Arc<dyn SubscriptionRepository + Send + Sync>,
+        billing_client: Arc<dyn BillingClientAdapter + Send + Sync>,
         meter_repo: Arc<dyn MeterRepository + Send + Sync>,
-        notification_orchestrator: Arc<dyn NotificationOrchestrator + Send + Sync>,
+        notification_client: Arc<dyn NotificationClientAdapter + Send + Sync>,
     ) -> Self {
         Self {
-            subscription_repo,
+            billing_client,
             meter_repo,
-            notification_orchestrator,
+            notification_client,
         }
     }
 }
@@ -40,7 +40,7 @@ impl GatekeeperOrchestrator for GatekeeperOrchestratorImpl {
         api_key: String,
     ) -> Result<AuthDecision, GatekeeperError> {
         // Step 1: Call the subscription repository to fetch limits and active status associated with the key
-        let subscription = self.subscription_repo
+        let subscription = self.billing_client
             .get_subscription_by_key(api_key)
             .await
             .map_err(|e| GatekeeperError::DatabaseError(e.to_string()))?
@@ -89,7 +89,7 @@ impl GatekeeperOrchestrator for GatekeeperOrchestratorImpl {
         // Step 5: Call the notification orchestrator asynchronously to dispatch warning emails/alerts if thresholds are crossed
         if let Some(alert) = alert_type {
             let email = subscription.customer_email.clone();
-            let notifier = Arc::clone(&self.notification_orchestrator);
+            let notifier = Arc::clone(&self.notification_client);
             let usage = meter_result.current_monthly_count;
             tokio::spawn(async move {
                 let _ = notifier.dispatch_alert(email, alert, usage, limit).await;
@@ -122,21 +122,18 @@ mod tests {
     use chrono::Utc;
     use std::sync::Mutex;
 
-    struct MockSubscriptionRepo {
+    struct MockBillingClient {
         should_fail: bool,
         subscription: Option<SubscriptionDetails>,
     }
 
     #[async_trait]
-    impl SubscriptionRepository for MockSubscriptionRepo {
+    impl BillingClientAdapter for MockBillingClient {
         async fn get_subscription_by_key(&self, _api_key: String) -> Result<Option<SubscriptionDetails>, RepositoryError> {
             if self.should_fail {
                 return Err(RepositoryError::DatabaseError("DB error".to_string()));
             }
             Ok(self.subscription.clone())
-        }
-        async fn update_subscription_status(&self, _stripe_sub_id: String, _status: String, _plan_id: String) -> Result<(), RepositoryError> {
-            Ok(())
         }
     }
 
@@ -158,12 +155,12 @@ mod tests {
         }
     }
 
-    struct MockNotificationOrchestrator {
+    struct MockNotificationClient {
         dispatched_alerts: Arc<Mutex<Vec<(String, String, u32)>>>,
     }
 
     #[async_trait]
-    impl NotificationOrchestrator for MockNotificationOrchestrator {
+    impl NotificationClientAdapter for MockNotificationClient {
         async fn dispatch_alert(&self, customer_email: String, alert_type: String, current_usage: u32, _limit: u32) -> Result<(), NotificationError> {
             self.dispatched_alerts.lock().unwrap().push((customer_email, alert_type, current_usage));
             Ok(())
@@ -185,7 +182,7 @@ mod tests {
             current_period_end: Utc::now().naive_utc(),
         };
 
-        let sub_repo = Arc::new(MockSubscriptionRepo {
+        let billing_client = Arc::new(MockBillingClient {
             should_fail: false,
             subscription: Some(sub),
         });
@@ -201,11 +198,11 @@ mod tests {
         });
 
         let alerts = Arc::new(Mutex::new(Vec::new()));
-        let notif_orch = Arc::new(MockNotificationOrchestrator {
+        let notif_client = Arc::new(MockNotificationClient {
             dispatched_alerts: Arc::clone(&alerts),
         });
 
-        let orchestrator = GatekeeperOrchestratorImpl::new(sub_repo, meter_repo, notif_orch);
+        let orchestrator = GatekeeperOrchestratorImpl::new(billing_client, meter_repo, notif_client);
         let result = orchestrator.authorize_request("key_123".to_string()).await;
 
         assert!(result.is_ok());
@@ -229,7 +226,7 @@ mod tests {
             current_period_end: Utc::now().naive_utc(),
         };
 
-        let sub_repo = Arc::new(MockSubscriptionRepo {
+        let billing_client = Arc::new(MockBillingClient {
             should_fail: false,
             subscription: Some(sub),
         });
@@ -244,11 +241,11 @@ mod tests {
             },
         });
 
-        let notif_orch = Arc::new(MockNotificationOrchestrator {
+        let notif_client = Arc::new(MockNotificationClient {
             dispatched_alerts: Arc::new(Mutex::new(Vec::new())),
         });
 
-        let orchestrator = GatekeeperOrchestratorImpl::new(sub_repo, meter_repo, notif_orch);
+        let orchestrator = GatekeeperOrchestratorImpl::new(billing_client, meter_repo, notif_client);
         let result = orchestrator.authorize_request("key_123".to_string()).await;
 
         assert!(result.is_ok());
@@ -271,7 +268,7 @@ mod tests {
             current_period_end: Utc::now().naive_utc(),
         };
 
-        let sub_repo = Arc::new(MockSubscriptionRepo {
+        let billing_client = Arc::new(MockBillingClient {
             should_fail: false,
             subscription: Some(sub),
         });
@@ -287,11 +284,11 @@ mod tests {
         });
 
         let alerts = Arc::new(Mutex::new(Vec::new()));
-        let notif_orch = Arc::new(MockNotificationOrchestrator {
+        let notif_client = Arc::new(MockNotificationClient {
             dispatched_alerts: Arc::clone(&alerts),
         });
 
-        let orchestrator = GatekeeperOrchestratorImpl::new(sub_repo, meter_repo, notif_orch);
+        let orchestrator = GatekeeperOrchestratorImpl::new(billing_client, meter_repo, notif_client);
         let result = orchestrator.authorize_request("key_123".to_string()).await;
 
         assert!(result.is_ok());
@@ -308,7 +305,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_authorize_request_db_error() {
-        let sub_repo = Arc::new(MockSubscriptionRepo {
+        let billing_client = Arc::new(MockBillingClient {
             should_fail: true,
             subscription: None,
         });
@@ -321,11 +318,11 @@ mod tests {
                 current_monthly_count: 0,
             },
         });
-        let notif_orch = Arc::new(MockNotificationOrchestrator {
+        let notif_client = Arc::new(MockNotificationClient {
             dispatched_alerts: Arc::new(Mutex::new(Vec::new())),
         });
 
-        let orchestrator = GatekeeperOrchestratorImpl::new(sub_repo, meter_repo, notif_orch);
+        let orchestrator = GatekeeperOrchestratorImpl::new(billing_client, meter_repo, notif_client);
         let result = orchestrator.authorize_request("key_123".to_string()).await;
 
         assert!(result.is_err());
@@ -337,7 +334,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_authorize_request_not_found() {
-        let sub_repo = Arc::new(MockSubscriptionRepo {
+        let billing_client = Arc::new(MockBillingClient {
             should_fail: false,
             subscription: None,
         });
@@ -350,11 +347,11 @@ mod tests {
                 current_monthly_count: 0,
             },
         });
-        let notif_orch = Arc::new(MockNotificationOrchestrator {
+        let notif_client = Arc::new(MockNotificationClient {
             dispatched_alerts: Arc::new(Mutex::new(Vec::new())),
         });
 
-        let orchestrator = GatekeeperOrchestratorImpl::new(sub_repo, meter_repo, notif_orch);
+        let orchestrator = GatekeeperOrchestratorImpl::new(billing_client, meter_repo, notif_client);
         let result = orchestrator.authorize_request("key_123".to_string()).await;
 
         assert!(result.is_err());
@@ -375,7 +372,7 @@ mod tests {
             current_period_end: Utc::now().naive_utc(),
         };
 
-        let sub_repo = Arc::new(MockSubscriptionRepo {
+        let billing_client = Arc::new(MockBillingClient {
             should_fail: false,
             subscription: Some(sub),
         });
@@ -390,11 +387,11 @@ mod tests {
             },
         });
 
-        let notif_orch = Arc::new(MockNotificationOrchestrator {
+        let notif_client = Arc::new(MockNotificationClient {
             dispatched_alerts: Arc::new(Mutex::new(Vec::new())),
         });
 
-        let orchestrator = GatekeeperOrchestratorImpl::new(sub_repo, meter_repo, notif_orch);
+        let orchestrator = GatekeeperOrchestratorImpl::new(billing_client, meter_repo, notif_client);
         let result = orchestrator.authorize_request("key_123".to_string()).await;
 
         assert!(result.is_err());
@@ -406,11 +403,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_mocks_coverage() {
-        let sub_repo = MockSubscriptionRepo {
+        let sub_repo = MockBillingClient {
             should_fail: false,
             subscription: None,
         };
-        let res1 = sub_repo.update_subscription_status("".to_string(), "".to_string(), "".to_string()).await;
+        let res1 = sub_repo.get_subscription_by_key("".to_string()).await;
         assert!(res1.is_ok());
 
         let meter_repo = MockMeterRepo {
@@ -440,7 +437,7 @@ mod tests {
             current_period_start: Utc::now().naive_utc(),
             current_period_end: Utc::now().naive_utc(),
         };
-        let sub_repo = Arc::new(MockSubscriptionRepo {
+        let billing_client = Arc::new(MockBillingClient {
             should_fail: false,
             subscription: Some(sub_free),
         });
@@ -453,10 +450,10 @@ mod tests {
                 current_monthly_count: 5,
             },
         });
-        let notif_orch = Arc::new(MockNotificationOrchestrator {
+        let notif_client = Arc::new(MockNotificationClient {
             dispatched_alerts: Arc::new(Mutex::new(Vec::new())),
         });
-        let orchestrator = GatekeeperOrchestratorImpl::new(sub_repo.clone(), meter_repo.clone(), notif_orch.clone());
+        let orchestrator = GatekeeperOrchestratorImpl::new(billing_client.clone(), meter_repo.clone(), notif_client.clone());
         let res = orchestrator.authorize_request("key_free".to_string()).await.unwrap();
         assert_eq!(res.remaining_requests, 9); // 10 - 1
 
@@ -472,11 +469,11 @@ mod tests {
             current_period_start: Utc::now().naive_utc(),
             current_period_end: Utc::now().naive_utc(),
         };
-        let sub_repo = Arc::new(MockSubscriptionRepo {
+        let billing_client = Arc::new(MockBillingClient {
             should_fail: false,
             subscription: Some(sub_ent),
         });
-        let orchestrator = GatekeeperOrchestratorImpl::new(sub_repo, meter_repo.clone(), notif_orch.clone());
+        let orchestrator = GatekeeperOrchestratorImpl::new(billing_client, meter_repo.clone(), notif_client.clone());
         let res = orchestrator.authorize_request("key_ent".to_string()).await.unwrap();
         assert_eq!(res.remaining_requests, 999); // 1000 - 1
 
@@ -492,11 +489,11 @@ mod tests {
             current_period_start: Utc::now().naive_utc(),
             current_period_end: Utc::now().naive_utc(),
         };
-        let sub_repo = Arc::new(MockSubscriptionRepo {
+        let billing_client = Arc::new(MockBillingClient {
             should_fail: false,
             subscription: Some(sub_other),
         });
-        let orchestrator = GatekeeperOrchestratorImpl::new(sub_repo, meter_repo, notif_orch);
+        let orchestrator = GatekeeperOrchestratorImpl::new(billing_client, meter_repo, notif_client);
         let res = orchestrator.authorize_request("key_other".to_string()).await.unwrap();
         assert_eq!(res.remaining_requests, 9); // 10 (fallback) - 1
     }

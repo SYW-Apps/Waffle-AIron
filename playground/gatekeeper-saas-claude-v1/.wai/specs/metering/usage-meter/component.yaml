@@ -1,0 +1,16 @@
+id: usage-meter
+name: Usage Meter
+description: >-
+  The hot-path consume workflow: atomically check-and-decrement a subscription's per-resource
+  counter via Redis, detect threshold crossings, and publish usage.threshold events. Receives the
+  quota/window from the caller so it never depends on subscriptions. Published as metering's RPC
+  interface, consumed by gatekeeping.
+subsystem: metering
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - redis-counter-adapter
+  - usage-event-adapter
+status: draft
+createdAt: '2026-06-17T17:52:39.430Z'
+updatedAt: '2026-06-17T17:52:39.430Z'

@@ -1,0 +1,16 @@
+kind: value-object
+id: stripe-error
+name: Stripe Error
+description: Shared error surfaced by the Stripe adapter for API and webhook-verification failures.
+fields:
+  - name: variant
+    type: string
+    description: One of Api | RateLimited | InvalidSignature | Parse
+    optional: false
+  - name: message
+    type: string
+    description: Human-readable detail
+    optional: false
+methods: []
+createdAt: '2026-06-17T18:44:22.236Z'
+updatedAt: '2026-06-17T18:44:22.250Z'

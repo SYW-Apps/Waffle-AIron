@@ -6,44 +6,54 @@
 # gatekeeper-saas-claude-v1
 
 ## Overview
-A new project initialized with Wairon.
-(The AI agent should overwrite this description with a complete overview of the project concept and stack once the user specifies their choices)
+**Gatekeeper** is a multi-tenant SaaS control-plane microservice that sits in front of
+our platforms' APIs. It tracks customers, meters their API access in real time, and
+enforces subscription limits backed by Stripe. On every protected API call, a customer
+platform asks Gatekeeper to authorize the request; Gatekeeper checks the caller's
+subscription tier and remaining quota, returns an allow/deny decision, and decrements
+the usage counter. It reconciles metered usage against Stripe subscriptions, manages
+per-tier limits, and emits usage-threshold notifications to each account's billing
+email.
 
 ## Tech Stack
-- [Specify Language, Framework, and Databases here]
+- **Language / Runtime:** Rust (async, Tokio).
+- **Inbound transport:** HTTP/JSON (and optionally gRPC) ingress for the gate.
+- **Authoritative store:** PostgreSQL (accounts, subscriptions, plans/limits, invoices,
+  usage rollups) accessed via `sqlx`.
+- **Hot path / counters:** Redis for per-subscription rate-limit & quota counters,
+  accessed via `deadpool-redis`. The inline gate reads/decrements here.
+- **External integrations (Adapters only):** Stripe via `async-stripe`
+  (subscriptions, metered billing, webhooks); transactional email via an HTTP email
+  provider adapter (e.g. SendGrid/Postmark).
+
+## Enforcement Model
+- **Inline synchronous gate.** Customer platforms call Gatekeeper to authorize each
+  protected API call. The decision path is latency-critical: it reads cached
+  limits + Redis counters, never blocking on Postgres in the hot path.
+- Postgres is the source of truth; Redis counters are projections seeded from
+  Postgres and periodically reconciled / flushed back as usage rollups.
 
 ## Key Conventions
-- Follow Spec-Driven Development (SDD) using Wairon.
-- Refrain from writing code implementation until specifications are approved.
+- Follow Spec-Driven Development (SDD) using Wairon. The spec tree under `.wai/specs/`
+  is the source of truth; agents and code are derived from it.
+- Refrain from writing code implementation until specifications are approved and
+  `sdd_validate_tree` passes with zero errors.
+- Architectural vocabulary only (Portal, Orchestrator, Store, Index, Registry,
+  Adapter, Observer, Specialist; Repository/Gateway patterns). No "Manager/Helper/Utils".
+- Only `Portal` components accept external traffic. All external I/O (Postgres, Redis,
+  Stripe, email) happens exclusively in `Adapter` components.
 
 ---
 
-# Domain Map (0 domains)
+# Domain Map (5 domains)
 
-_No domains yet._
-
----
-
-# wairon MCP Tools
-
-The **wairon MCP server** is active in this project. You can call these tools directly:
-
-| Tool | Purpose |
-|------|---------|
-| `listAgents` | List agents resolved from the spec tree (optionally filter by domainId) |
-| `getAgent` | Get full details of an agent by id |
-| `listDomains` | List domains (subsystem-derived + free-standing) |
-| `validateTopology` | Check for topology errors/warnings |
-| `getProjectConfig` | Get the project configuration |
-| `sdd_initialize_system` | Create the L0 system spec |
-| `sdd_add_subsystem` | Add an L1 subsystem |
-| `sdd_add_component` | Add an L2 component |
-| `sdd_define_interface` | Define an L3 interface contract |
-| `sdd_write_narrative` | Write an L4 implementation + L5 narrative |
-| `sdd_validate_tree` | Validate the whole spec tree |
-| `sdd_get_status` | Spec-tree completeness dashboard |
-
-Use these MCP tools to query and change project state — never the `wairon` CLI (that is the human developer's tool).
+| ID | Source | Name |
+|----|--------|------|
+| `accounts` | subsystem `accounts` | Accounts Subsystem |
+| `gatekeeping` | subsystem `gatekeeping` | Gatekeeping Subsystem |
+| `metering` | subsystem `metering` | Metering Subsystem |
+| `notifications` | subsystem `notifications` | Notifications Subsystem |
+| `subscriptions` | subsystem `subscriptions` | Subscriptions Subsystem |
 
 ---
 

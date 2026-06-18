@@ -1,0 +1,14 @@
+id: metering-portal
+name: Metering Portal
+description: >-
+  HTTP/JSON ingress for /v1/usage. Forwards usage read requests to the usage query specialist. Never
+  touches adapters or repositories directly.
+subsystem: metering
+componentType: Portal
+owns: []
+dependsOn:
+  - usage-query
+portalType: HTTP_API
+status: draft
+createdAt: '2026-06-17T17:52:36.686Z'
+updatedAt: '2026-06-17T17:52:36.687Z'

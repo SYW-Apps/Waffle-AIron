@@ -1,0 +1,13 @@
+id: account-index
+name: Account Index
+description: >-
+  Read path over the account store: look up a customer by id or billing-account id, and resolve the
+  billing contact email for an account. Projects the store's state; never mutates it.
+subsystem: accounts
+componentType: Index
+owns: []
+dependsOn:
+  - account-store
+status: draft
+createdAt: '2026-06-16T22:40:23.023Z'
+updatedAt: '2026-06-16T22:40:23.024Z'

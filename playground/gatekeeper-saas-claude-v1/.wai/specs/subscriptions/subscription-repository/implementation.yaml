@@ -1,0 +1,58 @@
+id: subscription-repository-impl
+name: Subscription Repository Implementation
+description: Facade forwarding 1:1 to owned registry and index.
+contract: isubscription-repository
+sourcePath: src/subscriptions/subscription_repository.rs
+methods:
+  - name: save_subscription
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: subscription-registry
+        targetMethod: create_subscription
+  - name: set_tier
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: subscription-registry
+        targetMethod: set_tier
+  - name: set_status
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: subscription-registry
+        targetMethod: set_status
+  - name: mark_event_processed
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: subscription-registry
+        targetMethod: mark_event_processed
+  - name: find_subscription
+    narrative:
+      - stepNumber: 1
+        description: Forward to the index
+        type: call
+        targetComponent: subscription-index
+        targetMethod: find_subscription
+  - name: find_by_account
+    narrative:
+      - stepNumber: 1
+        description: Forward to the index
+        type: call
+        targetComponent: subscription-index
+        targetMethod: find_by_account
+  - name: is_event_processed
+    narrative:
+      - stepNumber: 1
+        description: Forward to the index
+        type: call
+        targetComponent: subscription-index
+        targetMethod: is_event_processed
+status: draft
+createdAt: '2026-06-17T18:36:58.412Z'
+updatedAt: '2026-06-17T18:36:58.412Z'

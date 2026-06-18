@@ -1,0 +1,14 @@
+id: subscriptions-client-adapter
+name: Subscriptions Client Adapter
+description: >-
+  Local client adapter that crosses the boundary into the subscriptions subsystem, calling its
+  published entitlement-resolver interface to fetch entitlements for a subscription. The only
+  gatekeeping block allowed to call subscriptions. Maps subscription errors into gate errors.
+subsystem: gatekeeping
+componentType: Adapter
+owns: []
+dependsOn:
+  - entitlement-resolver
+status: draft
+createdAt: '2026-06-17T18:09:02.030Z'
+updatedAt: '2026-06-17T18:09:02.031Z'

@@ -1,0 +1,14 @@
+id: usage-event-observer
+name: Usage Event Observer
+description: >-
+  Subscribes to usage.threshold events on the message bus and forwards each to the notification
+  orchestrator. Realizes the notifications subsystem's MessageBus public interface (the consumer
+  side of the usage.threshold topic).
+subsystem: notifications
+componentType: Observer
+owns: []
+dependsOn:
+  - notification-orchestrator
+status: draft
+createdAt: '2026-06-17T18:16:59.864Z'
+updatedAt: '2026-06-17T18:16:59.864Z'

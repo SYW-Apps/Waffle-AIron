@@ -7,6 +7,12 @@ parentSystem: gatekeeper-saas
 publicInterfaces:
   - type: REST
     details: REST API for customer management and Stripe Webhook ingest
+    component: billing-portal
+    interface: ibilling-portal
+  - type: Custom
+    details: Shared repository for cross-subsystem query access
+    component: billing-repository
+    interface: ibilling-repository
 status: complete
 createdAt: '2026-06-16T16:22:34.254Z'
 updatedAt: '2026-06-16T16:22:34.255Z'

@@ -270,6 +270,19 @@ mod tests {
             let guard = self.customers.lock().unwrap();
             Ok(guard.iter().find(|c| c.stripe_customer_id.as_deref() == Some(stripe_customer_id)).cloned())
         }
+
+        async fn find_customer_by_subscription_id(&self, subscription_id: &str) -> Result<Option<Customer>, sqlx::Error> {
+            let sub_guard = self.subscriptions.lock().unwrap();
+            let sub = sub_guard.iter().find(|s| {
+                s.stripe_subscription_id.as_deref() == Some(subscription_id) || s.id.to_string() == subscription_id
+            });
+            if let Some(s) = sub {
+                let cust_guard = self.customers.lock().unwrap();
+                Ok(cust_guard.iter().find(|c| c.id == s.customer_id).cloned())
+            } else {
+                Ok(None)
+            }
+        }
     }
 
     #[tokio::test]

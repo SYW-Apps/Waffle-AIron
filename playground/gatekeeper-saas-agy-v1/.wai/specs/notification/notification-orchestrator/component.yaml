@@ -5,7 +5,6 @@ subsystem: "notification"
 componentType: "Orchestrator"
 owns: []
 dependsOn:
-  - "customer-repository"
   - "email-adapter"
   - "push-adapter"
 status: "complete"

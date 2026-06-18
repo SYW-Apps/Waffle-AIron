@@ -1,0 +1,15 @@
+id: usage-reconciler
+name: Usage Reconciler
+description: >-
+  Owns a periodic background loop that flushes Redis usage counters into authoritative Postgres
+  rollups and prunes expired counter windows. Delegates Redis reads to the counter adapter and
+  persistence to the rollup repository.
+subsystem: metering
+componentType: Actor
+owns: []
+dependsOn:
+  - redis-counter-adapter
+  - usage-rollup-repository
+status: draft
+createdAt: '2026-06-17T17:52:43.724Z'
+updatedAt: '2026-06-17T17:52:43.724Z'

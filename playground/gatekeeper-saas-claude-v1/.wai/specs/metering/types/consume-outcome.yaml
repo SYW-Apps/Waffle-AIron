@@ -1,0 +1,21 @@
+kind: value-object
+id: consume-outcome
+name: Consume Outcome
+description: 'Result of a consume attempt: whether it was allowed and the resulting usage/remaining.'
+subsystem: metering
+fields:
+  - name: allowed
+    type: bool
+    description: Whether the consume was within quota
+    optional: false
+  - name: used
+    type: i64
+    description: Units used in the window after this call
+    optional: false
+  - name: remaining
+    type: i64
+    description: Units remaining in the window
+    optional: false
+methods: []
+createdAt: '2026-06-17T17:59:08.501Z'
+updatedAt: '2026-06-17T17:59:08.512Z'

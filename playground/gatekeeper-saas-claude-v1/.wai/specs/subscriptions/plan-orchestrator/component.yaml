@@ -1,0 +1,13 @@
+id: plan-orchestrator
+name: Plan Orchestrator
+description: >-
+  Coordinates plan catalog workflows: create/update plans, tiers, and per-tier limits. Delegates
+  persistence to the plan repository facade.
+subsystem: subscriptions
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - plan-repository
+status: draft
+createdAt: '2026-06-17T17:43:06.261Z'
+updatedAt: '2026-06-17T17:43:06.262Z'

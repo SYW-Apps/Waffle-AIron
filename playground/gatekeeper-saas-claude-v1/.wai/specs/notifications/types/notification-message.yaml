@@ -1,0 +1,21 @@
+kind: value-object
+id: notification-message
+name: Notification Message
+description: A composed email alert ready to send.
+subsystem: notifications
+fields:
+  - name: to
+    type: email
+    description: Recipient billing email
+    optional: false
+  - name: subject
+    type: string
+    description: Email subject
+    optional: false
+  - name: body
+    type: string
+    description: Email body
+    optional: false
+methods: []
+createdAt: '2026-06-17T18:17:13.594Z'
+updatedAt: '2026-06-17T18:17:13.595Z'

@@ -1,0 +1,12 @@
+id: notification-log-adapter
+name: Notification Log Adapter
+description: >-
+  The only block writing notification delivery records to Postgres (append-only). Records each sent
+  alert for audit/history. Write-only, no domain logic.
+subsystem: notifications
+componentType: Adapter
+owns: []
+dependsOn: []
+status: draft
+createdAt: '2026-06-17T18:17:07.302Z'
+updatedAt: '2026-06-17T18:17:07.302Z'

@@ -1,0 +1,27 @@
+kind: entity
+id: billing-account
+name: Billing Account
+description: >-
+  The billing identity for a customer; root reference for subscriptions and the billing email used
+  by notifications. Free of Stripe concerns — Stripe state is owned by the subscriptions subsystem.
+subsystem: accounts
+fields:
+  - name: id
+    type: string
+    description: BillingAccountId newtype
+    optional: false
+  - name: customer_id
+    type: string
+    description: Owning CustomerId
+    optional: false
+  - name: billing_email
+    type: email
+    description: Billing contact email
+    optional: false
+  - name: status
+    type: accounts.account-status
+    description: Billing account lifecycle status
+    optional: false
+methods: []
+createdAt: '2026-06-17T18:34:25.701Z'
+updatedAt: '2026-06-17T18:34:25.702Z'

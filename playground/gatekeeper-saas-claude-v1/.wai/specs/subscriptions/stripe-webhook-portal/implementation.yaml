@@ -1,0 +1,22 @@
+id: stripe-webhook-portal-impl
+name: Stripe Webhook Portal Implementation
+description: Receives the raw signed Stripe event and forwards it.
+contract: istripe-webhook-portal
+sourcePath: src/subscriptions/stripe_webhook_portal.rs
+methods:
+  - name: handle_webhook
+    narrative:
+      - stepNumber: 1
+        description: Read the raw request body bytes and the Stripe-Signature header
+        type: local
+      - stepNumber: 2
+        description: Forward to the stripe event orchestrator for verification and processing
+        type: call
+        targetComponent: stripe-event-orchestrator
+        targetMethod: process_event
+      - stepNumber: 3
+        description: Return 200 on success, 400 on signature/parse failure
+        type: local
+status: draft
+createdAt: '2026-06-17T18:35:46.336Z'
+updatedAt: '2026-06-17T18:35:46.336Z'

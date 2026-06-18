@@ -1,0 +1,24 @@
+id: api-key-authenticator-impl
+name: API Key Authenticator Implementation
+description: Verifies an API key and resolves its subscription.
+contract: iapi-key-authenticator
+sourcePath: src/gatekeeping/api_key_authenticator.rs
+methods:
+  - name: authenticate
+    narrative:
+      - stepNumber: 1
+        description: Hash the presented api_key with the same algorithm used at issue time
+        type: local
+      - stepNumber: 2
+        description: Look up an active credential by key hash
+        type: call
+        targetComponent: credential-repository
+        targetMethod: find_by_hash
+      - stepNumber: 3
+        description: >-
+          If absent or status is not Active, return GateError::Unauthenticated; otherwise return
+          AuthResult { subscription_id }
+        type: local
+status: draft
+createdAt: '2026-06-17T18:26:33.209Z'
+updatedAt: '2026-06-17T18:26:33.209Z'

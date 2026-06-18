@@ -1,0 +1,25 @@
+id: subscriptions
+name: Subscriptions Subsystem
+description: >-
+  Owns plans, subscription tiers, and per-tier limits/entitlements. Syncs subscriptions and metered
+  billing with Stripe and ingests Stripe webhooks. Owns the Stripe Adapter. Provides resolved
+  entitlements (limits) for a subscription to the gatekeeping subsystem.
+parentSystem: gatekeeper-saas-claude-v1
+publicInterfaces:
+  - type: REST
+    details: /v1/plans and /v1/subscriptions — manage plans, tiers, limits, and customer subscriptions
+    component: subscriptions-portal
+    interface: isubscriptions-portal
+  - type: REST
+    details: /v1/stripe/webhook — Stripe webhook ingress (idempotent)
+    component: stripe-webhook-portal
+    interface: istripe-webhook-portal
+  - type: Custom
+    details: >-
+      In-process API: resolve(SubscriptionId)/resolve_for_account(BillingAccountId) -> Entitlements,
+      consumed by gatekeeping
+    component: entitlement-resolver
+    interface: ientitlement-resolver
+status: draft
+createdAt: '2026-06-16T22:25:43.948Z'
+updatedAt: '2026-06-17T18:02:05.395Z'

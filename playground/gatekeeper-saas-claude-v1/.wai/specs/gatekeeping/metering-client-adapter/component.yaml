@@ -1,0 +1,14 @@
+id: metering-client-adapter
+name: Metering Client Adapter
+description: >-
+  Local client adapter that crosses the boundary into the metering subsystem, calling its published
+  usage-meter consume interface to check-and-decrement usage. The only gatekeeping block allowed to
+  call metering. Maps metering errors into gate errors.
+subsystem: gatekeeping
+componentType: Adapter
+owns: []
+dependsOn:
+  - usage-meter
+status: draft
+createdAt: '2026-06-17T18:09:04.686Z'
+updatedAt: '2026-06-17T18:09:04.686Z'

@@ -1,0 +1,28 @@
+id: iusage-rollup-repository
+name: Usage Rollup Repository Interface
+description: >-
+  Persistence facade for usage rollups. Each method forwards 1:1 to the owned registry (writes) or
+  index (reads).
+component: usage-rollup-repository
+methods:
+  - name: record_usage
+    description: Add usage into a period rollup (forwards to registry)
+    signature: >-
+      async fn record_usage(&self, subscription_id: SubscriptionId, resource: String, period:
+      String, amount: i64) -> Result<(), MeteringError>
+    returns: Result<(), MeteringError>
+  - name: get_rollup
+    description: Read a period rollup (forwards to index)
+    signature: >-
+      async fn get_rollup(&self, subscription_id: SubscriptionId, resource: String, period: String)
+      -> Result<Option<UsageRollup>, MeteringError>
+    returns: Result<Option<UsageRollup>, MeteringError>
+  - name: list_rollups
+    description: List rollups for a subscription (forwards to index)
+    signature: >-
+      async fn list_rollups(&self, subscription_id: SubscriptionId) -> Result<Vec<UsageRollup>,
+      MeteringError>
+    returns: Result<Vec<UsageRollup>, MeteringError>
+status: draft
+createdAt: '2026-06-17T17:59:48.215Z'
+updatedAt: '2026-06-17T17:59:48.215Z'

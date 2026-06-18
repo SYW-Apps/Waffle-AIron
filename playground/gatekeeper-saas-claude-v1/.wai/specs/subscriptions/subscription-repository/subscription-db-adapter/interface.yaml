@@ -1,0 +1,26 @@
+id: isubscription-db-adapter
+name: Subscription Postgres Adapter Interface
+description: The only block doing Postgres I/O for the subscription aggregate (sqlx). No domain logic.
+component: subscription-db-adapter
+methods:
+  - name: load_subscription
+    description: Load a subscription by id
+    signature: 'async fn load_subscription(&self, id: SubscriptionId) -> Result<Option<Subscription>, DbError>'
+    returns: Result<Option<Subscription>, DbError>
+  - name: load_by_account
+    description: Load a subscription by billing account id
+    signature: 'async fn load_by_account(&self, id: BillingAccountId) -> Result<Option<Subscription>, DbError>'
+    returns: Result<Option<Subscription>, DbError>
+  - name: upsert_subscription
+    description: Insert or update a subscription
+    signature: 'async fn upsert_subscription(&self, sub: &Subscription) -> Result<(), DbError>'
+    returns: Result<(), DbError>
+  - name: insert_processed_event
+    description: Insert a processed event id (unique constraint); false if duplicate
+    signature: >-
+      async fn insert_processed_event(&self, event_id: String, subscription_id: SubscriptionId) ->
+      Result<bool, DbError>
+    returns: Result<bool, DbError>
+status: draft
+createdAt: '2026-06-17T17:50:15.058Z'
+updatedAt: '2026-06-17T17:50:15.059Z'

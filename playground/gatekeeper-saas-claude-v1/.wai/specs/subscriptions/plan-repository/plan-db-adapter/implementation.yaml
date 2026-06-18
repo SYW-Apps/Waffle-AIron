@@ -1,0 +1,24 @@
+id: plan-db-adapter-impl
+name: Plan Postgres Adapter Implementation
+description: sqlx Postgres I/O for plans, tiers, and limits.
+contract: iplan-db-adapter
+sourcePath: src/subscriptions/plan_db_adapter.rs
+methods:
+  - name: load_plan
+    narrative:
+      - stepNumber: 1
+        description: SELECT the plan with its tiers and limits (joins) and assemble a Plan
+        type: local
+  - name: load_all_plans
+    narrative:
+      - stepNumber: 1
+        description: SELECT all plans with tiers and limits for store hydration
+        type: local
+  - name: upsert_plan
+    narrative:
+      - stepNumber: 1
+        description: In a transaction, upsert the plan row, its tier rows, and their limit rows
+        type: local
+status: draft
+createdAt: '2026-06-17T18:36:49.481Z'
+updatedAt: '2026-06-17T18:36:49.481Z'

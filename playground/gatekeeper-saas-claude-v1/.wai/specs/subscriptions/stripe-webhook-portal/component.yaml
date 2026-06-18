@@ -1,0 +1,14 @@
+id: stripe-webhook-portal
+name: Stripe Webhook Portal
+description: >-
+  Dedicated HTTP ingress for /v1/stripe/webhook. Receives the raw signed Stripe event body (no
+  API-key auth) and forwards it to the stripe event orchestrator for verification and processing.
+subsystem: subscriptions
+componentType: Portal
+owns: []
+dependsOn:
+  - stripe-event-orchestrator
+portalType: HTTP_API
+status: draft
+createdAt: '2026-06-17T17:43:04.380Z'
+updatedAt: '2026-06-17T17:43:04.381Z'

@@ -1,0 +1,22 @@
+id: icredential-repository
+name: Credential Repository Interface
+description: >-
+  Persistence facade for API-key credentials. Each method forwards 1:1 to the owned registry
+  (writes) or index (reads).
+component: credential-repository
+methods:
+  - name: save_key
+    description: Persist a new credential (forwards to registry)
+    signature: 'async fn save_key(&self, key: ApiKey) -> Result<(), GateError>'
+    returns: Result<(), GateError>
+  - name: revoke
+    description: Set a credential to Revoked (forwards to registry)
+    signature: 'async fn revoke(&self, key_id: ApiKeyId) -> Result<(), GateError>'
+    returns: Result<(), GateError>
+  - name: find_by_hash
+    description: Resolve an active credential by key hash (forwards to index)
+    signature: 'async fn find_by_hash(&self, key_hash: String) -> Result<Option<ApiKey>, GateError>'
+    returns: Result<Option<ApiKey>, GateError>
+status: draft
+createdAt: '2026-06-17T18:08:11.901Z'
+updatedAt: '2026-06-17T18:08:11.902Z'

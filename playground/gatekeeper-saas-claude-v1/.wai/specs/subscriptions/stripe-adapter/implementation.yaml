@@ -1,0 +1,45 @@
+id: stripe-adapter-impl
+name: Stripe Adapter Implementation
+description: async-stripe I/O for customers, subscriptions, and webhook verification.
+contract: istripe-adapter
+sourcePath: src/subscriptions/stripe_adapter.rs
+methods:
+  - name: create_customer
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Call Stripe Customers create with the billing email; map the response into
+          StripeCustomerRef
+        type: local
+  - name: create_subscription
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Call Stripe Subscriptions create with the customer id and price id, attaching our
+          subscription_id as metadata; map into StripeSubscriptionRef (status, current_period_end)
+        type: local
+  - name: update_subscription
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Call Stripe Subscriptions update to swap the subscription item to the new price; map into
+          StripeSubscriptionRef
+        type: local
+  - name: cancel_subscription
+    narrative:
+      - stepNumber: 1
+        description: Call Stripe Subscriptions cancel for the subscription id
+        type: local
+  - name: verify_and_parse_event
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Verify the webhook HMAC signature against the configured signing secret
+          (Webhook::construct_event); on mismatch return StripeError
+        type: local
+      - stepNumber: 2
+        description: Parse the verified payload into a typed StripeEvent {id, kind, payload}
+        type: local
+status: draft
+createdAt: '2026-06-17T18:36:26.306Z'
+updatedAt: '2026-06-17T18:36:26.307Z'

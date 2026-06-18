@@ -1,0 +1,12 @@
+kind: value-object
+id: api-key-id
+name: API Key Id
+description: Newtype identifier for an API key credential.
+fields:
+  - name: value
+    type: string
+    description: Opaque unique id
+    optional: false
+methods: []
+createdAt: '2026-06-17T18:44:15.830Z'
+updatedAt: '2026-06-17T18:44:15.846Z'

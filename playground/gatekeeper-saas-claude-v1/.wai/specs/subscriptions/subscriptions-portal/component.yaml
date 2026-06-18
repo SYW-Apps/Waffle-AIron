@@ -1,0 +1,15 @@
+id: subscriptions-portal
+name: Subscriptions Portal
+description: >-
+  HTTP/JSON ingress for /v1/plans and /v1/subscriptions management. Forwards validated requests to
+  the plan and subscription orchestrators. Never touches stores, repositories, or adapters directly.
+subsystem: subscriptions
+componentType: Portal
+owns: []
+dependsOn:
+  - plan-orchestrator
+  - subscription-orchestrator
+portalType: HTTP_API
+status: draft
+createdAt: '2026-06-17T17:43:01.991Z'
+updatedAt: '2026-06-17T17:43:01.992Z'

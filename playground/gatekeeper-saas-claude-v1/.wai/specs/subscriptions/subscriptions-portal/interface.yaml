@@ -1,0 +1,72 @@
+id: isubscriptions-portal
+name: Subscriptions Portal Interface
+description: >-
+  HTTP/JSON contract for plan and subscription management. Forwards to the plan and subscription
+  orchestrators.
+component: subscriptions-portal
+methods:
+  - name: create_plan
+    description: POST /v1/plans — create a plan with tiers and limits
+    signature: 'async fn create_plan(&self, body: Plan) -> Result<Plan, ApiError>'
+    returns: Result<Plan, ApiError>
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /v1/plans
+  - name: list_plans
+    description: GET /v1/plans — list catalog plans
+    signature: async fn list_plans(&self) -> Result<Vec<Plan>, ApiError>
+    returns: Result<Vec<Plan>, ApiError>
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /v1/plans
+  - name: update_tier_limits
+    description: PATCH /v1/plans/{plan_id}/tiers/{tier_id}/limits — update a tier's limits
+    signature: >-
+      async fn update_tier_limits(&self, plan_id: PlanId, tier_id: TierId, limits: LimitSet) ->
+      Result<Plan, ApiError>
+    returns: Result<Plan, ApiError>
+    endpoint:
+      transport: HTTP
+      method: PATCH
+      path: /v1/plans/{plan_id}/tiers/{tier_id}/limits
+  - name: create_subscription
+    description: POST /v1/subscriptions — subscribe a billing account to a plan tier
+    signature: >-
+      async fn create_subscription(&self, body: CreateSubscriptionCommand) -> Result<Subscription,
+      ApiError>
+    returns: Result<Subscription, ApiError>
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /v1/subscriptions
+  - name: get_subscription
+    description: GET /v1/subscriptions/{id}
+    signature: 'async fn get_subscription(&self, id: SubscriptionId) -> Result<Subscription, ApiError>'
+    returns: Result<Subscription, ApiError>
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /v1/subscriptions/{id}
+  - name: change_tier
+    description: PATCH /v1/subscriptions/{id}/tier — move a subscription to a different tier
+    signature: >-
+      async fn change_tier(&self, id: SubscriptionId, tier_id: TierId) -> Result<Subscription,
+      ApiError>
+    returns: Result<Subscription, ApiError>
+    endpoint:
+      transport: HTTP
+      method: PATCH
+      path: /v1/subscriptions/{id}/tier
+  - name: cancel_subscription
+    description: POST /v1/subscriptions/{id}/cancel
+    signature: 'async fn cancel_subscription(&self, id: SubscriptionId) -> Result<(), ApiError>'
+    returns: Result<(), ApiError>
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /v1/subscriptions/{id}/cancel
+status: draft
+createdAt: '2026-06-17T17:49:05.974Z'
+updatedAt: '2026-06-18T11:26:33.071Z'

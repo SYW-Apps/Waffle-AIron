@@ -1,0 +1,28 @@
+id: imetering-portal
+name: Metering Portal Interface
+description: HTTP/JSON contract for reading usage. Forwards to the usage query specialist.
+component: metering-portal
+methods:
+  - name: get_usage
+    description: GET /v1/usage/{subscription_id}/{resource} — usage for one resource
+    signature: >-
+      async fn get_usage(&self, subscription_id: SubscriptionId, resource: String) ->
+      Result<UsageView, ApiError>
+    returns: Result<UsageView, ApiError>
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /v1/usage/{subscription_id}/{resource}
+  - name: list_usage
+    description: GET /v1/usage/{subscription_id} — usage across all resources
+    signature: >-
+      async fn list_usage(&self, subscription_id: SubscriptionId) -> Result<Vec<UsageView>,
+      ApiError>
+    returns: Result<Vec<UsageView>, ApiError>
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /v1/usage/{subscription_id}
+status: draft
+createdAt: '2026-06-17T17:59:31.262Z'
+updatedAt: '2026-06-18T11:26:33.031Z'

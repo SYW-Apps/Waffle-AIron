@@ -1,0 +1,14 @@
+id: iusage-meter
+name: Usage Meter Interface
+description: The hot-path consume contract. Published RPC interface consumed by gatekeeping.
+component: usage-meter
+methods:
+  - name: consume
+    description: >-
+      Atomically check-and-decrement the counter, detect threshold crossings, publish
+      usage.threshold, and return the outcome
+    signature: 'async fn consume(&self, req: ConsumeRequest) -> Result<ConsumeOutcome, MeteringError>'
+    returns: Result<ConsumeOutcome, MeteringError>
+status: draft
+createdAt: '2026-06-17T17:59:27.969Z'
+updatedAt: '2026-06-17T17:59:27.969Z'

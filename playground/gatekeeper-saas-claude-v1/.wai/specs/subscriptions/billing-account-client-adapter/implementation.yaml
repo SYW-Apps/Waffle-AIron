@@ -1,0 +1,19 @@
+id: billing-account-client-adapter-impl
+name: Billing Account Client Adapter Implementation
+description: Boundary client into accounts for billing email.
+contract: ibilling-account-client-adapter
+sourcePath: src/subscriptions/billing_account_client.rs
+methods:
+  - name: resolve_billing_email
+    narrative:
+      - stepNumber: 1
+        description: Call the published account directory to resolve the billing email
+        type: call
+        targetComponent: account-directory
+        targetMethod: resolve_billing_email
+      - stepNumber: 2
+        description: Map any AccountError into SubscriptionError and return the Option<Email>
+        type: local
+status: draft
+createdAt: '2026-06-17T18:36:29.684Z'
+updatedAt: '2026-06-17T18:36:29.684Z'

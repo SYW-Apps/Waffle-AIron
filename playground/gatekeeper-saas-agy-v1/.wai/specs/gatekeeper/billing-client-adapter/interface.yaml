@@ -1,0 +1,12 @@
+id: "ibilling-client-adapter"
+name: "Billing Client Adapter Interface"
+description: "Interface for local client adapter that retrieves subscription data from Billing."
+component: "billing-client-adapter"
+methods:
+  - name: "get_subscription_by_key"
+    description: "Fetches active subscription metadata and limits for the given API key."
+    signature: "async fn get_subscription_by_key(api_key: String) -> Result<Option<SubscriptionDetails>, RepositoryError>"
+    returns: "Result<Option<SubscriptionDetails>, RepositoryError>"
+status: "complete"
+createdAt: "2026-06-17T14:12:00Z"
+updatedAt: "2026-06-17T14:12:00Z"

@@ -1,0 +1,15 @@
+id: stripe-event-orchestrator
+name: Stripe Event Orchestrator
+description: >-
+  Processes incoming Stripe webhook events. Verifies and parses the event via the stripe adapter,
+  dedupes by event id (idempotency), and reconciles local subscription state via the subscription
+  repository in a single transaction.
+subsystem: subscriptions
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - subscription-repository
+  - stripe-adapter
+status: draft
+createdAt: '2026-06-17T17:43:10.969Z'
+updatedAt: '2026-06-17T17:43:10.970Z'

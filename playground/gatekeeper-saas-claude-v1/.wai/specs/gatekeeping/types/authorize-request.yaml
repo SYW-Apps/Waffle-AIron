@@ -1,0 +1,21 @@
+kind: value-object
+id: authorize-request
+name: Authorize Request
+description: Inbound request to authorize a single protected API call.
+subsystem: gatekeeping
+fields:
+  - name: api_key
+    type: string
+    description: Caller's API key (plaintext, verified against stored hash)
+    optional: false
+  - name: resource
+    type: string
+    description: Metered resource being accessed
+    optional: false
+  - name: amount
+    type: i64
+    description: Units requested (usually 1)
+    optional: false
+methods: []
+createdAt: '2026-06-17T18:07:09.945Z'
+updatedAt: '2026-06-17T18:07:09.959Z'

@@ -1,0 +1,12 @@
+kind: value-object
+id: plan-id
+name: Plan Id
+description: Newtype identifier for a Plan.
+fields:
+  - name: value
+    type: string
+    description: Opaque unique id
+    optional: false
+methods: []
+createdAt: '2026-06-17T18:44:11.574Z'
+updatedAt: '2026-06-17T18:44:11.591Z'

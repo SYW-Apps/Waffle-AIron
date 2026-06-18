@@ -1,0 +1,16 @@
+id: iusage-reconciler
+name: Usage Reconciler Interface
+description: Owns the periodic loop flushing Redis counters into Postgres rollups.
+component: usage-reconciler
+methods:
+  - name: run
+    description: The live reconciliation loop (runs until shutdown)
+    signature: async fn run(&self)
+    returns: ()
+  - name: reconcile_once
+    description: Perform one flush pass; returns the number of counters flushed
+    signature: async fn reconcile_once(&self) -> Result<u64, MeteringError>
+    returns: Result<u64, MeteringError>
+status: draft
+createdAt: '2026-06-17T17:59:37.381Z'
+updatedAt: '2026-06-17T17:59:37.381Z'

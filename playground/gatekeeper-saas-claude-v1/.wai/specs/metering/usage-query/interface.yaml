@@ -1,0 +1,20 @@
+id: iusage-query
+name: Usage Query Interface
+description: Read capability combining live Redis counters with Postgres rollups.
+component: usage-query
+methods:
+  - name: get_usage
+    description: Combine live counter and rollups for one resource
+    signature: >-
+      async fn get_usage(&self, subscription_id: SubscriptionId, resource: String) ->
+      Result<UsageView, MeteringError>
+    returns: Result<UsageView, MeteringError>
+  - name: list_usage
+    description: Usage across all resources for a subscription
+    signature: >-
+      async fn list_usage(&self, subscription_id: SubscriptionId) -> Result<Vec<UsageView>,
+      MeteringError>
+    returns: Result<Vec<UsageView>, MeteringError>
+status: draft
+createdAt: '2026-06-17T17:59:34.582Z'
+updatedAt: '2026-06-17T17:59:34.583Z'

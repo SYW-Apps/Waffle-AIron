@@ -1,0 +1,14 @@
+id: istripe-event-orchestrator
+name: Stripe Event Orchestrator Interface
+description: Processes verified Stripe webhook events and reconciles local subscription state idempotently.
+component: stripe-event-orchestrator
+methods:
+  - name: process_event
+    description: Verify+parse the event, dedupe by event id, and reconcile subscription state
+    signature: >-
+      async fn process_event(&self, raw_body: Vec<u8>, signature: String) -> Result<(),
+      SubscriptionError>
+    returns: Result<(), SubscriptionError>
+status: draft
+createdAt: '2026-06-17T17:49:20.536Z'
+updatedAt: '2026-06-17T17:49:20.537Z'

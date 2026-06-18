@@ -1,0 +1,14 @@
+id: iapi-key-authenticator
+name: API Key Authenticator Interface
+description: Verifies a presented API key and resolves its identity.
+component: api-key-authenticator
+methods:
+  - name: authenticate
+    description: >-
+      Hash the key, resolve the active credential, and return its subscription/billing-account or
+      Unauthenticated
+    signature: 'async fn authenticate(&self, api_key: String) -> Result<AuthResult, GateError>'
+    returns: Result<AuthResult, GateError>
+status: draft
+createdAt: '2026-06-17T18:08:11.865Z'
+updatedAt: '2026-06-17T18:08:11.866Z'

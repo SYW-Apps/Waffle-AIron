@@ -1,0 +1,37 @@
+id: notification-orchestrator-impl
+name: Notification Orchestrator Implementation
+description: Resolves the billing email, composes, sends, and records the alert.
+contract: inotification-orchestrator
+sourcePath: src/notifications/notification_orchestrator.rs
+methods:
+  - name: handle_threshold
+    narrative:
+      - stepNumber: 1
+        description: Resolve the billing email for the event's billing_account_id (NoBillingEmail if absent)
+        type: call
+        targetComponent: accounts-client-adapter
+        targetMethod: resolve_billing_email
+      - stepNumber: 2
+        description: >-
+          Compose a NotificationMessage (subject/body) from the event (resource, used/quota, ratio,
+          window)
+        type: local
+      - stepNumber: 3
+        description: Send the email
+        type: call
+        targetComponent: email-adapter
+        targetMethod: send
+      - stepNumber: 4
+        description: Build a NotificationRecord with the delivery status
+        type: local
+      - stepNumber: 5
+        description: Append the delivery record
+        type: call
+        targetComponent: notification-log-adapter
+        targetMethod: record_sent
+      - stepNumber: 6
+        description: Return Ok(())
+        type: local
+status: draft
+createdAt: '2026-06-17T18:41:03.947Z'
+updatedAt: '2026-06-17T18:41:03.947Z'

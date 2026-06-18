@@ -1,0 +1,94 @@
+id: subscription-registry-impl
+name: Subscription Registry Implementation
+description: Write path with transactional, idempotent Stripe-event application.
+contract: isubscription-registry
+sourcePath: src/subscriptions/subscription_registry.rs
+methods:
+  - name: create_subscription
+    narrative:
+      - stepNumber: 1
+        description: Insert the subscription into the store
+        type: call
+        targetComponent: subscription-store
+        targetMethod: insert
+      - stepNumber: 2
+        description: Persist the subscription row to Postgres
+        type: call
+        targetComponent: subscription-db-adapter
+        targetMethod: upsert_subscription
+      - stepNumber: 3
+        description: Return Ok(())
+        type: local
+  - name: set_tier
+    narrative:
+      - stepNumber: 1
+        description: Apply the tier change in the store (NotFound if absent)
+        type: call
+        targetComponent: subscription-store
+        targetMethod: set_tier
+      - stepNumber: 2
+        description: Read back the updated subscription
+        type: call
+        targetComponent: subscription-store
+        targetMethod: get
+      - stepNumber: 3
+        description: Persist the updated row
+        type: call
+        targetComponent: subscription-db-adapter
+        targetMethod: upsert_subscription
+      - stepNumber: 4
+        description: Return Ok(())
+        type: local
+  - name: set_status
+    narrative:
+      - stepNumber: 1
+        description: Apply the status/period change in the store (NotFound if absent)
+        type: call
+        targetComponent: subscription-store
+        targetMethod: set_status
+      - stepNumber: 2
+        description: Read back the updated subscription
+        type: call
+        targetComponent: subscription-store
+        targetMethod: get
+      - stepNumber: 3
+        description: Persist the updated row
+        type: call
+        targetComponent: subscription-db-adapter
+        targetMethod: upsert_subscription
+      - stepNumber: 4
+        description: Return Ok(())
+        type: local
+  - name: mark_event_processed
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Insert the processed event id (unique constraint); if it already exists the insert returns
+          false
+        type: call
+        targetComponent: subscription-db-adapter
+        targetMethod: insert_processed_event
+      - stepNumber: 2
+        description: If the event was already processed (false), return Ok(false) without applying any change
+        type: local
+      - stepNumber: 3
+        description: Apply the new status/period to the store
+        type: call
+        targetComponent: subscription-store
+        targetMethod: set_status
+      - stepNumber: 4
+        description: Read back the updated subscription
+        type: call
+        targetComponent: subscription-store
+        targetMethod: get
+      - stepNumber: 5
+        description: Persist the updated subscription row (same transaction as the event insert)
+        type: call
+        targetComponent: subscription-db-adapter
+        targetMethod: upsert_subscription
+      - stepNumber: 6
+        description: Return Ok(true)
+        type: local
+status: draft
+createdAt: '2026-06-17T18:37:08.294Z'
+updatedAt: '2026-06-17T18:37:08.295Z'

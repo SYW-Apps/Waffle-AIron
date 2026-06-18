@@ -1,0 +1,24 @@
+id: iusage-rollup-store
+name: Usage Rollup Store Interface
+description: Authoritative in-process state for usage rollups. Depended upon by registry and index.
+component: usage-rollup-store
+methods:
+  - name: upsert_add
+    description: Add amount to a rollup, creating it if absent
+    signature: >-
+      fn upsert_add(&self, subscription_id: SubscriptionId, resource: String, period: String,
+      amount: i64)
+    returns: ()
+  - name: get
+    description: Get a rollup
+    signature: >-
+      fn get(&self, subscription_id: SubscriptionId, resource: String, period: String) ->
+      Option<UsageRollup>
+    returns: Option<UsageRollup>
+  - name: list
+    description: List rollups for a subscription
+    signature: 'fn list(&self, subscription_id: SubscriptionId) -> Vec<UsageRollup>'
+    returns: Vec<UsageRollup>
+status: draft
+createdAt: '2026-06-17T17:59:56.679Z'
+updatedAt: '2026-06-17T17:59:56.679Z'

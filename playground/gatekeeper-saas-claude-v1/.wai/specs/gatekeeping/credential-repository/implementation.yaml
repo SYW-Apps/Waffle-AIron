@@ -1,0 +1,30 @@
+id: credential-repository-impl
+name: Credential Repository Implementation
+description: Facade forwarding 1:1 to owned registry and index blocks.
+contract: icredential-repository
+sourcePath: src/gatekeeping/credential_repository.rs
+methods:
+  - name: save_key
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry to create the credential
+        type: call
+        targetComponent: credential-registry
+        targetMethod: create_key
+  - name: revoke
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry to set the credential status to Revoked
+        type: call
+        targetComponent: credential-registry
+        targetMethod: set_status
+  - name: find_by_hash
+    narrative:
+      - stepNumber: 1
+        description: Forward to the index to resolve the active credential by key hash
+        type: call
+        targetComponent: credential-index
+        targetMethod: find_by_hash
+status: draft
+createdAt: '2026-06-17T18:26:40.276Z'
+updatedAt: '2026-06-17T18:26:40.276Z'

@@ -1,0 +1,30 @@
+id: iaccount-orchestrator
+name: Account Orchestrator Interface
+description: Account workflow coordination; delegates persistence to the account repository facade.
+component: account-orchestrator
+methods:
+  - name: create_account
+    description: Validate input, assemble the Account aggregate with generated ids, and persist it
+    signature: 'async fn create_account(&self, cmd: CreateAccountCommand) -> Result<Account, AccountError>'
+    returns: Result<Account, AccountError>
+  - name: get_account
+    description: Resolve the full account aggregate or NotFound
+    signature: 'async fn get_account(&self, id: BillingAccountId) -> Result<Account, AccountError>'
+    returns: Result<Account, AccountError>
+  - name: get_customer
+    description: Resolve a single customer or NotFound
+    signature: 'async fn get_customer(&self, id: CustomerId) -> Result<Customer, AccountError>'
+    returns: Result<Customer, AccountError>
+  - name: update_billing_email
+    description: Update the billing email and return the refreshed account
+    signature: >-
+      async fn update_billing_email(&self, id: BillingAccountId, email: Email) -> Result<Account,
+      AccountError>
+    returns: Result<Account, AccountError>
+  - name: deactivate_account
+    description: Transition the account to Deactivated
+    signature: 'async fn deactivate_account(&self, id: BillingAccountId) -> Result<(), AccountError>'
+    returns: Result<(), AccountError>
+status: draft
+createdAt: '2026-06-17T18:40:10.056Z'
+updatedAt: '2026-06-17T18:40:10.056Z'

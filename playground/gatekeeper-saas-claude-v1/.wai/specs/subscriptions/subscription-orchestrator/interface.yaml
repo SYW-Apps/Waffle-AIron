@@ -1,0 +1,32 @@
+id: isubscription-orchestrator
+name: Subscription Orchestrator Interface
+description: >-
+  Subscription lifecycle coordination; validates tiers against the plan catalog, syncs to Stripe,
+  and persists local state.
+component: subscription-orchestrator
+methods:
+  - name: create_subscription
+    description: Validate tier, create the subscription in Stripe, and persist local state
+    signature: >-
+      async fn create_subscription(&self, cmd: CreateSubscriptionCommand) -> Result<Subscription,
+      SubscriptionError>
+    returns: Result<Subscription, SubscriptionError>
+  - name: get_subscription
+    description: Fetch a subscription or NotFound
+    signature: >-
+      async fn get_subscription(&self, id: SubscriptionId) -> Result<Subscription,
+      SubscriptionError>
+    returns: Result<Subscription, SubscriptionError>
+  - name: change_tier
+    description: Validate target tier, update Stripe, and persist the new tier
+    signature: >-
+      async fn change_tier(&self, id: SubscriptionId, tier_id: TierId) -> Result<Subscription,
+      SubscriptionError>
+    returns: Result<Subscription, SubscriptionError>
+  - name: cancel_subscription
+    description: Cancel in Stripe and mark the local subscription canceled
+    signature: 'async fn cancel_subscription(&self, id: SubscriptionId) -> Result<(), SubscriptionError>'
+    returns: Result<(), SubscriptionError>
+status: draft
+createdAt: '2026-06-17T17:49:17.710Z'
+updatedAt: '2026-06-17T17:49:17.710Z'

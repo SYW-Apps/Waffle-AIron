@@ -1,0 +1,20 @@
+id: isubscription-index
+name: Subscription Index Interface
+description: Read path projecting the subscription store. Never mutates.
+component: subscription-index
+methods:
+  - name: find_subscription
+    description: Look up a subscription by id
+    signature: 'fn find_subscription(&self, id: SubscriptionId) -> Option<Subscription>'
+    returns: Option<Subscription>
+  - name: find_by_account
+    description: Find the subscription for a billing account
+    signature: 'fn find_by_account(&self, id: BillingAccountId) -> Option<Subscription>'
+    returns: Option<Subscription>
+  - name: is_event_processed
+    description: Whether a Stripe event id has already been processed
+    signature: 'fn is_event_processed(&self, event_id: String) -> bool'
+    returns: bool
+status: draft
+createdAt: '2026-06-17T17:50:06.006Z'
+updatedAt: '2026-06-17T17:50:06.006Z'

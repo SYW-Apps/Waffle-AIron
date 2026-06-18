@@ -1,0 +1,29 @@
+kind: entity
+id: contact
+name: Contact
+description: A named contact person on a customer account.
+subsystem: accounts
+fields:
+  - name: id
+    type: string
+    description: ContactId newtype
+    optional: false
+  - name: customer_id
+    type: string
+    description: Owning CustomerId
+    optional: false
+  - name: email
+    type: email
+    description: Contact email
+    optional: false
+  - name: name
+    type: string
+    description: Contact full name
+    optional: false
+  - name: role
+    type: string
+    description: Role label, e.g. Admin | Billing | Technical
+    optional: false
+methods: []
+createdAt: '2026-06-17T15:16:52.845Z'
+updatedAt: '2026-06-17T15:16:52.848Z'

@@ -5,6 +5,7 @@ parentSystem: "gatekeeper-saas"
 publicInterfaces:
   - type: "REST"
     details: "Ingress proxy middleware intercepting /api/v1/* traffic"
+    component: "gatekeeper-portal"
 status: "complete"
 createdAt: "2026-06-15T23:11:00Z"
 updatedAt: "2026-06-15T23:11:00Z"

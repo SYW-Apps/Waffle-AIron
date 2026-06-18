@@ -1,0 +1,29 @@
+id: usage-rollup-registry-impl
+name: Usage Rollup Registry Implementation
+description: 'Write path: accumulate period total in store, persist.'
+contract: iusage-rollup-registry
+sourcePath: src/metering/usage_rollup_registry.rs
+methods:
+  - name: increment
+    narrative:
+      - stepNumber: 1
+        description: Add the amount to the period rollup in the store (creating it if absent)
+        type: call
+        targetComponent: usage-rollup-store
+        targetMethod: upsert_add
+      - stepNumber: 2
+        description: Read back the updated rollup
+        type: call
+        targetComponent: usage-rollup-store
+        targetMethod: get
+      - stepNumber: 3
+        description: Persist the rollup total to Postgres
+        type: call
+        targetComponent: usage-rollup-db-adapter
+        targetMethod: upsert_rollup
+      - stepNumber: 4
+        description: Return Ok(())
+        type: local
+status: draft
+createdAt: '2026-06-17T18:39:34.207Z'
+updatedAt: '2026-06-17T18:39:34.207Z'

@@ -1,0 +1,12 @@
+id: inotification-log-adapter
+name: Notification Log Adapter Interface
+description: The only block writing notification delivery records to Postgres. Append-only.
+component: notification-log-adapter
+methods:
+  - name: record_sent
+    description: Append a notification delivery record
+    signature: 'async fn record_sent(&self, record: NotificationRecord) -> Result<(), NotificationError>'
+    returns: Result<(), NotificationError>
+status: draft
+createdAt: '2026-06-17T18:17:40.537Z'
+updatedAt: '2026-06-17T18:17:40.537Z'

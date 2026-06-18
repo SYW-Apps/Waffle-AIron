@@ -1,0 +1,13 @@
+kind: value-object
+id: api-key-status
+name: API Key Status
+description: Lifecycle status of an API key.
+subsystem: gatekeeping
+fields:
+  - name: variant
+    type: string
+    description: One of Active | Revoked
+    optional: false
+methods: []
+createdAt: '2026-06-17T18:07:16.576Z'
+updatedAt: '2026-06-17T18:07:16.589Z'

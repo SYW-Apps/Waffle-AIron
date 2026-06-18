@@ -1,0 +1,51 @@
+id: gate-orchestrator-impl
+name: Gate Orchestrator Implementation
+description: The authorize workflow tying authentication, entitlements, metering, and audit together.
+contract: igate-orchestrator
+sourcePath: src/gatekeeping/gate_orchestrator.rs
+methods:
+  - name: authorize
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Authenticate the presented API key; on Unauthenticated, return a denied decision (reason
+          unauthenticated)
+        type: call
+        targetComponent: api-key-authenticator
+        targetMethod: authenticate
+      - stepNumber: 2
+        description: >-
+          Resolve the subscription's entitlements (effective limits + status + billing_account_id)
+          via the subscriptions client adapter
+        type: call
+        targetComponent: subscriptions-client-adapter
+        targetMethod: resolve_entitlements
+      - stepNumber: 3
+        description: >-
+          Verify status is Active and find the Limit matching the requested resource; if inactive or
+          unentitled, build a denied decision (forbidden) and proceed to audit
+        type: local
+      - stepNumber: 4
+        description: >-
+          Assemble a ConsumeRequest (subscription_id, billing_account_id from entitlements,
+          resource, quota and window from the matched limit, amount) and check-and-decrement via the
+          metering client adapter
+        type: call
+        targetComponent: metering-client-adapter
+        targetMethod: consume
+      - stepNumber: 5
+        description: >-
+          Build the AuthorizeDecision from the ConsumeOutcome (allowed, reason ok|over_quota,
+          remaining)
+        type: local
+      - stepNumber: 6
+        description: Record the decision in the append-only audit log
+        type: call
+        targetComponent: audit-adapter
+        targetMethod: record_decision
+      - stepNumber: 7
+        description: Return the AuthorizeDecision
+        type: local
+status: draft
+createdAt: '2026-06-17T18:26:33.134Z'
+updatedAt: '2026-06-17T18:26:33.134Z'

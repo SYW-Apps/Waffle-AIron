@@ -1,0 +1,12 @@
+id: iaudit-adapter
+name: Decision Audit Adapter Interface
+description: The only block writing decision-audit records to Postgres. Write-only, append-only.
+component: audit-adapter
+methods:
+  - name: record_decision
+    description: Append an authorize decision to the audit log
+    signature: 'async fn record_decision(&self, record: DecisionAuditRecord) -> Result<(), GateError>'
+    returns: Result<(), GateError>
+status: draft
+createdAt: '2026-06-17T18:08:11.883Z'
+updatedAt: '2026-06-17T18:08:11.883Z'

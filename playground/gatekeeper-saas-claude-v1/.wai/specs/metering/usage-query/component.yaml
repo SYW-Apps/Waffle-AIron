@@ -1,0 +1,14 @@
+id: usage-query
+name: Usage Query
+description: >-
+  Read capability combining the live Redis counter with historical Postgres rollups to report
+  current usage and remaining quota for a subscription/resource.
+subsystem: metering
+componentType: Specialist
+owns: []
+dependsOn:
+  - redis-counter-adapter
+  - usage-rollup-repository
+status: draft
+createdAt: '2026-06-17T17:52:41.314Z'
+updatedAt: '2026-06-17T17:52:41.317Z'

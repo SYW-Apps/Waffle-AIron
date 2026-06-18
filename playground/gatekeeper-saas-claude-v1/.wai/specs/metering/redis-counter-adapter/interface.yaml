@@ -1,0 +1,33 @@
+id: iredis-counter-adapter
+name: Redis Counter Adapter Interface
+description: >-
+  The only block doing Redis I/O for metering. Atomic counter operations and edge-trigger threshold
+  flags keyed per subscription/resource/window.
+component: redis-counter-adapter
+methods:
+  - name: check_and_decrement
+    description: Atomically seed-on-miss to quota with TTL, decrement by amount, deny below floor
+    signature: >-
+      async fn check_and_decrement(&self, key: String, amount: i64, quota: i64, ttl_seconds: i64) ->
+      Result<ConsumeOutcome, MeteringError>
+    returns: Result<ConsumeOutcome, MeteringError>
+  - name: get
+    description: Read the current counter value
+    signature: 'async fn get(&self, key: String) -> Result<Option<i64>, MeteringError>'
+    returns: Result<Option<i64>, MeteringError>
+  - name: snapshot_all
+    description: Scan all live counters for reconciliation
+    signature: async fn snapshot_all(&self) -> Result<Vec<CounterSnapshot>, MeteringError>
+    returns: Result<Vec<CounterSnapshot>, MeteringError>
+  - name: try_mark_threshold
+    description: >-
+      Atomically set-if-absent an edge-trigger flag for a crossed threshold (same TTL as the
+      counter); returns true only the first time, so usage.threshold publishes once per threshold
+      per period
+    signature: >-
+      async fn try_mark_threshold(&self, key: String, threshold: i64, ttl_seconds: i64) ->
+      Result<bool, MeteringError>
+    returns: Result<bool, MeteringError>
+status: draft
+createdAt: '2026-06-17T18:17:29.200Z'
+updatedAt: '2026-06-17T18:17:29.201Z'

@@ -1,0 +1,16 @@
+id: usage-event-adapter-impl
+name: Usage Event Adapter Implementation
+description: Publishes usage.threshold events to the message bus.
+contract: iusage-event-adapter
+sourcePath: src/metering/usage_event_adapter.rs
+methods:
+  - name: publish_threshold
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Serialize the UsageThresholdEvent and publish it to the usage.threshold topic on the
+          message bus
+        type: local
+status: draft
+createdAt: '2026-06-17T18:39:20.586Z'
+updatedAt: '2026-06-17T18:39:20.586Z'

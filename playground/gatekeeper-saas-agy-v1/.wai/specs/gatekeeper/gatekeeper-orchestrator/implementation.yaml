@@ -9,7 +9,7 @@ methods:
       - stepNumber: 1
         description: "Call the subscription repository to fetch limits and active status associated with the key"
         type: "call"
-        targetComponent: "subscription-repository"
+        targetComponent: "billing-client-adapter"
         targetMethod: "get_subscription_by_key"
       - stepNumber: 2
         description: "Verify if subscription is active and return unauthorized if not active"
@@ -25,7 +25,7 @@ methods:
       - stepNumber: 5
         description: "Call the notification orchestrator asynchronously to dispatch warning emails/alerts if thresholds are crossed"
         type: "call"
-        targetComponent: "notification-orchestrator"
+        targetComponent: "notification-client-adapter"
         targetMethod: "dispatch_alert"
       - stepNumber: 6
         description: "Return the final authorization decision (allowed/denied) along with rate-limiting response details"

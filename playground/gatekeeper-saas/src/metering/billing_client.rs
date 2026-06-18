@@ -92,6 +92,10 @@ mod tests {
         async fn find_customer_by_stripe_customer_id(&self, _stripe_customer_id: &str) -> Result<Option<Customer>, sqlx::Error> {
             Ok(None)
         }
+
+        async fn find_customer_by_subscription_id(&self, _subscription_id: &str) -> Result<Option<Customer>, sqlx::Error> {
+            Ok(self.customer.clone())
+        }
     }
 
     #[tokio::test]

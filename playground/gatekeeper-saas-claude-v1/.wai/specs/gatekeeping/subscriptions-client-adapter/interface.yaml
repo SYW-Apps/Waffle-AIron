@@ -1,0 +1,14 @@
+id: isubscriptions-client-adapter
+name: Subscriptions Client Adapter Interface
+description: Boundary client into subscriptions. Fetches entitlements via the published entitlement-resolver.
+component: subscriptions-client-adapter
+methods:
+  - name: resolve_entitlements
+    description: Call subscriptions.entitlement-resolver.resolve and map errors into GateError
+    signature: >-
+      async fn resolve_entitlements(&self, subscription_id: SubscriptionId) -> Result<Entitlements,
+      GateError>
+    returns: Result<Entitlements, GateError>
+status: draft
+createdAt: '2026-06-17T18:09:13.565Z'
+updatedAt: '2026-06-17T18:09:13.565Z'

@@ -1,0 +1,16 @@
+id: email-adapter-impl
+name: Email Adapter Implementation
+description: Sends transactional email via the HTTP provider.
+contract: iemail-adapter
+sourcePath: src/notifications/email_adapter.rs
+methods:
+  - name: send
+    narrative:
+      - stepNumber: 1
+        description: >-
+          POST the NotificationMessage (to, subject, body) to the email provider's HTTP API; map a
+          non-2xx response into NotificationError::SendFailure
+        type: local
+status: draft
+createdAt: '2026-06-17T18:41:09.600Z'
+updatedAt: '2026-06-17T18:41:09.601Z'

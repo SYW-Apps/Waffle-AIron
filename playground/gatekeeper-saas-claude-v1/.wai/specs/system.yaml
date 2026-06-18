@@ -1,7 +1,32 @@
 schemaVersion: 1.0.0
 name: gatekeeper-saas-claude-v1
-vision: Core vision for gatekeeper-saas-claude-v1
-boundaries: []
-globalRequirements: []
-createdAt: '2026-06-16T21:09:50.305Z'
-updatedAt: '2026-06-16T21:09:50.305Z'
+vision: >-
+  A multi-tenant Rust control-plane microservice that authorizes and meters every protected API call
+  across our platforms in real time, enforcing Stripe-backed subscription limits and notifying
+  billing contacts on usage thresholds. Postgres is authoritative; Redis holds hot per-subscription
+  counters on the inline gate hot path. External I/O (Postgres, Redis, Stripe, email) is isolated
+  behind Adapters.
+boundaries:
+  - name: Inline authorization
+    description: >-
+      The gate sits in the request path; allow/deny decisions are Redis-fast and never block on
+      Postgres.
+  - name: Stripe is billing source of truth
+    description: >-
+      Stripe owns money/invoicing; Gatekeeper owns entitlements and metered usage and reconciles to
+      Stripe.
+  - name: External I/O isolated behind Adapters
+    description: >-
+      Postgres, Redis, Stripe, and email are each reachable only through dedicated Adapter
+      components.
+globalRequirements:
+  - description: Multi-tenant isolation per customer/account across all data and decisions.
+  - description: >-
+      Inline authorize hot path stays in Redis (target p99 single-digit ms); Postgres is never on
+      that path.
+  - description: Idempotent usage accounting and idempotent Stripe webhook handling.
+  - description: Auditable trail of access decisions and billing/subscription events.
+  - description: Eventual reconciliation between Redis counters and Postgres usage rollups.
+  - description: Authenticated platform callers via API key or signed credential.
+createdAt: '2026-06-16T22:24:49.540Z'
+updatedAt: '2026-06-16T22:24:49.540Z'

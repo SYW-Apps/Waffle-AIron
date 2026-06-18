@@ -10,10 +10,10 @@ boundaries:
   - name: "billing"
     description: "Out-of-band context managing Stripe customer syncing, subscription statuses, plans, and quota limits."
   - name: "notification"
-    description: "Observer-driven dispatch system sending warning and limit emails or webhook notifications to billing contacts."
+    description: "Dispatch system sending warning and limit emails or webhook notifications to billing contacts."
 globalRequirements:
   - description: "Hot-path key validation and rate limiting must execute in under 5ms (Redis cache hit)."
   - description: "Persistence of billing quotas must use PostgreSQL as the single source of truth."
-  - description: "Notification engine must decouple warning dispatches from request processing via async queues."
+  - description: "Notification dispatch must not add latency to the authorization hot-path response; warning dispatches run off the response path (spawned, fire-and-forget)."
 createdAt: "2026-06-15T22:43:55.244Z"
 updatedAt: "2026-06-15T23:10:00Z"

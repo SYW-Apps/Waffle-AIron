@@ -1,0 +1,65 @@
+id: accounts-portal-impl
+name: Accounts Portal Implementation
+description: Axum HTTP handlers for accounts/customers; forwards to the account orchestrator.
+contract: iaccounts-portal
+sourcePath: src/accounts/portal.rs
+methods:
+  - name: create_account
+    narrative:
+      - stepNumber: 1
+        description: Deserialize and validate the CreateAccountCommand
+        type: local
+      - stepNumber: 2
+        description: Forward to the account orchestrator
+        type: call
+        targetComponent: account-orchestrator
+        targetMethod: create_account
+      - stepNumber: 3
+        description: Return 201 Created or error
+        type: local
+  - name: get_account
+    narrative:
+      - stepNumber: 1
+        description: Fetch the account aggregate via the orchestrator
+        type: call
+        targetComponent: account-orchestrator
+        targetMethod: get_account
+      - stepNumber: 2
+        description: Return 200 or 404
+        type: local
+  - name: get_customer
+    narrative:
+      - stepNumber: 1
+        description: Fetch the customer via the orchestrator
+        type: call
+        targetComponent: account-orchestrator
+        targetMethod: get_customer
+      - stepNumber: 2
+        description: Return 200 or 404
+        type: local
+  - name: update_billing_email
+    narrative:
+      - stepNumber: 1
+        description: Parse the billing account id and the new Email
+        type: local
+      - stepNumber: 2
+        description: Forward to the orchestrator
+        type: call
+        targetComponent: account-orchestrator
+        targetMethod: update_billing_email
+      - stepNumber: 3
+        description: Return 200 with the refreshed account or error
+        type: local
+  - name: deactivate_account
+    narrative:
+      - stepNumber: 1
+        description: Deactivate via the orchestrator
+        type: call
+        targetComponent: account-orchestrator
+        targetMethod: deactivate_account
+      - stepNumber: 2
+        description: Return 204 No Content or error
+        type: local
+status: draft
+createdAt: '2026-06-17T18:40:20.413Z'
+updatedAt: '2026-06-17T18:40:20.413Z'

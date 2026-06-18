@@ -1,0 +1,17 @@
+kind: value-object
+id: gate-error
+name: Gate Error
+description: Domain error for the gatekeeping subsystem.
+subsystem: gatekeeping
+fields:
+  - name: variant
+    type: string
+    description: One of Unauthenticated | Forbidden | OverQuota | Downstream | Persistence
+    optional: false
+  - name: message
+    type: string
+    description: Human-readable detail
+    optional: false
+methods: []
+createdAt: '2026-06-17T18:07:26.556Z'
+updatedAt: '2026-06-17T18:07:26.569Z'

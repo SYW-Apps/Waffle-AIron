@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 import { setProjectRoot } from '../utils/fs.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import type { ValidationIssue } from '../core/validation.js';
+import { EndpointSchema, type Endpoint } from '../models/specs.js';
 
 // ---------------------------------------------------------------------------
 // wairon MCP Server
@@ -283,7 +284,7 @@ export function createMcpServer(): McpServer {
     },
   );
 
-  reg<{ id: string; name: string; description: string; subsystem: string; componentType: 'Portal' | 'Orchestrator' | 'Supervisor' | 'Actor' | 'Store' | 'Index' | 'Registry' | 'Adapter' | 'Observer' | 'Specialist' | 'Repository' | 'Gateway'; owns?: string[]; dependsOn?: string[]; portalType?: 'HTTP_API' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'CLI' | 'Custom' }>(server,
+  reg<{ id: string; name: string; description: string; subsystem: string; componentType: 'Portal' | 'Orchestrator' | 'Supervisor' | 'Actor' | 'Store' | 'Index' | 'Registry' | 'Adapter' | 'Observer' | 'Specialist' | 'Repository' | 'Gateway'; owns?: string[]; dependsOn?: string[]; portalType?: 'HTTP_API' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'CLI' | 'NamedPipe' | 'IPC' | 'Custom' }>(server,
     'sdd_add_component',
     {
       description: 'Add an L2 Component under a subsystem. componentType is a building block (Portal, Orchestrator, Supervisor, Actor, Store, Index, Registry, Adapter, Observer, Specialist) or a pattern (Repository, Gateway). Patterns set "owns" (their private member blocks); all components set "dependsOn" (collaborators — facades or standalone blocks).',
@@ -295,7 +296,7 @@ export function createMcpServer(): McpServer {
         componentType: z.enum(['Portal', 'Orchestrator', 'Supervisor', 'Actor', 'Store', 'Index', 'Registry', 'Adapter', 'Observer', 'Specialist', 'Repository', 'Gateway']).describe('The building block, or pattern (Repository/Gateway)'),
         owns: z.array(z.string()).optional().describe('Member block ids privately owned by this component (patterns only)'),
         dependsOn: z.array(z.string()).optional().describe('IDs of other components this collaborates with (facades or standalone blocks)'),
-        portalType: z.enum(['HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'Custom']).optional().describe('Required when componentType is Portal'),
+        portalType: z.enum(['HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'Custom']).optional().describe('Required when componentType is Portal'),
       },
     },
     ({ id, name, description, subsystem, componentType, owns, dependsOn, portalType }) => {
@@ -358,6 +359,77 @@ export function createMcpServer(): McpServer {
           updatedAt: now,
         });
         return text(`Successfully defined L3 Interface Contract "${name}" (${id}).`);
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  // One generic tool for ALL public-facing wire endpoints — HTTP, gRPC, GraphQL,
+  // MessageBus, NamedPipe, IPC, CLI, Custom — binding each interface method to a
+  // concrete `endpoint`. This is what a Portal needs to satisfy the gate's
+  // MISSING_ENDPOINT / ENDPOINT_TRANSPORT_MISMATCH rules. Run it after
+  // sdd_define_interface (the methods must already exist).
+  reg<{ interface: string; endpoints: Array<{ method: string; transport: 'HTTP' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'NamedPipe' | 'IPC' | 'CLI' | 'Custom'; httpMethod?: string; path?: string; service?: string; rpcMethod?: string; operation?: string; field?: string; topic?: string; event?: string; queue?: string; direction?: string; pipe?: string; channel?: string; command?: string; address?: string }> }>(server,
+    'sdd_set_endpoints',
+    {
+      description: 'Bind the concrete wire endpoint for one or more methods on an L3 interface. ONE generic tool for every transport (HTTP, gRPC, GraphQL, MessageBus, NamedPipe, IPC, CLI, Custom) — pick `transport` and fill that transport\'s address fields. Required to satisfy the gate for any Portal component. The interface and its methods must already exist (call sdd_define_interface first).',
+      inputSchema: {
+        interface: z.string().describe('The L3 interface ID (e.g. "ibilling-gateway")'),
+        endpoints: z.array(z.object({
+          method: z.string().describe('The NAME of the interface method to bind (not the HTTP verb)'),
+          transport: z.enum(['HTTP', 'gRPC', 'GraphQL', 'MessageBus', 'NamedPipe', 'IPC', 'CLI', 'Custom']).describe('Wire protocol; must match the Portal\'s portalType'),
+          httpMethod: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD']).optional().describe('HTTP: verb'),
+          path: z.string().optional().describe('HTTP: route path, e.g. "/v1/checkout"'),
+          service: z.string().optional().describe('gRPC: service name'),
+          rpcMethod: z.string().optional().describe('gRPC: rpc method name'),
+          operation: z.enum(['query', 'mutation', 'subscription']).optional().describe('GraphQL: operation kind'),
+          field: z.string().optional().describe('GraphQL: root field name'),
+          topic: z.string().optional().describe('MessageBus: topic'),
+          event: z.string().optional().describe('MessageBus: event name'),
+          queue: z.string().optional().describe('MessageBus: optional queue/consumer group'),
+          direction: z.enum(['subscribe', 'publish']).optional().describe('MessageBus: subscribe (default) or publish'),
+          pipe: z.string().optional().describe('NamedPipe: pipe name, e.g. "\\\\.\\pipe\\gk-events"'),
+          channel: z.string().optional().describe('IPC: channel name'),
+          command: z.string().optional().describe('CLI: command/subcommand'),
+          address: z.string().optional().describe('Custom: free-form address'),
+        })).describe('One binding per method'),
+      },
+    },
+    ({ interface: interfaceId, endpoints }) => {
+      try {
+        const { loadInterfaceSpec, saveInterfaceSpec } = requireSpecs();
+        const intf = loadInterfaceSpec(interfaceId);
+        if (!intf) return errText(`Interface "${interfaceId}" does not exist.`);
+
+        const buildRaw = (e: typeof endpoints[number]): Record<string, unknown> => {
+          switch (e.transport) {
+            case 'HTTP':       return { transport: 'HTTP', method: e.httpMethod, path: e.path };
+            case 'gRPC':       return { transport: 'gRPC', service: e.service, method: e.rpcMethod };
+            case 'GraphQL':    return { transport: 'GraphQL', operation: e.operation, field: e.field };
+            case 'MessageBus': return { transport: 'MessageBus', topic: e.topic, event: e.event, queue: e.queue, direction: e.direction ?? 'subscribe' };
+            case 'NamedPipe':  return { transport: 'NamedPipe', pipe: e.pipe };
+            case 'IPC':        return { transport: 'IPC', channel: e.channel };
+            case 'CLI':        return { transport: 'CLI', command: e.command };
+            case 'Custom':     return { transport: 'Custom', address: e.address };
+          }
+        };
+
+        const bound: string[] = [];
+        for (const e of endpoints) {
+          const m = intf.methods.find(x => x.name === e.method);
+          if (!m) return errText(`Method "${e.method}" not found on interface "${interfaceId}". Define it via sdd_define_interface first.`);
+          const parsed = EndpointSchema.safeParse(buildRaw(e));
+          if (!parsed.success) {
+            const detail = parsed.error.issues.map(i => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');
+            return errText(`Invalid ${e.transport} endpoint for method "${e.method}": ${detail}`);
+          }
+          m.endpoint = parsed.data as Endpoint;
+          bound.push(`${e.method}→${e.transport}`);
+        }
+        intf.updatedAt = new Date().toISOString();
+        saveInterfaceSpec(intf);
+        return text(`Bound ${bound.length} endpoint(s) on "${interfaceId}": ${bound.join(', ')}.`);
       } catch (e) {
         return errText(String(e));
       }

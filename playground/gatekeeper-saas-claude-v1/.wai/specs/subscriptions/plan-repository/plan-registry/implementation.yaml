@@ -1,0 +1,44 @@
+id: plan-registry-impl
+name: Plan Registry Implementation
+description: 'Write path: mutate store then persist.'
+contract: iplan-registry
+sourcePath: src/subscriptions/plan_registry.rs
+methods:
+  - name: create_plan
+    narrative:
+      - stepNumber: 1
+        description: Insert the plan into the store
+        type: call
+        targetComponent: plan-store
+        targetMethod: insert
+      - stepNumber: 2
+        description: Persist the plan (tiers + limits) to Postgres
+        type: call
+        targetComponent: plan-db-adapter
+        targetMethod: upsert_plan
+      - stepNumber: 3
+        description: Return Ok(())
+        type: local
+  - name: update_tier_limits
+    narrative:
+      - stepNumber: 1
+        description: Apply the tier limits change in the store (NotFound if plan/tier absent)
+        type: call
+        targetComponent: plan-store
+        targetMethod: apply_tier_limits
+      - stepNumber: 2
+        description: Read back the updated plan
+        type: call
+        targetComponent: plan-store
+        targetMethod: get
+      - stepNumber: 3
+        description: Persist the updated plan
+        type: call
+        targetComponent: plan-db-adapter
+        targetMethod: upsert_plan
+      - stepNumber: 4
+        description: Return Ok(())
+        type: local
+status: draft
+createdAt: '2026-06-17T18:36:39.056Z'
+updatedAt: '2026-06-17T18:36:39.056Z'

@@ -1,0 +1,29 @@
+kind: value-object
+id: notification-record
+name: Notification Record
+description: An append-only record of a sent notification.
+subsystem: notifications
+fields:
+  - name: billing_account_id
+    type: string
+    description: BillingAccountId notified
+    optional: false
+  - name: to
+    type: email
+    description: Recipient email
+    optional: false
+  - name: subject
+    type: string
+    description: Subject sent
+    optional: false
+  - name: sent_at
+    type: string
+    description: RFC3339 send time
+    optional: false
+  - name: status
+    type: string
+    description: 'Delivery status: sent | failed'
+    optional: false
+methods: []
+createdAt: '2026-06-17T18:17:16.405Z'
+updatedAt: '2026-06-17T18:17:16.426Z'

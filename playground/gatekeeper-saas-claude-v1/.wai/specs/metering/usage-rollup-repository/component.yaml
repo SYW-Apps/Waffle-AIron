@@ -1,0 +1,16 @@
+id: usage-rollup-repository
+name: Usage Rollup Repository
+description: >-
+  Persistence facade for authoritative usage rollups (per subscription/resource/period totals).
+  Consumers use this facade only. Owns the rollup store, registry, index, and Postgres adapter.
+subsystem: metering
+componentType: Repository
+owns:
+  - usage-rollup-store
+  - usage-rollup-registry
+  - usage-rollup-index
+  - usage-rollup-db-adapter
+dependsOn: []
+status: draft
+createdAt: '2026-06-17T17:52:49.902Z'
+updatedAt: '2026-06-17T17:52:49.902Z'

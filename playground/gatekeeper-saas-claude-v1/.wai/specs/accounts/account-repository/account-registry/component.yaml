@@ -1,0 +1,14 @@
+id: account-registry
+name: Account Registry
+description: >-
+  Write path (create/update/delete) for the Account aggregate. Applies mutations to the account
+  store and persists them via the Postgres adapter. Does not update indexes.
+subsystem: accounts
+componentType: Registry
+owns: []
+dependsOn:
+  - account-store
+  - account-db-adapter
+status: draft
+createdAt: '2026-06-16T22:40:23.009Z'
+updatedAt: '2026-06-16T22:40:23.009Z'

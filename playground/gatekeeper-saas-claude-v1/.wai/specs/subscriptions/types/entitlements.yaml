@@ -1,0 +1,27 @@
+kind: value-object
+id: entitlements
+name: Entitlements
+description: >-
+  The resolved effective limit set and status for a subscription. Published contract consumed by the
+  gatekeeping subsystem.
+subsystem: subscriptions
+fields:
+  - name: subscription_id
+    type: string
+    description: SubscriptionId
+    optional: false
+  - name: billing_account_id
+    type: string
+    description: BillingAccountId
+    optional: false
+  - name: status
+    type: subscriptions.subscription-status
+    description: Subscription status at resolution time
+    optional: false
+  - name: limits
+    type: subscriptions.limit[]
+    description: Effective limits (tier limits merged with overrides)
+    optional: false
+methods: []
+createdAt: '2026-06-17T17:48:45.895Z'
+updatedAt: '2026-06-17T17:48:45.906Z'

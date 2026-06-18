@@ -1,0 +1,12 @@
+id: imetering-client-adapter
+name: Metering Client Adapter Interface
+description: Boundary client into metering. Performs check-and-decrement via the published usage-meter.
+component: metering-client-adapter
+methods:
+  - name: consume
+    description: Call metering.usage-meter.consume and map errors into GateError
+    signature: 'async fn consume(&self, req: ConsumeRequest) -> Result<ConsumeOutcome, GateError>'
+    returns: Result<ConsumeOutcome, GateError>
+status: draft
+createdAt: '2026-06-17T18:09:15.234Z'
+updatedAt: '2026-06-17T18:09:15.234Z'

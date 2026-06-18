@@ -1,0 +1,47 @@
+kind: entity
+id: subscription
+name: Subscription
+description: >-
+  A billing account's active subscription to a plan tier, linked to Stripe. Owns the Stripe customer
+  and subscription ids.
+subsystem: subscriptions
+fields:
+  - name: id
+    type: string
+    description: SubscriptionId newtype
+    optional: false
+  - name: billing_account_id
+    type: string
+    description: Owning BillingAccountId (from accounts)
+    optional: false
+  - name: plan_id
+    type: string
+    description: PlanId
+    optional: false
+  - name: tier_id
+    type: string
+    description: TierId
+    optional: false
+  - name: stripe_customer_id
+    type: string
+    description: Stripe customer id for the billing account (owned here)
+    optional: true
+  - name: stripe_subscription_id
+    type: string
+    description: Linked Stripe subscription id
+    optional: true
+  - name: status
+    type: subscriptions.subscription-status
+    description: Current status
+    optional: false
+  - name: current_period_end
+    type: string
+    description: RFC3339 end of current billing period
+    optional: false
+  - name: overrides
+    type: subscriptions.limit[]
+    description: Subscription-level limit overrides on top of the tier
+    optional: false
+methods: []
+createdAt: '2026-06-17T18:34:29.935Z'
+updatedAt: '2026-06-17T18:34:29.952Z'

@@ -1,0 +1,12 @@
+id: credential-db-adapter
+name: Credential Postgres Adapter
+description: >-
+  The only block doing Postgres I/O for credentials (sqlx). Loads and persists credential rows. No
+  domain logic.
+subsystem: gatekeeping
+componentType: Adapter
+owns: []
+dependsOn: []
+status: draft
+createdAt: '2026-06-17T18:05:51.845Z'
+updatedAt: '2026-06-17T18:05:51.845Z'

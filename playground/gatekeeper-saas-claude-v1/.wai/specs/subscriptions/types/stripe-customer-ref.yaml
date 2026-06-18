@@ -1,0 +1,13 @@
+kind: value-object
+id: stripe-customer-ref
+name: Stripe Customer Ref
+description: Reference returned by Stripe after creating a customer.
+subsystem: subscriptions
+fields:
+  - name: stripe_customer_id
+    type: string
+    description: Stripe customer id
+    optional: false
+methods: []
+createdAt: '2026-06-17T18:34:31.815Z'
+updatedAt: '2026-06-17T18:34:31.830Z'

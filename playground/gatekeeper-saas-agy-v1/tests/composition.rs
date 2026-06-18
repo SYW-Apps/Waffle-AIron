@@ -1,6 +1,8 @@
 use gatekeeper_saas::models::*;
 use gatekeeper_saas::gatekeeper::portal::{GatekeeperPortal, GatekeeperPortalImpl};
 use gatekeeper_saas::gatekeeper::orchestrator::GatekeeperOrchestratorImpl;
+use gatekeeper_saas::gatekeeper::billing_client_adapter::BillingClientAdapterImpl;
+use gatekeeper_saas::gatekeeper::notification_client_adapter::NotificationClientAdapterImpl;
 use gatekeeper_saas::gatekeeper::meter_store::InMemoryMeterStore;
 use gatekeeper_saas::gatekeeper::meter_repository::MeterRepositoryImpl;
 use gatekeeper_saas::gatekeeper::redis_adapter::RedisAdapter;
@@ -231,10 +233,13 @@ async fn test_full_system_cohesive_simulation() {
         push_adapter,
     ));
 
+    let billing_client = Arc::new(BillingClientAdapterImpl::new(subscription_repo.clone()));
+    let notification_client = Arc::new(NotificationClientAdapterImpl::new(notification_orchestrator));
+
     let gatekeeper_orchestrator = Arc::new(GatekeeperOrchestratorImpl::new(
-        subscription_repo.clone(),
+        billing_client,
         meter_repo,
-        notification_orchestrator,
+        notification_client,
     ));
 
     let billing_orchestrator = Arc::new(BillingOrchestratorImpl::new(
