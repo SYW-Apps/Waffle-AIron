@@ -13,6 +13,6 @@ dependsOn:
   - subscriptions-client-adapter
   - metering-client-adapter
   - audit-adapter
-status: draft
+status: complete
 createdAt: '2026-06-17T18:09:06.450Z'
-updatedAt: '2026-06-17T18:09:06.450Z'
+updatedAt: '2026-06-18T12:27:15.852Z'

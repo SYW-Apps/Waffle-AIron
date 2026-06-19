@@ -7,6 +7,6 @@ subsystem: subscriptions
 componentType: Adapter
 owns: []
 dependsOn: []
-status: draft
+status: complete
 createdAt: '2026-06-17T17:43:24.616Z'
-updatedAt: '2026-06-17T17:43:24.616Z'
+updatedAt: '2026-06-18T12:27:16.138Z'

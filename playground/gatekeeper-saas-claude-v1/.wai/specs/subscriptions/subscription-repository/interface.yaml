@@ -21,12 +21,15 @@ methods:
     returns: Result<(), SubscriptionError>
   - name: mark_event_processed
     description: >-
-      Apply a Stripe event and record its id transactionally; false if already processed (forwards
-      to registry)
+      Apply a Stripe event and record its id; returns false if the event id was already processed
+      (forwards to registry). Idempotent: re-delivering the same event id is a no-op enforced by the
+      processed-event unique constraint.
     signature: >-
       async fn mark_event_processed(&self, id: SubscriptionId, event_id: String, status:
       SubscriptionStatus, current_period_end: String) -> Result<bool, SubscriptionError>
     returns: Result<bool, SubscriptionError>
+    guarantees:
+      - idempotent
   - name: find_subscription
     description: Find a subscription (forwards to index)
     signature: >-
@@ -43,6 +46,6 @@ methods:
     description: Check whether a Stripe event id was already processed (forwards to index)
     signature: 'async fn is_event_processed(&self, event_id: String) -> Result<bool, SubscriptionError>'
     returns: Result<bool, SubscriptionError>
-status: draft
-createdAt: '2026-06-17T17:49:58.608Z'
-updatedAt: '2026-06-17T17:49:58.608Z'
+status: complete
+createdAt: '2026-06-18T23:06:51.526Z'
+updatedAt: '2026-06-19T10:16:46.731Z'

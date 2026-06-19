@@ -1014,19 +1014,40 @@ updatedAt: '2026-06-10T22:00:00Z'
     }
   });
 
-  it('allows an Adapter reaching another subsystem\'s published public component', () => {
+  it('allows an Adapter reaching another subsystem\'s published Portal (front door)', () => {
     const proj = createTempProject();
     proj.writeSpec('system', 'system', SYS);
     proj.writeSpec('subsystem', 'sub-a', sub('sub-a'));
     proj.writeSpec('subsystem', 'sub-b', sub('sub-b',
-      'publicInterfaces:\n  - type: Custom\n    details: facade\n    component: facade-b\n'));
-    proj.writeSpec('component', 'adapter-a', comp('adapter-a', 'sub-a', 'Adapter', { dependsOn: ['facade-b'] }));
-    proj.writeSpec('component', 'facade-b', comp('facade-b', 'sub-b', 'Orchestrator'));
+      'publicInterfaces:\n  - type: Custom\n    details: front door\n    component: portal-b\n'));
+    proj.writeSpec('component', 'adapter-a', comp('adapter-a', 'sub-a', 'Adapter', { dependsOn: ['portal-b'] }));
+    proj.writeSpec('component', 'portal-b', comp('portal-b', 'sub-b', 'Portal', { portalType: 'HTTP_API' }));
     proj.activate();
     try {
       const res = validateSddTree();
       expect(res.issues.some(i => i.code.startsWith('CROSS_SUBSYSTEM_'))).toBe(false);
       expect(res.valid).toBe(true);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('flags an Adapter reaching another subsystem\'s published NON-Portal internal (CROSS_SUBSYSTEM_TARGET_NON_PORTAL)', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', SYS);
+    proj.writeSpec('subsystem', 'sub-a', sub('sub-a'));
+    // sub-b publishes an internal Orchestrator directly (the leak the rule catches).
+    proj.writeSpec('subsystem', 'sub-b', sub('sub-b',
+      'publicInterfaces:\n  - type: Custom\n    details: leaked internal\n    component: orch-b\n'));
+    proj.writeSpec('component', 'adapter-a', comp('adapter-a', 'sub-a', 'Adapter', { dependsOn: ['orch-b'] }));
+    proj.writeSpec('component', 'orch-b', comp('orch-b', 'sub-b', 'Orchestrator'));
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.valid).toBe(false);
+      expect(res.issues.some(i => i.code === 'CROSS_SUBSYSTEM_TARGET_NON_PORTAL')).toBe(true);
+      // It IS published, so this is not a private-access violation.
+      expect(res.issues.some(i => i.code === 'CROSS_SUBSYSTEM_PRIVATE_ACCESS')).toBe(false);
     } finally {
       proj.cleanup();
     }
@@ -1138,6 +1159,129 @@ updatedAt: '2026-06-10T22:00:00Z'
     try {
       const res = validateSddTree();
       expect(res.issues.some(i => i.code === 'PUBLIC_INTERFACE_EVENT_MISTYPED')).toBe(false);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('flags a narrative step asserting idempotency against a non-idempotent contract (NARRATIVE_SEMANTIC_UNBACKED)', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', SYS);
+    proj.writeSpec('subsystem', 'sub-a', sub('sub-a'));
+    proj.writeSpec('component', 'orch-a', comp('orch-a', 'sub-a', 'Orchestrator', { dependsOn: ['reg-a'] }));
+    proj.writeSpec('component', 'reg-a', comp('reg-a', 'sub-a', 'Registry'));
+    proj.writeSpec('interface', 'iorch-a', `
+schemaVersion: 1.0.0
+id: iorch-a
+name: IOrchA
+description: Reconciler
+component: orch-a
+methods:
+  - name: reconcile_once
+    description: Reconcile the rollup
+    signature: "reconcile_once(): void"
+    returns: "void"
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('interface', 'ireg-a', `
+schemaVersion: 1.0.0
+id: ireg-a
+name: IRegA
+description: Rollup registry
+component: reg-a
+methods:
+  - name: upsert_add
+    description: Add amount to a rollup, creating it if absent
+    signature: "upsert_add(amount: number): void"
+    returns: "void"
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('implementation', 'iorch-a-impl', `
+schemaVersion: 1.0.0
+id: iorch-a-impl
+name: ReconcilerImpl
+description: Reconciler implementation
+contract: iorch-a
+sourcePath: src/orch-a.ts
+methods:
+  - name: reconcile_once
+    narrative:
+      - stepNumber: 1
+        description: Write the rollup total (idempotent) to the registry
+        type: call
+        targetComponent: reg-a
+        targetMethod: upsert_add
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.issues.some(i => i.code === 'NARRATIVE_SEMANTIC_UNBACKED')).toBe(true);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('accepts a narrative asserting idempotency when the target method declares the guarantee', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', SYS);
+    proj.writeSpec('subsystem', 'sub-a', sub('sub-a'));
+    proj.writeSpec('component', 'orch-a', comp('orch-a', 'sub-a', 'Orchestrator', { dependsOn: ['reg-a'] }));
+    proj.writeSpec('component', 'reg-a', comp('reg-a', 'sub-a', 'Registry'));
+    proj.writeSpec('interface', 'iorch-a', `
+schemaVersion: 1.0.0
+id: iorch-a
+name: IOrchA
+description: Reconciler
+component: orch-a
+methods:
+  - name: reconcile_once
+    description: Reconcile the rollup
+    signature: "reconcile_once(): void"
+    returns: "void"
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('interface', 'ireg-a', `
+schemaVersion: 1.0.0
+id: ireg-a
+name: IRegA
+description: Rollup registry
+component: reg-a
+methods:
+  - name: set_total
+    description: Replace the rollup total
+    signature: "set_total(amount: number): void"
+    returns: "void"
+    guarantees: [idempotent]
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('implementation', 'iorch-a-impl', `
+schemaVersion: 1.0.0
+id: iorch-a-impl
+name: ReconcilerImpl
+description: Reconciler implementation
+contract: iorch-a
+sourcePath: src/orch-a.ts
+methods:
+  - name: reconcile_once
+    narrative:
+      - stepNumber: 1
+        description: Write the rollup total (idempotent) to the registry
+        type: call
+        targetComponent: reg-a
+        targetMethod: set_total
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.issues.some(i => i.code === 'NARRATIVE_SEMANTIC_UNBACKED')).toBe(false);
     } finally {
       proj.cleanup();
     }

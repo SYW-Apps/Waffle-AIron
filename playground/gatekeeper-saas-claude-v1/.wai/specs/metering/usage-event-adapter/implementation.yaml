@@ -11,6 +11,6 @@ methods:
           Serialize the UsageThresholdEvent and publish it to the usage.threshold topic on the
           message bus
         type: local
-status: draft
+status: complete
 createdAt: '2026-06-17T18:39:20.586Z'
-updatedAt: '2026-06-17T18:39:20.586Z'
+updatedAt: '2026-06-18T12:27:17.263Z'

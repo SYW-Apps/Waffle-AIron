@@ -9,6 +9,6 @@ methods:
       - stepNumber: 1
         description: INSERT the NotificationRecord into the notification_log table
         type: local
-status: draft
+status: complete
 createdAt: '2026-06-17T18:41:11.192Z'
-updatedAt: '2026-06-17T18:41:11.192Z'
+updatedAt: '2026-06-18T12:27:17.392Z'

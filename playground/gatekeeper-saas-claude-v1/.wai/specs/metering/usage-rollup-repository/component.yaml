@@ -11,6 +11,6 @@ owns:
   - usage-rollup-index
   - usage-rollup-db-adapter
 dependsOn: []
-status: draft
+status: complete
 createdAt: '2026-06-17T17:52:49.902Z'
-updatedAt: '2026-06-17T17:52:49.902Z'
+updatedAt: '2026-06-18T12:27:15.972Z'

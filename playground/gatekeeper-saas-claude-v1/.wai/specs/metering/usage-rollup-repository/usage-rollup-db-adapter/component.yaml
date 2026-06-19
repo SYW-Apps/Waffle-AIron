@@ -7,6 +7,6 @@ subsystem: metering
 componentType: Adapter
 owns: []
 dependsOn: []
-status: draft
+status: complete
 createdAt: '2026-06-17T17:52:56.735Z'
-updatedAt: '2026-06-17T17:52:56.735Z'
+updatedAt: '2026-06-18T12:27:15.984Z'

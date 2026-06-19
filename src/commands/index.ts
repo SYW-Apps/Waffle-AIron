@@ -1,5 +1,6 @@
 export * from './aliases.js';
 export * from './generate.js';
+export * from './lock.js';
 export * from './init.js';
 export * from './mcp.js';
 export * from './list.js';

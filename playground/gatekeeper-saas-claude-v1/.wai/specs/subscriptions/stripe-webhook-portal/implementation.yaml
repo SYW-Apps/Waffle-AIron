@@ -17,6 +17,6 @@ methods:
       - stepNumber: 3
         description: Return 200 on success, 400 on signature/parse failure
         type: local
-status: draft
+status: complete
 createdAt: '2026-06-17T18:35:46.336Z'
-updatedAt: '2026-06-17T18:35:46.336Z'
+updatedAt: '2026-06-18T12:27:17.550Z'

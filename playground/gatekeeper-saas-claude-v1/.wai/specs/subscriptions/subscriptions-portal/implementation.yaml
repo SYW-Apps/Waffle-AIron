@@ -1,6 +1,8 @@
 id: subscriptions-portal-impl
 name: Subscriptions Portal Implementation
-description: Axum HTTP handlers for plans and subscriptions; forwards to orchestrators.
+description: >-
+  Axum HTTP handlers for plans and subscriptions; forwards to orchestrators, plus the in-process
+  resolve_entitlements forward to the entitlement resolver (the published cross-subsystem entry).
 contract: isubscriptions-portal
 sourcePath: src/subscriptions/portal.rs
 methods:
@@ -86,6 +88,18 @@ methods:
       - stepNumber: 2
         description: Return 204 No Content or error
         type: local
-status: draft
-createdAt: '2026-06-17T18:35:43.047Z'
-updatedAt: '2026-06-17T18:35:43.047Z'
+  - name: resolve_entitlements
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the entitlement resolver to resolve effective limits + status for the
+          subscription
+        type: call
+        targetComponent: entitlement-resolver
+        targetMethod: resolve
+      - stepNumber: 2
+        description: Return the Entitlements or the SubscriptionError
+        type: local
+status: complete
+createdAt: '2026-06-18T22:56:34.172Z'
+updatedAt: '2026-06-19T10:16:46.925Z'

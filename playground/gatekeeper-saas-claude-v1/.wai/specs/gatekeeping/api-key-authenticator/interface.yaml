@@ -9,6 +9,6 @@ methods:
       Unauthenticated
     signature: 'async fn authenticate(&self, api_key: String) -> Result<AuthResult, GateError>'
     returns: Result<AuthResult, GateError>
-status: draft
+status: complete
 createdAt: '2026-06-17T18:08:11.865Z'
-updatedAt: '2026-06-17T18:08:11.866Z'
+updatedAt: '2026-06-18T12:27:16.418Z'

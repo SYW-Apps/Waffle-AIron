@@ -10,7 +10,7 @@ methods:
         description: Forward to the registry
         type: call
         targetComponent: usage-rollup-registry
-        targetMethod: increment
+        targetMethod: set_usage
   - name: get_rollup
     narrative:
       - stepNumber: 1
@@ -25,6 +25,6 @@ methods:
         type: call
         targetComponent: usage-rollup-index
         targetMethod: list_for_subscription
-status: draft
-createdAt: '2026-06-17T18:39:27.295Z'
-updatedAt: '2026-06-17T18:39:27.295Z'
+status: complete
+createdAt: '2026-06-18T22:59:29.905Z'
+updatedAt: '2026-06-19T10:16:46.837Z'

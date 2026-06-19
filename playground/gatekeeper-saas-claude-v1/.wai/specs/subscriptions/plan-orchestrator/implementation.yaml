@@ -52,6 +52,6 @@ methods:
       - stepNumber: 3
         description: Return the refreshed plan or NotFound
         type: local
-status: draft
+status: complete
 createdAt: '2026-06-17T18:35:52.455Z'
-updatedAt: '2026-06-17T18:35:52.455Z'
+updatedAt: '2026-06-18T12:27:17.451Z'

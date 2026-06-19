@@ -21,6 +21,6 @@ methods:
       - stepNumber: 1
         description: In a transaction, delete the contacts, billing account, and customer for the aggregate
         type: local
-status: draft
+status: complete
 createdAt: '2026-06-17T18:40:52.730Z'
-updatedAt: '2026-06-17T18:40:52.730Z'
+updatedAt: '2026-06-18T12:27:17.007Z'

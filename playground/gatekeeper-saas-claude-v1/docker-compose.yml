@@ -1,0 +1,33 @@
+# Local infrastructure for the infra-backed integration tests in tests/integration_pg.rs.
+#
+#   docker compose up -d
+#   export DATABASE_URL=postgres://gatekeeper:gatekeeper@localhost:5432/gatekeeper
+#   export REDIS_URL=redis://127.0.0.1:6379
+#   cargo nextest run
+#
+# Without these env vars the integration tests skip and the suite still passes.
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: gatekeeper
+      POSTGRES_PASSWORD: gatekeeper
+      POSTGRES_DB: gatekeeper
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gatekeeper"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 10

@@ -16,6 +16,6 @@ methods:
           INSERT INTO api_key_credentials ... ON CONFLICT (id) DO UPDATE the status (and fields),
           binding the ApiKey
         type: local
-status: draft
+status: complete
 createdAt: '2026-06-17T18:26:56.809Z'
-updatedAt: '2026-06-17T18:26:56.809Z'
+updatedAt: '2026-06-18T12:27:17.130Z'

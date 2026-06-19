@@ -15,6 +15,6 @@ methods:
       async fn resolve_for_account(&self, id: BillingAccountId) -> Result<Entitlements,
       SubscriptionError>
     returns: Result<Entitlements, SubscriptionError>
-status: draft
+status: complete
 createdAt: '2026-06-17T17:49:23.898Z'
-updatedAt: '2026-06-17T17:49:23.898Z'
+updatedAt: '2026-06-18T12:27:16.778Z'

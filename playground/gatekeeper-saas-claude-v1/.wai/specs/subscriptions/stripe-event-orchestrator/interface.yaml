@@ -9,6 +9,6 @@ methods:
       async fn process_event(&self, raw_body: Vec<u8>, signature: String) -> Result<(),
       SubscriptionError>
     returns: Result<(), SubscriptionError>
-status: draft
+status: complete
 createdAt: '2026-06-17T17:49:20.536Z'
-updatedAt: '2026-06-17T17:49:20.537Z'
+updatedAt: '2026-06-18T12:27:16.872Z'

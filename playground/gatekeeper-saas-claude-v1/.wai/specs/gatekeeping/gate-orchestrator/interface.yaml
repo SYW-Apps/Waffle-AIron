@@ -11,6 +11,6 @@ methods:
       and return allow/deny
     signature: 'async fn authorize(&self, req: AuthorizeRequest) -> Result<AuthorizeDecision, GateError>'
     returns: Result<AuthorizeDecision, GateError>
-status: draft
+status: complete
 createdAt: '2026-06-17T18:08:11.820Z'
-updatedAt: '2026-06-17T18:08:11.820Z'
+updatedAt: '2026-06-18T12:27:16.520Z'

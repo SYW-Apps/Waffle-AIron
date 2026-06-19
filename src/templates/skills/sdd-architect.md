@@ -75,7 +75,7 @@ The full standard is the source of truth; this is the summary you design against
 5. **Behaviour placement**: behaviour lives where it can be performed autonomously over its own state (`order.total()`, `dog.bark()`); behaviour needing an external actor lives on the *acting* component, taking the entity as an argument (a `Carrier` ships an order — not `order.ship()`). Prefer composition + interfaces over inheritance.
 6. **Narrative coding (L5)**: each method reads top-to-bottom as named steps; one level of abstraction per function; a pattern facade's method is exactly one `call` step (pure 1:1 forwarding, no logic).
 7. **Right-size**: L1, concurrency, and events are all optional — don't add blocks, patterns, or layers a system doesn't need. Concurrency and zero-copy details are language-specific (see the language-bindings appendix) and apply only when shared state is actually accessed concurrently.
-8. **Subsystem boundaries (bounded contexts)**: each L1 subsystem publishes a *public surface* — the components named in its `publicInterfaces`. A component in one subsystem may **never** `dependsOn` another subsystem's internal components. Cross-subsystem access is *always* routed through a **local client `Adapter`** that calls the other subsystem's published public component. The Adapter abstracts *how* the hop happens (in-process forwarding, REST, gRPC, IPC, network) — the Orchestrator just takes one step and never changes if the other subsystem later becomes a separate microservice. Rule: a cross-subsystem `dependsOn` is valid only when (a) the source is an `Adapter` and (b) the target is in the other subsystem's `publicInterfaces`.
+8. **Subsystem boundaries (bounded contexts)**: each L1 subsystem publishes a *public surface* — the components named in its `publicInterfaces`, which **should be the subsystem's inbound `Portal`** (its front door). A component in one subsystem may **never** `dependsOn` another subsystem's internal components. Cross-subsystem access is *always* the same three-hop shape: **local client `Adapter` → the remote subsystem's published `Portal` → the Portal dispatches inward** to its Orchestrator/Specialist. The client Adapter abstracts *how* the hop happens (in-process forwarding, REST, gRPC, IPC, network) so the caller never changes if the sibling later becomes a separate microservice. Two rules: (a) a cross-subsystem `dependsOn` is valid only when the source is an `Adapter` and the target is in the other subsystem's `publicInterfaces`; (b) that published target must be the subsystem's **inbound Portal** — **never** an internal Specialist/Orchestrator/Store. Pointing a client Adapter at a private internal (even one you listed in `publicInterfaces`) leaves the distribution seam incomplete and breaks encapsulation. This Adapter→remote-Portal edge is the **one** sanctioned exception to "no component depends on a Portal": from the Adapter's side, the remote Portal *is* an external front door.
 
 ## 📋 Spec File YAML Schemas
 
@@ -117,6 +117,14 @@ updatedAt: "2026-06-12T20:00:00Z"
 > when you create the subsystem, **backfill the bindings later with
 > `sdd_set_public_interfaces`**.
 >
+> **If this subsystem is consumed by sibling subsystems, publish its inbound `Portal`**
+> as the public component, so a sibling's client Adapter targets the Portal (the front
+> door) and the Portal dispatches inward. Do **not** publish an internal
+> Specialist/Orchestrator/Store as the cross-subsystem entry point — even though
+> `type: Custom` currently accepts *any* component, a published internal is a leaked
+> boundary (see Rule 8). For an in-process sibling boundary, an `RPC` (Portal/gRPC) or a
+> Portal-backed `Custom` interface is the right surface.
+>
 > Pick the `type` that matches the *real* contract — don't reach for `Custom` to
 > dodge the type check. `Custom` is for genuinely bespoke surfaces, not an escape
 > hatch. If a boundary is event-driven (a queue/stream others subscribe to), type
@@ -150,6 +158,9 @@ methods:
     description: "Saves a generated invoice to the store"
     signature: "save_invoice(invoice: Invoice): Promise<void>"
     returns: "Promise<void>"
+    # guarantees: [idempotent]   # optional, combinable: idempotent | atomic | transactional | exactly-once.
+    #                            # Set when an L0 requirement or a narrative step asserts the property.
+    #                            # The gate requires any guarantee a narrative claims to be declared here.
     # Concrete wire binding — ONE generic `endpoint` field, discriminated by `transport`.
     # Set it via the `sdd_set_endpoints` MCP tool (don't hand-author). Required on every
     # method whose component is a Portal; the gate flags MISSING_ENDPOINT otherwise.

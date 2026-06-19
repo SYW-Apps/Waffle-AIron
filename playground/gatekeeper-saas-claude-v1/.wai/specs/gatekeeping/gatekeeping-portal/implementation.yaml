@@ -47,6 +47,6 @@ methods:
       - stepNumber: 3
         description: Return 204 No Content
         type: local
-status: draft
+status: complete
 createdAt: '2026-06-17T18:26:33.087Z'
-updatedAt: '2026-06-17T18:26:33.087Z'
+updatedAt: '2026-06-18T12:27:17.204Z'

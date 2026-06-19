@@ -53,6 +53,6 @@ methods:
         type: call
         targetComponent: subscription-index
         targetMethod: is_event_processed
-status: draft
+status: complete
 createdAt: '2026-06-17T18:36:58.412Z'
-updatedAt: '2026-06-17T18:36:58.412Z'
+updatedAt: '2026-06-18T12:27:17.576Z'

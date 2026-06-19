@@ -7,6 +7,6 @@ subsystem: notifications
 componentType: Adapter
 owns: []
 dependsOn: []
-status: draft
+status: complete
 createdAt: '2026-06-17T18:17:07.302Z'
-updatedAt: '2026-06-17T18:17:07.302Z'
+updatedAt: '2026-06-18T12:27:16.056Z'

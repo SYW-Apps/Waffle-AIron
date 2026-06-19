@@ -6,11 +6,15 @@ description: >-
 component: redis-counter-adapter
 methods:
   - name: check_and_decrement
-    description: Atomically seed-on-miss to quota with TTL, decrement by amount, deny below floor
+    description: >-
+      Atomically seed-on-miss to quota with TTL, decrement by amount, deny below floor (single Redis
+      Lua script)
     signature: >-
       async fn check_and_decrement(&self, key: String, amount: i64, quota: i64, ttl_seconds: i64) ->
       Result<ConsumeOutcome, MeteringError>
     returns: Result<ConsumeOutcome, MeteringError>
+    guarantees:
+      - atomic
   - name: get
     description: Read the current counter value
     signature: 'async fn get(&self, key: String) -> Result<Option<i64>, MeteringError>'
@@ -22,12 +26,14 @@ methods:
   - name: try_mark_threshold
     description: >-
       Atomically set-if-absent an edge-trigger flag for a crossed threshold (same TTL as the
-      counter); returns true only the first time, so usage.threshold publishes once per threshold
-      per period
+      counter; single SET NX); returns true only the first time, so usage.threshold publishes once
+      per threshold per period
     signature: >-
       async fn try_mark_threshold(&self, key: String, threshold: i64, ttl_seconds: i64) ->
       Result<bool, MeteringError>
     returns: Result<bool, MeteringError>
-status: draft
-createdAt: '2026-06-17T18:17:29.200Z'
-updatedAt: '2026-06-17T18:17:29.201Z'
+    guarantees:
+      - atomic
+status: complete
+createdAt: '2026-06-18T22:57:39.941Z'
+updatedAt: '2026-06-19T10:16:46.677Z'

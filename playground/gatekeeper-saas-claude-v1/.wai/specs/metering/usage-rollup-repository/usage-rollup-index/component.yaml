@@ -8,6 +8,6 @@ componentType: Index
 owns: []
 dependsOn:
   - usage-rollup-store
-status: draft
+status: complete
 createdAt: '2026-06-17T17:52:55.549Z'
-updatedAt: '2026-06-17T17:52:55.549Z'
+updatedAt: '2026-06-18T12:27:15.996Z'

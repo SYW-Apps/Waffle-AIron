@@ -10,6 +10,6 @@ publicInterfaces:
     details: Subscribes to usage.threshold events and dispatches billing-email alerts
     component: usage-event-observer
     interface: iusage-event-observer
-status: draft
+status: complete
 createdAt: '2026-06-16T22:25:44.066Z'
-updatedAt: '2026-06-17T18:17:44.979Z'
+updatedAt: '2026-06-18T12:27:15.623Z'

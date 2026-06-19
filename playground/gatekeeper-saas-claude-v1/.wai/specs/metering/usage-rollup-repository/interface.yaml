@@ -6,11 +6,15 @@ description: >-
 component: usage-rollup-repository
 methods:
   - name: record_usage
-    description: Add usage into a period rollup (forwards to registry)
+    description: >-
+      Set a period rollup's cumulative used to the given absolute value (forwards to registry).
+      Idempotent: re-flushing the same reconciliation snapshot does not double-count.
     signature: >-
       async fn record_usage(&self, subscription_id: SubscriptionId, resource: String, period:
-      String, amount: i64) -> Result<(), MeteringError>
+      String, used: i64) -> Result<(), MeteringError>
     returns: Result<(), MeteringError>
+    guarantees:
+      - idempotent
   - name: get_rollup
     description: Read a period rollup (forwards to index)
     signature: >-
@@ -23,6 +27,6 @@ methods:
       async fn list_rollups(&self, subscription_id: SubscriptionId) -> Result<Vec<UsageRollup>,
       MeteringError>
     returns: Result<Vec<UsageRollup>, MeteringError>
-status: draft
-createdAt: '2026-06-17T17:59:48.215Z'
-updatedAt: '2026-06-17T17:59:48.215Z'
+status: complete
+createdAt: '2026-06-18T22:59:26.132Z'
+updatedAt: '2026-06-19T10:16:46.692Z'

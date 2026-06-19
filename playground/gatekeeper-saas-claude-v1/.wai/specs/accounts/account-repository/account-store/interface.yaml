@@ -23,6 +23,6 @@ methods:
     description: Mutate status; returns false if not present
     signature: 'fn set_status(&self, id: BillingAccountId, status: AccountStatus) -> bool'
     returns: bool
-status: draft
+status: complete
 createdAt: '2026-06-17T17:39:09.357Z'
-updatedAt: '2026-06-17T17:39:09.357Z'
+updatedAt: '2026-06-18T12:27:16.377Z'

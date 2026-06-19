@@ -8,6 +8,6 @@ componentType: Index
 owns: []
 dependsOn:
   - account-store
-status: draft
+status: complete
 createdAt: '2026-06-16T22:40:23.023Z'
-updatedAt: '2026-06-16T22:40:23.024Z'
+updatedAt: '2026-06-18T12:27:15.688Z'

@@ -12,6 +12,6 @@ owns:
   - subscription-index
   - subscription-db-adapter
 dependsOn: []
-status: draft
+status: complete
 createdAt: '2026-06-17T17:43:26.973Z'
-updatedAt: '2026-06-17T17:43:26.973Z'
+updatedAt: '2026-06-18T12:27:16.239Z'

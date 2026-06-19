@@ -9,6 +9,6 @@ owns: []
 dependsOn:
   - usage-rollup-store
   - usage-rollup-db-adapter
-status: draft
+status: complete
 createdAt: '2026-06-17T17:52:53.670Z'
-updatedAt: '2026-06-17T17:52:53.670Z'
+updatedAt: '2026-06-18T12:27:16.008Z'

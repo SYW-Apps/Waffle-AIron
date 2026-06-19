@@ -10,6 +10,6 @@ owns: []
 dependsOn:
   - plan-repository
   - subscription-repository
-status: draft
+status: complete
 createdAt: '2026-06-17T17:43:13.791Z'
-updatedAt: '2026-06-17T17:43:13.791Z'
+updatedAt: '2026-06-18T12:27:16.103Z'

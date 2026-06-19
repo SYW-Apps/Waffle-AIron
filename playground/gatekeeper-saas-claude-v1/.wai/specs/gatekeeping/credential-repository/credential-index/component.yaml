@@ -8,6 +8,6 @@ componentType: Index
 owns: []
 dependsOn:
   - credential-store
-status: draft
+status: complete
 createdAt: '2026-06-17T18:05:50.435Z'
-updatedAt: '2026-06-17T18:05:50.435Z'
+updatedAt: '2026-06-18T12:27:15.817Z'

@@ -15,6 +15,6 @@ methods:
     description: Whether a Stripe event id has already been processed
     signature: 'fn is_event_processed(&self, event_id: String) -> bool'
     returns: bool
-status: draft
+status: complete
 createdAt: '2026-06-17T17:50:06.006Z'
-updatedAt: '2026-06-17T17:50:06.006Z'
+updatedAt: '2026-06-18T12:27:16.930Z'

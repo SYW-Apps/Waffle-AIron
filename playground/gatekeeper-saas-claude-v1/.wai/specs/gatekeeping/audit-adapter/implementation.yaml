@@ -9,6 +9,6 @@ methods:
       - stepNumber: 1
         description: INSERT the DecisionAuditRecord into the decision_audit_log table
         type: local
-status: draft
+status: complete
 createdAt: '2026-06-17T18:26:58.726Z'
-updatedAt: '2026-06-17T18:26:58.726Z'
+updatedAt: '2026-06-18T12:27:17.104Z'

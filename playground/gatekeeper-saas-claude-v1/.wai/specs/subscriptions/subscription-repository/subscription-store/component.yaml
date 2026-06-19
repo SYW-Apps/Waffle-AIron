@@ -7,6 +7,6 @@ subsystem: subscriptions
 componentType: Store
 owns: []
 dependsOn: []
-status: draft
+status: complete
 createdAt: '2026-06-17T17:43:28.853Z'
-updatedAt: '2026-06-17T17:43:28.854Z'
+updatedAt: '2026-06-18T12:27:16.286Z'

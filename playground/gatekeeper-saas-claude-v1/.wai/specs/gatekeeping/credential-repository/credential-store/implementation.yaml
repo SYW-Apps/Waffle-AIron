@@ -30,6 +30,6 @@ methods:
           If the credential exists, mutate its status in place and return true; otherwise return
           false
         type: local
-status: draft
+status: complete
 createdAt: '2026-06-17T18:26:53.526Z'
-updatedAt: '2026-06-17T18:26:53.526Z'
+updatedAt: '2026-06-18T12:27:17.167Z'

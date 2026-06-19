@@ -1,8 +1,9 @@
 id: isubscription-registry
 name: Subscription Registry Interface
 description: >-
-  Write path for the Subscription aggregate: applies mutations to the store and persists
-  transactionally via the Postgres adapter.
+  Write path for the Subscription aggregate: applies mutations to the store and persists via the
+  Postgres adapter. Stripe-event application is idempotent via the processed-event unique
+  constraint.
 component: subscription-registry
 methods:
   - name: create_subscription
@@ -20,11 +21,16 @@ methods:
       String) -> Result<(), SubscriptionError>
     returns: Result<(), SubscriptionError>
   - name: mark_event_processed
-    description: Record the event id and apply status in one transaction; false if duplicate
+    description: >-
+      Record the event id (unique constraint) and apply the status change; returns false if the
+      event id was already processed. Idempotent: a duplicate event id is rejected at insert and
+      applies no change.
     signature: >-
       async fn mark_event_processed(&self, id: SubscriptionId, event_id: String, status:
       SubscriptionStatus, current_period_end: String) -> Result<bool, SubscriptionError>
     returns: Result<bool, SubscriptionError>
-status: draft
-createdAt: '2026-06-17T17:50:03.107Z'
-updatedAt: '2026-06-17T17:50:03.107Z'
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-06-18T23:06:56.731Z'
+updatedAt: '2026-06-19T10:16:46.744Z'

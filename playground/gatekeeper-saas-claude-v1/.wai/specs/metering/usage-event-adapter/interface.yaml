@@ -9,6 +9,6 @@ methods:
     description: Serialize and publish a usage.threshold event
     signature: 'async fn publish_threshold(&self, event: UsageThresholdEvent) -> Result<(), MeteringError>'
     returns: Result<(), MeteringError>
-status: draft
+status: complete
 createdAt: '2026-06-17T17:59:44.027Z'
-updatedAt: '2026-06-17T17:59:44.027Z'
+updatedAt: '2026-06-18T12:27:16.596Z'

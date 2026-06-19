@@ -19,6 +19,6 @@ methods:
     description: Mutate status; false if absent
     signature: 'fn set_status(&self, key_id: ApiKeyId, status: ApiKeyStatus) -> bool'
     returns: bool
-status: draft
+status: complete
 createdAt: '2026-06-17T18:08:11.964Z'
-updatedAt: '2026-06-17T18:08:11.964Z'
+updatedAt: '2026-06-18T12:27:16.495Z'

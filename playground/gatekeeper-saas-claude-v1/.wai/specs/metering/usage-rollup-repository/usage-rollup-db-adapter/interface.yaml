@@ -13,6 +13,6 @@ methods:
     description: Insert or update a period rollup total
     signature: 'async fn upsert_rollup(&self, rollup: &UsageRollup) -> Result<(), DbError>'
     returns: Result<(), DbError>
-status: draft
+status: complete
 createdAt: '2026-06-17T17:59:59.515Z'
-updatedAt: '2026-06-17T17:59:59.516Z'
+updatedAt: '2026-06-18T12:27:16.657Z'

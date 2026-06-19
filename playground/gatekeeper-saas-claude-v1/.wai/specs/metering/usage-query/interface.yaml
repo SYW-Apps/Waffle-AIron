@@ -15,6 +15,6 @@ methods:
       async fn list_usage(&self, subscription_id: SubscriptionId) -> Result<Vec<UsageView>,
       MeteringError>
     returns: Result<Vec<UsageView>, MeteringError>
-status: draft
+status: complete
 createdAt: '2026-06-17T17:59:34.582Z'
-updatedAt: '2026-06-17T17:59:34.583Z'
+updatedAt: '2026-06-18T12:27:16.621Z'

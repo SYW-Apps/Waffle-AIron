@@ -13,6 +13,6 @@ methods:
     description: Mark an API key revoked
     signature: 'async fn revoke_key(&self, key_id: ApiKeyId) -> Result<(), GateError>'
     returns: Result<(), GateError>
-status: draft
+status: complete
 createdAt: '2026-06-17T18:24:41.589Z'
-updatedAt: '2026-06-17T18:24:41.589Z'
+updatedAt: '2026-06-18T12:27:16.443Z'

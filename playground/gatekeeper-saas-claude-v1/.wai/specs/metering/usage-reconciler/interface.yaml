@@ -11,6 +11,6 @@ methods:
     description: Perform one flush pass; returns the number of counters flushed
     signature: async fn reconcile_once(&self) -> Result<u64, MeteringError>
     returns: Result<u64, MeteringError>
-status: draft
+status: complete
 createdAt: '2026-06-17T17:59:37.381Z'
-updatedAt: '2026-06-17T17:59:37.381Z'
+updatedAt: '2026-06-18T12:27:16.634Z'

@@ -15,6 +15,6 @@ methods:
     description: Read a tier's limit set
     signature: 'fn find_tier_limits(&self, plan_id: PlanId, tier_id: TierId) -> Option<LimitSet>'
     returns: Option<LimitSet>
-status: draft
+status: complete
 createdAt: '2026-06-17T17:49:43.384Z'
-updatedAt: '2026-06-17T17:49:43.384Z'
+updatedAt: '2026-06-18T12:27:16.825Z'

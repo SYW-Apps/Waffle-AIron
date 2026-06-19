@@ -1,6 +1,9 @@
 id: accounts-portal-impl
 name: Accounts Portal Implementation
-description: Axum HTTP handlers for accounts/customers; forwards to the account orchestrator.
+description: >-
+  Axum HTTP handlers for accounts/customers; forwards to the account orchestrator, plus the
+  in-process resolve_billing_email forward to the account directory (the published cross-subsystem
+  entry).
 contract: iaccounts-portal
 sourcePath: src/accounts/portal.rs
 methods:
@@ -60,6 +63,18 @@ methods:
       - stepNumber: 2
         description: Return 204 No Content or error
         type: local
-status: draft
-createdAt: '2026-06-17T18:40:20.413Z'
-updatedAt: '2026-06-17T18:40:20.413Z'
+  - name: resolve_billing_email
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the account directory to resolve the billing contact email for the billing
+          account
+        type: call
+        targetComponent: account-directory
+        targetMethod: resolve_billing_email
+      - stepNumber: 2
+        description: Return the Option<Email> or the AccountError
+        type: local
+status: complete
+createdAt: '2026-06-18T22:56:41.864Z'
+updatedAt: '2026-06-19T10:16:46.771Z'

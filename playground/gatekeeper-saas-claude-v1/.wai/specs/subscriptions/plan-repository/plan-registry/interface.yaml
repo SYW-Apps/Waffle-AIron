@@ -15,6 +15,6 @@ methods:
       async fn update_tier_limits(&self, plan_id: PlanId, tier_id: TierId, limits: LimitSet) ->
       Result<(), SubscriptionError>
     returns: Result<(), SubscriptionError>
-status: draft
+status: complete
 createdAt: '2026-06-17T17:49:40.525Z'
-updatedAt: '2026-06-17T17:49:40.525Z'
+updatedAt: '2026-06-18T12:27:16.837Z'

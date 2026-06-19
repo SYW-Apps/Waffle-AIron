@@ -7,6 +7,6 @@ methods:
     description: Call metering.usage-meter.consume and map errors into GateError
     signature: 'async fn consume(&self, req: ConsumeRequest) -> Result<ConsumeOutcome, GateError>'
     returns: Result<ConsumeOutcome, GateError>
-status: draft
+status: complete
 createdAt: '2026-06-17T18:09:15.234Z'
-updatedAt: '2026-06-17T18:09:15.234Z'
+updatedAt: '2026-06-18T12:27:16.547Z'

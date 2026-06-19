@@ -11,6 +11,6 @@ methods:
     description: Apply status change to store and persist
     signature: 'async fn set_status(&self, key_id: ApiKeyId, status: ApiKeyStatus) -> Result<(), GateError>'
     returns: Result<(), GateError>
-status: draft
+status: complete
 createdAt: '2026-06-17T18:08:11.922Z'
-updatedAt: '2026-06-17T18:08:11.923Z'
+updatedAt: '2026-06-18T12:27:16.483Z'

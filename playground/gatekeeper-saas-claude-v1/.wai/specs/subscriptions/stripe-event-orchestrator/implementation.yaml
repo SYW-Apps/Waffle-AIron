@@ -18,14 +18,14 @@ methods:
         type: local
       - stepNumber: 3
         description: >-
-          Idempotently record the event id and apply the status change in one transaction; returns
-          false if the event was already processed (no-op)
+          Idempotently record the event id and apply the status change; returns false if the event
+          was already processed (no-op)
         type: call
         targetComponent: subscription-repository
         targetMethod: mark_event_processed
       - stepNumber: 4
         description: Return Ok(()) (skipping silently if the event was a duplicate)
         type: local
-status: draft
-createdAt: '2026-06-17T18:36:10.808Z'
-updatedAt: '2026-06-17T18:36:10.808Z'
+status: complete
+createdAt: '2026-06-18T23:07:10.231Z'
+updatedAt: '2026-06-19T10:16:46.899Z'

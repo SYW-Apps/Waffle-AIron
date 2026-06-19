@@ -28,6 +28,17 @@ You must read, respect, and update `.wai/phased_design.md` (specifically Stage 5
 3. **Verify Contracts & Boundaries (MCP)**:
    - For every `call` step, query the MCP server to verify that the target component is declared in the calling component's dependencies and that the target method exists on its L3 interfaces.
    - Run `sdd_validate_tree` to ensure this narrative doesn't create circular dependencies or break component type boundaries.
+   - **Verify asserted semantics against the contract.** If a step claims a semantic
+     property — *idempotent*, *atomic*, *transactional*, *exactly-once* — the target L3
+     method MUST declare it in its `guarantees` list, and its shape must actually deliver
+     it. An **additive** write (`increment`, `upsert_add`, "add amount to…") cannot realize
+     an *idempotent* update; a reconcile/rollup that must be idempotent needs a
+     **set/replace** method declaring `guarantees: [idempotent]`. The gate enforces this
+     *consistency* (a narrative claim with no matching contract guarantee is flagged
+     `NARRATIVE_SEMANTIC_UNBACKED`) but cannot verify the guarantee is truly delivered —
+     that is on you and the implementer. If the contract lacks the needed method or
+     guarantee, revise the L3 interface first (mandatory when an L0 `globalRequirement`
+     depends on it).
 4. **Register & Promote**:
    - Present the drafted narrative content (the exact step-by-step YAML structure) and a concise summary of the key flow/design choices directly in the chat message to the user. Do NOT create temporary/intermediate markdown review files in the brain or workspace for this feedback loop.
    - Upon user approval, call `sdd_write_narrative` to save it in the spec tree.

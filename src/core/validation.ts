@@ -1,6 +1,16 @@
 import { AgentRecord } from '../models/agent.js';
 import { ProjectConfig, RulesConfig } from '../models/project.js';
 import { Registry } from '../models/registry.js';
+import { SEMANTIC_GUARANTEES, Guarantee } from '../models/specs.js';
+
+// Narrative-prose keyword per recognized guarantee — the gate flags a step that uses one
+// while calling a method that doesn't declare that guarantee. Keep in sync with SEMANTIC_GUARANTEES.
+const GUARANTEE_KEYWORDS: Record<Guarantee, RegExp> = {
+  'idempotent': /idempoten/i,
+  'atomic': /\batomic/i,
+  'transactional': /\btransaction/i,
+  'exactly-once': /exactly[\s-]?once/i,
+};
 import {
   loadSystemSpec,
   loadSubsystemSpecs,
@@ -412,15 +422,13 @@ export function validateSddTree(rules?: RulesConfig): ValidationResult {
 
           // Check if target component has an interface containing targetMethod
           const targetInterfaces = interfaces.filter(i => i.component === step.targetComponent);
-          let methodFound = false;
+          let targetMethodSpec: (typeof targetInterfaces)[number]['methods'][number] | undefined;
           for (const targetIntf of targetInterfaces) {
-            if (targetIntf.methods.some(m => m.name === step.targetMethod)) {
-              methodFound = true;
-              break;
-            }
+            const found = targetIntf.methods.find(m => m.name === step.targetMethod);
+            if (found) { targetMethodSpec = found; break; }
           }
 
-          if (!methodFound) {
+          if (!targetMethodSpec) {
             addIssue(
               'error',
               'INVALID_TARGET_METHOD_REFERENCE',
@@ -428,6 +436,24 @@ export function validateSddTree(rules?: RulesConfig): ValidationResult {
               impl.id,
               isDraftCtx || isComponentDraft(step.targetComponent)
             );
+          } else {
+            // Semantic cross-check (consistency, not truth): the gate can't read prose, but
+            // it CAN catch a narrative step that asserts a guarantee the contract it calls
+            // doesn't declare. Data-driven over the recognized guarantee set — a step whose
+            // description claims a guarantee must call a method that lists it in `guarantees`.
+            // Whether the method truly delivers it is implementation correctness, not here.
+            const declared = new Set(targetMethodSpec.guarantees ?? []);
+            for (const g of SEMANTIC_GUARANTEES) {
+              if (GUARANTEE_KEYWORDS[g].test(step.description) && !declared.has(g)) {
+                addIssue(
+                  'warning',
+                  'NARRATIVE_SEMANTIC_UNBACKED',
+                  `Step ${step.stepNumber} of "${implMethod.name}" in implementation "${impl.id}" asserts "${g}", but the method it calls — "${step.targetMethod}" on "${step.targetComponent}" — does not list "${g}" among its L3 contract guarantees. Declare it on that method (and ensure its shape can deliver it), or revise the narrative.`,
+                  impl.id,
+                  isDraftCtx || isComponentDraft(step.targetComponent)
+                );
+              }
+            }
           }
         }
       }
@@ -533,12 +559,25 @@ export function validateSddTree(rules?: RulesConfig): ValidationResult {
           );
         }
 
-        // The target must be part of the other subsystem's published public surface.
-        if (!(publicSet.get(depComp.subsystem)?.has(depComp.id))) {
+        // The target must be part of the other subsystem's published public surface,
+        // AND that surface must be the subsystem's inbound Portal (its front door) — not
+        // a published internal Specialist/Orchestrator/Store. The hop is always:
+        // client Adapter → remote Portal → Portal dispatches inward. Allowing a non-Portal
+        // target leaks the boundary and breaks the adapter→network→remote-Portal seam.
+        const targetIsPublic = publicSet.get(depComp.subsystem)?.has(depComp.id) ?? false;
+        if (!targetIsPublic) {
           addIssue(
             'error',
             'CROSS_SUBSYSTEM_PRIVATE_ACCESS',
             `Boundary violation: "${comp.id}" depends on "${depComp.id}", which is not part of subsystem "${depComp.subsystem}"'s published public surface. Depend on one of its publicInterfaces components instead.`,
+            comp.id,
+            crossDraft
+          );
+        } else if (depComp.componentType !== 'Portal' && depComp.componentType !== 'Gateway') {
+          addIssue(
+            'error',
+            'CROSS_SUBSYSTEM_TARGET_NON_PORTAL',
+            `Boundary violation: client Adapter "${comp.id}" enters subsystem "${depComp.subsystem}" through "${depComp.id}" (${depComp.componentType}), not its inbound Portal. A cross-subsystem hop must target the remote subsystem's Portal (its front door), which dispatches inward — publishing/depending on an internal ${depComp.componentType} leaks the boundary and breaks the distribution seam. Expose a Portal for "${depComp.subsystem}" and point this Adapter at it.`,
             comp.id,
             crossDraft
           );

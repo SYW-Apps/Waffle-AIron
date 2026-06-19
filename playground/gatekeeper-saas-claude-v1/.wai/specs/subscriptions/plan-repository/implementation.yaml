@@ -39,6 +39,6 @@ methods:
         type: call
         targetComponent: plan-index
         targetMethod: find_tier_limits
-status: draft
+status: complete
 createdAt: '2026-06-17T18:36:33.881Z'
-updatedAt: '2026-06-17T18:36:33.881Z'
+updatedAt: '2026-06-18T12:27:17.465Z'

@@ -35,6 +35,6 @@ methods:
       async fn resolve_billing_email(&self, id: BillingAccountId) -> Result<Option<Email>,
       AccountError>
     returns: Result<Option<Email>, AccountError>
-status: draft
+status: complete
 createdAt: '2026-06-17T17:39:09.291Z'
-updatedAt: '2026-06-17T17:39:09.291Z'
+updatedAt: '2026-06-18T12:27:16.390Z'

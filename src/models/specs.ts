@@ -140,6 +140,16 @@ export const EndpointSchema = z.discriminatedUnion('transport', [
 ]);
 export type Endpoint = z.infer<typeof EndpointSchema>;
 
+/**
+ * Recognized method-level semantic guarantees. Kept as a closed set so the validator's
+ * cross-level consistency check (narrative claim ↔ contract guarantee) is data-driven over
+ * one source of truth — add a guarantee here (+ its narrative keyword in validation.ts) to
+ * extend it. NOT a place for free-form prose.
+ */
+export const SEMANTIC_GUARANTEES = ['idempotent', 'atomic', 'transactional', 'exactly-once'] as const;
+export const GuaranteeSchema = z.enum(SEMANTIC_GUARANTEES);
+export type Guarantee = z.infer<typeof GuaranteeSchema>;
+
 export const MethodSignatureSchema = z.object({
   name: z.string().regex(/^[a-zA-Z0-9_]+$/, 'Method name must be alphanumeric'),
   description: z.string(),
@@ -147,6 +157,13 @@ export const MethodSignatureSchema = z.object({
   returns: z.string(),   // e.g. "Promise<void>"
   /** Concrete wire binding for this method when its component is a Portal (set via sdd_set_endpoints). */
   endpoint: EndpointSchema.optional(),
+  /**
+   * First-class semantic guarantees this method's contract promises (combinable). The
+   * implementer MUST honour them, and the gate checks *consistency*: a narrative step that
+   * asserts a guarantee must call a method that declares it here. Whether the guarantee is
+   * actually delivered is implementation correctness (implementer tests), not a static check.
+   */
+  guarantees: z.array(GuaranteeSchema).optional(),
 });
 
 export type MethodSignature = z.infer<typeof MethodSignatureSchema>;

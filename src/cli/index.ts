@@ -10,6 +10,7 @@ import {
   runAliasesDisable,
   runInit,
   runGenerate,
+  runLock,
   runValidate,
   runList,
   runShow,
@@ -81,6 +82,18 @@ program
       root: opts.root,
       dryRun: opts.dryRun,
     });
+  });
+
+// ---------------------------------------------------------------------------
+// lock
+// ---------------------------------------------------------------------------
+
+program
+  .command('lock')
+  .description('Final check before implementation: validate the spec tree as complete, freeze all specs to complete, and (re)generate the agent topology — only if it validates')
+  .option('-y, --yes', 'skip the confirmation prompt (for scripts / CI)')
+  .action(async (opts) => {
+    await runLock({ yes: opts.yes });
   });
 
 // ---------------------------------------------------------------------------

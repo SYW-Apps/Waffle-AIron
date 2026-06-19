@@ -1,15 +1,15 @@
 id: usage-rollup-store-impl
 name: Usage Rollup Store Implementation
-description: Authoritative in-memory rollup state keyed by (subscription, resource, period).
+description: Authoritative in-memory rollup state keyed by (subscription, resource, period). Set-style writes.
 contract: iusage-rollup-store
 sourcePath: src/metering/usage_rollup_store.rs
 methods:
-  - name: upsert_add
+  - name: set_used
     narrative:
       - stepNumber: 1
         description: >-
-          Add the amount to the rollup for (subscription, resource, period), creating the entry at
-          that amount if absent
+          Set the rollup's used for (subscription, resource, period) to the given absolute value,
+          creating the entry at that value if absent
         type: local
   - name: get
     narrative:
@@ -21,6 +21,6 @@ methods:
       - stepNumber: 1
         description: Return clones of all rollups for the subscription
         type: local
-status: draft
-createdAt: '2026-06-17T18:39:37.596Z'
-updatedAt: '2026-06-17T18:39:37.596Z'
+status: complete
+createdAt: '2026-06-18T22:59:14.837Z'
+updatedAt: '2026-06-19T10:16:46.861Z'

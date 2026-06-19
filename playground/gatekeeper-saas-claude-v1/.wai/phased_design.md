@@ -79,10 +79,29 @@ Map the behavior step-by-step.
 
 Once the specs are clean and compiled, mark the components as `status: complete` to lock them, then generate the agents and write code!
 
-*   [x] **Validation Check (AI):** `sdd_validate_tree` returns **0 errors** (only draft-status + advisory MISSING_HTTP_ENDPOINT warnings remain).
-*   [ ] **Promote draft → complete (human):** No MCP tool sets component status; flip via `wairon` CLI to unlock implementation.
-*   [ ] **Agent Generation (human):** `wairon generate` to instantiate the `<component>-implementer` agents.
-*   [ ] **Code Implementation:** Implement each component 1:1 to its interface + narrative at its recorded `sourcePath` (every component already carries one).
+*   [x] **Validation Check (AI):** `sdd_validate_tree` returns **0 errors / 0 warnings**; all 18 Portal endpoints bound via `sdd_set_endpoints`.
+*   [x] **Promote draft → complete (human):** `wairon lock` flipped every spec to `complete`.
+*   [x] **Agent Generation (human):** implementer agents generated.
+*   [x] **Code Implementation:** ALL 53 components implemented 1:1 to interface + narrative at their `sourcePath`. `sdd_get_status` = **100% Complete**; `cargo build` clean; `cargo test` = 72 passing.
+
+### Implementation summary (single Rust crate, modules per subsystem)
+* Each L3 interface → a Rust trait; components hold `Arc<dyn Trait>` deps (mockable for TDD). Method bodies map 1:1 to L5 narrative steps (`// Step N:` comments).
+* Stores use the write-lock / read-swap hybrid (`arc-swap` snapshot reads, mutex-serialized COW writes). Adapters are the only blocks doing external I/O (sqlx Postgres, deadpool-redis, reqwest→Stripe/email). Cross-subsystem calls only via local client Adapters.
+* In-process realizations: cross-subsystem APIs are direct `Arc<dyn>` calls; the `usage.threshold` MessageBus is a `tokio::broadcast` channel (metering publishes, notifications subscribes). Reconciler + notification consumer run as spawned background tasks.
+* Migrations `0001`–`0005` (accounts, subscriptions, metering, gatekeeping, notifications).
+
+### Known divergences from narrative (flagged, faithful to the typed interfaces)
+1. **subscription-orchestrator**: narrative mentions a `NoBillingEmail` outcome absent from the `SubscriptionError` enum → mapped to `Conflict`.
+2. **Adapter boundaries can't be unit-tested without infra** (Postgres/Redis/Stripe/email); their tests are at the mapping/logic level (e.g. real HMAC webhook verification is unit-tested). Live integration requires the services.
+
+### Stage 6 remediation — conformance gate (new validator rules)
+The gate (`wairon validate` CLI / `sdd_validate_tree` MCP) introduced two new rules; remediated as follows:
+1. **`CROSS_SUBSYSTEM_TARGET_NON_PORTAL` (4 errors → 0):** a cross-subsystem client Adapter must enter the remote subsystem through its **Portal** (front door), not an internal component. Each remote Portal now exposes the in-process op (1:1 forward) and the 4 client Adapters depend on the Portal: metering-portal.`consume`→usage-meter; subscriptions-portal.`resolve_entitlements`→entitlement-resolver; accounts-portal.`resolve_billing_email`→account-directory. The `Custom`→{usage-meter, entitlement-resolver, account-directory} public interfaces were dropped (the REST Portals are the published surface). In code: each Portal carries a `*PortalApi` in-process trait; subsystems expose `portal` not the internal component; composition root + test harness wire Portal→Portal.
+2. **`NARRATIVE_SEMANTIC_UNBACKED` (7 warnings → 0):** declared guarantees where genuinely delivered — `atomic` on redis `check_and_decrement`/`try_mark_threshold`; `idempotent` on subscription-repository/registry `mark_event_processed`. Reworded narratives where the guarantee wasn't backed (dropped the cross-boundary "atomic" assertion; dropped the misplaced "transactional" wording — the registry does not open one DB transaction, and transactional is **not** an L0 requirement).
+3. **`usage-reconciler` idempotency (was divergence #1) — FIXED:** L0 mandates *"Idempotent usage accounting"*, so the additive overcounting was a requirement violation, not a tolerable divergence. The rollup write is now **set-style** (store `upsert_add`→`set_used`, registry `increment`→`set_usage`, repository `record_usage` declared `idempotent`): a pass sets the period rollup to the counter's cumulative `used`, so overlapping/retried flushes never double-count.
+
+**Tests:** `cargo nextest run` = **80 passed** (72 unit + 5 composition + 3 infra-gated). Build clean.
+**Re-lock required:** the spec edits reset 7 components to `draft`. Run `wairon lock` to re-promote them to `complete` and regenerate the implementer agents, then restart the session.
 
 ---
 

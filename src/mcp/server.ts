@@ -325,7 +325,7 @@ export function createMcpServer(): McpServer {
     },
   );
 
-  reg<{ id: string; name: string; description: string; component: string; methods?: { name: string; description: string; signature: string; returns: string }[] }>(server,
+  reg<{ id: string; name: string; description: string; component: string; methods?: { name: string; description: string; signature: string; returns: string; guarantees?: ('idempotent' | 'atomic' | 'transactional' | 'exactly-once')[] }[] }>(server,
     'sdd_define_interface',
     {
       description: 'Define an L3 Contract / Interface with method signatures for a component.',
@@ -339,6 +339,7 @@ export function createMcpServer(): McpServer {
           description: z.string(),
           signature: z.string(),
           returns: z.string(),
+          guarantees: z.array(z.enum(['idempotent', 'atomic', 'transactional', 'exactly-once'])).optional().describe('Semantic guarantees this method promises (combinable). The implementer must honour them; the gate requires any guarantee a narrative step asserts to be declared here. Set when an L0 requirement or a narrative step depends on the guarantee.'),
         })).optional().describe('List of method signature contracts'),
       },
     },

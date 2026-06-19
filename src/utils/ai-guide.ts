@@ -101,9 +101,17 @@ binary to orient yourself — the MCP tools give you the project state directly.
   Everything the CLI does, you do through MCP: to validate the tree call
   \`sdd_validate_tree\` (never \`wairon validate\`); to check completeness/status call
   \`sdd_get_status\` (never \`wairon status\`). Don't run shell commands for these.
-- **To implement a component** (only after its spec is \`complete\` and validates):
-  spawn the \`<component-id>-implementer\` subagent via your tool's native subagent
-  mechanism. The code must map 1:1 to the spec's interface + narrative.
+- **Handoff to implementation (the human's lock step).** When the design is done and
+  \`sdd_validate_tree\` is clean, you do NOT promote specs or generate agents yourself —
+  there is no MCP tool for it, by design (it is the human's approval gate). Instead, tell
+  the human verbatim: *"The specs are complete and validate. Please run \`wairon lock\` to
+  do the final validation + confirmation and generate the implementer agents, then restart
+  this session so I can load and use them."* \`wairon lock\` freezes every spec to
+  \`complete\` (only if it validates as complete) and regenerates the agent topology.
+- **To implement a component** (only after \`wairon lock\` has run and you are in a fresh
+  session): spawn the \`<component-id>-implementer\` subagent via your tool's native subagent
+  mechanism. The code must map 1:1 to the spec's interface + narrative. Newly generated
+  agents are loaded at session start — they are invisible until the session is restarted.
 - The **spec tree is the source of truth**. Files under \`.claude/agents/\` /
   \`.gemini/agents/\` are generated outputs — never edit them.
 
@@ -112,7 +120,12 @@ binary to orient yourself — the MCP tools give you the project state directly.
    \`complete\` and \`sdd_validate_tree\` passes with zero errors.
 2. **Human-in-the-loop.** Present each drafted spec layer to the user for approval
    before moving on; don't design several layers ahead unprompted.
-3. **Spec is law.** Generated code maps exactly to the interfaces and narrative steps.
+3. **Spec is law — and the law must be consistent.** Generated code maps exactly to the
+   interfaces and narrative steps. But if a 1:1 mapping would be *wrong* — a narrative
+   asserts semantics its dependency contract can't deliver (e.g. "idempotent" wired to an
+   additive-only write), or it would violate an L0 \`globalRequirement\` — **stop and
+   escalate a spec revision**; never ship a spec-faithful-but-wrong result with a
+   "divergence" footnote. A contradictory spec is an upstream defect to fix, not implement.
 
 ### Component vocabulary (full detail in the sdd-architect skill)
 Building blocks: Portal, Orchestrator, Supervisor, Actor, Store, Index, Registry,

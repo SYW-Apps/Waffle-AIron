@@ -65,6 +65,6 @@ methods:
       - stepNumber: 2
         description: Return Ok(())
         type: local
-status: draft
+status: complete
 createdAt: '2026-06-17T18:40:27.244Z'
-updatedAt: '2026-06-17T18:40:27.244Z'
+updatedAt: '2026-06-18T12:27:16.993Z'

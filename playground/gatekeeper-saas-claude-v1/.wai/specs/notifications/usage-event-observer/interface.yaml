@@ -13,6 +13,6 @@ methods:
       async fn on_usage_threshold(&self, event: UsageThresholdEvent) -> Result<(),
       NotificationError>
     returns: Result<(), NotificationError>
-status: draft
+status: complete
 createdAt: '2026-06-17T18:17:32.000Z'
-updatedAt: '2026-06-17T18:17:32.000Z'
+updatedAt: '2026-06-18T12:27:16.754Z'

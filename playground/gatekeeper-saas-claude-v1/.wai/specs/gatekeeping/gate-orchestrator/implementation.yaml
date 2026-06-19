@@ -46,6 +46,6 @@ methods:
       - stepNumber: 7
         description: Return the AuthorizeDecision
         type: local
-status: draft
+status: complete
 createdAt: '2026-06-17T18:26:33.134Z'
-updatedAt: '2026-06-17T18:26:33.134Z'
+updatedAt: '2026-06-18T12:27:17.192Z'

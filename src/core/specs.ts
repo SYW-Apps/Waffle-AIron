@@ -16,6 +16,7 @@ import {
   ImplementationSpecSchema,
   TypeSpec,
   TypeSpecSchema,
+  SpecStatus,
 } from '../models/index.js';
 import { ValidationIssue } from './validation.js';
 
@@ -494,6 +495,64 @@ export function saveTypeSpec(spec: TypeSpec): void {
   spec.updatedAt = new Date().toISOString();
   writeYamlFile(p, spec);
   invalidateSpecCache();
+}
+
+// ---------------------------------------------------------------------------
+// Spec status promotion (draft/design → complete)
+//
+// Used by the `wairon lock` command to freeze the design. TypeSpecs carry no
+// status, so only subsystems / components / interfaces / implementations promote.
+// ---------------------------------------------------------------------------
+export type SpecKind = 'subsystem' | 'component' | 'interface' | 'implementation';
+
+export interface PromotableSpec {
+  kind: SpecKind;
+  id: string;
+  /** The current (pre-promotion) status — captured so callers can revert. */
+  status: SpecStatus;
+}
+
+/** Every spec whose status is not yet 'complete', with its current status captured. */
+export function collectPromotableSpecs(): PromotableSpec[] {
+  const out: PromotableSpec[] = [];
+  for (const s of loadSubsystemSpecs())      if (s.status !== 'complete') out.push({ kind: 'subsystem', id: s.id, status: (s.status ?? 'complete') as SpecStatus });
+  for (const c of loadComponentSpecs())      if (c.status !== 'complete') out.push({ kind: 'component', id: c.id, status: (c.status ?? 'complete') as SpecStatus });
+  for (const i of loadInterfaceSpecs())      if (i.status !== 'complete') out.push({ kind: 'interface', id: i.id, status: (i.status ?? 'complete') as SpecStatus });
+  for (const m of loadImplementationSpecs()) if (m.status !== 'complete') out.push({ kind: 'implementation', id: m.id, status: (m.status ?? 'complete') as SpecStatus });
+  return out;
+}
+
+/** Set a single spec's status (bumps updatedAt). Caller invalidates the cache. */
+export function applySpecStatus(kind: SpecKind, id: string, status: SpecStatus): void {
+  switch (kind) {
+    case 'subsystem':      { const s = loadSubsystemSpec(id);      if (s) saveSubsystemSpec({ ...s, status }); break; }
+    case 'component':      { const s = loadComponentSpec(id);      if (s) saveComponentSpec({ ...s, status }); break; }
+    case 'interface':      { const s = loadInterfaceSpec(id);      if (s) saveInterfaceSpec({ ...s, status }); break; }
+    case 'implementation': { const s = loadImplementationSpec(id); if (s) saveImplementationSpec({ ...s, status }); break; }
+  }
+}
+
+/**
+ * Snapshot the raw bytes of every spec file under .wai/specs. Paired with
+ * restoreSpecFiles() to give a byte-exact revert — used by `wairon lock` to
+ * dry-run a promotion (write 'complete' → validate → restore) without leaving
+ * any change behind if validation fails or the user cancels.
+ */
+export function snapshotSpecFiles(): Map<string, string> {
+  const root = path.dirname(AI_PATHS.specsSystem());
+  const snapshot = new Map<string, string>();
+  if (!pathExists(root)) return snapshot;
+  for (const file of listFilesRecursive(root, '.yaml')) {
+    snapshot.set(file, fs.readFileSync(file, 'utf8'));
+  }
+  return snapshot;
+}
+
+/** Restore files captured by snapshotSpecFiles(). Caller invalidates the cache. */
+export function restoreSpecFiles(snapshot: Map<string, string>): void {
+  for (const [file, content] of snapshot) {
+    fs.writeFileSync(file, content);
+  }
 }
 
 

@@ -33,6 +33,6 @@ methods:
     description: Whether an event id is already recorded
     signature: 'fn has_event(&self, event_id: String) -> bool'
     returns: bool
-status: draft
+status: complete
 createdAt: '2026-06-17T17:50:11.126Z'
-updatedAt: '2026-06-17T17:50:11.126Z'
+updatedAt: '2026-06-18T12:27:16.954Z'

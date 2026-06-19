@@ -16,6 +16,6 @@ methods:
           INSERT INTO usage_rollups (subscription_id, resource, period, total) ON CONFLICT
           (subscription_id, resource, period) DO UPDATE SET total = EXCLUDED.total
         type: local
-status: draft
+status: complete
 createdAt: '2026-06-17T18:39:40.650Z'
-updatedAt: '2026-06-17T18:39:40.650Z'
+updatedAt: '2026-06-18T12:27:17.323Z'

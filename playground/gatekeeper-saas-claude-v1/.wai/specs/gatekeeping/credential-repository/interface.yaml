@@ -17,6 +17,6 @@ methods:
     description: Resolve an active credential by key hash (forwards to index)
     signature: 'async fn find_by_hash(&self, key_hash: String) -> Result<Option<ApiKey>, GateError>'
     returns: Result<Option<ApiKey>, GateError>
-status: draft
+status: complete
 createdAt: '2026-06-17T18:08:11.901Z'
-updatedAt: '2026-06-17T18:08:11.902Z'
+updatedAt: '2026-06-18T12:27:16.506Z'

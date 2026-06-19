@@ -1,15 +1,15 @@
 id: billing-account-client-adapter
 name: Billing Account Client Adapter
 description: >-
-  Local client adapter that crosses into the accounts subsystem, calling its published
-  account-directory to read the billing email for a billing account (used to provision the Stripe
-  customer). The only subscriptions block allowed to call accounts. Maps account errors into
-  subscription errors.
+  Local client adapter that crosses into the accounts subsystem, calling its inbound Portal's
+  published resolve_billing_email endpoint to read the billing email for a billing account (used to
+  provision the Stripe customer). The only subscriptions block allowed to call accounts. Maps
+  account errors into subscription errors.
 subsystem: subscriptions
 componentType: Adapter
 owns: []
 dependsOn:
-  - account-directory
-status: draft
-createdAt: '2026-06-17T18:34:34.183Z'
-updatedAt: '2026-06-17T18:34:34.183Z'
+  - accounts-portal
+status: complete
+createdAt: '2026-06-18T22:57:08.043Z'
+updatedAt: '2026-06-19T10:16:46.622Z'

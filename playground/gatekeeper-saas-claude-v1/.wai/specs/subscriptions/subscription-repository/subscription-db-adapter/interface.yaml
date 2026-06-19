@@ -21,6 +21,6 @@ methods:
       async fn insert_processed_event(&self, event_id: String, subscription_id: SubscriptionId) ->
       Result<bool, DbError>
     returns: Result<bool, DbError>
-status: draft
+status: complete
 createdAt: '2026-06-17T17:50:15.058Z'
-updatedAt: '2026-06-17T17:50:15.059Z'
+updatedAt: '2026-06-18T12:27:16.918Z'

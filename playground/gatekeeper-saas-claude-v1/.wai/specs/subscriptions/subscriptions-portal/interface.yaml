@@ -1,8 +1,8 @@
 id: isubscriptions-portal
 name: Subscriptions Portal Interface
 description: >-
-  HTTP/JSON contract for plan and subscription management. Forwards to the plan and subscription
-  orchestrators.
+  HTTP/JSON contract for plan and subscription management, plus the published entitlement read.
+  Forwards to the plan and subscription orchestrators and the entitlement resolver.
 component: subscriptions-portal
 methods:
   - name: create_plan
@@ -67,6 +67,19 @@ methods:
       transport: HTTP
       method: POST
       path: /v1/subscriptions/{id}/cancel
-status: draft
-createdAt: '2026-06-17T17:49:05.974Z'
-updatedAt: '2026-06-18T11:26:33.071Z'
+  - name: resolve_entitlements
+    description: >-
+      GET /v1/subscriptions/{id}/entitlements — resolve effective limits + status for a
+      subscription; forwards 1:1 to the entitlement resolver. The published cross-subsystem entry
+      consumed by gatekeeping's subscriptions client adapter.
+    signature: >-
+      async fn resolve_entitlements(&self, subscription_id: SubscriptionId) -> Result<Entitlements,
+      SubscriptionError>
+    returns: Result<Entitlements, SubscriptionError>
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /v1/subscriptions/{id}/entitlements
+status: complete
+createdAt: '2026-06-18T22:55:44.103Z'
+updatedAt: '2026-06-19T10:16:46.757Z'

@@ -96,8 +96,11 @@ is whether it also owns **state** or **workflow**:
 
 ### Dependency rules
 
-- **Portal** is the inbound boundary; no component may depend on it. It dispatches
-  to Orchestrators (and may consult read-only Indexes for routing/formatting).
+- **Portal** is the inbound boundary; no *local* component may depend on it. It
+  dispatches to Orchestrators (and may consult read-only Indexes for routing/formatting).
+  The **one** exception is a **cross-subsystem client Adapter** (see below): from its
+  side the remote subsystem's Portal is an external front door, so it depends on that
+  Portal — never on the remote subsystem's internals.
 - **Observer** may depend on exactly **one** Orchestrator *or* one Supervisor
   entry; it may use a message-bus **Adapter** to subscribe. No component depends on it.
 - **Store** may depend on an **Adapter** (its backend) or another Store. It is
@@ -110,7 +113,12 @@ is whether it also owns **state** or **workflow**:
   **not** depend on Indexes.
 - **Adapter** is a dependency-sink toward the system (its other side is external).
   It may not depend on Orchestrators or Stores. **Any** component may depend on an
-  Adapter to reach an external system.
+  Adapter to reach an external system. **Cross-subsystem client Adapter** (the one
+  Adapter that depends *outward* on a Portal): a sibling subsystem is "potentially
+  external" — designed to be swappable for a network service — so a local client
+  Adapter is its only reachable surface, and it depends on the **remote subsystem's
+  Portal** (its front door), which dispatches inward. It still may not depend on the
+  remote subsystem's Orchestrators/Stores/Specialists directly.
 - **Specialist** stays narrow; it **may** depend on Repositories, Indexes, and
   **Adapters**, but must not own bus/persistence/runtime (those are
   Observer/Store/Actor).

@@ -7,6 +7,6 @@ subsystem: gatekeeping
 componentType: Store
 owns: []
 dependsOn: []
-status: draft
+status: complete
 createdAt: '2026-06-17T18:05:46.678Z'
-updatedAt: '2026-06-17T18:05:46.679Z'
+updatedAt: '2026-06-18T12:27:15.840Z'

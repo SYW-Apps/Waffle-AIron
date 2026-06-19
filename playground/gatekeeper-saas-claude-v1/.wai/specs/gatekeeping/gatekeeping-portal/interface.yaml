@@ -29,6 +29,6 @@ methods:
       transport: HTTP
       method: DELETE
       path: /v1/api-keys/{key_id}
-status: draft
+status: complete
 createdAt: '2026-06-17T18:08:11.791Z'
-updatedAt: '2026-06-18T11:26:33.004Z'
+updatedAt: '2026-06-18T12:27:16.534Z'

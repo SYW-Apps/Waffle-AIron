@@ -1,6 +1,6 @@
 id: usage-reconciler-impl
 name: Usage Reconciler Implementation
-description: Periodic loop flushing Redis counters into Postgres rollups.
+description: Periodic loop flushing Redis counters into Postgres rollups via idempotent set-style writes.
 contract: iusage-reconciler
 sourcePath: src/metering/usage_reconciler.rs
 methods:
@@ -24,14 +24,14 @@ methods:
         type: local
       - stepNumber: 3
         description: >-
-          For each snapshot, reconcile its used value into the authoritative period rollup
-          (idempotent)
+          For each snapshot, set its cumulative used value into the authoritative period rollup;
+          this set-style write is idempotent, so overlapping or retried passes never double-count
         type: call
         targetComponent: usage-rollup-repository
         targetMethod: record_usage
       - stepNumber: 4
         description: Return the number of counters flushed
         type: local
-status: draft
-createdAt: '2026-06-17T18:39:13.229Z'
-updatedAt: '2026-06-17T18:39:13.229Z'
+status: complete
+createdAt: '2026-06-18T22:59:34.587Z'
+updatedAt: '2026-06-19T10:16:46.826Z'

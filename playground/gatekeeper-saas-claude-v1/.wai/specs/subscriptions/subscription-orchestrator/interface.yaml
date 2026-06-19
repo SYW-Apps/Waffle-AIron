@@ -27,6 +27,6 @@ methods:
     description: Cancel in Stripe and mark the local subscription canceled
     signature: 'async fn cancel_subscription(&self, id: SubscriptionId) -> Result<(), SubscriptionError>'
     returns: Result<(), SubscriptionError>
-status: draft
+status: complete
 createdAt: '2026-06-17T17:49:17.710Z'
-updatedAt: '2026-06-17T17:49:17.710Z'
+updatedAt: '2026-06-18T12:27:16.894Z'

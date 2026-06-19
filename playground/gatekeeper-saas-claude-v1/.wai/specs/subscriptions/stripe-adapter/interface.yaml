@@ -31,6 +31,6 @@ methods:
       fn verify_and_parse_event(&self, raw_body: Vec<u8>, signature: String) -> Result<StripeEvent,
       StripeError>
     returns: Result<StripeEvent, StripeError>
-status: draft
+status: complete
 createdAt: '2026-06-17T18:34:42.643Z'
-updatedAt: '2026-06-17T18:34:42.643Z'
+updatedAt: '2026-06-18T12:27:16.859Z'

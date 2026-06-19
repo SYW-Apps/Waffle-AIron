@@ -7,6 +7,6 @@ methods:
     description: Append a notification delivery record
     signature: 'async fn record_sent(&self, record: NotificationRecord) -> Result<(), NotificationError>'
     returns: Result<(), NotificationError>
-status: draft
+status: complete
 createdAt: '2026-06-17T18:17:40.537Z'
-updatedAt: '2026-06-17T18:17:40.537Z'
+updatedAt: '2026-06-18T12:27:16.730Z'

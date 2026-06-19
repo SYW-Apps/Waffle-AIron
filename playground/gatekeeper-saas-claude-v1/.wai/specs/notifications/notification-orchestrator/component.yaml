@@ -11,6 +11,6 @@ dependsOn:
   - accounts-client-adapter
   - email-adapter
   - notification-log-adapter
-status: draft
+status: complete
 createdAt: '2026-06-17T18:17:02.237Z'
-updatedAt: '2026-06-17T18:17:02.237Z'
+updatedAt: '2026-06-18T12:27:16.068Z'

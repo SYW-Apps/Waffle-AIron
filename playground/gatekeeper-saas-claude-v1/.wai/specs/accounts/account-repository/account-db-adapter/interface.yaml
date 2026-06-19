@@ -15,6 +15,6 @@ methods:
     description: Delete an account aggregate
     signature: 'async fn delete_account(&self, id: BillingAccountId) -> Result<(), DbError>'
     returns: Result<(), DbError>
-status: draft
+status: complete
 createdAt: '2026-06-17T17:39:09.373Z'
-updatedAt: '2026-06-17T17:39:09.373Z'
+updatedAt: '2026-06-18T12:27:16.336Z'

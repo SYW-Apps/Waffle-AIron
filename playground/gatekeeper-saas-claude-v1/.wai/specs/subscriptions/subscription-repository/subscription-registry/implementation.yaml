@@ -1,6 +1,8 @@
 id: subscription-registry-impl
 name: Subscription Registry Implementation
-description: Write path with transactional, idempotent Stripe-event application.
+description: >-
+  Write path with idempotent Stripe-event application: the processed-event insert (unique
+  constraint) dedups duplicates before any status change is applied.
 contract: isubscription-registry
 sourcePath: src/subscriptions/subscription_registry.rs
 methods:
@@ -82,13 +84,13 @@ methods:
         targetComponent: subscription-store
         targetMethod: get
       - stepNumber: 5
-        description: Persist the updated subscription row (same transaction as the event insert)
+        description: Persist the updated subscription row
         type: call
         targetComponent: subscription-db-adapter
         targetMethod: upsert_subscription
       - stepNumber: 6
         description: Return Ok(true)
         type: local
-status: draft
-createdAt: '2026-06-17T18:37:08.294Z'
-updatedAt: '2026-06-17T18:37:08.295Z'
+status: complete
+createdAt: '2026-06-18T23:07:06.610Z'
+updatedAt: '2026-06-19T10:16:46.913Z'

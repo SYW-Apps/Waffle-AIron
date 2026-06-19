@@ -11,6 +11,6 @@ owns: []
 dependsOn:
   - redis-counter-adapter
   - usage-event-adapter
-status: draft
+status: complete
 createdAt: '2026-06-17T17:52:39.430Z'
-updatedAt: '2026-06-17T17:52:39.430Z'
+updatedAt: '2026-06-18T12:27:15.935Z'

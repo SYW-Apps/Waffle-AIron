@@ -19,6 +19,6 @@ methods:
       - stepNumber: 1
         description: In a transaction, upsert the plan row, its tier rows, and their limit rows
         type: local
-status: draft
+status: complete
 createdAt: '2026-06-17T18:36:49.481Z'
-updatedAt: '2026-06-17T18:36:49.481Z'
+updatedAt: '2026-06-18T12:27:17.477Z'

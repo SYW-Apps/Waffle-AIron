@@ -9,6 +9,6 @@ methods:
       async fn resolve_entitlements(&self, subscription_id: SubscriptionId) -> Result<Entitlements,
       GateError>
     returns: Result<Entitlements, GateError>
-status: draft
+status: complete
 createdAt: '2026-06-17T18:09:13.565Z'
-updatedAt: '2026-06-17T18:09:13.565Z'
+updatedAt: '2026-06-18T12:27:16.559Z'

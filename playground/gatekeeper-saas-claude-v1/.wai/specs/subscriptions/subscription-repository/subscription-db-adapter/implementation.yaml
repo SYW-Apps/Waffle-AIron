@@ -26,6 +26,6 @@ methods:
           INSERT INTO processed_stripe_events (event_id, subscription_id) ON CONFLICT (event_id) DO
           NOTHING; return true if a row was inserted, false if it already existed
         type: local
-status: draft
+status: complete
 createdAt: '2026-06-17T18:37:21.551Z'
-updatedAt: '2026-06-17T18:37:21.551Z'
+updatedAt: '2026-06-18T12:27:17.587Z'

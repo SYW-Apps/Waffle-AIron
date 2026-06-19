@@ -46,6 +46,6 @@ methods:
         type: call
         targetComponent: account-index
         targetMethod: resolve_billing_email
-status: draft
+status: complete
 createdAt: '2026-06-17T18:40:35.278Z'
-updatedAt: '2026-06-17T18:40:35.279Z'
+updatedAt: '2026-06-18T12:27:17.065Z'

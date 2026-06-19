@@ -1,6 +1,8 @@
 id: iaccounts-portal
 name: Accounts Portal Interface
-description: HTTP/JSON contract for the accounts subsystem. Validates and forwards to the account orchestrator.
+description: >-
+  HTTP/JSON contract for the accounts subsystem, plus the published billing-email lookup. Validates
+  and forwards to the account orchestrator and the account directory.
 component: accounts-portal
 methods:
   - name: create_account
@@ -45,6 +47,19 @@ methods:
       transport: HTTP
       method: POST
       path: /v1/accounts/{id}/deactivate
-status: draft
-createdAt: '2026-06-17T17:39:09.196Z'
-updatedAt: '2026-06-18T11:26:32.125Z'
+  - name: resolve_billing_email
+    description: >-
+      GET /v1/accounts/{id}/billing-email — resolve the billing contact email for a billing account;
+      forwards 1:1 to the account directory. The published cross-subsystem entry consumed by the
+      notifications and subscriptions client adapters.
+    signature: >-
+      async fn resolve_billing_email(&self, id: BillingAccountId) -> Result<Option<Email>,
+      AccountError>
+    returns: Result<Option<Email>, AccountError>
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /v1/accounts/{id}/billing-email
+status: complete
+createdAt: '2026-06-18T22:55:52.999Z'
+updatedAt: '2026-06-19T10:16:46.647Z'

@@ -7,15 +7,11 @@ description: >-
 parentSystem: gatekeeper-saas-claude-v1
 publicInterfaces:
   - type: REST
-    details: /v1/accounts and /v1/customers — CRUD for customers, billing accounts, and contacts
+    details: >-
+      /v1/accounts and /v1/customers — CRUD for customers, billing accounts, and contacts, and GET
+      /v1/accounts/{id}/billing-email consumed by notifications and subscriptions
     component: accounts-portal
     interface: iaccounts-portal
-  - type: Custom
-    details: >-
-      In-process lookup: resolve_billing_email(BillingAccountId) -> Option<Email>, consumed by
-      notifications
-    component: account-directory
-    interface: iaccount-directory
-status: draft
+status: complete
 createdAt: '2026-06-16T22:25:43.910Z'
-updatedAt: '2026-06-17T18:17:46.503Z'
+updatedAt: '2026-06-18T22:57:21.456Z'

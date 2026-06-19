@@ -24,6 +24,6 @@ methods:
       - stepNumber: 2
         description: Return the list
         type: local
-status: draft
+status: complete
 createdAt: '2026-06-17T18:39:34.655Z'
-updatedAt: '2026-06-17T18:39:34.655Z'
+updatedAt: '2026-06-18T12:27:17.335Z'

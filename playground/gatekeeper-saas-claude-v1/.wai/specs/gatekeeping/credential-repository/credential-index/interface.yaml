@@ -11,6 +11,6 @@ methods:
     description: Find a credential by id
     signature: 'fn find_by_id(&self, key_id: ApiKeyId) -> Option<ApiKey>'
     returns: Option<ApiKey>
-status: draft
+status: complete
 createdAt: '2026-06-17T18:08:11.941Z'
-updatedAt: '2026-06-17T18:08:11.942Z'
+updatedAt: '2026-06-18T12:27:16.471Z'
