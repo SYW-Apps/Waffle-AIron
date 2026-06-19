@@ -1,0 +1,40 @@
+id: iaccount-repository
+name: Account Repository Interface
+description: >-
+  Persistence facade for the Account aggregate. Each method forwards 1:1 to an owned registry
+  (writes) or index (reads) block.
+component: account-repository
+methods:
+  - name: save_account
+    description: Persist a new account aggregate (forwards to registry)
+    signature: 'async fn save_account(&self, account: Account) -> Result<(), AccountError>'
+    returns: Result<(), AccountError>
+  - name: update_billing_email
+    description: Change billing email (forwards to registry)
+    signature: >-
+      async fn update_billing_email(&self, id: BillingAccountId, email: Email) -> Result<(),
+      AccountError>
+    returns: Result<(), AccountError>
+  - name: set_status
+    description: Set account status (forwards to registry)
+    signature: >-
+      async fn set_status(&self, id: BillingAccountId, status: AccountStatus) -> Result<(),
+      AccountError>
+    returns: Result<(), AccountError>
+  - name: find_account
+    description: Find full account aggregate (forwards to index)
+    signature: 'async fn find_account(&self, id: BillingAccountId) -> Result<Option<Account>, AccountError>'
+    returns: Result<Option<Account>, AccountError>
+  - name: find_customer
+    description: Find a customer (forwards to index)
+    signature: 'async fn find_customer(&self, id: CustomerId) -> Result<Option<Customer>, AccountError>'
+    returns: Result<Option<Customer>, AccountError>
+  - name: resolve_billing_email
+    description: Resolve billing email for an account (forwards to index)
+    signature: >-
+      async fn resolve_billing_email(&self, id: BillingAccountId) -> Result<Option<Email>,
+      AccountError>
+    returns: Result<Option<Email>, AccountError>
+status: complete
+createdAt: '2026-06-17T17:39:09.291Z'
+updatedAt: '2026-06-18T12:27:16.390Z'

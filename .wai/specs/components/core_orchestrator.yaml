@@ -1,0 +1,9 @@
+id: "core_orchestrator"
+name: "Core Orchestrator"
+description: "Orchestrates spec loading and manipulation in the core subsystem."
+subsystem: "sdd_core"
+componentType: "Orchestrator"
+dependsOn:
+  - "spec_loader"
+createdAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-06-19T12:00:00Z"

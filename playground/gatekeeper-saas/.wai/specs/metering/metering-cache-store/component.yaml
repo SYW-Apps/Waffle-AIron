@@ -1,0 +1,10 @@
+id: metering-cache-store
+name: Metering Cache Store
+description: Redis in-memory store for high-throughput rate-limit state and active request counters.
+subsystem: metering
+componentType: Store
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-06-16T17:04:42.067Z'
+updatedAt: '2026-06-16T17:04:42.068Z'

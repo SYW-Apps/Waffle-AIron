@@ -1,0 +1,39 @@
+id: account-index-impl
+name: Account Index Implementation
+description: Read projection over the account store.
+contract: iaccount-index
+sourcePath: src/accounts/account_index.rs
+methods:
+  - name: find_account
+    narrative:
+      - stepNumber: 1
+        description: Read the aggregate from the store by billing account id
+        type: call
+        targetComponent: account-store
+        targetMethod: get
+      - stepNumber: 2
+        description: Return the result
+        type: local
+  - name: find_customer
+    narrative:
+      - stepNumber: 1
+        description: Read the aggregate by customer id
+        type: call
+        targetComponent: account-store
+        targetMethod: get_by_customer
+      - stepNumber: 2
+        description: Extract and return the Customer, or None
+        type: local
+  - name: resolve_billing_email
+    narrative:
+      - stepNumber: 1
+        description: Read the aggregate by billing account id
+        type: call
+        targetComponent: account-store
+        targetMethod: get
+      - stepNumber: 2
+        description: Return the billing_account.billing_email, or None
+        type: local
+status: complete
+createdAt: '2026-06-17T18:40:45.362Z'
+updatedAt: '2026-06-18T12:27:17.023Z'

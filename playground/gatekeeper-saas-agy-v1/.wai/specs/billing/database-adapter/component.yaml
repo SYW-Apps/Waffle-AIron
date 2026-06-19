@@ -1,0 +1,10 @@
+id: "database-adapter"
+name: "Database Adapter"
+description: "SQLx connection adapter executing raw PostgreSQL queries."
+subsystem: "billing"
+componentType: "Adapter"
+owns: []
+dependsOn: []
+status: "complete"
+createdAt: "2026-06-15T23:18:00Z"
+updatedAt: "2026-06-15T23:20:00Z"

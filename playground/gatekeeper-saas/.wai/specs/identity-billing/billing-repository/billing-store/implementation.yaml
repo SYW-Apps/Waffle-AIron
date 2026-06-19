@@ -1,0 +1,17 @@
+id: billing-store-impl
+name: Billing Store Implementation
+description: PostgreSQL connection pool management.
+contract: ibilling-store
+sourcePath: src/identity-billing/store.rs
+methods:
+  - name: get_connection
+    narrative:
+      - stepNumber: 1
+        description: Verify connection pool is active; establish one if unitialized.
+        type: local
+      - stepNumber: 2
+        description: Acquire and return connection client from pool.
+        type: local
+status: complete
+createdAt: '2026-06-16T16:57:23.273Z'
+updatedAt: '2026-06-16T16:57:23.273Z'

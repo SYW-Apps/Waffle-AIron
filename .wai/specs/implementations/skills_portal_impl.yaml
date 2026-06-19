@@ -1,0 +1,16 @@
+schemaVersion: "1.0.0"
+id: "skills_portal_impl"
+name: "Skills Portal Implementation"
+description: "Concrete implementation forwarding portal requests to skills orchestrator."
+contract: "iskills_portal"
+sourcePath: ".wai/specs/implementations/skills_portal_impl.yaml"
+methods:
+  - name: "exportSddSkills"
+    narrative:
+      - stepNumber: 1
+        description: "Forward exportSddSkills call to skills orchestrator"
+        type: "call"
+        targetComponent: "skills_orchestrator"
+        targetMethod: "exportSddSkills"
+createdAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-06-19T12:00:00Z"

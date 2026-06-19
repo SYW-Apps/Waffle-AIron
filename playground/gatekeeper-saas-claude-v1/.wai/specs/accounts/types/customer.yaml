@@ -1,0 +1,29 @@
+kind: entity
+id: customer
+name: Customer
+description: A tenant of the platform. Aggregate sub-entity identified by CustomerId.
+subsystem: accounts
+fields:
+  - name: id
+    type: string
+    description: CustomerId newtype
+    optional: false
+  - name: name
+    type: string
+    description: Display name of the customer/organization
+    optional: false
+  - name: status
+    type: accounts.account-status
+    description: Current lifecycle status
+    optional: false
+  - name: billing_account_id
+    type: string
+    description: BillingAccountId of this customer's billing account
+    optional: false
+  - name: created_at
+    type: string
+    description: RFC3339 creation timestamp
+    optional: false
+methods: []
+createdAt: '2026-06-17T15:16:52.813Z'
+updatedAt: '2026-06-17T15:16:52.816Z'

@@ -1,0 +1,15 @@
+id: entitlement-resolver
+name: Entitlement Resolver
+description: >-
+  Resolves the effective limit set for a subscription by combining its plan/tier limits with any
+  subscription-level overrides. This is the read capability the gatekeeping subsystem consumes to
+  learn a subscription's limits.
+subsystem: subscriptions
+componentType: Specialist
+owns: []
+dependsOn:
+  - plan-repository
+  - subscription-repository
+status: complete
+createdAt: '2026-06-17T17:43:13.791Z'
+updatedAt: '2026-06-18T12:27:16.103Z'

@@ -1,0 +1,14 @@
+id: metering
+name: Metering & Enforcement Subsystem
+description: >-
+  Provides low-latency checks to validate access keys, increment usage counters, and enforce rate
+  limits.
+parentSystem: gatekeeper-saas
+publicInterfaces:
+  - type: REST
+    details: High-throughput /check-access and /meter endpoints
+    component: metering-portal
+    interface: imetering-portal
+status: complete
+createdAt: '2026-06-16T16:22:34.492Z'
+updatedAt: '2026-06-16T16:22:34.494Z'

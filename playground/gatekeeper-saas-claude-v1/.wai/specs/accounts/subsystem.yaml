@@ -1,0 +1,17 @@
+id: accounts
+name: Accounts Subsystem
+description: >-
+  Manages customers, their billing accounts, and contact/email details. Authoritative source for
+  tenant identity and the billing contact email used by notifications. Does not handle money or
+  usage directly.
+parentSystem: gatekeeper-saas-claude-v1
+publicInterfaces:
+  - type: REST
+    details: >-
+      /v1/accounts and /v1/customers — CRUD for customers, billing accounts, and contacts, and GET
+      /v1/accounts/{id}/billing-email consumed by notifications and subscriptions
+    component: accounts-portal
+    interface: iaccounts-portal
+status: complete
+createdAt: '2026-06-16T22:25:43.910Z'
+updatedAt: '2026-06-18T22:57:21.456Z'

@@ -1,0 +1,12 @@
+id: metering-portal
+name: Metering REST Portal
+description: Low-latency REST entrypoints for checking access credentials and reporting raw metrics.
+subsystem: metering
+componentType: Portal
+owns: []
+dependsOn:
+  - metering-orchestrator
+portalType: HTTP_API
+status: complete
+createdAt: '2026-06-16T17:04:42.777Z'
+updatedAt: '2026-06-16T17:04:42.777Z'

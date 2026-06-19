@@ -1,0 +1,16 @@
+id: icredential-index
+name: Credential Index Interface
+description: Read path over the credential store. Never mutates.
+component: credential-index
+methods:
+  - name: find_by_hash
+    description: Find an active credential by key hash
+    signature: 'fn find_by_hash(&self, key_hash: String) -> Option<ApiKey>'
+    returns: Option<ApiKey>
+  - name: find_by_id
+    description: Find a credential by id
+    signature: 'fn find_by_id(&self, key_id: ApiKeyId) -> Option<ApiKey>'
+    returns: Option<ApiKey>
+status: complete
+createdAt: '2026-06-17T18:08:11.941Z'
+updatedAt: '2026-06-18T12:27:16.471Z'

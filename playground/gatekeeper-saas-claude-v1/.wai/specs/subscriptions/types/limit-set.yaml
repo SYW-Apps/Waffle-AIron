@@ -1,0 +1,13 @@
+kind: value-object
+id: limit-set
+name: Limit Set
+description: A collection of limits applied together (for a tier or as overrides).
+subsystem: subscriptions
+fields:
+  - name: limits
+    type: subscriptions.limit[]
+    description: The limits in this set
+    optional: false
+methods: []
+createdAt: '2026-06-17T17:48:32.116Z'
+updatedAt: '2026-06-17T17:48:32.128Z'

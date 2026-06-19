@@ -1,0 +1,44 @@
+id: credential-registry-impl
+name: Credential Registry Implementation
+description: 'Write path: mutate the store then persist via the Postgres adapter.'
+contract: icredential-registry
+sourcePath: src/gatekeeping/credential_registry.rs
+methods:
+  - name: create_key
+    narrative:
+      - stepNumber: 1
+        description: Insert the credential into the in-memory store
+        type: call
+        targetComponent: credential-store
+        targetMethod: insert
+      - stepNumber: 2
+        description: Persist the credential row to Postgres
+        type: call
+        targetComponent: credential-db-adapter
+        targetMethod: upsert_key
+      - stepNumber: 3
+        description: Return Ok(())
+        type: local
+  - name: set_status
+    narrative:
+      - stepNumber: 1
+        description: Apply the status change in the store; if the key is absent return a Persistence GateError
+        type: call
+        targetComponent: credential-store
+        targetMethod: set_status
+      - stepNumber: 2
+        description: Read back the updated credential to persist its new state
+        type: call
+        targetComponent: credential-store
+        targetMethod: get
+      - stepNumber: 3
+        description: Persist the updated credential row to Postgres
+        type: call
+        targetComponent: credential-db-adapter
+        targetMethod: upsert_key
+      - stepNumber: 4
+        description: Return Ok(())
+        type: local
+status: complete
+createdAt: '2026-06-17T18:26:45.986Z'
+updatedAt: '2026-06-18T12:27:17.154Z'

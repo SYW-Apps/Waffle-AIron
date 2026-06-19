@@ -1,0 +1,18 @@
+id: iusage-rollup-db-adapter
+name: Usage Rollup Postgres Adapter Interface
+description: The only block doing Postgres I/O for usage rollups (sqlx). No domain logic.
+component: usage-rollup-db-adapter
+methods:
+  - name: load_rollups
+    description: Load all rollups for a subscription
+    signature: >-
+      async fn load_rollups(&self, subscription_id: SubscriptionId) -> Result<Vec<UsageRollup>,
+      DbError>
+    returns: Result<Vec<UsageRollup>, DbError>
+  - name: upsert_rollup
+    description: Insert or update a period rollup total
+    signature: 'async fn upsert_rollup(&self, rollup: &UsageRollup) -> Result<(), DbError>'
+    returns: Result<(), DbError>
+status: complete
+createdAt: '2026-06-17T17:59:59.515Z'
+updatedAt: '2026-06-18T12:27:16.657Z'

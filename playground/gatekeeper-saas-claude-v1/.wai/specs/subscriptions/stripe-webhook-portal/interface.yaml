@@ -1,0 +1,18 @@
+id: istripe-webhook-portal
+name: Stripe Webhook Portal Interface
+description: >-
+  HTTP ingress for Stripe webhooks. Receives the raw signed body and forwards to the stripe event
+  orchestrator.
+component: stripe-webhook-portal
+methods:
+  - name: handle_webhook
+    description: POST /v1/stripe/webhook — accept and forward a signed Stripe event
+    signature: 'async fn handle_webhook(&self, raw_body: Vec<u8>, signature: String) -> Result<(), ApiError>'
+    returns: Result<(), ApiError>
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /v1/stripe/webhook
+status: complete
+createdAt: '2026-06-17T17:49:08.289Z'
+updatedAt: '2026-06-18T12:27:16.883Z'

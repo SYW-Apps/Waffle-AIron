@@ -1,0 +1,12 @@
+id: inotification-orchestrator
+name: Notification Orchestrator Interface
+description: Composes and dispatches a usage alert in response to a threshold event.
+component: notification-orchestrator
+methods:
+  - name: handle_threshold
+    description: Resolve billing email, compose the alert, send it, and record the delivery
+    signature: 'async fn handle_threshold(&self, event: UsageThresholdEvent) -> Result<(), NotificationError>'
+    returns: Result<(), NotificationError>
+status: complete
+createdAt: '2026-06-17T18:17:34.345Z'
+updatedAt: '2026-06-18T12:27:16.742Z'

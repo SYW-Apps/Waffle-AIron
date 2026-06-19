@@ -1,0 +1,9 @@
+id: "cli_validator_adapter"
+name: "CLI Validator Client Adapter"
+description: "Local client adapter in sdd_cli to cross the subsystem boundary to sdd_validator."
+subsystem: "sdd_cli"
+componentType: "Adapter"
+dependsOn:
+  - "validator_portal"
+createdAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-06-19T12:00:00Z"

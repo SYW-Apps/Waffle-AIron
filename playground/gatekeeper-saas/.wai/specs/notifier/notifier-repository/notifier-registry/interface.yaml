@@ -1,0 +1,12 @@
+id: inotifier-registry
+name: Notifier Registry Interface
+description: Insert transactions operations.
+component: notifier-registry
+methods:
+  - name: insert_alert_log
+    description: Inserts new Alert Log row.
+    signature: 'insert_alert_log(log: UsageAlertLog): Promise<void>'
+    returns: Promise<void>
+status: complete
+createdAt: '2026-06-16T17:47:06.534Z'
+updatedAt: '2026-06-16T17:47:06.535Z'

@@ -1,0 +1,12 @@
+id: email-adapter
+name: Email Adapter
+description: >-
+  The only block doing email I/O. Sends transactional email through an HTTP email provider (e.g.
+  SendGrid/Postmark). No domain logic.
+subsystem: notifications
+componentType: Adapter
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-06-17T18:17:05.983Z'
+updatedAt: '2026-06-18T12:27:16.044Z'

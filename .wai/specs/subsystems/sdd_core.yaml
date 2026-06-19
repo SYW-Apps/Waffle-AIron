@@ -1,0 +1,10 @@
+id: "sdd_core"
+name: "SDD Core Spec Manager"
+description: "Handles physical spec tree reading, parsing, writing, and dynamic agent topology resolution."
+parentSystem: "Waffle-AIron"
+publicInterfaces:
+  - type: "Custom"
+    component: "core_portal"
+    details: "Provides spec loading and topology resolution services."
+createdAt: "2026-06-10T19:28:00.000Z"
+updatedAt: "2026-06-10T19:28:00.000Z"

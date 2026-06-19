@@ -1,0 +1,32 @@
+schemaVersion: "1.0.0"
+id: "order_orchestrator_impl"
+name: "Order Orchestrator Implementation"
+description: "Concrete implementation of Order Orchestrator coordination workflow."
+contract: "iorder_orchestrator"
+sourcePath: "src/order/order_orchestrator.ts"
+methods:
+  - name: "createOrder"
+    narrative:
+      - stepNumber: 1
+        description: "Initialize a new Order record and validate input checkout details"
+        type: "local"
+      - stepNumber: 2
+        description: "Persist the new Order with PENDING status"
+        type: "call"
+        targetComponent: "order_repository"
+        targetMethod: "insertOrder"
+      - stepNumber: 3
+        description: "Request inventory reservation via Inventory microservice client"
+        type: "call"
+        targetComponent: "inventory_client"
+        targetMethod: "reserveStock"
+      - stepNumber: 4
+        description: "Publish ORDER_PLACED event message broker for asynchronous processing"
+        type: "call"
+        targetComponent: "notification_publisher"
+        targetMethod: "publishOrderPlaced"
+      - stepNumber: 5
+        description: "Return order object representing the completed transaction"
+        type: "local"
+createdAt: "2026-06-11T15:00:00Z"
+updatedAt: "2026-06-11T15:00:00Z"

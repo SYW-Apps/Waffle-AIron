@@ -1,0 +1,43 @@
+id: metering-portal-impl
+name: Metering Portal Implementation
+description: >-
+  Axum HTTP handlers for usage reads, plus the in-process consume forward to the usage meter (the
+  published cross-subsystem entry).
+contract: imetering-portal
+sourcePath: src/metering/portal.rs
+methods:
+  - name: get_usage
+    narrative:
+      - stepNumber: 1
+        description: Read usage for the subscription/resource via the usage query specialist
+        type: call
+        targetComponent: usage-query
+        targetMethod: get_usage
+      - stepNumber: 2
+        description: Return 200 with the UsageView or error
+        type: local
+  - name: list_usage
+    narrative:
+      - stepNumber: 1
+        description: List usage across resources via the usage query specialist
+        type: call
+        targetComponent: usage-query
+        targetMethod: list_usage
+      - stepNumber: 2
+        description: Return 200 with the UsageView list
+        type: local
+  - name: consume
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the consume request to the usage meter (check-and-decrement and threshold
+          detection)
+        type: call
+        targetComponent: usage-meter
+        targetMethod: consume
+      - stepNumber: 2
+        description: Return the ConsumeOutcome or the MeteringError
+        type: local
+status: complete
+createdAt: '2026-06-18T22:56:23.502Z'
+updatedAt: '2026-06-19T10:16:46.812Z'

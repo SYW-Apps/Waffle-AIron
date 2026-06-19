@@ -1,0 +1,21 @@
+id: credential-db-adapter-impl
+name: Credential Postgres Adapter Implementation
+description: sqlx Postgres I/O for credential rows.
+contract: icredential-db-adapter
+sourcePath: src/gatekeeping/credential_db_adapter.rs
+methods:
+  - name: load_all
+    narrative:
+      - stepNumber: 1
+        description: SELECT all rows from api_key_credentials and map each into an ApiKey
+        type: local
+  - name: upsert_key
+    narrative:
+      - stepNumber: 1
+        description: >-
+          INSERT INTO api_key_credentials ... ON CONFLICT (id) DO UPDATE the status (and fields),
+          binding the ApiKey
+        type: local
+status: complete
+createdAt: '2026-06-17T18:26:56.809Z'
+updatedAt: '2026-06-18T12:27:17.130Z'

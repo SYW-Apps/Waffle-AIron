@@ -1,0 +1,10 @@
+id: "validator_portal"
+name: "Validator Portal"
+description: "Inbound portal for the SDD validator subsystem."
+subsystem: "sdd_validator"
+componentType: "Portal"
+portalType: "Custom"
+dependsOn:
+  - "spec_validator"
+createdAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-06-19T12:00:00Z"

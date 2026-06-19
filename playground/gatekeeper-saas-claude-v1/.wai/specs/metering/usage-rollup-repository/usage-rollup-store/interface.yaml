@@ -1,0 +1,28 @@
+id: iusage-rollup-store
+name: Usage Rollup Store Interface
+description: >-
+  Authoritative in-process state for usage rollups. Depended upon by registry and index. Writes are
+  set-style (absolute period total), so re-flushing the same snapshot is idempotent.
+component: usage-rollup-store
+methods:
+  - name: set_used
+    description: >-
+      Set a rollup's cumulative used for (subscription, resource, period) to the given absolute
+      value, creating it if absent. Idempotent: re-applying the same value is a no-op.
+    signature: >-
+      fn set_used(&self, subscription_id: SubscriptionId, resource: String, period: String, used:
+      i64)
+    returns: ()
+  - name: get
+    description: Get a rollup
+    signature: >-
+      fn get(&self, subscription_id: SubscriptionId, resource: String, period: String) ->
+      Option<UsageRollup>
+    returns: Option<UsageRollup>
+  - name: list
+    description: List rollups for a subscription
+    signature: 'fn list(&self, subscription_id: SubscriptionId) -> Vec<UsageRollup>'
+    returns: Vec<UsageRollup>
+status: complete
+createdAt: '2026-06-18T22:59:11.275Z'
+updatedAt: '2026-06-19T10:16:46.718Z'

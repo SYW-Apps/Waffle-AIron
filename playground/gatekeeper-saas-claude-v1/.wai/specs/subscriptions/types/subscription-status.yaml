@@ -1,0 +1,13 @@
+kind: value-object
+id: subscription-status
+name: Subscription Status
+description: Lifecycle status of a subscription, mirroring Stripe.
+subsystem: subscriptions
+fields:
+  - name: variant
+    type: string
+    description: One of Trialing | Active | PastDue | Canceled | Incomplete
+    optional: false
+methods: []
+createdAt: '2026-06-17T17:48:39.195Z'
+updatedAt: '2026-06-17T17:48:39.204Z'

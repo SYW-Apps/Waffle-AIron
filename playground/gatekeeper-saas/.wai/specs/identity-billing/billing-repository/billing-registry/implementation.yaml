@@ -1,0 +1,79 @@
+id: billing-registry-impl
+name: Billing Registry Implementation
+description: Executes INSERT and UPDATE statements for database entities.
+contract: ibilling-registry
+sourcePath: src/identity-billing/registry.rs
+methods:
+  - name: insert_customer
+    narrative:
+      - stepNumber: 1
+        description: Acquire DB client connection.
+        type: call
+        targetComponent: billing-store
+        targetMethod: get_connection
+      - stepNumber: 2
+        description: Execute INSERT query to persist customer record.
+        type: local
+  - name: update_customer
+    narrative:
+      - stepNumber: 1
+        description: Acquire DB client connection.
+        type: call
+        targetComponent: billing-store
+        targetMethod: get_connection
+      - stepNumber: 2
+        description: Execute UPDATE query to refresh customer details.
+        type: local
+  - name: insert_api_key
+    narrative:
+      - stepNumber: 1
+        description: Acquire DB client connection.
+        type: call
+        targetComponent: billing-store
+        targetMethod: get_connection
+      - stepNumber: 2
+        description: Execute INSERT query to save API key.
+        type: local
+  - name: update_api_key_status
+    narrative:
+      - stepNumber: 1
+        description: Acquire DB client connection.
+        type: call
+        targetComponent: billing-store
+        targetMethod: get_connection
+      - stepNumber: 2
+        description: Execute UPDATE query to set API key status (active/revoked).
+        type: local
+  - name: insert_subscription
+    narrative:
+      - stepNumber: 1
+        description: Acquire DB client connection.
+        type: call
+        targetComponent: billing-store
+        targetMethod: get_connection
+      - stepNumber: 2
+        description: Execute INSERT query to save subscription record.
+        type: local
+  - name: update_subscription
+    narrative:
+      - stepNumber: 1
+        description: Acquire DB client connection.
+        type: call
+        targetComponent: billing-store
+        targetMethod: get_connection
+      - stepNumber: 2
+        description: Execute UPDATE query to modify active subscription tier or period.
+        type: local
+  - name: insert_tier
+    narrative:
+      - stepNumber: 1
+        description: Acquire DB client connection.
+        type: call
+        targetComponent: billing-store
+        targetMethod: get_connection
+      - stepNumber: 2
+        description: Execute INSERT query to save tier metadata.
+        type: local
+status: complete
+createdAt: '2026-06-16T16:57:23.570Z'
+updatedAt: '2026-06-16T16:57:23.570Z'

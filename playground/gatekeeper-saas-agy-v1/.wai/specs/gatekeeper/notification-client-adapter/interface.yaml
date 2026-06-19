@@ -1,0 +1,12 @@
+id: "inotification-client-adapter"
+name: "Notification Client Adapter Interface"
+description: "Interface for local client adapter that dispatches warnings/alerts through Notification Subsystem."
+component: "notification-client-adapter"
+methods:
+  - name: "dispatch_alert"
+    description: "Triggers warning or limit alerts for the customer."
+    signature: "async fn dispatch_alert(customer_email: String, alert_type: String, current_usage: u32, limit: u32) -> Result<(), NotificationError>"
+    returns: "Result<(), NotificationError>"
+status: "complete"
+createdAt: "2026-06-17T14:12:00Z"
+updatedAt: "2026-06-17T14:12:00Z"

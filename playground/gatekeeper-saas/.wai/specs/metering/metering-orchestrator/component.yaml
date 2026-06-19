@@ -1,0 +1,14 @@
+id: metering-orchestrator
+name: Metering Orchestrator
+description: >-
+  Coordinates looking up customer limits, verifying Redis counters, incrementing usage, and
+  enforcing thresholds.
+subsystem: metering
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - metering-cache-store
+  - billing-client-adapter
+status: complete
+createdAt: '2026-06-16T17:04:42.537Z'
+updatedAt: '2026-06-16T17:04:42.538Z'

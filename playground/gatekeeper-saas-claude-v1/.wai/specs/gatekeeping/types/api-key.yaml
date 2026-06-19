@@ -1,0 +1,31 @@
+kind: entity
+id: api-key
+name: API Key
+description: >-
+  A credential mapping a hashed API key to a subscription. The billing account is sourced from the
+  subscription's entitlements at authorize time, not stored here.
+subsystem: gatekeeping
+fields:
+  - name: id
+    type: string
+    description: ApiKeyId newtype
+    optional: false
+  - name: subscription_id
+    type: string
+    description: SubscriptionId the key maps to
+    optional: false
+  - name: key_hash
+    type: string
+    description: Hash of the API key (never the plaintext)
+    optional: false
+  - name: status
+    type: gatekeeping.api-key-status
+    description: Active or Revoked
+    optional: false
+  - name: created_at
+    type: string
+    description: RFC3339 issue timestamp
+    optional: false
+methods: []
+createdAt: '2026-06-17T18:24:36.975Z'
+updatedAt: '2026-06-17T18:24:36.976Z'

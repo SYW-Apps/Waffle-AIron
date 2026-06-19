@@ -1,0 +1,12 @@
+id: usage-rollup-store
+name: Usage Rollup Store
+description: >-
+  Authoritative state for usage rollups. Depended upon by the rollup registry and index; never
+  depends on them.
+subsystem: metering
+componentType: Store
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-06-17T17:52:51.803Z'
+updatedAt: '2026-06-18T12:27:16.020Z'

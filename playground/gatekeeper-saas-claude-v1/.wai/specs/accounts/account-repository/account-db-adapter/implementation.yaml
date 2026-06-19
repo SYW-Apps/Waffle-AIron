@@ -1,0 +1,26 @@
+id: account-db-adapter-impl
+name: Account Postgres Adapter Implementation
+description: sqlx Postgres I/O for the account aggregate.
+contract: iaccount-db-adapter
+sourcePath: src/accounts/account_db_adapter.rs
+methods:
+  - name: load_account
+    narrative:
+      - stepNumber: 1
+        description: >-
+          SELECT the customer, billing account, and contacts (joins) and assemble the Account
+          aggregate
+        type: local
+  - name: upsert_account
+    narrative:
+      - stepNumber: 1
+        description: In a transaction, upsert the customer, billing_account, and contact rows
+        type: local
+  - name: delete_account
+    narrative:
+      - stepNumber: 1
+        description: In a transaction, delete the contacts, billing account, and customer for the aggregate
+        type: local
+status: complete
+createdAt: '2026-06-17T18:40:52.730Z'
+updatedAt: '2026-06-18T12:27:17.007Z'

@@ -1,0 +1,12 @@
+schemaVersion: "1.0.0"
+id: "inotification_publisher"
+name: "Notification Event Publisher Interface"
+description: "Interface contract for publishing order status events to the message broker."
+component: "notification_publisher"
+methods:
+  - name: "publishOrderPlaced"
+    description: "Publishes ORDER_PLACED event to RabbitMQ/Kafka"
+    signature: "publishOrderPlaced(orderId: string): void"
+    returns: "void"
+createdAt: "2026-06-11T15:00:00Z"
+updatedAt: "2026-06-11T15:00:00Z"

@@ -1,0 +1,15 @@
+id: subscription-registry
+name: Subscription Registry
+description: >-
+  Write path for the Subscription aggregate: create/update subscription, change tier, set status,
+  and record a processed Stripe event id. Applies mutations to the subscription store and persists
+  via the Postgres adapter, transactionally.
+subsystem: subscriptions
+componentType: Registry
+owns: []
+dependsOn:
+  - subscription-store
+  - subscription-db-adapter
+status: complete
+createdAt: '2026-06-17T17:43:30.741Z'
+updatedAt: '2026-06-18T12:27:16.274Z'

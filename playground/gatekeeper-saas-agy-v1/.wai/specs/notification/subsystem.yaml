@@ -1,0 +1,11 @@
+id: "notification"
+name: "Notification Subsystem"
+description: "Dispatches email warnings and push/webhook alerts when usage limits are approached (80%) or reached (100%)."
+parentSystem: "gatekeeper-saas"
+publicInterfaces:
+  - type: "Custom"
+    details: "Synchronous dispatch interface for sending limit-warning email and push/webhook notifications"
+    component: "notification-orchestrator"
+status: "complete"
+createdAt: "2026-06-15T23:11:00Z"
+updatedAt: "2026-06-15T23:11:00Z"

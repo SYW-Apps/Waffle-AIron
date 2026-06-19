@@ -1,0 +1,39 @@
+schemaVersion: "1.0.0"
+id: "agent_resolver_impl"
+name: "Agent Topology Resolver Implementation"
+description: "Concrete implementation resolving dynamic agent topology from spec loaders."
+contract: "iagent_resolver"
+sourcePath: "src/core/agent_resolver.ts"
+methods:
+  - name: "resolveAgentTopology"
+    narrative:
+      - stepNumber: 1
+        description: "Load system spec"
+        type: "call"
+        targetComponent: "spec_loader"
+        targetMethod: "loadSystemSpec"
+      - stepNumber: 2
+        description: "Load subsystem specs"
+        type: "call"
+        targetComponent: "spec_loader"
+        targetMethod: "loadSubsystemSpecs"
+      - stepNumber: 3
+        description: "Load component specs"
+        type: "call"
+        targetComponent: "spec_loader"
+        targetMethod: "loadComponentSpecs"
+      - stepNumber: 4
+        description: "Load interface specs"
+        type: "call"
+        targetComponent: "spec_loader"
+        targetMethod: "loadInterfaceSpecs"
+      - stepNumber: 5
+        description: "Load implementation specs"
+        type: "call"
+        targetComponent: "spec_loader"
+        targetMethod: "loadImplementationSpecs"
+      - stepNumber: 6
+        description: "Combine loaded specs to build a dynamic list of AgentRecord objects representing the system architect, subsystem owners, and component implementers."
+        type: "local"
+createdAt: "2026-06-11T14:50:00Z"
+updatedAt: "2026-06-11T14:50:00Z"

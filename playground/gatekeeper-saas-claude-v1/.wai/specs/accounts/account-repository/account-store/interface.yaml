@@ -1,0 +1,28 @@
+id: iaccount-store
+name: Account Store Interface
+description: Authoritative in-process state for the Account aggregate. Depended upon by registry and index.
+component: account-store
+methods:
+  - name: insert
+    description: Insert or replace an account aggregate
+    signature: 'fn insert(&self, account: Account)'
+    returns: ()
+  - name: get
+    description: Get aggregate by billing account id
+    signature: 'fn get(&self, id: BillingAccountId) -> Option<Account>'
+    returns: Option<Account>
+  - name: get_by_customer
+    description: Get aggregate by customer id
+    signature: 'fn get_by_customer(&self, id: CustomerId) -> Option<Account>'
+    returns: Option<Account>
+  - name: apply_billing_email
+    description: Mutate billing email; returns false if not present
+    signature: 'fn apply_billing_email(&self, id: BillingAccountId, email: Email) -> bool'
+    returns: bool
+  - name: set_status
+    description: Mutate status; returns false if not present
+    signature: 'fn set_status(&self, id: BillingAccountId, status: AccountStatus) -> bool'
+    returns: bool
+status: complete
+createdAt: '2026-06-17T17:39:09.357Z'
+updatedAt: '2026-06-18T12:27:16.377Z'

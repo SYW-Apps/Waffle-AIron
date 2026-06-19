@@ -1,0 +1,19 @@
+id: "customer-registry-impl"
+name: "Customer Registry Implementation"
+description: "Durable SQL path for customer mutations."
+contract: "icustomer-registry"
+sourcePath: "src/billing/customer_registry.rs"
+methods:
+  - name: "save_customer"
+    narrative:
+      - stepNumber: 1
+        description: "Call the database adapter to execute INSERT or UPDATE on the PostgreSQL customers table"
+        type: "call"
+        targetComponent: "database-adapter"
+        targetMethod: "execute_query"
+      - stepNumber: 2
+        description: "Return registry success"
+        type: "local"
+status: "complete"
+createdAt: "2026-06-15T23:19:00Z"
+updatedAt: "2026-06-15T23:20:00Z"

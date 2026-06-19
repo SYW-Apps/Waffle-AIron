@@ -1,0 +1,17 @@
+id: notifier-store-impl
+name: Notifier Store Implementation
+description: PostgreSQL connection wrapper for notifier context.
+contract: inotifier-store
+sourcePath: src/notifier/store.rs
+methods:
+  - name: get_connection
+    narrative:
+      - stepNumber: 1
+        description: Verify pool state; initialize database connection if inactive.
+        type: local
+      - stepNumber: 2
+        description: Return connection client.
+        type: local
+status: complete
+createdAt: '2026-06-16T18:39:08.310Z'
+updatedAt: '2026-06-16T18:39:08.311Z'

@@ -1,0 +1,12 @@
+id: "subscription-repository"
+name: "Subscription Repository"
+description: "Repository pattern facade providing unified operations for reading/writing subscription records, with caching."
+subsystem: "billing"
+componentType: "Repository"
+owns:
+  - "subscription-store"
+dependsOn:
+  - "database-adapter"
+status: "complete"
+createdAt: "2026-06-15T23:18:00Z"
+updatedAt: "2026-06-15T23:20:00Z"

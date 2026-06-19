@@ -1,0 +1,52 @@
+id: "meter-repository-impl"
+name: "Meter Repository Implementation"
+description: "Handles repository aggregation and coordination between local memory stores and the Redis adapter."
+contract: "imeter-repository"
+sourcePath: "src/gatekeeper/meter_repository.rs"
+methods:
+  - name: "check_and_increment"
+    narrative:
+      - stepNumber: 1
+        description: "Call the Redis adapter to increment the sliding window rate limit counter"
+        type: "call"
+        targetComponent: "redis-adapter"
+        targetMethod: "incr_rate_limit"
+      - stepNumber: 2
+        description: "Verify if the rate limit count exceeds the allowed threshold"
+        type: "local"
+      - stepNumber: 3
+        description: "Call the Redis adapter to increment the monthly usage counter"
+        type: "call"
+        targetComponent: "redis-adapter"
+        targetMethod: "incr_monthly_usage"
+      - stepNumber: 4
+        description: "Call the meter store to cache the newly updated metrics in memory"
+        type: "call"
+        targetComponent: "meter-store"
+        targetMethod: "update_cached_meter"
+      - stepNumber: 5
+        description: "Return the merged result of rate limits and monthly usage status"
+        type: "local"
+  - name: "get_current_usage"
+    narrative:
+      - stepNumber: 1
+        description: "Call the meter store to check for locally cached monthly usage"
+        type: "call"
+        targetComponent: "meter-store"
+        targetMethod: "get_cached_meter"
+      - stepNumber: 2
+        description: "If cache missed, call the Redis adapter to fetch monthly usage"
+        type: "call"
+        targetComponent: "redis-adapter"
+        targetMethod: "get_string"
+      - stepNumber: 3
+        description: "Cache the value back into the local meter store"
+        type: "call"
+        targetComponent: "meter-store"
+        targetMethod: "update_cached_meter"
+      - stepNumber: 4
+        description: "Return the current monthly usage count"
+        type: "local"
+status: "complete"
+createdAt: "2026-06-15T23:17:00Z"
+updatedAt: "2026-06-15T23:17:40Z"

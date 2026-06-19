@@ -1,0 +1,12 @@
+id: "ibilling-orchestrator"
+name: "Billing Orchestrator Interface"
+description: "Workflow coordination contract for synchronizing subscription changes and customer metadata."
+component: "billing-orchestrator"
+methods:
+  - name: "handle_stripe_event"
+    description: "Evaluates the type of Stripe event and triggers updates to customer registrations or active subscription limits."
+    signature: "async fn handle_stripe_event(event_type: String, stripe_customer_id: String, stripe_subscription_id: String) -> Result<(), BillingError>"
+    returns: "Result<(), BillingError>"
+status: "complete"
+createdAt: "2026-06-15T23:18:00Z"
+updatedAt: "2026-06-15T23:20:00Z"

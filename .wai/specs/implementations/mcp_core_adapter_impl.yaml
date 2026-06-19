@@ -1,0 +1,23 @@
+schemaVersion: "1.0.0"
+id: "mcp_core_adapter_impl"
+name: "MCP Core Adapter Implementation"
+description: "Concrete implementation forwarding MCP requests to core portal."
+contract: "imcp_core_adapter"
+sourcePath: ".wai/specs/implementations/mcp_core_adapter_impl.yaml"
+methods:
+  - name: "loadSystemSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Call loadSystemSpec on core portal"
+        type: "call"
+        targetComponent: "core_portal"
+        targetMethod: "loadSystemSpec"
+  - name: "resolveAgentTopology"
+    narrative:
+      - stepNumber: 1
+        description: "Call resolveAgentTopology on core portal"
+        type: "call"
+        targetComponent: "core_portal"
+        targetMethod: "resolveAgentTopology"
+createdAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-06-19T12:00:00Z"

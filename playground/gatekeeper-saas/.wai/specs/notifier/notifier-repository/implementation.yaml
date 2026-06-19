@@ -1,0 +1,26 @@
+id: notifier-repository-impl
+name: Notifier Repository Implementation
+description: Unified facade interface for database logging.
+contract: inotifier-repository
+sourcePath: src/notifier/repository.rs
+methods:
+  - name: save_alert_log
+    narrative:
+      - stepNumber: 1
+        description: Forward to registry to write log details.
+        type: call
+        targetComponent: notifier-registry
+        targetMethod: insert_alert_log
+  - name: has_notified_in_period
+    narrative:
+      - stepNumber: 1
+        description: Forward lookup query parameters to index.
+        type: call
+        targetComponent: notifier-index
+        targetMethod: lookup_alert_log_by_period
+      - stepNumber: 2
+        description: Return boolean flag based on query lookup outcomes.
+        type: local
+status: complete
+createdAt: '2026-06-16T18:39:09.040Z'
+updatedAt: '2026-06-16T18:39:09.040Z'

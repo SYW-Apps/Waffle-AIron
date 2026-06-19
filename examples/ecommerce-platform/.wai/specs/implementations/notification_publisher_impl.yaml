@@ -1,0 +1,14 @@
+schemaVersion: "1.0.0"
+id: "notification_publisher_impl"
+name: "Notification Event Publisher Implementation"
+description: "Concrete event publisher publishing JSON messages to Kafka topic."
+contract: "inotification_publisher"
+sourcePath: "src/order/notification_publisher.ts"
+methods:
+  - name: "publishOrderPlaced"
+    narrative:
+      - stepNumber: 1
+        description: "Connect to Kafka broker, serialize event message, and publish to 'order-events' topic"
+        type: "local"
+createdAt: "2026-06-11T15:00:00Z"
+updatedAt: "2026-06-11T15:00:00Z"

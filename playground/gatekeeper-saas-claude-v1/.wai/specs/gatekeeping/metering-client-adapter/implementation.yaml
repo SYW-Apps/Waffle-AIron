@@ -1,0 +1,21 @@
+id: metering-client-adapter-impl
+name: Metering Client Adapter Implementation
+description: Boundary client into metering for check-and-decrement, via the metering Portal.
+contract: imetering-client-adapter
+sourcePath: src/gatekeeping/metering_client.rs
+methods:
+  - name: consume
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Call the metering Portal's consume endpoint to check-and-decrement usage and detect
+          threshold crossings
+        type: call
+        targetComponent: metering-portal
+        targetMethod: consume
+      - stepNumber: 2
+        description: Map any MeteringError into GateError::Downstream and return the ConsumeOutcome
+        type: local
+status: complete
+createdAt: '2026-06-18T22:56:55.786Z'
+updatedAt: '2026-06-19T10:16:46.785Z'

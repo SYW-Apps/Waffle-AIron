@@ -1,0 +1,22 @@
+schemaVersion: "1.0.0"
+id: "order_portal_impl"
+name: "Order API Portal Controller"
+description: "Concrete router controller implementation wrapping order_orchestrator calls."
+contract: "iorder_portal"
+sourcePath: "src/order/order_portal.ts"
+methods:
+  - name: "submitOrder"
+    narrative:
+      - stepNumber: 1
+        description: "Extract customer and item parameters from HTTP request body"
+        type: "local"
+      - stepNumber: 2
+        description: "Submit checkout transaction through the Order Orchestrator"
+        type: "call"
+        targetComponent: "order_orchestrator"
+        targetMethod: "createOrder"
+      - stepNumber: 3
+        description: "Format response and return payload with status 201 Created"
+        type: "local"
+createdAt: "2026-06-11T19:00:00Z"
+updatedAt: "2026-06-11T19:00:00Z"

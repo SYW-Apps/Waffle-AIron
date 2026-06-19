@@ -1,0 +1,10 @@
+id: "mcp_server"
+name: "MCP Server Manager"
+description: "Exposes the 6 standard SDD tools and manages their request/response lifecycles."
+subsystem: "sdd_mcp"
+componentType: "Supervisor"
+dependsOn:
+  - "mcp_core_adapter"
+  - "mcp_validator_adapter"
+createdAt: "2026-06-10T19:28:00.000Z"
+updatedAt: "2026-06-19T12:00:00Z"

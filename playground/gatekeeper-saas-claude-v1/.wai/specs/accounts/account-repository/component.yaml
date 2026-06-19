@@ -1,0 +1,17 @@
+id: account-repository
+name: Account Repository
+description: >-
+  Persistence facade for the Account aggregate (Customer root + BillingAccount + Contacts).
+  Consumers use this facade only, never its inner blocks. Owns the account store, write registry,
+  read index, and Postgres adapter.
+subsystem: accounts
+componentType: Repository
+owns:
+  - account-store
+  - account-registry
+  - account-index
+  - account-db-adapter
+dependsOn: []
+status: complete
+createdAt: '2026-06-16T22:40:22.968Z'
+updatedAt: '2026-06-18T12:27:15.728Z'

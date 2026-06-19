@@ -1,0 +1,19 @@
+id: accounts-client-adapter-impl
+name: Accounts Client Adapter Implementation
+description: Boundary client into accounts for billing email, via the accounts Portal.
+contract: iaccounts-client-adapter
+sourcePath: src/notifications/accounts_client.rs
+methods:
+  - name: resolve_billing_email
+    narrative:
+      - stepNumber: 1
+        description: Call the accounts Portal's resolve_billing_email endpoint to resolve the billing email
+        type: call
+        targetComponent: accounts-portal
+        targetMethod: resolve_billing_email
+      - stepNumber: 2
+        description: Map any AccountError into NotificationError and return the Option<Email>
+        type: local
+status: complete
+createdAt: '2026-06-18T22:57:06.140Z'
+updatedAt: '2026-06-19T10:16:46.875Z'

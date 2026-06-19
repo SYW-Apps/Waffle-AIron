@@ -1,0 +1,37 @@
+id: notifier-orchestrator-impl
+name: Notifier Orchestrator Implementation
+description: Coordinates checking log alerts history, resolving email details, and sending alerts.
+contract: inotifier-orchestrator
+sourcePath: src/notifier/orchestrator.rs
+methods:
+  - name: notify_threshold_reached
+    narrative:
+      - stepNumber: 1
+        description: Query alerts database index verifying duplicate state.
+        type: call
+        targetComponent: notifier-repository
+        targetMethod: has_notified_in_period
+      - stepNumber: 2
+        description: If alert has already been sent, return early.
+        type: local
+      - stepNumber: 3
+        description: Lookup customer email address contact details.
+        type: call
+        targetComponent: notifier-billing-client
+        targetMethod: get_customer_email
+      - stepNumber: 4
+        description: Format alert message body details.
+        type: local
+      - stepNumber: 5
+        description: Send alert email to customer.
+        type: call
+        targetComponent: email-adapter
+        targetMethod: send_alert_email
+      - stepNumber: 6
+        description: Save generated log detail record.
+        type: call
+        targetComponent: notifier-repository
+        targetMethod: save_alert_log
+status: complete
+createdAt: '2026-06-16T18:39:09.796Z'
+updatedAt: '2026-06-16T18:39:09.797Z'

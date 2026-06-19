@@ -60,6 +60,29 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
     }
   }
 
+  // --- SDD Spec Tree ---
+  const { AI_PATHS: sddPaths } = require('../config/loader.js') as typeof import('../config/loader.js');
+  const { pathExists: sddPathExists } = require('../utils/fs.js') as typeof import('../utils/fs.js');
+  if (sddPathExists(sddPaths.specsSystem())) {
+    logger.header('SDD Architectural Specs');
+    const { validateSddTree } = require('../core/validation.js') as typeof import('../core/validation.js');
+    const sddResult = validateSddTree(projectConfig.rules);
+    if (sddResult.issues.length === 0) {
+      logger.success('Spec tree is valid and component type boundaries are enforced.');
+    } else {
+      for (const issue of sddResult.issues) {
+        const prefix = issue.specId ? chalk.gray(`[${issue.specId}] `) : '';
+        if (issue.severity === 'error') {
+          logger.error(`${prefix}[${issue.code}] ${issue.message}`);
+          hasErrors = true;
+        } else {
+          logger.warn(`${prefix}[${issue.code}] ${issue.message}`);
+          hasWarnings = true;
+        }
+      }
+    }
+  }
+
   logger.blank();
 
   const failOnWarnings = options.ci && hasWarnings;
@@ -69,6 +92,7 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
       logger.error('Validation failed: warnings are treated as errors in --ci mode.');
     } else {
       logger.error('Validation failed. Fix the errors above.');
+      logger.info(chalk.cyan('Tip: If you need to temporarily bypass an architectural rule, you can override its severity level in your `.wai/project.yaml` config (e.g. `rules.sddRuleSeverity.CIRCULAR_DEPENDENCY: warning`).'));
     }
     process.exit(1);
   } else {

@@ -1,0 +1,36 @@
+id: ibilling-registry
+name: Billing Registry Interface
+description: Direct transactional write operations for relational models.
+component: billing-registry
+methods:
+  - name: insert_customer
+    description: Inserts a new Customer row.
+    signature: 'insert_customer(customer: Customer): Promise<void>'
+    returns: Promise<void>
+  - name: update_customer
+    description: Updates details of an existing customer.
+    signature: 'update_customer(customer: Customer): Promise<void>'
+    returns: Promise<void>
+  - name: insert_api_key
+    description: Inserts a new ApiKey row.
+    signature: 'insert_api_key(key: ApiKey): Promise<void>'
+    returns: Promise<void>
+  - name: update_api_key_status
+    description: Sets api key status (active/revoked).
+    signature: 'update_api_key_status(key_id: String, status: String): Promise<void>'
+    returns: Promise<void>
+  - name: insert_subscription
+    description: Inserts a new subscription record.
+    signature: 'insert_subscription(sub: Subscription): Promise<void>'
+    returns: Promise<void>
+  - name: update_subscription
+    description: Updates active subscription details.
+    signature: 'update_subscription(sub: Subscription): Promise<void>'
+    returns: Promise<void>
+  - name: insert_tier
+    description: Inserts a subscription level description.
+    signature: 'insert_tier(tier: SubscriptionTier): Promise<void>'
+    returns: Promise<void>
+status: complete
+createdAt: '2026-06-16T16:30:02.351Z'
+updatedAt: '2026-06-16T16:30:02.352Z'

@@ -1,0 +1,19 @@
+id: subscriptions-client-adapter-impl
+name: Subscriptions Client Adapter Implementation
+description: Boundary client into subscriptions for entitlements, via the subscriptions Portal.
+contract: isubscriptions-client-adapter
+sourcePath: src/gatekeeping/subscriptions_client.rs
+methods:
+  - name: resolve_entitlements
+    narrative:
+      - stepNumber: 1
+        description: Call the subscriptions Portal's resolve_entitlements endpoint for the subscription
+        type: call
+        targetComponent: subscriptions-portal
+        targetMethod: resolve_entitlements
+      - stepNumber: 2
+        description: Map any SubscriptionError into GateError::Downstream and return the Entitlements
+        type: local
+status: complete
+createdAt: '2026-06-18T22:57:00.962Z'
+updatedAt: '2026-06-19T10:16:46.798Z'

@@ -1,0 +1,9 @@
+id: "spec_validator"
+name: "Spec Validator"
+description: "Validation linter checking spec completeness, method contracts, and component type boundaries."
+subsystem: "sdd_validator"
+componentType: "Specialist"
+dependsOn:
+  - "validator_core_adapter"
+createdAt: "2026-06-10T19:28:00.000Z"
+updatedAt: "2026-06-19T12:00:00Z"

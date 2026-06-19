@@ -1,0 +1,14 @@
+id: inotifier-orchestrator
+name: Notifier Orchestrator Interface
+description: Coordinating logic for validating, formatting, and sending alerts.
+component: notifier-orchestrator
+methods:
+  - name: notify_threshold_reached
+    description: Processes alert dispatch and updates alert logs repository.
+    signature: >-
+      notify_threshold_reached(subscription_id: String, threshold: Int32, current_usage: Int64,
+      limit: Int64, billing_start: DateTime): Promise<void>
+    returns: Promise<void>
+status: complete
+createdAt: '2026-06-16T17:47:05.279Z'
+updatedAt: '2026-06-16T17:47:05.280Z'

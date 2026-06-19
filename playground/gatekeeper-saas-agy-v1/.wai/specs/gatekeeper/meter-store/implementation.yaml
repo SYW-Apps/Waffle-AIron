@@ -1,0 +1,25 @@
+id: "meter-store-impl"
+name: "Meter Store Implementation"
+description: "In-memory safe state store for caching subscription usage details."
+contract: "imeter-store"
+sourcePath: "src/gatekeeper/meter_store.rs"
+methods:
+  - name: "get_cached_meter"
+    narrative:
+      - stepNumber: 1
+        description: "Read the local memory map utilizing lock-free read swaps"
+        type: "local"
+      - stepNumber: 2
+        description: "Return the CachedMeter if found, otherwise return None"
+        type: "local"
+  - name: "update_cached_meter"
+    narrative:
+      - stepNumber: 1
+        description: "Acquire the write lock for the local memory map safely"
+        type: "local"
+      - stepNumber: 2
+        description: "Insert or replace the subscription meter data in the active memory storage"
+        type: "local"
+status: "complete"
+createdAt: "2026-06-15T23:17:00Z"
+updatedAt: "2026-06-15T23:17:40Z"

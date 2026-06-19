@@ -1,0 +1,60 @@
+id: billing-index-impl
+name: Billing Index Implementation
+description: Performs SELECT queries for fast projection lookups.
+contract: ibilling-index
+sourcePath: src/identity-billing/index.rs
+methods:
+  - name: lookup_customer_by_key_hash
+    narrative:
+      - stepNumber: 1
+        description: Acquire DB client connection.
+        type: call
+        targetComponent: billing-store
+        targetMethod: get_connection
+      - stepNumber: 2
+        description: Execute SELECT query resolving Customer record linked to active key_hash.
+        type: local
+  - name: lookup_customer_by_id
+    narrative:
+      - stepNumber: 1
+        description: Acquire DB client connection.
+        type: call
+        targetComponent: billing-store
+        targetMethod: get_connection
+      - stepNumber: 2
+        description: Execute SELECT query retrieving Customer record matching ID.
+        type: local
+  - name: lookup_subscription_by_customer_id
+    narrative:
+      - stepNumber: 1
+        description: Acquire DB client connection.
+        type: call
+        targetComponent: billing-store
+        targetMethod: get_connection
+      - stepNumber: 2
+        description: Execute SELECT query resolving active Subscription record for customer.
+        type: local
+  - name: lookup_tier_by_id
+    narrative:
+      - stepNumber: 1
+        description: Acquire DB client connection.
+        type: call
+        targetComponent: billing-store
+        targetMethod: get_connection
+      - stepNumber: 2
+        description: Execute SELECT query resolving SubscriptionTier bounds matching tier ID.
+        type: local
+  - name: lookup_customer_by_stripe_customer_id
+    narrative:
+      - stepNumber: 1
+        description: Acquire DB client connection.
+        type: call
+        targetComponent: billing-store
+        targetMethod: get_connection
+      - stepNumber: 2
+        description: Execute SELECT query resolving Customer matching Stripe customer ID.
+        type: local
+status: complete
+
+createdAt: '2026-06-16T16:57:23.813Z'
+updatedAt: '2026-06-16T16:57:23.814Z'

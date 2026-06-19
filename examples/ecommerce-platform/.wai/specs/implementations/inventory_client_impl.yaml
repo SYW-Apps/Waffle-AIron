@@ -1,0 +1,14 @@
+schemaVersion: "1.0.0"
+id: "inventory_client_impl"
+name: "Inventory gRPC Client Implementation"
+description: "Concrete gRPC client sending remote requests to inventory subsystem service endpoint."
+contract: "iinventory_client"
+sourcePath: "src/order/inventory_client.ts"
+methods:
+  - name: "reserveStock"
+    narrative:
+      - stepNumber: 1
+        description: "Serialize items payload and submit gRPC request to Inventory service"
+        type: "local"
+createdAt: "2026-06-11T15:00:00Z"
+updatedAt: "2026-06-11T15:00:00Z"

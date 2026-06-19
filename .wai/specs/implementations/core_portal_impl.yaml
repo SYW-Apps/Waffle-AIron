@@ -1,0 +1,51 @@
+schemaVersion: "1.0.0"
+id: "core_portal_impl"
+name: "Core Portal Implementation"
+description: "Concrete implementation forwarding portal requests to core orchestrators."
+contract: "icore_portal"
+sourcePath: ".wai/specs/implementations/core_portal_impl.yaml"
+methods:
+  - name: "loadSystemSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Forward loadSystemSpec call to core orchestrator"
+        type: "call"
+        targetComponent: "core_orchestrator"
+        targetMethod: "loadSystemSpec"
+  - name: "loadSubsystemSpecs"
+    narrative:
+      - stepNumber: 1
+        description: "Forward loadSubsystemSpecs call to core orchestrator"
+        type: "call"
+        targetComponent: "core_orchestrator"
+        targetMethod: "loadSubsystemSpecs"
+  - name: "loadComponentSpecs"
+    narrative:
+      - stepNumber: 1
+        description: "Forward loadComponentSpecs call to core orchestrator"
+        type: "call"
+        targetComponent: "core_orchestrator"
+        targetMethod: "loadComponentSpecs"
+  - name: "loadInterfaceSpecs"
+    narrative:
+      - stepNumber: 1
+        description: "Forward loadInterfaceSpecs call to core orchestrator"
+        type: "call"
+        targetComponent: "core_orchestrator"
+        targetMethod: "loadInterfaceSpecs"
+  - name: "loadImplementationSpecs"
+    narrative:
+      - stepNumber: 1
+        description: "Forward loadImplementationSpecs call to core orchestrator"
+        type: "call"
+        targetComponent: "core_orchestrator"
+        targetMethod: "loadImplementationSpecs"
+  - name: "resolveAgentTopology"
+    narrative:
+      - stepNumber: 1
+        description: "Forward resolveAgentTopology call to agent resolver"
+        type: "call"
+        targetComponent: "agent_resolver"
+        targetMethod: "resolveAgentTopology"
+createdAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-06-19T12:00:00Z"

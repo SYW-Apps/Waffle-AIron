@@ -1,0 +1,39 @@
+id: subscription-index-impl
+name: Subscription Index Implementation
+description: Read projection over the subscription store.
+contract: isubscription-index
+sourcePath: src/subscriptions/subscription_index.rs
+methods:
+  - name: find_subscription
+    narrative:
+      - stepNumber: 1
+        description: Read the subscription from the store by id
+        type: call
+        targetComponent: subscription-store
+        targetMethod: get
+      - stepNumber: 2
+        description: Return the result
+        type: local
+  - name: find_by_account
+    narrative:
+      - stepNumber: 1
+        description: Read the subscription from the store by billing account id
+        type: call
+        targetComponent: subscription-store
+        targetMethod: get_by_account
+      - stepNumber: 2
+        description: Return the result
+        type: local
+  - name: is_event_processed
+    narrative:
+      - stepNumber: 1
+        description: Check whether the event id is recorded in the store
+        type: call
+        targetComponent: subscription-store
+        targetMethod: has_event
+      - stepNumber: 2
+        description: Return the boolean
+        type: local
+status: complete
+createdAt: '2026-06-17T18:37:12.530Z'
+updatedAt: '2026-06-18T12:27:17.598Z'

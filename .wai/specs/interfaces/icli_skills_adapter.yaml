@@ -1,0 +1,12 @@
+schemaVersion: "1.0.0"
+id: "icli_skills_adapter"
+name: "CLI Skills Adapter Interface"
+description: "Adapter contract for the CLI to export skills."
+component: "cli_skills_adapter"
+methods:
+  - name: "exportSddSkills"
+    description: "Calls exportSddSkills on the skills portal"
+    signature: "exportSddSkills(): void"
+    returns: "void"
+createdAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-06-19T12:00:00Z"

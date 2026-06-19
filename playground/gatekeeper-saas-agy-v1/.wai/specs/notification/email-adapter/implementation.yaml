@@ -1,0 +1,23 @@
+id: "email-adapter-impl"
+name: "Email Adapter Implementation"
+description: "Adapter managing outbound SMTP email delivery or SendGrid API integration."
+contract: "iemail-adapter"
+sourcePath: "src/notification/email_adapter.rs"
+methods:
+  - name: "send_email"
+    narrative:
+      - stepNumber: 1
+        description: "Establish connection with SMTP server or initialize HTTP SendGrid request client"
+        type: "local"
+      - stepNumber: 2
+        description: "Assemble email message headers, content types, and body"
+        type: "local"
+      - stepNumber: 3
+        description: "Deliver email via SMTP protocol or SendGrid REST endpoint"
+        type: "local"
+      - stepNumber: 4
+        description: "Return delivery result"
+        type: "local"
+status: "complete"
+createdAt: "2026-06-15T23:21:00Z"
+updatedAt: "2026-06-15T23:25:00Z"

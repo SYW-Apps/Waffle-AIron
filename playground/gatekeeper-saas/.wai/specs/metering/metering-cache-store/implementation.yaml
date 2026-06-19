@@ -1,0 +1,39 @@
+id: metering-cache-store-impl
+name: Metering Cache Store Implementation
+description: Redis client integration using deadpool-redis crate/bindings.
+contract: imetering-cache-store
+sourcePath: src/metering/cache_store.rs
+methods:
+  - name: check_limits_cache
+    narrative:
+      - stepNumber: 1
+        description: Acquire connection from Redis client pool.
+        type: local
+      - stepNumber: 2
+        description: Query Redis key matching key_hash limits profile.
+        type: local
+      - stepNumber: 3
+        description: Deserialize limits JSON string and return CachedLimits details if found.
+        type: local
+  - name: write_limits_cache
+    narrative:
+      - stepNumber: 1
+        description: Acquire connection from Redis client pool.
+        type: local
+      - stepNumber: 2
+        description: Serialize limits profile to JSON and save in Redis with TTL expiration.
+        type: local
+  - name: increment_usage
+    narrative:
+      - stepNumber: 1
+        description: Acquire connection from Redis client pool.
+        type: local
+      - stepNumber: 2
+        description: Execute atomic Redis Lua script to increment usage count within sliding window.
+        type: local
+      - stepNumber: 3
+        description: Return IncrementResult containing current count and breach status flag.
+        type: local
+status: complete
+createdAt: '2026-06-16T17:35:13.964Z'
+updatedAt: '2026-06-16T17:35:13.965Z'

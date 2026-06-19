@@ -1,0 +1,21 @@
+kind: value-object
+id: authorize-decision
+name: Authorize Decision
+description: The gate's allow/deny verdict for an authorize request.
+subsystem: gatekeeping
+fields:
+  - name: allowed
+    type: bool
+    description: Whether the call is permitted
+    optional: false
+  - name: reason
+    type: string
+    description: Decision reason, e.g. ok | over_quota | unauthenticated | forbidden
+    optional: false
+  - name: remaining
+    type: i64
+    description: Units remaining in the window after this call
+    optional: false
+methods: []
+createdAt: '2026-06-17T18:07:12.810Z'
+updatedAt: '2026-06-17T18:07:12.823Z'

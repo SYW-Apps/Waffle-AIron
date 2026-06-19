@@ -1,0 +1,16 @@
+schemaVersion: "1.0.0"
+id: "skills_orchestrator_impl"
+name: "Skills Orchestrator Implementation"
+description: "Concrete implementation delegating to skills exporter adapter."
+contract: "iskills_orchestrator"
+sourcePath: ".wai/specs/implementations/skills_orchestrator_impl.yaml"
+methods:
+  - name: "exportSddSkills"
+    narrative:
+      - stepNumber: 1
+        description: "Call exportSddSkills on skills exporter adapter"
+        type: "call"
+        targetComponent: "skills_exporter"
+        targetMethod: "exportSddSkills"
+createdAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-06-19T12:00:00Z"

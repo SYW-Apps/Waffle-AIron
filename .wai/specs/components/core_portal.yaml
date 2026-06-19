@@ -1,0 +1,11 @@
+id: "core_portal"
+name: "Core Portal"
+description: "Inbound portal for the SDD core subsystem, dispatching requests internally."
+subsystem: "sdd_core"
+componentType: "Portal"
+portalType: "Custom"
+dependsOn:
+  - "agent_resolver"
+  - "core_orchestrator"
+createdAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-06-19T12:00:00Z"

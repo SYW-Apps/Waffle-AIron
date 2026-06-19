@@ -1,0 +1,25 @@
+kind: entity
+id: usage-rollup
+name: Usage Rollup
+description: Authoritative historical usage total for a subscription/resource within a period.
+subsystem: metering
+fields:
+  - name: subscription_id
+    type: string
+    description: SubscriptionId
+    optional: false
+  - name: resource
+    type: string
+    description: Metered resource key
+    optional: false
+  - name: period
+    type: string
+    description: Period key, e.g. 2026-06
+    optional: false
+  - name: total
+    type: i64
+    description: Accumulated usage in the period
+    optional: false
+methods: []
+createdAt: '2026-06-17T17:59:13.768Z'
+updatedAt: '2026-06-17T17:59:13.778Z'

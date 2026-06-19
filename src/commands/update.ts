@@ -211,10 +211,11 @@ function fetchReleases(repo: string): Promise<GithubRelease[]> {
       },
     };
 
-    https.get(url, options, (res) => {
+    https.get(url, { ...options, agent: false }, (res) => {
       let data = '';
       res.on('data', (chunk) => { data += chunk; });
       res.on('end', () => {
+        res.destroy();
         if (res.statusCode !== 200) {
           reject(new Error(`GitHub API returned ${res.statusCode}: ${data.slice(0, 200)}`));
           return;
@@ -239,21 +240,29 @@ function downloadFile(url: string, dest: string): Promise<void> {
     const file = fs.createWriteStream(dest);
     const get = url.startsWith('https://') ? https.get : http.get;
 
-    get(url, { headers: { 'User-Agent': `wairon/${WAIRON_VERSION}` } }, (res) => {
+    // agent: false disables keep-alive so the socket closes as soon as the
+    // response is done, preventing the event loop from hanging afterwards.
+    get(url, { headers: { 'User-Agent': `wairon/${WAIRON_VERSION}` }, agent: false }, (res) => {
       if (res.statusCode === 301 || res.statusCode === 302) {
         file.close();
+        res.destroy();
         downloadFile(res.headers.location!, dest).then(resolve).catch(reject);
         return;
       }
       if (res.statusCode !== 200) {
         file.close();
+        res.destroy();
         reject(new Error(`Download returned ${res.statusCode}`));
         return;
       }
 
       res.pipe(file);
-      file.on('finish', () => file.close(() => resolve()));
+      file.on('finish', () => {
+        res.destroy();
+        file.close(() => resolve());
+      });
       file.on('error', (err) => {
+        res.destroy();
         fs.unlink(dest, () => {});
         reject(err);
       });

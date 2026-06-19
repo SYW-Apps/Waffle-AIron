@@ -1,0 +1,21 @@
+id: usage-rollup-db-adapter-impl
+name: Usage Rollup Postgres Adapter Implementation
+description: sqlx Postgres I/O for usage rollups.
+contract: iusage-rollup-db-adapter
+sourcePath: src/metering/usage_rollup_db_adapter.rs
+methods:
+  - name: load_rollups
+    narrative:
+      - stepNumber: 1
+        description: SELECT all rollup rows for the subscription and map into UsageRollups
+        type: local
+  - name: upsert_rollup
+    narrative:
+      - stepNumber: 1
+        description: >-
+          INSERT INTO usage_rollups (subscription_id, resource, period, total) ON CONFLICT
+          (subscription_id, resource, period) DO UPDATE SET total = EXCLUDED.total
+        type: local
+status: complete
+createdAt: '2026-06-17T18:39:40.650Z'
+updatedAt: '2026-06-18T12:27:17.323Z'

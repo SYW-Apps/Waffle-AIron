@@ -1,0 +1,51 @@
+id: isubscription-repository
+name: Subscription Repository Interface
+description: >-
+  Persistence facade for the Subscription aggregate (incl. processed-event idempotency log). Each
+  method forwards 1:1 to the owned registry or index.
+component: subscription-repository
+methods:
+  - name: save_subscription
+    description: Persist a new subscription (forwards to registry)
+    signature: 'async fn save_subscription(&self, sub: Subscription) -> Result<(), SubscriptionError>'
+    returns: Result<(), SubscriptionError>
+  - name: set_tier
+    description: Change tier (forwards to registry)
+    signature: 'async fn set_tier(&self, id: SubscriptionId, tier_id: TierId) -> Result<(), SubscriptionError>'
+    returns: Result<(), SubscriptionError>
+  - name: set_status
+    description: Set status and period end (forwards to registry)
+    signature: >-
+      async fn set_status(&self, id: SubscriptionId, status: SubscriptionStatus, current_period_end:
+      String) -> Result<(), SubscriptionError>
+    returns: Result<(), SubscriptionError>
+  - name: mark_event_processed
+    description: >-
+      Apply a Stripe event and record its id; returns false if the event id was already processed
+      (forwards to registry). Idempotent: re-delivering the same event id is a no-op enforced by the
+      processed-event unique constraint.
+    signature: >-
+      async fn mark_event_processed(&self, id: SubscriptionId, event_id: String, status:
+      SubscriptionStatus, current_period_end: String) -> Result<bool, SubscriptionError>
+    returns: Result<bool, SubscriptionError>
+    guarantees:
+      - idempotent
+  - name: find_subscription
+    description: Find a subscription (forwards to index)
+    signature: >-
+      async fn find_subscription(&self, id: SubscriptionId) -> Result<Option<Subscription>,
+      SubscriptionError>
+    returns: Result<Option<Subscription>, SubscriptionError>
+  - name: find_by_account
+    description: Find the subscription for a billing account (forwards to index)
+    signature: >-
+      async fn find_by_account(&self, id: BillingAccountId) -> Result<Option<Subscription>,
+      SubscriptionError>
+    returns: Result<Option<Subscription>, SubscriptionError>
+  - name: is_event_processed
+    description: Check whether a Stripe event id was already processed (forwards to index)
+    signature: 'async fn is_event_processed(&self, event_id: String) -> Result<bool, SubscriptionError>'
+    returns: Result<bool, SubscriptionError>
+status: complete
+createdAt: '2026-06-18T23:06:51.526Z'
+updatedAt: '2026-06-19T10:16:46.731Z'

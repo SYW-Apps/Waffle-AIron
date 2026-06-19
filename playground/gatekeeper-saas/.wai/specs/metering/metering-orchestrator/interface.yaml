@@ -1,0 +1,16 @@
+id: imetering-orchestrator
+name: Metering Orchestrator Interface
+description: Verifies client credentials against Redis cache and database, enforcing tier limits.
+component: metering-orchestrator
+methods:
+  - name: verify_access
+    description: Checks if API key is active and within limit boundaries.
+    signature: 'verify_access(key_value: String): Promise<AccessValidation>'
+    returns: Promise<AccessValidation>
+  - name: increment_count
+    description: Atomically increments request count and returns limits state.
+    signature: 'increment_count(key_value: String, cost: Int32): Promise<UsageStatus>'
+    returns: Promise<UsageStatus>
+status: complete
+createdAt: '2026-06-16T17:33:24.883Z'
+updatedAt: '2026-06-16T17:33:24.884Z'

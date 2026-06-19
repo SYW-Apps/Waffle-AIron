@@ -1,0 +1,16 @@
+id: "notification-client-adapter-impl"
+name: "Notification Client Adapter Implementation"
+description: "Implementation of Notification Client Adapter that forwards calls directly to the Notification Subsystem's orchestrator."
+contract: "inotification-client-adapter"
+sourcePath: "src/gatekeeper/notification_client_adapter.rs"
+methods:
+  - name: "dispatch_alert"
+    narrative:
+      - stepNumber: 1
+        description: "Delegate the alert dispatching to the notification subsystem orchestrator"
+        type: "call"
+        targetComponent: "notification-orchestrator"
+        targetMethod: "dispatch_alert"
+status: "complete"
+createdAt: "2026-06-17T14:12:00Z"
+updatedAt: "2026-06-17T14:12:00Z"

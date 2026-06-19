@@ -1,0 +1,27 @@
+kind: value-object
+id: counter-snapshot
+name: Counter Snapshot
+description: >-
+  A point-in-time read of a single Redis usage counter, used by the reconciler to flush into
+  rollups.
+subsystem: metering
+fields:
+  - name: subscription_id
+    type: string
+    description: SubscriptionId
+    optional: false
+  - name: resource
+    type: string
+    description: Metered resource key
+    optional: false
+  - name: window
+    type: string
+    description: Counter window
+    optional: false
+  - name: used
+    type: i64
+    description: Units used in the counter at snapshot time
+    optional: false
+methods: []
+createdAt: '2026-06-17T17:59:16.498Z'
+updatedAt: '2026-06-17T17:59:16.508Z'

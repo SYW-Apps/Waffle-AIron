@@ -1,0 +1,57 @@
+id: plan-orchestrator-impl
+name: Plan Orchestrator Implementation
+description: Plan catalog workflows over the plan repository.
+contract: iplan-orchestrator
+sourcePath: src/subscriptions/plan_orchestrator.rs
+methods:
+  - name: create_plan
+    narrative:
+      - stepNumber: 1
+        description: Validate the plan (non-empty tiers, each tier has a stripe_price_id)
+        type: local
+      - stepNumber: 2
+        description: Persist the plan
+        type: call
+        targetComponent: plan-repository
+        targetMethod: save_plan
+      - stepNumber: 3
+        description: Return the created plan
+        type: local
+  - name: get_plan
+    narrative:
+      - stepNumber: 1
+        description: Find the plan by id
+        type: call
+        targetComponent: plan-repository
+        targetMethod: find_plan
+      - stepNumber: 2
+        description: Return it or SubscriptionError::NotFound
+        type: local
+  - name: list_plans
+    narrative:
+      - stepNumber: 1
+        description: List all plans
+        type: call
+        targetComponent: plan-repository
+        targetMethod: list_plans
+      - stepNumber: 2
+        description: Return the list
+        type: local
+  - name: update_tier_limits
+    narrative:
+      - stepNumber: 1
+        description: Apply the tier limit update
+        type: call
+        targetComponent: plan-repository
+        targetMethod: update_tier_limits
+      - stepNumber: 2
+        description: Re-read the plan to return the refreshed view
+        type: call
+        targetComponent: plan-repository
+        targetMethod: find_plan
+      - stepNumber: 3
+        description: Return the refreshed plan or NotFound
+        type: local
+status: complete
+createdAt: '2026-06-17T18:35:52.455Z'
+updatedAt: '2026-06-18T12:27:17.451Z'

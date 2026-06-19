@@ -1,0 +1,18 @@
+id: iusage-rollup-index
+name: Usage Rollup Index Interface
+description: Read path over the rollup store. Never mutates.
+component: usage-rollup-index
+methods:
+  - name: get
+    description: Get a period rollup
+    signature: >-
+      fn get(&self, subscription_id: SubscriptionId, resource: String, period: String) ->
+      Option<UsageRollup>
+    returns: Option<UsageRollup>
+  - name: list_for_subscription
+    description: List all rollups for a subscription
+    signature: 'fn list_for_subscription(&self, subscription_id: SubscriptionId) -> Vec<UsageRollup>'
+    returns: Vec<UsageRollup>
+status: complete
+createdAt: '2026-06-17T17:59:53.382Z'
+updatedAt: '2026-06-18T12:27:16.669Z'

@@ -1,0 +1,24 @@
+id: iplan-store
+name: Plan Store Interface
+description: Authoritative in-process state for the Plan aggregate. Depended upon by registry and index.
+component: plan-store
+methods:
+  - name: insert
+    description: Insert or replace a plan
+    signature: 'fn insert(&self, plan: Plan)'
+    returns: ()
+  - name: get
+    description: Get a plan by id
+    signature: 'fn get(&self, id: PlanId) -> Option<Plan>'
+    returns: Option<Plan>
+  - name: list
+    description: List all plans
+    signature: fn list(&self) -> Vec<Plan>
+    returns: Vec<Plan>
+  - name: apply_tier_limits
+    description: Mutate a tier's limits; false if plan/tier absent
+    signature: 'fn apply_tier_limits(&self, plan_id: PlanId, tier_id: TierId, limits: LimitSet) -> bool'
+    returns: bool
+status: complete
+createdAt: '2026-06-17T17:49:47.105Z'
+updatedAt: '2026-06-18T12:27:16.848Z'

@@ -1,0 +1,17 @@
+id: metering
+name: Metering Subsystem
+description: >-
+  Owns usage state per user/subscription. Holds hot per-subscription counters in Redis
+  (check-and-decrement on the gate hot path) and authoritative usage rollups in Postgres,
+  reconciling between them. Emits usage-threshold events consumed by notifications.
+parentSystem: gatekeeper-saas-claude-v1
+publicInterfaces:
+  - type: REST
+    details: >-
+      /v1/usage — read usage and remaining quota per subscription/resource, and the hot-path POST
+      /v1/usage/consume check-and-decrement consumed by gatekeeping
+    component: metering-portal
+    interface: imetering-portal
+status: complete
+createdAt: '2026-06-16T22:25:44.015Z'
+updatedAt: '2026-06-18T22:57:17.752Z'

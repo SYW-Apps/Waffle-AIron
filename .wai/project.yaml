@@ -1,0 +1,19 @@
+schemaVersion: 1.0.0
+name: Waffle-AIron
+targets:
+  - type: claude
+    outputDir: .claude/agents
+    enabled: true
+rules:
+  noOverlappingOwnership: true
+  requireOwnedPaths: true
+  metaAgentTags:
+    - meta
+    - guardian
+    - architect
+    - adapter
+    - portal
+    - orchestrator
+  enforceReproducibility: true
+createdAt: '2026-06-10T20:23:10.714Z'
+updatedAt: '2026-06-10T20:23:10.714Z'

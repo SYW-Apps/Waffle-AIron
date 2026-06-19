@@ -1,0 +1,21 @@
+kind: value-object
+id: issued-key
+name: Issued Key
+description: Result of issuing an API key; carries the plaintext exactly once.
+subsystem: gatekeeping
+fields:
+  - name: id
+    type: string
+    description: ApiKeyId
+    optional: false
+  - name: plaintext
+    type: string
+    description: The plaintext key, returned only at issue time
+    optional: false
+  - name: subscription_id
+    type: string
+    description: SubscriptionId the key maps to
+    optional: false
+methods: []
+createdAt: '2026-06-17T18:07:22.193Z'
+updatedAt: '2026-06-17T18:07:22.207Z'

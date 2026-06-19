@@ -1,0 +1,45 @@
+kind: entity
+id: subscription
+name: Subscription
+description: Tracks the active subscription state and tier details for a customer.
+subsystem: identity-billing
+fields:
+  - name: id
+    type: String
+    description: Unique identifier for the subscription.
+    optional: false
+  - name: customer_id
+    type: String
+    description: ForeignKey pointing to the Customer.
+    optional: false
+  - name: stripe_subscription_id
+    type: String
+    description: Associated Stripe Subscription ID.
+    optional: true
+  - name: tier_id
+    type: String
+    description: ForeignKey pointing to the SubscriptionTier.
+    optional: false
+  - name: status
+    type: String
+    description: 'Stripe subscription status: active, past_due, canceled, trialing.'
+    optional: false
+  - name: current_period_start
+    type: DateTime
+    description: Billing cycle start timestamp.
+    optional: false
+  - name: current_period_end
+    type: DateTime
+    description: Billing cycle end timestamp.
+    optional: false
+  - name: created_at
+    type: DateTime
+    description: Timestamp when the subscription record was created.
+    optional: false
+  - name: updated_at
+    type: DateTime
+    description: Timestamp when the subscription record was last updated.
+    optional: false
+methods: []
+createdAt: '2026-06-16T16:26:51.512Z'
+updatedAt: '2026-06-16T16:26:51.517Z'

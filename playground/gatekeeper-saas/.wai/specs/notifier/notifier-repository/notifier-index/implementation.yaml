@@ -1,0 +1,19 @@
+id: notifier-index-impl
+name: Notifier Index Implementation
+description: Queries alert logs to prevent duplicate warning messages.
+contract: inotifier-index
+sourcePath: src/notifier/index.rs
+methods:
+  - name: lookup_alert_log_by_period
+    narrative:
+      - stepNumber: 1
+        description: Acquire database connection.
+        type: call
+        targetComponent: notifier-store
+        targetMethod: get_connection
+      - stepNumber: 2
+        description: Execute SELECT query searching for logged alerts matching parameters.
+        type: local
+status: complete
+createdAt: '2026-06-16T18:39:08.801Z'
+updatedAt: '2026-06-16T18:39:08.802Z'

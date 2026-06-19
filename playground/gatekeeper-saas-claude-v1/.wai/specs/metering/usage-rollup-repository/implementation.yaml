@@ -1,0 +1,30 @@
+id: usage-rollup-repository-impl
+name: Usage Rollup Repository Implementation
+description: Facade forwarding 1:1 to owned registry and index.
+contract: iusage-rollup-repository
+sourcePath: src/metering/usage_rollup_repository.rs
+methods:
+  - name: record_usage
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: usage-rollup-registry
+        targetMethod: set_usage
+  - name: get_rollup
+    narrative:
+      - stepNumber: 1
+        description: Forward to the index
+        type: call
+        targetComponent: usage-rollup-index
+        targetMethod: get
+  - name: list_rollups
+    narrative:
+      - stepNumber: 1
+        description: Forward to the index
+        type: call
+        targetComponent: usage-rollup-index
+        targetMethod: list_for_subscription
+status: complete
+createdAt: '2026-06-18T22:59:29.905Z'
+updatedAt: '2026-06-19T10:16:46.837Z'

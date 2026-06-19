@@ -1,0 +1,29 @@
+kind: value-object
+id: usage-view
+name: Usage View
+description: 'Reported usage for a subscription/resource: live window usage plus historical period total.'
+subsystem: metering
+fields:
+  - name: subscription_id
+    type: string
+    description: SubscriptionId
+    optional: false
+  - name: resource
+    type: string
+    description: Metered resource key
+    optional: false
+  - name: window
+    type: string
+    description: Window the live count applies to
+    optional: false
+  - name: used
+    type: i64
+    description: Units used in the current window
+    optional: false
+  - name: period_total
+    type: i64
+    description: Historical total from rollups for the current period
+    optional: false
+methods: []
+createdAt: '2026-06-17T17:59:11.322Z'
+updatedAt: '2026-06-17T17:59:11.332Z'

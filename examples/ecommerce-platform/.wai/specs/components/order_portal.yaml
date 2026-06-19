@@ -1,0 +1,11 @@
+id: "order_portal"
+name: "Order API Portal"
+description: "REST API entry point / controller for handling incoming orders requests."
+subsystem: "order_subsystem"
+componentType: "Portal"
+portalType: "HTTP_API"
+basePath: "/orders"
+dependsOn:
+  - "order_orchestrator"
+createdAt: "2026-06-11T19:00:00Z"
+updatedAt: "2026-06-11T19:00:00Z"

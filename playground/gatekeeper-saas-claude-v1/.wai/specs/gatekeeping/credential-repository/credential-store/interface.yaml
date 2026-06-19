@@ -1,0 +1,24 @@
+id: icredential-store
+name: Credential Store Interface
+description: Authoritative in-process state for API-key credentials. Depended upon by registry and index.
+component: credential-store
+methods:
+  - name: insert
+    description: Insert or replace a credential
+    signature: 'fn insert(&self, key: ApiKey)'
+    returns: ()
+  - name: get_by_hash
+    description: Get a credential by key hash
+    signature: 'fn get_by_hash(&self, key_hash: String) -> Option<ApiKey>'
+    returns: Option<ApiKey>
+  - name: get
+    description: Get a credential by id
+    signature: 'fn get(&self, key_id: ApiKeyId) -> Option<ApiKey>'
+    returns: Option<ApiKey>
+  - name: set_status
+    description: Mutate status; false if absent
+    signature: 'fn set_status(&self, key_id: ApiKeyId, status: ApiKeyStatus) -> bool'
+    returns: bool
+status: complete
+createdAt: '2026-06-17T18:08:11.964Z'
+updatedAt: '2026-06-18T12:27:16.495Z'

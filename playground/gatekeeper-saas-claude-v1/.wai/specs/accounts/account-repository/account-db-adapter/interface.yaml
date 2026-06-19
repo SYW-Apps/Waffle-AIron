@@ -1,0 +1,20 @@
+id: iaccount-db-adapter
+name: Account Postgres Adapter Interface
+description: The only block doing Postgres I/O for accounts (sqlx). No domain logic.
+component: account-db-adapter
+methods:
+  - name: load_account
+    description: Load an account aggregate (customer + billing account + contacts) from Postgres
+    signature: 'async fn load_account(&self, id: BillingAccountId) -> Result<Option<Account>, DbError>'
+    returns: Result<Option<Account>, DbError>
+  - name: upsert_account
+    description: Insert or update the full aggregate transactionally
+    signature: 'async fn upsert_account(&self, account: &Account) -> Result<(), DbError>'
+    returns: Result<(), DbError>
+  - name: delete_account
+    description: Delete an account aggregate
+    signature: 'async fn delete_account(&self, id: BillingAccountId) -> Result<(), DbError>'
+    returns: Result<(), DbError>
+status: complete
+createdAt: '2026-06-17T17:39:09.373Z'
+updatedAt: '2026-06-18T12:27:16.336Z'

@@ -1,0 +1,44 @@
+schemaVersion: "1.0.0"
+id: "core_orchestrator_impl"
+name: "Core Orchestrator Implementation"
+description: "Concrete implementation forwarding to registry loader."
+contract: "icore_orchestrator"
+sourcePath: ".wai/specs/implementations/core_orchestrator_impl.yaml"
+methods:
+  - name: "loadSystemSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Call loadSystemSpec on spec loader"
+        type: "call"
+        targetComponent: "spec_loader"
+        targetMethod: "loadSystemSpec"
+  - name: "loadSubsystemSpecs"
+    narrative:
+      - stepNumber: 1
+        description: "Call loadSubsystemSpecs on spec loader"
+        type: "call"
+        targetComponent: "spec_loader"
+        targetMethod: "loadSubsystemSpecs"
+  - name: "loadComponentSpecs"
+    narrative:
+      - stepNumber: 1
+        description: "Call loadComponentSpecs on spec loader"
+        type: "call"
+        targetComponent: "spec_loader"
+        targetMethod: "loadComponentSpecs"
+  - name: "loadInterfaceSpecs"
+    narrative:
+      - stepNumber: 1
+        description: "Call loadInterfaceSpecs on spec loader"
+        type: "call"
+        targetComponent: "spec_loader"
+        targetMethod: "loadInterfaceSpecs"
+  - name: "loadImplementationSpecs"
+    narrative:
+      - stepNumber: 1
+        description: "Call loadImplementationSpecs on spec loader"
+        type: "call"
+        targetComponent: "spec_loader"
+        targetMethod: "loadImplementationSpecs"
+createdAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-06-19T12:00:00Z"

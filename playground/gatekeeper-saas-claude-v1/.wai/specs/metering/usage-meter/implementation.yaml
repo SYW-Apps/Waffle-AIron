@@ -1,0 +1,45 @@
+id: usage-meter-impl
+name: Usage Meter Implementation
+description: >-
+  Hot-path consume: atomic counter, edge-triggered threshold publish. Counter stores cumulative USED
+  for the window so it is directly queryable; the adapter derives remaining from the passed quota.
+contract: iusage-meter
+sourcePath: src/metering/usage_meter.rs
+methods:
+  - name: consume
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Build the counter key (subscription_id:resource:window) and compute ttl_seconds from the
+          window
+        type: local
+      - stepNumber: 2
+        description: Atomically increment usage and check against quota in Redis
+        type: call
+        targetComponent: redis-counter-adapter
+        targetMethod: check_and_decrement
+      - stepNumber: 3
+        description: >-
+          Compute the usage ratio (used/quota) and determine whether this call crossed a configured
+          threshold boundary (e.g. 0.8, 1.0)
+        type: local
+      - stepNumber: 4
+        description: >-
+          If a threshold boundary was crossed, atomically set its edge-trigger flag so it fires only
+          once per period
+        type: call
+        targetComponent: redis-counter-adapter
+        targetMethod: try_mark_threshold
+      - stepNumber: 5
+        description: >-
+          If the flag was newly set, build a UsageThresholdEvent (subscription_id,
+          billing_account_id, resource, used, quota, ratio, window) and publish it
+        type: call
+        targetComponent: usage-event-adapter
+        targetMethod: publish_threshold
+      - stepNumber: 6
+        description: Return the ConsumeOutcome
+        type: local
+status: complete
+createdAt: '2026-06-17T18:39:02.868Z'
+updatedAt: '2026-06-18T12:27:17.276Z'

@@ -1,0 +1,9 @@
+schemaVersion: "1.0.0"
+name: "Ecommerce-Platform"
+vision: "A microservice-based e-commerce platform coordinating orders, inventory, and notifications."
+boundaries:
+  - "Each subsystem represents a separate microservice boundary."
+globalRequirements:
+  - "Asynchronous event-driven communication between services."
+createdAt: "2026-06-11T15:00:00Z"
+updatedAt: "2026-06-11T15:00:00Z"

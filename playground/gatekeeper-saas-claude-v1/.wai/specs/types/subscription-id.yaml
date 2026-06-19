@@ -1,0 +1,12 @@
+kind: value-object
+id: subscription-id
+name: Subscription Id
+description: Newtype identifier for a Subscription. Shared system-wide and referenced cross-subsystem.
+fields:
+  - name: value
+    type: string
+    description: Opaque unique id
+    optional: false
+methods: []
+createdAt: '2026-06-17T18:44:10.162Z'
+updatedAt: '2026-06-17T18:44:10.179Z'

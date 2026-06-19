@@ -1,0 +1,14 @@
+id: audit-adapter-impl
+name: Decision Audit Adapter Implementation
+description: Append-only Postgres writer for authorize decisions.
+contract: iaudit-adapter
+sourcePath: src/gatekeeping/audit_adapter.rs
+methods:
+  - name: record_decision
+    narrative:
+      - stepNumber: 1
+        description: INSERT the DecisionAuditRecord into the decision_audit_log table
+        type: local
+status: complete
+createdAt: '2026-06-17T18:26:58.726Z'
+updatedAt: '2026-06-18T12:27:17.104Z'

@@ -1,0 +1,12 @@
+schemaVersion: "1.0.0"
+id: "iinventory_client"
+name: "Inventory gRPC Client Interface"
+description: "Interface contract for reserving stock in remote service."
+component: "inventory_client"
+methods:
+  - name: "reserveStock"
+    description: "Sends gRPC call to reserve inventory items"
+    signature: "reserveStock(orderId: string, items: Array<{itemId: string, qty: number}>): Promise<boolean>"
+    returns: "Promise<boolean>"
+createdAt: "2026-06-11T15:00:00Z"
+updatedAt: "2026-06-11T15:00:00Z"

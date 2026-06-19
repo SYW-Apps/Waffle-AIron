@@ -1,0 +1,29 @@
+id: usage-rollup-index-impl
+name: Usage Rollup Index Implementation
+description: Read projection over the rollup store.
+contract: iusage-rollup-index
+sourcePath: src/metering/usage_rollup_index.rs
+methods:
+  - name: get
+    narrative:
+      - stepNumber: 1
+        description: Read the rollup from the store
+        type: call
+        targetComponent: usage-rollup-store
+        targetMethod: get
+      - stepNumber: 2
+        description: Return the result
+        type: local
+  - name: list_for_subscription
+    narrative:
+      - stepNumber: 1
+        description: Read all rollups for the subscription from the store
+        type: call
+        targetComponent: usage-rollup-store
+        targetMethod: list
+      - stepNumber: 2
+        description: Return the list
+        type: local
+status: complete
+createdAt: '2026-06-17T18:39:34.655Z'
+updatedAt: '2026-06-18T12:27:17.335Z'

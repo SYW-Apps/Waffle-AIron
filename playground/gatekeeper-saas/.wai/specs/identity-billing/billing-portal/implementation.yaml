@@ -1,0 +1,64 @@
+id: billing-portal-impl
+name: Billing REST Portal Implementation
+description: HTTP controller handlers executing orchestrator workflows.
+contract: ibilling-portal
+sourcePath: src/identity-billing/portal.rs
+methods:
+  - name: create_customer
+    narrative:
+      - stepNumber: 1
+        description: Parse request body mapping to register customer data model.
+        type: local
+      - stepNumber: 2
+        description: Call Orchestrator to register the customer.
+        type: call
+        targetComponent: billing-orchestrator
+        targetMethod: register_customer
+      - stepNumber: 3
+        description: Format and return JSON HTTP 201 Response.
+        type: local
+  - name: create_api_key
+    narrative:
+      - stepNumber: 1
+        description: Parse request body details.
+        type: local
+      - stepNumber: 2
+        description: Call Orchestrator to generate credentials.
+        type: call
+        targetComponent: billing-orchestrator
+        targetMethod: generate_api_key
+      - stepNumber: 3
+        description: Format and return HTTP 201 Response.
+        type: local
+  - name: revoke_api_key
+    narrative:
+      - stepNumber: 1
+        description: Extract API key ID parameter from path.
+        type: local
+      - stepNumber: 2
+        description: Call Orchestrator workflow to revoke API Key.
+        type: call
+        targetComponent: billing-orchestrator
+        targetMethod: revoke_api_key
+      - stepNumber: 3
+        description: Format and return HTTP 204 No Content Response.
+        type: local
+  - name: stripe_webhook
+    narrative:
+      - stepNumber: 1
+        description: Parse raw request details.
+        type: local
+      - stepNumber: 2
+        description: Verify Webhook signature validation metrics.
+        type: local
+      - stepNumber: 3
+        description: Call Orchestrator to handle Stripe payload sync.
+        type: call
+        targetComponent: billing-orchestrator
+        targetMethod: handle_stripe_event
+      - stepNumber: 4
+        description: Format and return HTTP 200 OK Response.
+        type: local
+status: complete
+createdAt: '2026-06-16T16:57:24.526Z'
+updatedAt: '2026-06-16T16:57:24.527Z'

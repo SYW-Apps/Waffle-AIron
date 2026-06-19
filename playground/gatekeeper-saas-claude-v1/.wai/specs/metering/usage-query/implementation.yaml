@@ -1,0 +1,46 @@
+id: usage-query-impl
+name: Usage Query Implementation
+description: Combines live Redis counters with Postgres rollups.
+contract: iusage-query
+sourcePath: src/metering/usage_query.rs
+methods:
+  - name: get_usage
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Derive the current period and window, and build the live counter key for
+          subscription/resource
+        type: local
+      - stepNumber: 2
+        description: Read the live used counter from Redis
+        type: call
+        targetComponent: redis-counter-adapter
+        targetMethod: get
+      - stepNumber: 3
+        description: Read the persisted rollup for the current period
+        type: call
+        targetComponent: usage-rollup-repository
+        targetMethod: get_rollup
+      - stepNumber: 4
+        description: >-
+          Assemble a UsageView (used = live counter, period_total = rollup total plus live used,
+          window)
+        type: local
+  - name: list_usage
+    narrative:
+      - stepNumber: 1
+        description: List the subscription's persisted rollups
+        type: call
+        targetComponent: usage-rollup-repository
+        targetMethod: list_rollups
+      - stepNumber: 2
+        description: Snapshot the live counters
+        type: call
+        targetComponent: redis-counter-adapter
+        targetMethod: snapshot_all
+      - stepNumber: 3
+        description: Filter snapshots to this subscription and merge with rollups into a UsageView per resource
+        type: local
+status: complete
+createdAt: '2026-06-17T18:39:08.740Z'
+updatedAt: '2026-06-18T12:27:17.288Z'

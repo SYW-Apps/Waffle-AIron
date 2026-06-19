@@ -1,0 +1,12 @@
+schemaVersion: "1.0.0"
+id: "iagent_resolver"
+name: "Agent Topology Resolver Interface"
+description: "Interface contract for resolving agent topology from specification files."
+component: "agent_resolver"
+methods:
+  - name: "resolveAgentTopology"
+    description: "Resolves AgentRecord structures dynamically from the loaded specs"
+    signature: "resolveAgentTopology(): AgentRecord[]"
+    returns: "AgentRecord[]"
+createdAt: "2026-06-11T14:50:00Z"
+updatedAt: "2026-06-11T14:50:00Z"

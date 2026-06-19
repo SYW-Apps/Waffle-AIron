@@ -1,0 +1,14 @@
+id: accounts-client-adapter
+name: Accounts Client Adapter
+description: >-
+  Local client adapter that crosses into the accounts subsystem, calling its inbound Portal's
+  published resolve_billing_email endpoint to resolve the billing email for a billing account. The
+  only notifications block allowed to call accounts. Maps account errors into notification errors.
+subsystem: notifications
+componentType: Adapter
+owns: []
+dependsOn:
+  - accounts-portal
+status: complete
+createdAt: '2026-06-18T22:57:02.862Z'
+updatedAt: '2026-06-19T10:16:46.609Z'

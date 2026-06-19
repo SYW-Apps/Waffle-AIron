@@ -1,0 +1,44 @@
+id: "subscription-repository-impl"
+name: "Subscription Repository Implementation"
+description: "Handles repository aggregation and coordination between local memory stores and the database adapter."
+contract: "isubscription-repository"
+sourcePath: "src/billing/subscription_repository.rs"
+methods:
+  - name: "get_subscription_by_key"
+    narrative:
+      - stepNumber: 1
+        description: "Call the subscription store to check for cached subscription details"
+        type: "call"
+        targetComponent: "subscription-store"
+        targetMethod: "get_cached_subscription"
+      - stepNumber: 2
+        description: "If cache missed, call the database adapter to fetch subscription from PostgreSQL"
+        type: "call"
+        targetComponent: "database-adapter"
+        targetMethod: "fetch_row"
+      - stepNumber: 3
+        description: "If found, call the subscription store to cache the subscription details"
+        type: "call"
+        targetComponent: "subscription-store"
+        targetMethod: "update_cached_subscription"
+      - stepNumber: 4
+        description: "Return subscription details"
+        type: "local"
+  - name: "update_subscription_status"
+    narrative:
+      - stepNumber: 1
+        description: "Call the database adapter to update the subscription status and limits in PostgreSQL"
+        type: "call"
+        targetComponent: "database-adapter"
+        targetMethod: "execute_query"
+      - stepNumber: 2
+        description: "Call the subscription store to update the cached subscription status"
+        type: "call"
+        targetComponent: "subscription-store"
+        targetMethod: "update_cached_subscription"
+      - stepNumber: 3
+        description: "Return success"
+        type: "local"
+status: "complete"
+createdAt: "2026-06-15T23:19:00Z"
+updatedAt: "2026-06-15T23:20:00Z"

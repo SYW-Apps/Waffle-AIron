@@ -1,0 +1,12 @@
+id: plan-db-adapter
+name: Plan Postgres Adapter
+description: >-
+  The only block doing Postgres I/O (sqlx) for the plan aggregate. Loads and persists
+  plan/tier/limit rows. No domain logic.
+subsystem: subscriptions
+componentType: Adapter
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-06-17T17:43:24.616Z'
+updatedAt: '2026-06-18T12:27:16.138Z'

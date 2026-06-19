@@ -1,0 +1,52 @@
+id: gatekeeping-portal-impl
+name: Gatekeeping Portal Implementation
+description: Axum HTTP handlers for the gate; validates and forwards to orchestrators.
+contract: igatekeeping-portal
+sourcePath: src/gatekeeping/portal.rs
+methods:
+  - name: authorize
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Deserialize and validate the JSON body into an AuthorizeRequest (api_key, resource,
+          amount)
+        type: local
+      - stepNumber: 2
+        description: Forward to the gate orchestrator to make the decision
+        type: call
+        targetComponent: gate-orchestrator
+        targetMethod: authorize
+      - stepNumber: 3
+        description: >-
+          Map the AuthorizeDecision or GateError to an HTTP response (200 allow/deny, 401
+          unauthenticated, 429 over quota, 500)
+        type: local
+  - name: issue_api_key
+    narrative:
+      - stepNumber: 1
+        description: Parse the subscription_id from the request body
+        type: local
+      - stepNumber: 2
+        description: Forward to the credential orchestrator to issue a key
+        type: call
+        targetComponent: credential-orchestrator
+        targetMethod: issue_key
+      - stepNumber: 3
+        description: Return 201 Created with the IssuedKey (plaintext shown once)
+        type: local
+  - name: revoke_api_key
+    narrative:
+      - stepNumber: 1
+        description: Parse the key_id from the path
+        type: local
+      - stepNumber: 2
+        description: Forward to the credential orchestrator to revoke the key
+        type: call
+        targetComponent: credential-orchestrator
+        targetMethod: revoke_key
+      - stepNumber: 3
+        description: Return 204 No Content
+        type: local
+status: complete
+createdAt: '2026-06-17T18:26:33.087Z'
+updatedAt: '2026-06-18T12:27:17.204Z'

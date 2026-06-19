@@ -1,0 +1,13 @@
+kind: value-object
+id: account-status
+name: Account Status
+description: 'Lifecycle state of an account: Active, Suspended, or Deactivated.'
+subsystem: accounts
+fields:
+  - name: variant
+    type: string
+    description: One of Active | Suspended | Deactivated
+    optional: false
+methods: []
+createdAt: '2026-06-17T15:16:52.737Z'
+updatedAt: '2026-06-17T15:16:52.808Z'

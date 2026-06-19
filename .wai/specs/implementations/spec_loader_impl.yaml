@@ -1,0 +1,94 @@
+schemaVersion: "1.0.0"
+id: "spec_loader_impl"
+name: "Spec Loader Implementation"
+description: "Concrete implementation of the Spec Loader Interface using js-yaml and Zod schemas."
+contract: "ispec_loader"
+sourcePath: "src/core/specs.ts"
+methods:
+  - name: "loadSystemSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Determine the system spec path using AI_PATHS.specsSystem()"
+        type: "local"
+      - stepNumber: 2
+        description: "Read system.yaml if it exists and parse it using SystemSpecSchema"
+        type: "local"
+  - name: "saveSystemSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Serialize the SystemSpec object and write to system.yaml"
+        type: "local"
+  - name: "loadSubsystemSpecs"
+    narrative:
+      - stepNumber: 1
+        description: "List all YAML files in the subsystems specification directory"
+        type: "local"
+      - stepNumber: 2
+        description: "Read and parse each file against SubsystemSpecSchema, collecting Zod errors"
+        type: "local"
+  - name: "loadSubsystemSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Read the specified subsystem spec file and validate against SubsystemSpecSchema"
+        type: "local"
+  - name: "saveSubsystemSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Update the updatedAt timestamp and write the subsystem spec to subsystems/*.yaml"
+        type: "local"
+  - name: "loadComponentSpecs"
+    narrative:
+      - stepNumber: 1
+        description: "List all YAML files in the components specification directory"
+        type: "local"
+      - stepNumber: 2
+        description: "Read and parse each file against ComponentSpecSchema, collecting Zod errors"
+        type: "local"
+  - name: "loadComponentSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Read the specified component spec file and validate against ComponentSpecSchema"
+        type: "local"
+  - name: "saveComponentSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Update the updatedAt timestamp and write the component spec to components/*.yaml"
+        type: "local"
+  - name: "loadInterfaceSpecs"
+    narrative:
+      - stepNumber: 1
+        description: "List all YAML files in the interfaces specification directory"
+        type: "local"
+      - stepNumber: 2
+        description: "Read and parse each file against InterfaceSpecSchema, collecting Zod errors"
+        type: "local"
+  - name: "loadInterfaceSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Read the specified interface spec file and validate against InterfaceSpecSchema"
+        type: "local"
+  - name: "saveInterfaceSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Update the updatedAt timestamp and write the interface spec to interfaces/*.yaml"
+        type: "local"
+  - name: "loadImplementationSpecs"
+    narrative:
+      - stepNumber: 1
+        description: "List all YAML files in the implementations specification directory"
+        type: "local"
+      - stepNumber: 2
+        description: "Read and parse each file against ImplementationSpecSchema, collecting Zod errors"
+        type: "local"
+  - name: "loadImplementationSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Read the specified implementation spec file and validate against ImplementationSpecSchema"
+        type: "local"
+  - name: "saveImplementationSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Update the updatedAt timestamp and write the implementation spec to implementations/*.yaml"
+        type: "local"
+createdAt: "2026-06-11T14:50:00Z"
+updatedAt: "2026-06-11T14:50:00Z"

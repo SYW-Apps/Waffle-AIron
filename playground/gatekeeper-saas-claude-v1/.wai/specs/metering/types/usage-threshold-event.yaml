@@ -1,0 +1,39 @@
+kind: value-object
+id: usage-threshold-event
+name: Usage Threshold Event
+description: >-
+  Published when a subscription crosses a usage threshold. Carries enough context for notifications
+  to resolve the billing email and compose a message without calling back into metering.
+subsystem: metering
+fields:
+  - name: subscription_id
+    type: string
+    description: SubscriptionId
+    optional: false
+  - name: billing_account_id
+    type: string
+    description: BillingAccountId for email resolution
+    optional: false
+  - name: resource
+    type: string
+    description: Metered resource key
+    optional: false
+  - name: used
+    type: i64
+    description: Units used
+    optional: false
+  - name: quota
+    type: i64
+    description: Quota for the window
+    optional: false
+  - name: ratio
+    type: f64
+    description: used/quota at crossing time
+    optional: false
+  - name: window
+    type: string
+    description: Window the threshold applies to
+    optional: false
+methods: []
+createdAt: '2026-06-17T17:59:20.267Z'
+updatedAt: '2026-06-17T17:59:20.276Z'

@@ -1,31 +1,27 @@
-import * as path from 'path';
 import { AgentRecord } from '../models/agent.js';
-import { Domain } from '../models/domain.js';
 import { ProjectConfig, TargetConfig } from '../models/project.js';
 import { loadTemplate, renderTemplateInstructions } from '../core/templates.js';
-import { loadDomainRegistry } from '../config/loader.js';
-import { getPropagationTargets } from '../core/domains.js';
 import { getExporter } from './registry.js';
 import { ExportResult } from './base.js';
 
 // ---------------------------------------------------------------------------
-// Generate: domain-aware agent file generation
+// Generate: agent file generation
 //
-// For agents WITHOUT a domainRoot: generate only at project root (unchanged).
-//
-// For agents WITH a domainRoot:
-//   1. Standalone render → written to <domainPath>/<target>/agents/<id>.md
-//      Uses domain-relative ownedPaths and standalone framing.
-//   2. Reference render  → written to <root>/<target>/agents/<id>.md
-//      Uses project-absolute ownedPaths and delegation framing.
-//      Only generated for parent domains based on domain.propagation setting.
+// Agents are derived from the SDD spec tree and are written as native subagent
+// files into each target's output dir at the project root. The host AI tool
+// (Claude / Codex / aider) spawns these as its own subagents — wairon does not
+// orchestrate sessions itself, so there is no per-directory or propagation
+// rendering.
 // ---------------------------------------------------------------------------
-
-export type RenderContext = 'standalone' | 'project-reference' | 'root';
 
 export interface GenerateOptions {
   projectRoot?: string;
   filterTargets?: string[];
+  /**
+   * If set, only generate agents whose domainRoot is in this set.
+   * Use the special value 'root' to select agents with no domainRoot.
+   */
+  filterDomainIds?: string[];
   dryRun?: boolean;
 }
 
@@ -40,34 +36,8 @@ export function generateAgent(
   options: GenerateOptions = {},
 ): GenerateSummary {
   const projectRoot = options.projectRoot ?? process.cwd();
-
-  if (agent.domainRoot) {
-    return generateDomainAgent(agent, projectConfig, projectRoot, options);
-  }
-  return generateRootAgent(agent, projectConfig, projectRoot, options);
-}
-
-export function generateAll(
-  agents: AgentRecord[],
-  projectConfig: ProjectConfig,
-  options: GenerateOptions = {},
-): GenerateSummary[] {
-  return agents.map((agent) => generateAgent(agent, projectConfig, options));
-}
-
-// ---------------------------------------------------------------------------
-// Root agents (no domainRoot) — single render at project root
-// ---------------------------------------------------------------------------
-
-function generateRootAgent(
-  agent: AgentRecord,
-  projectConfig: ProjectConfig,
-  projectRoot: string,
-  options: GenerateOptions,
-): GenerateSummary {
   const template = loadTemplate(agent.template, projectConfig.globalTemplatesDir);
-  const vars = buildVars(agent, agent.ownedPaths, 'root');
-  const rendered = renderTemplateInstructions(template, vars);
+  const rendered = renderTemplateInstructions(template, buildVars(agent));
   const results: ExportResult[] = [];
 
   for (const agentTarget of agent.targets) {
@@ -87,145 +57,37 @@ function generateRootAgent(
   return { agent, results };
 }
 
-// ---------------------------------------------------------------------------
-// Domain agents — two renders: standalone + parent references
-// ---------------------------------------------------------------------------
-
-function generateDomainAgent(
-  agent: AgentRecord,
+export function generateAll(
+  agents: AgentRecord[],
   projectConfig: ProjectConfig,
-  projectRoot: string,
-  options: GenerateOptions,
-): GenerateSummary {
-  const results: ExportResult[] = [];
-  const domainRegistry = loadDomainRegistry();
-  const domain = domainRegistry.domains.find((d) => d.id === agent.domainRoot);
+  options: GenerateOptions = {},
+): GenerateSummary[] {
+  let pool = agents;
 
-  if (!domain) {
-    // Domain no longer exists — fall back to root render
-    return generateRootAgent(agent, projectConfig, projectRoot, options);
+  if (options.filterDomainIds && options.filterDomainIds.length > 0) {
+    const ids = new Set(options.filterDomainIds);
+    pool = agents.filter((a) => ids.has(a.domainRoot ?? 'root'));
   }
 
-  const template = loadTemplate(agent.template, projectConfig.globalTemplatesDir);
-
-  // --- 1. Standalone render in the domain's own directory ---
-  const domainRelativePaths = toDomainRelativePaths(agent.ownedPaths, domain.path);
-  const standaloneVars = buildVars(agent, domainRelativePaths, 'standalone', domain);
-  const standaloneRendered = renderTemplateInstructions(template, standaloneVars);
-  const domainRoot = path.resolve(projectRoot, domain.path);
-
-  for (const agentTarget of agent.targets) {
-    const targetConfig = resolveTargetConfig(agentTarget, projectConfig);
-    if (!targetConfig) continue;
-
-    const targetType = 'type' in targetConfig ? targetConfig.type : targetConfig as string;
-    if (options.filterTargets && !options.filterTargets.includes(targetType)) continue;
-
-    if (!options.dryRun) {
-      results.push(getExporter(targetConfig).export({
-        agent,
-        template,
-        renderedInstructions: standaloneRendered,
-        projectRoot: domainRoot,   // ← domain directory is the root for this render
-        target: targetConfig,
-      }));
-    }
-  }
-
-  // --- 2. Reference renders in parent domains based on propagation ---
-  const propagationTargets = getPropagationTargets(domain, domainRegistry);
-
-  for (const parentDomain of propagationTargets) {
-    const parentRoot = parentDomain.type === 'root'
-      ? projectRoot
-      : path.resolve(projectRoot, parentDomain.path);
-
-    const refVars = buildVars(agent, agent.ownedPaths, 'project-reference', domain, parentDomain);
-    const refRendered = renderTemplateInstructions(template, refVars);
-
-    for (const agentTarget of agent.targets) {
-      const targetConfig = resolveTargetConfig(agentTarget, projectConfig);
-      if (!targetConfig) continue;
-
-      const targetType = 'type' in targetConfig ? targetConfig.type : targetConfig as string;
-      if (options.filterTargets && !options.filterTargets.includes(targetType)) continue;
-
-      if (!options.dryRun) {
-        results.push(getExporter(targetConfig).export({
-          agent,
-          template,
-          renderedInstructions: refRendered,
-          projectRoot: parentRoot,
-          target: targetConfig,
-        }));
-      }
-    }
-  }
-
-  return { agent, results };
+  return pool.map((agent) => generateAgent(agent, projectConfig, options));
 }
 
 // ---------------------------------------------------------------------------
-// Template variable builders
+// Template variable builder
 // ---------------------------------------------------------------------------
 
-function buildVars(
-  agent: AgentRecord,
-  ownedPaths: string[],
-  context: RenderContext,
-  domain?: Domain,
-  parentDomain?: Domain,
-): Record<string, string> {
-  const contextNote = contextNoteFor(context, domain, parentDomain);
+function buildVars(agent: AgentRecord): Record<string, string> {
   return {
     agentId: agent.id,
     agentName: agent.name,
     agentDescription: agent.description,
-    ownedPaths: ownedPaths.join('\n'),
+    ownedPaths: agent.ownedPaths.join('\n'),
     tags: agent.tags.join(', '),
-    renderContext: context,
-    contextNote,
-    domainPath: domain?.path ?? '.',
-    domainName: domain?.name ?? '',
+    renderContext: 'root',
+    contextNote: '',
+    domainPath: '.',
+    domainName: '',
   };
-}
-
-function contextNoteFor(
-  context: RenderContext,
-  domain?: Domain,
-  _parentDomain?: Domain,
-): string {
-  if (context === 'standalone') {
-    return `You are operating as a specialized agent within the \`${domain?.path ?? '.'}\` module. ` +
-      `You may be invoked by a parent project agent via the wairon delegation system. ` +
-      `Focus deeply on your domain — you do not need awareness of the broader project.`;
-  }
-  if (context === 'project-reference') {
-    return `This agent is canonically defined in the \`${domain?.path ?? '.'}\` subdomain. ` +
-      `From this project context, it is responsible for \`${domain?.path ?? '.'}\`. ` +
-      `For deep work in that domain, invoke via: \`wairon delegate ${domain?.id ?? ''}\``;
-  }
-  return '';
-}
-
-// ---------------------------------------------------------------------------
-// Path helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Convert project-absolute ownedPaths to domain-relative paths.
- * "services/core/**" with domainPath "services/core" → "**"
- */
-function toDomainRelativePaths(ownedPaths: string[], domainPath: string): string[] {
-  const normalizedDomain = domainPath.replace(/\\/g, '/').replace(/\/$/, '');
-  return ownedPaths.map((p) => {
-    const normalized = p.replace(/\\/g, '/');
-    if (normalized.startsWith(normalizedDomain + '/')) {
-      return normalized.slice(normalizedDomain.length + 1) || '**';
-    }
-    if (normalized === normalizedDomain) return '**';
-    return p; // doesn't match domain prefix — keep as-is
-  });
 }
 
 /**

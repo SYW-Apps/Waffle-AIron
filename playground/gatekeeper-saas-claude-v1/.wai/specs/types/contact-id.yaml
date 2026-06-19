@@ -1,0 +1,12 @@
+kind: value-object
+id: contact-id
+name: Contact Id
+description: Newtype identifier for a Contact.
+fields:
+  - name: value
+    type: string
+    description: Opaque unique id
+    optional: false
+methods: []
+createdAt: '2026-06-17T18:44:14.401Z'
+updatedAt: '2026-06-17T18:44:14.417Z'

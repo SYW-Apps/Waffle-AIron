@@ -1,0 +1,65 @@
+id: iaccounts-portal
+name: Accounts Portal Interface
+description: >-
+  HTTP/JSON contract for the accounts subsystem, plus the published billing-email lookup. Validates
+  and forwards to the account orchestrator and the account directory.
+component: accounts-portal
+methods:
+  - name: create_account
+    description: POST /v1/accounts — create a customer with billing account and contacts
+    signature: 'async fn create_account(&self, body: CreateAccountCommand) -> Result<Account, ApiError>'
+    returns: Result<Account, ApiError>
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /v1/accounts
+  - name: get_account
+    description: GET /v1/accounts/{id} — fetch the full account aggregate
+    signature: 'async fn get_account(&self, id: BillingAccountId) -> Result<Account, ApiError>'
+    returns: Result<Account, ApiError>
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /v1/accounts/{id}
+  - name: get_customer
+    description: GET /v1/customers/{id} — fetch a single customer
+    signature: 'async fn get_customer(&self, id: CustomerId) -> Result<Customer, ApiError>'
+    returns: Result<Customer, ApiError>
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /v1/customers/{id}
+  - name: update_billing_email
+    description: PATCH /v1/accounts/{id}/billing-email — change the billing contact email
+    signature: >-
+      async fn update_billing_email(&self, id: BillingAccountId, email: Email) -> Result<Account,
+      ApiError>
+    returns: Result<Account, ApiError>
+    endpoint:
+      transport: HTTP
+      method: PATCH
+      path: /v1/accounts/{id}/billing-email
+  - name: deactivate_account
+    description: POST /v1/accounts/{id}/deactivate — deactivate an account
+    signature: 'async fn deactivate_account(&self, id: BillingAccountId) -> Result<(), ApiError>'
+    returns: Result<(), ApiError>
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /v1/accounts/{id}/deactivate
+  - name: resolve_billing_email
+    description: >-
+      GET /v1/accounts/{id}/billing-email — resolve the billing contact email for a billing account;
+      forwards 1:1 to the account directory. The published cross-subsystem entry consumed by the
+      notifications and subscriptions client adapters.
+    signature: >-
+      async fn resolve_billing_email(&self, id: BillingAccountId) -> Result<Option<Email>,
+      AccountError>
+    returns: Result<Option<Email>, AccountError>
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /v1/accounts/{id}/billing-email
+status: complete
+createdAt: '2026-06-18T22:55:52.999Z'
+updatedAt: '2026-06-19T10:16:46.647Z'

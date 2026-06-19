@@ -1,0 +1,22 @@
+schemaVersion: "1.0.0"
+id: "todo_manager_impl"
+name: "Todo Manager Implementation"
+description: "Concrete implementation of Todo Manager handling task business logic."
+contract: "itodo_manager"
+sourcePath: "src/managers/todo_manager.ts"
+methods:
+  - name: "createTask"
+    narrative:
+      - stepNumber: 1
+        description: "Generate a new task ID and initialize task object"
+        type: "local"
+      - stepNumber: 2
+        description: "Save task object using the database store component"
+        type: "call"
+        targetComponent: "todo_store"
+        targetMethod: "saveTask"
+      - stepNumber: 3
+        description: "Return the created task object"
+        type: "local"
+createdAt: "2026-06-11T15:00:00Z"
+updatedAt: "2026-06-11T15:00:00Z"

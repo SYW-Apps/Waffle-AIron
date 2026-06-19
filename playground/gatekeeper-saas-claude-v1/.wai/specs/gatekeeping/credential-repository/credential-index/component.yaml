@@ -1,0 +1,13 @@
+id: credential-index
+name: Credential Index
+description: >-
+  Read path over the credential store: resolve an active credential by key hash to its
+  subscription/billing-account. Projects the store; never mutates it.
+subsystem: gatekeeping
+componentType: Index
+owns: []
+dependsOn:
+  - credential-store
+status: complete
+createdAt: '2026-06-17T18:05:50.435Z'
+updatedAt: '2026-06-18T12:27:15.817Z'

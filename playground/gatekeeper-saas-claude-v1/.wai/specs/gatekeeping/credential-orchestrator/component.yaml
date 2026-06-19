@@ -1,0 +1,14 @@
+id: credential-orchestrator
+name: Credential Orchestrator
+description: >-
+  Issues and revokes API keys for a subscription. Generates a key, stores its hash mapped to the
+  subscription/billing account, and returns the plaintext once. Delegates persistence to the
+  credential repository.
+subsystem: gatekeeping
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - credential-repository
+status: complete
+createdAt: '2026-06-17T18:05:40.556Z'
+updatedAt: '2026-06-18T12:27:15.780Z'

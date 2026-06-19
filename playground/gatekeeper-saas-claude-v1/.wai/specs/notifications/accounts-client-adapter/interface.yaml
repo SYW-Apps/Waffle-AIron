@@ -1,0 +1,14 @@
+id: iaccounts-client-adapter
+name: Accounts Client Adapter Interface
+description: Boundary client into accounts. Resolves billing email via the published account-directory.
+component: accounts-client-adapter
+methods:
+  - name: resolve_billing_email
+    description: Call accounts.account-directory.resolve_billing_email and map errors into NotificationError
+    signature: >-
+      async fn resolve_billing_email(&self, id: BillingAccountId) -> Result<Option<Email>,
+      NotificationError>
+    returns: Result<Option<Email>, NotificationError>
+status: complete
+createdAt: '2026-06-17T18:17:36.834Z'
+updatedAt: '2026-06-18T12:27:16.704Z'

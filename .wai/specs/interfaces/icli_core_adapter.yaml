@@ -1,0 +1,12 @@
+schemaVersion: "1.0.0"
+id: "icli_core_adapter"
+name: "CLI Core Adapter Interface"
+description: "Adapter contract for the CLI to load specifications from the core subsystem."
+component: "cli_core_adapter"
+methods:
+  - name: "loadSystemSpec"
+    description: "Calls loadSystemSpec on the core portal"
+    signature: "loadSystemSpec(): SystemSpec | null"
+    returns: "SystemSpec | null"
+createdAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-06-19T12:00:00Z"

@@ -1,0 +1,15 @@
+kind: value-object
+id: auth-result
+name: Auth Result
+description: >-
+  The identity resolved from a valid API key. Carries the subscription; the billing account is
+  derived later from entitlements.
+subsystem: gatekeeping
+fields:
+  - name: subscription_id
+    type: string
+    description: SubscriptionId the key maps to
+    optional: false
+methods: []
+createdAt: '2026-06-17T18:24:38.796Z'
+updatedAt: '2026-06-17T18:24:38.810Z'

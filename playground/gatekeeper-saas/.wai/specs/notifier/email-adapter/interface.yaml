@@ -1,0 +1,12 @@
+id: iemail-adapter
+name: Email Adapter Interface
+description: Outbound port contract for dispatching alert emails.
+component: email-adapter
+methods:
+  - name: send_alert_email
+    description: Sends email to customer.
+    signature: 'send_alert_email(email: String, subject: String, body: String): Promise<void>'
+    returns: Promise<void>
+status: complete
+createdAt: '2026-06-16T17:47:05.538Z'
+updatedAt: '2026-06-16T17:47:05.538Z'

@@ -1,0 +1,13 @@
+id: "customer-repository"
+name: "Customer Repository"
+description: "Repository pattern facade providing unified operations for reading/writing customer records, with caching."
+subsystem: "billing"
+componentType: "Repository"
+owns:
+  - "customer-store"
+  - "customer-registry"
+dependsOn:
+  - "database-adapter"
+status: "complete"
+createdAt: "2026-06-15T23:18:00Z"
+updatedAt: "2026-06-15T23:20:00Z"

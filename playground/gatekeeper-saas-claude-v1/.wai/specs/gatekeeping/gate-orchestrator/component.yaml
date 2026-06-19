@@ -1,0 +1,18 @@
+id: gate-orchestrator
+name: Gate Orchestrator
+description: >-
+  The authorize workflow: authenticate the API key, resolve entitlements via the subscriptions
+  client adapter, check-and-decrement via the metering client adapter passing the resolved
+  quota/window, record the decision via the audit adapter, and return an allow/deny decision.
+  Crosses subsystem boundaries only through local client adapters.
+subsystem: gatekeeping
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - api-key-authenticator
+  - subscriptions-client-adapter
+  - metering-client-adapter
+  - audit-adapter
+status: complete
+createdAt: '2026-06-17T18:09:06.450Z'
+updatedAt: '2026-06-18T12:27:15.852Z'

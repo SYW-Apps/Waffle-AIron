@@ -1,0 +1,12 @@
+schemaVersion: "1.0.0"
+id: "iskills_exporter"
+name: "Skills Exporter Interface"
+description: "Interface contract for copying static workflow skills to agent config directories."
+component: "skills_exporter"
+methods:
+  - name: "exportSddSkills"
+    description: "Copies built-in SDD skills templates into the project's local config folders"
+    signature: "exportSddSkills(): void"
+    returns: "void"
+createdAt: "2026-06-11T14:50:00Z"
+updatedAt: "2026-06-11T14:50:00Z"

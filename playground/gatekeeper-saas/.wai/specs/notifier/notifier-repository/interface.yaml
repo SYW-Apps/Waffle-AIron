@@ -1,0 +1,18 @@
+id: inotifier-repository
+name: Notifier Repository Interface
+description: Facade database lookup interface for usage logs.
+component: notifier-repository
+methods:
+  - name: save_alert_log
+    description: Saves logged alert detail record.
+    signature: 'save_alert_log(log: UsageAlertLog): Promise<void>'
+    returns: Promise<void>
+  - name: has_notified_in_period
+    description: Verifies if an email warning has already been sent.
+    signature: >-
+      has_notified_in_period(subscription_id: String, threshold: Int32, period_start: DateTime):
+      Promise<Boolean>
+    returns: Promise<Boolean>
+status: complete
+createdAt: '2026-06-16T17:47:06.030Z'
+updatedAt: '2026-06-16T17:47:06.031Z'

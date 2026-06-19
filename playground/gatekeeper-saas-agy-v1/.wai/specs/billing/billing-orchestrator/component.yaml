@@ -1,0 +1,13 @@
+id: "billing-orchestrator"
+name: "Billing Orchestrator"
+description: "Coordinates subscription updates, parses customer info, updates PostgreSQL records, and syncs plans/limits."
+subsystem: "billing"
+componentType: "Orchestrator"
+owns: []
+dependsOn:
+  - "subscription-repository"
+  - "customer-repository"
+  - "stripe-adapter"
+status: "complete"
+createdAt: "2026-06-15T23:18:00Z"
+updatedAt: "2026-06-15T23:20:00Z"

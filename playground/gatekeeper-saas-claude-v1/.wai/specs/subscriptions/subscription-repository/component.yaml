@@ -1,0 +1,17 @@
+id: subscription-repository
+name: Subscription Repository
+description: >-
+  Persistence facade for the Subscription aggregate (tier, Stripe ids, status, processed webhook
+  event log for idempotency). Consumers use this facade only. Owns the subscription store, registry,
+  index, and Postgres adapter.
+subsystem: subscriptions
+componentType: Repository
+owns:
+  - subscription-store
+  - subscription-registry
+  - subscription-index
+  - subscription-db-adapter
+dependsOn: []
+status: complete
+createdAt: '2026-06-17T17:43:26.973Z'
+updatedAt: '2026-06-18T12:27:16.239Z'

@@ -1,0 +1,11 @@
+id: "customer-registry"
+name: "Customer Registry"
+description: "Handles CUD (create, update, delete) operations for customer records."
+subsystem: "billing"
+componentType: "Registry"
+owns: []
+dependsOn:
+  - "database-adapter"
+status: "complete"
+createdAt: "2026-06-15T23:18:00Z"
+updatedAt: "2026-06-15T23:20:00Z"

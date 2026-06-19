@@ -1,0 +1,19 @@
+id: usage-event-observer-impl
+name: Usage Event Observer Implementation
+description: Consumes usage.threshold and forwards to the notification workflow.
+contract: iusage-event-observer
+sourcePath: src/notifications/usage_event_observer.rs
+methods:
+  - name: on_usage_threshold
+    narrative:
+      - stepNumber: 1
+        description: Forward the deserialized UsageThresholdEvent to the notification orchestrator
+        type: call
+        targetComponent: notification-orchestrator
+        targetMethod: handle_threshold
+      - stepNumber: 2
+        description: Acknowledge the message on success; on error let the bus retry per its policy
+        type: local
+status: complete
+createdAt: '2026-06-17T18:40:59.243Z'
+updatedAt: '2026-06-18T12:27:17.416Z'

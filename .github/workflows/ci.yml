@@ -8,7 +8,7 @@ on:
 
 jobs:
   check:
-    name: Typecheck & Test
+    name: Typecheck, Test, Build & Conformance
     runs-on: ubuntu-latest
 
     steps:
@@ -28,3 +28,11 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # Dogfood: enforce wairon's own architecture-conformance gate on its spec tree.
+      # --ci treats warnings as errors.
+      - name: Architecture conformance gate
+        run: node dist/cli/index.js validate --ci

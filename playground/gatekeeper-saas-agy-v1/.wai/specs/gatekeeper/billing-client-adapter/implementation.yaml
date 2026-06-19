@@ -1,0 +1,16 @@
+id: "billing-client-adapter-impl"
+name: "Billing Client Adapter Implementation"
+description: "Implementation of Billing Client Adapter that forwards calls directly to the Billing Subsystem's subscription repository."
+contract: "ibilling-client-adapter"
+sourcePath: "src/gatekeeper/billing_client_adapter.rs"
+methods:
+  - name: "get_subscription_by_key"
+    narrative:
+      - stepNumber: 1
+        description: "Delegate subscription lookup to the billing subsystem subscription repository"
+        type: "call"
+        targetComponent: "subscription-repository"
+        targetMethod: "get_subscription_by_key"
+status: "complete"
+createdAt: "2026-06-17T14:12:00Z"
+updatedAt: "2026-06-17T14:12:00Z"

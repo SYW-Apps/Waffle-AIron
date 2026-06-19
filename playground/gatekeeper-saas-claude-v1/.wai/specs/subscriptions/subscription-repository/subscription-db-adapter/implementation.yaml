@@ -1,0 +1,31 @@
+id: subscription-db-adapter-impl
+name: Subscription Postgres Adapter Implementation
+description: sqlx Postgres I/O for subscriptions and processed events.
+contract: isubscription-db-adapter
+sourcePath: src/subscriptions/subscription_db_adapter.rs
+methods:
+  - name: load_subscription
+    narrative:
+      - stepNumber: 1
+        description: SELECT the subscription row by id and map into a Subscription
+        type: local
+  - name: load_by_account
+    narrative:
+      - stepNumber: 1
+        description: SELECT the subscription row by billing_account_id and map into a Subscription
+        type: local
+  - name: upsert_subscription
+    narrative:
+      - stepNumber: 1
+        description: INSERT INTO subscriptions ... ON CONFLICT (id) DO UPDATE binding the Subscription fields
+        type: local
+  - name: insert_processed_event
+    narrative:
+      - stepNumber: 1
+        description: >-
+          INSERT INTO processed_stripe_events (event_id, subscription_id) ON CONFLICT (event_id) DO
+          NOTHING; return true if a row was inserted, false if it already existed
+        type: local
+status: complete
+createdAt: '2026-06-17T18:37:21.551Z'
+updatedAt: '2026-06-18T12:27:17.587Z'

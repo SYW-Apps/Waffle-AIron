@@ -1,0 +1,21 @@
+kind: value-object
+id: stripe-event
+name: Stripe Event
+description: A verified, parsed Stripe webhook event.
+subsystem: subscriptions
+fields:
+  - name: id
+    type: string
+    description: Stripe event id (used for idempotency)
+    optional: false
+  - name: kind
+    type: string
+    description: Event type, e.g. customer.subscription.updated
+    optional: false
+  - name: payload
+    type: string
+    description: Parsed event payload (JSON)
+    optional: false
+methods: []
+createdAt: '2026-06-17T17:48:48.115Z'
+updatedAt: '2026-06-17T17:48:48.127Z'

@@ -1,0 +1,30 @@
+schemaVersion: "1.0.0"
+id: "cli_validator_adapter_impl"
+name: "CLI Validator Adapter Implementation"
+description: "Concrete implementation forwarding validation requests to the validator portal."
+contract: "icli_validator_adapter"
+sourcePath: ".wai/specs/implementations/cli_validator_adapter_impl.yaml"
+methods:
+  - name: "validateSddTree"
+    narrative:
+      - stepNumber: 1
+        description: "Call validateSddTree on the validator portal"
+        type: "call"
+        targetComponent: "validator_portal"
+        targetMethod: "validateSddTree"
+  - name: "validateRegistry"
+    narrative:
+      - stepNumber: 1
+        description: "Call validateRegistry on the validator portal"
+        type: "call"
+        targetComponent: "validator_portal"
+        targetMethod: "validateRegistry"
+  - name: "validateProjectConfig"
+    narrative:
+      - stepNumber: 1
+        description: "Call validateProjectConfig on the validator portal"
+        type: "call"
+        targetComponent: "validator_portal"
+        targetMethod: "validateProjectConfig"
+createdAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-06-19T12:00:00Z"

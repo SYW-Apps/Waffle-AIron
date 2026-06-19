@@ -1,0 +1,12 @@
+id: iemail-adapter
+name: Email Adapter Interface
+description: The only block doing email I/O via the HTTP email provider.
+component: email-adapter
+methods:
+  - name: send
+    description: Send a composed email via the provider
+    signature: 'async fn send(&self, message: NotificationMessage) -> Result<(), NotificationError>'
+    returns: Result<(), NotificationError>
+status: complete
+createdAt: '2026-06-17T18:17:39.046Z'
+updatedAt: '2026-06-18T12:27:16.717Z'

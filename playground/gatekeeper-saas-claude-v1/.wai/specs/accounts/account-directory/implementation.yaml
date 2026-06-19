@@ -1,0 +1,19 @@
+id: account-directory-impl
+name: Account Directory Implementation
+description: Published read capability for cross-subsystem billing lookups.
+contract: iaccount-directory
+sourcePath: src/accounts/account_directory.rs
+methods:
+  - name: resolve_billing_email
+    narrative:
+      - stepNumber: 1
+        description: Resolve the billing email via the account repository
+        type: call
+        targetComponent: account-repository
+        targetMethod: resolve_billing_email
+      - stepNumber: 2
+        description: Return the Option<Email>
+        type: local
+status: complete
+createdAt: '2026-06-17T18:40:34.586Z'
+updatedAt: '2026-06-18T12:27:16.979Z'

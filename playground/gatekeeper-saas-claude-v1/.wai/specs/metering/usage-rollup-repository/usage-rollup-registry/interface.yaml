@@ -1,0 +1,20 @@
+id: iusage-rollup-registry
+name: Usage Rollup Registry Interface
+description: >-
+  Write path for usage rollups: sets period totals (absolute) in the store and persists via the
+  Postgres adapter. Set-style so reconciliation re-flushes are idempotent.
+component: usage-rollup-registry
+methods:
+  - name: set_usage
+    description: >-
+      Set the period rollup's cumulative used to the given absolute value in the store and persist.
+      Idempotent: re-flushing the same snapshot does not change the total.
+    signature: >-
+      async fn set_usage(&self, subscription_id: SubscriptionId, resource: String, period: String,
+      used: i64) -> Result<(), MeteringError>
+    returns: Result<(), MeteringError>
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-06-18T22:59:17.657Z'
+updatedAt: '2026-06-19T10:16:46.705Z'

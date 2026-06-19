@@ -1,0 +1,10 @@
+id: "sdd_validator"
+name: "SDD Architectural Validator"
+description: "Checks spec tree completeness, interface contract compliance, and enforces component-type interaction boundaries."
+parentSystem: "Waffle-AIron"
+publicInterfaces:
+  - type: "Custom"
+    component: "validator_portal"
+    details: "Provides spec validation services."
+createdAt: "2026-06-10T19:28:00.000Z"
+updatedAt: "2026-06-10T19:28:00.000Z"

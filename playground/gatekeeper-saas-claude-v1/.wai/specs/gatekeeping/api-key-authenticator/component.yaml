@@ -1,0 +1,14 @@
+id: api-key-authenticator
+name: API Key Authenticator
+description: >-
+  Verifies a presented API key by hashing it and resolving the active credential to its
+  (subscription_id, billing_account_id). Returns an authentication result; performs no I/O beyond
+  the credential repository.
+subsystem: gatekeeping
+componentType: Specialist
+owns: []
+dependsOn:
+  - credential-repository
+status: complete
+createdAt: '2026-06-17T18:05:42.907Z'
+updatedAt: '2026-06-18T12:27:15.754Z'

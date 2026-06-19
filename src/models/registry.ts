@@ -2,11 +2,11 @@ import { z } from 'zod';
 import { AgentRecordSchema } from './agent.js';
 
 // ---------------------------------------------------------------------------
-// Registry — lives at .wai/registry/agents.json
+// Registry — the in-memory agent set
 //
-// The registry is the authoritative list of all agents defined for this project.
-// It is managed programmatically by the CLI and should not be edited by hand
-// (though it is human-readable for inspection).
+// Agents are derived from the SDD spec tree (resolveAgentTopology); this is the
+// in-memory shape returned by loadRegistry(). There is no hand-maintained
+// agents.json — generated agent files are outputs, not a source of truth.
 //
 // JSON is used (not YAML) because:
 // - The registry is primarily written by the CLI, not by humans

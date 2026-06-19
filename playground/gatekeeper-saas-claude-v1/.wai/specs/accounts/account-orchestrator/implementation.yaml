@@ -1,0 +1,70 @@
+id: account-orchestrator-impl
+name: Account Orchestrator Implementation
+description: Account workflows over the account repository.
+contract: iaccount-orchestrator
+sourcePath: src/accounts/account_orchestrator.rs
+methods:
+  - name: create_account
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Validate the billing email and assemble the Account aggregate: generate
+          CustomerId/BillingAccountId/ContactIds, build Customer + BillingAccount (status Active) +
+          Contacts
+        type: local
+      - stepNumber: 2
+        description: Persist the aggregate
+        type: call
+        targetComponent: account-repository
+        targetMethod: save_account
+      - stepNumber: 3
+        description: Return the created Account
+        type: local
+  - name: get_account
+    narrative:
+      - stepNumber: 1
+        description: Find the account aggregate
+        type: call
+        targetComponent: account-repository
+        targetMethod: find_account
+      - stepNumber: 2
+        description: Return it or AccountError::NotFound
+        type: local
+  - name: get_customer
+    narrative:
+      - stepNumber: 1
+        description: Find the customer
+        type: call
+        targetComponent: account-repository
+        targetMethod: find_customer
+      - stepNumber: 2
+        description: Return it or NotFound
+        type: local
+  - name: update_billing_email
+    narrative:
+      - stepNumber: 1
+        description: Validate the new email, then apply the change
+        type: call
+        targetComponent: account-repository
+        targetMethod: update_billing_email
+      - stepNumber: 2
+        description: Re-read the account
+        type: call
+        targetComponent: account-repository
+        targetMethod: find_account
+      - stepNumber: 3
+        description: Return the refreshed account or NotFound
+        type: local
+  - name: deactivate_account
+    narrative:
+      - stepNumber: 1
+        description: Set the account status to Deactivated
+        type: call
+        targetComponent: account-repository
+        targetMethod: set_status
+      - stepNumber: 2
+        description: Return Ok(())
+        type: local
+status: complete
+createdAt: '2026-06-17T18:40:27.244Z'
+updatedAt: '2026-06-18T12:27:16.993Z'

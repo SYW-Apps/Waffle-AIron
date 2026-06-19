@@ -1,0 +1,13 @@
+id: plan-index
+name: Plan Index
+description: >-
+  Read path over the plan store: look up a plan by id, list tiers, and read a tier's limit set.
+  Projects the store state; never mutates it.
+subsystem: subscriptions
+componentType: Index
+owns: []
+dependsOn:
+  - plan-store
+status: complete
+createdAt: '2026-06-17T17:43:23.206Z'
+updatedAt: '2026-06-18T12:27:16.151Z'

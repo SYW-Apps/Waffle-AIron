@@ -1,0 +1,12 @@
+id: credential-store
+name: Credential Store
+description: >-
+  Authoritative state for API-key credentials. Depended upon by the credential registry and index;
+  never depends on them.
+subsystem: gatekeeping
+componentType: Store
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-06-17T18:05:46.678Z'
+updatedAt: '2026-06-18T12:27:15.840Z'

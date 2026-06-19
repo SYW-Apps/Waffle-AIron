@@ -1,0 +1,12 @@
+kind: value-object
+id: billing-account-id
+name: Billing Account Id
+description: Newtype identifier for a BillingAccount. Shared system-wide and referenced cross-subsystem.
+fields:
+  - name: value
+    type: string
+    description: Opaque unique id
+    optional: false
+methods: []
+createdAt: '2026-06-17T18:44:08.749Z'
+updatedAt: '2026-06-17T18:44:08.766Z'

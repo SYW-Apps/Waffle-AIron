@@ -1,0 +1,9 @@
+id: "cli_skills_adapter"
+name: "CLI Skills Client Adapter"
+description: "Local client adapter in sdd_cli to cross the subsystem boundary to sdd_skills."
+subsystem: "sdd_cli"
+componentType: "Adapter"
+dependsOn:
+  - "skills_portal"
+createdAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-06-19T12:00:00Z"

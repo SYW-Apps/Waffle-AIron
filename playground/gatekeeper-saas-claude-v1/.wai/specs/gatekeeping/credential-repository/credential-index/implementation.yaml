@@ -1,0 +1,29 @@
+id: credential-index-impl
+name: Credential Index Implementation
+description: Read projection over the credential store.
+contract: icredential-index
+sourcePath: src/gatekeeping/credential_index.rs
+methods:
+  - name: find_by_hash
+    narrative:
+      - stepNumber: 1
+        description: Read the credential from the store by key hash
+        type: call
+        targetComponent: credential-store
+        targetMethod: get_by_hash
+      - stepNumber: 2
+        description: Return the credential if Active, else None
+        type: local
+  - name: find_by_id
+    narrative:
+      - stepNumber: 1
+        description: Read the credential from the store by id
+        type: call
+        targetComponent: credential-store
+        targetMethod: get
+      - stepNumber: 2
+        description: Return the result
+        type: local
+status: complete
+createdAt: '2026-06-17T18:26:49.311Z'
+updatedAt: '2026-06-18T12:27:17.143Z'

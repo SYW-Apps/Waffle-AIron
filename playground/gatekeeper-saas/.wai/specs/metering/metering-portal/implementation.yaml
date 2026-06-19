@@ -1,0 +1,35 @@
+id: metering-portal-impl
+name: Metering Portal Implementation
+description: REST Controller routing key verification traffic.
+contract: imetering-portal
+sourcePath: src/metering/portal.rs
+methods:
+  - name: check_access
+    narrative:
+      - stepNumber: 1
+        description: Parse API key parameter from request headers.
+        type: local
+      - stepNumber: 2
+        description: Call Orchestrator to verify API key validity and rate limits.
+        type: call
+        targetComponent: metering-orchestrator
+        targetMethod: verify_access
+      - stepNumber: 3
+        description: Format and return JSON HTTP Response.
+        type: local
+  - name: report_usage
+    narrative:
+      - stepNumber: 1
+        description: Parse request headers and key cost weights from request body.
+        type: local
+      - stepNumber: 2
+        description: Call Orchestrator to record request metrics usage.
+        type: call
+        targetComponent: metering-orchestrator
+        targetMethod: increment_count
+      - stepNumber: 3
+        description: Format and return JSON HTTP Response with usage summary.
+        type: local
+status: complete
+createdAt: '2026-06-16T17:35:14.696Z'
+updatedAt: '2026-06-16T17:35:14.697Z'

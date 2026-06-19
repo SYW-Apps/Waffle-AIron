@@ -1,0 +1,17 @@
+kind: value-object
+id: metering-error
+name: Metering Error
+description: Domain error for the metering subsystem.
+subsystem: metering
+fields:
+  - name: variant
+    type: string
+    description: One of NotFound | CounterFailure | PublishFailure | Persistence
+    optional: false
+  - name: message
+    type: string
+    description: Human-readable detail
+    optional: false
+methods: []
+createdAt: '2026-06-17T17:59:21.922Z'
+updatedAt: '2026-06-17T17:59:21.939Z'

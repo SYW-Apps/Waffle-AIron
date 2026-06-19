@@ -1,0 +1,13 @@
+id: billing-index
+name: Billing Index
+description: >-
+  Maintains read-optimized search indices (e.g. lookup customer by key_hash or stripe_customer_id)
+  over the billing store.
+subsystem: identity-billing
+componentType: Index
+owns: []
+dependsOn:
+  - billing-store
+status: complete
+createdAt: '2026-06-16T16:58:49.760Z'
+updatedAt: '2026-06-16T16:58:49.760Z'

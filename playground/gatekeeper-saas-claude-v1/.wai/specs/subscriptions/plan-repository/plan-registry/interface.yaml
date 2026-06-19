@@ -1,0 +1,20 @@
+id: iplan-registry
+name: Plan Registry Interface
+description: >-
+  Write path for the Plan aggregate: applies mutations to the plan store and persists via the
+  Postgres adapter.
+component: plan-registry
+methods:
+  - name: create_plan
+    description: Insert into store and upsert via adapter
+    signature: 'async fn create_plan(&self, plan: Plan) -> Result<(), SubscriptionError>'
+    returns: Result<(), SubscriptionError>
+  - name: update_tier_limits
+    description: Apply tier-limit change to store and persist
+    signature: >-
+      async fn update_tier_limits(&self, plan_id: PlanId, tier_id: TierId, limits: LimitSet) ->
+      Result<(), SubscriptionError>
+    returns: Result<(), SubscriptionError>
+status: complete
+createdAt: '2026-06-17T17:49:40.525Z'
+updatedAt: '2026-06-18T12:27:16.837Z'

@@ -1,0 +1,12 @@
+schemaVersion: "1.0.0"
+id: "itodo_manager"
+name: "Todo Manager Interface"
+description: "Interface contract for orchestrating todo task logic."
+component: "todo_manager"
+methods:
+  - name: "createTask"
+    description: "Processes task creation request"
+    signature: "createTask(title: string): Task"
+    returns: "Task"
+createdAt: "2026-06-11T15:00:00Z"
+updatedAt: "2026-06-11T15:00:00Z"

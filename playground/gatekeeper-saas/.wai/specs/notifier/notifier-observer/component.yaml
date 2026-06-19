@@ -1,0 +1,13 @@
+id: notifier-observer
+name: Notifier Event Observer
+description: >-
+  Listens to usage threshold warning events emitted by the metering subsystem and delegates to
+  orchestrator.
+subsystem: notifier
+componentType: Observer
+owns: []
+dependsOn:
+  - notifier-orchestrator
+status: complete
+createdAt: '2026-06-16T17:42:48.040Z'
+updatedAt: '2026-06-16T17:42:48.041Z'

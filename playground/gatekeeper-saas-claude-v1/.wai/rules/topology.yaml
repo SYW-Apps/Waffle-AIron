@@ -1,0 +1,7 @@
+version: 1.0.0
+notes:
+  - Prefer existing agents before creating new ones.
+  - Only create a new agent when a durable architectural boundary exists.
+  - Every non-meta agent must have at least one owned path.
+  - Generated outputs must be reproducible from the registry.
+  - Avoid overlapping primary ownership between agents.

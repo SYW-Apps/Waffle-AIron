@@ -1,0 +1,13 @@
+id: stripe-adapter
+name: Stripe Adapter
+description: >-
+  The only block doing Stripe I/O (async-stripe): create/update/cancel subscriptions and customers,
+  and verify + parse incoming webhook signatures into typed events. Performs no domain logic and
+  depends on no other subscriptions components.
+subsystem: subscriptions
+componentType: Adapter
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-06-17T17:43:15.678Z'
+updatedAt: '2026-06-18T12:27:16.188Z'

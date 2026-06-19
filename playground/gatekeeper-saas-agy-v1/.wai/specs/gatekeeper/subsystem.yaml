@@ -1,0 +1,11 @@
+id: "gatekeeper"
+name: "Gatekeeper Subsystem"
+description: "Handles real-time API request interception, key authorization, rate limiting, and access metering."
+parentSystem: "gatekeeper-saas"
+publicInterfaces:
+  - type: "REST"
+    details: "Ingress proxy middleware intercepting /api/v1/* traffic"
+    component: "gatekeeper-portal"
+status: "complete"
+createdAt: "2026-06-15T23:11:00Z"
+updatedAt: "2026-06-15T23:11:00Z"

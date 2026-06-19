@@ -1,0 +1,33 @@
+kind: value-object
+id: decision-audit-record
+name: Decision Audit Record
+description: An append-only record of one authorize decision.
+subsystem: gatekeeping
+fields:
+  - name: subscription_id
+    type: string
+    description: SubscriptionId
+    optional: false
+  - name: billing_account_id
+    type: string
+    description: BillingAccountId
+    optional: false
+  - name: resource
+    type: string
+    description: Resource accessed
+    optional: false
+  - name: allowed
+    type: bool
+    description: Whether it was allowed
+    optional: false
+  - name: reason
+    type: string
+    description: Decision reason
+    optional: false
+  - name: timestamp
+    type: string
+    description: RFC3339 decision time
+    optional: false
+methods: []
+createdAt: '2026-06-17T18:07:25.017Z'
+updatedAt: '2026-06-17T18:07:25.030Z'

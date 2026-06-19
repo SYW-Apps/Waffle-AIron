@@ -1,0 +1,10 @@
+id: "stripe-adapter"
+name: "Stripe Adapter"
+description: "Adapter managing outgoing HTTPS communication with the external Stripe API."
+subsystem: "billing"
+componentType: "Adapter"
+owns: []
+dependsOn: []
+status: "complete"
+createdAt: "2026-06-15T23:18:00Z"
+updatedAt: "2026-06-15T23:20:00Z"

@@ -1,0 +1,38 @@
+id: credential-orchestrator-impl
+name: Credential Orchestrator Implementation
+description: Issues and revokes API keys.
+contract: icredential-orchestrator
+sourcePath: src/gatekeeping/credential_orchestrator.rs
+methods:
+  - name: issue_key
+    narrative:
+      - stepNumber: 1
+        description: Generate a cryptographically random API key (plaintext) and a new ApiKeyId
+        type: local
+      - stepNumber: 2
+        description: Hash the plaintext key (e.g. SHA-256)
+        type: local
+      - stepNumber: 3
+        description: 'Build an ApiKey {id, subscription_id, key_hash, status: Active, created_at}'
+        type: local
+      - stepNumber: 4
+        description: Persist the credential
+        type: call
+        targetComponent: credential-repository
+        targetMethod: save_key
+      - stepNumber: 5
+        description: Return IssuedKey {id, plaintext, subscription_id} (plaintext exposed only here)
+        type: local
+  - name: revoke_key
+    narrative:
+      - stepNumber: 1
+        description: Revoke the credential by id
+        type: call
+        targetComponent: credential-repository
+        targetMethod: revoke
+      - stepNumber: 2
+        description: Return Ok(())
+        type: local
+status: complete
+createdAt: '2026-06-17T18:26:33.184Z'
+updatedAt: '2026-06-18T12:27:17.117Z'

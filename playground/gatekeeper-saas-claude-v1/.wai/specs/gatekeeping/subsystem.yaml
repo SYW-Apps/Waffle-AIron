@@ -1,0 +1,17 @@
+id: gatekeeping
+name: Gatekeeping Subsystem
+description: >-
+  The gate. Inbound entrypoint that authorizes each protected API call in real time by consulting
+  resolved entitlements from subscriptions and check-and-decrementing counters in metering,
+  returning an allow/deny decision. Owns decision/policy logic; holds no usage state itself.
+parentSystem: gatekeeper-saas-claude-v1
+publicInterfaces:
+  - type: REST
+    details: >-
+      /v1/authorize — authorize a single protected API call (allow/deny + decrement); /v1/api-keys —
+      issue/revoke caller API keys
+    component: gatekeeping-portal
+    interface: igatekeeping-portal
+status: complete
+createdAt: '2026-06-16T22:25:44.034Z'
+updatedAt: '2026-06-18T12:27:15.598Z'

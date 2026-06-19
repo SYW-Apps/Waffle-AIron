@@ -1,0 +1,35 @@
+id: "gatekeeper-orchestrator-impl"
+name: "Gatekeeper Orchestrator Implementation"
+description: "Coordinates key lookup, quota checking, and rate-limiting check and increments."
+contract: "igatekeeper-orchestrator"
+sourcePath: "src/gatekeeper/orchestrator.rs"
+methods:
+  - name: "authorize_request"
+    narrative:
+      - stepNumber: 1
+        description: "Call the subscription repository to fetch limits and active status associated with the key"
+        type: "call"
+        targetComponent: "billing-client-adapter"
+        targetMethod: "get_subscription_by_key"
+      - stepNumber: 2
+        description: "Verify if subscription is active and return unauthorized if not active"
+        type: "local"
+      - stepNumber: 3
+        description: "Call the meter repository to atomically check rate limits and monthly limits, incrementing counts if allowed"
+        type: "call"
+        targetComponent: "meter-repository"
+        targetMethod: "check_and_increment"
+      - stepNumber: 4
+        description: "Check if the usage counters have reached the 80% or 100% threshold trigger points"
+        type: "local"
+      - stepNumber: 5
+        description: "Call the notification orchestrator asynchronously to dispatch warning emails/alerts if thresholds are crossed"
+        type: "call"
+        targetComponent: "notification-client-adapter"
+        targetMethod: "dispatch_alert"
+      - stepNumber: 6
+        description: "Return the final authorization decision (allowed/denied) along with rate-limiting response details"
+        type: "local"
+status: "complete"
+createdAt: "2026-06-15T23:17:00Z"
+updatedAt: "2026-06-15T23:18:40Z"

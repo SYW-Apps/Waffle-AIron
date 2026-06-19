@@ -1,0 +1,14 @@
+id: credential-registry
+name: Credential Registry
+description: >-
+  Write path for credentials: issue (insert hash mapping) and revoke (set status). Applies mutations
+  to the credential store and persists via the Postgres adapter.
+subsystem: gatekeeping
+componentType: Registry
+owns: []
+dependsOn:
+  - credential-store
+  - credential-db-adapter
+status: complete
+createdAt: '2026-06-17T18:05:48.558Z'
+updatedAt: '2026-06-18T12:27:15.829Z'

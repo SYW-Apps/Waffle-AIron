@@ -1,0 +1,13 @@
+id: redis-counter-adapter
+name: Redis Counter Adapter
+description: >-
+  The only block doing Redis I/O for metering (deadpool-redis). Provides atomic check-and-decrement
+  (Lua/DECRBY with a floor), read, and seed-with-TTL keyed per subscription/resource/window. No
+  domain logic.
+subsystem: metering
+componentType: Adapter
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-06-17T17:52:46.181Z'
+updatedAt: '2026-06-18T12:27:15.911Z'

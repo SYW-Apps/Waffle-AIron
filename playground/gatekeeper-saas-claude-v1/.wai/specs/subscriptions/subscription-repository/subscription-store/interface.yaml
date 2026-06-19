@@ -1,0 +1,38 @@
+id: isubscription-store
+name: Subscription Store Interface
+description: Authoritative in-process state for the Subscription aggregate and its processed-event ids.
+component: subscription-store
+methods:
+  - name: insert
+    description: Insert or replace a subscription
+    signature: 'fn insert(&self, sub: Subscription)'
+    returns: ()
+  - name: get
+    description: Get a subscription by id
+    signature: 'fn get(&self, id: SubscriptionId) -> Option<Subscription>'
+    returns: Option<Subscription>
+  - name: get_by_account
+    description: Get a subscription by billing account id
+    signature: 'fn get_by_account(&self, id: BillingAccountId) -> Option<Subscription>'
+    returns: Option<Subscription>
+  - name: set_tier
+    description: Mutate tier; false if absent
+    signature: 'fn set_tier(&self, id: SubscriptionId, tier_id: TierId) -> bool'
+    returns: bool
+  - name: set_status
+    description: Mutate status/period; false if absent
+    signature: >-
+      fn set_status(&self, id: SubscriptionId, status: SubscriptionStatus, current_period_end:
+      String) -> bool
+    returns: bool
+  - name: record_event
+    description: Record a processed event id; false if already present
+    signature: 'fn record_event(&self, event_id: String) -> bool'
+    returns: bool
+  - name: has_event
+    description: Whether an event id is already recorded
+    signature: 'fn has_event(&self, event_id: String) -> bool'
+    returns: bool
+status: complete
+createdAt: '2026-06-17T17:50:11.126Z'
+updatedAt: '2026-06-18T12:27:16.954Z'

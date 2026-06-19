@@ -1,0 +1,38 @@
+id: account-store-impl
+name: Account Store Implementation
+description: Authoritative in-memory account aggregate state with a customer secondary index.
+contract: iaccount-store
+sourcePath: src/accounts/account_store.rs
+methods:
+  - name: insert
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Insert or replace the aggregate in the billing-account-id map and update the customer-id
+          secondary index
+        type: local
+  - name: get
+    narrative:
+      - stepNumber: 1
+        description: Return a clone of the aggregate for the billing account id if present
+        type: local
+  - name: get_by_customer
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the billing account id via the customer secondary index and return a clone if
+          present
+        type: local
+  - name: apply_billing_email
+    narrative:
+      - stepNumber: 1
+        description: If present, mutate the billing_account.billing_email and return true, else false
+        type: local
+  - name: set_status
+    narrative:
+      - stepNumber: 1
+        description: If present, mutate the status (customer + billing account) and return true, else false
+        type: local
+status: complete
+createdAt: '2026-06-17T18:40:49.369Z'
+updatedAt: '2026-06-18T12:27:17.051Z'

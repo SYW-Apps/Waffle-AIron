@@ -1,0 +1,12 @@
+id: ibilling-store
+name: Billing Store Interface
+description: Exposes underlying connection pool handle.
+component: billing-store
+methods:
+  - name: get_connection
+    description: Provides raw Postgres DB connection handle.
+    signature: 'get_connection(): Connection'
+    returns: Connection
+status: complete
+createdAt: '2026-06-16T16:30:02.114Z'
+updatedAt: '2026-06-16T16:30:02.115Z'

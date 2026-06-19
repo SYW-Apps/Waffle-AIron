@@ -1,0 +1,14 @@
+id: account-orchestrator
+name: Account Orchestrator
+description: >-
+  Coordinates account workflows: create a customer together with its billing account and contact,
+  update billing email, deactivate an account. Holds workflow control flow; delegates all
+  persistence to the account repository facade.
+subsystem: accounts
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - account-repository
+status: complete
+createdAt: '2026-06-16T22:40:22.949Z'
+updatedAt: '2026-06-18T12:27:15.661Z'

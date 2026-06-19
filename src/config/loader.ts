@@ -1,15 +1,15 @@
-import { aiDir, pathExists } from '../utils/fs.js';
-import { readJsonFile, readYamlFile, writeJsonFile, writeYamlFile } from '../utils/yaml.js';
-import { ProjectNotInitializedError } from '../utils/errors.js';
+import * as path from 'path';
+import { aiDir, pathExists, fromProjectRoot } from '../utils/fs.js';
+import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
+import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';
 import {
   ProjectConfig,
   ProjectConfigSchema,
   Registry,
-  RegistrySchema,
   createEmptyRegistry,
-  DomainRegistry,
-  DomainRegistrySchema,
-  createEmptyDomainRegistry,
+  TopologyConfig,
+  TopologyConfigSchema,
+  createEmptyTopologyConfig,
 } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -19,15 +19,36 @@ import {
 export const AI_PATHS = {
   root: () => aiDir(),
   projectConfig: () => aiDir('project.yaml'),
-  registryDir: () => aiDir('registry'),
-  agentsRegistry: () => aiDir('registry', 'agents.json'),
-  domainsRegistry: () => aiDir('registry', 'domains.json'),
+  topologyConfig: () => aiDir('topology.yaml'),
   templatesDir: () => aiDir('templates'),
-  bundlesDir: () => aiDir('bundles'),
   rulesDir: () => aiDir('rules'),
   docsDir: () => aiDir('docs'),
   generatedDir: () => aiDir('generated'),
-  jobsDir: () => aiDir('jobs'),
+  contextDir: () => aiDir('context'),
+  contextProjectMd: () => aiDir('context', 'project.md'),
+  contextArchitectureMd: () => aiDir('context', 'architecture.md'),
+  contextDomainsMd: () => aiDir('context', 'domains.md'),
+  contextWaironGuideMd: () => aiDir('context', 'wairon-guide.md'),
+  specsDir: () => {
+    try {
+      const projConfig = aiDir('project.yaml');
+      if (pathExists(projConfig)) {
+        const raw = readYamlFile(projConfig) as any;
+        if (raw && raw.paths && raw.paths.specsDir) {
+          return fromProjectRoot(raw.paths.specsDir);
+        }
+      }
+    } catch {
+      // ignore and fallback
+    }
+    return aiDir('specs');
+  },
+  specsSystem: () => path.join(AI_PATHS.specsDir(), 'system.yaml'),
+  specsSubsystemsDir: () => path.join(AI_PATHS.specsDir(), 'subsystems'),
+  specsComponentsDir: () => path.join(AI_PATHS.specsDir(), 'components'),
+  specsInterfacesDir: () => path.join(AI_PATHS.specsDir(), 'interfaces'),
+  specsImplementationsDir: () => path.join(AI_PATHS.specsDir(), 'implementations'),
+  specsTypesDir: () => path.join(AI_PATHS.specsDir(), 'types'),
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -56,7 +77,11 @@ export function assertProjectInitialized(): void {
 export function loadProjectConfig(): ProjectConfig {
   assertProjectInitialized();
   const raw = readYamlFile(AI_PATHS.projectConfig());
-  return ProjectConfigSchema.parse(raw);
+  try {
+    return ProjectConfigSchema.parse(raw);
+  } catch (e: unknown) {
+    throw new WaironError(`Invalid .wai/project.yaml: ${e instanceof Error ? e.message : String(e)}`);
+  }
 }
 
 /**
@@ -71,42 +96,37 @@ export function saveProjectConfig(config: ProjectConfig): void {
 // ---------------------------------------------------------------------------
 
 /**
- * Load and validate the agent registry from .wai/registry/agents.json.
- * Returns an empty registry if the file doesn't exist yet.
+ * Resolve the agent registry. The SDD spec tree (.wai/specs/) is the single
+ * source of truth for agents — the topology is always derived from it via
+ * resolveAgentTopology(), never read from a hand-maintained agents.json.
+ * Returns an empty registry when no system spec exists yet.
  */
 export function loadRegistry(): Registry {
   assertProjectInitialized();
-  const raw = readJsonFile(AI_PATHS.agentsRegistry());
-  if (raw === null) return createEmptyRegistry();
-  return RegistrySchema.parse(raw);
-}
-
-/**
- * Write the agent registry to .wai/registry/agents.json.
- */
-export function saveRegistry(registry: Registry): void {
-  registry.updatedAt = new Date().toISOString();
-  writeJsonFile(AI_PATHS.agentsRegistry(), registry);
+  if (!pathExists(AI_PATHS.specsSystem())) return createEmptyRegistry();
+  const { resolveAgentTopology } = require('../core/agent_resolver.js') as typeof import('../core/agent_resolver.js');
+  return {
+    schemaVersion: '1.0.0',
+    agents: resolveAgentTopology(),
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 // ---------------------------------------------------------------------------
-// Domain registry
+// Topology config (free-standing domains) — .wai/topology.yaml
+//
+// Spec-backed domains are derived from the spec tree at read time and are NOT
+// stored here. This file holds only free-standing (cross-cutting) domains.
 // ---------------------------------------------------------------------------
 
-/**
- * Load and validate the domain registry from .wai/registry/domains.json.
- */
-export function loadDomainRegistry(): DomainRegistry {
+export function loadTopologyConfig(): TopologyConfig {
   assertProjectInitialized();
-  const raw = readJsonFile(AI_PATHS.domainsRegistry());
-  if (raw === null) return createEmptyDomainRegistry();
-  return DomainRegistrySchema.parse(raw);
+  if (!pathExists(AI_PATHS.topologyConfig())) return createEmptyTopologyConfig();
+  const raw = readYamlFile(AI_PATHS.topologyConfig());
+  if (!raw) return createEmptyTopologyConfig();
+  return TopologyConfigSchema.parse(raw);
 }
 
-/**
- * Write the domain registry to .wai/registry/domains.json.
- */
-export function saveDomainRegistry(registry: DomainRegistry): void {
-  registry.updatedAt = new Date().toISOString();
-  writeJsonFile(AI_PATHS.domainsRegistry(), registry);
+export function saveTopologyConfig(config: TopologyConfig): void {
+  writeYamlFile(AI_PATHS.topologyConfig(), config);
 }

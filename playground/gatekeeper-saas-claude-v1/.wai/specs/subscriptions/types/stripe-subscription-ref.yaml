@@ -1,0 +1,21 @@
+kind: value-object
+id: stripe-subscription-ref
+name: Stripe Subscription Ref
+description: Reference returned by Stripe after creating/updating a subscription.
+subsystem: subscriptions
+fields:
+  - name: stripe_subscription_id
+    type: string
+    description: Stripe subscription id
+    optional: false
+  - name: status
+    type: subscriptions.subscription-status
+    description: Status reported by Stripe
+    optional: false
+  - name: current_period_end
+    type: string
+    description: RFC3339 current period end
+    optional: false
+methods: []
+createdAt: '2026-06-17T17:48:50.473Z'
+updatedAt: '2026-06-17T17:48:50.483Z'

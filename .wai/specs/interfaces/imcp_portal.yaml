@@ -1,0 +1,16 @@
+schemaVersion: "1.0.0"
+id: "imcp_portal"
+name: "MCP Portal Interface"
+description: "Inbound Portal contract for the MCP subsystem."
+component: "mcp_portal"
+methods:
+  - name: "createMcpServer"
+    description: "Initializes and registers the MCP server"
+    signature: "createMcpServer(): McpServer"
+    returns: "McpServer"
+    endpoint:
+      transport: "gRPC"
+      service: "McpServer"
+      method: "createMcpServer"
+createdAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-06-19T12:00:00Z"

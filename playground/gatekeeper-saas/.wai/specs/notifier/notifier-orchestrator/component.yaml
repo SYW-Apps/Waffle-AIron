@@ -1,0 +1,15 @@
+id: notifier-orchestrator
+name: Notifier Orchestrator
+description: >-
+  Coordinates checking notification alert limits logs, resolving contacts, sending emails, and
+  logging outcomes.
+subsystem: notifier
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - notifier-repository
+  - email-adapter
+  - notifier-billing-client
+status: complete
+createdAt: '2026-06-16T17:42:47.795Z'
+updatedAt: '2026-06-16T17:42:47.796Z'

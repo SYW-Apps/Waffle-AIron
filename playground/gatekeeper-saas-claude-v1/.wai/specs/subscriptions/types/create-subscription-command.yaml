@@ -1,0 +1,21 @@
+kind: value-object
+id: create-subscription-command
+name: Create Subscription Command
+description: 'Input to create a subscription: which billing account subscribes to which plan tier.'
+subsystem: subscriptions
+fields:
+  - name: billing_account_id
+    type: string
+    description: BillingAccountId
+    optional: false
+  - name: plan_id
+    type: string
+    description: PlanId
+    optional: false
+  - name: tier_id
+    type: string
+    description: TierId
+    optional: false
+methods: []
+createdAt: '2026-06-17T17:48:52.825Z'
+updatedAt: '2026-06-17T17:48:52.837Z'

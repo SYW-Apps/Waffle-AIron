@@ -27,6 +27,11 @@ export interface UserConfig {
    * where to create/remove symlinks or .cmd wrappers.
    */
   installDir?: string;
+  /**
+   * The active profile id to use when no per-project profile is set.
+   * Profiles are defined in ~/.wairon/profiles.json.
+   */
+  activeProfile?: string;
 }
 
 const CONFIG_DIR = path.join(os.homedir(), '.wairon');
@@ -77,5 +82,15 @@ export function getInstallDir(): string | undefined {
 export function setInstallDir(dir: string): void {
   const config = loadUserConfig();
   config.installDir = dir;
+  saveUserConfig(config);
+}
+
+export function getActiveProfileId(): string | undefined {
+  return loadUserConfig().activeProfile;
+}
+
+export function setActiveProfileId(id: string | undefined): void {
+  const config = loadUserConfig();
+  config.activeProfile = id;
   saveUserConfig(config);
 }

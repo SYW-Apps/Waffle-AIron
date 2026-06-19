@@ -1,0 +1,9 @@
+id: "inventory_subsystem"
+name: "Inventory Management Service"
+description: "Tracks item stock levels and reservations."
+parentSystem: "Ecommerce-Platform"
+publicInterfaces:
+  - type: "RPC"
+    details: "gRPC stock reservation service"
+createdAt: "2026-06-11T15:00:00Z"
+updatedAt: "2026-06-11T15:00:00Z"

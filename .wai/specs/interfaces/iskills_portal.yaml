@@ -1,0 +1,12 @@
+schemaVersion: "1.0.0"
+id: "iskills_portal"
+name: "Skills Portal Interface"
+description: "Inbound Portal contract for skills subsystem."
+component: "skills_portal"
+methods:
+  - name: "exportSddSkills"
+    description: "Triggers skill exporting"
+    signature: "exportSddSkills(): void"
+    returns: "void"
+createdAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-06-19T12:00:00Z"

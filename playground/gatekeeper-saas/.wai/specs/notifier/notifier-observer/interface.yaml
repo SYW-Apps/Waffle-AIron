@@ -1,0 +1,12 @@
+id: inotifier-observer
+name: Notifier Observer Interface
+description: Inbound message/event subscriber endpoint interface.
+component: notifier-observer
+methods:
+  - name: handle_usage_event
+    description: Handles event notifications for client usage thresholds.
+    signature: 'handle_usage_event(event: UsageAlertEvent): Promise<void>'
+    returns: Promise<void>
+status: complete
+createdAt: '2026-06-16T17:47:05.024Z'
+updatedAt: '2026-06-16T17:47:05.025Z'

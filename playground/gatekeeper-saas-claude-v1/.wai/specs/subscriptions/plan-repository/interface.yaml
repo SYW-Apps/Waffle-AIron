@@ -1,0 +1,34 @@
+id: iplan-repository
+name: Plan Repository Interface
+description: >-
+  Persistence facade for the Plan aggregate. Each method forwards 1:1 to the owned registry (writes)
+  or index (reads).
+component: plan-repository
+methods:
+  - name: save_plan
+    description: Persist a plan (forwards to registry)
+    signature: 'async fn save_plan(&self, plan: Plan) -> Result<(), SubscriptionError>'
+    returns: Result<(), SubscriptionError>
+  - name: update_tier_limits
+    description: Update a tier's limits (forwards to registry)
+    signature: >-
+      async fn update_tier_limits(&self, plan_id: PlanId, tier_id: TierId, limits: LimitSet) ->
+      Result<(), SubscriptionError>
+    returns: Result<(), SubscriptionError>
+  - name: find_plan
+    description: Find a plan (forwards to index)
+    signature: 'async fn find_plan(&self, id: PlanId) -> Result<Option<Plan>, SubscriptionError>'
+    returns: Result<Option<Plan>, SubscriptionError>
+  - name: list_plans
+    description: List plans (forwards to index)
+    signature: async fn list_plans(&self) -> Result<Vec<Plan>, SubscriptionError>
+    returns: Result<Vec<Plan>, SubscriptionError>
+  - name: find_tier_limits
+    description: Read a tier's limit set (forwards to index)
+    signature: >-
+      async fn find_tier_limits(&self, plan_id: PlanId, tier_id: TierId) -> Result<Option<LimitSet>,
+      SubscriptionError>
+    returns: Result<Option<LimitSet>, SubscriptionError>
+status: complete
+createdAt: '2026-06-17T17:49:37.734Z'
+updatedAt: '2026-06-18T12:27:16.801Z'

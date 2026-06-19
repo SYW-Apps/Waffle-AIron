@@ -1,0 +1,37 @@
+kind: entity
+id: api-key
+name: ApiKey
+description: Access credential for the customer to authenticate and authorize API requests.
+subsystem: identity-billing
+fields:
+  - name: id
+    type: String
+    description: Unique identifier for the API key.
+    optional: false
+  - name: customer_id
+    type: String
+    description: ForeignKey pointing to the owning Customer.
+    optional: false
+  - name: key_hash
+    type: String
+    description: SHA-256 hash of the API key for secure lookup.
+    optional: false
+  - name: prefix
+    type: String
+    description: Visible display prefix of the API key (e.g. gk_live_abcd).
+    optional: false
+  - name: status
+    type: String
+    description: 'Key status: active or revoked.'
+    optional: false
+  - name: created_at
+    type: DateTime
+    description: Timestamp when the key was generated.
+    optional: false
+  - name: updated_at
+    type: DateTime
+    description: Timestamp when the key status was modified.
+    optional: false
+methods: []
+createdAt: '2026-06-16T16:26:51.045Z'
+updatedAt: '2026-06-16T16:26:51.049Z'

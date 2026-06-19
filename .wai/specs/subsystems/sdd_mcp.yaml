@@ -1,0 +1,10 @@
+id: "sdd_mcp"
+name: "SDD MCP Server"
+description: "Hosts the Stdio Model Context Protocol (MCP) server, exposing tools for AI specifications manipulation."
+parentSystem: "Waffle-AIron"
+publicInterfaces:
+  - type: "RPC"
+    component: "mcp_portal"
+    details: "Exposes 6 standard sdd_* tools over Model Context Protocol stdio transport."
+createdAt: "2026-06-10T19:28:00.000Z"
+updatedAt: "2026-06-10T19:28:00.000Z"

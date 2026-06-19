@@ -1,0 +1,20 @@
+id: iplan-db-adapter
+name: Plan Postgres Adapter Interface
+description: The only block doing Postgres I/O for the plan aggregate (sqlx). No domain logic.
+component: plan-db-adapter
+methods:
+  - name: load_plan
+    description: Load a plan with tiers and limits
+    signature: 'async fn load_plan(&self, id: PlanId) -> Result<Option<Plan>, DbError>'
+    returns: Result<Option<Plan>, DbError>
+  - name: load_all_plans
+    description: Load all plans (for store hydration)
+    signature: async fn load_all_plans(&self) -> Result<Vec<Plan>, DbError>
+    returns: Result<Vec<Plan>, DbError>
+  - name: upsert_plan
+    description: Insert or update a plan with its tiers and limits
+    signature: 'async fn upsert_plan(&self, plan: &Plan) -> Result<(), DbError>'
+    returns: Result<(), DbError>
+status: complete
+createdAt: '2026-06-17T17:49:50.942Z'
+updatedAt: '2026-06-18T12:27:16.813Z'

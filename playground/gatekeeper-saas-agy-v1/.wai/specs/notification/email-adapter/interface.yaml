@@ -1,0 +1,12 @@
+id: "iemail-adapter"
+name: "Email Adapter Interface"
+description: "Interface representing outgoing email client operations."
+component: "email-adapter"
+methods:
+  - name: "send_email"
+    description: "Sends an email to the recipient with a specified subject and body."
+    signature: "async fn send_email(to: String, subject: String, body: String) -> Result<(), AdapterError>"
+    returns: "Result<(), AdapterError>"
+status: "complete"
+createdAt: "2026-06-15T23:21:00Z"
+updatedAt: "2026-06-15T23:25:00Z"

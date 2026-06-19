@@ -1,0 +1,12 @@
+id: inotifier-store
+name: Notifier Store Interface
+description: Connection handler contract.
+component: notifier-store
+methods:
+  - name: get_connection
+    description: Provides PostgreSQL connection client handle.
+    signature: 'get_connection(): Connection'
+    returns: Connection
+status: complete
+createdAt: '2026-06-16T17:47:06.285Z'
+updatedAt: '2026-06-16T17:47:06.286Z'

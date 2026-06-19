@@ -1,0 +1,14 @@
+id: notification-log-adapter-impl
+name: Notification Log Adapter Implementation
+description: Append-only Postgres writer for notification deliveries.
+contract: inotification-log-adapter
+sourcePath: src/notifications/notification_log_adapter.rs
+methods:
+  - name: record_sent
+    narrative:
+      - stepNumber: 1
+        description: INSERT the NotificationRecord into the notification_log table
+        type: local
+status: complete
+createdAt: '2026-06-17T18:41:11.192Z'
+updatedAt: '2026-06-18T12:27:17.392Z'

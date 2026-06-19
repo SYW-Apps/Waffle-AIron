@@ -1,0 +1,14 @@
+id: inotifier-index
+name: Notifier Index Interface
+description: Lookup search projections.
+component: notifier-index
+methods:
+  - name: lookup_alert_log_by_period
+    description: Queries logged alerts matching parameters.
+    signature: >-
+      lookup_alert_log_by_period(subscription_id: String, threshold: Int32, period_start: DateTime):
+      Promise<Option<UsageAlertLog>>
+    returns: Promise<Option<UsageAlertLog>>
+status: complete
+createdAt: '2026-06-16T17:47:06.793Z'
+updatedAt: '2026-06-16T17:47:06.794Z'

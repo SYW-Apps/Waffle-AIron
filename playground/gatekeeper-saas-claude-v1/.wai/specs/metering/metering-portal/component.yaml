@@ -1,0 +1,17 @@
+id: metering-portal
+name: Metering Portal
+description: >-
+  HTTP/JSON ingress for /v1/usage. Forwards usage read requests to the usage query specialist and
+  the hot-path consume to the usage meter. It is the metering subsystem's inbound front door — the
+  only surface other subsystems cross into via a client Adapter. Never touches adapters or
+  repositories directly.
+subsystem: metering
+componentType: Portal
+owns: []
+dependsOn:
+  - usage-query
+  - usage-meter
+portalType: HTTP_API
+status: complete
+createdAt: '2026-06-18T22:55:28.075Z'
+updatedAt: '2026-06-19T10:16:46.596Z'

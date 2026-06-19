@@ -1,0 +1,41 @@
+id: imetering-portal
+name: Metering Portal Interface
+description: >-
+  HTTP/JSON contract for the metering subsystem. Forwards usage reads to the usage query specialist
+  and the hot-path consume to the usage meter. The published inbound surface for cross-subsystem
+  hops.
+component: metering-portal
+methods:
+  - name: get_usage
+    description: GET /v1/usage/{subscription_id}/{resource} — usage for one resource
+    signature: >-
+      async fn get_usage(&self, subscription_id: SubscriptionId, resource: String) ->
+      Result<UsageView, ApiError>
+    returns: Result<UsageView, ApiError>
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /v1/usage/{subscription_id}/{resource}
+  - name: list_usage
+    description: GET /v1/usage/{subscription_id} — usage across all resources
+    signature: >-
+      async fn list_usage(&self, subscription_id: SubscriptionId) -> Result<Vec<UsageView>,
+      ApiError>
+    returns: Result<Vec<UsageView>, ApiError>
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /v1/usage/{subscription_id}
+  - name: consume
+    description: >-
+      POST /v1/usage/consume — hot-path check-and-decrement; forwards 1:1 to the usage meter. The
+      published cross-subsystem entry consumed by gatekeeping's metering client adapter.
+    signature: 'async fn consume(&self, req: ConsumeRequest) -> Result<ConsumeOutcome, MeteringError>'
+    returns: Result<ConsumeOutcome, MeteringError>
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /v1/usage/consume
+status: complete
+createdAt: '2026-06-18T22:55:32.768Z'
+updatedAt: '2026-06-19T10:16:46.663Z'

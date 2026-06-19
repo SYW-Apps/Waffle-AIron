@@ -1,0 +1,16 @@
+id: igate-orchestrator
+name: Gate Orchestrator Interface
+description: >-
+  The authorize workflow coordinator. Authenticates, resolves entitlements, consumes usage, audits,
+  and decides.
+component: gate-orchestrator
+methods:
+  - name: authorize
+    description: >-
+      Authenticate the key, resolve entitlements, check-and-decrement usage, record the decision,
+      and return allow/deny
+    signature: 'async fn authorize(&self, req: AuthorizeRequest) -> Result<AuthorizeDecision, GateError>'
+    returns: Result<AuthorizeDecision, GateError>
+status: complete
+createdAt: '2026-06-17T18:08:11.820Z'
+updatedAt: '2026-06-18T12:27:16.520Z'

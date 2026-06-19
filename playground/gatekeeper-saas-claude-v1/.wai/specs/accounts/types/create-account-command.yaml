@@ -1,0 +1,21 @@
+kind: value-object
+id: create-account-command
+name: Create Account Command
+description: 'Input to create a new account: a name, a billing email, and zero or more contacts.'
+subsystem: accounts
+fields:
+  - name: name
+    type: string
+    description: Customer/organization name
+    optional: false
+  - name: billing_email
+    type: email
+    description: Initial billing email
+    optional: false
+  - name: contacts
+    type: accounts.contact[]
+    description: Initial contacts (without ids; assigned on creation)
+    optional: false
+methods: []
+createdAt: '2026-06-17T15:16:52.878Z'
+updatedAt: '2026-06-17T15:16:52.881Z'

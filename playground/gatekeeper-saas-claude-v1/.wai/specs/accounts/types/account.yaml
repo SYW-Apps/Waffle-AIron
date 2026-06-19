@@ -1,0 +1,23 @@
+kind: entity
+id: account
+name: Account
+description: >-
+  The Account aggregate persisted as one consistency boundary: a Customer root with its
+  BillingAccount and Contacts.
+subsystem: accounts
+fields:
+  - name: customer
+    type: accounts.customer
+    description: Aggregate root
+    optional: false
+  - name: billing_account
+    type: accounts.billing-account
+    description: The customer's billing account
+    optional: false
+  - name: contacts
+    type: accounts.contact[]
+    description: Contacts on the account
+    optional: false
+methods: []
+createdAt: '2026-06-17T15:16:52.853Z'
+updatedAt: '2026-06-17T15:16:52.855Z'

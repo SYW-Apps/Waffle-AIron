@@ -1,0 +1,51 @@
+id: billing-orchestrator-impl
+name: Billing Orchestrator Implementation
+description: Coordinates customer registration, credential generation, and billing synchronizations.
+contract: ibilling-orchestrator
+sourcePath: src/identity-billing/orchestrator.rs
+methods:
+  - name: register_customer
+    narrative:
+      - stepNumber: 1
+        description: Provision Stripe Customer.
+        type: call
+        targetComponent: stripe-adapter
+        targetMethod: create_stripe_customer
+      - stepNumber: 2
+        description: Save newly created Customer entity into database.
+        type: call
+        targetComponent: billing-repository
+        targetMethod: save_customer
+  - name: generate_api_key
+    narrative:
+      - stepNumber: 1
+        description: Generate random key bytes and prefix.
+        type: local
+      - stepNumber: 2
+        description: Compute key hash using SHA-256 algorithm.
+        type: local
+      - stepNumber: 3
+        description: Persist generated ApiKey details in database.
+        type: call
+        targetComponent: billing-repository
+        targetMethod: save_api_key
+  - name: revoke_api_key
+    narrative:
+      - stepNumber: 1
+        description: Revoke api key status in database.
+        type: call
+        targetComponent: billing-repository
+        targetMethod: revoke_api_key
+  - name: handle_stripe_event
+    narrative:
+      - stepNumber: 1
+        description: Parse Stripe Webhook event fields.
+        type: local
+      - stepNumber: 2
+        description: Save or update active Subscription limits records.
+        type: call
+        targetComponent: billing-repository
+        targetMethod: save_subscription
+status: complete
+createdAt: '2026-06-16T16:57:24.294Z'
+updatedAt: '2026-06-16T16:57:24.295Z'

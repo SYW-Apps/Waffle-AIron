@@ -1,0 +1,22 @@
+schemaVersion: 1.0.0
+name: gatekeeper-saas
+targets:
+  - type: claude
+    outputDir: .claude/agents
+    enabled: true
+  - type: agy
+    outputDir: .gemini/agents
+    enabled: true
+rules:
+  noOverlappingOwnership: true
+  requireOwnedPaths: true
+  metaAgentTags:
+    - meta
+    - guardian
+    - architect
+  enforceReproducibility: true
+  sddRuleSeverity: {}
+paths:
+  specsDir: .wai/specs
+createdAt: '2026-06-15T22:43:55.244Z'
+updatedAt: '2026-06-15T22:43:55.244Z'

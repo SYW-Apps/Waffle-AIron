@@ -1,0 +1,9 @@
+id: "todo"
+name: "Todo Management Subsystem"
+description: "Core logic for tasks operations."
+parentSystem: "Todo-Service"
+publicInterfaces:
+  - type: "REST"
+    details: "POST /tasks, GET /tasks, GET /tasks/:id"
+createdAt: "2026-06-11T15:00:00Z"
+updatedAt: "2026-06-11T15:00:00Z"

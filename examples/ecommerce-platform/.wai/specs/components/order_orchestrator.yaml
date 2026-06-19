@@ -1,0 +1,11 @@
+id: "order_orchestrator"
+name: "Order Orchestrator"
+description: "Coordinates order placement, database persistence, inventory reservation, and notification publishing."
+subsystem: "order_subsystem"
+componentType: "Orchestrator"
+dependsOn:
+  - "order_repository"
+  - "inventory_client"
+  - "notification_publisher"
+createdAt: "2026-06-11T15:00:00Z"
+updatedAt: "2026-06-11T15:00:00Z"

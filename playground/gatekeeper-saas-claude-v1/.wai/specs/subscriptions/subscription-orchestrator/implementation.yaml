@@ -1,0 +1,116 @@
+id: subscription-orchestrator-impl
+name: Subscription Orchestrator Implementation
+description: Subscription lifecycle with Stripe provisioning and local persistence.
+contract: isubscription-orchestrator
+sourcePath: src/subscriptions/subscription_orchestrator.rs
+methods:
+  - name: create_subscription
+    narrative:
+      - stepNumber: 1
+        description: Load the plan to validate the target tier and read its stripe_price_id
+        type: call
+        targetComponent: plan-repository
+        targetMethod: find_plan
+      - stepNumber: 2
+        description: >-
+          Locate the tier by tier_id; if plan or tier is missing, return
+          SubscriptionError::InvalidTier
+        type: local
+      - stepNumber: 3
+        description: Check for an existing subscription on the billing account to reuse its stripe_customer_id
+        type: call
+        targetComponent: subscription-repository
+        targetMethod: find_by_account
+      - stepNumber: 4
+        description: If no Stripe customer yet, read the billing email from accounts (NoBillingEmail if absent)
+        type: call
+        targetComponent: billing-account-client-adapter
+        targetMethod: resolve_billing_email
+      - stepNumber: 5
+        description: If no Stripe customer yet, create one in Stripe for that email
+        type: call
+        targetComponent: stripe-adapter
+        targetMethod: create_customer
+      - stepNumber: 6
+        description: Create the subscription in Stripe for the customer at the tier's price
+        type: call
+        targetComponent: stripe-adapter
+        targetMethod: create_subscription
+      - stepNumber: 7
+        description: >-
+          Assemble the local Subscription (ids, stripe_customer_id, stripe_subscription_id, status,
+          current_period_end, empty overrides)
+        type: local
+      - stepNumber: 8
+        description: Persist the subscription
+        type: call
+        targetComponent: subscription-repository
+        targetMethod: save_subscription
+      - stepNumber: 9
+        description: Return the created subscription
+        type: local
+  - name: get_subscription
+    narrative:
+      - stepNumber: 1
+        description: Find the subscription by id
+        type: call
+        targetComponent: subscription-repository
+        targetMethod: find_subscription
+      - stepNumber: 2
+        description: Return it or NotFound
+        type: local
+  - name: change_tier
+    narrative:
+      - stepNumber: 1
+        description: Load the current subscription (NotFound if absent)
+        type: call
+        targetComponent: subscription-repository
+        targetMethod: find_subscription
+      - stepNumber: 2
+        description: Load the plan and resolve the new tier's stripe_price_id (InvalidTier if missing)
+        type: call
+        targetComponent: plan-repository
+        targetMethod: find_plan
+      - stepNumber: 3
+        description: Update the subscription's price in Stripe
+        type: call
+        targetComponent: stripe-adapter
+        targetMethod: update_subscription
+      - stepNumber: 4
+        description: Persist the new tier locally
+        type: call
+        targetComponent: subscription-repository
+        targetMethod: set_tier
+      - stepNumber: 5
+        description: Persist the status/period returned by Stripe
+        type: call
+        targetComponent: subscription-repository
+        targetMethod: set_status
+      - stepNumber: 6
+        description: Re-read and return the updated subscription
+        type: call
+        targetComponent: subscription-repository
+        targetMethod: find_subscription
+  - name: cancel_subscription
+    narrative:
+      - stepNumber: 1
+        description: Load the subscription (NotFound if absent)
+        type: call
+        targetComponent: subscription-repository
+        targetMethod: find_subscription
+      - stepNumber: 2
+        description: Cancel it in Stripe
+        type: call
+        targetComponent: stripe-adapter
+        targetMethod: cancel_subscription
+      - stepNumber: 3
+        description: Mark the local subscription Canceled
+        type: call
+        targetComponent: subscription-repository
+        targetMethod: set_status
+      - stepNumber: 4
+        description: Return Ok(())
+        type: local
+status: complete
+createdAt: '2026-06-17T18:36:06.361Z'
+updatedAt: '2026-06-18T12:27:17.563Z'

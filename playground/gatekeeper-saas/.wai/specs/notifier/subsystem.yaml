@@ -1,0 +1,14 @@
+id: notifier
+name: Alerts & Notifications Subsystem
+description: >-
+  Monitors client API usage levels against subscription limits and issues email warnings or
+  limit-reached notices.
+parentSystem: gatekeeper-saas
+publicInterfaces:
+  - type: Custom
+    details: Asynchronous event handler or polling daemon
+    component: notifier-observer
+    interface: inotifier-observer
+status: complete
+createdAt: '2026-06-16T17:42:34.721Z'
+updatedAt: '2026-06-16T17:42:34.723Z'

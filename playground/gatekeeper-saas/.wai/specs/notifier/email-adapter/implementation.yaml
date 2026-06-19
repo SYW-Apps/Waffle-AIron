@@ -1,0 +1,17 @@
+id: email-adapter-impl
+name: Email Adapter Implementation
+description: SMTP dispatch wrapper using lettre crate/bindings.
+contract: iemail-adapter
+sourcePath: src/notifier/email_adapter.rs
+methods:
+  - name: send_alert_email
+    narrative:
+      - stepNumber: 1
+        description: Initialize SMTP client configuration credentials.
+        type: local
+      - stepNumber: 2
+        description: Send SMTP dispatch request containing email details.
+        type: local
+status: complete
+createdAt: '2026-06-16T18:39:09.275Z'
+updatedAt: '2026-06-16T18:39:09.275Z'

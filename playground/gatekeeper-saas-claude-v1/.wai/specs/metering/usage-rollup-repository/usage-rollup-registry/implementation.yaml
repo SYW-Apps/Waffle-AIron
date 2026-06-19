@@ -1,0 +1,31 @@
+id: usage-rollup-registry-impl
+name: Usage Rollup Registry Implementation
+description: 'Write path: set absolute period total in store, persist. Idempotent set-style write.'
+contract: iusage-rollup-registry
+sourcePath: src/metering/usage_rollup_registry.rs
+methods:
+  - name: set_usage
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Set the period rollup's cumulative used to the given absolute value in the store (creating
+          it if absent)
+        type: call
+        targetComponent: usage-rollup-store
+        targetMethod: set_used
+      - stepNumber: 2
+        description: Read back the updated rollup
+        type: call
+        targetComponent: usage-rollup-store
+        targetMethod: get
+      - stepNumber: 3
+        description: Persist the rollup total to Postgres (upsert)
+        type: call
+        targetComponent: usage-rollup-db-adapter
+        targetMethod: upsert_rollup
+      - stepNumber: 4
+        description: Return Ok(())
+        type: local
+status: complete
+createdAt: '2026-06-18T22:59:21.452Z'
+updatedAt: '2026-06-19T10:16:46.849Z'

@@ -1,0 +1,10 @@
+id: "meter-store"
+name: "Meter Store"
+description: "Authoritative in-memory state tracking for active request limits and sliding windows."
+subsystem: "gatekeeper"
+componentType: "Store"
+owns: []
+dependsOn: []
+status: "complete"
+createdAt: "2026-06-15T23:12:00Z"
+updatedAt: "2026-06-15T23:17:40Z"

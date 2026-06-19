@@ -1,0 +1,22 @@
+id: "gatekeeper-portal-impl"
+name: "Gatekeeper Portal Implementation"
+description: "Axum web application middleware routing to authorization orchestrator."
+contract: "igatekeeper-portal"
+sourcePath: "src/gatekeeper/portal.rs"
+methods:
+  - name: "handle_request"
+    narrative:
+      - stepNumber: 1
+        description: "Extract the API key from the request headers map ('X-API-Key')"
+        type: "local"
+      - stepNumber: 2
+        description: "Call the gatekeeper orchestrator to authorize the key and evaluate rate/volume limits"
+        type: "call"
+        targetComponent: "gatekeeper-orchestrator"
+        targetMethod: "authorize_request"
+      - stepNumber: 3
+        description: "Return the authorization status decision to the client with appropriate headers"
+        type: "local"
+status: "complete"
+createdAt: "2026-06-15T23:17:00Z"
+updatedAt: "2026-06-15T23:17:40Z"
