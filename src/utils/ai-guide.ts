@@ -26,112 +26,44 @@ export const GUIDE_MARKER_END = '<!-- wairon-guide-end -->';
 export const GLOBAL_GUIDE_BODY = `\
 ## wairon — Spec-Driven Development (optional)
 
-A project *may* use **wairon**, an optional spec-driven development (SDD) workflow.
-If a \`.wai/specs/\` tree exists, the workflow is active for that project; otherwise
-you can ignore wairon and work normally. wairon does not run or orchestrate AI
-sessions — it *equips* yours.
+If \`.wai/specs/\` exists, the wairon SDD workflow is active; otherwise ignore it. wairon does not orchestrate sessions — it equips yours.
 
-### What wairon owns when active
-
-- \`.wai/specs/\` is a typed spec tree: L0 System → L1 Subsystem → L2 Component →
-  L3 Interface → L4 Implementation → L5 Narrative. It is the source of truth for
-  the project's **architecture**.
-- Agent files in \`.claude/agents/\` (and other tools) are **generated from the
-  spec tree** — never edit them by hand.
-- A conformance gate enforces reference integrity, contract↔implementation method
-  symmetry, component-stereotype dependency rules (e.g. Portals may not depend on
-  Stores), and dependency-cycle detection. You run it via the \`sdd_validate_tree\`
-  MCP tool.
-
-### How you work in an SDD project
-
-- **Skills:** invoke \`sdd-architect\` to design (plus \`sdd-narrative\`, \`sdd-auditor\`,
-  \`sdd-implement\`). The project's own \`.claude/CLAUDE.md\` / \`.gemini/GEMINI.md\` guide
-  is your full playbook — read it and follow it; you don't need to search for more.
-- **MCP tools:** author and validate specs through the \`sdd_*\` tools
-  (\`sdd_initialize_system\`, \`sdd_add_subsystem\`, \`sdd_add_component\`,
-  \`sdd_define_interface\`, \`sdd_write_narrative\`, \`sdd_add_type\`, \`sdd_validate_tree\`,
-  \`sdd_get_status\`).
-- **You never run the \`wairon\` CLI — it is the human developer's tool.** Everything
-  it does, you do through MCP: validate with \`sdd_validate_tree\` (not \`wairon
-  validate\`); check status with \`sdd_get_status\` (not \`wairon status\`). Don't run
-  shell commands for these.
-- **Subagents:** spawn the generated \`<component>-implementer\` agents via your tool's
-  own native subagent mechanism — wairon does not spawn sessions itself.
-
-### Strict once enabled
-
-If the SDD workflow is active, follow it strictly:
-1. **Design before code.** Do not write source for a component until its spec is
-   complete and \`sdd_validate_tree\` passes with zero errors.
-2. **Spec is law.** Generated code maps 1:1 to the interfaces and narrative steps.
-   If the spec is incomplete, stop and extend the spec — do not improvise.
-3. **Human-in-the-loop.** Present each drafted spec layer for approval before
-   moving on; do not design several layers ahead unprompted.`;
+### In SDD Projects:
+- **Source of Truth**: All architecture lives in the spec tree under \`.wai/specs/\` (L0 System → L1 Subsystem → L2 Component → L3 Interface → L4 Implementation → L5 Narrative). Do not edit generated agent config files under \`.claude/agents/\` (rebuilt via \`wairon generate\`).
+- **Validation**: Conformance checks (stereotype rules, cycle checks, reference integrity) are run via the \`sdd_validate_tree\` MCP tool.
+- **Operating Rules**:
+  1. **Skills**: Use \`sdd-architect\` to design (and \`sdd-implement\`, \`sdd-narrative\`, \`sdd-auditor\`). Refer to project's local guide file for detailed constraints.
+  2. **MCP Tools Only**: Author/validate specs *only* via \`sdd_*\` tools (e.g. \`sdd_initialize_system\`, \`sdd_validate_tree\`).
+  3. **No CLI Exec**: Do not run the \`wairon\` CLI (human tool). Use MCP tools \`sdd_validate_tree\` and \`sdd_get_status\` instead.
+  4. **Subagents**: Spawn generated \`<component>-implementer\` subagents for coding.
+  5. **Design First**: Complete spec and pass \`sdd_validate_tree\` before writing code.
+  6. **Consistency**: Code must match L3 interfaces and L5 narratives exactly. If the spec is wrong, stop and update the spec.`;
 
 const LOCAL_GUIDE_BODY = `\
 ## Wairon — Spec-Driven Development (you are operating inside it)
 
-This project uses **wairon**. You build a typed **spec tree** under \`.wai/specs/\`
-(L0 System → L1 Subsystem → L2 Component → L3 Interface → L4 Implementation →
-L5 Narrative); the agent topology and the implementation are derived from it.
+This project uses **wairon**. System specs live under \`.wai/specs/\` (L0 System → L1 Subsystem → L2 Component → L3 Interface → L4 Implementation → Narrative); agent topology and code are derived from it.
 
-**This guide plus the \`sdd-architect\` skill already contain everything you need.
-Do NOT search the filesystem or read agent files to figure out what wairon or SDD
-is — you have the full context right here. When the user describes what they want,
-get to work.**
+**Do NOT search files or read agent configs to learn about wairon or SDD. Use the context here and the \`sdd-architect\` skill to start.**
 
-**Your first move: call the \`sdd_get_status\` MCP tool** to see the current spec
-tree. (Your client may list wairon tools namespaced — e.g. \`wairon/sdd_get_status\`;
-call that.) Do NOT read \`.wai/\` files, inspect the wairon plugin, or check the CLI
-binary to orient yourself — the MCP tools give you the project state directly.
+**Your first move: call the \`sdd_get_status\` MCP tool** (or \`wairon/sdd_get_status\`) to see the spec tree. Do not parse files or run CLI commands manually.
 
 ### How you operate
-- **To design or change the system** (subsystems, components, interfaces, narratives):
-  invoke the **\`sdd-architect\`** skill (in \`.claude/skills/\` or \`.gemini/skills/\`).
-  It is your complete playbook — it walks the spec tree with you, level by level.
-- **Author and validate specs through the wairon MCP tools only** —
-  \`sdd_initialize_system\`, \`sdd_add_subsystem\`, \`sdd_add_component\`,
-  \`sdd_define_interface\`, \`sdd_write_narrative\`, \`sdd_add_type\`,
-  \`sdd_validate_tree\`, \`sdd_get_status\`. These come from the connected **\`wairon\`
-  MCP server** and are already in your available tools — your client may list them
-  namespaced (e.g. \`wairon/sdd_get_status\`); just call that form. Do NOT read files
-  or run \`--help\` / \`mcp status\` to "discover" tool names, and don't hand-edit spec YAML.
-- **You never run the \`wairon\` CLI — that is the human developer's tool.**
-  Everything the CLI does, you do through MCP: to validate the tree call
-  \`sdd_validate_tree\` (never \`wairon validate\`); to check completeness/status call
-  \`sdd_get_status\` (never \`wairon status\`). Don't run shell commands for these.
-- **Handoff to implementation (the human's lock step).** When the design is done and
-  \`sdd_validate_tree\` is clean, you do NOT promote specs or generate agents yourself —
-  there is no MCP tool for it, by design (it is the human's approval gate). Instead, tell
-  the human verbatim: *"The specs are complete and validate. Please run \`wairon lock\` to
-  do the final validation + confirmation and generate the implementer agents, then restart
-  this session so I can load and use them."* \`wairon lock\` freezes every spec to
-  \`complete\` (only if it validates as complete) and regenerates the agent topology.
-- **To implement a component** (only after \`wairon lock\` has run and you are in a fresh
-  session): spawn the \`<component-id>-implementer\` subagent via your tool's native subagent
-  mechanism. The code must map 1:1 to the spec's interface + narrative. Newly generated
-  agents are loaded at session start — they are invisible until the session is restarted.
-- The **spec tree is the source of truth**. Files under \`.claude/agents/\` /
-  \`.gemini/agents/\` are generated outputs — never edit them.
+- **To design/modify specs**: Use **\`sdd-architect\`** skill (in \`.claude/skills/\` or \`.gemini/skills/\`).
+- **Manage specs via MCP tools only**: Use \`sdd_initialize_system\`, \`sdd_add_subsystem\`, \`sdd_add_component\`, \`sdd_define_interface\`, \`sdd_write_narrative\`, \`sdd_add_type\`, \`sdd_validate_tree\`, and \`sdd_get_status\` (namespaced if needed). Do not edit specs manually.
+- **Do not run the \`wairon\` CLI**: Use \`sdd_validate_tree\` and \`sdd_get_status\` instead of CLI commands.
+- **Handoff to implementation**: Once design is complete and validates cleanly, tell the human: *"The specs are complete and validate. Please run \`wairon lock\` to confirm and generate the implementer agents, then restart this session to load them."*
+- **To implement code**: Spawn the generated \`<component-id>-implementer\` subagent. Implementations must match L3 interfaces and L5 narratives exactly.
 
-### The rules (enforced by \`sdd_validate_tree\`)
-1. **Design before code.** Don't write source for a component until its spec is
-   \`complete\` and \`sdd_validate_tree\` passes with zero errors.
-2. **Human-in-the-loop.** Present each drafted spec layer to the user for approval
-   before moving on; don't design several layers ahead unprompted.
-3. **Spec is law — and the law must be consistent.** Generated code maps exactly to the
-   interfaces and narrative steps. But if a 1:1 mapping would be *wrong* — a narrative
-   asserts semantics its dependency contract can't deliver (e.g. "idempotent" wired to an
-   additive-only write), or it would violate an L0 \`globalRequirement\` — **stop and
-   escalate a spec revision**; never ship a spec-faithful-but-wrong result with a
-   "divergence" footnote. A contradictory spec is an upstream defect to fix, not implement.
+### Rules (enforced by \`sdd_validate_tree\`)
+1. **Design before code**: Complete spec and pass validator before writing source code.
+2. **Human-in-the-loop**: Ask user approval for each spec layer before proceeding.
+3. **Spec consistency**: If a 1:1 narrative match is incorrect or conflicts with L0 requirements, escalate a spec revision first. Never ship mismatched code.
 
-### Component vocabulary (full detail in the sdd-architect skill)
-Building blocks: Portal, Orchestrator, Supervisor, Actor, Store, Index, Registry,
-Adapter, Observer, Specialist. Patterns (which \`own\` member blocks): Repository,
-Gateway. Use \`owns\` for a pattern's private members and \`dependsOn\` for
-collaborators. Never use generic names like "Manager", "Helper", or "Utils".`;
+### Component Vocabulary
+* **Blocks**: Portal, Orchestrator, Supervisor, Actor, Store, Index, Registry, Adapter, Observer, Specialist.
+* **Patterns**: Repository, Gateway (these composable patterns \`own\` member blocks).
+* Use \`owns\` for private member containment (exactly one hop) and \`dependsOn\` for collaborators. Never use generic suffixes like "Manager", "Helper", or "Utils".`;
 
 // ---------------------------------------------------------------------------
 // Path resolution
