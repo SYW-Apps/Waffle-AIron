@@ -1,0 +1,10 @@
+id: "mcp_portal"
+name: "MCP Portal"
+description: "Inbound portal for the SDD MCP subsystem."
+subsystem: "sdd_mcp"
+componentType: "Portal"
+portalType: "gRPC"
+dependsOn:
+  - "mcp_server"
+createdAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-06-19T12:00:00Z"

@@ -4,8 +4,8 @@ description: "Coordinates terminal subcommand actions and flags, mapping CLI inp
 subsystem: "sdd_cli"
 componentType: "Orchestrator"
 dependsOn:
-  - "spec_loader"
-  - "spec_validator"
-  - "skills_exporter"
+  - "cli_core_adapter"
+  - "cli_validator_adapter"
+  - "cli_skills_adapter"
 createdAt: "2026-06-10T19:28:00.000Z"
-updatedAt: "2026-06-10T19:28:00.000Z"
+updatedAt: "2026-06-19T12:00:00Z"

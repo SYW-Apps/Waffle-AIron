@@ -16,7 +16,7 @@ methods:
       - stepNumber: 3
         description: "Export SDD skills templates"
         type: "call"
-        targetComponent: "skills_exporter"
+        targetComponent: "cli_skills_adapter"
         targetMethod: "exportSddSkills"
       - stepNumber: 4
         description: "Generate default L0/L1/L2 spec files if empty"
@@ -29,17 +29,17 @@ methods:
       - stepNumber: 2
         description: "Validate registry rules"
         type: "call"
-        targetComponent: "spec_validator"
+        targetComponent: "cli_validator_adapter"
         targetMethod: "validateRegistry"
       - stepNumber: 3
         description: "Validate project configuration"
         type: "call"
-        targetComponent: "spec_validator"
+        targetComponent: "cli_validator_adapter"
         targetMethod: "validateProjectConfig"
       - stepNumber: 4
         description: "Validate SDD specification tree"
         type: "call"
-        targetComponent: "spec_validator"
+        targetComponent: "cli_validator_adapter"
         targetMethod: "validateSddTree"
       - stepNumber: 5
         description: "Print validation errors/warnings and exit process if invalid"
@@ -49,7 +49,7 @@ methods:
       - stepNumber: 1
         description: "Load spec system"
         type: "call"
-        targetComponent: "spec_loader"
+        targetComponent: "cli_core_adapter"
         targetMethod: "loadSystemSpec"
       - stepNumber: 2
         description: "Generate Dynamic Agent outputs matching configured target engines"
@@ -59,7 +59,7 @@ methods:
       - stepNumber: 1
         description: "Load specs using spec loader"
         type: "call"
-        targetComponent: "spec_loader"
+        targetComponent: "cli_core_adapter"
         targetMethod: "loadSystemSpec"
       - stepNumber: 2
         description: "Format and print resolved dynamic agent list to stdout"
@@ -69,7 +69,7 @@ methods:
       - stepNumber: 1
         description: "Load spec system"
         type: "call"
-        targetComponent: "spec_loader"
+        targetComponent: "cli_core_adapter"
         targetMethod: "loadSystemSpec"
       - stepNumber: 2
         description: "Format and display details for specified dynamic agent"
@@ -83,4 +83,4 @@ methods:
         description: "If new release is found and not in check-only mode, pull and apply updates"
         type: "local"
 createdAt: "2026-06-11T14:50:00Z"
-updatedAt: "2026-06-11T14:50:00Z"
+updatedAt: "2026-06-19T12:00:00Z"

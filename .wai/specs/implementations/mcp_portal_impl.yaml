@@ -1,0 +1,16 @@
+schemaVersion: "1.0.0"
+id: "mcp_portal_impl"
+name: "MCP Portal Implementation"
+description: "Concrete implementation forwarding portal calls to the MCP server supervisor."
+contract: "imcp_portal"
+sourcePath: ".wai/specs/implementations/mcp_portal_impl.yaml"
+methods:
+  - name: "createMcpServer"
+    narrative:
+      - stepNumber: 1
+        description: "Forward createMcpServer call to the MCP server supervisor"
+        type: "call"
+        targetComponent: "mcp_server"
+        targetMethod: "createMcpServer"
+createdAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-06-19T12:00:00Z"

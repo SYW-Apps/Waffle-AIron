@@ -1,0 +1,44 @@
+schemaVersion: "1.0.0"
+id: "validator_core_adapter_impl"
+name: "Validator Core Adapter Implementation"
+description: "Concrete implementation forwarding validator load calls to core portal."
+contract: "ivalidator_core_adapter"
+sourcePath: ".wai/specs/implementations/validator_core_adapter_impl.yaml"
+methods:
+  - name: "loadSystemSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Call loadSystemSpec on core portal"
+        type: "call"
+        targetComponent: "core_portal"
+        targetMethod: "loadSystemSpec"
+  - name: "loadSubsystemSpecs"
+    narrative:
+      - stepNumber: 1
+        description: "Call loadSubsystemSpecs on core portal"
+        type: "call"
+        targetComponent: "core_portal"
+        targetMethod: "loadSubsystemSpecs"
+  - name: "loadComponentSpecs"
+    narrative:
+      - stepNumber: 1
+        description: "Call loadComponentSpecs on core portal"
+        type: "call"
+        targetComponent: "core_portal"
+        targetMethod: "loadComponentSpecs"
+  - name: "loadInterfaceSpecs"
+    narrative:
+      - stepNumber: 1
+        description: "Call loadInterfaceSpecs on core portal"
+        type: "call"
+        targetComponent: "core_portal"
+        targetMethod: "loadInterfaceSpecs"
+  - name: "loadImplementationSpecs"
+    narrative:
+      - stepNumber: 1
+        description: "Call loadImplementationSpecs on core portal"
+        type: "call"
+        targetComponent: "core_portal"
+        targetMethod: "loadImplementationSpecs"
+createdAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-06-19T12:00:00Z"

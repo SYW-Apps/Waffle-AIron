@@ -1,0 +1,16 @@
+schemaVersion: "1.0.0"
+id: "cli_skills_adapter_impl"
+name: "CLI Skills Adapter Implementation"
+description: "Concrete implementation forwarding skills exporting requests to the skills portal."
+contract: "icli_skills_adapter"
+sourcePath: ".wai/specs/implementations/cli_skills_adapter_impl.yaml"
+methods:
+  - name: "exportSddSkills"
+    narrative:
+      - stepNumber: 1
+        description: "Call exportSddSkills on the skills portal"
+        type: "call"
+        targetComponent: "skills_portal"
+        targetMethod: "exportSddSkills"
+createdAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-06-19T12:00:00Z"

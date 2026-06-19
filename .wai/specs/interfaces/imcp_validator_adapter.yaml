@@ -1,0 +1,12 @@
+schemaVersion: "1.0.0"
+id: "imcp_validator_adapter"
+name: "MCP Validator Adapter Interface"
+description: "Adapter contract for MCP to run spec validations."
+component: "mcp_validator_adapter"
+methods:
+  - name: "validateSddTree"
+    description: "Calls validateSddTree on validator portal"
+    signature: "validateSddTree(): ValidationResult"
+    returns: "ValidationResult"
+createdAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-06-19T12:00:00Z"

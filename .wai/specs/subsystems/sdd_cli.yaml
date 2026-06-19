@@ -4,6 +4,7 @@ description: "Terminal entry points for initializing, validating, generating, an
 parentSystem: "Waffle-AIron"
 publicInterfaces:
   - type: "Custom"
+    component: "cli_runner"
     details: "Terminal command interfaces: wairon init, generate, validate, list, show."
 createdAt: "2026-06-10T19:28:00.000Z"
 updatedAt: "2026-06-10T19:28:00.000Z"

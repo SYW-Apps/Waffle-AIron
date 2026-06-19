@@ -13,25 +13,25 @@ methods:
       - stepNumber: 2
         description: "Register tool 'listAgents' which resolves dynamic agent topology using agent_resolver"
         type: "call"
-        targetComponent: "agent_resolver"
+        targetComponent: "mcp_core_adapter"
         targetMethod: "resolveAgentTopology"
       - stepNumber: 3
         description: "Register tool 'getAgent' which retrieves a single resolved agent's details"
         type: "call"
-        targetComponent: "agent_resolver"
+        targetComponent: "mcp_core_adapter"
         targetMethod: "resolveAgentTopology"
       - stepNumber: 4
         description: "Register validation tools executing validateSddTree"
         type: "call"
-        targetComponent: "spec_validator"
+        targetComponent: "mcp_validator_adapter"
         targetMethod: "validateSddTree"
       - stepNumber: 5
         description: "Register loader tools to fetch system, subsystem, and component specs from spec_loader"
         type: "call"
-        targetComponent: "spec_loader"
+        targetComponent: "mcp_core_adapter"
         targetMethod: "loadSystemSpec"
       - stepNumber: 6
         description: "Return configured McpServer instance"
         type: "local"
 createdAt: "2026-06-11T14:50:00Z"
-updatedAt: "2026-06-11T14:50:00Z"
+updatedAt: "2026-06-19T12:00:00Z"

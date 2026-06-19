@@ -1,0 +1,30 @@
+schemaVersion: "1.0.0"
+id: "validator_portal_impl"
+name: "Validator Portal Implementation"
+description: "Concrete implementation forwarding portal requests to spec validator."
+contract: "ivalidator_portal"
+sourcePath: ".wai/specs/implementations/validator_portal_impl.yaml"
+methods:
+  - name: "validateSddTree"
+    narrative:
+      - stepNumber: 1
+        description: "Forward validateSddTree call to spec validator"
+        type: "call"
+        targetComponent: "spec_validator"
+        targetMethod: "validateSddTree"
+  - name: "validateRegistry"
+    narrative:
+      - stepNumber: 1
+        description: "Forward validateRegistry call to spec validator"
+        type: "call"
+        targetComponent: "spec_validator"
+        targetMethod: "validateRegistry"
+  - name: "validateProjectConfig"
+    narrative:
+      - stepNumber: 1
+        description: "Forward validateProjectConfig call to spec validator"
+        type: "call"
+        targetComponent: "spec_validator"
+        targetMethod: "validateProjectConfig"
+createdAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-06-19T12:00:00Z"

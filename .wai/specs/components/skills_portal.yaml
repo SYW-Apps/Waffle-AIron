@@ -1,0 +1,10 @@
+id: "skills_portal"
+name: "Skills Portal"
+description: "Inbound portal for the SDD skills subsystem."
+subsystem: "sdd_skills"
+componentType: "Portal"
+portalType: "Custom"
+dependsOn:
+  - "skills_orchestrator"
+createdAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-06-19T12:00:00Z"

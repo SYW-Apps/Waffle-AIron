@@ -1,0 +1,9 @@
+id: "validator_core_adapter"
+name: "Validator Core Client Adapter"
+description: "Local client adapter in sdd_validator to cross the subsystem boundary to sdd_core."
+subsystem: "sdd_validator"
+componentType: "Adapter"
+dependsOn:
+  - "core_portal"
+createdAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-06-19T12:00:00Z"

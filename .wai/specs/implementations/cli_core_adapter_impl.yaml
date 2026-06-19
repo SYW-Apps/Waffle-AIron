@@ -1,0 +1,16 @@
+schemaVersion: "1.0.0"
+id: "cli_core_adapter_impl"
+name: "CLI Core Adapter Implementation"
+description: "Concrete implementation forwarding spec loading requests to the core portal."
+contract: "icli_core_adapter"
+sourcePath: ".wai/specs/implementations/cli_core_adapter_impl.yaml"
+methods:
+  - name: "loadSystemSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Call loadSystemSpec on the core portal"
+        type: "call"
+        targetComponent: "core_portal"
+        targetMethod: "loadSystemSpec"
+createdAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-06-19T12:00:00Z"

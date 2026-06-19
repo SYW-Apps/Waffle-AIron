@@ -1,0 +1,9 @@
+id: "mcp_validator_adapter"
+name: "MCP Validator Client Adapter"
+description: "Local client adapter in sdd_mcp to cross the subsystem boundary to sdd_validator."
+subsystem: "sdd_mcp"
+componentType: "Adapter"
+dependsOn:
+  - "validator_portal"
+createdAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-06-19T12:00:00Z"

@@ -4,6 +4,6 @@ description: "Validation linter checking spec completeness, method contracts, an
 subsystem: "sdd_validator"
 componentType: "Specialist"
 dependsOn:
-  - "spec_loader"
+  - "validator_core_adapter"
 createdAt: "2026-06-10T19:28:00.000Z"
-updatedAt: "2026-06-10T19:28:00.000Z"
+updatedAt: "2026-06-19T12:00:00Z"
