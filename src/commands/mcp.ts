@@ -221,8 +221,9 @@ export async function runMcpInstall(options: McpInstallOptions = {}): Promise<vo
     const mcpServers = (settings['mcpServers'] ?? {}) as Record<string, unknown>;
     const agentLabel = backend === 'gemini' ? 'Antigravity' : 'Claude';
 
+    const isPackaged = typeof (process as any).pkg !== 'undefined';
     const scriptPath = process.argv[1] ? path.resolve(process.argv[1]).replace(/\\/g, '/') : null;
-    const useDirectNode = scriptPath && (scriptPath.endsWith('.js') || scriptPath.endsWith('.ts'));
+    const useDirectNode = !isPackaged && scriptPath && (scriptPath.endsWith('.js') || scriptPath.endsWith('.ts'));
 
     // Project-local installs know the exact project, so pin it: the server then
     // attaches deterministically regardless of the cwd the host spawns it with,
