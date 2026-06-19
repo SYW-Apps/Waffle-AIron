@@ -1,107 +1,52 @@
-<!-- wairon-generated — do not edit directly -->
-<!-- source: .wai/context/project.md — run `wairon context sync` to rebuild -->
+<!-- wairon-version: 0.1.8 -->
+<!-- wairon-generated — do not edit directly; the human developer rebuilds this with `wairon generate` -->
 
-# Domain Map (1 domain)
+# Domain Map (5 domains)
 
-| ID | Path | Name |
-|----|------|------|
-| `root` | `.` | Waffle-AIron |
+| ID | Source | Name |
+|----|--------|------|
+| `sdd_cli` | subsystem `sdd_cli` | Wairon CLI Interfaces |
+| `sdd_core` | subsystem `sdd_core` | SDD Core Spec Manager |
+| `sdd_mcp` | subsystem `sdd_mcp` | SDD MCP Server |
+| `sdd_skills` | subsystem `sdd_skills` | SDD Skills Exporter |
+| `sdd_validator` | subsystem `sdd_validator` | SDD Architectural Validator |
 
 ---
 
-## wairon — AI Agent Topology Manager
+# wairon MCP Tools
 
-Projects you work in may use **wairon** to manage AI coding agent topology.
-wairon keeps a registry of agents in `.wai/registry/agents.json`. Agent files
-(like the ones in `.claude/agents/`) are generated from that registry —
-**never edit them directly**.
+The **wairon MCP server** is active in this project. You can call these tools directly:
 
-### Domain & agent model
+| Tool | Purpose |
+|------|---------|
+| `listAgents` | List agents resolved from the spec tree (optionally filter by domainId) |
+| `getAgent` | Get full details of an agent by id |
+| `listDomains` | List domains (subsystem-derived + free-standing) |
+| `validateTopology` | Check for topology errors/warnings |
+| `getProjectConfig` | Get the project configuration |
+| `sdd_initialize_system` | Create the L0 system spec |
+| `sdd_add_subsystem` | Add an L1 subsystem |
+| `sdd_add_component` | Add an L2 component |
+| `sdd_define_interface` | Define an L3 interface contract |
+| `sdd_write_narrative` | Write an L4 implementation + L5 narrative |
+| `sdd_validate_tree` | Validate the whole spec tree |
+| `sdd_get_status` | Spec-tree completeness dashboard |
 
-A **domain** is a scoped area of a repository — a package, service, library, or
-sub-project — that has its own set of agents. Each domain has an `id` (e.g.
-`auth-service`), a `path` (relative to project root), and a set of agents that
-own paths within it.
+Use these MCP tools to query and change project state — never the `wairon` CLI (that is the human developer's tool).
 
-An **agent** belongs to exactly one domain (via its `domainRoot` field) or to
-the global root. Agents declare `ownedPaths` — glob patterns that describe
-which files they are responsible for.
+---
 
-### When to delegate
+## wairon — Spec-Driven Development (optional)
 
-Use `wairon delegate` when:
-- A task is clearly bounded to a single domain (service, package, library)
-- The work can proceed independently without coordinating with other domains
-- You want a focused sub-agent context with only the relevant agent set loaded
-- The task would benefit from isolation (tests, refactors, migrations)
+If `.wai/specs/` exists, the wairon SDD workflow is active; otherwise ignore it. wairon does not orchestrate sessions — it equips yours.
 
-Do **not** delegate when:
-- The task spans multiple unrelated domains (handle it at the root level)
-- The change requires coordinating cross-domain contracts first
-- The domain doesn't exist or has no agents yet (run `wairon scaffold-domains`)
-
-### Delegation workflow
-
-1. Identify the target domain id: `wairon domains list`
-2. Delegate the task:
-   ```
-   wairon delegate <domain-id> --prompt "description of the task"
-   ```
-   This creates a **job file** at `.wai/jobs/<job-id>.yaml` and spawns a new
-   AI tool session in the domain directory with `stdio:inherit`.
-3. The sub-agent session starts with the job context loaded automatically via
-   environment variables (`WAIRON_JOB_ID`, `WAIRON_JOB_FILE`).
-4. When the sub-agent finishes, it writes a result file at
-   `.wai/jobs/<job-id>.result.yaml` and the parent session reads + displays it.
-
-### Job lifecycle
-
-| Status      | Meaning                                              |
-|-------------|------------------------------------------------------|
-| `pending`   | Job created, session not started yet                 |
-| `running`   | Session is active                                    |
-| `completed` | Sub-agent wrote a result file and exited cleanly     |
-| `abandoned` | Session exited without writing a result              |
-| `failed`    | Session exited with a non-zero code                  |
-
-Inspect jobs: `wairon jobs list` / `wairon jobs show <job-id>`
-
-### Sub-agent job pickup protocol
-
-When a new session starts in a domain directory and `WAIRON_JOB_FILE` is set:
-
-1. Read the job file: it contains the task, context files, and notes.
-2. Acknowledge the job by checking its status (it should be `running`).
-3. Work exclusively within the domain's `path` and `ownedPaths`.
-4. When done, write a result file at `<job-file-path>.result.yaml`:
-   ```yaml
-   jobId: <id>
-   summary: "What was done"
-   filesChanged:
-     - path/to/changed/file.ts
-   flagged: "Anything out of scope or that needs parent attention"
-   ```
-5. Exit cleanly — the parent session will pick up the result automatically.
-
-If no `WAIRON_JOB_FILE` env var is set, operate normally without job context.
-
-### Key commands
-```
-wairon list                       list all agents in the registry
-wairon generate                   regenerate all agent files
-wairon generate --domain <id>     regenerate only a specific domain
-wairon validate                   check for topology issues
-wairon create-agent               add a new agent interactively
-wairon create-bundle              scaffold a set of agents from a template
-wairon scaffold-domains           scaffold agents for domains that have none
-wairon domains list               list all project domains
-wairon domains scan --add         detect and add new domains
-wairon delegate <domain-id>       spawn a focused session for a domain
-wairon analyze                    analyze coverage gaps
-wairon targets list               show configured output targets
-wairon jobs list                  view all delegated jobs
-wairon profiles list              view configured profiles (work/personal/etc.)
-wairon mcp install                register the wairon MCP server in Claude Code
-```
-
-To update an agent: edit `.wai/registry/agents.json` and run `wairon generate`.
+### In SDD Projects:
+- **Source of Truth**: All architecture lives in the spec tree under `.wai/specs/` (L0 System → L1 Subsystem → L2 Component → L3 Interface → L4 Implementation → L5 Narrative). Do not edit generated agent config files under `.claude/agents/` (rebuilt via `wairon generate`).
+- **Validation**: Conformance checks (stereotype rules, cycle checks, reference integrity) are run via the `sdd_validate_tree` MCP tool.
+- **Operating Rules**:
+  1. **Skills**: Use `sdd-architect` to design (and `sdd-implement`, `sdd-narrative`, `sdd-auditor`). Refer to project's local guide file for detailed constraints.
+  2. **MCP Tools Only**: Author/validate specs *only* via `sdd_*` tools (e.g. `sdd_initialize_system`, `sdd_validate_tree`).
+  3. **No CLI Exec**: Do not run the `wairon` CLI (human tool). Use MCP tools `sdd_validate_tree` and `sdd_get_status` instead.
+  4. **Subagents**: Spawn generated `<component>-implementer` subagents for coding.
+  5. **Design First**: Complete spec and pass `sdd_validate_tree` before writing code.
+  6. **Consistency**: Code must match L3 interfaces and L5 narratives exactly. If the spec is wrong, stop and update the spec.
