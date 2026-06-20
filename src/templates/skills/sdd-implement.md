@@ -72,7 +72,10 @@ All implementation work must strictly adhere to these rules:
      - `Actor` (asynchronous state execution task).
      - `Observer` (subscribes to events and forwards them).
      - `Specialist` (narrow, functional domain rules e.g., Scanner, Router, Evaluator, Compiler).
-2. **Narrative Coding (Level 5)**:
+   - **Strict Layer Isolation & No Persistence Shortcuts**:
+     - A `Portal` must **never** depend directly on a `Repository`, `Store`, `Registry`, `Index`, or `Adapter`. It must **always** route calls through an `Orchestrator`.
+     - Every stored domain entity (even simple configs, permissions, or rules) **must** use a dedicated `Repository` pattern composed of `Store`, `Registry`, and `Index` blocks. Do **not** store state inside `Orchestrator` or `Specialist` blocks directly, and do **not** combine Store/Registry/Index functionality into a single helper/specialist.
+2. **Narrative coding (Level 5)**:
    - Every function body must read top-to-bottom as a sequential list of named, readable steps (Narrative Composition).
    - Maintain one level of abstraction per function. Functions must remain short (~25 lines max).
 3. **Passive Foundations**:

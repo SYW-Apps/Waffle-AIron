@@ -59,6 +59,7 @@ This project uses **wairon**. System specs live under \`.wai/specs/\` (L0 System
 1. **Design before code**: Complete spec and pass validator before writing source code.
 2. **Human-in-the-loop**: Ask user approval for each spec layer before proceeding.
 3. **Spec consistency**: If a 1:1 narrative match is incorrect or conflicts with L0 requirements, escalate a spec revision first. Never ship mismatched code.
+4. **No persistence shortcuts & strict layers**: A Portal must never depend directly on a Repository, Store, Registry, or Adapter (enforce Portal -> Orchestrator -> Repository/Store). Every stored entity (even simple configs/permissions/rules) must use a proper Repository (composed of Store, Registry, and Index). Never store state inside Orchestrators or Specialists directly, and never combine Store/Registry/Index roles into one component.
 
 ### Component Vocabulary
 * **Blocks**: Portal, Orchestrator, Supervisor, Actor, Store, Index, Registry, Adapter, Observer, Specialist.
