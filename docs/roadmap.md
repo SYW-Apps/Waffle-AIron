@@ -61,10 +61,14 @@ reflects what is actually shipped in `src/` and what is planned.
     - *Concept*: Structures Entity-Component-System simulation loops.
     - *Stereotypes*: `Store` represents the component array registries, `Specialist` represents systems (e.g. Physics, Collision), and `Observer` manages game event buses.
     - *Zero-Cost Target*: Systems query data directly from entity storage, but architectural boundaries compile down to raw pointer arithmetic. Repository facade lookups are monomorphized or exploded inline.
-  - **Embedded/PLC Profile** (`realtime-embedded`):
-    - *Concept*: Structures real-time event loops, hardware pin control, sensor arrays, and actuator drivers.
-    - *Stereotypes*: `Adapter` wraps physical pin/device register I/O, `Orchestrator` implements control loop logic (e.g., PID controllers), and `Observer` captures interrupt service routines (ISRs).
+  - **Embedded Profile** (`realtime-embedded`):
+    - *Concept*: Structures real-time microcontroller firmware, hardware pin control, sensor loops, and actuator drivers.
+    - *Stereotypes*: `Adapter` wraps physical pin/device register I/O, `Orchestrator` implements control loops (e.g., PID controls), and `Observer` captures hardware interrupt routines (ISRs).
     - *Validation*: Strictly isolates controllers from hardware registers (requiring all pin access to flow through Adapter interfaces), and checks narratives for static memory guarantees (e.g., banning dynamic heap allocations).
+  - **PLC Cyclic Profile** (`plc-cyclic`):
+    - *Concept*: Structures industrial control programs executing inside strict scan cycles (e.g., Structured Text, CODESYS, Beckhoff TwinCAT, Siemens S7).
+    - *Stereotypes*: `Portal` maps to external HMI/network interfaces, `Orchestrator` maps to cyclic sequence programs, and `Specialist` / `Store` map to Function Blocks and instance memory.
+    - *Validation*: Strict single-threaded execution model. **Forbids concurrent runtime blocks** (`Actor` and `Supervisor` stereotypes) because execution must complete deterministically inside a single scan cycle. Prohibits asynchronous or blocking operations (like loops without safety watchdogs) in narratives.
 
 ---
 

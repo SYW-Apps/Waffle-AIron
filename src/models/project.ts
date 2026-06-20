@@ -77,7 +77,7 @@ export const ProjectConfigSchema = z.object({
    * The type/profile of the project, which configures targeted guidelines, rules,
    * templates, and validation constraints.
    */
-  projectType: z.enum(['backend', 'frontend-reactive', 'frontend-controller', 'lowlevel-os', 'game-ecs', 'realtime-embedded', 'fullstack']).default('backend'),
+  projectType: z.enum(['backend', 'frontend-reactive', 'frontend-controller', 'lowlevel-os', 'game-ecs', 'realtime-embedded', 'plc-cyclic', 'fullstack']).default('backend'),
 
   /** Optional short description of this project */
   description: z.string().optional(),
