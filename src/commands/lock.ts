@@ -48,7 +48,7 @@ export async function runLock(options: LockOptions = {}): Promise<void> {
   const snapshot = snapshotSpecFiles();
   for (const p of promotable) applySpecStatus(p.kind, p.id, 'complete');
   invalidateSpecCache();
-  const dry = validateSddTree(projectConfig.rules);
+  const dry = validateSddTree(projectConfig.rules, projectConfig.projectType);
   restoreSpecFiles(snapshot);
   invalidateSpecCache();
 

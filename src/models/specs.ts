@@ -61,6 +61,7 @@ export const SubsystemSpecSchema = z.object({
   description: z.string(),
   parentSystem: z.string(), // References L0 System Name or file
   publicInterfaces: z.array(PublicInterfaceSchema).default([]),
+  profile: z.enum(['backend', 'frontend-reactive', 'frontend-controller']).optional(), // Optional subsystem override for fullstack
   status: SpecStatusSchema.optional().default('complete'),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -83,14 +84,17 @@ export const ComponentTypeSchema = z.enum([
   'Adapter',
   'Observer',
   'Specialist',
+  'View', // Pure presenter/UI component
   // Patterns (compositions of blocks)
   'Repository',
   'Gateway',
+  'FeatureComponent', // Logic Hook + View Presenter pattern
+  'RouterComponent',  // Switch/routing component pattern
 ]);
 export type ComponentType = z.infer<typeof ComponentTypeSchema>;
 
 /** Component types that are patterns (own member blocks) rather than building blocks. */
-export const PATTERN_TYPES: ReadonlySet<ComponentType> = new Set(['Repository', 'Gateway']);
+export const PATTERN_TYPES: ReadonlySet<ComponentType> = new Set(['Repository', 'Gateway', 'FeatureComponent', 'RouterComponent']);
 
 export const PortalTypeSchema = z.enum(['HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'Custom']);
 export type PortalType = z.infer<typeof PortalTypeSchema>;

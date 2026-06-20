@@ -133,7 +133,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
     try {
       const { validateSddTree } = require('../core/validation.js') as typeof import('../core/validation.js');
       const cfg = loadProjectConfig();
-      const result = validateSddTree(cfg.rules);
+      const result = validateSddTree(cfg.rules, cfg.projectType);
       const errs = result.issues.filter((i) => i.severity === 'error').length;
       const warns = result.issues.filter((i) => i.severity === 'warning').length;
       if (errs > 0) line(tally, 'error', `Conformance: ${errs} error(s), ${warns} warning(s) — see \`wairon validate\` (you: \`sdd_validate_tree\`)`);

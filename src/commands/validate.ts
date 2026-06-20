@@ -66,7 +66,7 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
   if (sddPathExists(sddPaths.specsSystem())) {
     logger.header('SDD Architectural Specs');
     const { validateSddTree } = require('../core/validation.js') as typeof import('../core/validation.js');
-    const sddResult = validateSddTree(projectConfig.rules);
+    const sddResult = validateSddTree(projectConfig.rules, projectConfig.projectType);
     if (sddResult.issues.length === 0) {
       logger.success('Spec tree is valid and component type boundaries are enforced.');
     } else {

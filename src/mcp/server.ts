@@ -529,7 +529,7 @@ export function createMcpServer(): McpServer {
         const { loadProjectConfig } = requireLoader();
         const config = loadProjectConfig();
         const { validateSddTree } = requireValidation();
-        const result = validateSddTree(config.rules);
+        const result = validateSddTree(config.rules, config.projectType);
         return json({
           valid: result.valid,
           errors: result.issues.filter((i) => i.severity === 'error'),
