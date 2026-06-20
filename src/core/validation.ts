@@ -211,15 +211,16 @@ export function validateSddTree(rules?: RulesConfig, projectType: string = 'back
   };
 
   // Helper to resolve the profile of a component/subsystem
-  const getComponentProfile = (compId: string): 'backend' | 'frontend-reactive' | 'frontend-controller' => {
+  const getComponentProfile = (compId: string): 'backend' | 'frontend-reactive' | 'frontend-controller' | 'lowlevel-os' | 'game-ecs' | 'realtime-embedded' => {
     const comp = componentMap.get(compId);
     if (!comp) return 'backend';
     const sub = subsystems.find(s => s.id === comp.subsystem);
     if (sub && sub.profile) {
       return sub.profile;
     }
-    if (projectType === 'frontend-reactive' || projectType === 'frontend-controller') {
-      return projectType;
+    const validProfiles = ['frontend-reactive', 'frontend-controller', 'lowlevel-os', 'game-ecs', 'realtime-embedded'];
+    if (validProfiles.includes(projectType)) {
+      return projectType as any;
     }
     return 'backend';
   };
@@ -802,7 +803,7 @@ export function validateSddTree(rules?: RulesConfig, projectType: string = 'back
     const isDraftCtx = isComponentDraft(comp.id);
     const profile = getComponentProfile(comp.id);
 
-    if (profile === 'backend') {
+    if (profile === 'backend' || profile === 'lowlevel-os' || profile === 'game-ecs' || profile === 'realtime-embedded') {
       const frontendTypes = ['View', 'FeatureComponent', 'RouterComponent'];
       if (frontendTypes.includes(comp.componentType)) {
         addIssue(

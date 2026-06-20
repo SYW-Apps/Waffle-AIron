@@ -61,7 +61,7 @@ export const SubsystemSpecSchema = z.object({
   description: z.string(),
   parentSystem: z.string(), // References L0 System Name or file
   publicInterfaces: z.array(PublicInterfaceSchema).default([]),
-  profile: z.enum(['backend', 'frontend-reactive', 'frontend-controller']).optional(), // Optional subsystem override for fullstack
+  profile: z.enum(['backend', 'frontend-reactive', 'frontend-controller', 'lowlevel-os', 'game-ecs', 'realtime-embedded']).optional(), // Optional subsystem override for fullstack
   status: SpecStatusSchema.optional().default('complete'),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
