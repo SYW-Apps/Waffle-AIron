@@ -66,7 +66,7 @@ async function runInitNonInteractive(): Promise<void> {
 
   // Claude and Antigravity are active by default
   const targets: TargetConfig[] = [defaultTargetConfig('claude'), defaultTargetConfig('agy')];
-  const projectConfig = buildProjectConfig(projectName, targets, now);
+  const projectConfig = buildProjectConfig(projectName, targets, now, 'backend');
 
   const guidePlan: AiGuidePlan = {
     claudeGlobal: false,
@@ -105,6 +105,25 @@ async function runInitInteractive(): Promise<void> {
       name: 'projectName',
       message: 'Project name:',
       default: defaultProjectName,
+    },
+  ]);
+
+  // ------------------------------------------------------------------
+  // Phase 1b — Project Type
+  // ------------------------------------------------------------------
+
+  const { projectType } = await inquirer.prompt<{ projectType: 'backend' | 'frontend-reactive' | 'frontend-controller' | 'fullstack' }>([
+    {
+      type: 'list',
+      name: 'projectType',
+      message: 'Project type / architecture profile:',
+      choices: [
+        { name: 'Backend-only (standard DDD backend/services)', value: 'backend' },
+        { name: 'Frontend Reactive (React, Vue 3, Svelte, SolidJS)', value: 'frontend-reactive' },
+        { name: 'Frontend Controller (Angular, Flutter, Mobile/Native)', value: 'frontend-controller' },
+        { name: 'Fullstack / Monorepo (supports custom profile per subsystem)', value: 'fullstack' },
+      ],
+      default: 'backend',
     },
   ]);
 
@@ -188,6 +207,7 @@ async function runInitInteractive(): Promise<void> {
   logger.header('Init summary');
   logger.blank();
   console.log(`  ${chalk.bold('Project:')}  ${projectName}`);
+  console.log(`  ${chalk.bold('Profile:')}  ${projectType}`);
   console.log(`  ${chalk.bold('Targets:')}  ${targets.map((t) => t.type).join(', ')}`);
   console.log(`  ${chalk.bold('Guide:')}    Auto-inject local AI rules card (${activeTargetTypes.filter(t => ['claude', 'gemini', 'agy'].includes(t)).join(', ') || 'none'})`);
   logger.blank();
@@ -211,7 +231,7 @@ async function runInitInteractive(): Promise<void> {
   // ------------------------------------------------------------------
 
   const now = new Date().toISOString();
-  const projectConfig = buildProjectConfig(projectName, targets, now);
+  const projectConfig = buildProjectConfig(projectName, targets, now, projectType);
 
   await executeInit(
     projectName,
@@ -420,10 +440,12 @@ function buildProjectConfig(
   name: string,
   targets: TargetConfig[],
   now: string,
+  projectType: 'backend' | 'frontend-reactive' | 'frontend-controller' | 'fullstack',
 ): ProjectConfig {
   return {
     schemaVersion: '1.0.0',
     name,
+    projectType,
     targets,
     rules: {
       noOverlappingOwnership: true,

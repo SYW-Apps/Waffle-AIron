@@ -1,7 +1,7 @@
 import { AgentRecord } from '../models/agent.js';
 import { ProjectConfig, RulesConfig } from '../models/project.js';
 import { Registry } from '../models/registry.js';
-import { SEMANTIC_GUARANTEES, Guarantee } from '../models/specs.js';
+import { SEMANTIC_GUARANTEES, Guarantee, PATTERN_TYPES } from '../models/specs.js';
 
 // Narrative-prose keyword per recognized guarantee — the gate flags a step that uses one
 // while calling a method that doesn't declare that guarantee. Keep in sync with SEMANTIC_GUARANTEES.
@@ -163,7 +163,7 @@ export function validateProjectConfig(config: ProjectConfig): ValidationResult {
 // SDD Spec Tree Validation
 // ---------------------------------------------------------------------------
 
-export function validateSddTree(rules?: RulesConfig): ValidationResult {
+export function validateSddTree(rules?: RulesConfig, projectType: string = 'backend'): ValidationResult {
   const issues: ValidationIssue[] = [];
 
   // Load specs
@@ -208,6 +208,20 @@ export function validateSddTree(rules?: RulesConfig): ValidationResult {
     if (sub && (sub.status === 'draft' || sub.status === 'design')) return true;
     
     return false;
+  };
+
+  // Helper to resolve the profile of a component/subsystem
+  const getComponentProfile = (compId: string): 'backend' | 'frontend-reactive' | 'frontend-controller' => {
+    const comp = componentMap.get(compId);
+    if (!comp) return 'backend';
+    const sub = subsystems.find(s => s.id === comp.subsystem);
+    if (sub && sub.profile) {
+      return sub.profile;
+    }
+    if (projectType === 'frontend-reactive' || projectType === 'frontend-controller') {
+      return projectType;
+    }
+    return 'backend';
   };
 
   // Helper to determine rule severity based on user config and draft status
@@ -669,6 +683,20 @@ export function validateSddTree(rules?: RulesConfig): ValidationResult {
           );
         }
       }
+
+      // View rule: pure presenter block. Decoupled from logical execution and persistence layers.
+      if (comp.componentType === 'View') {
+        const forbiddenTypes = ['Store', 'Registry', 'Index', 'Adapter', 'Portal', 'Observer', 'Repository', 'Gateway', 'Orchestrator'];
+        if (forbiddenTypes.includes(depComp.componentType)) {
+          addIssue(
+            'error',
+            'ARCHITECTURE_VIOLATION_VIEW_DEP',
+            `Architectural violation: View component "${comp.id}" cannot depend on "${depComp.componentType}" component "${depComp.id}". Views must remain passive UI blocks and be decoupled from logical layers.`,
+            comp.id,
+            isDraftCtx || isComponentDraft(depComp.id)
+          );
+        }
+      }
     }
   }
 
@@ -676,13 +704,13 @@ export function validateSddTree(rules?: RulesConfig): ValidationResult {
   const ownedBy = new Map<string, string>(); // member block id -> owning pattern id
   for (const comp of components) {
     const isDraftCtx = isComponentDraft(comp.id);
-    const isPattern = comp.componentType === 'Repository' || comp.componentType === 'Gateway';
+    const isPattern = PATTERN_TYPES.has(comp.componentType);
 
     if (isPattern && comp.owns.length === 0) {
       addIssue('error', 'EMPTY_PATTERN', `Pattern "${comp.id}" (${comp.componentType}) must own member blocks via "owns".`, comp.id, isDraftCtx);
     }
     if (!isPattern && comp.owns.length > 0) {
-      addIssue('error', 'BLOCK_OWNS_MEMBERS', `Building block "${comp.id}" (${comp.componentType}) cannot own members; only patterns (Repository/Gateway) use "owns".`, comp.id, isDraftCtx);
+      addIssue('error', 'BLOCK_OWNS_MEMBERS', `Building block "${comp.id}" (${comp.componentType}) cannot own members; only patterns (${Array.from(PATTERN_TYPES).join('/')}) use "owns".`, comp.id, isDraftCtx);
     }
 
     for (const memberId of comp.owns) {
@@ -691,7 +719,7 @@ export function validateSddTree(rules?: RulesConfig): ValidationResult {
         addIssue('error', 'INVALID_OWNED_MEMBER', `Component "${comp.id}" owns "${memberId}" which does not exist.`, comp.id, isDraftCtx);
         continue;
       }
-      if (member.componentType === 'Repository' || member.componentType === 'Gateway') {
+      if (PATTERN_TYPES.has(member.componentType)) {
         addIssue('error', 'PATTERN_OWNS_PATTERN', `Pattern "${comp.id}" owns "${memberId}", which is itself a pattern. Patterns own only building blocks — compose patterns at the subsystem (L1) level.`, comp.id, isDraftCtx);
       }
       const prev = ownedBy.get(memberId);
@@ -722,6 +750,37 @@ export function validateSddTree(rules?: RulesConfig): ValidationResult {
         }
       }
     }
+
+    // FeatureComponent containment: exactly one Orchestrator and one View
+    if (comp.componentType === 'FeatureComponent') {
+      let hasOrchestrator = false;
+      let hasView = false;
+      for (const memberId of comp.owns) {
+        const t = componentMap.get(memberId)?.componentType;
+        if (t === 'Orchestrator') hasOrchestrator = true;
+        if (t === 'View') hasView = true;
+      }
+      if (comp.owns.length !== 2 || !hasOrchestrator || !hasView) {
+        addIssue('error', 'FEATURE_COMPONENT_CONTAINMENT', `FeatureComponent "${comp.id}" must own exactly one Orchestrator (logic side) and one View (UI side) component.`, comp.id, isDraftCtx);
+      }
+    }
+
+    // RouterComponent containment: exactly one Portal facade and at least one other child component/View
+    if (comp.componentType === 'RouterComponent') {
+      let hasPortal = false;
+      let hasChildren = false;
+      for (const memberId of comp.owns) {
+        const t = componentMap.get(memberId)?.componentType;
+        if (t === 'Portal') hasPortal = true;
+        else if (t) hasChildren = true;
+      }
+      if (!hasPortal) {
+        addIssue('error', 'ROUTER_COMPONENT_CONTAINMENT', `RouterComponent "${comp.id}" must own exactly one Portal component to act as its facade.`, comp.id, isDraftCtx);
+      }
+      if (!hasChildren) {
+        addIssue('error', 'ROUTER_COMPONENT_CONTAINMENT', `RouterComponent "${comp.id}" must own at least one child component/View to route to.`, comp.id, isDraftCtx);
+      }
+    }
   }
 
   // 4c. Visibility rule: a component may depend on (a) blocks within its OWN group
@@ -738,7 +797,37 @@ export function validateSddTree(rules?: RulesConfig): ValidationResult {
     }
   }
 
-  // 4d. Public interface binding: each declared publicInterface must be backed by
+  // 4d. Architectural Profile Constraints (backend / frontend-reactive / frontend-controller validation)
+  for (const comp of components) {
+    const isDraftCtx = isComponentDraft(comp.id);
+    const profile = getComponentProfile(comp.id);
+
+    if (profile === 'backend') {
+      const frontendTypes = ['View', 'FeatureComponent', 'RouterComponent'];
+      if (frontendTypes.includes(comp.componentType)) {
+        addIssue(
+          'error',
+          'FRONTEND_STEREOTYPE_IN_BACKEND',
+          `Architectural violation: Component "${comp.id}" is a frontend stereotype (${comp.componentType}) but subsystem "${comp.subsystem}" is configured as a backend subsystem.`,
+          comp.id,
+          isDraftCtx
+        );
+      }
+    } else {
+      const backendOnlyTypes = ['Supervisor', 'Actor'];
+      if (backendOnlyTypes.includes(comp.componentType)) {
+        addIssue(
+          'warning',
+          'BACKEND_STEREOTYPE_IN_FRONTEND',
+          `Subsystem "${comp.subsystem}" is a frontend subsystem, but component "${comp.id}" is a backend stereotype (${comp.componentType}). Ensure this runtime concern is genuinely client-side.`,
+          comp.id,
+          isDraftCtx
+        );
+      }
+    }
+  }
+
+  // 4e. Public interface binding: each declared publicInterface must be backed by
   // a real component in the SAME subsystem whose type can realize the declared
   // interface. This is what makes "which components are public" machine-checkable
   // (and catches a declared interface that no component actually implements).
