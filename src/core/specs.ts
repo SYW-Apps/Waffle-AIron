@@ -297,6 +297,10 @@ export function loadSubsystemSpec(id: string): SubsystemSpec | null {
 export function saveSubsystemSpec(spec: SubsystemSpec): void {
   const p = getSubsystemPath(spec.id);
   ensureDir(path.dirname(p));
+  const existing = loadSubsystemSpec(spec.id);
+  if (existing) {
+    spec.createdAt = existing.createdAt;
+  }
   spec.updatedAt = new Date().toISOString();
   writeYamlFile(p, spec);
   invalidateSpecCache();
@@ -333,6 +337,10 @@ export function loadComponentSpec(id: string): ComponentSpec | null {
 export function saveComponentSpec(spec: ComponentSpec): void {
   const p = getComponentPath(spec.id, spec.subsystem);
   ensureDir(path.dirname(p));
+  const existing = loadComponentSpec(spec.id);
+  if (existing) {
+    spec.createdAt = existing.createdAt;
+  }
   spec.updatedAt = new Date().toISOString();
   writeYamlFile(p, spec);
   invalidateSpecCache();
@@ -420,6 +428,10 @@ export function loadInterfaceSpec(id: string): InterfaceSpec | null {
 export function saveInterfaceSpec(spec: InterfaceSpec): void {
   const p = getInterfacePath(spec.id, spec.component);
   ensureDir(path.dirname(p));
+  const existing = loadInterfaceSpec(spec.id);
+  if (existing) {
+    spec.createdAt = existing.createdAt;
+  }
   spec.updatedAt = new Date().toISOString();
   writeYamlFile(p, spec);
   invalidateSpecCache();
@@ -456,6 +468,10 @@ export function loadImplementationSpec(id: string): ImplementationSpec | null {
 export function saveImplementationSpec(spec: ImplementationSpec): void {
   const p = getImplementationPath(spec.id, spec.contract);
   ensureDir(path.dirname(p));
+  const existing = loadImplementationSpec(spec.id);
+  if (existing) {
+    spec.createdAt = existing.createdAt;
+  }
   spec.updatedAt = new Date().toISOString();
   writeYamlFile(p, spec);
   invalidateSpecCache();
@@ -492,6 +508,10 @@ export function loadTypeSpec(id: string): TypeSpec | null {
 export function saveTypeSpec(spec: TypeSpec): void {
   const p = getTypePath(spec.id, spec.subsystem);
   ensureDir(path.dirname(p));
+  const existing = loadTypeSpec(spec.id);
+  if (existing) {
+    spec.createdAt = existing.createdAt;
+  }
   spec.updatedAt = new Date().toISOString();
   writeYamlFile(p, spec);
   invalidateSpecCache();
@@ -553,6 +573,65 @@ export function restoreSpecFiles(snapshot: Map<string, string>): void {
   for (const [file, content] of snapshot) {
     fs.writeFileSync(file, content);
   }
+}
+
+/** Helper to clean up empty parent directories up to `.wai/specs` folder */
+function cleanEmptyDirs(filePath: string): void {
+  let dir = path.dirname(filePath);
+  const specsRoot = path.resolve(AI_PATHS.specsDir());
+  while (dir !== specsRoot && dir.startsWith(specsRoot)) {
+    if (fs.existsSync(dir) && fs.readdirSync(dir).length === 0) {
+      fs.rmdirSync(dir);
+      dir = path.dirname(dir);
+    } else {
+      break;
+    }
+  }
+}
+
+export function deleteSubsystemSpec(id: string): boolean {
+  const p = getSubsystemPath(id);
+  if (!fs.existsSync(p)) return false;
+  fs.unlinkSync(p);
+  cleanEmptyDirs(p);
+  invalidateSpecCache();
+  return true;
+}
+
+export function deleteComponentSpec(id: string): boolean {
+  const p = getComponentPath(id);
+  if (!fs.existsSync(p)) return false;
+  fs.unlinkSync(p);
+  cleanEmptyDirs(p);
+  invalidateSpecCache();
+  return true;
+}
+
+export function deleteInterfaceSpec(id: string): boolean {
+  const p = getInterfacePath(id);
+  if (!fs.existsSync(p)) return false;
+  fs.unlinkSync(p);
+  cleanEmptyDirs(p);
+  invalidateSpecCache();
+  return true;
+}
+
+export function deleteImplementationSpec(id: string): boolean {
+  const p = getImplementationPath(id);
+  if (!fs.existsSync(p)) return false;
+  fs.unlinkSync(p);
+  cleanEmptyDirs(p);
+  invalidateSpecCache();
+  return true;
+}
+
+export function deleteTypeSpec(id: string): boolean {
+  const p = getTypePath(id);
+  if (!fs.existsSync(p)) return false;
+  fs.unlinkSync(p);
+  cleanEmptyDirs(p);
+  invalidateSpecCache();
+  return true;
 }
 
 

@@ -1,7 +1,26 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+
+// To avoid TDZ (Temporal Dead Zone) ReferenceError with hoisted vi.mock,
+// we store the mocks and actuals on globalThis.
+vi.mock('fs', async () => {
+  const actual = await vi.importActual<typeof import('fs')>('fs');
+  (globalThis as any).__actualExistsSync = actual.existsSync;
+  return {
+    ...actual,
+    existsSync: (p: string) => {
+      const mock = (globalThis as any).__mockExistsSync;
+      if (mock) {
+        return mock(p);
+      }
+      return actual.existsSync(p);
+    }
+  };
+});
+
+
 import { findProjectRoot, setProjectRoot, getProjectRoot, fromProjectRoot } from '../../src/utils/fs.js';
 
 function tmpDir(prefix: string): string {
@@ -20,8 +39,20 @@ describe('findProjectRoot', () => {
 
   it('returns null when no project marker is found', () => {
     const root = tmpDir('wairon-noroot-');
-    expect(findProjectRoot(root)).toBeNull();
-    fs.rmSync(root, { recursive: true, force: true });
+    (globalThis as any).__mockExistsSync = (p: string) => {
+      const pStr = String(p);
+      if (pStr.endsWith('.wai') || pStr.endsWith('.wairon') || pStr.includes(path.sep + '.wai') || pStr.includes(path.sep + '.wairon')) {
+        return false;
+      }
+      return (globalThis as any).__actualExistsSync(pStr);
+    };
+
+    try {
+      expect(findProjectRoot(root)).toBeNull();
+    } finally {
+      (globalThis as any).__mockExistsSync = null;
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 

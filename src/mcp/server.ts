@@ -541,6 +541,62 @@ export function createMcpServer(): McpServer {
     },
   );
 
+  reg<{ kind: 'subsystem' | 'component' | 'interface' | 'implementation' | 'type'; id: string }>(server,
+    'sdd_get_spec',
+    {
+      description: 'Get/read the parsed JSON contents of a specific spec from the spec tree. Returns structural contents without file system path searching.',
+      inputSchema: {
+        kind: z.enum(['subsystem', 'component', 'interface', 'implementation', 'type']).describe('The kind of specification'),
+        id: z.string().describe('The identifier of the spec to fetch'),
+      },
+    },
+    ({ kind, id }) => {
+      try {
+        const specs = requireSpecs();
+        let result: unknown = null;
+        switch (kind) {
+          case 'subsystem':      result = specs.loadSubsystemSpec(id); break;
+          case 'component':      result = specs.loadComponentSpec(id); break;
+          case 'interface':      result = specs.loadInterfaceSpec(id); break;
+          case 'implementation': result = specs.loadImplementationSpec(id); break;
+          case 'type':           result = specs.loadTypeSpec(id); break;
+        }
+        if (!result) return errText(`Spec of kind "${kind}" with ID "${id}" does not exist.`);
+        return json(result);
+      } catch (e) {
+        return errText(String(e));
+      }
+    }
+  );
+
+  reg<{ kind: 'subsystem' | 'component' | 'interface' | 'implementation' | 'type'; id: string }>(server,
+    'sdd_delete_spec',
+    {
+      description: 'Delete a specification file from the spec tree and clean up any empty parent directories.',
+      inputSchema: {
+        kind: z.enum(['subsystem', 'component', 'interface', 'implementation', 'type']).describe('The kind of spec to delete'),
+        id: z.string().describe('The ID of the spec to delete'),
+      },
+    },
+    ({ kind, id }) => {
+      try {
+        const specs = requireSpecs();
+        let deleted = false;
+        switch (kind) {
+          case 'subsystem':      deleted = specs.deleteSubsystemSpec(id); break;
+          case 'component':      deleted = specs.deleteComponentSpec(id); break;
+          case 'interface':      deleted = specs.deleteInterfaceSpec(id); break;
+          case 'implementation': deleted = specs.deleteImplementationSpec(id); break;
+          case 'type':           deleted = specs.deleteTypeSpec(id); break;
+        }
+        if (!deleted) return errText(`Spec of kind "${kind}" with ID "${id}" could not be deleted (file may not exist).`);
+        return text(`Successfully deleted ${kind} spec "${id}".`);
+      } catch (e) {
+        return errText(String(e));
+      }
+    }
+  );
+
   reg<Record<string, never>>(server,
     'sdd_get_status',
     {
