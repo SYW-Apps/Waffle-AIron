@@ -917,12 +917,27 @@ export function applySpecStatus(kind: SpecKind, id: string, status: SpecStatus):
  * any change behind if validation fails or the user cancels.
  */
 export function snapshotSpecFiles(): Map<string, string> {
-  const root = path.dirname(AI_PATHS.specsSystem());
+  const index = scanAllSpecs();
   const snapshot = new Map<string, string>();
-  if (!pathExists(root)) return snapshot;
-  for (const file of listFilesRecursive(root, '.yaml')) {
-    snapshot.set(file, fs.readFileSync(file, 'utf8'));
+  const files = new Set<string>();
+
+  const sysPath = AI_PATHS.specsSystem();
+  if (pathExists(sysPath)) {
+    files.add(path.resolve(sysPath));
   }
+
+  for (const group of Object.values(index.paths)) {
+    for (const file of Object.values(group)) {
+      files.add(path.resolve(file));
+    }
+  }
+
+  for (const file of files) {
+    if (fs.existsSync(file)) {
+      snapshot.set(file, fs.readFileSync(file, 'utf8'));
+    }
+  }
+
   return snapshot;
 }
 
