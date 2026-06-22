@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
-import { execSync } from 'child_process';
+import { execSync, spawn } from 'child_process';
 import { logger } from '../utils/logger.js';
 import { WAIRON_VERSION, GITHUB_REPO } from '../config/defaults.js';
 import { getChannel, setChannel, UpdateChannel } from '../config/userconfig.js';
@@ -158,7 +158,7 @@ export async function runUpdate(options: UpdateOptions = {}): Promise<void> {
 
   logger.info(`Installing to ${selfPath}...`);
   try {
-    installBinary(tmpFile, selfPath);
+    installBinary(tmpFile, selfPath, release.tag_name);
   } catch (err) {
     logger.error(`Install failed: ${(err as Error).message}`);
     logger.info(`Downloaded binary is at: ${tmpFile}`);
@@ -330,7 +330,7 @@ function isPkgBinary(): boolean {
   return !!(process as NodeJS.Process & { pkg?: unknown }).pkg;
 }
 
-function installBinary(tmpFile: string, destPath: string): void {
+function installBinary(tmpFile: string, destPath: string, tag_name: string): void {
   const platform = process.platform;
   const isZip = tmpFile.endsWith('.zip');
   const extractDir = path.join(os.tmpdir(), 'wairon-extract');
@@ -357,17 +357,36 @@ function installBinary(tmpFile: string, destPath: string): void {
   }
 
   if (platform === 'win32') {
-    // On Windows you cannot overwrite a running exe, but you CAN rename it
-    // (executables are opened with FILE_SHARE_DELETE). So we:
-    //   1. Rename the running exe to .old  (instant, atomic on same volume)
-    //   2. Copy the new binary into the now-free slot
-    //   3. Attempt to delete .old immediately (succeeds when this process exits;
-    //      if it fails here, cleanStaleBinary() removes it on next run)
-    const oldPath = destPath + '.old';
-    cleanStaleBinary(oldPath);
-    fs.renameSync(destPath, oldPath);
-    fs.copyFileSync(extractedBinary, destPath);
-    try { fs.unlinkSync(oldPath); } catch { /* deleted on next startup */ }
+    // Write a batch script to replace the binary once this process exits
+    const batPath = path.join(os.tmpdir(), 'wairon-update.bat');
+    const batContent = `@echo off
+set /a retry=0
+:loop
+move /y "${extractedBinary}" "${destPath}" >nul 2>nul
+if errorlevel 1 (
+  set /a retry+=1
+  if %retry% lss 30 (
+    timeout /t 1 /nobreak >nul
+    goto loop
+  )
+)
+del /f /q "${tmpFile}" >nul 2>nul
+rmdir /s /q "${extractDir}" >nul 2>nul
+del "%~f0"
+`;
+    fs.writeFileSync(batPath, batContent, 'utf-8');
+
+    // Spawn the batch file detached
+    const child = spawn('cmd.exe', ['/c', batPath], {
+      detached: true,
+      stdio: 'ignore',
+    });
+    child.unref();
+
+    logger.blank();
+    logger.success(`Updated to ${tag_name}`);
+    logger.info('Waffle-AIron is completing the installation in the background.');
+    process.exit(0);
   } else {
     const tmpDest = destPath + '.new';
     fs.copyFileSync(extractedBinary, tmpDest);

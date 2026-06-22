@@ -214,7 +214,7 @@ export function createMcpServer(): McpServer {
     },
   );
 
-  reg<{ id: string; name: string; description: string; publicInterfaces?: { type: 'REST' | 'GraphQL' | 'MessageBus' | 'RPC' | 'Custom'; details: string; component?: string; interface?: string }[] }>(server,
+  reg<{ id: string; name: string; description: string; publicInterfaces?: { type: 'REST' | 'GraphQL' | 'MessageBus' | 'RPC' | 'Custom'; details: string; component?: string; interface?: string }[]; projectPath?: string }>(server,
     'sdd_add_subsystem',
     {
       description: 'Add an L1 Subsystem / Service under the system boundary. publicInterfaces should bind each entry to the component that realizes it (the subsystem\'s published surface); if components do not exist yet, add them later with sdd_set_public_interfaces.',
@@ -228,9 +228,10 @@ export function createMcpServer(): McpServer {
           component: z.string().optional().describe('The L2 component id that realizes this interface (this subsystem\'s published surface)'),
           interface: z.string().optional().describe('Optional L3 interface id on that component backing this entry'),
         })).optional().describe('Public entrypoints exposed by this subsystem, each bound to a realizing component'),
+        projectPath: z.string().optional().describe('Relative path to external project root for subsystem chaining'),
       },
     },
-    ({ id, name, description, publicInterfaces }) => {
+    ({ id, name, description, publicInterfaces, projectPath }) => {
       try {
         const { loadSystemSpec, saveSubsystemSpec } = requireSpecs();
         const system = loadSystemSpec();
@@ -242,6 +243,7 @@ export function createMcpServer(): McpServer {
           description,
           parentSystem: system.name,
           publicInterfaces: publicInterfaces ?? [],
+          projectPath,
           status: 'draft',
           createdAt: now,
           updatedAt: now,
@@ -278,6 +280,32 @@ export function createMcpServer(): McpServer {
           updatedAt: new Date().toISOString(),
         });
         return text(`Updated public interfaces for subsystem "${subsystem}" (${publicInterfaces.length} ${publicInterfaces.length === 1 ? 'entry' : 'entries'}).`);
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  reg<{ subsystem: string; projectPath?: string }>(server,
+    'sdd_set_subsystem_project_path',
+    {
+      description: 'Set (or clear) the projectPath of an L1 Subsystem for subsystem chaining. projectPath should be a relative path to the external project root directory.',
+      inputSchema: {
+        subsystem: z.string().describe('The L1 subsystem id to update'),
+        projectPath: z.string().optional().describe('Relative path to external project root (or omit to clear)'),
+      },
+    },
+    ({ subsystem, projectPath }) => {
+      try {
+        const { loadSubsystemSpec, saveSubsystemSpec } = requireSpecs();
+        const sub = loadSubsystemSpec(subsystem);
+        if (!sub) return errText(`Subsystem "${subsystem}" does not exist.`);
+        saveSubsystemSpec({
+          ...sub,
+          projectPath,
+          updatedAt: new Date().toISOString(),
+        });
+        return text(`Updated projectPath for subsystem "${subsystem}" to: ${projectPath || 'none (cleared)'}`);
       } catch (e) {
         return errText(String(e));
       }
