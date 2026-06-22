@@ -131,4 +131,83 @@ describe('recursive subproject loading and namespacing', () => {
     expect(portalComp?.subsystem).toBe('billing::invoice');
     expect(portalComp?.dependsOn).toContain('billing::invoice_store');
   });
+
+  it('correctly resolves paths and strips namespace prefixes when saving specs to subprojects', () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-root-write-'));
+    childDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-child-write-'));
+
+    // 1. Setup parent project structure
+    fs.mkdirSync(path.join(rootDir, '.wai', 'specs'), { recursive: true });
+    setProjectRoot(rootDir);
+
+    saveSystemSpec({
+      schemaVersion: '1.0.0',
+      name: 'root-system',
+      vision: 'A unified system-of-systems',
+      boundaries: [],
+      globalRequirements: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const relPath = path.relative(rootDir, childDir);
+    saveSubsystemSpec({
+      id: 'billing',
+      name: 'Billing',
+      description: 'Handles billing',
+      parentSystem: 'root-system',
+      publicInterfaces: [],
+      projectPath: relPath,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // 2. Setup child project structure
+    setProjectRoot(childDir);
+    fs.mkdirSync(path.join(childDir, '.wai', 'specs'), { recursive: true });
+    saveSystemSpec({
+      schemaVersion: '1.0.0',
+      name: 'child-system',
+      vision: 'Child billing system',
+      boundaries: [],
+      globalRequirements: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    saveSubsystemSpec({
+      id: 'invoice',
+      name: 'Invoice management',
+      description: 'Manages invoices',
+      parentSystem: 'child-system',
+      publicInterfaces: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // 3. Switch back to parent context and save a new component under the child's namespace
+    setProjectRoot(rootDir);
+    invalidateSpecCache();
+
+    saveComponentSpec({
+      id: 'billing::invoice_portal',
+      name: 'Invoice portal',
+      description: 'Entrance for invoice calls',
+      subsystem: 'billing::invoice',
+      componentType: 'Portal',
+      owns: [],
+      dependsOn: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // 4. Verify that the file was written to the child project path, and contains stripped IDs
+    const childComponentPath = path.join(childDir, '.wai', 'specs', 'invoice', 'invoice_portal', 'component.yaml');
+    expect(fs.existsSync(childComponentPath)).toBe(true);
+
+    const contents = fs.readFileSync(childComponentPath, 'utf8');
+    expect(contents).toContain('id: invoice_portal'); // prefix stripped!
+    expect(contents).toContain('subsystem: invoice'); // prefix stripped!
+    expect(contents).not.toContain('billing::');
+  });
 });

@@ -312,10 +312,113 @@ export function scanAllSpecs(): SpecIndex {
   return cachedIndex;
 }
 
+export function resolveSubprojectForNamespace(namespace: string): string | null {
+  const parts = namespace.split('::');
+  let currentDir = getProjectRoot();
+  for (const part of parts) {
+    const prevOverride = getProjectRootOverride();
+    setProjectRoot(currentDir);
+    try {
+      const sub = loadSubsystemSpec(part);
+      if (sub && sub.projectPath) {
+        currentDir = path.resolve(currentDir, sub.projectPath);
+      } else {
+        return null;
+      }
+    } finally {
+      setProjectRoot(prevOverride);
+    }
+  }
+  return currentDir;
+}
+
+export function splitNamespace(qualifiedId: string): { prefix: string; localId: string } {
+  if (!qualifiedId.includes('::')) {
+    return { prefix: '', localId: qualifiedId };
+  }
+  const parts = qualifiedId.split('::');
+  const localId = parts.pop()!;
+  return { prefix: parts.join('::'), localId };
+}
+
+function stripPrefix(id: string, prefix: string): string {
+  if (id.startsWith(`${prefix}::`)) {
+    return id.slice(prefix.length + 2);
+  }
+  return id;
+}
+
+function stripNamespaceFromSubsystem(spec: SubsystemSpec, prefix: string): SubsystemSpec {
+  return {
+    ...spec,
+    id: stripPrefix(spec.id, prefix),
+    publicInterfaces: spec.publicInterfaces.map(pi => ({
+      ...pi,
+      component: pi.component ? stripPrefix(pi.component, prefix) : undefined,
+      interface: pi.interface ? stripPrefix(pi.interface, prefix) : undefined,
+    })),
+  };
+}
+
+function stripNamespaceFromComponent(spec: ComponentSpec, prefix: string): ComponentSpec {
+  return {
+    ...spec,
+    id: stripPrefix(spec.id, prefix),
+    subsystem: stripPrefix(spec.subsystem, prefix),
+    owns: spec.owns.map(o => stripPrefix(o, prefix)),
+    dependsOn: spec.dependsOn.map(d => stripPrefix(d, prefix)),
+  };
+}
+
+function stripNamespaceFromInterface(spec: InterfaceSpec, prefix: string): InterfaceSpec {
+  return {
+    ...spec,
+    id: stripPrefix(spec.id, prefix),
+    component: stripPrefix(spec.component, prefix),
+  };
+}
+
+function stripNamespaceFromImplementation(spec: ImplementationSpec, prefix: string): ImplementationSpec {
+  return {
+    ...spec,
+    id: stripPrefix(spec.id, prefix),
+    contract: stripPrefix(spec.contract, prefix),
+    methods: spec.methods.map(m => ({
+      ...m,
+      narrative: m.narrative.map(step => ({
+        ...step,
+        targetComponent: step.targetComponent ? stripPrefix(step.targetComponent, prefix) : undefined,
+      })),
+    })),
+  };
+}
+
+function stripNamespaceFromType(spec: TypeSpec, prefix: string): TypeSpec {
+  return {
+    ...spec,
+    id: stripPrefix(spec.id, prefix),
+    subsystem: spec.subsystem ? stripPrefix(spec.subsystem, prefix) : undefined,
+  };
+}
+
 export function getSubsystemPath(id: string): string {
   const index = scanAllSpecs();
   if (index.paths.subsystem[id]) {
     return index.paths.subsystem[id];
+  }
+  if (id.includes('::')) {
+    const parts = id.split('::');
+    const childProj = resolveSubprojectForNamespace(parts.slice(0, -1).join('::'));
+    if (childProj) {
+      const remainingId = parts[parts.length - 1];
+      const prevOverride = getProjectRootOverride();
+      setProjectRoot(childProj);
+      try {
+        return getSubsystemPath(remainingId);
+      } finally {
+        setProjectRoot(prevOverride);
+      }
+    }
   }
   if (pathExists(AI_PATHS.specsSubsystemsDir()) && listFiles(AI_PATHS.specsSubsystemsDir(), '.yaml').length > 0) {
     return path.join(AI_PATHS.specsSubsystemsDir(), `${id}.yaml`);
@@ -337,6 +440,22 @@ export function getComponentPath(id: string, subsystemId?: string): string {
   const index = scanAllSpecs();
   if (index.paths.component[id]) {
     return index.paths.component[id];
+  }
+
+  if (id.includes('::')) {
+    const parts = id.split('::');
+    const childProj = resolveSubprojectForNamespace(parts.slice(0, -1).join('::'));
+    if (childProj) {
+      const remainingId = parts[parts.length - 1];
+      const remainingSubsystem = subsystemId ? subsystemId.split('::').pop() : undefined;
+      const prevOverride = getProjectRootOverride();
+      setProjectRoot(childProj);
+      try {
+        return getComponentPath(remainingId, remainingSubsystem);
+      } finally {
+        setProjectRoot(prevOverride);
+      }
+    }
   }
 
   // Owned members nest one level deep inside their owning pattern's folder
@@ -371,6 +490,22 @@ export function getInterfacePath(id: string, componentId?: string): string {
     return index.paths.interface[id];
   }
 
+  if (id.includes('::')) {
+    const parts = id.split('::');
+    const childProj = resolveSubprojectForNamespace(parts.slice(0, -1).join('::'));
+    if (childProj) {
+      const remainingId = parts[parts.length - 1];
+      const remainingComponent = componentId ? componentId.split('::').pop() : undefined;
+      const prevOverride = getProjectRootOverride();
+      setProjectRoot(childProj);
+      try {
+        return getInterfacePath(remainingId, remainingComponent);
+      } finally {
+        setProjectRoot(prevOverride);
+      }
+    }
+  }
+
   if (componentId) {
     const compPath = getComponentPath(componentId);
     const compDir = path.dirname(compPath);
@@ -391,6 +526,22 @@ export function getImplementationPath(id: string, contractId?: string): string {
   const index = scanAllSpecs();
   if (index.paths.implementation[id]) {
     return index.paths.implementation[id];
+  }
+
+  if (id.includes('::')) {
+    const parts = id.split('::');
+    const childProj = resolveSubprojectForNamespace(parts.slice(0, -1).join('::'));
+    if (childProj) {
+      const remainingId = parts[parts.length - 1];
+      const remainingContract = contractId ? contractId.split('::').pop() : undefined;
+      const prevOverride = getProjectRootOverride();
+      setProjectRoot(childProj);
+      try {
+        return getImplementationPath(remainingId, remainingContract);
+      } finally {
+        setProjectRoot(prevOverride);
+      }
+    }
   }
 
   if (contractId) {
@@ -444,6 +595,10 @@ export function loadSubsystemSpecs(): SubsystemSpec[] {
 }
 
 export function loadSubsystemSpec(id: string): SubsystemSpec | null {
+  const index = scanAllSpecs();
+  const cached = index.subsystems.find((s) => s.id === id);
+  if (cached) return cached;
+
   const p = getSubsystemPath(id);
   if (!pathExists(p)) return null;
   try {
@@ -463,12 +618,16 @@ export function loadSubsystemSpec(id: string): SubsystemSpec | null {
 export function saveSubsystemSpec(spec: SubsystemSpec): void {
   const p = getSubsystemPath(spec.id);
   ensureDir(path.dirname(p));
+
+  const { prefix } = splitNamespace(spec.id);
+  const specToWrite = prefix ? stripNamespaceFromSubsystem(spec, prefix) : spec;
+
   const existing = loadSubsystemSpec(spec.id);
   if (existing) {
-    spec.createdAt = existing.createdAt;
+    specToWrite.createdAt = existing.createdAt;
   }
-  spec.updatedAt = new Date().toISOString();
-  writeYamlFile(p, spec);
+  specToWrite.updatedAt = new Date().toISOString();
+  writeYamlFile(p, specToWrite);
   invalidateSpecCache();
 }
 
@@ -503,12 +662,16 @@ export function loadComponentSpec(id: string): ComponentSpec | null {
 export function saveComponentSpec(spec: ComponentSpec): void {
   const p = getComponentPath(spec.id, spec.subsystem);
   ensureDir(path.dirname(p));
+
+  const { prefix } = splitNamespace(spec.subsystem || spec.id);
+  const specToWrite = prefix ? stripNamespaceFromComponent(spec, prefix) : spec;
+
   const existing = loadComponentSpec(spec.id);
   if (existing) {
-    spec.createdAt = existing.createdAt;
+    specToWrite.createdAt = existing.createdAt;
   }
-  spec.updatedAt = new Date().toISOString();
-  writeYamlFile(p, spec);
+  specToWrite.updatedAt = new Date().toISOString();
+  writeYamlFile(p, specToWrite);
   invalidateSpecCache();
   // Keep the physical layout in sync with ownership: nest owned members under
   // their pattern, and move anything an `owns` change has displaced.
@@ -520,6 +683,7 @@ function desiredComponentDir(comp: ComponentSpec, index: SpecIndex): string | nu
   const currentPath = index.paths.component[comp.id];
   // Only the nested-tree layout is normalized (skip the legacy flat components/ dir).
   if (!currentPath || !currentPath.endsWith('component.yaml')) return null;
+  if (comp.id.includes('::')) return null;
 
   const owner = findOwner(comp.id, index.components);
   if (owner) {
@@ -594,12 +758,16 @@ export function loadInterfaceSpec(id: string): InterfaceSpec | null {
 export function saveInterfaceSpec(spec: InterfaceSpec): void {
   const p = getInterfacePath(spec.id, spec.component);
   ensureDir(path.dirname(p));
+
+  const { prefix } = splitNamespace(spec.component || spec.id);
+  const specToWrite = prefix ? stripNamespaceFromInterface(spec, prefix) : spec;
+
   const existing = loadInterfaceSpec(spec.id);
   if (existing) {
-    spec.createdAt = existing.createdAt;
+    specToWrite.createdAt = existing.createdAt;
   }
-  spec.updatedAt = new Date().toISOString();
-  writeYamlFile(p, spec);
+  specToWrite.updatedAt = new Date().toISOString();
+  writeYamlFile(p, specToWrite);
   invalidateSpecCache();
 }
 
@@ -634,12 +802,16 @@ export function loadImplementationSpec(id: string): ImplementationSpec | null {
 export function saveImplementationSpec(spec: ImplementationSpec): void {
   const p = getImplementationPath(spec.id, spec.contract);
   ensureDir(path.dirname(p));
+
+  const { prefix } = splitNamespace(spec.contract || spec.id);
+  const specToWrite = prefix ? stripNamespaceFromImplementation(spec, prefix) : spec;
+
   const existing = loadImplementationSpec(spec.id);
   if (existing) {
-    spec.createdAt = existing.createdAt;
+    specToWrite.createdAt = existing.createdAt;
   }
-  spec.updatedAt = new Date().toISOString();
-  writeYamlFile(p, spec);
+  specToWrite.updatedAt = new Date().toISOString();
+  writeYamlFile(p, specToWrite);
   invalidateSpecCache();
 }
 
@@ -652,6 +824,22 @@ export function saveImplementationSpec(spec: ImplementationSpec): void {
 export function getTypePath(id: string, subsystemId?: string): string {
   const index = scanAllSpecs();
   if (index.paths.type[id]) return index.paths.type[id];
+
+  if (id.includes('::')) {
+    const parts = id.split('::');
+    const childProj = resolveSubprojectForNamespace(parts.slice(0, -1).join('::'));
+    if (childProj) {
+      const remainingId = parts[parts.length - 1];
+      const remainingSubsystem = subsystemId ? subsystemId.split('::').pop() : undefined;
+      const prevOverride = getProjectRootOverride();
+      setProjectRoot(childProj);
+      try {
+        return getTypePath(remainingId, remainingSubsystem);
+      } finally {
+        setProjectRoot(prevOverride);
+      }
+    }
+  }
 
   if (subsystemId) {
     const subPath = getSubsystemPath(subsystemId);
@@ -674,12 +862,16 @@ export function loadTypeSpec(id: string): TypeSpec | null {
 export function saveTypeSpec(spec: TypeSpec): void {
   const p = getTypePath(spec.id, spec.subsystem);
   ensureDir(path.dirname(p));
+
+  const { prefix } = splitNamespace(spec.subsystem || spec.id);
+  const specToWrite = prefix ? stripNamespaceFromType(spec, prefix) : spec;
+
   const existing = loadTypeSpec(spec.id);
   if (existing) {
-    spec.createdAt = existing.createdAt;
+    specToWrite.createdAt = existing.createdAt;
   }
-  spec.updatedAt = new Date().toISOString();
-  writeYamlFile(p, spec);
+  specToWrite.updatedAt = new Date().toISOString();
+  writeYamlFile(p, specToWrite);
   invalidateSpecCache();
 }
 
@@ -725,12 +917,27 @@ export function applySpecStatus(kind: SpecKind, id: string, status: SpecStatus):
  * any change behind if validation fails or the user cancels.
  */
 export function snapshotSpecFiles(): Map<string, string> {
-  const root = path.dirname(AI_PATHS.specsSystem());
+  const index = scanAllSpecs();
   const snapshot = new Map<string, string>();
-  if (!pathExists(root)) return snapshot;
-  for (const file of listFilesRecursive(root, '.yaml')) {
-    snapshot.set(file, fs.readFileSync(file, 'utf8'));
+  const files = new Set<string>();
+
+  const sysPath = AI_PATHS.specsSystem();
+  if (pathExists(sysPath)) {
+    files.add(path.resolve(sysPath));
   }
+
+  for (const group of Object.values(index.paths)) {
+    for (const file of Object.values(group)) {
+      files.add(path.resolve(file));
+    }
+  }
+
+  for (const file of files) {
+    if (fs.existsSync(file)) {
+      snapshot.set(file, fs.readFileSync(file, 'utf8'));
+    }
+  }
+
   return snapshot;
 }
 
