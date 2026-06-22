@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { AI_PATHS } from '../config/loader.js';
-import { ensureDir, listFiles, listFilesRecursive, pathExists } from '../utils/fs.js';
+import { ensureDir, listFiles, listFilesRecursive, pathExists, getProjectRoot, setProjectRoot, getProjectRootOverride } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import {
   SystemSpec,
@@ -55,9 +55,26 @@ export function invalidateSpecCache(): void {
   cachedIndex = null;
 }
 
-export function scanAllSpecs(): SpecIndex {
-  if (cachedIndex) return cachedIndex;
+function qualifyId(id: string, prefix: string): string;
+function qualifyId(id: string | undefined, prefix: string): string | undefined;
+function qualifyId(id: string | undefined, prefix: string): string | undefined {
+  if (!id) return id;
+  if (id.startsWith('::')) {
+    return id.slice(2);
+  }
+  if (id.startsWith('super::')) {
+    const prefixParts = prefix.split('::');
+    const idParts = id.split('::');
+    while (idParts[0] === 'super') {
+      idParts.shift();
+      prefixParts.pop();
+    }
+    return [...prefixParts, ...idParts].join('::');
+  }
+  return `${prefix}::${id}`;
+}
 
+function scanSpecsForProject(projectDir: string, namespacePrefix: string, visitedDirs: Set<string>): SpecIndex {
   const index: SpecIndex = {
     subsystems: [],
     components: [],
@@ -73,77 +90,217 @@ export function scanAllSpecs(): SpecIndex {
     },
   };
 
-  const specsDir = AI_PATHS.specsDir();
-  if (!pathExists(specsDir)) return index;
+  const prevOverride = getProjectRootOverride();
+  setProjectRoot(projectDir);
 
-  const files = listFilesRecursive(specsDir, '.yaml');
-  const systemYaml = path.normalize(AI_PATHS.specsSystem());
+  try {
+    const specsDir = AI_PATHS.specsDir();
+    if (!pathExists(specsDir)) return index;
 
-  for (const file of files) {
-    const normFile = path.normalize(file);
-    if (normFile === systemYaml) continue; // skip L0 System Spec
+    const files = listFilesRecursive(specsDir, '.yaml');
+    const systemYaml = path.normalize(AI_PATHS.specsSystem());
 
-    let detectedType = 'spec';
-    try {
-      const raw = readYamlFile(file);
-      if (raw === null || typeof raw !== 'object') {
+    const localSubprojects: { subsystemId: string; projectPath: string }[] = [];
+
+    for (const file of files) {
+      const normFile = path.normalize(file);
+      if (normFile === systemYaml) continue;
+
+      let detectedType = 'spec';
+      try {
+        const raw = readYamlFile(file);
+        if (raw === null || typeof raw !== 'object') {
+          loaderIssues.push({
+            severity: 'error',
+            code: 'INVALID_YAML',
+            message: `Spec file "${file}" is not a valid YAML object or is empty.`,
+            specId: path.basename(file, '.yaml'),
+          });
+          continue;
+        }
+
+        if ('parentSystem' in raw) {
+          detectedType = 'subsystem';
+          const parsed = SubsystemSpecSchema.parse(raw);
+          if (parsed.projectPath) {
+            localSubprojects.push({
+              subsystemId: parsed.id,
+              projectPath: parsed.projectPath,
+            });
+          }
+          index.subsystems.push(parsed);
+          index.paths.subsystem[parsed.id] = file;
+        } else if ('componentType' in raw) {
+          detectedType = 'component';
+          const parsed = ComponentSpecSchema.parse(raw);
+          index.components.push(parsed);
+          index.paths.component[parsed.id] = file;
+        } else if ('component' in raw) {
+          detectedType = 'interface';
+          const parsed = InterfaceSpecSchema.parse(raw);
+          index.interfaces.push(parsed);
+          index.paths.interface[parsed.id] = file;
+        } else if ('contract' in raw) {
+          detectedType = 'implementation';
+          const parsed = ImplementationSpecSchema.parse(raw);
+          index.implementations.push(parsed);
+          index.paths.implementation[parsed.id] = file;
+        } else if ('kind' in raw) {
+          detectedType = 'type';
+          const parsed = TypeSpecSchema.parse(raw);
+          index.types.push(parsed);
+          index.paths.type[parsed.id] = file;
+        }
+
+        if (detectedType === 'spec') {
+          loaderIssues.push({
+            severity: 'error',
+            code: 'UNKNOWN_SPEC_TYPE',
+            message: `Spec file "${file}" does not match any recognized L1-L4 schema structure.`,
+            specId: path.basename(file, '.yaml'),
+          });
+        }
+      } catch (e: any) {
+        const filename = path.basename(file, '.yaml');
         loaderIssues.push({
           severity: 'error',
-          code: 'INVALID_YAML',
-          message: `Spec file "${file}" is not a valid YAML object or is empty.`,
-          specId: path.basename(file, '.yaml'),
+          code: 'SCHEMA_VALIDATION_ERROR',
+          message: `Failed to parse ${detectedType} spec "${file}": ${e.message || String(e)}`,
+          specId: filename,
+        });
+      }
+    }
+
+    if (namespacePrefix) {
+      index.subsystems = index.subsystems.map(sub => ({
+        ...sub,
+        id: qualifyId(sub.id, namespacePrefix),
+        publicInterfaces: sub.publicInterfaces.map(p => ({
+          ...p,
+          component: p.component ? qualifyId(p.component, namespacePrefix) : undefined,
+          interface: p.interface ? qualifyId(p.interface, namespacePrefix) : undefined,
+        })),
+      }));
+
+      index.components = index.components.map(comp => ({
+        ...comp,
+        id: qualifyId(comp.id, namespacePrefix),
+        subsystem: qualifyId(comp.subsystem, namespacePrefix),
+        owns: comp.owns.map(o => qualifyId(o, namespacePrefix)),
+        dependsOn: comp.dependsOn.map(d => qualifyId(d, namespacePrefix)),
+      }));
+
+      index.interfaces = index.interfaces.map(intf => ({
+        ...intf,
+        id: qualifyId(intf.id, namespacePrefix),
+        component: qualifyId(intf.component, namespacePrefix),
+      }));
+
+      index.implementations = index.implementations.map(impl => ({
+        ...impl,
+        id: qualifyId(impl.id, namespacePrefix),
+        contract: qualifyId(impl.contract, namespacePrefix),
+        methods: impl.methods.map(m => ({
+          ...m,
+          narrative: m.narrative.map(step => ({
+            ...step,
+            targetComponent: step.targetComponent ? qualifyId(step.targetComponent, namespacePrefix) : undefined,
+          })),
+        })),
+      }));
+
+      index.types = index.types.map(t => ({
+        ...t,
+        id: qualifyId(t.id, namespacePrefix),
+        subsystem: t.subsystem ? qualifyId(t.subsystem, namespacePrefix) : undefined,
+      }));
+
+      const originalPaths = index.paths;
+      index.paths = {
+        subsystem: {},
+        component: {},
+        interface: {},
+        implementation: {},
+        type: {},
+      };
+
+      for (const [k, v] of Object.entries(originalPaths.subsystem)) {
+        index.paths.subsystem[qualifyId(k, namespacePrefix)] = v;
+      }
+      for (const [k, v] of Object.entries(originalPaths.component)) {
+        index.paths.component[qualifyId(k, namespacePrefix)] = v;
+      }
+      for (const [k, v] of Object.entries(originalPaths.interface)) {
+        index.paths.interface[qualifyId(k, namespacePrefix)] = v;
+      }
+      for (const [k, v] of Object.entries(originalPaths.implementation)) {
+        index.paths.implementation[qualifyId(k, namespacePrefix)] = v;
+      }
+      for (const [k, v] of Object.entries(originalPaths.type)) {
+        index.paths.type[qualifyId(k, namespacePrefix)] = v;
+      }
+    }
+
+    for (const subproj of localSubprojects) {
+      const childDir = path.resolve(projectDir, subproj.projectPath);
+      if (visitedDirs.has(childDir)) {
+        loaderIssues.push({
+          severity: 'error',
+          code: 'CIRCULAR_SUBPROJECT_REFERENCE',
+          message: `Circular reference detected: Subsystem "${subproj.subsystemId}" refers to subproject "${childDir}" which is already loaded.`,
+          specId: subproj.subsystemId,
         });
         continue;
       }
 
-      if ('parentSystem' in raw) {
-        detectedType = 'subsystem';
-        const parsed = SubsystemSpecSchema.parse(raw);
-        index.subsystems.push(parsed);
-        index.paths.subsystem[parsed.id] = file;
-      } else if ('componentType' in raw) {
-        detectedType = 'component';
-        const parsed = ComponentSpecSchema.parse(raw);
-        index.components.push(parsed);
-        index.paths.component[parsed.id] = file;
-      } else if ('component' in raw) {
-        detectedType = 'interface';
-        const parsed = InterfaceSpecSchema.parse(raw);
-        index.interfaces.push(parsed);
-        index.paths.interface[parsed.id] = file;
-      } else if ('contract' in raw) {
-        detectedType = 'implementation';
-        const parsed = ImplementationSpecSchema.parse(raw);
-        index.implementations.push(parsed);
-        index.paths.implementation[parsed.id] = file;
-      } else if ('kind' in raw) {
-        detectedType = 'type';
-        const parsed = TypeSpecSchema.parse(raw);
-        index.types.push(parsed);
-        index.paths.type[parsed.id] = file;
-      }
-
-      if (detectedType === 'spec') {
+      if (!fs.existsSync(childDir)) {
         loaderIssues.push({
           severity: 'error',
-          code: 'UNKNOWN_SPEC_TYPE',
-          message: `Spec file "${file}" does not match any recognized L1-L4 schema structure. Ensure required discriminator fields (e.g. parentSystem, componentType, component, or contract) are declared.`,
-          specId: path.basename(file, '.yaml'),
+          code: 'SUBPROJECT_NOT_FOUND',
+          message: `Subproject directory "${childDir}" declared by subsystem "${subproj.subsystemId}" does not exist.`,
+          specId: subproj.subsystemId,
         });
+        continue;
       }
-    } catch (e: any) {
-      const filename = path.basename(file, '.yaml');
-      loaderIssues.push({
-        severity: 'error',
-        code: 'SCHEMA_VALIDATION_ERROR',
-        message: `Failed to parse ${detectedType} spec "${file}": ${e.message || String(e)}`,
-        specId: filename,
-      });
+
+      const childNamespace = namespacePrefix
+        ? `${namespacePrefix}::${subproj.subsystemId}`
+        : subproj.subsystemId;
+
+      const newVisited = new Set(visitedDirs);
+      newVisited.add(childDir);
+
+      const childIndex = scanSpecsForProject(childDir, childNamespace, newVisited);
+
+      index.subsystems.push(...childIndex.subsystems);
+      index.components.push(...childIndex.components);
+      index.interfaces.push(...childIndex.interfaces);
+      index.implementations.push(...childIndex.implementations);
+      index.types.push(...childIndex.types);
+
+      Object.assign(index.paths.subsystem, childIndex.paths.subsystem);
+      Object.assign(index.paths.component, childIndex.paths.component);
+      Object.assign(index.paths.interface, childIndex.paths.interface);
+      Object.assign(index.paths.implementation, childIndex.paths.implementation);
+      Object.assign(index.paths.type, childIndex.paths.type);
     }
+
+  } finally {
+    setProjectRoot(prevOverride);
   }
 
-  cachedIndex = index;
   return index;
+}
+
+export function scanAllSpecs(): SpecIndex {
+  if (cachedIndex) return cachedIndex;
+
+  loaderIssues = [];
+  const rootDir = getProjectRoot();
+  const visited = new Set<string>([path.resolve(rootDir)]);
+  
+  cachedIndex = scanSpecsForProject(rootDir, '', visited);
+  return cachedIndex;
 }
 
 export function getSubsystemPath(id: string): string {

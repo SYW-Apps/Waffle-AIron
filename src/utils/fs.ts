@@ -93,6 +93,11 @@ export function setProjectRoot(dir: string | null): void {
   projectRootOverride = dir === null ? null : path.resolve(dir);
 }
 
+/** Get the raw project root override value (or null if none set) */
+export function getProjectRootOverride(): string | null {
+  return projectRootOverride;
+}
+
 /** The resolved project root: the explicit override if set, else process.cwd(). */
 export function getProjectRoot(): string {
   return projectRootOverride ?? process.cwd();
