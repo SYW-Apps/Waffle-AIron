@@ -62,6 +62,7 @@ export const SubsystemSpecSchema = z.object({
   parentSystem: z.string(), // References L0 System Name or file
   publicInterfaces: z.array(PublicInterfaceSchema).default([]),
   profile: z.enum(['backend', 'frontend-reactive', 'frontend-controller', 'lowlevel-os', 'game-ecs', 'realtime-embedded', 'plc-cyclic']).optional(), // Optional subsystem override for fullstack
+  projectPath: z.string().optional(), // Relative path to external project root for subsystem chaining
   status: SpecStatusSchema.optional().default('complete'),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
