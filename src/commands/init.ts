@@ -112,7 +112,7 @@ async function runInitInteractive(): Promise<void> {
   // Phase 1b — Project Type
   // ------------------------------------------------------------------
 
-  const { projectType } = await inquirer.prompt<{ projectType: 'backend' | 'frontend-reactive' | 'frontend-controller' | 'fullstack' }>([
+  const { projectType } = await inquirer.prompt<{ projectType: 'backend' | 'frontend-reactive' | 'frontend-controller' | 'lowlevel-os' | 'game-ecs' | 'realtime-embedded' | 'plc-cyclic' | 'fullstack' }>([
     {
       type: 'list',
       name: 'projectType',
@@ -121,6 +121,10 @@ async function runInitInteractive(): Promise<void> {
         { name: 'Backend-only (standard DDD backend/services)', value: 'backend' },
         { name: 'Frontend Reactive (React, Vue 3, Svelte, SolidJS)', value: 'frontend-reactive' },
         { name: 'Frontend Controller (Angular, Flutter, Mobile/Native)', value: 'frontend-controller' },
+        { name: 'Low-Level OS (processes, devices, schedulers)', value: 'lowlevel-os' },
+        { name: 'Game ECS (Entity-Component-System simulation)', value: 'game-ecs' },
+        { name: 'Real-Time Embedded (control loops, sensors, actuators)', value: 'realtime-embedded' },
+        { name: 'PLC Cyclic (IEC 61131-3 Structured Text, scan loops)', value: 'plc-cyclic' },
         { name: 'Fullstack / Monorepo (supports custom profile per subsystem)', value: 'fullstack' },
       ],
       default: 'backend',
@@ -440,7 +444,7 @@ function buildProjectConfig(
   name: string,
   targets: TargetConfig[],
   now: string,
-  projectType: 'backend' | 'frontend-reactive' | 'frontend-controller' | 'fullstack',
+  projectType: 'backend' | 'frontend-reactive' | 'frontend-controller' | 'lowlevel-os' | 'game-ecs' | 'realtime-embedded' | 'plc-cyclic' | 'fullstack',
 ): ProjectConfig {
   return {
     schemaVersion: '1.0.0',

@@ -211,15 +211,16 @@ export function validateSddTree(rules?: RulesConfig, projectType: string = 'back
   };
 
   // Helper to resolve the profile of a component/subsystem
-  const getComponentProfile = (compId: string): 'backend' | 'frontend-reactive' | 'frontend-controller' => {
+  const getComponentProfile = (compId: string): 'backend' | 'frontend-reactive' | 'frontend-controller' | 'lowlevel-os' | 'game-ecs' | 'realtime-embedded' | 'plc-cyclic' => {
     const comp = componentMap.get(compId);
     if (!comp) return 'backend';
     const sub = subsystems.find(s => s.id === comp.subsystem);
     if (sub && sub.profile) {
       return sub.profile;
     }
-    if (projectType === 'frontend-reactive' || projectType === 'frontend-controller') {
-      return projectType;
+    const validProfiles = ['frontend-reactive', 'frontend-controller', 'lowlevel-os', 'game-ecs', 'realtime-embedded', 'plc-cyclic'];
+    if (validProfiles.includes(projectType)) {
+      return projectType as any;
     }
     return 'backend';
   };
@@ -802,16 +803,29 @@ export function validateSddTree(rules?: RulesConfig, projectType: string = 'back
     const isDraftCtx = isComponentDraft(comp.id);
     const profile = getComponentProfile(comp.id);
 
-    if (profile === 'backend') {
+    if (profile === 'backend' || profile === 'lowlevel-os' || profile === 'game-ecs' || profile === 'realtime-embedded' || profile === 'plc-cyclic') {
       const frontendTypes = ['View', 'FeatureComponent', 'RouterComponent'];
       if (frontendTypes.includes(comp.componentType)) {
         addIssue(
           'error',
           'FRONTEND_STEREOTYPE_IN_BACKEND',
-          `Architectural violation: Component "${comp.id}" is a frontend stereotype (${comp.componentType}) but subsystem "${comp.subsystem}" is configured as a backend subsystem.`,
+          `Architectural violation: Component "${comp.id}" is a frontend stereotype (${comp.componentType}) but subsystem "${comp.subsystem}" is configured as a backend-oriented subsystem.`,
           comp.id,
           isDraftCtx
         );
+      }
+
+      // PLC Cyclic specific constraints
+      if (profile === 'plc-cyclic') {
+        if (comp.componentType === 'Actor' || comp.componentType === 'Supervisor') {
+          addIssue(
+            'error',
+            'PLC_CYCLIC_CONCURRENCY_VIOLATION',
+            `Architectural violation: Component "${comp.id}" is a concurrent stereotype (${comp.componentType}) which is forbidden in PLC Cyclic profile. PLC logic runs strictly single-threaded within the main execution scan cycle.`,
+            comp.id,
+            isDraftCtx
+          );
+        }
       }
     } else {
       const backendOnlyTypes = ['Supervisor', 'Actor'];

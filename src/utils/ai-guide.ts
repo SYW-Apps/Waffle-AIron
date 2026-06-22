@@ -50,7 +50,7 @@ This project uses **wairon**. System specs live under \`.wai/specs/\` (L0 System
 
 ### How you operate
 - **To design/modify specs**: Use **\`sdd-architect\`** skill (in \`.claude/skills/\` or \`.gemini/skills/\`).
-- **Manage specs via MCP tools only**: Use \`sdd_initialize_system\`, \`sdd_add_subsystem\`, \`sdd_add_component\`, \`sdd_define_interface\`, \`sdd_write_narrative\`, \`sdd_add_type\`, \`sdd_validate_tree\`, and \`sdd_get_status\` (namespaced if needed). Do not edit specs manually.
+- **Manage specs via MCP tools only**: Use \`sdd_initialize_system\`, \`sdd_add_subsystem\`, \`sdd_add_component\`, \`sdd_define_interface\`, \`sdd_write_narrative\`, \`sdd_add_type\`, \`sdd_get_spec\`, \`sdd_delete_spec\`, \`sdd_validate_tree\`, and \`sdd_get_status\` (namespaced if needed). Do not edit specs manually.
 - **Do not run the \`wairon\` CLI**: Use \`sdd_validate_tree\` and \`sdd_get_status\` instead of CLI commands.
 - **Handoff to implementation**: Once design is complete and validates cleanly, tell the human: *"The specs are complete and validate. Please run \`wairon lock\` to confirm and generate the implementer agents, then restart this session to load them."*
 - **To implement code**: Spawn the generated \`<component-id>-implementer\` subagent. Implementations must match L3 interfaces and L5 narratives exactly.

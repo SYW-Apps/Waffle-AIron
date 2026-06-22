@@ -48,6 +48,27 @@ reflects what is actually shipped in `src/` and what is planned.
 - **CI integration** — `wairon validate --ci` in PR checks; conformance diff
   reporting.
 - **Org scale** — shared template libraries and cross-project standards.
+- **Multi-Domain Architectural Profiles** — Support non-backend domains cleanly to prevent context waste. First version of the engine integration is shipped, supporting the following blueprints:
+  - **Frontend Profiles** (`frontend-reactive` and `frontend-controller`):
+    - *Concept*: Enforces a strict separation of presentation views from reactive logic custom hooks or class controllers.
+    - *Stereotypes*: Introduces `View` blocks representing pure presenter elements (like React JSX, Vue templates, or Flutter StatelessWidgets).
+    - *Validation*: Views are strictly passive; they cannot depend on database Stores, Registries, or Adapters. They only receive properties and forward callbacks.
+  - **OS Profile** (`lowlevel-os`):
+    - *Concept*: Models OS kernel scheduling loops, thread tasks, virtual filesystem blocks, and hardware interfaces.
+    - *Stereotypes*: `Supervisor` maps to the kernel scheduler, `Actor` represents thread contexts/tasks, `Adapter` represents device drivers/VFS layers, and `Store` represents process tables.
+    - *Zero-Cost Target*: Spec boundaries are compile-time virtual boundaries. Calls from system calls (`Portals`) to handlers are aggressively inlined, monomorphized, or resolved static-statically in systems languages (C, Rust `no_std`).
+  - **Game Profile** (`game-ecs`):
+    - *Concept*: Structures Entity-Component-System simulation loops.
+    - *Stereotypes*: `Store` represents the component array registries, `Specialist` represents systems (e.g. Physics, Collision), and `Observer` manages game event buses.
+    - *Zero-Cost Target*: Systems query data directly from entity storage, but architectural boundaries compile down to raw pointer arithmetic. Repository facade lookups are monomorphized or exploded inline.
+  - **Embedded Profile** (`realtime-embedded`):
+    - *Concept*: Structures real-time microcontroller firmware, hardware pin control, sensor loops, and actuator drivers.
+    - *Stereotypes*: `Adapter` wraps physical pin/device register I/O, `Orchestrator` implements control loops (e.g., PID controls), and `Observer` captures hardware interrupt routines (ISRs).
+    - *Validation*: Strictly isolates controllers from hardware registers (requiring all pin access to flow through Adapter interfaces), and checks narratives for static memory guarantees (e.g., banning dynamic heap allocations).
+  - **PLC Cyclic Profile** (`plc-cyclic`):
+    - *Concept*: Structures industrial control programs executing inside strict scan cycles (e.g., Structured Text, CODESYS, Beckhoff TwinCAT, Siemens S7).
+    - *Stereotypes*: `Portal` maps to external HMI/network interfaces, `Orchestrator` maps to cyclic sequence programs, and `Specialist` / `Store` map to Function Blocks and instance memory.
+    - *Validation*: Strict single-threaded execution model. **Forbids concurrent runtime blocks** (`Actor` and `Supervisor` stereotypes) because execution must complete deterministically inside a single scan cycle. Prohibits asynchronous or blocking operations (like loops without safety watchdogs) in narratives.
 
 ---
 
