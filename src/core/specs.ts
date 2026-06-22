@@ -71,7 +71,7 @@ function qualifyId(id: string | undefined, prefix: string): string | undefined {
     }
     return [...prefixParts, ...idParts].join('::');
   }
-  return `${prefix}::${id}`;
+  return prefix ? `${prefix}::${id}` : id;
 }
 
 function scanSpecsForProject(projectDir: string, namespacePrefix: string, visitedDirs: Set<string>): SpecIndex {
@@ -171,17 +171,29 @@ function scanSpecsForProject(projectDir: string, namespacePrefix: string, visite
       }
     }
 
-    if (namespacePrefix) {
-      index.subsystems = index.subsystems.map(sub => ({
+    // 2. Namespace local subsystems (runs always to handle projectPath delegation)
+    index.subsystems = index.subsystems.map(sub => {
+      const qualifiedSubId = namespacePrefix ? qualifyId(sub.id, namespacePrefix) : sub.id;
+      const componentPrefix = sub.projectPath ? qualifiedSubId : namespacePrefix;
+      return {
         ...sub,
-        id: qualifyId(sub.id, namespacePrefix),
+        id: qualifiedSubId,
         publicInterfaces: sub.publicInterfaces.map(p => ({
           ...p,
-          component: p.component ? qualifyId(p.component, namespacePrefix) : undefined,
-          interface: p.interface ? qualifyId(p.interface, namespacePrefix) : undefined,
+          component: p.component ? qualifyId(p.component, componentPrefix) : undefined,
+          interface: p.interface ? qualifyId(p.interface, componentPrefix) : undefined,
         })),
-      }));
+      };
+    });
 
+    const originalSubsystemPaths = index.paths.subsystem;
+    index.paths.subsystem = {};
+    for (const [k, v] of Object.entries(originalSubsystemPaths)) {
+      const qualifiedK = namespacePrefix ? qualifyId(k, namespacePrefix) : k;
+      index.paths.subsystem[qualifiedK] = v;
+    }
+
+    if (namespacePrefix) {
       index.components = index.components.map(comp => ({
         ...comp,
         id: qualifyId(comp.id, namespacePrefix),
@@ -217,16 +229,13 @@ function scanSpecsForProject(projectDir: string, namespacePrefix: string, visite
 
       const originalPaths = index.paths;
       index.paths = {
-        subsystem: {},
+        subsystem: index.paths.subsystem,
         component: {},
         interface: {},
         implementation: {},
         type: {},
       };
 
-      for (const [k, v] of Object.entries(originalPaths.subsystem)) {
-        index.paths.subsystem[qualifyId(k, namespacePrefix)] = v;
-      }
       for (const [k, v] of Object.entries(originalPaths.component)) {
         index.paths.component[qualifyId(k, namespacePrefix)] = v;
       }

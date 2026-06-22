@@ -290,7 +290,7 @@ export function validateSddTree(rules?: RulesConfig, projectType: string = 'back
   // Check subsystems reference parent system
   for (const sub of subsystems) {
     const isDraftCtx = sub.status === 'draft' || sub.status === 'design';
-    if (!sub.parentSystem || sub.parentSystem !== system.name) {
+    if (!sub.parentSystem || (sub.parentSystem !== system.name && !sub.id.includes('::'))) {
       addIssue(
         'warning',
         'ORPHANED_SUBSYSTEM',
@@ -883,7 +883,8 @@ export function validateSddTree(rules?: RulesConfig, projectType: string = 'back
         addIssue('error', 'PUBLIC_INTERFACE_INVALID_COMPONENT', `Subsystem "${sub.id}" public interface references component "${pi.component}" which does not exist.`, sub.id, isDraftCtx);
         continue;
       }
-      if (backing.subsystem !== sub.id) {
+      const isSubsystemOwner = backing.subsystem === sub.id || backing.subsystem.startsWith(sub.id + '::');
+      if (!isSubsystemOwner) {
         addIssue('error', 'PUBLIC_INTERFACE_FOREIGN_COMPONENT', `Subsystem "${sub.id}" publishes component "${pi.component}", but it belongs to subsystem "${backing.subsystem}". A subsystem may only publish its own components.`, sub.id, isDraftCtx);
       }
       if (!pubTypeMatches(pi.type, backing.componentType, backing.portalType)) {
