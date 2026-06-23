@@ -50,9 +50,11 @@ interface SpecIndex {
 }
 
 let cachedIndex: SpecIndex | null = null;
+let cachedRootDir: string | null = null;
 
 export function invalidateSpecCache(): void {
   cachedIndex = null;
+  cachedRootDir = null;
 }
 
 function qualifyId(id: string, prefix: string): string;
@@ -302,10 +304,11 @@ function scanSpecsForProject(projectDir: string, namespacePrefix: string, visite
 }
 
 export function scanAllSpecs(): SpecIndex {
-  if (cachedIndex) return cachedIndex;
+  const rootDir = getProjectRoot();
+  if (cachedIndex && cachedRootDir === rootDir) return cachedIndex;
 
   loaderIssues = [];
-  const rootDir = getProjectRoot();
+  cachedRootDir = rootDir;
   const visited = new Set<string>([path.resolve(rootDir)]);
   
   cachedIndex = scanSpecsForProject(rootDir, '', visited);
@@ -315,6 +318,7 @@ export function scanAllSpecs(): SpecIndex {
 export function resolveSubprojectForNamespace(namespace: string): string | null {
   const parts = namespace.split('::');
   let currentDir = getProjectRoot();
+  let resolvedAny = false;
   for (const part of parts) {
     const prevOverride = getProjectRootOverride();
     setProjectRoot(currentDir);
@@ -322,14 +326,13 @@ export function resolveSubprojectForNamespace(namespace: string): string | null 
       const sub = loadSubsystemSpec(part);
       if (sub && sub.projectPath) {
         currentDir = path.resolve(currentDir, sub.projectPath);
-      } else {
-        return null;
+        resolvedAny = true;
       }
     } finally {
       setProjectRoot(prevOverride);
     }
   }
-  return currentDir;
+  return resolvedAny ? currentDir : null;
 }
 
 export function splitNamespace(qualifiedId: string): { prefix: string; localId: string } {
@@ -506,6 +509,21 @@ export function getInterfacePath(id: string, componentId?: string): string {
     }
   }
 
+  if (componentId && componentId.includes('::')) {
+    const parts = componentId.split('::');
+    const childProj = resolveSubprojectForNamespace(parts.slice(0, -1).join('::'));
+    if (childProj) {
+      const remainingComponent = parts[parts.length - 1];
+      const prevOverride = getProjectRootOverride();
+      setProjectRoot(childProj);
+      try {
+        return getInterfacePath(id, remainingComponent);
+      } finally {
+        setProjectRoot(prevOverride);
+      }
+    }
+  }
+
   if (componentId) {
     const compPath = getComponentPath(componentId);
     const compDir = path.dirname(compPath);
@@ -538,6 +556,21 @@ export function getImplementationPath(id: string, contractId?: string): string {
       setProjectRoot(childProj);
       try {
         return getImplementationPath(remainingId, remainingContract);
+      } finally {
+        setProjectRoot(prevOverride);
+      }
+    }
+  }
+
+  if (contractId && contractId.includes('::')) {
+    const parts = contractId.split('::');
+    const childProj = resolveSubprojectForNamespace(parts.slice(0, -1).join('::'));
+    if (childProj) {
+      const remainingContract = parts[parts.length - 1];
+      const prevOverride = getProjectRootOverride();
+      setProjectRoot(childProj);
+      try {
+        return getImplementationPath(id, remainingContract);
       } finally {
         setProjectRoot(prevOverride);
       }
@@ -835,6 +868,21 @@ export function getTypePath(id: string, subsystemId?: string): string {
       setProjectRoot(childProj);
       try {
         return getTypePath(remainingId, remainingSubsystem);
+      } finally {
+        setProjectRoot(prevOverride);
+      }
+    }
+  }
+
+  if (subsystemId && subsystemId.includes('::')) {
+    const parts = subsystemId.split('::');
+    const childProj = resolveSubprojectForNamespace(parts.slice(0, -1).join('::'));
+    if (childProj) {
+      const remainingSubsystem = parts[parts.length - 1];
+      const prevOverride = getProjectRootOverride();
+      setProjectRoot(childProj);
+      try {
+        return getTypePath(id, remainingSubsystem);
       } finally {
         setProjectRoot(prevOverride);
       }

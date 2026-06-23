@@ -7,6 +7,8 @@ import {
   saveSystemSpec,
   saveSubsystemSpec,
   saveComponentSpec,
+  saveInterfaceSpec,
+  saveTypeSpec,
   scanAllSpecs,
   invalidateSpecCache,
   getLoaderIssues,
@@ -209,5 +211,42 @@ describe('recursive subproject loading and namespacing', () => {
     expect(contents).toContain('id: invoice_portal'); // prefix stripped!
     expect(contents).toContain('subsystem: invoice'); // prefix stripped!
     expect(contents).not.toContain('billing::');
+
+    // 5. Save a namespaced type
+    saveTypeSpec({
+      kind: 'entity',
+      id: 'billing::invoice_event',
+      name: 'Invoice Event',
+      subsystem: 'billing::invoice',
+      fields: [{ name: 'amount', type: 'number', optional: false }],
+      methods: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const childTypePath = path.join(childDir, '.wai', 'specs', 'invoice', 'types', 'invoice_event.yaml');
+    expect(fs.existsSync(childTypePath)).toBe(true);
+    const typeContents = fs.readFileSync(childTypePath, 'utf8');
+    expect(typeContents).toContain('id: invoice_event'); // stripped!
+    expect(typeContents).toContain('subsystem: invoice'); // stripped!
+    expect(typeContents).not.toContain('billing::');
+
+    // 6. Save a namespaced interface
+    saveInterfaceSpec({
+      id: 'billing::i-invoice-portal',
+      name: 'IInvoicePortal',
+      description: 'Invoice portal interface',
+      component: 'billing::invoice_portal',
+      methods: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const childInterfacePath = path.join(childDir, '.wai', 'specs', 'invoice', 'invoice_portal', 'interface.yaml');
+    expect(fs.existsSync(childInterfacePath)).toBe(true);
+    const interfaceContents = fs.readFileSync(childInterfacePath, 'utf8');
+    expect(interfaceContents).toContain('id: i-invoice-portal'); // stripped!
+    expect(interfaceContents).toContain('component: invoice_portal'); // stripped!
+    expect(interfaceContents).not.toContain('billing::');
   });
 });
