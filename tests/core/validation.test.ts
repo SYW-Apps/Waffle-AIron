@@ -1429,6 +1429,113 @@ updatedAt: '2026-06-10T22:00:00Z'
       proj.cleanup();
     }
   });
+
+  it('flags undefined type references inside interface method signatures', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', SYS);
+    proj.writeSpec('subsystem', 'sub-a', sub('sub-a'));
+    proj.writeSpec('component', 'comp-a', comp('comp-a', 'sub-a', 'Orchestrator'));
+    proj.writeSpec('interface', 'icomp-a', `
+schemaVersion: 1.0.0
+id: icomp-a
+name: ICompA
+description: Test interface
+component: comp-a
+methods:
+  - name: test_method
+    description: Test
+    signature: "test_method(param: NonExistentType): Promise<AnotherMissingType>"
+    returns: "Promise<AnotherMissingType>"
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      const typeIssues = res.issues.filter(i => i.code === 'UNDEFINED_TYPE_REFERENCE');
+      expect(typeIssues.length).toBe(2);
+      expect(typeIssues.some(i => i.message.includes('NonExistentType'))).toBe(true);
+      expect(typeIssues.some(i => i.message.includes('AnotherMissingType'))).toBe(true);
+      expect(res.valid).toBe(false);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('flags non-portal components declaring endpoints', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', SYS);
+    proj.writeSpec('subsystem', 'sub-a', sub('sub-a'));
+    proj.writeSpec('component', 'comp-a', comp('comp-a', 'sub-a', 'Orchestrator'));
+    proj.writeSpec('interface', 'icomp-a', `
+schemaVersion: 1.0.0
+id: icomp-a
+name: ICompA
+description: Test interface
+component: comp-a
+methods:
+  - name: test_method
+    description: Test
+    signature: "test_method(): void"
+    returns: "void"
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /test
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.issues.some(i => i.code === 'ARCHITECTURE_VIOLATION_NON_PORTAL_ENDPOINT')).toBe(true);
+      expect(res.valid).toBe(false);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('flags missing method implementations as errors in non-draft contexts', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', SYS);
+    proj.writeSpec('subsystem', 'sub-a', sub('sub-a'));
+    proj.writeSpec('component', 'comp-a', comp('comp-a', 'sub-a', 'Orchestrator'));
+    proj.writeSpec('interface', 'icomp-a', `
+schemaVersion: 1.0.0
+id: icomp-a
+name: ICompA
+description: Test interface
+component: comp-a
+methods:
+  - name: method_one
+    description: One
+    signature: "method_one(): void"
+    returns: "void"
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('implementation', 'comp-a-impl', `
+schemaVersion: 1.0.0
+id: comp-a-impl
+name: Impl
+description: Impl
+contract: icomp-a
+sourcePath: src/comp-a.ts
+methods: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      const issue = res.issues.find(i => i.code === 'MISSING_IMPLEMENTATION_METHOD');
+      expect(issue).toBeDefined();
+      expect(issue!.severity).toBe('error');
+      expect(res.valid).toBe(false);
+    } finally {
+      proj.cleanup();
+    }
+  });
 });
 
 

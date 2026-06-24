@@ -63,10 +63,32 @@ if (-not (Test-Path $ExtractedBin)) {
     exit 1
 }
 
-Copy-Item $ExtractedBin (Join-Path $InstallDir $BinName) -Force
+$DestBin = Join-Path $InstallDir $BinName
+$OldBin = "$DestBin.old"
+
+if (Test-Path $DestBin) {
+    if (Test-Path $OldBin) {
+        try { Remove-Item $OldBin -Force -ErrorAction SilentlyContinue } catch {}
+    }
+    try {
+        Copy-Item $ExtractedBin $DestBin -Force
+    } catch {
+        try {
+            Rename-Item -Path $DestBin -NewName "$BinName.old" -Force
+            Copy-Item $ExtractedBin $DestBin -Force
+            try { Remove-Item $OldBin -Force -ErrorAction SilentlyContinue } catch {}
+        } catch {
+            Write-Error "Failed to install binary. The file may be locked by another process that cannot be renamed: $_"
+            exit 1
+        }
+    }
+} else {
+    Copy-Item $ExtractedBin $DestBin -Force
+}
+
 Remove-Item $TmpDir -Recurse -Force
 
-Write-Host "Installed to: $InstallDir\$BinName" -ForegroundColor Green
+Write-Host "Installed to: $DestBin" -ForegroundColor Green
 
 # Add to PATH if not already present
 $UserPath = [System.Environment]::GetEnvironmentVariable('PATH', 'User')

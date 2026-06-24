@@ -1,0 +1,8 @@
+kind: value-object
+id: interface_spec
+name: InterfaceSpec
+description: L3 Interface specification
+fields: []
+methods: []
+createdAt: '2026-06-10T22:00:00.000Z'
+updatedAt: '2026-06-10T22:00:00.000Z'

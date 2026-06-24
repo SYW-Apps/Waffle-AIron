@@ -1,0 +1,8 @@
+kind: value-object
+id: agent_record
+name: AgentRecord
+description: Agent record
+fields: []
+methods: []
+createdAt: '2026-06-10T22:00:00.000Z'
+updatedAt: '2026-06-10T22:00:00.000Z'
