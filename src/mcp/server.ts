@@ -142,16 +142,25 @@ export function createMcpServer(): McpServer {
     },
   );
 
-  reg<Record<string, never>>(server,
+  reg<{ subsystem?: string }>(server,
     'validateTopology',
     {
-      description: 'Validate the project\'s agent topology. Returns errors and warnings (duplicate ids, overlapping ownership, missing paths, etc.).',
+      description: 'Validate the project\'s agent topology. Returns errors and warnings (duplicate ids, overlapping ownership, missing paths, etc.). Supports optional subsystem scoping.',
+      inputSchema: {
+        subsystem: z.string().optional().describe('Only validate topology for agents under the specified subsystem'),
+      },
     },
-    () => {
+    ({ subsystem }) => {
       try {
         const { loadRegistry, loadProjectConfig } = requireLoader();
         const { validateRegistry } = requireValidation();
-        const registry = loadRegistry();
+        let registry = loadRegistry();
+        if (subsystem) {
+          registry = {
+            ...registry,
+            agents: registry.agents.filter((a) => a.domainRoot === subsystem || a.domainRoot?.startsWith(`${subsystem}::`)),
+          };
+        }
         const config   = loadProjectConfig();
         const result   = validateRegistry(registry, config.rules ?? { requireCreationReason: false });
         return json({
@@ -547,17 +556,26 @@ export function createMcpServer(): McpServer {
     },
   );
 
-  reg<Record<string, never>>(server,
+  reg<{ subsystem?: string; recursive?: boolean }>(server,
     'sdd_validate_tree',
     {
-      description: 'Validate the entire SDD spec tree, checking parent references, contract compatibility, narratives, and component type boundaries.',
+      description: 'Validate the SDD spec tree, checking parent references, contract compatibility, narratives, and component type boundaries. Supports scoping and recursion controls.',
+      inputSchema: {
+        subsystem: z.string().optional().describe('Only validate the specified subsystem (granular)'),
+        recursive: z.boolean().optional().describe('Whether to recursively validate subprojects (default: true)'),
+      },
     },
-    () => {
+    ({ subsystem, recursive }) => {
       try {
         const { loadProjectConfig } = requireLoader();
         const config = loadProjectConfig();
         const { validateSddTree } = requireValidation();
-        const result = validateSddTree(config.rules, config.projectType);
+        const result = validateSddTree({
+          rules: config.rules,
+          projectType: config.projectType,
+          scopeSubsystem: subsystem,
+          recursive: recursive ?? true,
+        });
         return json({
           valid: result.valid,
           errors: result.issues.filter((i) => i.severity === 'error'),
@@ -625,15 +643,22 @@ export function createMcpServer(): McpServer {
     }
   );
 
-  reg<Record<string, never>>(server,
+  reg<{ subsystem?: string; recursive?: boolean }>(server,
     'sdd_get_status',
     {
-      description: 'Get the completeness status dashboard of the SDD spec tree.',
+      description: 'Get the completeness status dashboard of the SDD spec tree. Supports scoping and recursion controls.',
+      inputSchema: {
+        subsystem: z.string().optional().describe('Only show status for the specified subsystem'),
+        recursive: z.boolean().optional().describe('Whether to recursively load subprojects (default: true)'),
+      },
     },
-    () => {
+    ({ subsystem, recursive }) => {
       try {
         const { getStatusReport } = require('../commands/status.js') as typeof import('../commands/status.js');
-        return text(getStatusReport());
+        return text(getStatusReport({
+          subsystem,
+          recursive: recursive ?? true,
+        }));
       } catch (e) {
         return errText(String(e));
       }

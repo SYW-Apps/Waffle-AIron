@@ -9,7 +9,13 @@ import {
   loadInterfaceSpecs,
   loadImplementationSpecs,
   getLoaderIssues,
+  scanAllSpecs,
 } from '../core/specs.js';
+
+export interface StatusOptions {
+  subsystem?: string;
+  recursive?: boolean | number;
+}
 
 // ---------------------------------------------------------------------------
 // status command
@@ -17,8 +23,10 @@ import {
 // Shows a hierarchical completeness map of the SDD Spec Tree.
 // ---------------------------------------------------------------------------
 
-export async function runStatus(): Promise<void> {
+export async function runStatus(options: StatusOptions = {}): Promise<void> {
   assertProjectInitialized();
+
+  scanAllSpecs({ recursive: options.recursive ?? true });
 
   const system = loadSystemSpec();
   const loaderErrors = getLoaderIssues();
@@ -32,10 +40,23 @@ export async function runStatus(): Promise<void> {
     process.exit(1);
   }
 
-  const subsystems = loadSubsystemSpecs();
-  const components = loadComponentSpecs();
-  const interfaces = loadInterfaceSpecs();
-  const implementations = loadImplementationSpecs();
+  let subsystems = loadSubsystemSpecs();
+  let components = loadComponentSpecs();
+  let interfaces = loadInterfaceSpecs();
+  let implementations = loadImplementationSpecs();
+
+  if (options.subsystem) {
+    subsystems = subsystems.filter(s => s.id === options.subsystem || s.id.startsWith(`${options.subsystem}::`));
+    components = components.filter(c => c.subsystem === options.subsystem || c.subsystem.startsWith(`${options.subsystem}::`));
+    interfaces = interfaces.filter(i => {
+      const c = components.find(comp => comp.id === i.component);
+      return c !== undefined;
+    });
+    implementations = implementations.filter(im => {
+      const inf = interfaces.find(i => i.id === im.contract);
+      return inf !== undefined;
+    });
+  }
 
   if (!system) {
     logger.error('L0 System specification (system.yaml) is missing. Run `wairon init` first.');
@@ -159,7 +180,9 @@ export async function runStatus(): Promise<void> {
   logger.blank();
 }
 
-export function getStatusReport(): string {
+export function getStatusReport(options: StatusOptions = {}): string {
+  scanAllSpecs({ recursive: options.recursive ?? true });
+
   const system = loadSystemSpec();
   const loaderErrors = getLoaderIssues();
 
@@ -176,10 +199,23 @@ export function getStatusReport(): string {
     return 'L0 System specification (system.yaml) is missing.';
   }
 
-  const subsystems = loadSubsystemSpecs();
-  const components = loadComponentSpecs();
-  const interfaces = loadInterfaceSpecs();
-  const implementations = loadImplementationSpecs();
+  let subsystems = loadSubsystemSpecs();
+  let components = loadComponentSpecs();
+  let interfaces = loadInterfaceSpecs();
+  let implementations = loadImplementationSpecs();
+
+  if (options.subsystem) {
+    subsystems = subsystems.filter(s => s.id === options.subsystem || s.id.startsWith(`${options.subsystem}::`));
+    components = components.filter(c => c.subsystem === options.subsystem || c.subsystem.startsWith(`${options.subsystem}::`));
+    interfaces = interfaces.filter(i => {
+      const c = components.find(comp => comp.id === i.component);
+      return c !== undefined;
+    });
+    implementations = implementations.filter(im => {
+      const inf = interfaces.find(i => i.id === im.contract);
+      return inf !== undefined;
+    });
+  }
 
   let output = '';
   const componentScores = new Map<string, number>();

@@ -20,6 +20,7 @@ import {
   loadTypeSpecs,
   clearLoaderIssues,
   getLoaderIssues,
+  scanAllSpecs,
 } from './specs.js';
 
 // ---------------------------------------------------------------------------
@@ -199,7 +200,32 @@ export function validateProjectConfig(config: ProjectConfig): ValidationResult {
 // SDD Spec Tree Validation
 // ---------------------------------------------------------------------------
 
-export function validateSddTree(rules?: RulesConfig, projectType: string = 'backend'): ValidationResult {
+export interface ValidationOptions {
+  rules?: RulesConfig;
+  projectType?: string;
+  scopeSubsystem?: string;
+  recursive?: boolean | number;
+}
+
+export function validateSddTree(
+  rulesOrOptions?: RulesConfig | ValidationOptions,
+  projectType: string = 'backend'
+): ValidationResult {
+  let rules = rulesOrOptions as RulesConfig | undefined;
+  let scopeSubsystem: string | undefined;
+  let recursive: boolean | number = true;
+
+  if (rulesOrOptions && ('scopeSubsystem' in rulesOrOptions || 'recursive' in rulesOrOptions || 'rules' in rulesOrOptions || 'projectType' in rulesOrOptions)) {
+    const opts = rulesOrOptions as ValidationOptions;
+    rules = opts.rules;
+    projectType = opts.projectType ?? 'backend';
+    scopeSubsystem = opts.scopeSubsystem;
+    recursive = opts.recursive ?? true;
+  }
+
+  // Configure spec loader recursion
+  scanAllSpecs({ recursive });
+
   const issues: ValidationIssue[] = [];
 
   // Load specs
@@ -211,9 +237,50 @@ export function validateSddTree(rules?: RulesConfig, projectType: string = 'back
   const implementations = loadImplementationSpecs();
   const types = loadTypeSpecs();
 
+  // Helper to check if a spec ID is within the requested scopeSubsystem
+  const isSpecInScope = (specId: string): boolean => {
+    if (!scopeSubsystem) return true;
+    if (specId === scopeSubsystem) return true;
+
+    // Check if it is a component
+    const comp = components.find(c => c.id === specId);
+    if (comp) return comp.subsystem === scopeSubsystem || comp.subsystem.startsWith(`${scopeSubsystem}::`);
+
+    // Check if it is an interface
+    const intf = interfaces.find(i => i.id === specId);
+    if (intf) {
+      const parentComp = components.find(c => c.id === intf.component);
+      return parentComp ? (parentComp.subsystem === scopeSubsystem || parentComp.subsystem.startsWith(`${scopeSubsystem}::`)) : false;
+    }
+
+    // Check if it is an implementation
+    const impl = implementations.find(i => i.id === specId);
+    if (impl) {
+      const contractIntf = interfaces.find(i => i.id === impl.contract);
+      if (contractIntf) {
+        const parentComp = components.find(c => c.id === contractIntf.component);
+        return parentComp ? (parentComp.subsystem === scopeSubsystem || parentComp.subsystem.startsWith(`${scopeSubsystem}::`)) : false;
+      }
+      return false;
+    }
+
+    // Check if it is a type
+    const t = types.find(type => type.id === specId);
+    if (t) return t.subsystem === scopeSubsystem || (t.subsystem ? t.subsystem.startsWith(`${scopeSubsystem}::`) : false);
+
+    // Default prefix match fallback
+    if (specId.startsWith(`${scopeSubsystem}::`)) return true;
+
+    return false;
+  };
+
   // Retrieve any loader schema validation issues
   const loaderErrors = getLoaderIssues();
-  issues.push(...loaderErrors);
+  if (scopeSubsystem) {
+    issues.push(...loaderErrors.filter(e => e.specId && isSpecInScope(e.specId)));
+  } else {
+    issues.push(...loaderErrors);
+  }
 
   if (!system) {
     issues.push(issue('error', 'MISSING_SYSTEM_SPEC', 'L0 System specification (system.yaml) is missing.'));
@@ -306,6 +373,9 @@ export function validateSddTree(rules?: RulesConfig, projectType: string = 'back
     specId?: string,
     isDraftContext?: boolean
   ) => {
+    if (scopeSubsystem && specId && !isSpecInScope(specId)) {
+      return;
+    }
     const severity = getRuleSeverity(code, defaultSeverity, isDraftContext);
     if (severity !== 'off') {
       issues.push(issue(severity, code, message, undefined, specId));
