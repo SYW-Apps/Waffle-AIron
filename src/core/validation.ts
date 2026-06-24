@@ -17,6 +17,7 @@ import {
   loadComponentSpecs,
   loadInterfaceSpecs,
   loadImplementationSpecs,
+  loadTypeSpecs,
   clearLoaderIssues,
   getLoaderIssues,
 } from './specs.js';
@@ -24,6 +25,41 @@ import {
 // ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
+
+const BUILTIN_TYPES = new Set([
+  'string', 'str', 'number', 'boolean', 'bool', 'float', 'double', 'int', 'integer',
+  'u8', 'u16', 'u32', 'u64', 'u128', 'usize',
+  'i8', 'i16', 'i32', 'i64', 'i128', 'isize',
+  'f32', 'f64', 'char', 'byte', 'bytes',
+  'any', 'void', 'null', 'undefined', 'object',
+  'date', 'datetime', 'time', 'timestamp', 'duration',
+  'uuid', 'decimal', 'json',
+  'list', 'vector', 'vec', 'array', 'map', 'set', 'dict', 'dictionary', 'hashmap', 'tuple',
+  'result', 'option', 'box', 'arc', 'rc', 'ref', 'cell', 'refcell', 'mutex', 'rwlock', 'std'
+]);
+
+function extractTypeIdentifiers(typeStr: string): string[] {
+  return typeStr.match(/[a-zA-Z0-9_-]+(?:::[a-zA-Z0-9_-]+|\.[a-zA-Z0-9_-]+)*/g) || [];
+}
+
+function normalizePart(part: string): string {
+  return part.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function matchTypeRef(ref: string, typeId: string): boolean {
+  const refParts = ref.split(/::|\./).map(normalizePart).filter(Boolean);
+  const typeParts = typeId.split(/::|\./).map(normalizePart).filter(Boolean);
+
+  if (refParts.length === 0 || typeParts.length === 0) return false;
+  if (refParts.length > typeParts.length) return false;
+
+  for (let i = 1; i <= refParts.length; i++) {
+    if (refParts[refParts.length - i] !== typeParts[typeParts.length - i]) {
+      return false;
+    }
+  }
+  return true;
+}
 
 export interface ValidationIssue {
   severity: 'error' | 'warning';
@@ -173,6 +209,7 @@ export function validateSddTree(rules?: RulesConfig, projectType: string = 'back
   const components = loadComponentSpecs();
   const interfaces = loadInterfaceSpecs();
   const implementations = loadImplementationSpecs();
+  const types = loadTypeSpecs();
 
   // Retrieve any loader schema validation issues
   const loaderErrors = getLoaderIssues();
@@ -252,6 +289,7 @@ export function validateSddTree(rules?: RulesConfig, projectType: string = 'back
         'ORPHANED_SUBSYSTEM',
         'PUBLIC_INTERFACE_UNBOUND',
         'PUBLIC_INTERFACE_TYPE_MISMATCH',
+        'UNDEFINED_TYPE_REFERENCE',
       ];
       if (completenessRules.includes(ruleCode)) {
         return 'warning';
@@ -341,6 +379,48 @@ export function validateSddTree(rules?: RulesConfig, projectType: string = 'back
         impl.id,
         isDraftCtx
       );
+    }
+  }
+
+  // Check types reference existing subsystem and resolve fields
+  for (const t of types) {
+    const sub = subsystems.find(s => s.id === t.subsystem);
+    const isDraftCtx = sub ? (sub.status === 'draft' || sub.status === 'design') : false;
+    if (t.subsystem && !subsystemIds.has(t.subsystem)) {
+      addIssue(
+        'error',
+        'INVALID_SUBSYSTEM_REFERENCE',
+        `Type "${t.id}" references non-existent subsystem "${t.subsystem}".`,
+        t.id,
+        isDraftCtx
+      );
+    }
+
+    if (t.fields) {
+      for (const field of t.fields) {
+        const refs = extractTypeIdentifiers(field.type);
+        for (const ref of refs) {
+          const refLower = ref.toLowerCase();
+          if (BUILTIN_TYPES.has(refLower)) {
+            continue;
+          }
+          const resolved = types.find(spec => {
+            const typeQualifiedId = spec.subsystem && !spec.id.startsWith(`${spec.subsystem}::`)
+              ? `${spec.subsystem}::${spec.id}`
+              : spec.id;
+            return matchTypeRef(ref, typeQualifiedId);
+          });
+          if (!resolved) {
+            addIssue(
+              'error',
+              'UNDEFINED_TYPE_REFERENCE',
+              `Type "${t.id}" field "${field.name}" references undefined type "${ref}" in "${field.type}".`,
+              t.id,
+              isDraftCtx
+            );
+          }
+        }
+      }
     }
   }
 
