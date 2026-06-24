@@ -148,11 +148,12 @@ describe('validateSddTree', () => {
     fs.mkdirSync(path.join(specsDir, 'components'));
     fs.mkdirSync(path.join(specsDir, 'interfaces'));
     fs.mkdirSync(path.join(specsDir, 'implementations'));
+    fs.mkdirSync(path.join(specsDir, 'types'));
 
     return {
       tempDir,
       originalCwd,
-      writeSpec: (type: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation', name: string, content: string) => {
+      writeSpec: (type: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type', name: string, content: string) => {
         let filePath = '';
         if (type === 'system') {
           filePath = path.join(specsDir, 'system.yaml');
@@ -1282,6 +1283,148 @@ updatedAt: '2026-06-10T22:00:00Z'
     try {
       const res = validateSddTree();
       expect(res.issues.some(i => i.code === 'NARRATIVE_SEMANTIC_UNBACKED')).toBe(false);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('validates fields with defined or builtin type references and flags undefined types', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: Subsystem A description
+parentSystem: TestSystem
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'shared', `
+schemaVersion: 1.0.0
+id: shared
+name: Shared
+description: Shared resources
+parentSystem: TestSystem
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('type', 'node_id', `
+kind: value-object
+id: node_id
+name: NodeID
+description: Node identifier
+subsystem: sub-a
+fields:
+  - name: value
+    type: string
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('type', 'node', `
+kind: entity
+id: node
+name: Node
+description: A processing node
+subsystem: sub-a
+fields:
+  - name: id
+    type: sub-a::node_id
+  - name: extra
+    type: Option<shared::WafflerError>
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      // Should flag shared::WafflerError as undefined, but sub-a::node_id and string should pass
+      expect(res.issues.some(i => i.code === 'UNDEFINED_TYPE_REFERENCE')).toBe(true);
+      const issue = res.issues.find(i => i.code === 'UNDEFINED_TYPE_REFERENCE');
+      expect(issue?.message).toContain('references undefined type "shared::WafflerError"');
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('passes validation when the type references are fully defined', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: Subsystem A description
+parentSystem: TestSystem
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'shared', `
+schemaVersion: 1.0.0
+id: shared
+name: Shared
+description: Shared resources
+parentSystem: TestSystem
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('type', 'node_id', `
+kind: value-object
+id: node_id
+name: NodeID
+description: Node identifier
+subsystem: sub-a
+fields:
+  - name: value
+    type: string
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('type', 'waffler_error', `
+kind: value-object
+id: waffler_error
+name: WafflerError
+description: Shared error
+subsystem: shared
+fields:
+  - name: code
+    type: number
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('type', 'node', `
+kind: entity
+id: node
+name: Node
+description: A processing node
+subsystem: sub-a
+fields:
+  - name: id
+    type: sub-a::node_id
+  - name: extra
+    type: Option<shared::WafflerError>
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.issues.some(i => i.code === 'UNDEFINED_TYPE_REFERENCE')).toBe(false);
+      expect(res.valid).toBe(true);
     } finally {
       proj.cleanup();
     }

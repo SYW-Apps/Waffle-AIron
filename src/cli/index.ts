@@ -104,8 +104,10 @@ program
   .command('validate')
   .description('Validate the project configuration and the SDD Spec Tree')
   .option('--ci', 'treat warnings as errors for CI pipelines')
+  .option('--subsystem <id>', 'only validate the specified subsystem (granular)')
+  .option('--no-recursive', 'do not recursively validate subprojects')
   .action(async (opts) => {
-    await runValidate({ ci: opts.ci });
+    await runValidate({ ci: opts.ci, subsystem: opts.subsystem, recursive: opts.recursive });
   });
 
 // ---------------------------------------------------------------------------
@@ -115,8 +117,10 @@ program
 program
   .command('status')
   .description('Show a hierarchical completeness graph of the SDD Spec Tree')
-  .action(async () => {
-    await runStatus();
+  .option('--subsystem <id>', 'only show status for the specified subsystem')
+  .option('--no-recursive', 'do not recursively show status for subprojects')
+  .action(async (opts) => {
+    await runStatus({ subsystem: opts.subsystem, recursive: opts.recursive });
   });
 
 // ---------------------------------------------------------------------------

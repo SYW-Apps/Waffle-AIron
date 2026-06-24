@@ -1,8 +1,9 @@
 {
   "mcpServers": {
     "wairon": {
-      "command": "wairon",
+      "command": "node",
       "args": [
+        "C:/Users/ShutYourWaffle/source/Waffle-AIron/src/cli/index.ts",
         "mcp",
         "serve"
       ],

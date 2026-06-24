@@ -50,3 +50,4 @@ If `.wai/specs/` exists, the wairon SDD workflow is active; otherwise ignore it.
   4. **Subagents**: Spawn generated `<component>-implementer` subagents for coding.
   5. **Design First**: Complete spec and pass `sdd_validate_tree` before writing code.
   6. **Consistency**: Code must match L3 interfaces and L5 narratives exactly. If the spec is wrong, stop and update the spec.
+  7. **Subprojects & Namespacing**: If a subsystem uses `projectPath` delegation, target its specs using namespaced IDs (e.g. `subsystem::component`). Use leading `::` to target root (e.g. `::shared::type`) and `super::` to go up a level (e.g. `super::sibling`). wairon automatically resolves the path and strips the prefix on writes.

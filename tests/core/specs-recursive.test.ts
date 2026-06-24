@@ -13,6 +13,8 @@ import {
   invalidateSpecCache,
   getLoaderIssues,
 } from '../../src/core/specs.js';
+import { validateSddTree } from '../../src/core/validation.js';
+import { getStatusReport } from '../../src/commands/status.js';
 
 const now = new Date().toISOString();
 
@@ -266,5 +268,213 @@ describe('recursive subproject loading and namespacing', () => {
     const itemContents = fs.readFileSync(childItemPath, 'utf8');
     expect(itemContents).toContain('id: invoice_item');
     expect(itemContents).toContain('subsystem: invoice');
+
+    // 8. Save a namespaced subsystem under the child's namespace and check parentSystem rewriting
+    saveSubsystemSpec({
+      id: 'billing::tax',
+      name: 'Tax Management',
+      description: 'Handles tax calculations',
+      parentSystem: 'root-system', // Passed parent system from parent context (e.g. Waffler)
+      publicInterfaces: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const childSubsystemPath = path.join(childDir, '.wai', 'specs', 'tax', 'subsystem.yaml');
+    expect(fs.existsSync(childSubsystemPath)).toBe(true);
+    const subContents = fs.readFileSync(childSubsystemPath, 'utf8');
+    expect(subContents).toContain('id: tax');
+    expect(subContents).toContain('parentSystem: child-system'); // Automatically rewritten!
+    expect(subContents).not.toContain('parentSystem: root-system');
+  });
+
+  it('correctly respects recursive and depth limits when scanning', () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-root-depth-'));
+    childDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-child-depth-'));
+    const grandchildDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-grandchild-depth-'));
+
+    // 1. Setup Root project
+    fs.mkdirSync(path.join(rootDir, '.wai', 'specs'), { recursive: true });
+    setProjectRoot(rootDir);
+
+    saveSystemSpec({
+      schemaVersion: '1.0.0',
+      name: 'root-system',
+      vision: 'A unified system-of-systems',
+      boundaries: [],
+      globalRequirements: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    saveSubsystemSpec({
+      id: 'billing',
+      name: 'Billing',
+      description: 'Handles billing',
+      parentSystem: 'root-system',
+      publicInterfaces: [],
+      projectPath: path.relative(rootDir, childDir),
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // 2. Setup Child project
+    fs.mkdirSync(path.join(childDir, '.wai', 'specs'), { recursive: true });
+    setProjectRoot(childDir);
+    
+    saveSystemSpec({
+      schemaVersion: '1.0.0',
+      name: 'child-system',
+      vision: 'Child billing system',
+      boundaries: [],
+      globalRequirements: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    saveSubsystemSpec({
+      id: 'invoice',
+      name: 'Invoice management',
+      description: 'Manages invoices',
+      parentSystem: 'child-system',
+      publicInterfaces: [],
+      projectPath: path.relative(childDir, grandchildDir),
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // 3. Setup Grandchild project
+    fs.mkdirSync(path.join(grandchildDir, '.wai', 'specs'), { recursive: true });
+    setProjectRoot(grandchildDir);
+    
+    saveSystemSpec({
+      schemaVersion: '1.0.0',
+      name: 'grandchild-system',
+      vision: 'Grandchild system',
+      boundaries: [],
+      globalRequirements: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    saveSubsystemSpec({
+      id: 'tax',
+      name: 'Tax Calculation',
+      description: 'Calculates tax',
+      parentSystem: 'grandchild-system',
+      publicInterfaces: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // 4. Test scans from root project with different recursion settings
+    setProjectRoot(rootDir);
+    
+    // Depth 0 (non-recursive)
+    invalidateSpecCache();
+    const index0 = scanAllSpecs({ recursive: false });
+    expect(index0.subsystems.find(s => s.id === 'billing')).toBeDefined();
+    expect(index0.subsystems.find(s => s.id === 'billing::invoice')).toBeUndefined();
+    expect(index0.subsystems.find(s => s.id === 'billing::invoice::tax')).toBeUndefined();
+
+    // Depth 1 (recursive up to depth 1)
+    invalidateSpecCache();
+    const index1 = scanAllSpecs({ recursive: 1 });
+    expect(index1.subsystems.find(s => s.id === 'billing')).toBeDefined();
+    expect(index1.subsystems.find(s => s.id === 'billing::invoice')).toBeDefined();
+    expect(index1.subsystems.find(s => s.id === 'billing::invoice::tax')).toBeUndefined();
+
+    // Depth 2 (recursive up to depth 2 / full)
+    invalidateSpecCache();
+    const index2 = scanAllSpecs({ recursive: true });
+    expect(index2.subsystems.find(s => s.id === 'billing')).toBeDefined();
+    expect(index2.subsystems.find(s => s.id === 'billing::invoice')).toBeDefined();
+    expect(index2.subsystems.find(s => s.id === 'billing::invoice::tax')).toBeDefined();
+
+    // Clean up grandchild directory since it's not tracked by afterEach
+    fs.rmSync(grandchildDir, { recursive: true, force: true });
+  });
+
+  it('correctly filters validation and status by scopeSubsystem', () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-root-scope-'));
+    childDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-child-scope-'));
+
+    // 1. Setup Root project
+    fs.mkdirSync(path.join(rootDir, '.wai', 'specs'), { recursive: true });
+    setProjectRoot(rootDir);
+
+    saveSystemSpec({
+      schemaVersion: '1.0.0',
+      name: 'root-system',
+      vision: 'A unified system-of-systems',
+      boundaries: [],
+      globalRequirements: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    saveSubsystemSpec({
+      id: 'billing',
+      name: 'Billing',
+      description: 'Handles billing',
+      parentSystem: 'root-system',
+      publicInterfaces: [],
+      projectPath: path.relative(rootDir, childDir),
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // 2. Setup Child project
+    fs.mkdirSync(path.join(childDir, '.wai', 'specs'), { recursive: true });
+    setProjectRoot(childDir);
+    
+    saveSystemSpec({
+      schemaVersion: '1.0.0',
+      name: 'child-system',
+      vision: 'Child billing system',
+      boundaries: [],
+      globalRequirements: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    saveSubsystemSpec({
+      id: 'invoice',
+      name: 'Invoice management',
+      description: 'Manages invoices',
+      parentSystem: 'child-system',
+      publicInterfaces: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // Add a component in the invoice subsystem
+    saveComponentSpec({
+      id: 'invoice_portal',
+      name: 'Invoice Portal',
+      description: 'Invoice portal entrance',
+      subsystem: 'invoice',
+      componentType: 'Portal',
+      owns: [],
+      dependsOn: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // 3. Switch back to parent context and validate/status
+    setProjectRoot(rootDir);
+    invalidateSpecCache();
+
+    // Check validation output with scopeSubsystem
+    const valResultFiltered = validateSddTree({ scopeSubsystem: 'billing::invoice' });
+    // Filtered validation should focus on child subsystem and run without failing on root subsystem missing specs or other root issues.
+    expect(valResultFiltered.issues.some(i => i.specId === 'billing')).toBe(false);
+
+    // Check status report with subsystem option
+    const statusReport = getStatusReport({ subsystem: 'billing::invoice' });
+    expect(statusReport).toContain('billing::invoice');
+    expect(statusReport).toContain('billing::invoice_portal');
+    expect(statusReport).not.toContain('billing\n');
   });
 });
+

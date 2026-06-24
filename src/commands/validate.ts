@@ -12,13 +12,21 @@ import { validateRegistry, validateProjectConfig } from '../core/validation.js';
 
 export interface ValidateOptions {
   ci?: boolean; // treat warnings as errors (for CI pipelines)
+  subsystem?: string; // validate only a specific subsystem
+  recursive?: boolean | number; // whether to recursively validate subprojects
 }
 
 export async function runValidate(options: ValidateOptions = {}): Promise<void> {
   assertProjectInitialized();
 
   const projectConfig = loadProjectConfig();
-  const registry = loadRegistry();
+  let registry = loadRegistry();
+  if (options.subsystem) {
+    registry = {
+      ...registry,
+      agents: registry.agents.filter(a => a.domainRoot === options.subsystem || a.domainRoot?.startsWith(`${options.subsystem}::`)),
+    };
+  }
 
   let hasErrors = false;
   let hasWarnings = false;
@@ -66,7 +74,12 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
   if (sddPathExists(sddPaths.specsSystem())) {
     logger.header('SDD Architectural Specs');
     const { validateSddTree } = require('../core/validation.js') as typeof import('../core/validation.js');
-    const sddResult = validateSddTree(projectConfig.rules, projectConfig.projectType);
+    const sddResult = validateSddTree({
+      rules: projectConfig.rules,
+      projectType: projectConfig.projectType,
+      scopeSubsystem: options.subsystem,
+      recursive: options.recursive ?? true,
+    });
     if (sddResult.issues.length === 0) {
       logger.success('Spec tree is valid and component type boundaries are enforced.');
     } else {

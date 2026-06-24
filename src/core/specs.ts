@@ -51,10 +51,12 @@ interface SpecIndex {
 
 let cachedIndex: SpecIndex | null = null;
 let cachedRootDir: string | null = null;
+let cachedRecursive: boolean | number | null = null;
 
 export function invalidateSpecCache(): void {
   cachedIndex = null;
   cachedRootDir = null;
+  cachedRecursive = null;
 }
 
 function qualifyId(id: string, prefix: string): string;
@@ -76,7 +78,7 @@ function qualifyId(id: string | undefined, prefix: string): string | undefined {
   return prefix ? `${prefix}::${id}` : id;
 }
 
-function scanSpecsForProject(projectDir: string, namespacePrefix: string, visitedDirs: Set<string>): SpecIndex {
+function scanSpecsForProject(projectDir: string, namespacePrefix: string, visitedDirs: Set<string>, maxDepth = Infinity, currentDepth = 0): SpecIndex {
   const index: SpecIndex = {
     subsystems: [],
     components: [],
@@ -252,48 +254,50 @@ function scanSpecsForProject(projectDir: string, namespacePrefix: string, visite
       }
     }
 
-    for (const subproj of localSubprojects) {
-      const childDir = path.resolve(projectDir, subproj.projectPath);
-      if (visitedDirs.has(childDir)) {
-        loaderIssues.push({
-          severity: 'error',
-          code: 'CIRCULAR_SUBPROJECT_REFERENCE',
-          message: `Circular reference detected: Subsystem "${subproj.subsystemId}" refers to subproject "${childDir}" which is already loaded.`,
-          specId: subproj.subsystemId,
-        });
-        continue;
+    if (currentDepth < maxDepth) {
+      for (const subproj of localSubprojects) {
+        const childDir = path.resolve(projectDir, subproj.projectPath);
+        if (visitedDirs.has(childDir)) {
+          loaderIssues.push({
+            severity: 'error',
+            code: 'CIRCULAR_SUBPROJECT_REFERENCE',
+            message: `Circular reference detected: Subsystem "${subproj.subsystemId}" refers to subproject "${childDir}" which is already loaded.`,
+            specId: subproj.subsystemId,
+          });
+          continue;
+        }
+
+        if (!fs.existsSync(childDir)) {
+          loaderIssues.push({
+            severity: 'error',
+            code: 'SUBPROJECT_NOT_FOUND',
+            message: `Subproject directory "${childDir}" declared by subsystem "${subproj.subsystemId}" does not exist.`,
+            specId: subproj.subsystemId,
+          });
+          continue;
+        }
+
+        const childNamespace = namespacePrefix
+          ? `${namespacePrefix}::${subproj.subsystemId}`
+          : subproj.subsystemId;
+
+        const newVisited = new Set(visitedDirs);
+        newVisited.add(childDir);
+
+        const childIndex = scanSpecsForProject(childDir, childNamespace, newVisited, maxDepth, currentDepth + 1);
+
+        index.subsystems.push(...childIndex.subsystems);
+        index.components.push(...childIndex.components);
+        index.interfaces.push(...childIndex.interfaces);
+        index.implementations.push(...childIndex.implementations);
+        index.types.push(...childIndex.types);
+
+        Object.assign(index.paths.subsystem, childIndex.paths.subsystem);
+        Object.assign(index.paths.component, childIndex.paths.component);
+        Object.assign(index.paths.interface, childIndex.paths.interface);
+        Object.assign(index.paths.implementation, childIndex.paths.implementation);
+        Object.assign(index.paths.type, childIndex.paths.type);
       }
-
-      if (!fs.existsSync(childDir)) {
-        loaderIssues.push({
-          severity: 'error',
-          code: 'SUBPROJECT_NOT_FOUND',
-          message: `Subproject directory "${childDir}" declared by subsystem "${subproj.subsystemId}" does not exist.`,
-          specId: subproj.subsystemId,
-        });
-        continue;
-      }
-
-      const childNamespace = namespacePrefix
-        ? `${namespacePrefix}::${subproj.subsystemId}`
-        : subproj.subsystemId;
-
-      const newVisited = new Set(visitedDirs);
-      newVisited.add(childDir);
-
-      const childIndex = scanSpecsForProject(childDir, childNamespace, newVisited);
-
-      index.subsystems.push(...childIndex.subsystems);
-      index.components.push(...childIndex.components);
-      index.interfaces.push(...childIndex.interfaces);
-      index.implementations.push(...childIndex.implementations);
-      index.types.push(...childIndex.types);
-
-      Object.assign(index.paths.subsystem, childIndex.paths.subsystem);
-      Object.assign(index.paths.component, childIndex.paths.component);
-      Object.assign(index.paths.interface, childIndex.paths.interface);
-      Object.assign(index.paths.implementation, childIndex.paths.implementation);
-      Object.assign(index.paths.type, childIndex.paths.type);
     }
 
   } finally {
@@ -303,15 +307,18 @@ function scanSpecsForProject(projectDir: string, namespacePrefix: string, visite
   return index;
 }
 
-export function scanAllSpecs(): SpecIndex {
+export function scanAllSpecs(options?: { recursive?: boolean | number }): SpecIndex {
+  const recursive = options?.recursive ?? true;
   const rootDir = getProjectRoot();
-  if (cachedIndex && cachedRootDir === rootDir) return cachedIndex;
+  if (cachedIndex && cachedRootDir === rootDir && cachedRecursive === recursive) return cachedIndex;
 
   loaderIssues = [];
   cachedRootDir = rootDir;
+  cachedRecursive = recursive;
   const visited = new Set<string>([path.resolve(rootDir)]);
   
-  cachedIndex = scanSpecsForProject(rootDir, '', visited);
+  const maxDepth = typeof recursive === 'number' ? recursive : (recursive ? Infinity : 0);
+  cachedIndex = scanSpecsForProject(rootDir, '', visited, maxDepth, 0);
   return cachedIndex;
 }
 
@@ -661,7 +668,26 @@ export function saveSubsystemSpec(spec: SubsystemSpec): void {
   ensureDir(path.dirname(p));
 
   const { prefix } = splitNamespace(spec.id);
-  const specToWrite = prefix ? stripNamespaceFromSubsystem(spec, prefix) : spec;
+  let specToWrite = prefix ? stripNamespaceFromSubsystem(spec, prefix) : spec;
+
+  if (prefix) {
+    const childProj = resolveSubprojectForNamespace(prefix);
+    if (childProj) {
+      const prevOverride = getProjectRootOverride();
+      setProjectRoot(childProj);
+      try {
+        const childSystem = loadSystemSpec();
+        if (childSystem) {
+          specToWrite = {
+            ...specToWrite,
+            parentSystem: childSystem.name,
+          };
+        }
+      } finally {
+        setProjectRoot(prevOverride);
+      }
+    }
+  }
 
   const existing = loadSubsystemSpec(spec.id);
   if (existing) {

@@ -4,6 +4,21 @@ targets:
   - type: claude
     outputDir: .claude/agents
     enabled: true
+  - type: gemini
+    outputDir: .gemini/agents
+    enabled: true
+  - type: agy
+    outputDir: .gemini/agents
+    enabled: true
+  - type: cursor
+    outputDir: .cursor/rules
+    enabled: true
+  - type: copilot
+    outputDir: .github/prompts
+    enabled: true
+  - type: codex
+    outputDir: .codex/agents
+    enabled: true
 rules:
   noOverlappingOwnership: true
   requireOwnedPaths: true
