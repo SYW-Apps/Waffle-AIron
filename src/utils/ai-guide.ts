@@ -55,7 +55,7 @@ This project uses **wairon**. System specs live under \`.wai/specs/\` (L0 System
 - **Subprojects & Namespacing (Chaining)**: If a subsystem defines a \`projectPath\`, its entire \`.wai/\` spec tree is recursively loaded and namespaced with the subsystem ID as a prefix (using double-colons, e.g. \`billing::invoice::invoice_portal\`). You do NOT need to switch directory contexts. Use the qualified namespaced ID with the parent MCP tools; wairon will resolve the path, strip the prefix, and write to the correct subproject automatically.
 - **Do not run the \`wairon\` CLI**: Use \`sdd_validate_tree\` and \`sdd_get_status\` instead of CLI commands.
 - **Handoff to implementation**: Once design is complete and validates cleanly, tell the human: *"The specs are complete and validate. Please run \`wairon lock\` to confirm and generate the implementer agents, then restart this session to load them."*
-- **To implement code**: Spawn the generated \`<component-id>-implementer\` subagent. Implementations must match L3 interfaces and L5 narratives exactly.
+- **To implement code**: Spawn the generated \`<component-id>-implementer\` subagent. Implementations must match L3 interfaces and L5 narratives exactly. If you are operating inside a subproject directory context (e.g. subfolder) and cannot see or spawn the generated implementer agent or its skills, instruct the user to start a new agent session from the parent wairon project directory root.
 
 ### Rules (enforced by \`sdd_validate_tree\`)
 1. **Design before code**: Complete spec and pass validator before writing source code.
