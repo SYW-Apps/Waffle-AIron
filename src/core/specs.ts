@@ -423,6 +423,14 @@ export function getSubsystemPath(id: string): string {
       }
     }
   }
+
+  // Suffix match for bare IDs matching a unique qualified subsystem
+  const suffix = `::${id}`;
+  const matches = Object.keys(index.paths.subsystem).filter(key => key.endsWith(suffix));
+  if (matches.length === 1) {
+    return index.paths.subsystem[matches[0]];
+  }
+
   if (pathExists(AI_PATHS.specsSubsystemsDir()) && listFiles(AI_PATHS.specsSubsystemsDir(), '.yaml').length > 0) {
     return path.join(AI_PATHS.specsSubsystemsDir(), `${id}.yaml`);
   }

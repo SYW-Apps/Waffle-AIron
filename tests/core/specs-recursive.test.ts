@@ -248,5 +248,23 @@ describe('recursive subproject loading and namespacing', () => {
     expect(interfaceContents).toContain('id: i-invoice-portal'); // stripped!
     expect(interfaceContents).toContain('component: invoice_portal'); // stripped!
     expect(interfaceContents).not.toContain('billing::');
+
+    // 7. Save a type using a bare subsystem name that matches a unique child subsystem
+    saveTypeSpec({
+      kind: 'entity',
+      id: 'invoice_item',
+      name: 'Invoice Item',
+      subsystem: 'invoice', // bare subsystem name!
+      fields: [{ name: 'price', type: 'number', optional: false }],
+      methods: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const childItemPath = path.join(childDir, '.wai', 'specs', 'invoice', 'types', 'invoice_item.yaml');
+    expect(fs.existsSync(childItemPath)).toBe(true);
+    const itemContents = fs.readFileSync(childItemPath, 'utf8');
+    expect(itemContents).toContain('id: invoice_item');
+    expect(itemContents).toContain('subsystem: invoice');
   });
 });
