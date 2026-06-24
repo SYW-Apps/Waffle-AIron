@@ -661,7 +661,26 @@ export function saveSubsystemSpec(spec: SubsystemSpec): void {
   ensureDir(path.dirname(p));
 
   const { prefix } = splitNamespace(spec.id);
-  const specToWrite = prefix ? stripNamespaceFromSubsystem(spec, prefix) : spec;
+  let specToWrite = prefix ? stripNamespaceFromSubsystem(spec, prefix) : spec;
+
+  if (prefix) {
+    const childProj = resolveSubprojectForNamespace(prefix);
+    if (childProj) {
+      const prevOverride = getProjectRootOverride();
+      setProjectRoot(childProj);
+      try {
+        const childSystem = loadSystemSpec();
+        if (childSystem) {
+          specToWrite = {
+            ...specToWrite,
+            parentSystem: childSystem.name,
+          };
+        }
+      } finally {
+        setProjectRoot(prevOverride);
+      }
+    }
+  }
 
   const existing = loadSubsystemSpec(spec.id);
   if (existing) {

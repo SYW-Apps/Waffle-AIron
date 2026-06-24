@@ -266,5 +266,23 @@ describe('recursive subproject loading and namespacing', () => {
     const itemContents = fs.readFileSync(childItemPath, 'utf8');
     expect(itemContents).toContain('id: invoice_item');
     expect(itemContents).toContain('subsystem: invoice');
+
+    // 8. Save a namespaced subsystem under the child's namespace and check parentSystem rewriting
+    saveSubsystemSpec({
+      id: 'billing::tax',
+      name: 'Tax Management',
+      description: 'Handles tax calculations',
+      parentSystem: 'root-system', // Passed parent system from parent context (e.g. Waffler)
+      publicInterfaces: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const childSubsystemPath = path.join(childDir, '.wai', 'specs', 'tax', 'subsystem.yaml');
+    expect(fs.existsSync(childSubsystemPath)).toBe(true);
+    const subContents = fs.readFileSync(childSubsystemPath, 'utf8');
+    expect(subContents).toContain('id: tax');
+    expect(subContents).toContain('parentSystem: child-system'); // Automatically rewritten!
+    expect(subContents).not.toContain('parentSystem: root-system');
   });
 });
