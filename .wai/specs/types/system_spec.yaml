@@ -1,0 +1,8 @@
+kind: value-object
+id: system_spec
+name: SystemSpec
+description: L0 System specification
+fields: []
+methods: []
+createdAt: '2026-06-10T22:00:00.000Z'
+updatedAt: '2026-06-10T22:00:00.000Z'

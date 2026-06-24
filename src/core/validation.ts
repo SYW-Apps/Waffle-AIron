@@ -37,7 +37,7 @@ const BUILTIN_TYPES = new Set([
   'uuid', 'decimal', 'json',
   'list', 'vector', 'vec', 'array', 'map', 'set', 'dict', 'dictionary', 'hashmap', 'tuple',
   'result', 'option', 'box', 'arc', 'rc', 'ref', 'cell', 'refcell', 'mutex', 'rwlock', 'std',
-  'promise', 'record', 'json', 'unknown', 'never', 'error'
+  'promise', 'record', 'json', 'unknown', 'never', 'error', 'mcpserver'
 ]);
 
 function extractTypeIdentifiers(typeStr: string): string[] {
@@ -64,16 +64,18 @@ function extractGenericTypeVariables(signature: string): Set<string> {
 function extractTypesFromSignature(signature: string, returns: string): string[] {
   const types: string[] = [];
   
-  // Extract from returns
-  types.push(...extractTypeIdentifiers(returns));
+  // Extract from returns, stripping property names if it's an inline type
+  const returnsCleaned = returns.replace(/[a-zA-Z0-9_-]+\s*\??\s*:/g, '');
+  types.push(...extractTypeIdentifiers(returnsCleaned));
   
-  // Parse parameters: e.g. "listAccounts(userId: string, filter: AccountFilter)"
+  // Parse parameters: e.g. "listAccounts(options: { yes?: boolean })"
   const openParen = signature.indexOf('(');
   const closeParen = signature.lastIndexOf(')');
   if (openParen !== -1 && closeParen !== -1 && closeParen > openParen) {
     const paramsStr = signature.slice(openParen + 1, closeParen);
     
     let bracketDepth = 0;
+    let braceDepth = 0;
     let paramStart = 0;
     const params: string[] = [];
     
@@ -81,7 +83,9 @@ function extractTypesFromSignature(signature: string, returns: string): string[]
       const char = paramsStr[i];
       if (char === '<') bracketDepth++;
       else if (char === '>') bracketDepth--;
-      else if (char === ',' && bracketDepth === 0) {
+      else if (char === '{') braceDepth++;
+      else if (char === '}') braceDepth--;
+      else if (char === ',' && bracketDepth === 0 && braceDepth === 0) {
         params.push(paramsStr.slice(paramStart, i).trim());
         paramStart = i + 1;
       }
@@ -94,7 +98,8 @@ function extractTypesFromSignature(signature: string, returns: string): string[]
       const colonIndex = param.indexOf(':');
       if (colonIndex !== -1) {
         const paramType = param.slice(colonIndex + 1).trim();
-        types.push(...extractTypeIdentifiers(paramType));
+        const paramTypeCleaned = paramType.replace(/[a-zA-Z0-9_-]+\s*\??\s*:/g, '');
+        types.push(...extractTypeIdentifiers(paramTypeCleaned));
       }
     }
   }

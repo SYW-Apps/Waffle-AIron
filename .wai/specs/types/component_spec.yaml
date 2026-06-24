@@ -1,0 +1,8 @@
+kind: value-object
+id: component_spec
+name: ComponentSpec
+description: L2 Component specification
+fields: []
+methods: []
+createdAt: '2026-06-10T22:00:00.000Z'
+updatedAt: '2026-06-10T22:00:00.000Z'
