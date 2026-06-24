@@ -36,11 +36,70 @@ const BUILTIN_TYPES = new Set([
   'date', 'datetime', 'time', 'timestamp', 'duration',
   'uuid', 'decimal', 'json',
   'list', 'vector', 'vec', 'array', 'map', 'set', 'dict', 'dictionary', 'hashmap', 'tuple',
-  'result', 'option', 'box', 'arc', 'rc', 'ref', 'cell', 'refcell', 'mutex', 'rwlock', 'std'
+  'result', 'option', 'box', 'arc', 'rc', 'ref', 'cell', 'refcell', 'mutex', 'rwlock', 'std',
+  'promise', 'record', 'json', 'unknown', 'never', 'error'
 ]);
 
 function extractTypeIdentifiers(typeStr: string): string[] {
   return typeStr.match(/[a-zA-Z0-9_-]+(?:::[a-zA-Z0-9_-]+|\.[a-zA-Z0-9_-]+)*/g) || [];
+}
+
+function extractGenericTypeVariables(signature: string): Set<string> {
+  const vars = new Set<string>();
+  const openParen = signature.indexOf('(');
+  const beforeParen = openParen !== -1 ? signature.slice(0, openParen) : signature;
+  
+  const openBracket = beforeParen.indexOf('<');
+  const closeBracket = beforeParen.lastIndexOf('>');
+  if (openBracket !== -1 && closeBracket !== -1 && closeBracket > openBracket) {
+    const varsStr = beforeParen.slice(openBracket + 1, closeBracket);
+    const parsedVars = varsStr.split(',').map(v => v.trim().split(/\s+extends\s+/i)[0].split('=')[0].trim());
+    for (const v of parsedVars) {
+      if (v) vars.add(v);
+    }
+  }
+  return vars;
+}
+
+function extractTypesFromSignature(signature: string, returns: string): string[] {
+  const types: string[] = [];
+  
+  // Extract from returns
+  types.push(...extractTypeIdentifiers(returns));
+  
+  // Parse parameters: e.g. "listAccounts(userId: string, filter: AccountFilter)"
+  const openParen = signature.indexOf('(');
+  const closeParen = signature.lastIndexOf(')');
+  if (openParen !== -1 && closeParen !== -1 && closeParen > openParen) {
+    const paramsStr = signature.slice(openParen + 1, closeParen);
+    
+    let bracketDepth = 0;
+    let paramStart = 0;
+    const params: string[] = [];
+    
+    for (let i = 0; i < paramsStr.length; i++) {
+      const char = paramsStr[i];
+      if (char === '<') bracketDepth++;
+      else if (char === '>') bracketDepth--;
+      else if (char === ',' && bracketDepth === 0) {
+        params.push(paramsStr.slice(paramStart, i).trim());
+        paramStart = i + 1;
+      }
+    }
+    if (paramStart < paramsStr.length) {
+      params.push(paramsStr.slice(paramStart).trim());
+    }
+    
+    for (const param of params) {
+      const colonIndex = param.indexOf(':');
+      if (colonIndex !== -1) {
+        const paramType = param.slice(colonIndex + 1).trim();
+        types.push(...extractTypeIdentifiers(paramType));
+      }
+    }
+  }
+  
+  return Array.from(new Set(types));
 }
 
 function normalizePart(part: string): string {
@@ -329,6 +388,19 @@ export function validateSddTree(
     return 'backend';
   };
 
+  const isTypeResolved = (ref: string, methodGenerics: Set<string>): boolean => {
+    const refLower = ref.toLowerCase();
+    if (BUILTIN_TYPES.has(refLower)) return true;
+    if (methodGenerics.has(ref)) return true;
+    
+    return types.some(spec => {
+      const typeQualifiedId = spec.subsystem && !spec.id.startsWith(`${spec.subsystem}::`)
+        ? `${spec.subsystem}::${spec.id}`
+        : spec.id;
+      return matchTypeRef(ref, typeQualifiedId);
+    });
+  };
+
   // Helper to determine rule severity based on user config and draft status
   const getRuleSeverity = (
     ruleCode: string,
@@ -345,18 +417,10 @@ export function validateSddTree(
         'MISSING_ENDPOINT',
         'ENDPOINT_TRANSPORT_MISMATCH',
         'MISSING_PORTAL_TYPE',
-        'INVALID_TARGET_METHOD_REFERENCE',
-        'INVALID_TARGET_COMPONENT_REFERENCE',
-        'MISSING_TARGET_METHOD',
-        'MISSING_TARGET_COMPONENT',
         'UNEXPECTED_IMPLEMENTATION_METHOD',
-        'INVALID_INTERFACE_REFERENCE',
-        'INVALID_COMPONENT_REFERENCE',
-        'INVALID_SUBSYSTEM_REFERENCE',
         'ORPHANED_SUBSYSTEM',
         'PUBLIC_INTERFACE_UNBOUND',
         'PUBLIC_INTERFACE_TYPE_MISMATCH',
-        'UNDEFINED_TYPE_REFERENCE',
       ];
       if (completenessRules.includes(ruleCode)) {
         return 'warning';
@@ -494,6 +558,26 @@ export function validateSddTree(
     }
   }
 
+  // 1.5. Interface Method Signature Type Reference Validation
+  for (const intf of interfaces) {
+    const isDraftCtx = isComponentDraft(intf.component) || intf.status === 'draft' || intf.status === 'design';
+    for (const m of intf.methods) {
+      const methodGenerics = extractGenericTypeVariables(m.signature);
+      const refs = extractTypesFromSignature(m.signature, m.returns);
+      for (const ref of refs) {
+        if (!isTypeResolved(ref, methodGenerics)) {
+          addIssue(
+            'error',
+            'UNDEFINED_TYPE_REFERENCE',
+            `Method "${m.name}" on interface "${intf.id}" references undefined type "${ref}" in signature.`,
+            intf.id,
+            isDraftCtx
+          );
+        }
+      }
+    }
+  }
+
   // 2. Interface / Implementation Method Contract Validation
   const interfaceMap = new Map(interfaces.map(i => [i.id, i]));
 
@@ -523,7 +607,7 @@ export function validateSddTree(
     for (const contractMethod of contract.methods) {
       if (!implMethodNames.has(contractMethod.name)) {
         addIssue(
-          'warning',
+          'error',
           'MISSING_IMPLEMENTATION_METHOD',
           `Implementation "${impl.id}" is missing implementation for contract method "${contractMethod.name}" from interface "${contract.id}".`,
           impl.id,
@@ -688,6 +772,22 @@ export function validateSddTree(
           isDraftCtx
         );
       }
+
+      // Ensure non-portal components do not carry endpoints on their interface methods
+      const compInterfaces = interfaces.filter(i => i.component === comp.id);
+      for (const intf of compInterfaces) {
+        for (const m of intf.methods) {
+          if (m.endpoint) {
+            addIssue(
+              'error',
+              'ARCHITECTURE_VIOLATION_NON_PORTAL_ENDPOINT',
+              `Architectural violation: Component "${comp.id}" is a ${comp.componentType}, but method "${m.name}" on its interface "${intf.id}" declares an endpoint. Only Portal components may carry endpoints.`,
+              comp.id,
+              isDraftCtx
+            );
+          }
+        }
+      }
     }
 
     const dependencies = comp.dependsOn;
@@ -798,11 +898,11 @@ export function validateSddTree(
       // Store rule: a Store may depend only on another Store or its backend Adapter.
       // It is depended upon by Registries/Indexes — never the reverse.
       if (comp.componentType === 'Store') {
-        if (depComp.componentType !== 'Store' && depComp.componentType !== 'Adapter') {
+        if (depComp.componentType !== 'Store' && depComp.componentType !== 'Registry' && depComp.componentType !== 'Adapter') {
           addIssue(
             'error',
             'ARCHITECTURE_VIOLATION_STORE_DEP',
-            `Architectural violation: Store component "${comp.id}" cannot depend on "${depComp.componentType}" component "${depComp.id}". Stores may only depend on other Stores or a backend Adapter.`,
+            `Architectural violation: Store component "${comp.id}" cannot depend on "${depComp.componentType}" component "${depComp.id}". Stores may only depend on other Stores, Registries, or a backend Adapter.`,
             comp.id,
             isDraftCtx || isComponentDraft(depComp.id)
           );
