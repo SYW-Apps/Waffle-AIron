@@ -26,3 +26,7 @@ You must coordinate with `.wai/phased_design.md` (Stage 6: Sandbox Implementatio
    - If the project requires a more legacy-friendly or relaxed structure, instruct the user to configure custom rule severities in `.wai/project.yaml` (e.g., `rules.sddRuleSeverity.CIRCULAR_DEPENDENCY: warning`).
 4. **Final Gate Lock**:
    - Once all specs compile cleanly (`valid: true` with zero errors), check off Stage 6 in `.wai/phased_design.md`. This unlocks agent generation, which the **human developer** runs from their terminal (`wairon generate`) — you do not run it yourself.
+
+## Common Validation Pitfalls & Troubleshooting
+- **`UNDEFINED_TYPE_REFERENCE` with Generic Variables (e.g., `T`)**:
+  If the validator outputs an error that type `T` (or any generic parameter name) is undefined on a generic type specification, check the type's `name` field. The type's `name` property **must** explicitly declare the generic variables using angle brackets (e.g., `name: IdentifiedEntity<T>`). If omitted, the validator fails to register the generic parameter scope, causing any fields referencing `T` to trigger an `UNDEFINED_TYPE_REFERENCE` error.
