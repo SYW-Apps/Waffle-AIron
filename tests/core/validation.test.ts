@@ -1628,8 +1628,8 @@ component: comp-a
 methods:
   - name: delete
     description: Delete something
-    signature: "delete(uuid: string, options: { mode: 'raw' | 'wrapped', code?: 10 }) -> void // comment with size and count"
-    returns: "void // return comment with raw and persisted"
+    signature: "delete(uuid: string, options: { mode: 'raw' | 'wrapped', code?: 10 }) -> void (wrapped bytes)"
+    returns: "void — return comment with raw and persisted"
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);
