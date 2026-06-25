@@ -198,6 +198,7 @@ export const NarrativeStepSchema = z.object({
   type: NarrativeStepTypeSchema,
   targetComponent: z.string().optional(), // Required if type is 'call', references L2 Component id
   targetMethod: z.string().optional(),    // Required if type is 'call', references Method name on target interface
+  assertsGuarantees: z.array(GuaranteeSchema).optional(),
 });
 
 export type NarrativeStep = z.infer<typeof NarrativeStepSchema>;
