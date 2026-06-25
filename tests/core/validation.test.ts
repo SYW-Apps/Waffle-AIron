@@ -1210,10 +1210,11 @@ methods:
   - name: reconcile_once
     narrative:
       - stepNumber: 1
-        description: Write the rollup total (idempotent) to the registry
+        description: Write the rollup total to the registry
         type: call
         targetComponent: reg-a
         targetMethod: upsert_add
+        assertsGuarantees: [idempotent]
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);
@@ -1272,10 +1273,11 @@ methods:
   - name: reconcile_once
     narrative:
       - stepNumber: 1
-        description: Write the rollup total (idempotent) to the registry
+        description: Write the rollup total to the registry
         type: call
         targetComponent: reg-a
         targetMethod: set_total
+        assertsGuarantees: [idempotent]
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);
@@ -1345,68 +1347,6 @@ updatedAt: '2026-06-10T22:00:00Z'
     try {
       const res = validateSddTree();
       expect(res.issues.some(i => i.code === 'NARRATIVE_SEMANTIC_UNBACKED')).toBe(true);
-    } finally {
-      proj.cleanup();
-    }
-  });
-
-  it('avoids prose regex scanning when assertsGuarantees is explicitly defined (even if empty)', () => {
-    const proj = createTempProject();
-    proj.writeSpec('system', 'system', SYS);
-    proj.writeSpec('subsystem', 'sub-a', sub('sub-a'));
-    proj.writeSpec('component', 'orch-a', comp('orch-a', 'sub-a', 'Orchestrator', { dependsOn: ['reg-a'] }));
-    proj.writeSpec('component', 'reg-a', comp('reg-a', 'sub-a', 'Registry'));
-    proj.writeSpec('interface', 'iorch-a', `
-schemaVersion: 1.0.0
-id: iorch-a
-name: IOrchA
-description: Reconciler
-component: orch-a
-methods:
-  - name: reconcile_once
-    description: Reconcile the rollup
-    signature: "reconcile_once(): void"
-    returns: "void"
-createdAt: '2026-06-10T22:00:00Z'
-updatedAt: '2026-06-10T22:00:00Z'
-`);
-    proj.writeSpec('interface', 'ireg-a', `
-schemaVersion: 1.0.0
-id: ireg-a
-name: IRegA
-description: Rollup registry
-component: reg-a
-methods:
-  - name: upsert_add
-    description: Add amount
-    signature: "upsert_add(amount: number): void"
-    returns: "void"
-createdAt: '2026-06-10T22:00:00Z'
-updatedAt: '2026-06-10T22:00:00Z'
-`);
-    proj.writeSpec('implementation', 'iorch-a-impl', `
-schemaVersion: 1.0.0
-id: iorch-a-impl
-name: ReconcilerImpl
-description: Reconciler implementation
-contract: iorch-a
-sourcePath: src/orch-a.ts
-methods:
-  - name: reconcile_once
-    narrative:
-      - stepNumber: 1
-        description: This step mentions atomic add but should not be matched as atomic guarantee because assertsGuarantees is empty
-        type: call
-        targetComponent: reg-a
-        targetMethod: upsert_add
-        assertsGuarantees: []
-createdAt: '2026-06-10T22:00:00Z'
-updatedAt: '2026-06-10T22:00:00Z'
-`);
-    proj.activate();
-    try {
-      const res = validateSddTree();
-      expect(res.issues.some(i => i.code === 'NARRATIVE_SEMANTIC_UNBACKED')).toBe(false);
     } finally {
       proj.cleanup();
     }
@@ -1613,6 +1553,35 @@ updatedAt: '2026-06-10T22:00:00Z'
       proj.cleanup();
     }
   });
+
+  it('resolves union type references and recursive self-references on type specs', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', SYS);
+    proj.writeSpec('subsystem', 'sub-a', sub('sub-a'));
+    proj.writeSpec('type', 'vm_value', `
+kind: value-object
+id: vm-value
+name: VmValue
+description: Discriminated union of VM values
+subsystem: sub-a
+fields:
+  - name: variant
+    type: string
+  - name: value
+    type: "boolean | i64 | string | list<VmValue>"
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.issues.some(i => i.code === 'UNDEFINED_TYPE_REFERENCE')).toBe(false);
+      expect(res.valid).toBe(true);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
 
   it('correctly ignores return arrows, unit types, comments, and string/number literals in signatures', () => {
     const proj = createTempProject();

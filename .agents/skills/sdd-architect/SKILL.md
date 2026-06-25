@@ -203,3 +203,45 @@ status: "draft" # draft | design | complete
 createdAt: "2026-06-12T20:00:00Z"
 updatedAt: "2026-06-12T20:00:00Z"
 ```
+
+### 6. Types / Value-Objects & Entities (under `.wai/specs/types/`)
+```yaml
+kind: "value-object" # value-object | entity
+id: "identified-entity"
+name: "IdentifiedEntity<T>" # IMPORTANT: Generic type parameters MUST be declared here using <T>
+description: "A standardized wrapper..."
+fields:
+  - name: "identity"
+    type: "namespace-segment"
+    description: "The entity's identity."
+    optional: false
+  - name: "entity"
+    type: "T" # Uses the generic type parameter T declared in the name field above
+    description: "The body."
+    optional: false
+methods: []
+createdAt: "2026-06-20T16:37:08Z"
+updatedAt: "2026-06-20T16:37:08Z"
+```
+> [!IMPORTANT]
+> **Generic Type Parameter Declarations**:
+> When defining generic value-objects or entities in `.wai/specs/types/`, you must append the generic parameters to the type's `name` property (e.g., `name: IdentifiedEntity<T>`).
+> If you omit `<T>` from the `name` (e.g. leaving it as `name: IdentifiedEntity`), the validator cannot bind the type variable `T`. Any fields referencing `T` will then raise an `UNDEFINED_TYPE_REFERENCE` validation error.
+
+> [!TIP]
+> **Sum Types, ADTs, & Rust Enums**:
+> To specify Rust enums or discriminated unions in a cross-platform manner (instead of resorting to loose `json` or `any` fields), model them as a `value-object` representing a **Discriminated Union**:
+> ```yaml
+> kind: "value-object"
+> id: "vm-value"
+> name: "VmValue"
+> fields:
+>   - name: "variant"
+>     type: "string" # e.g., "null" | "boolean" | "integer" | "string"
+>     optional: false
+>   - name: "value"
+>     type: "boolean | i64 | string | list<VmValue>" # Resolves each identifier individually, supports recursion
+>     optional: true
+> ```
+
+

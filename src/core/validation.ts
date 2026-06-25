@@ -3,14 +3,6 @@ import { ProjectConfig, RulesConfig } from '../models/project.js';
 import { Registry } from '../models/registry.js';
 import { SEMANTIC_GUARANTEES, Guarantee, PATTERN_TYPES } from '../models/specs.js';
 
-// Narrative-prose keyword per recognized guarantee — the gate flags a step that uses one
-// while calling a method that doesn't declare that guarantee. Keep in sync with SEMANTIC_GUARANTEES.
-const GUARANTEE_KEYWORDS: Record<Guarantee, RegExp> = {
-  'idempotent': /idempoten/i,
-  'atomic': /\batomic/i,
-  'transactional': /\btransaction/i,
-  'exactly-once': /exactly[\s-]?once/i,
-};
 import {
   loadSystemSpec,
   loadSubsystemSpecs,
@@ -762,18 +754,6 @@ export function validateSddTree(
                     'warning',
                     'NARRATIVE_SEMANTIC_UNBACKED',
                     `Step ${step.stepNumber} of "${implMethod.name}" in implementation "${impl.id}" explicitly asserts guarantee "${g}", but the method it calls — "${step.targetMethod}" on "${step.targetComponent}" — does not list "${g}" among its L3 contract guarantees. Declare it on that method (and ensure its shape can deliver it), or revise the narrative.`,
-                    impl.id,
-                    isDraftCtx || isComponentDraft(step.targetComponent)
-                  );
-                }
-              }
-            } else {
-              for (const g of SEMANTIC_GUARANTEES) {
-                if (GUARANTEE_KEYWORDS[g].test(step.description) && !declared.has(g)) {
-                  addIssue(
-                    'warning',
-                    'NARRATIVE_SEMANTIC_UNBACKED',
-                    `Step ${step.stepNumber} of "${implMethod.name}" in implementation "${impl.id}" asserts "${g}" in its description, but the method it calls — "${step.targetMethod}" on "${step.targetComponent}" — does not list "${g}" among its L3 contract guarantees. Declare it on that method (and ensure its shape can deliver it), or revise the narrative. (Prefer using the explicit 'assertsGuarantees' field on this step to avoid false positives).`,
                     impl.id,
                     isDraftCtx || isComponentDraft(step.targetComponent)
                   );
