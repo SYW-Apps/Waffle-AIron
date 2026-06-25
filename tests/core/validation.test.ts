@@ -1586,6 +1586,92 @@ updatedAt: '2026-06-10T22:00:00Z'
     }
   });
 
+  it('resolves generic type parameters on type specs', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', SYS);
+    proj.writeSpec('subsystem', 'sub-a', sub('sub-a'));
+    proj.writeSpec('type', 'identified_entity', `
+kind: entity
+id: identified-entity
+name: IdentifiedEntity<T>
+description: Identified entity wrapper
+subsystem: sub-a
+fields:
+  - name: id
+    type: string
+  - name: entity
+    type: T
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.issues.some(i => i.code === 'UNDEFINED_TYPE_REFERENCE')).toBe(false);
+      expect(res.valid).toBe(true);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('correctly ignores return arrows, unit types, comments, and string/number literals in signatures', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', SYS);
+    proj.writeSpec('subsystem', 'sub-a', sub('sub-a'));
+    proj.writeSpec('component', 'comp-a', comp('comp-a', 'sub-a', 'Orchestrator'));
+    proj.writeSpec('interface', 'icomp-a', `
+schemaVersion: 1.0.0
+id: icomp-a
+name: ICompA
+description: Test interface
+component: comp-a
+methods:
+  - name: delete
+    description: Delete something
+    signature: "delete(uuid: string, options: { mode: 'raw' | 'wrapped', code?: 10 }) -> void // comment with size and count"
+    returns: "void // return comment with raw and persisted"
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.issues.some(i => i.code === 'UNDEFINED_TYPE_REFERENCE')).toBe(false);
+      expect(res.valid).toBe(true);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('resolves interface-level and method-level generic parameters', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', SYS);
+    proj.writeSpec('subsystem', 'sub-a', sub('sub-a'));
+    proj.writeSpec('component', 'comp-a', comp('comp-a', 'sub-a', 'Orchestrator'));
+    proj.writeSpec('interface', 'icomp-a', `
+schemaVersion: 1.0.0
+id: icomp-a
+name: ICompA<T>
+description: Test interface
+component: comp-a
+methods:
+  - name: get_val
+    description: Get a val
+    signature: "get_val<U>(param: T): Promise<U>"
+    returns: "Promise<U>"
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.issues.some(i => i.code === 'UNDEFINED_TYPE_REFERENCE')).toBe(false);
+      expect(res.valid).toBe(true);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
   it('flags non-portal components declaring endpoints', () => {
     const proj = createTempProject();
     proj.writeSpec('system', 'system', SYS);

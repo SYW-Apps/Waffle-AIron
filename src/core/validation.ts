@@ -34,14 +34,31 @@ const BUILTIN_TYPES = new Set([
   'f32', 'f64', 'char', 'byte', 'bytes',
   'any', 'void', 'null', 'undefined', 'object',
   'date', 'datetime', 'time', 'timestamp', 'duration',
-  'uuid', 'decimal', 'json',
+  'uuid', 'decimal', 'json', 'true', 'false',
   'list', 'vector', 'vec', 'array', 'map', 'set', 'dict', 'dictionary', 'hashmap', 'tuple',
   'result', 'option', 'box', 'arc', 'rc', 'ref', 'cell', 'refcell', 'mutex', 'rwlock', 'std',
   'promise', 'record', 'json', 'unknown', 'never', 'error', 'mcpserver'
 ]);
 
 function extractTypeIdentifiers(typeStr: string): string[] {
-  return typeStr.match(/[a-zA-Z0-9_-]+(?:::[a-zA-Z0-9_-]+|\.[a-zA-Z0-9_-]+)*/g) || [];
+  // 1. Strip comments
+  let cleaned = typeStr
+    .replace(/\/\/.*$/gm, '')
+    .replace(/#.*$/gm, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  
+  // 2. Strip string literals (both single quotes, double quotes, and backticks)
+  cleaned = cleaned.replace(/(["'`])(?:\\.|[^\\])*?\1/g, ' ');
+  
+  // 3. Extract identifiers (allowing dashes, underscores, and qualified namespace resolution)
+  const matches = cleaned.match(/[a-zA-Z0-9_-]+(?:::[a-zA-Z0-9_-]+|\.[a-zA-Z0-9_-]+)*/g) || [];
+  
+  // 4. Filter out pure numbers, standalone punctuation/dashes, and ensure the token represents a valid type reference
+  return matches.filter(t => {
+    if (!/[a-zA-Z0-9]/.test(t)) return false;
+    if (/^\d+$/.test(t)) return false;
+    return true;
+  });
 }
 
 function extractGenericTypeVariables(signature: string): Set<string> {
@@ -61,21 +78,38 @@ function extractGenericTypeVariables(signature: string): Set<string> {
   return vars;
 }
 
+function extractTypeGenerics(name: string): Set<string> {
+  const vars = new Set<string>();
+  const openBracket = name.indexOf('<');
+  const closeBracket = name.lastIndexOf('>');
+  if (openBracket !== -1 && closeBracket !== -1 && closeBracket > openBracket) {
+    const varsStr = name.slice(openBracket + 1, closeBracket);
+    const parsedVars = varsStr.split(',').map(v => v.trim().split(/\s+extends\s+/i)[0].split('=')[0].trim());
+    for (const v of parsedVars) {
+      if (v) vars.add(v);
+    }
+  }
+  return vars;
+}
+
 function extractTypesFromSignature(signature: string, returns: string): string[] {
   const types: string[] = [];
   
-  // Extract from returns, stripping property names if it's an inline type
-  const returnsCleaned = returns.replace(/[a-zA-Z0-9_-]+\s*\??\s*:/g, '');
+  // Clean comments first
+  const sigCleaned = signature.replace(/\/\/.*$/gm, '').replace(/#.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  const returnsCleaned = returns.replace(/\/\/.*$/gm, '').replace(/#.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')
+                                .replace(/[a-zA-Z0-9_-]+\s*\??\s*:/g, '');
+  
   types.push(...extractTypeIdentifiers(returnsCleaned));
   
-  // Parse parameters: e.g. "listAccounts(options: { yes?: boolean })"
-  const openParen = signature.indexOf('(');
-  const closeParen = signature.lastIndexOf(')');
+  const openParen = sigCleaned.indexOf('(');
+  const closeParen = sigCleaned.lastIndexOf(')');
   if (openParen !== -1 && closeParen !== -1 && closeParen > openParen) {
-    const paramsStr = signature.slice(openParen + 1, closeParen);
+    const paramsStr = sigCleaned.slice(openParen + 1, closeParen);
     
     let bracketDepth = 0;
     let braceDepth = 0;
+    let parenDepth = 0;
     let paramStart = 0;
     const params: string[] = [];
     
@@ -85,7 +119,9 @@ function extractTypesFromSignature(signature: string, returns: string): string[]
       else if (char === '>') bracketDepth--;
       else if (char === '{') braceDepth++;
       else if (char === '}') braceDepth--;
-      else if (char === ',' && bracketDepth === 0 && braceDepth === 0) {
+      else if (char === '(') parenDepth++;
+      else if (char === ')') parenDepth--;
+      else if (char === ',' && bracketDepth === 0 && braceDepth === 0 && parenDepth === 0) {
         params.push(paramsStr.slice(paramStart, i).trim());
         paramStart = i + 1;
       }
@@ -536,11 +572,15 @@ export function validateSddTree(
     }
 
     if (t.fields) {
+      const typeGenerics = extractTypeGenerics(t.name);
       for (const field of t.fields) {
         const refs = extractTypeIdentifiers(field.type);
         for (const ref of refs) {
           const refLower = ref.toLowerCase();
           if (BUILTIN_TYPES.has(refLower)) {
+            continue;
+          }
+          if (typeGenerics.has(ref)) {
             continue;
           }
           const resolved = types.find(spec => {
@@ -566,11 +606,13 @@ export function validateSddTree(
   // 1.5. Interface Method Signature Type Reference Validation
   for (const intf of interfaces) {
     const isDraftCtx = isComponentDraft(intf.component) || intf.status === 'draft' || intf.status === 'design';
+    const interfaceGenerics = extractTypeGenerics(intf.name);
     for (const m of intf.methods) {
       const methodGenerics = extractGenericTypeVariables(m.signature);
+      const allGenerics = new Set([...interfaceGenerics, ...methodGenerics]);
       const refs = extractTypesFromSignature(m.signature, m.returns);
       for (const ref of refs) {
-        if (!isTypeResolved(ref, methodGenerics)) {
+        if (!isTypeResolved(ref, allGenerics)) {
           addIssue(
             'error',
             'UNDEFINED_TYPE_REFERENCE',
