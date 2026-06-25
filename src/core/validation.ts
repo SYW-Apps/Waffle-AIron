@@ -1,7 +1,7 @@
 import { AgentRecord } from '../models/agent.js';
 import { ProjectConfig, RulesConfig } from '../models/project.js';
 import { Registry } from '../models/registry.js';
-import { SEMANTIC_GUARANTEES, Guarantee, PATTERN_TYPES } from '../models/specs.js';
+import { PATTERN_TYPES } from '../models/specs.js';
 
 import {
   loadSystemSpec,
