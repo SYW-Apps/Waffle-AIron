@@ -697,15 +697,29 @@ export function validateSddTree(
             // description claims a guarantee must call a method that lists it in `guarantees`.
             // Whether the method truly delivers it is implementation correctness, not here.
             const declared = new Set(targetMethodSpec.guarantees ?? []);
-            for (const g of SEMANTIC_GUARANTEES) {
-              if (GUARANTEE_KEYWORDS[g].test(step.description) && !declared.has(g)) {
-                addIssue(
-                  'warning',
-                  'NARRATIVE_SEMANTIC_UNBACKED',
-                  `Step ${step.stepNumber} of "${implMethod.name}" in implementation "${impl.id}" asserts "${g}", but the method it calls — "${step.targetMethod}" on "${step.targetComponent}" — does not list "${g}" among its L3 contract guarantees. Declare it on that method (and ensure its shape can deliver it), or revise the narrative.`,
-                  impl.id,
-                  isDraftCtx || isComponentDraft(step.targetComponent)
-                );
+            if (step.assertsGuarantees) {
+              for (const g of step.assertsGuarantees) {
+                if (!declared.has(g)) {
+                  addIssue(
+                    'warning',
+                    'NARRATIVE_SEMANTIC_UNBACKED',
+                    `Step ${step.stepNumber} of "${implMethod.name}" in implementation "${impl.id}" explicitly asserts guarantee "${g}", but the method it calls — "${step.targetMethod}" on "${step.targetComponent}" — does not list "${g}" among its L3 contract guarantees. Declare it on that method (and ensure its shape can deliver it), or revise the narrative.`,
+                    impl.id,
+                    isDraftCtx || isComponentDraft(step.targetComponent)
+                  );
+                }
+              }
+            } else {
+              for (const g of SEMANTIC_GUARANTEES) {
+                if (GUARANTEE_KEYWORDS[g].test(step.description) && !declared.has(g)) {
+                  addIssue(
+                    'warning',
+                    'NARRATIVE_SEMANTIC_UNBACKED',
+                    `Step ${step.stepNumber} of "${implMethod.name}" in implementation "${impl.id}" asserts "${g}" in its description, but the method it calls — "${step.targetMethod}" on "${step.targetComponent}" — does not list "${g}" among its L3 contract guarantees. Declare it on that method (and ensure its shape can deliver it), or revise the narrative. (Prefer using the explicit 'assertsGuarantees' field on this step to avoid false positives).`,
+                    impl.id,
+                    isDraftCtx || isComponentDraft(step.targetComponent)
+                  );
+                }
               }
             }
           }
