@@ -47,13 +47,20 @@ function extractTypeIdentifiers(typeStr: string): string[] {
     .replace(/#.*$/gm, '')
     .replace(/\/\*[\s\S]*?\*\//g, '');
   
-  // 2. Strip string literals (both single quotes, double quotes, and backticks)
+  // 2. Strip trailing parenthesized descriptions: e.g. "Result<T> (or eof)" -> "Result<T>"
+  // We only strip it if it is preceded by non-whitespace, to avoid stripping a top-level tuple like "(string, number)"
+  cleaned = cleaned.replace(/(?<=\S)\s*\([^)]*\)\s*$/, '');
+  
+  // 3. Strip trailing prose after a dash, em-dash, or colon: e.g. "Result<T> - returns eof" -> "Result<T>"
+  cleaned = cleaned.replace(/(?<=\S)\s+[-—:]\s+[a-z\s_-]+$/, '');
+  
+  // 4. Strip string literals (both single quotes, double quotes, and backticks)
   cleaned = cleaned.replace(/(["'`])(?:\\.|[^\\])*?\1/g, ' ');
   
-  // 3. Extract identifiers (allowing dashes, underscores, and qualified namespace resolution)
+  // 5. Extract identifiers (allowing dashes, underscores, and qualified namespace resolution)
   const matches = cleaned.match(/[a-zA-Z0-9_-]+(?:::[a-zA-Z0-9_-]+|\.[a-zA-Z0-9_-]+)*/g) || [];
   
-  // 4. Filter out pure numbers, standalone punctuation/dashes, and ensure the token represents a valid type reference
+  // 6. Filter out pure numbers, standalone punctuation/dashes, and ensure the token represents a valid type reference
   return matches.filter(t => {
     if (!/[a-zA-Z0-9]/.test(t)) return false;
     if (/^\d+$/.test(t)) return false;
@@ -95,8 +102,11 @@ function extractTypeGenerics(name: string): Set<string> {
 function extractTypesFromSignature(signature: string, returns: string): string[] {
   const types: string[] = [];
   
-  // Clean comments first
-  const sigCleaned = signature.replace(/\/\/.*$/gm, '').replace(/#.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  // Clean comments and trailing prose/parentheses first
+  let sigCleaned = signature.replace(/\/\/.*$/gm, '').replace(/#.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  sigCleaned = sigCleaned.replace(/(?<=\S)\s*\([^)]*\)\s*$/, '');
+  sigCleaned = sigCleaned.replace(/(?<=\S)\s+[-—:]\s+[a-z\s_-]+$/, '');
+
   const returnsCleaned = returns.replace(/\/\/.*$/gm, '').replace(/#.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')
                                 .replace(/[a-zA-Z0-9_-]+\s*\??\s*:/g, '');
   
@@ -432,7 +442,7 @@ export function validateSddTree(
   const isTypeResolved = (ref: string, methodGenerics: Set<string>): boolean => {
     const refLower = ref.toLowerCase();
     if (BUILTIN_TYPES.has(refLower)) return true;
-    if (methodGenerics.has(ref)) return true;
+    if (methodGenerics.has(refLower)) return true;
     
     return types.some(spec => {
       const typeQualifiedId = spec.subsystem && !spec.id.startsWith(`${spec.subsystem}::`)
@@ -572,7 +582,9 @@ export function validateSddTree(
     }
 
     if (t.fields) {
-      const typeGenerics = extractTypeGenerics(t.name);
+      const typeGenerics = new Set(
+        Array.from(extractTypeGenerics(t.name)).map(g => g.toLowerCase())
+      );
       for (const field of t.fields) {
         const refs = extractTypeIdentifiers(field.type);
         for (const ref of refs) {
@@ -580,7 +592,7 @@ export function validateSddTree(
           if (BUILTIN_TYPES.has(refLower)) {
             continue;
           }
-          if (typeGenerics.has(ref)) {
+          if (typeGenerics.has(refLower)) {
             continue;
           }
           const resolved = types.find(spec => {
@@ -606,9 +618,13 @@ export function validateSddTree(
   // 1.5. Interface Method Signature Type Reference Validation
   for (const intf of interfaces) {
     const isDraftCtx = isComponentDraft(intf.component) || intf.status === 'draft' || intf.status === 'design';
-    const interfaceGenerics = extractTypeGenerics(intf.name);
+    const interfaceGenerics = new Set(
+      Array.from(extractTypeGenerics(intf.name)).map(g => g.toLowerCase())
+    );
     for (const m of intf.methods) {
-      const methodGenerics = extractGenericTypeVariables(m.signature);
+      const methodGenerics = new Set(
+        Array.from(extractGenericTypeVariables(m.signature)).map(g => g.toLowerCase())
+      );
       const allGenerics = new Set([...interfaceGenerics, ...methodGenerics]);
       const refs = extractTypesFromSignature(m.signature, m.returns);
       for (const ref of refs) {
