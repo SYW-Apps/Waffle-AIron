@@ -52,11 +52,13 @@ interface SpecIndex {
 let cachedIndex: SpecIndex | null = null;
 let cachedRootDir: string | null = null;
 let cachedRecursive: boolean | number | null = null;
+const rootSubsystems = new Set<string>();
 
 export function invalidateSpecCache(): void {
   cachedIndex = null;
   cachedRootDir = null;
   cachedRecursive = null;
+  rootSubsystems.clear();
 }
 
 function qualifyId(id: string, prefix: string): string;
@@ -74,6 +76,10 @@ function qualifyId(id: string | undefined, prefix: string): string | undefined {
       prefixParts.pop();
     }
     return [...prefixParts, ...idParts].join('::');
+  }
+  const firstSegment = id.split('::')[0];
+  if (rootSubsystems.has(firstSegment)) {
+    return id;
   }
   return prefix ? `${prefix}::${id}` : id;
 }
@@ -126,6 +132,9 @@ function scanSpecsForProject(projectDir: string, namespacePrefix: string, visite
         if ('parentSystem' in raw) {
           detectedType = 'subsystem';
           const parsed = SubsystemSpecSchema.parse(raw);
+          if (currentDepth === 0) {
+            rootSubsystems.add(parsed.id);
+          }
           if (parsed.projectPath) {
             localSubprojects.push({
               subsystemId: parsed.id,
@@ -313,6 +322,7 @@ export function scanAllSpecs(options?: { recursive?: boolean | number }): SpecIn
   if (cachedIndex && cachedRootDir === rootDir && cachedRecursive === recursive) return cachedIndex;
 
   loaderIssues = [];
+  rootSubsystems.clear();
   cachedRootDir = rootDir;
   cachedRecursive = recursive;
   const visited = new Set<string>([path.resolve(rootDir)]);
@@ -973,12 +983,46 @@ export interface PromotableSpec {
 }
 
 /** Every spec whose status is not yet 'complete', with its current status captured. */
-export function collectPromotableSpecs(): PromotableSpec[] {
+export function collectPromotableSpecs(scopeSubsystem?: string): PromotableSpec[] {
   const out: PromotableSpec[] = [];
-  for (const s of loadSubsystemSpecs())      if (s.status !== 'complete') out.push({ kind: 'subsystem', id: s.id, status: (s.status ?? 'complete') as SpecStatus });
-  for (const c of loadComponentSpecs())      if (c.status !== 'complete') out.push({ kind: 'component', id: c.id, status: (c.status ?? 'complete') as SpecStatus });
-  for (const i of loadInterfaceSpecs())      if (i.status !== 'complete') out.push({ kind: 'interface', id: i.id, status: (i.status ?? 'complete') as SpecStatus });
-  for (const m of loadImplementationSpecs()) if (m.status !== 'complete') out.push({ kind: 'implementation', id: m.id, status: (m.status ?? 'complete') as SpecStatus });
+  const subsystems = loadSubsystemSpecs();
+  const components = loadComponentSpecs();
+  const interfaces = loadInterfaceSpecs();
+  const implementations = loadImplementationSpecs();
+
+  const isSpecInSubsystemScope = (specSubsystem: string | undefined): boolean => {
+    if (!scopeSubsystem) return true;
+    if (!specSubsystem) return false;
+    return specSubsystem === scopeSubsystem || specSubsystem.startsWith(`${scopeSubsystem}::`);
+  };
+
+  for (const s of subsystems) {
+    if (s.status !== 'complete' && (s.id === scopeSubsystem || s.id.startsWith(`${scopeSubsystem}::`))) {
+      out.push({ kind: 'subsystem', id: s.id, status: (s.status ?? 'complete') as SpecStatus });
+    }
+  }
+  for (const c of components) {
+    if (c.status !== 'complete' && isSpecInSubsystemScope(c.subsystem)) {
+      out.push({ kind: 'component', id: c.id, status: (c.status ?? 'complete') as SpecStatus });
+    }
+  }
+  for (const i of interfaces) {
+    if (i.status !== 'complete') {
+      const comp = components.find(c => c.id === i.component);
+      if (comp && isSpecInSubsystemScope(comp.subsystem)) {
+        out.push({ kind: 'interface', id: i.id, status: (i.status ?? 'complete') as SpecStatus });
+      }
+    }
+  }
+  for (const m of implementations) {
+    if (m.status !== 'complete') {
+      const intf = interfaces.find(i => i.id === m.contract);
+      const comp = intf ? components.find(c => c.id === intf.component) : null;
+      if (comp && isSpecInSubsystemScope(comp.subsystem)) {
+        out.push({ kind: 'implementation', id: m.id, status: (m.status ?? 'complete') as SpecStatus });
+      }
+    }
+  }
   return out;
 }
 

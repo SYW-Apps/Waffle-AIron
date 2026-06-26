@@ -30,6 +30,10 @@ import { runGenerate } from './generate.js';
 export interface LockOptions {
   /** Skip the interactive confirmation (for scripts / CI). */
   yes?: boolean;
+  /** Limit lock scope to a specific subsystem. */
+  subsystem?: string;
+  /** Whether to recursively lock subprojects. */
+  recursive?: boolean | number;
 }
 
 export async function runLock(options: LockOptions = {}): Promise<void> {
@@ -43,17 +47,51 @@ export async function runLock(options: LockOptions = {}): Promise<void> {
   const projectConfig = loadProjectConfig();
 
   logger.info('Analyzing and validating specifications in-memory...');
-  const index = scanAllSpecs();
-  const promotable = collectPromotableSpecs();
+  const index = scanAllSpecs({ recursive: options.recursive ?? true });
+  const promotable = collectPromotableSpecs(options.subsystem);
 
-  // --- Dry run: validate the tree in-memory as if everything were already complete ---
+  // --- Dry run: validate the tree in-memory as if everything in the scope were already complete ---
   const originalStatuses = new Map<any, string | undefined>();
-  for (const s of index.subsystems) { originalStatuses.set(s, s.status); s.status = 'complete'; }
-  for (const c of index.components) { originalStatuses.set(c, c.status); c.status = 'complete'; }
-  for (const i of index.interfaces) { originalStatuses.set(i, i.status); i.status = 'complete'; }
-  for (const m of index.implementations) { originalStatuses.set(m, m.status); m.status = 'complete'; }
+  const isSpecInSubsystemScope = (specSubsystem: string | undefined): boolean => {
+    if (!options.subsystem) return true;
+    if (!specSubsystem) return false;
+    return specSubsystem === options.subsystem || specSubsystem.startsWith(`${options.subsystem}::`);
+  };
 
-  const dry = validateSddTree(projectConfig.rules, projectConfig.projectType);
+  for (const s of index.subsystems) {
+    if (!options.subsystem || s.id === options.subsystem || s.id.startsWith(`${options.subsystem}::`)) {
+      originalStatuses.set(s, s.status);
+      s.status = 'complete';
+    }
+  }
+  for (const c of index.components) {
+    if (isSpecInSubsystemScope(c.subsystem)) {
+      originalStatuses.set(c, c.status);
+      c.status = 'complete';
+    }
+  }
+  for (const i of index.interfaces) {
+    const comp = index.components.find(c => c.id === i.component);
+    if (comp && isSpecInSubsystemScope(comp.subsystem)) {
+      originalStatuses.set(i, i.status);
+      i.status = 'complete';
+    }
+  }
+  for (const m of index.implementations) {
+    const intf = index.interfaces.find(i => i.id === m.contract);
+    const comp = intf ? index.components.find(c => c.id === intf.component) : null;
+    if (comp && isSpecInSubsystemScope(comp.subsystem)) {
+      originalStatuses.set(m, m.status);
+      m.status = 'complete';
+    }
+  }
+
+  const dry = validateSddTree({
+    rules: projectConfig.rules,
+    projectType: projectConfig.projectType,
+    scopeSubsystem: options.subsystem,
+    recursive: options.recursive ?? true,
+  });
 
   // Restore original statuses in-memory
   for (const [spec, status] of originalStatuses.entries()) {
@@ -123,7 +161,7 @@ export async function runLock(options: LockOptions = {}): Promise<void> {
   }
 
   logger.blank();
-  await runGenerate({});
+  await runGenerate({ domain: options.subsystem });
 
   logger.blank();
   logger.success('Specs locked and agent topology generated.');

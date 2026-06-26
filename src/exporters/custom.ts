@@ -19,7 +19,7 @@ export class CustomExporter implements Exporter {
     if (!('outputDir' in target)) {
       throw new Error('CustomExporter requires target.outputDir');
     }
-    return path.resolve(projectRoot, target.outputDir, `${agent.id}.md`);
+    return path.resolve(projectRoot, target.outputDir, `${agent.id.replace(/::/g, '--')}.md`);
   }
 
   export(ctx: ExportContext): ExportResult {
