@@ -997,7 +997,7 @@ export function collectPromotableSpecs(scopeSubsystem?: string): PromotableSpec[
   };
 
   for (const s of subsystems) {
-    if (s.status !== 'complete' && (s.id === scopeSubsystem || s.id.startsWith(`${scopeSubsystem}::`))) {
+    if (s.status !== 'complete' && (!scopeSubsystem || s.id === scopeSubsystem || s.id.startsWith(scopeSubsystem + '::'))) {
       out.push({ kind: 'subsystem', id: s.id, status: (s.status ?? 'complete') as SpecStatus });
     }
   }
