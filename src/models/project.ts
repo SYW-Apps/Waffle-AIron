@@ -50,11 +50,18 @@ export const RulesConfigSchema = z.object({
   enforceReproducibility: z.boolean().default(true),
 
   /**
+   * Whether to generate individual component implementer agents.
+   * If false, only subsystem owner agents are generated, and they own the component implementations.
+   */
+  generateComponentImplementers: z.boolean().default(true),
+
+  /**
    * Severity overrides for SDD validation rules.
    * Key: rule code (e.g. CIRCULAR_DEPENDENCY), Value: error | warning | off
    */
   sddRuleSeverity: z.record(z.enum(['error', 'warning', 'off'])).default({}),
 });
+
 export type RulesConfig = z.infer<typeof RulesConfigSchema>;
 
 export const PathsConfigSchema = z.object({
