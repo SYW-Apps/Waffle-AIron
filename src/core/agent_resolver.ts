@@ -1,6 +1,8 @@
 import * as path from 'path';
+import * as fs from 'fs';
 import { AgentRecord } from '../models/agent.js';
 import { loadProjectConfig, AI_PATHS, loadTopologyConfig } from '../config/loader.js';
+import { getProjectRoot, pathExists } from '../utils/fs.js';
 import {
   loadSystemSpec,
   loadSubsystemSpecs,
@@ -11,12 +13,167 @@ import {
   getComponentPath,
   getInterfacePath,
   getImplementationPath,
+  resolveSubprojectForNamespace,
 } from './specs.js';
+import { ComponentSpec } from '../models/specs.js';
+
+// Cache for project files relative to the system root
+const projectFilesCache = new Map<string, string[]>();
+
+function listFilesRecursiveSafe(dirPath: string, ext: string): string[] {
+  if (!fs.existsSync(dirPath)) return [];
+  const nameLower = path.basename(dirPath).toLowerCase();
+  const IGNORED_DIRS = new Set([
+    'node_modules',
+    'target',
+    'dist',
+    'build',
+    '.git',
+    '.wai',
+    '.claude',
+    '.gemini',
+    '.codex',
+    '.agents',
+    '.vscode',
+  ]);
+  if (IGNORED_DIRS.has(nameLower)) return [];
+
+  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...listFilesRecursiveSafe(fullPath, ext));
+    } else if (entry.isFile() && entry.name.endsWith(ext)) {
+      files.push(fullPath);
+    }
+  }
+  return files;
+}
+
+function getProjectFiles(projectDir: string): string[] {
+  let files = projectFilesCache.get(projectDir);
+  if (!files) {
+    files = [];
+    const srcDir = path.join(projectDir, 'src');
+    const legacySrcDir = path.join(projectDir, 'legacy-src');
+    
+    let searchDir = projectDir;
+    if (pathExists(srcDir)) {
+      searchDir = srcDir;
+    } else if (pathExists(legacySrcDir)) {
+      searchDir = legacySrcDir;
+    } else if (projectDir === getProjectRoot()) {
+      // Avoid scanning the entire monorepo root recursively
+      projectFilesCache.set(projectDir, []);
+      return [];
+    }
+    
+    const extensions = ['.rs', '.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.c', '.cpp', '.cs', '.java', '.kt', '.swift', '.rb', '.php', '.lua'];
+    for (const ext of extensions) {
+      files.push(...listFilesRecursiveSafe(searchDir, ext));
+    }
+    const rootDir = getProjectRoot();
+    files = files.map(f => path.relative(rootDir, f).replace(/\\/g, '/'));
+    projectFilesCache.set(projectDir, files);
+  }
+  return files;
+}
+
+function inferSourcePathForComponent(comp: ComponentSpec, subsystems: any[]): string | null {
+  try {
+    const projectDir = resolveSubprojectForNamespace(comp.subsystem) || getProjectRoot();
+    const files = getProjectFiles(projectDir);
+    if (files.length === 0) return null;
+
+    const compRelativeId = comp.id.split('::').pop() || comp.id;
+    const subRelativeId = comp.subsystem.split('::').pop() || comp.subsystem;
+
+    let cleanName = compRelativeId;
+    if (cleanName.startsWith(`${subRelativeId}-`)) {
+      cleanName = cleanName.slice(subRelativeId.length + 1);
+    }
+
+    const candidates = new Set<string>();
+    candidates.add(cleanName.toLowerCase());
+    candidates.add(cleanName.replace(/-/g, '_').toLowerCase());
+    candidates.add(compRelativeId.toLowerCase());
+    candidates.add(compRelativeId.replace(/-/g, '_').toLowerCase());
+    candidates.add(comp.componentType.toLowerCase());
+
+    let bestFile: string | null = null;
+    let bestScore = -1;
+
+    for (const f of files) {
+      const ext = path.extname(f);
+      const base = path.basename(f, ext).toLowerCase();
+      if (candidates.has(base)) {
+        let score = 0;
+        const normalizedPath = f.toLowerCase();
+        
+        // Match directory to subsystem name
+        const subPattern1 = `/${subRelativeId.toLowerCase()}/`;
+        const subPattern2 = `/${subRelativeId.replace(/-/g, '_').toLowerCase()}/`;
+        if (normalizedPath.includes(subPattern1) || normalizedPath.includes(subPattern2)) {
+          score += 10;
+        }
+
+        // Deduct points or skip if file belongs to another subsystem folder
+        let belongsToOtherSubsystem = false;
+        for (const otherSub of subsystems) {
+          if (otherSub.id === comp.subsystem) continue;
+          const otherSubRelativeId = otherSub.id.split('::').pop() || otherSub.id;
+          const otherPattern1 = `/${otherSubRelativeId.toLowerCase()}/`;
+          const otherPattern2 = `/${otherSubRelativeId.replace(/-/g, '_').toLowerCase()}/`;
+          if (normalizedPath.includes(otherPattern1) || normalizedPath.includes(otherPattern2)) {
+            belongsToOtherSubsystem = true;
+            break;
+          }
+        }
+        if (belongsToOtherSubsystem) {
+          continue; // Skip this file because it belongs to another subsystem
+        }
+
+        // Exact match of clean name
+        if (base === cleanName.toLowerCase() || base === cleanName.replace(/-/g, '_').toLowerCase()) {
+          score += 5;
+        }
+
+        // Exact match of component ID
+        if (base === compRelativeId.toLowerCase() || base === compRelativeId.replace(/-/g, '_').toLowerCase()) {
+          score += 3;
+        }
+
+        // Under src or legacy-src folder
+        if (normalizedPath.startsWith('src/') || normalizedPath.includes('/src/') ||
+            normalizedPath.startsWith('legacy-src/') || normalizedPath.includes('/legacy-src/')) {
+          score += 2;
+        }
+
+        // Match component type suffix
+        if (base === comp.componentType.toLowerCase()) {
+          score += 1;
+        }
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestFile = f;
+        }
+      }
+    }
+
+    return bestFile;
+  } catch {
+    return null;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Topology Resolver: Translates SDD Spec Tree into Agent Topology
 // ---------------------------------------------------------------------------
 export function resolveAgentTopology(): AgentRecord[] {
+  projectFilesCache.clear();
+
   const system = loadSystemSpec();
   if (!system) return [];
 
@@ -56,9 +213,9 @@ export function resolveAgentTopology(): AgentRecord[] {
 
     const ownedPaths: string[] = [];
     // Subsystem Owners own subsystem specification and component specifications under their domain
-    ownedPaths.push(path.relative(process.cwd(), getSubsystemPath(sub.id)).replace(/\\/g, '/'));
+    ownedPaths.push(path.relative(getProjectRoot(), getSubsystemPath(sub.id)).replace(/\\/g, '/'));
     for (const c of subComponents) {
-      ownedPaths.push(path.relative(process.cwd(), getComponentPath(c.id, sub.id)).replace(/\\/g, '/'));
+      ownedPaths.push(path.relative(getProjectRoot(), getComponentPath(c.id, sub.id)).replace(/\\/g, '/'));
     }
 
     agents.push({
@@ -94,14 +251,21 @@ export function resolveAgentTopology(): AgentRecord[] {
       if (impl.sourcePath) ownedPaths.push(impl.sourcePath);
     }
 
+    if (ownedPaths.length === 0) {
+      const inferred = inferSourcePathForComponent(comp, subsystems);
+      if (inferred) {
+        ownedPaths.push(inferred);
+      }
+    }
+
     const dependencies = comp.dependsOn.map((depId) => `${depId}-implementer`);
 
     // An implementer needs to read specs, interfaces, and direct dependency component files
     const readPaths = [
-      path.relative(process.cwd(), AI_PATHS.specsSystem()).replace(/\\/g, '/'),
-      path.relative(process.cwd(), getComponentPath(comp.id, comp.subsystem)).replace(/\\/g, '/'),
-      ...compInterfaces.map((i) => path.relative(process.cwd(), getInterfacePath(i.id, comp.id)).replace(/\\/g, '/')),
-      ...compImpls.map((impl) => path.relative(process.cwd(), getImplementationPath(impl.id, impl.contract)).replace(/\\/g, '/')),
+      path.relative(getProjectRoot(), AI_PATHS.specsSystem()).replace(/\\/g, '/'),
+      path.relative(getProjectRoot(), getComponentPath(comp.id, comp.subsystem)).replace(/\\/g, '/'),
+      ...compInterfaces.map((i) => path.relative(getProjectRoot(), getInterfacePath(i.id, comp.id)).replace(/\\/g, '/')),
+      ...compImpls.map((impl) => path.relative(getProjectRoot(), getImplementationPath(impl.id, impl.contract)).replace(/\\/g, '/')),
     ];
 
     agents.push({

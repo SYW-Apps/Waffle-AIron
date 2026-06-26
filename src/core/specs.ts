@@ -156,6 +156,10 @@ function scanSpecsForProject(projectDir: string, namespacePrefix: string, visite
         } else if ('contract' in raw) {
           detectedType = 'implementation';
           const parsed = ImplementationSpecSchema.parse(raw);
+          if (parsed.sourcePath) {
+            const absSourcePath = path.resolve(projectDir, parsed.sourcePath);
+            parsed.sourcePath = path.relative(getProjectRoot(), absSourcePath).replace(/\\/g, '/');
+          }
           index.implementations.push(parsed);
           index.paths.implementation[parsed.id] = file;
         } else if ('kind' in raw) {
@@ -336,21 +340,19 @@ export function resolveSubprojectForNamespace(namespace: string): string | null 
   const parts = namespace.split('::');
   let currentDir = getProjectRoot();
   let resolvedAny = false;
+  let currentPrefix = '';
   for (const part of parts) {
-    const prevOverride = getProjectRootOverride();
-    setProjectRoot(currentDir);
-    try {
-      const sub = loadSubsystemSpec(part);
-      if (sub && sub.projectPath) {
-        currentDir = path.resolve(currentDir, sub.projectPath);
-        resolvedAny = true;
-      }
-    } finally {
-      setProjectRoot(prevOverride);
+    currentPrefix = currentPrefix ? `${currentPrefix}::${part}` : part;
+    const index = scanAllSpecs();
+    const sub = index.subsystems.find((s) => s.id === currentPrefix);
+    if (sub && sub.projectPath) {
+      currentDir = path.resolve(currentDir, sub.projectPath);
+      resolvedAny = true;
     }
   }
   return resolvedAny ? currentDir : null;
 }
+
 
 export function splitNamespace(qualifiedId: string): { prefix: string; localId: string } {
   if (!qualifiedId.includes('::')) {
