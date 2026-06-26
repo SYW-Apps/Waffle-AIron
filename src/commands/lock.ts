@@ -6,9 +6,8 @@ import { validateSddTree } from '../core/validation.js';
 import {
   collectPromotableSpecs,
   applySpecStatus,
-  snapshotSpecFiles,
-  restoreSpecFiles,
   invalidateSpecCache,
+  scanAllSpecs,
 } from '../core/specs.js';
 import { runGenerate } from './generate.js';
 
@@ -31,6 +30,10 @@ import { runGenerate } from './generate.js';
 export interface LockOptions {
   /** Skip the interactive confirmation (for scripts / CI). */
   yes?: boolean;
+  /** Limit lock scope to a specific subsystem. */
+  subsystem?: string;
+  /** Whether to recursively lock subprojects. */
+  recursive?: boolean | number;
 }
 
 export async function runLock(options: LockOptions = {}): Promise<void> {
@@ -42,21 +45,75 @@ export async function runLock(options: LockOptions = {}): Promise<void> {
   }
 
   const projectConfig = loadProjectConfig();
-  const promotable = collectPromotableSpecs();
 
-  // --- Dry run: validate the tree as if everything were already complete ---
-  const snapshot = snapshotSpecFiles();
-  for (const p of promotable) applySpecStatus(p.kind, p.id, 'complete');
-  invalidateSpecCache();
-  const dry = validateSddTree(projectConfig.rules, projectConfig.projectType);
-  restoreSpecFiles(snapshot);
-  invalidateSpecCache();
+  logger.info('Analyzing and validating specifications in-memory...');
+  const index = scanAllSpecs({ recursive: options.recursive ?? true });
+  const promotable = collectPromotableSpecs(options.subsystem);
+
+  // --- Dry run: validate the tree in-memory as if everything in the scope were already complete ---
+  const originalStatuses = new Map<any, string | undefined>();
+  const isSpecInSubsystemScope = (specSubsystem: string | undefined): boolean => {
+    if (!options.subsystem) return true;
+    if (!specSubsystem) return false;
+    return specSubsystem === options.subsystem || specSubsystem.startsWith(`${options.subsystem}::`);
+  };
+
+  for (const s of index.subsystems) {
+    if (!options.subsystem || s.id === options.subsystem || s.id.startsWith(`${options.subsystem}::`)) {
+      originalStatuses.set(s, s.status);
+      s.status = 'complete';
+    }
+  }
+  for (const c of index.components) {
+    if (isSpecInSubsystemScope(c.subsystem)) {
+      originalStatuses.set(c, c.status);
+      c.status = 'complete';
+    }
+  }
+  for (const i of index.interfaces) {
+    const comp = index.components.find(c => c.id === i.component);
+    if (comp && isSpecInSubsystemScope(comp.subsystem)) {
+      originalStatuses.set(i, i.status);
+      i.status = 'complete';
+    }
+  }
+  for (const m of index.implementations) {
+    const intf = index.interfaces.find(i => i.id === m.contract);
+    const comp = intf ? index.components.find(c => c.id === intf.component) : null;
+    if (comp && isSpecInSubsystemScope(comp.subsystem)) {
+      originalStatuses.set(m, m.status);
+      m.status = 'complete';
+    }
+  }
+
+  const dry = validateSddTree({
+    rules: projectConfig.rules,
+    projectType: projectConfig.projectType,
+    scopeSubsystem: options.subsystem,
+    recursive: options.recursive ?? true,
+  });
+
+  // Restore original statuses in-memory
+  for (const [spec, status] of originalStatuses.entries()) {
+    spec.status = status;
+  }
 
   const errors = dry.issues.filter((i) => i.severity === 'error');
   if (errors.length > 0) {
     logger.header('Cannot lock — the spec tree does not validate as complete');
+    let errorCount = 0;
+    const MAX_PRINT = 100;
+    let skippedErrors = 0;
     for (const i of errors) {
-      logger.error(`${i.specId ? `[${i.specId}] ` : ''}[${i.code}] ${i.message}`);
+      if (errorCount < MAX_PRINT) {
+        logger.error(`${i.specId ? `[${i.specId}] ` : ''}[${i.code}] ${i.message}`);
+        errorCount++;
+      } else {
+        skippedErrors++;
+      }
+    }
+    if (skippedErrors > 0) {
+      logger.error(`... and ${skippedErrors} more error(s) omitted.`);
     }
     logger.blank();
     logger.info('Fix the errors above, then run `wairon lock` again. Nothing was changed.');
@@ -104,7 +161,7 @@ export async function runLock(options: LockOptions = {}): Promise<void> {
   }
 
   logger.blank();
-  await runGenerate({});
+  await runGenerate({ domain: options.subsystem });
 
   logger.blank();
   logger.success('Specs locked and agent topology generated.');

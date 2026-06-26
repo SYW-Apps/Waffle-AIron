@@ -29,7 +29,7 @@ export class GeminiExporter implements Exporter {
   outputPath(ctx: Omit<ExportContext, 'renderedInstructions'>): string {
     const { agent, target, projectRoot } = ctx;
     const outputDir = 'outputDir' in target ? target.outputDir : '.gemini/agents';
-    return path.resolve(projectRoot, outputDir, `${agent.id}.yaml`);
+    return path.resolve(projectRoot, outputDir, `${agent.id.replace(/::/g, '--')}.yaml`);
   }
 
   export(ctx: ExportContext): ExportResult {

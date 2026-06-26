@@ -92,8 +92,10 @@ program
   .command('lock')
   .description('Final check before implementation: validate the spec tree as complete, freeze all specs to complete, and (re)generate the agent topology — only if it validates')
   .option('-y, --yes', 'skip the confirmation prompt (for scripts / CI)')
+  .option('--subsystem <id>', 'only lock specs in the specified subsystem')
+  .option('--no-recursive', 'do not recursively validate subprojects')
   .action(async (opts) => {
-    await runLock({ yes: opts.yes });
+    await runLock({ yes: opts.yes, subsystem: opts.subsystem, recursive: opts.recursive });
   });
 
 // ---------------------------------------------------------------------------

@@ -41,7 +41,10 @@ export async function runGenerate(options: GenerateOptions = {}): Promise<void> 
   } else if (options.domains) {
     filterDomainIds = options.domains.split(',').map((s) => s.trim()).filter(Boolean);
   } else if (options.domain) {
-    filterDomainIds = [options.domain];
+    const matches = registry.agents
+      .map(a => a.domainRoot)
+      .filter((d): d is string => !!d && (d === options.domain || d.startsWith(`${options.domain}::`)));
+    filterDomainIds = Array.from(new Set([options.domain, ...matches]));
   }
 
   const agentPool = filterDomainIds

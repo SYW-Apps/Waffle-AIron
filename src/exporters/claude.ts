@@ -29,7 +29,7 @@ export class ClaudeExporter implements Exporter {
   outputPath(ctx: Omit<ExportContext, 'renderedInstructions'>): string {
     const { agent, target, projectRoot } = ctx;
     const outputDir = 'outputDir' in target ? target.outputDir : '.claude/agents';
-    return path.resolve(projectRoot, outputDir, `${agent.id}.md`);
+    return path.resolve(projectRoot, outputDir, `${agent.id.replace(/::/g, '--')}.md`);
   }
 
   export(ctx: ExportContext): ExportResult {
