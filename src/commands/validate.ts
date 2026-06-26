@@ -83,15 +83,38 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
     if (sddResult.issues.length === 0) {
       logger.success('Spec tree is valid and component type boundaries are enforced.');
     } else {
+      let errorCount = 0;
+      let warningCount = 0;
+      const MAX_PRINT = 100;
+      let skippedErrors = 0;
+      let skippedWarnings = 0;
+
       for (const issue of sddResult.issues) {
         const prefix = issue.specId ? chalk.gray(`[${issue.specId}] `) : '';
         if (issue.severity === 'error') {
-          logger.error(`${prefix}[${issue.code}] ${issue.message}`);
           hasErrors = true;
+          if (errorCount < MAX_PRINT) {
+            logger.error(`${prefix}[${issue.code}] ${issue.message}`);
+            errorCount++;
+          } else {
+            skippedErrors++;
+          }
         } else {
-          logger.warn(`${prefix}[${issue.code}] ${issue.message}`);
           hasWarnings = true;
+          if (warningCount < MAX_PRINT) {
+            logger.warn(`${prefix}[${issue.code}] ${issue.message}`);
+            warningCount++;
+          } else {
+            skippedWarnings++;
+          }
         }
+      }
+
+      if (skippedErrors > 0) {
+        logger.error(`... and ${skippedErrors} more error(s) omitted. Use '--subsystem <id>' to validate a specific subsystem.`);
+      }
+      if (skippedWarnings > 0) {
+        logger.warn(`... and ${skippedWarnings} more warning(s) omitted. Use '--subsystem <id>' to validate a specific subsystem.`);
       }
     }
   }

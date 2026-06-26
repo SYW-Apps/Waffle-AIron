@@ -6,9 +6,8 @@ import { validateSddTree } from '../core/validation.js';
 import {
   collectPromotableSpecs,
   applySpecStatus,
-  snapshotSpecFiles,
-  restoreSpecFiles,
   invalidateSpecCache,
+  scanAllSpecs,
 } from '../core/specs.js';
 import { runGenerate } from './generate.js';
 
@@ -42,21 +41,41 @@ export async function runLock(options: LockOptions = {}): Promise<void> {
   }
 
   const projectConfig = loadProjectConfig();
+
+  logger.info('Analyzing and validating specifications in-memory...');
+  const index = scanAllSpecs();
   const promotable = collectPromotableSpecs();
 
-  // --- Dry run: validate the tree as if everything were already complete ---
-  const snapshot = snapshotSpecFiles();
-  for (const p of promotable) applySpecStatus(p.kind, p.id, 'complete');
-  invalidateSpecCache();
+  // --- Dry run: validate the tree in-memory as if everything were already complete ---
+  const originalStatuses = new Map<any, string | undefined>();
+  for (const s of index.subsystems) { originalStatuses.set(s, s.status); s.status = 'complete'; }
+  for (const c of index.components) { originalStatuses.set(c, c.status); c.status = 'complete'; }
+  for (const i of index.interfaces) { originalStatuses.set(i, i.status); i.status = 'complete'; }
+  for (const m of index.implementations) { originalStatuses.set(m, m.status); m.status = 'complete'; }
+
   const dry = validateSddTree(projectConfig.rules, projectConfig.projectType);
-  restoreSpecFiles(snapshot);
-  invalidateSpecCache();
+
+  // Restore original statuses in-memory
+  for (const [spec, status] of originalStatuses.entries()) {
+    spec.status = status;
+  }
 
   const errors = dry.issues.filter((i) => i.severity === 'error');
   if (errors.length > 0) {
     logger.header('Cannot lock — the spec tree does not validate as complete');
+    let errorCount = 0;
+    const MAX_PRINT = 100;
+    let skippedErrors = 0;
     for (const i of errors) {
-      logger.error(`${i.specId ? `[${i.specId}] ` : ''}[${i.code}] ${i.message}`);
+      if (errorCount < MAX_PRINT) {
+        logger.error(`${i.specId ? `[${i.specId}] ` : ''}[${i.code}] ${i.message}`);
+        errorCount++;
+      } else {
+        skippedErrors++;
+      }
+    }
+    if (skippedErrors > 0) {
+      logger.error(`... and ${skippedErrors} more error(s) omitted.`);
     }
     logger.blank();
     logger.info('Fix the errors above, then run `wairon lock` again. Nothing was changed.');
