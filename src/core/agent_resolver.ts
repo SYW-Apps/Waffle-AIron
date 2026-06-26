@@ -111,10 +111,18 @@ function inferSourcePathForComponent(comp: ComponentSpec, subsystems: any[]): st
         let score = 0;
         const normalizedPath = f.toLowerCase();
         
-        // Match directory to subsystem name
+        // Match directory to subsystem name or its segments
         const subPattern1 = `/${subRelativeId.toLowerCase()}/`;
         const subPattern2 = `/${subRelativeId.replace(/-/g, '_').toLowerCase()}/`;
-        if (normalizedPath.includes(subPattern1) || normalizedPath.includes(subPattern2)) {
+        const hasSubsystemSegmentMatch = subRelativeId
+          .split(/[-_]/)
+          .some((seg: string) => seg.length >= 3 && normalizedPath.includes(`/${seg.toLowerCase()}/`));
+
+        const hasSubsystemMatch = normalizedPath.includes(subPattern1) || 
+                                  normalizedPath.includes(subPattern2) || 
+                                  hasSubsystemSegmentMatch;
+
+        if (hasSubsystemMatch) {
           score += 10;
         }
 
@@ -125,7 +133,13 @@ function inferSourcePathForComponent(comp: ComponentSpec, subsystems: any[]): st
           const otherSubRelativeId = otherSub.id.split('::').pop() || otherSub.id;
           const otherPattern1 = `/${otherSubRelativeId.toLowerCase()}/`;
           const otherPattern2 = `/${otherSubRelativeId.replace(/-/g, '_').toLowerCase()}/`;
-          if (normalizedPath.includes(otherPattern1) || normalizedPath.includes(otherPattern2)) {
+          const otherSegmentMatch = otherSubRelativeId
+            .split(/[-_]/)
+            .some((seg: string) => seg.length >= 3 && normalizedPath.includes(`/${seg.toLowerCase()}/`));
+
+          if (normalizedPath.includes(otherPattern1) || 
+              normalizedPath.includes(otherPattern2) || 
+              otherSegmentMatch) {
             belongsToOtherSubsystem = true;
             break;
           }
@@ -135,13 +149,23 @@ function inferSourcePathForComponent(comp: ComponentSpec, subsystems: any[]): st
         }
 
         // Exact match of clean name
-        if (base === cleanName.toLowerCase() || base === cleanName.replace(/-/g, '_').toLowerCase()) {
+        const isCleanNameMatch = base === cleanName.toLowerCase() || base === cleanName.replace(/-/g, '_').toLowerCase();
+        if (isCleanNameMatch) {
           score += 5;
         }
 
         // Exact match of component ID
-        if (base === compRelativeId.toLowerCase() || base === compRelativeId.replace(/-/g, '_').toLowerCase()) {
+        const isIdMatch = base === compRelativeId.toLowerCase() || base === compRelativeId.replace(/-/g, '_').toLowerCase();
+        if (isIdMatch) {
           score += 3;
+        }
+
+        // A specific name match means it matches the clean name and that clean name is not just the generic component type
+        const isSpecificNameMatch = isCleanNameMatch && cleanName.toLowerCase() !== comp.componentType.toLowerCase();
+
+        // Reject matches that don't have any specific relation to the component or subsystem
+        if (!hasSubsystemMatch && !isSpecificNameMatch && !isIdMatch) {
+          continue;
         }
 
         // Under src or legacy-src folder
@@ -218,6 +242,46 @@ export function resolveAgentTopology(): AgentRecord[] {
       ownedPaths.push(path.relative(getProjectRoot(), getComponentPath(c.id, sub.id)).replace(/\\/g, '/'));
     }
 
+    if (!config.rules.generateComponentImplementers) {
+      // Aggregate all component implementation source paths under the subsystem owner
+      for (const comp of subComponents) {
+        // Find contract interfaces for this component
+        const compInterfaces = interfaces.filter((i) => i.component === comp.id);
+        const compInterfaceIds = compInterfaces.map((i) => i.id);
+
+        // Find implementations of those contracts
+        const compImpls = implementations.filter((impl) => compInterfaceIds.includes(impl.contract));
+
+        for (const impl of compImpls) {
+          if (impl.sourcePath) {
+            ownedPaths.push(impl.sourcePath);
+          }
+        }
+
+        const inferred = inferSourcePathForComponent(comp, subsystems);
+        if (inferred && !ownedPaths.includes(inferred)) {
+          ownedPaths.push(inferred);
+        }
+      }
+    }
+
+    let dependencies: string[] = [];
+    if (config.rules.generateComponentImplementers) {
+      dependencies = subComponents.map((c) => `${c.id}-implementer`);
+    } else {
+      // Subsystem depends on other subsystem owners that its components depend on
+      const depSubsystems = new Set<string>();
+      for (const c of subComponents) {
+        for (const depId of c.dependsOn) {
+          const depComp = components.find((other) => other.id === depId);
+          if (depComp && depComp.subsystem !== sub.id) {
+            depSubsystems.add(`${depComp.subsystem}-owner`);
+          }
+        }
+      }
+      dependencies = Array.from(depSubsystems);
+    }
+
     agents.push({
       id: `${sub.id}-owner`,
       name: `${sub.name} Owner`,
@@ -229,7 +293,7 @@ export function resolveAgentTopology(): AgentRecord[] {
       readPaths: ['**'],
       writePaths: ownedPaths,
       tags: ['owner', 'domain', 'sdd'],
-      dependencies: subComponents.map((c) => `${c.id}-implementer`),
+      dependencies,
       status: 'active',
       targets: activeTargets,
       createdAt: sub.createdAt,
@@ -238,54 +302,57 @@ export function resolveAgentTopology(): AgentRecord[] {
   }
 
   // 3. Component Implementers
-  for (const comp of components) {
-    // Find contract interfaces for this component
-    const compInterfaces = interfaces.filter((i) => i.component === comp.id);
-    const compInterfaceIds = compInterfaces.map((i) => i.id);
+  if (config.rules.generateComponentImplementers) {
+    for (const comp of components) {
+      // Find contract interfaces for this component
+      const compInterfaces = interfaces.filter((i) => i.component === comp.id);
+      const compInterfaceIds = compInterfaces.map((i) => i.id);
 
-    // Find implementations of those contracts
-    const compImpls = implementations.filter((impl) => compInterfaceIds.includes(impl.contract));
+      // Find implementations of those contracts
+      const compImpls = implementations.filter((impl) => compInterfaceIds.includes(impl.contract));
 
-    const ownedPaths: string[] = [];
-    for (const impl of compImpls) {
-      if (impl.sourcePath) ownedPaths.push(impl.sourcePath);
-    }
-
-    if (ownedPaths.length === 0) {
-      const inferred = inferSourcePathForComponent(comp, subsystems);
-      if (inferred) {
-        ownedPaths.push(inferred);
+      const ownedPaths: string[] = [];
+      for (const impl of compImpls) {
+        if (impl.sourcePath) ownedPaths.push(impl.sourcePath);
       }
+
+      if (ownedPaths.length === 0) {
+        const inferred = inferSourcePathForComponent(comp, subsystems);
+        if (inferred) {
+          ownedPaths.push(inferred);
+        }
+      }
+
+      const dependencies = comp.dependsOn.map((depId) => `${depId}-implementer`);
+
+      // An implementer needs to read specs, interfaces, and direct dependency component files
+      const readPaths = [
+        path.relative(getProjectRoot(), AI_PATHS.specsSystem()).replace(/\\/g, '/'),
+        path.relative(getProjectRoot(), getComponentPath(comp.id, comp.subsystem)).replace(/\\/g, '/'),
+        ...compInterfaces.map((i) => path.relative(getProjectRoot(), getInterfacePath(i.id, comp.id)).replace(/\\/g, '/')),
+        ...compImpls.map((impl) => path.relative(getProjectRoot(), getImplementationPath(impl.id, impl.contract)).replace(/\\/g, '/')),
+      ];
+
+      agents.push({
+        id: `${comp.id}-implementer`,
+        name: `${comp.name} Implementer`,
+        description: `Developer agent implementing ${comp.name} (${comp.componentType})`,
+        template: 'implementer',
+        creationReason: `Automatically inferred from L2 component spec: ${comp.id}`,
+        domainRoot: comp.subsystem,
+        ownedPaths,
+        readPaths,
+        writePaths: ownedPaths,
+        tags: ['implementer', 'component', 'sdd', comp.componentType.toLowerCase()],
+        dependencies,
+        status: 'active',
+        targets: activeTargets,
+        createdAt: comp.createdAt,
+        updatedAt: comp.updatedAt,
+      });
     }
-
-    const dependencies = comp.dependsOn.map((depId) => `${depId}-implementer`);
-
-    // An implementer needs to read specs, interfaces, and direct dependency component files
-    const readPaths = [
-      path.relative(getProjectRoot(), AI_PATHS.specsSystem()).replace(/\\/g, '/'),
-      path.relative(getProjectRoot(), getComponentPath(comp.id, comp.subsystem)).replace(/\\/g, '/'),
-      ...compInterfaces.map((i) => path.relative(getProjectRoot(), getInterfacePath(i.id, comp.id)).replace(/\\/g, '/')),
-      ...compImpls.map((impl) => path.relative(getProjectRoot(), getImplementationPath(impl.id, impl.contract)).replace(/\\/g, '/')),
-    ];
-
-    agents.push({
-      id: `${comp.id}-implementer`,
-      name: `${comp.name} Implementer`,
-      description: `Developer agent implementing ${comp.name} (${comp.componentType})`,
-      template: 'implementer',
-      creationReason: `Automatically inferred from L2 component spec: ${comp.id}`,
-      domainRoot: comp.subsystem,
-      ownedPaths,
-      readPaths,
-      writePaths: ownedPaths,
-      tags: ['implementer', 'component', 'sdd', comp.componentType.toLowerCase()],
-      dependencies,
-      status: 'active',
-      targets: activeTargets,
-      createdAt: comp.createdAt,
-      updatedAt: comp.updatedAt,
-    });
   }
+
 
   // 4. Free-standing domain owners (declared in .wai/topology.yaml)
   const now = new Date().toISOString();

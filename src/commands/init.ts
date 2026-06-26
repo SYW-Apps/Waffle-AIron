@@ -456,6 +456,7 @@ function buildProjectConfig(
       requireOwnedPaths: true,
       metaAgentTags: ['meta', 'guardian', 'architect'],
       enforceReproducibility: true,
+      generateComponentImplementers: true,
       sddRuleSeverity: {},
     },
     paths: {
