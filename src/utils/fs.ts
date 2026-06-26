@@ -98,9 +98,33 @@ export function getProjectRootOverride(): string | null {
   return projectRootOverride;
 }
 
-/** The resolved project root: the explicit override if set, else process.cwd(). */
+/**
+ * Walk up from startDir to the nearest ancestor containing a wairon project
+ * with system.yaml in its specs folder. Returns null if none is found.
+ */
+export function findSystemRoot(startDir: string): string | null {
+  let dir = path.resolve(startDir);
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const isWai = fs.existsSync(path.join(dir, '.wai'));
+    const isWairon = !isWai && fs.existsSync(path.join(dir, '.wairon'));
+    const base = isWai ? '.wai' : (isWairon ? '.wairon' : null);
+    if (base) {
+      if (fs.existsSync(path.join(dir, base, 'specs', 'system.yaml'))) {
+        return dir;
+      }
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+/** The resolved project root: the explicit override if set, else the resolved system root, else process.cwd(). */
 export function getProjectRoot(): string {
-  return projectRootOverride ?? process.cwd();
+  if (projectRootOverride) return projectRootOverride;
+  const systemRoot = findSystemRoot(process.cwd());
+  return systemRoot ?? process.cwd();
 }
 
 /**
