@@ -43,7 +43,7 @@ export const AI_PATHS = {
     }
     return aiDir('specs');
   },
-  specsSystem: () => path.join(AI_PATHS.specsDir(), 'system.yaml'),
+  specsSystem: () => path.join(AI_PATHS.specsDir(), '.system.yaml'),
   specsSubsystemsDir: () => path.join(AI_PATHS.specsDir(), 'subsystems'),
   specsComponentsDir: () => path.join(AI_PATHS.specsDir(), 'components'),
   specsInterfacesDir: () => path.join(AI_PATHS.specsDir(), 'interfaces'),
