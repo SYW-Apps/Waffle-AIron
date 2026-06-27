@@ -45,7 +45,7 @@ export const AI_PATHS = {
   },
   specsSystem: () => {
     const dir = AI_PATHS.specsDir();
-    const dotPath = path.join(dir, '.system.yaml');
+    const dotPath = path.join(dir, '.index.yaml');
     const legacyPath = path.join(dir, 'system.yaml');
     return pathExists(dotPath) ? dotPath : (pathExists(legacyPath) ? legacyPath : dotPath);
   },
