@@ -43,7 +43,12 @@ export const AI_PATHS = {
     }
     return aiDir('specs');
   },
-  specsSystem: () => path.join(AI_PATHS.specsDir(), '.system.yaml'),
+  specsSystem: () => {
+    const dir = AI_PATHS.specsDir();
+    const dotPath = path.join(dir, '.system.yaml');
+    const legacyPath = path.join(dir, 'system.yaml');
+    return pathExists(dotPath) ? dotPath : (pathExists(legacyPath) ? legacyPath : dotPath);
+  },
   specsSubsystemsDir: () => path.join(AI_PATHS.specsDir(), 'subsystems'),
   specsComponentsDir: () => path.join(AI_PATHS.specsDir(), 'components'),
   specsInterfacesDir: () => path.join(AI_PATHS.specsDir(), 'interfaces'),
