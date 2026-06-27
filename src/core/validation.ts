@@ -385,7 +385,7 @@ export function validateSddTree(
   }
 
   if (!system) {
-    issues.push(issue('error', 'MISSING_SYSTEM_SPEC', 'L0 System specification (system.yaml) is missing.'));
+    issues.push(issue('error', 'MISSING_SYSTEM_SPEC', 'L0 System specification (.system.yaml) is missing.'));
     return { valid: false, issues };
   }
 

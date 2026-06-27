@@ -45,11 +45,11 @@ describe('ownership-driven component layout', () => {
 
     // Owned member (owns) → nested under the repository.
     const storePath = getComponentPath('subscription-store').replace(/\\/g, '/');
-    expect(storePath).toContain('billing/subscription-repository/subscription-store/component.yaml');
+    expect(storePath).toContain('billing/subscription-repository/subscription-store/.index.yaml');
 
     // Shared block (dependsOn / interface reference) → flat sibling, NOT nested.
     const adapterPath = getComponentPath('database-adapter').replace(/\\/g, '/');
-    expect(adapterPath).toContain('billing/database-adapter/component.yaml');
+    expect(adapterPath).toContain('billing/database-adapter/.index.yaml');
     expect(adapterPath).not.toContain('subscription-repository');
   });
 });

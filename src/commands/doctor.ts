@@ -14,6 +14,7 @@ import { CONTEXT_PATHS, syncContextFiles } from '../core/context.js';
 import { readStampVersion } from '../core/stamp.js';
 import { localGuideFilePath, reinjectLocalGuides } from '../utils/ai-guide.js';
 import { activeTargetTypes, checkSkillFreshness, exportSddSkills } from '../core/skills.js';
+import { findLegacySpecFiles } from '../core/specs.js';
 import { claudeMcpConfigPath } from './mcp.js';
 
 // ---------------------------------------------------------------------------
@@ -121,9 +122,16 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
 
   const hasSystemSpec = pathExists(AI_PATHS.specsSystem());
   if (hasSystemSpec) {
-    line(tally, 'ok', 'System spec present (.wai/specs/system.yaml)');
+    line(tally, 'ok', 'System spec present (.wai/specs/.index.yaml)');
   } else {
     line(tally, 'warn', 'No system spec yet — design one via the sdd-architect skill / sdd_initialize_system');
+  }
+
+  const legacySpecs = findLegacySpecFiles();
+  if (legacySpecs.length > 0) {
+    line(tally, 'warn', `${legacySpecs.length} legacy spec filename(s) detected (e.g. subsystem.yaml, component.yaml) — wairon now uses .index.yaml, .interface.yaml, and .implementation.yaml. Run \`wairon doctor --fix\` to migrate automatically.`);
+  } else {
+    line(tally, 'ok', 'Spec filenames are up to date (.index.yaml)');
   }
   logger.blank();
 
@@ -259,6 +267,19 @@ async function applyFixes(): Promise<void> {
     console.log(`  ${icon('ok')} Regenerated context files, skills, and ${guides.length} local guide(s).`);
   } catch (e) {
     console.log(`  ${icon('error')} Regeneration failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  // Migrate legacy spec filenames
+  try {
+    const legacySpecs = findLegacySpecFiles();
+    if (legacySpecs.length > 0) {
+      for (const { path: oldPath, expected: newPath } of legacySpecs) {
+        fs.renameSync(oldPath, newPath);
+      }
+      console.log(`  ${icon('ok')} Migrated ${legacySpecs.length} legacy spec file(s) to the new dot-prefixed unified schema.`);
+    }
+  } catch (e) {
+    console.log(`  ${icon('error')} Spec migration failed: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   // Register / repair the MCP server. The install is now self-healing, so this

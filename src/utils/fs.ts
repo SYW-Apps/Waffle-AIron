@@ -110,7 +110,7 @@ export function findSystemRoot(startDir: string): string | null {
     const isWairon = !isWai && fs.existsSync(path.join(dir, '.wairon'));
     const base = isWai ? '.wai' : (isWairon ? '.wairon' : null);
     if (base) {
-      if (fs.existsSync(path.join(dir, base, 'specs', 'system.yaml'))) {
+      if (fs.existsSync(path.join(dir, base, 'specs', '.index.yaml')) || fs.existsSync(path.join(dir, base, 'specs', 'system.yaml'))) {
         return dir;
       }
     }

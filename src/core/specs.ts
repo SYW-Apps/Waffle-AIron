@@ -16,6 +16,8 @@ import {
   ImplementationSpecSchema,
   TypeSpec,
   TypeSpecSchema,
+  GroupSpec,
+  GroupSpecSchema,
   SpecStatus,
 } from '../models/index.js';
 import { ValidationIssue } from './validation.js';
@@ -40,12 +42,14 @@ interface SpecIndex {
   interfaces: InterfaceSpec[];
   implementations: ImplementationSpec[];
   types: TypeSpec[];
+  groups: GroupSpec[];
   paths: {
     subsystem: Record<string, string>;
     component: Record<string, string>;
     interface: Record<string, string>;
     implementation: Record<string, string>;
     type: Record<string, string>;
+    group: Record<string, string>;
   };
 }
 
@@ -91,12 +95,14 @@ function scanSpecsForProject(projectDir: string, namespacePrefix: string, visite
     interfaces: [],
     implementations: [],
     types: [],
+    groups: [],
     paths: {
       subsystem: {},
       component: {},
       interface: {},
       implementation: {},
       type: {},
+      group: {},
     },
   };
 
@@ -163,10 +169,17 @@ function scanSpecsForProject(projectDir: string, namespacePrefix: string, visite
           index.implementations.push(parsed);
           index.paths.implementation[parsed.id] = file;
         } else if ('kind' in raw) {
-          detectedType = 'type';
-          const parsed = TypeSpecSchema.parse(raw);
-          index.types.push(parsed);
-          index.paths.type[parsed.id] = file;
+          if (raw.kind === 'group') {
+            detectedType = 'group';
+            const parsed = GroupSpecSchema.parse(raw);
+            index.groups.push(parsed);
+            index.paths.group[parsed.id] = file;
+          } else {
+            detectedType = 'type';
+            const parsed = TypeSpecSchema.parse(raw);
+            index.types.push(parsed);
+            index.paths.type[parsed.id] = file;
+          }
         }
 
         if (detectedType === 'spec') {
@@ -242,6 +255,12 @@ function scanSpecsForProject(projectDir: string, namespacePrefix: string, visite
         ...t,
         id: qualifyId(t.id, namespacePrefix),
         subsystem: t.subsystem ? qualifyId(t.subsystem, namespacePrefix) : undefined,
+        group: t.group ? qualifyId(t.group, namespacePrefix) : undefined,
+      }));
+
+      index.groups = index.groups.map(g => ({
+        ...g,
+        id: qualifyId(g.id, namespacePrefix),
       }));
 
       const originalPaths = index.paths;
@@ -251,6 +270,7 @@ function scanSpecsForProject(projectDir: string, namespacePrefix: string, visite
         interface: {},
         implementation: {},
         type: {},
+        group: {},
       };
 
       for (const [k, v] of Object.entries(originalPaths.component)) {
@@ -264,6 +284,9 @@ function scanSpecsForProject(projectDir: string, namespacePrefix: string, visite
       }
       for (const [k, v] of Object.entries(originalPaths.type)) {
         index.paths.type[qualifyId(k, namespacePrefix)] = v;
+      }
+      for (const [k, v] of Object.entries(originalPaths.group)) {
+        index.paths.group[qualifyId(k, namespacePrefix)] = v;
       }
     }
 
@@ -304,12 +327,14 @@ function scanSpecsForProject(projectDir: string, namespacePrefix: string, visite
         index.interfaces.push(...childIndex.interfaces);
         index.implementations.push(...childIndex.implementations);
         index.types.push(...childIndex.types);
+        index.groups.push(...childIndex.groups);
 
         Object.assign(index.paths.subsystem, childIndex.paths.subsystem);
         Object.assign(index.paths.component, childIndex.paths.component);
         Object.assign(index.paths.interface, childIndex.paths.interface);
         Object.assign(index.paths.implementation, childIndex.paths.implementation);
         Object.assign(index.paths.type, childIndex.paths.type);
+        Object.assign(index.paths.group, childIndex.paths.group);
       }
     }
 
@@ -453,7 +478,7 @@ export function getSubsystemPath(id: string): string {
   if (pathExists(AI_PATHS.specsSubsystemsDir()) && listFiles(AI_PATHS.specsSubsystemsDir(), '.yaml').length > 0) {
     return path.join(AI_PATHS.specsSubsystemsDir(), `${id}.yaml`);
   }
-  return path.join(AI_PATHS.specsDir(), id, 'subsystem.yaml');
+  return path.join(AI_PATHS.specsDir(), id, '.index.yaml');
 }
 
 /**
@@ -493,16 +518,16 @@ export function getComponentPath(id: string, subsystemId?: string): string {
   const owner = findOwner(id, index.components);
   if (owner) {
     const ownerPath = index.paths.component[owner.id];
-    if (ownerPath && ownerPath.endsWith('component.yaml')) {
-      return path.join(path.dirname(ownerPath), id, 'component.yaml');
+    if (ownerPath && ownerPath.endsWith('.index.yaml')) {
+      return path.join(path.dirname(ownerPath), id, '.index.yaml');
     }
   }
 
   if (subsystemId) {
     const subPath = getSubsystemPath(subsystemId);
     const subDir = path.dirname(subPath);
-    if (subPath.endsWith('subsystem.yaml')) {
-      return path.join(subDir, id, 'component.yaml');
+    if (subPath.endsWith('.index.yaml')) {
+      return path.join(subDir, id, '.index.yaml');
     }
   }
 
@@ -511,7 +536,7 @@ export function getComponentPath(id: string, subsystemId?: string): string {
   }
 
   const targetSubsystem = subsystemId || 'default';
-  return path.join(AI_PATHS.specsDir(), targetSubsystem, id, 'component.yaml');
+  return path.join(AI_PATHS.specsDir(), targetSubsystem, id, '.index.yaml');
 }
 
 export function getInterfacePath(id: string, componentId?: string): string {
@@ -554,8 +579,8 @@ export function getInterfacePath(id: string, componentId?: string): string {
   if (componentId) {
     const compPath = getComponentPath(componentId);
     const compDir = path.dirname(compPath);
-    if (compPath.endsWith('component.yaml')) {
-      return path.join(compDir, 'interface.yaml');
+    if (compPath.endsWith('.index.yaml')) {
+      return path.join(compDir, '.interface.yaml');
     }
   }
 
@@ -564,7 +589,7 @@ export function getInterfacePath(id: string, componentId?: string): string {
   }
 
   const targetComponent = componentId || 'default';
-  return path.join(AI_PATHS.specsDir(), 'default', targetComponent, 'interface.yaml');
+  return path.join(AI_PATHS.specsDir(), 'default', targetComponent, '.interface.yaml');
 }
 
 export function getImplementationPath(id: string, contractId?: string): string {
@@ -607,8 +632,8 @@ export function getImplementationPath(id: string, contractId?: string): string {
   if (contractId) {
     const intfPath = getInterfacePath(contractId);
     const intfDir = path.dirname(intfPath);
-    if (intfPath.endsWith('interface.yaml')) {
-      return path.join(intfDir, 'implementation.yaml');
+    if (intfPath.endsWith('.interface.yaml')) {
+      return path.join(intfDir, '.implementation.yaml');
     }
   }
 
@@ -617,7 +642,7 @@ export function getImplementationPath(id: string, contractId?: string): string {
   }
 
   const targetContract = contractId ? contractId.replace(/^i/, '') : 'default';
-  return path.join(AI_PATHS.specsDir(), 'default', targetContract, 'implementation.yaml');
+  return path.join(AI_PATHS.specsDir(), 'default', targetContract, '.implementation.yaml');
 }
 
 // ---------------------------------------------------------------------------
@@ -761,13 +786,13 @@ export function saveComponentSpec(spec: ComponentSpec): void {
 function desiredComponentDir(comp: ComponentSpec, index: SpecIndex): string | null {
   const currentPath = index.paths.component[comp.id];
   // Only the nested-tree layout is normalized (skip the legacy flat components/ dir).
-  if (!currentPath || !currentPath.endsWith('component.yaml')) return null;
+  if (!currentPath || !currentPath.endsWith('.index.yaml')) return null;
   if (comp.id.includes('::')) return null;
 
   const owner = findOwner(comp.id, index.components);
   if (owner) {
     const ownerPath = index.paths.component[owner.id];
-    if (ownerPath && ownerPath.endsWith('component.yaml')) {
+    if (ownerPath && ownerPath.endsWith('.index.yaml')) {
       // The owner (a pattern) lives flat under its subsystem; the member nests inside it.
       const ownerSubDir = path.dirname(getSubsystemPath(owner.subsystem));
       return path.join(ownerSubDir, owner.id, comp.id);
@@ -900,7 +925,7 @@ export function saveImplementationSpec(spec: ImplementationSpec): void {
 // Entities/value objects live in a `types/` directory — at the subsystem that
 // owns them, or at the system level for shared value objects.
 // ---------------------------------------------------------------------------
-export function getTypePath(id: string, subsystemId?: string): string {
+export function getTypePath(id: string, subsystemId?: string, group?: string): string {
   const index = scanAllSpecs();
   if (index.paths.type[id]) return index.paths.type[id];
 
@@ -910,10 +935,11 @@ export function getTypePath(id: string, subsystemId?: string): string {
     if (childProj) {
       const remainingId = parts[parts.length - 1];
       const remainingSubsystem = subsystemId ? subsystemId.split('::').pop() : undefined;
+      const remainingGroup = group ? group.split('::').pop() : undefined;
       const prevOverride = getProjectRootOverride();
       setProjectRoot(childProj);
       try {
-        return getTypePath(remainingId, remainingSubsystem);
+        return getTypePath(remainingId, remainingSubsystem, remainingGroup);
       } finally {
         setProjectRoot(prevOverride);
       }
@@ -925,20 +951,30 @@ export function getTypePath(id: string, subsystemId?: string): string {
     const childProj = resolveSubprojectForNamespace(parts.slice(0, -1).join('::'));
     if (childProj) {
       const remainingSubsystem = parts[parts.length - 1];
+      const remainingGroup = group ? group.split('::').pop() : undefined;
       const prevOverride = getProjectRootOverride();
       setProjectRoot(childProj);
       try {
-        return getTypePath(id, remainingSubsystem);
+        return getTypePath(id, remainingSubsystem, remainingGroup);
       } finally {
         setProjectRoot(prevOverride);
       }
     }
   }
 
+  const targetGroup = group || index.types.find((t) => t.id === id)?.group;
+  if (targetGroup) {
+    const groupPath = index.paths.group[targetGroup];
+    if (groupPath) {
+      const localId = id.split('::').pop()!;
+      return path.join(path.dirname(groupPath), `${localId}.yaml`);
+    }
+  }
+
   if (subsystemId) {
     const subPath = getSubsystemPath(subsystemId);
     const subDir = path.dirname(subPath);
-    if (subPath.endsWith('subsystem.yaml')) {
+    if (subPath.endsWith('.index.yaml')) {
       return path.join(subDir, 'types', `${id}.yaml`);
     }
   }
@@ -954,7 +990,7 @@ export function loadTypeSpec(id: string): TypeSpec | null {
 }
 
 export function saveTypeSpec(spec: TypeSpec): void {
-  const p = getTypePath(spec.id, spec.subsystem);
+  const p = getTypePath(spec.id, spec.subsystem, spec.group);
   ensureDir(path.dirname(p));
 
   const { prefix } = splitNamespace(spec.subsystem || spec.id);
@@ -1127,12 +1163,126 @@ export function deleteImplementationSpec(id: string): boolean {
 }
 
 export function deleteTypeSpec(id: string): boolean {
-  const p = getTypePath(id);
+  const spec = loadTypeSpec(id);
+  const p = getTypePath(id, spec?.subsystem, spec?.group);
   if (!fs.existsSync(p)) return false;
   fs.unlinkSync(p);
   cleanEmptyDirs(p);
   invalidateSpecCache();
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// Groups (folders/categories for types) Loader/Writer
+// ---------------------------------------------------------------------------
+export function getGroupPath(id: string, subsystemId?: string): string {
+  const index = scanAllSpecs();
+  if (index.paths.group[id]) return index.paths.group[id];
+
+  if (id.includes('::')) {
+    const parts = id.split('::');
+    const childProj = resolveSubprojectForNamespace(parts.slice(0, -1).join('::'));
+    if (childProj) {
+      const remainingId = parts[parts.length - 1];
+      const remainingSubsystem = subsystemId ? subsystemId.split('::').pop() : undefined;
+      const prevOverride = getProjectRootOverride();
+      setProjectRoot(childProj);
+      try {
+        return getGroupPath(remainingId, remainingSubsystem);
+      } finally {
+        setProjectRoot(prevOverride);
+      }
+    }
+  }
+
+  if (subsystemId && subsystemId.includes('::')) {
+    const parts = subsystemId.split('::');
+    const childProj = resolveSubprojectForNamespace(parts.slice(0, -1).join('::'));
+    if (childProj) {
+      const remainingSubsystem = parts[parts.length - 1];
+      const prevOverride = getProjectRootOverride();
+      setProjectRoot(childProj);
+      try {
+        return getGroupPath(id, remainingSubsystem);
+      } finally {
+        setProjectRoot(prevOverride);
+      }
+    }
+  }
+
+  if (subsystemId) {
+    const subPath = getSubsystemPath(subsystemId);
+    const subDir = path.dirname(subPath);
+    if (subPath.endsWith('.index.yaml')) {
+      return path.join(subDir, 'types', id, '.index.yaml');
+    }
+  }
+  return path.join(AI_PATHS.specsTypesDir(), id, '.index.yaml');
+}
+
+export function loadGroupSpecs(): GroupSpec[] {
+  return scanAllSpecs().groups;
+}
+
+export function loadGroupSpec(id: string): GroupSpec | null {
+  return scanAllSpecs().groups.find((g) => g.id === id) ?? null;
+}
+
+export function saveGroupSpec(spec: GroupSpec): void {
+  const p = getGroupPath(spec.id);
+  ensureDir(path.dirname(p));
+
+  const { prefix } = splitNamespace(spec.id);
+  const specToWrite = prefix ? stripNamespaceFromGroup(spec, prefix) : spec;
+
+  const existing = loadGroupSpec(spec.id);
+  if (existing) {
+    specToWrite.createdAt = existing.createdAt;
+  }
+  specToWrite.updatedAt = new Date().toISOString();
+  writeYamlFile(p, specToWrite);
+  invalidateSpecCache();
+}
+
+export function deleteGroupSpec(id: string): boolean {
+  const p = getGroupPath(id);
+  if (!fs.existsSync(p)) return false;
+  fs.unlinkSync(p);
+  cleanEmptyDirs(p);
+  invalidateSpecCache();
+  return true;
+}
+
+function stripNamespaceFromGroup(spec: GroupSpec, prefix: string): GroupSpec {
+  return {
+    ...spec,
+    id: stripPrefix(spec.id, prefix),
+  };
+}
+
+export function findLegacySpecFiles(): { path: string; expected: string }[] {
+  const specsDir = AI_PATHS.specsDir();
+  if (!pathExists(specsDir)) return [];
+  const files = listFilesRecursive(specsDir, '.yaml');
+  const legacy: { path: string; expected: string }[] = [];
+  for (const f of files) {
+    const base = path.basename(f);
+    const dir = path.dirname(f);
+    if (base === 'system.yaml') {
+      legacy.push({ path: f, expected: path.join(dir, '.index.yaml') });
+    } else if (base === 'subsystem.yaml') {
+      legacy.push({ path: f, expected: path.join(dir, '.index.yaml') });
+    } else if (base === 'component.yaml') {
+      legacy.push({ path: f, expected: path.join(dir, '.index.yaml') });
+    } else if (base === 'group.yaml') {
+      legacy.push({ path: f, expected: path.join(dir, '.index.yaml') });
+    } else if (base === 'interface.yaml') {
+      legacy.push({ path: f, expected: path.join(dir, '.interface.yaml') });
+    } else if (base === 'implementation.yaml') {
+      legacy.push({ path: f, expected: path.join(dir, '.implementation.yaml') });
+    }
+  }
+  return legacy;
 }
 
 

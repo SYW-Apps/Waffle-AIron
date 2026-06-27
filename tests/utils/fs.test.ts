@@ -57,17 +57,17 @@ describe('findProjectRoot', () => {
 });
 
 describe('findSystemRoot', () => {
-  it('finds the nearest ancestor containing system.yaml', () => {
+  it('finds the nearest ancestor containing .index.yaml', () => {
     const root = tmpDir('wairon-system-');
     fs.mkdirSync(path.join(root, '.wai', 'specs'), { recursive: true });
-    fs.writeFileSync(path.join(root, '.wai', 'specs', 'system.yaml'), 'content');
+    fs.writeFileSync(path.join(root, '.wai', 'specs', '.index.yaml'), 'content');
     const nested = path.join(root, 'a', 'b', 'c');
     fs.mkdirSync(nested, { recursive: true });
     expect(findSystemRoot(nested)).toBe(path.resolve(root));
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it('returns null if no system.yaml is found', () => {
+  it('returns null if no .index.yaml is found', () => {
     const root = tmpDir('wairon-subsystem-');
     fs.mkdirSync(path.join(root, '.wai', 'specs'), { recursive: true });
     fs.writeFileSync(path.join(root, '.wai', 'specs', 'subsystem.yaml'), 'content');

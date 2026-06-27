@@ -31,6 +31,14 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
   let hasErrors = false;
   let hasWarnings = false;
 
+  // --- Legacy spec filenames check ---
+  const { findLegacySpecFiles } = require('../core/specs.js') as typeof import('../core/specs.js');
+  const legacySpecs = findLegacySpecFiles();
+  if (legacySpecs.length > 0) {
+    logger.warn(`Warning: ${legacySpecs.length} legacy spec filename(s) detected (e.g., component.yaml). These are deprecated. Please run \`wairon doctor --fix\` to migrate them to the new unified .index.yaml schema.`);
+    logger.blank();
+  }
+
   // --- Project config ---
   logger.header('Project Config');
   const configResult = validateProjectConfig(projectConfig);
