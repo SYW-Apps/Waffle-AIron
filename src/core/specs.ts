@@ -478,9 +478,7 @@ export function getSubsystemPath(id: string): string {
   if (pathExists(AI_PATHS.specsSubsystemsDir()) && listFiles(AI_PATHS.specsSubsystemsDir(), '.yaml').length > 0) {
     return path.join(AI_PATHS.specsSubsystemsDir(), `${id}.yaml`);
   }
-  const dotPath = path.join(AI_PATHS.specsDir(), id, '.index.yaml');
-  const legacyPath = path.join(AI_PATHS.specsDir(), id, 'subsystem.yaml');
-  return fs.existsSync(dotPath) ? dotPath : (fs.existsSync(legacyPath) ? legacyPath : dotPath);
+  return path.join(AI_PATHS.specsDir(), id, '.index.yaml');
 }
 
 /**
@@ -520,21 +518,16 @@ export function getComponentPath(id: string, subsystemId?: string): string {
   const owner = findOwner(id, index.components);
   if (owner) {
     const ownerPath = index.paths.component[owner.id];
-    if (ownerPath && (ownerPath.endsWith('.index.yaml') || ownerPath.endsWith('component.yaml'))) {
-      const nestedDir = path.dirname(ownerPath);
-      const dotPath = path.join(nestedDir, id, '.index.yaml');
-      const legacyPath = path.join(nestedDir, id, 'component.yaml');
-      return fs.existsSync(dotPath) ? dotPath : (fs.existsSync(legacyPath) ? legacyPath : dotPath);
+    if (ownerPath && ownerPath.endsWith('.index.yaml')) {
+      return path.join(path.dirname(ownerPath), id, '.index.yaml');
     }
   }
 
   if (subsystemId) {
     const subPath = getSubsystemPath(subsystemId);
     const subDir = path.dirname(subPath);
-    if (subPath.endsWith('.index.yaml') || subPath.endsWith('subsystem.yaml')) {
-      const dotPath = path.join(subDir, id, '.index.yaml');
-      const legacyPath = path.join(subDir, id, 'component.yaml');
-      return fs.existsSync(dotPath) ? dotPath : (fs.existsSync(legacyPath) ? legacyPath : dotPath);
+    if (subPath.endsWith('.index.yaml')) {
+      return path.join(subDir, id, '.index.yaml');
     }
   }
 
@@ -543,9 +536,7 @@ export function getComponentPath(id: string, subsystemId?: string): string {
   }
 
   const targetSubsystem = subsystemId || 'default';
-  const dotPath = path.join(AI_PATHS.specsDir(), targetSubsystem, id, '.index.yaml');
-  const legacyPath = path.join(AI_PATHS.specsDir(), targetSubsystem, id, 'component.yaml');
-  return fs.existsSync(dotPath) ? dotPath : (fs.existsSync(legacyPath) ? legacyPath : dotPath);
+  return path.join(AI_PATHS.specsDir(), targetSubsystem, id, '.index.yaml');
 }
 
 export function getInterfacePath(id: string, componentId?: string): string {
@@ -588,10 +579,8 @@ export function getInterfacePath(id: string, componentId?: string): string {
   if (componentId) {
     const compPath = getComponentPath(componentId);
     const compDir = path.dirname(compPath);
-    if (compPath.endsWith('.index.yaml') || compPath.endsWith('component.yaml')) {
-      const dotPath = path.join(compDir, '.interface.yaml');
-      const legacyPath = path.join(compDir, 'interface.yaml');
-      return fs.existsSync(dotPath) ? dotPath : (fs.existsSync(legacyPath) ? legacyPath : dotPath);
+    if (compPath.endsWith('.index.yaml')) {
+      return path.join(compDir, '.interface.yaml');
     }
   }
 
@@ -600,9 +589,7 @@ export function getInterfacePath(id: string, componentId?: string): string {
   }
 
   const targetComponent = componentId || 'default';
-  const dotPath = path.join(AI_PATHS.specsDir(), 'default', targetComponent, '.interface.yaml');
-  const legacyPath = path.join(AI_PATHS.specsDir(), 'default', targetComponent, 'interface.yaml');
-  return fs.existsSync(dotPath) ? dotPath : (fs.existsSync(legacyPath) ? legacyPath : dotPath);
+  return path.join(AI_PATHS.specsDir(), 'default', targetComponent, '.interface.yaml');
 }
 
 export function getImplementationPath(id: string, contractId?: string): string {
@@ -645,10 +632,8 @@ export function getImplementationPath(id: string, contractId?: string): string {
   if (contractId) {
     const intfPath = getInterfacePath(contractId);
     const intfDir = path.dirname(intfPath);
-    if (intfPath.endsWith('.interface.yaml') || intfPath.endsWith('interface.yaml')) {
-      const dotPath = path.join(intfDir, '.implementation.yaml');
-      const legacyPath = path.join(intfDir, 'implementation.yaml');
-      return fs.existsSync(dotPath) ? dotPath : (fs.existsSync(legacyPath) ? legacyPath : dotPath);
+    if (intfPath.endsWith('.interface.yaml')) {
+      return path.join(intfDir, '.implementation.yaml');
     }
   }
 
@@ -657,9 +642,7 @@ export function getImplementationPath(id: string, contractId?: string): string {
   }
 
   const targetContract = contractId ? contractId.replace(/^i/, '') : 'default';
-  const dotPath = path.join(AI_PATHS.specsDir(), 'default', targetContract, '.implementation.yaml');
-  const legacyPath = path.join(AI_PATHS.specsDir(), 'default', targetContract, 'implementation.yaml');
-  return fs.existsSync(dotPath) ? dotPath : (fs.existsSync(legacyPath) ? legacyPath : dotPath);
+  return path.join(AI_PATHS.specsDir(), 'default', targetContract, '.implementation.yaml');
 }
 
 // ---------------------------------------------------------------------------
@@ -803,13 +786,13 @@ export function saveComponentSpec(spec: ComponentSpec): void {
 function desiredComponentDir(comp: ComponentSpec, index: SpecIndex): string | null {
   const currentPath = index.paths.component[comp.id];
   // Only the nested-tree layout is normalized (skip the legacy flat components/ dir).
-  if (!currentPath || (!currentPath.endsWith('.index.yaml') && !currentPath.endsWith('component.yaml'))) return null;
+  if (!currentPath || !currentPath.endsWith('.index.yaml')) return null;
   if (comp.id.includes('::')) return null;
 
   const owner = findOwner(comp.id, index.components);
   if (owner) {
     const ownerPath = index.paths.component[owner.id];
-    if (ownerPath && (ownerPath.endsWith('.index.yaml') || ownerPath.endsWith('component.yaml'))) {
+    if (ownerPath && ownerPath.endsWith('.index.yaml')) {
       // The owner (a pattern) lives flat under its subsystem; the member nests inside it.
       const ownerSubDir = path.dirname(getSubsystemPath(owner.subsystem));
       return path.join(ownerSubDir, owner.id, comp.id);
@@ -991,7 +974,7 @@ export function getTypePath(id: string, subsystemId?: string, group?: string): s
   if (subsystemId) {
     const subPath = getSubsystemPath(subsystemId);
     const subDir = path.dirname(subPath);
-    if (subPath.endsWith('.index.yaml') || subPath.endsWith('subsystem.yaml')) {
+    if (subPath.endsWith('.index.yaml')) {
       return path.join(subDir, 'types', `${id}.yaml`);
     }
   }
@@ -1230,15 +1213,11 @@ export function getGroupPath(id: string, subsystemId?: string): string {
   if (subsystemId) {
     const subPath = getSubsystemPath(subsystemId);
     const subDir = path.dirname(subPath);
-    if (subPath.endsWith('.index.yaml') || subPath.endsWith('subsystem.yaml')) {
-      const dotPath = path.join(subDir, 'types', id, '.index.yaml');
-      const legacyPath = path.join(subDir, 'types', id, 'group.yaml');
-      return fs.existsSync(dotPath) ? dotPath : (fs.existsSync(legacyPath) ? legacyPath : dotPath);
+    if (subPath.endsWith('.index.yaml')) {
+      return path.join(subDir, 'types', id, '.index.yaml');
     }
   }
-  const dotPath = path.join(AI_PATHS.specsTypesDir(), id, '.index.yaml');
-  const legacyPath = path.join(AI_PATHS.specsTypesDir(), id, 'group.yaml');
-  return fs.existsSync(dotPath) ? dotPath : (fs.existsSync(legacyPath) ? legacyPath : dotPath);
+  return path.join(AI_PATHS.specsTypesDir(), id, '.index.yaml');
 }
 
 export function loadGroupSpecs(): GroupSpec[] {
@@ -1279,6 +1258,31 @@ function stripNamespaceFromGroup(spec: GroupSpec, prefix: string): GroupSpec {
     ...spec,
     id: stripPrefix(spec.id, prefix),
   };
+}
+
+export function findLegacySpecFiles(): { path: string; expected: string }[] {
+  const specsDir = AI_PATHS.specsDir();
+  if (!pathExists(specsDir)) return [];
+  const files = listFilesRecursive(specsDir, '.yaml');
+  const legacy: { path: string; expected: string }[] = [];
+  for (const f of files) {
+    const base = path.basename(f);
+    const dir = path.dirname(f);
+    if (base === 'system.yaml') {
+      legacy.push({ path: f, expected: path.join(dir, '.index.yaml') });
+    } else if (base === 'subsystem.yaml') {
+      legacy.push({ path: f, expected: path.join(dir, '.index.yaml') });
+    } else if (base === 'component.yaml') {
+      legacy.push({ path: f, expected: path.join(dir, '.index.yaml') });
+    } else if (base === 'group.yaml') {
+      legacy.push({ path: f, expected: path.join(dir, '.index.yaml') });
+    } else if (base === 'interface.yaml') {
+      legacy.push({ path: f, expected: path.join(dir, '.interface.yaml') });
+    } else if (base === 'implementation.yaml') {
+      legacy.push({ path: f, expected: path.join(dir, '.implementation.yaml') });
+    }
+  }
+  return legacy;
 }
 
 
