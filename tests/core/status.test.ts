@@ -31,7 +31,7 @@ describe('runStatus completeness dashboard', () => {
       writeSpec: (type: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation', name: string, content: string) => {
         let filePath = '';
         if (type === 'system') {
-          filePath = path.join(specsDir, 'system.yaml');
+          filePath = path.join(specsDir, '.index.yaml');
         } else {
           filePath = path.join(specsDir, `${type}s`, `${name}.yaml`);
         }

@@ -206,7 +206,7 @@ describe('recursive subproject loading and namespacing', () => {
     });
 
     // 4. Verify that the file was written to the child project path, and contains stripped IDs
-    const childComponentPath = path.join(childDir, '.wai', 'specs', 'invoice', 'invoice_portal', 'component.yaml');
+    const childComponentPath = path.join(childDir, '.wai', 'specs', 'invoice', 'invoice_portal', '.index.yaml');
     expect(fs.existsSync(childComponentPath)).toBe(true);
 
     const contents = fs.readFileSync(childComponentPath, 'utf8');
@@ -244,7 +244,7 @@ describe('recursive subproject loading and namespacing', () => {
       updatedAt: now,
     });
 
-    const childInterfacePath = path.join(childDir, '.wai', 'specs', 'invoice', 'invoice_portal', 'interface.yaml');
+    const childInterfacePath = path.join(childDir, '.wai', 'specs', 'invoice', 'invoice_portal', '.interface.yaml');
     expect(fs.existsSync(childInterfacePath)).toBe(true);
     const interfaceContents = fs.readFileSync(childInterfacePath, 'utf8');
     expect(interfaceContents).toContain('id: i-invoice-portal'); // stripped!
@@ -280,7 +280,7 @@ describe('recursive subproject loading and namespacing', () => {
       updatedAt: now,
     });
 
-    const childSubsystemPath = path.join(childDir, '.wai', 'specs', 'tax', 'subsystem.yaml');
+    const childSubsystemPath = path.join(childDir, '.wai', 'specs', 'tax', '.index.yaml');
     expect(fs.existsSync(childSubsystemPath)).toBe(true);
     const subContents = fs.readFileSync(childSubsystemPath, 'utf8');
     expect(subContents).toContain('id: tax');

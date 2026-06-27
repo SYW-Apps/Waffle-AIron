@@ -29,7 +29,7 @@ function createDraftProject() {
     fs.mkdirSync(path.join(specsDir, d), { recursive: true });
   }
 
-  fs.writeFileSync(path.join(specsDir, 'system.yaml'),
+  fs.writeFileSync(path.join(specsDir, '.index.yaml'),
     `schemaVersion: 1.0.0\nname: TestSystem\nvision: A system for testing\n${META}\n`);
   fs.writeFileSync(path.join(specsDir, 'subsystems', 'sub-a.yaml'),
     `schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: Subsystem A\nparentSystem: TestSystem\nstatus: draft\n${META}\n`);
