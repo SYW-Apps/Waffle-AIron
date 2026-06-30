@@ -172,26 +172,11 @@ function scanSpecsForProject(projectDir: string, namespacePrefix: string, visite
           if (raw.kind === 'group') {
             detectedType = 'group';
             const parsed = GroupSpecSchema.parse(raw);
-            
-            // Qualify the group ID with the subsystem ID if it resides inside a subsystem directory
-            const relPath = path.relative(specsDir, file).replace(/\\/g, '/');
-            const parts = relPath.split('/');
-            if (parts.length >= 4 && parts[1] === 'types') {
-              const sub = parts[0];
-              parsed.id = `${sub}::${parsed.id}`;
-            }
-            
             index.groups.push(parsed);
             index.paths.group[parsed.id] = file;
           } else {
             detectedType = 'type';
             const parsed = TypeSpecSchema.parse(raw);
-            if (parsed.subsystem) {
-              parsed.id = `${parsed.subsystem}::${parsed.id}`;
-              if (parsed.group) {
-                parsed.group = `${parsed.subsystem}::${parsed.group}`;
-              }
-            }
             index.types.push(parsed);
             index.paths.type[parsed.id] = file;
           }
@@ -977,9 +962,11 @@ export function getTypePath(id: string, subsystemId?: string, group?: string): s
     }
   }
 
-  const targetGroup = group || index.types.find((t) => t.id === id)?.group;
+  const { localId: plainId } = splitNamespace(id);
+  const targetGroup = group || index.types.find((t) => t.id === id || t.id === plainId)?.group;
   if (targetGroup) {
-    const groupPath = index.paths.group[targetGroup];
+    const { localId: plainGroup } = splitNamespace(targetGroup);
+    const groupPath = index.paths.group[targetGroup] || index.paths.group[plainGroup];
     if (groupPath) {
       const localId = id.split('::').pop()!;
       return path.join(path.dirname(groupPath), `${localId}.yaml`);
@@ -1201,7 +1188,9 @@ export function deleteTypeSpec(id: string): boolean {
 // ---------------------------------------------------------------------------
 export function getGroupPath(id: string, subsystemId?: string): string {
   const index = scanAllSpecs();
+  const { localId: plainId } = splitNamespace(id);
   if (index.paths.group[id]) return index.paths.group[id];
+  if (index.paths.group[plainId]) return index.paths.group[plainId];
 
   if (id.includes('::')) {
     const parts = id.split('::');
