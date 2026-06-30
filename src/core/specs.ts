@@ -767,7 +767,7 @@ export function saveComponentSpec(spec: ComponentSpec): void {
   const p = getComponentPath(spec.id, spec.subsystem);
   ensureDir(path.dirname(p));
 
-  const { prefix } = splitNamespace(spec.subsystem || spec.id);
+  const { prefix } = splitNamespace(spec.id);
   const specToWrite = prefix ? stripNamespaceFromComponent(spec, prefix) : spec;
 
   const existing = loadComponentSpec(spec.id);
@@ -863,7 +863,7 @@ export function saveInterfaceSpec(spec: InterfaceSpec): void {
   const p = getInterfacePath(spec.id, spec.component);
   ensureDir(path.dirname(p));
 
-  const { prefix } = splitNamespace(spec.component || spec.id);
+  const { prefix } = splitNamespace(spec.id);
   const specToWrite = prefix ? stripNamespaceFromInterface(spec, prefix) : spec;
 
   const existing = loadInterfaceSpec(spec.id);
@@ -907,7 +907,7 @@ export function saveImplementationSpec(spec: ImplementationSpec): void {
   const p = getImplementationPath(spec.id, spec.contract);
   ensureDir(path.dirname(p));
 
-  const { prefix } = splitNamespace(spec.contract || spec.id);
+  const { prefix } = splitNamespace(spec.id);
   const specToWrite = prefix ? stripNamespaceFromImplementation(spec, prefix) : spec;
 
   const existing = loadImplementationSpec(spec.id);
@@ -1004,7 +1004,7 @@ export function saveTypeSpec(spec: TypeSpec): void {
   const p = getTypePath(spec.id, spec.subsystem, spec.group);
   ensureDir(path.dirname(p));
 
-  const { prefix } = splitNamespace(spec.subsystem || spec.id);
+  const { prefix } = splitNamespace(spec.id);
   const specToWrite = prefix ? stripNamespaceFromType(spec, prefix) : spec;
 
   const existing = loadTypeSpec(spec.id);
