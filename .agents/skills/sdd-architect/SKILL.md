@@ -57,6 +57,12 @@ You must read, respect, and update the living quest log file: `.wai/phased_desig
    - Check completeness by calling the MCP tool `sdd_get_status`.
    - Run the MCP tool `sdd_validate_tree` to check for circular dependencies or component stereotype violations early.
    - Check off the completed stages in `.wai/phased_design.md`.
+6. **Granular Updates & Delta Merging**:
+   - For large components, portals, or interface implementations (with dozens of existing methods, endpoints, or narrative steps), do NOT use the full define commands to rewrite the entire spec. Instead, use the **`sdd_update_spec`** MCP tool.
+   - `sdd_update_spec` takes `kind`, `id`, and a `delta` object containing only the fields you want to update, append, insert, or delete.
+   - **Upserting elements in arrays** (e.g., `methods`, `fields`, `publicInterfaces`): Specify the element with its matching identifier (e.g., `name` or `component`+`interface`). If it exists, its fields are merged (preserving other existing properties, like interface method `endpoint` bindings); if it doesn't, it is appended.
+   - **Deleting elements in arrays**: Set `action: "delete"` (or `remove: true`) on the matching element in the delta array.
+   - **Granular narrative step updates**: Match by `stepNumber` and use `action: "insert"` to insert a step (auto-shifting subsequent steps up) or `action: "delete"` to delete a step (auto-shifting subsequent steps down).
 
 ## Guidelines
 - Walk the user down the tree level-by-level.

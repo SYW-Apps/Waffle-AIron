@@ -1307,4 +1307,177 @@ export function findLegacySpecFiles(): { path: string; expected: string }[] {
   return legacy;
 }
 
+export function updateSpec(
+  kind: 'subsystem' | 'component' | 'interface' | 'implementation' | 'type',
+  id: string,
+  delta: Record<string, any>
+): void {
+  const result = (() => {
+    switch (kind) {
+      case 'subsystem':      return loadSubsystemSpec(id);
+      case 'component':      return loadComponentSpec(id);
+      case 'interface':      return loadInterfaceSpec(id);
+      case 'implementation': return loadImplementationSpec(id);
+      case 'type':           return loadTypeSpec(id);
+    }
+  })();
+
+  if (!result) {
+    throw new Error(`Spec of kind "${kind}" with ID "${id}" does not exist. Define it first.`);
+  }
+
+  const mergeNarrative = (existingSteps: any[], deltaSteps: any[]): any[] => {
+    let steps = [...existingSteps];
+    const sortedDeltas = [...deltaSteps].sort((a, b) => a.stepNumber - b.stepNumber);
+    for (const deltaStep of sortedDeltas) {
+      const stepNum = deltaStep.stepNumber;
+      if (deltaStep.action === 'delete' || deltaStep.remove === true) {
+        const idx = steps.findIndex(s => s.stepNumber === stepNum);
+        if (idx !== -1) {
+          steps.splice(idx, 1);
+          steps = steps.map(s => {
+            if (s.stepNumber > stepNum) {
+              return { ...s, stepNumber: s.stepNumber - 1 };
+            }
+            return s;
+          });
+        }
+      } else if (deltaStep.action === 'insert') {
+        steps = steps.map(s => {
+          if (s.stepNumber >= stepNum) {
+            return { ...s, stepNumber: s.stepNumber + 1 };
+          }
+          return s;
+        });
+        const { action, remove, ...cleanStep } = deltaStep;
+        steps.push(cleanStep);
+      } else {
+        const idx = steps.findIndex(s => s.stepNumber === stepNum);
+        if (idx !== -1) {
+          const { action, remove, ...cleanStep } = deltaStep;
+          steps[idx] = {
+            ...steps[idx],
+            ...cleanStep,
+          };
+        } else {
+          const { action, remove, ...cleanStep } = deltaStep;
+          steps.push(cleanStep);
+        }
+      }
+    }
+    return steps.sort((a, b) => a.stepNumber - b.stepNumber);
+  };
+
+  const mergeMethods = (existingMethods: any[], deltaMethods: any[]): any[] => {
+    const merged = [...existingMethods];
+    for (const deltaMethod of deltaMethods) {
+      const idx = merged.findIndex(m => m.name === deltaMethod.name);
+      if (idx !== -1) {
+        if (deltaMethod.remove === true || deltaMethod.action === 'delete') {
+          merged.splice(idx, 1);
+        } else {
+          const existingMethod = merged[idx];
+          let narrative = existingMethod.narrative ? [...existingMethod.narrative] : [];
+          if (deltaMethod.narrative && Array.isArray(deltaMethod.narrative)) {
+            narrative = mergeNarrative(narrative, deltaMethod.narrative);
+          }
+          const { narrative: _, ...cleanMethod } = deltaMethod;
+          merged[idx] = {
+            ...existingMethod,
+            ...cleanMethod,
+            narrative,
+          };
+        }
+      } else {
+        if (deltaMethod.remove !== true && deltaMethod.action !== 'delete') {
+          merged.push(deltaMethod);
+        }
+      }
+    }
+    return merged;
+  };
+
+  const mergeNamedArray = (existing: any[], delta: any[]): any[] => {
+    const merged = [...existing];
+    for (const deltaItem of delta) {
+      const idx = merged.findIndex(item => item.name === deltaItem.name);
+      if (idx !== -1) {
+        if (deltaItem.remove === true || deltaItem.action === 'delete') {
+          merged.splice(idx, 1);
+        } else {
+          merged[idx] = {
+            ...merged[idx],
+            ...deltaItem,
+          };
+        }
+      } else {
+        if (deltaItem.remove !== true && deltaItem.action !== 'delete') {
+          merged.push(deltaItem);
+        }
+      }
+    }
+    return merged;
+  };
+
+  const mergePublicInterfaces = (existing: any[], delta: any[]): any[] => {
+    const merged = [...existing];
+    for (const deltaItem of delta) {
+      const idx = merged.findIndex(item => item.component === deltaItem.component && item.interface === deltaItem.interface);
+      if (idx !== -1) {
+        if (deltaItem.remove === true || deltaItem.action === 'delete') {
+          merged.splice(idx, 1);
+        } else {
+          merged[idx] = {
+            ...merged[idx],
+            ...deltaItem,
+          };
+        }
+      } else {
+        if (deltaItem.remove !== true && deltaItem.action !== 'delete') {
+          merged.push(deltaItem);
+        }
+      }
+    }
+    return merged;
+  };
+
+  const mergeDelta = (existing: any, delta: any): any => {
+    const res = { ...existing };
+    for (const [key, value] of Object.entries(delta)) {
+      if (value === undefined || value === null) {
+        continue;
+      }
+      if (key === 'methods' && Array.isArray(value) && Array.isArray(existing.methods)) {
+        if (kind === 'implementation') {
+          res.methods = mergeMethods(existing.methods, value);
+        } else {
+          res.methods = mergeNamedArray(existing.methods, value);
+        }
+      } else if (key === 'fields' && Array.isArray(value) && Array.isArray(existing.fields)) {
+        res.fields = mergeNamedArray(existing.fields, value);
+      } else if (key === 'publicInterfaces' && Array.isArray(value) && Array.isArray(existing.publicInterfaces)) {
+        res.publicInterfaces = mergePublicInterfaces(existing.publicInterfaces, value);
+      } else if (Array.isArray(value)) {
+        res[key] = value;
+      } else if (typeof value === 'object' && typeof existing[key] === 'object' && existing[key] !== null) {
+        res[key] = mergeDelta(existing[key], value);
+      } else {
+        res[key] = value;
+      }
+    }
+    return res;
+  };
+
+  const mergedResult = mergeDelta(result, delta);
+  mergedResult.updatedAt = new Date().toISOString();
+
+  switch (kind) {
+    case 'subsystem':      saveSubsystemSpec(mergedResult); break;
+    case 'component':      saveComponentSpec(mergedResult); break;
+    case 'interface':      saveInterfaceSpec(mergedResult); break;
+    case 'implementation': saveImplementationSpec(mergedResult); break;
+    case 'type':           saveTypeSpec(mergedResult); break;
+  }
+}
+
 
