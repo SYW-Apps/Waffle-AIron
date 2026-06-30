@@ -172,11 +172,26 @@ function scanSpecsForProject(projectDir: string, namespacePrefix: string, visite
           if (raw.kind === 'group') {
             detectedType = 'group';
             const parsed = GroupSpecSchema.parse(raw);
+            
+            // Qualify the group ID with the subsystem ID if it resides inside a subsystem directory
+            const relPath = path.relative(specsDir, file).replace(/\\/g, '/');
+            const parts = relPath.split('/');
+            if (parts.length >= 4 && parts[1] === 'types') {
+              const sub = parts[0];
+              parsed.id = `${sub}::${parsed.id}`;
+            }
+            
             index.groups.push(parsed);
             index.paths.group[parsed.id] = file;
           } else {
             detectedType = 'type';
             const parsed = TypeSpecSchema.parse(raw);
+            if (parsed.subsystem) {
+              parsed.id = `${parsed.subsystem}::${parsed.id}`;
+              if (parsed.group) {
+                parsed.group = `${parsed.subsystem}::${parsed.group}`;
+              }
+            }
             index.types.push(parsed);
             index.paths.type[parsed.id] = file;
           }
@@ -971,14 +986,23 @@ export function getTypePath(id: string, subsystemId?: string, group?: string): s
     }
   }
 
+  let localId = id;
+  if (id.includes('::')) {
+    const parts = id.split('::');
+    localId = parts[parts.length - 1];
+    if (!subsystemId) {
+      subsystemId = parts.slice(0, -1).join('::');
+    }
+  }
+
   if (subsystemId) {
     const subPath = getSubsystemPath(subsystemId);
     const subDir = path.dirname(subPath);
     if (subPath.endsWith('.index.yaml')) {
-      return path.join(subDir, 'types', `${id}.yaml`);
+      return path.join(subDir, 'types', `${localId}.yaml`);
     }
   }
-  return path.join(AI_PATHS.specsTypesDir(), `${id}.yaml`);
+  return path.join(AI_PATHS.specsTypesDir(), `${localId}.yaml`);
 }
 
 export function loadTypeSpecs(): TypeSpec[] {
@@ -1210,14 +1234,23 @@ export function getGroupPath(id: string, subsystemId?: string): string {
     }
   }
 
+  let localId = id;
+  if (id.includes('::')) {
+    const parts = id.split('::');
+    localId = parts[parts.length - 1];
+    if (!subsystemId) {
+      subsystemId = parts.slice(0, -1).join('::');
+    }
+  }
+
   if (subsystemId) {
     const subPath = getSubsystemPath(subsystemId);
     const subDir = path.dirname(subPath);
     if (subPath.endsWith('.index.yaml')) {
-      return path.join(subDir, 'types', id, '.index.yaml');
+      return path.join(subDir, 'types', localId, '.index.yaml');
     }
   }
-  return path.join(AI_PATHS.specsTypesDir(), id, '.index.yaml');
+  return path.join(AI_PATHS.specsTypesDir(), localId, '.index.yaml');
 }
 
 export function loadGroupSpecs(): GroupSpec[] {

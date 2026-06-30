@@ -8,6 +8,9 @@ import {
   saveComponentSpec,
   getComponentPath,
   invalidateSpecCache,
+  saveGroupSpec,
+  saveTypeSpec,
+  getTypePath,
 } from '../../src/core/specs.js';
 
 const now = new Date().toISOString();
@@ -51,5 +54,37 @@ describe('ownership-driven component layout', () => {
     const adapterPath = getComponentPath('database-adapter').replace(/\\/g, '/');
     expect(adapterPath).toContain('billing/database-adapter/.index.yaml');
     expect(adapterPath).not.toContain('subscription-repository');
+  });
+
+  it('nests types under their group directory when a group is specified', () => {
+    proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-nest-group-'));
+    fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
+    setProjectRoot(proj);
+
+    saveSubsystemSpec(sub());
+    saveGroupSpec({
+      kind: 'group',
+      id: 'billing::invoices',
+      name: 'Invoices Group',
+      description: 'Group for invoice types',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    saveTypeSpec({
+      kind: 'entity',
+      id: 'billing::invoice-event',
+      name: 'Invoice Event',
+      description: 'Test type',
+      subsystem: 'billing',
+      group: 'billing::invoices',
+      fields: [],
+      methods: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const typePath = getTypePath('billing::invoice-event').replace(/\\/g, '/');
+    expect(typePath).toContain('billing/types/invoices/invoice-event.yaml');
   });
 });
