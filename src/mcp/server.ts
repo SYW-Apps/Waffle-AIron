@@ -645,6 +645,27 @@ export function createMcpServer(): McpServer {
     }
   );
 
+  reg<{ kind: 'subsystem' | 'component' | 'interface' | 'implementation' | 'type'; id: string; delta: Record<string, any> }>(server,
+    'sdd_update_spec',
+    {
+      description: 'Update/patch an existing SDD specification (subsystem, component, interface, implementation, or type) using a granular delta. Updates fields, appends/merges array elements, or inserts/deletes narrative steps.',
+      inputSchema: {
+        kind: z.enum(['subsystem', 'component', 'interface', 'implementation', 'type']).describe('The spec kind to update'),
+        id: z.string().describe('The ID of the spec to update (namespaced if needed)'),
+        delta: z.record(z.any()).describe('The partial fields to merge into the spec. For arrays (like methods or fields), elements are matched by "name" (or "id") and merged/upserted. Add "action: \'delete\'" (or "remove: true") to delete a named element. For narrative steps, match by "stepNumber" and use "action: \'insert\'" (shifts subsequent steps up) or "action: \'delete\'" (shifts subsequent steps down and removes it).'),
+      },
+    },
+    ({ kind, id, delta }) => {
+      try {
+        const specs = requireSpecs();
+        specs.updateSpec(kind, id, delta);
+        return text(`Successfully updated ${kind} spec "${id}".`);
+      } catch (e) {
+        return errText(String(e));
+      }
+    }
+  );
+
   reg<{ subsystem?: string; recursive?: boolean }>(server,
     'sdd_get_status',
     {

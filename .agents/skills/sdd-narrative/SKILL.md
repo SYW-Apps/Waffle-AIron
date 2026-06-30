@@ -44,3 +44,7 @@ You must read, respect, and update `.wai/phased_design.md` (specifically Stage 5
    - Upon user approval, call `sdd_write_narrative` to save it in the spec tree.
    - Once the interface, narrative, and spec for this component compile without errors, recommend changing the component's status field to `status: complete`.
    - Update Stage 5 checkboxes in `.wai/phased_design.md`.
+5. **Granular Updates & Delta Merging**:
+   - For large portals or existing interface implementations, do NOT rewrite the entire implementation spec. Use the **`sdd_update_spec`** MCP tool with `kind: "implementation"`.
+   - Present the granular update delta directly to the user for feedback.
+   - Match narrative steps by `stepNumber` and use `action: "insert"` to insert a step (auto-shifting subsequent steps up) or `action: "delete"` to delete a step (auto-shifting subsequent steps down).
