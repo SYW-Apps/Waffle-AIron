@@ -767,7 +767,7 @@ export function saveComponentSpec(spec: ComponentSpec): void {
   const p = getComponentPath(spec.id, spec.subsystem);
   ensureDir(path.dirname(p));
 
-  const { prefix } = splitNamespace(spec.subsystem || spec.id);
+  const { prefix } = splitNamespace(spec.id);
   const specToWrite = prefix ? stripNamespaceFromComponent(spec, prefix) : spec;
 
   const existing = loadComponentSpec(spec.id);
@@ -863,7 +863,7 @@ export function saveInterfaceSpec(spec: InterfaceSpec): void {
   const p = getInterfacePath(spec.id, spec.component);
   ensureDir(path.dirname(p));
 
-  const { prefix } = splitNamespace(spec.component || spec.id);
+  const { prefix } = splitNamespace(spec.id);
   const specToWrite = prefix ? stripNamespaceFromInterface(spec, prefix) : spec;
 
   const existing = loadInterfaceSpec(spec.id);
@@ -907,7 +907,7 @@ export function saveImplementationSpec(spec: ImplementationSpec): void {
   const p = getImplementationPath(spec.id, spec.contract);
   ensureDir(path.dirname(p));
 
-  const { prefix } = splitNamespace(spec.contract || spec.id);
+  const { prefix } = splitNamespace(spec.id);
   const specToWrite = prefix ? stripNamespaceFromImplementation(spec, prefix) : spec;
 
   const existing = loadImplementationSpec(spec.id);
@@ -962,12 +962,23 @@ export function getTypePath(id: string, subsystemId?: string, group?: string): s
     }
   }
 
-  const targetGroup = group || index.types.find((t) => t.id === id)?.group;
+  const { localId: plainId } = splitNamespace(id);
+  const targetGroup = group || index.types.find((t) => t.id === id || t.id === plainId)?.group;
   if (targetGroup) {
-    const groupPath = index.paths.group[targetGroup];
+    const { localId: plainGroup } = splitNamespace(targetGroup);
+    const groupPath = index.paths.group[targetGroup] || index.paths.group[plainGroup];
     if (groupPath) {
       const localId = id.split('::').pop()!;
       return path.join(path.dirname(groupPath), `${localId}.yaml`);
+    }
+  }
+
+  let localId = id;
+  if (id.includes('::')) {
+    const parts = id.split('::');
+    localId = parts[parts.length - 1];
+    if (!subsystemId) {
+      subsystemId = parts.slice(0, -1).join('::');
     }
   }
 
@@ -975,10 +986,10 @@ export function getTypePath(id: string, subsystemId?: string, group?: string): s
     const subPath = getSubsystemPath(subsystemId);
     const subDir = path.dirname(subPath);
     if (subPath.endsWith('.index.yaml')) {
-      return path.join(subDir, 'types', `${id}.yaml`);
+      return path.join(subDir, 'types', `${localId}.yaml`);
     }
   }
-  return path.join(AI_PATHS.specsTypesDir(), `${id}.yaml`);
+  return path.join(AI_PATHS.specsTypesDir(), `${localId}.yaml`);
 }
 
 export function loadTypeSpecs(): TypeSpec[] {
@@ -993,7 +1004,7 @@ export function saveTypeSpec(spec: TypeSpec): void {
   const p = getTypePath(spec.id, spec.subsystem, spec.group);
   ensureDir(path.dirname(p));
 
-  const { prefix } = splitNamespace(spec.subsystem || spec.id);
+  const { prefix } = splitNamespace(spec.id);
   const specToWrite = prefix ? stripNamespaceFromType(spec, prefix) : spec;
 
   const existing = loadTypeSpec(spec.id);
@@ -1177,7 +1188,9 @@ export function deleteTypeSpec(id: string): boolean {
 // ---------------------------------------------------------------------------
 export function getGroupPath(id: string, subsystemId?: string): string {
   const index = scanAllSpecs();
+  const { localId: plainId } = splitNamespace(id);
   if (index.paths.group[id]) return index.paths.group[id];
+  if (index.paths.group[plainId]) return index.paths.group[plainId];
 
   if (id.includes('::')) {
     const parts = id.split('::');
@@ -1210,14 +1223,23 @@ export function getGroupPath(id: string, subsystemId?: string): string {
     }
   }
 
+  let localId = id;
+  if (id.includes('::')) {
+    const parts = id.split('::');
+    localId = parts[parts.length - 1];
+    if (!subsystemId) {
+      subsystemId = parts.slice(0, -1).join('::');
+    }
+  }
+
   if (subsystemId) {
     const subPath = getSubsystemPath(subsystemId);
     const subDir = path.dirname(subPath);
     if (subPath.endsWith('.index.yaml')) {
-      return path.join(subDir, 'types', id, '.index.yaml');
+      return path.join(subDir, 'types', localId, '.index.yaml');
     }
   }
-  return path.join(AI_PATHS.specsTypesDir(), id, '.index.yaml');
+  return path.join(AI_PATHS.specsTypesDir(), localId, '.index.yaml');
 }
 
 export function loadGroupSpecs(): GroupSpec[] {

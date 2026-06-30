@@ -520,7 +520,7 @@ export function createMcpServer(): McpServer {
     },
   );
 
-  reg<{ kind: 'entity' | 'value-object'; id: string; name: string; description?: string; subsystem?: string; fields?: { name: string; type: string; description?: string; optional?: boolean }[]; methods?: { name: string; signature: string; returns: string; description?: string }[] }>(server,
+  reg<{ kind: 'entity' | 'value-object'; id: string; name: string; description?: string; subsystem?: string; group?: string; fields?: { name: string; type: string; description?: string; optional?: boolean }[]; methods?: { name: string; signature: string; returns: string; description?: string }[] }>(server,
     'sdd_add_type',
     {
       description: 'Define an entity or value-object type (the data components operate on). Entities are owned by a subsystem; shared value objects omit subsystem (system-level). Fields are data; methods are PURE intrinsic behaviour only — anything needing a collaborator belongs on a component, taking the entity as an argument.',
@@ -530,11 +530,12 @@ export function createMcpServer(): McpServer {
         name: z.string().describe('Human-readable name'),
         description: z.string().optional(),
         subsystem: z.string().optional().describe('Owning subsystem id; omit for a system-level shared value object'),
+        group: z.string().optional().describe('Optional logical group ID to organize this type in subfolders'),
         fields: z.array(z.object({ name: z.string(), type: z.string(), description: z.string().optional(), optional: z.boolean().optional() })).optional().describe('Data fields (type is a primitive or a qualified type id, e.g. "billing.Invoice")'),
         methods: z.array(z.object({ name: z.string(), signature: z.string(), returns: z.string(), description: z.string().optional() })).optional().describe('Pure intrinsic methods only'),
       },
     },
-    ({ kind, id, name, description, subsystem, fields, methods }) => {
+    ({ kind, id, name, description, subsystem, group, fields, methods }) => {
       try {
         const { saveTypeSpec } = requireSpecs();
         const now = new Date().toISOString();
@@ -544,6 +545,7 @@ export function createMcpServer(): McpServer {
           name,
           ...(description ? { description } : {}),
           ...(subsystem ? { subsystem } : {}),
+          ...(group ? { group } : {}),
           fields: (fields ?? []).map((f) => ({ name: f.name, type: f.type, description: f.description, optional: f.optional ?? false })),
           methods: methods ?? [],
           createdAt: now,
