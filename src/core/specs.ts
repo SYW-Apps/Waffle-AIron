@@ -379,6 +379,21 @@ export function resolveSubprojectForNamespace(namespace: string): string | null 
 }
 
 
+export function getSubprojectPrefix(qualifiedId: string): string | null {
+  const parts = qualifiedId.split('::');
+  if (parts.length <= 1) return null;
+  const index = scanAllSpecs();
+  let currentPrefix = '';
+  for (let i = 0; i < parts.length - 1; i++) {
+    currentPrefix = currentPrefix ? `${currentPrefix}::${parts[i]}` : parts[i];
+    const sub = index.subsystems.find(s => s.id === currentPrefix);
+    if (sub && sub.projectPath) {
+      return currentPrefix;
+    }
+  }
+  return null;
+}
+
 export function splitNamespace(qualifiedId: string): { prefix: string; localId: string } {
   if (!qualifiedId.includes('::')) {
     return { prefix: '', localId: qualifiedId };
@@ -388,21 +403,29 @@ export function splitNamespace(qualifiedId: string): { prefix: string; localId: 
   return { prefix: parts.join('::'), localId };
 }
 
-function stripPrefix(id: string, prefix: string): string {
-  if (id.startsWith(`${prefix}::`)) {
-    return id.slice(prefix.length + 2);
+function stripNamespacePrefixes(id: string, prefix: string): string {
+  if (id.startsWith('::') || id.startsWith('super::')) {
+    return id;
   }
-  return id;
+  let local = id;
+  if (prefix && local.startsWith(`${prefix}::`)) {
+    local = local.slice(prefix.length + 2);
+  }
+  if (local.includes('::')) {
+    const parts = local.split('::');
+    return parts[parts.length - 1];
+  }
+  return local;
 }
 
 function stripNamespaceFromSubsystem(spec: SubsystemSpec, prefix: string): SubsystemSpec {
   return {
     ...spec,
-    id: stripPrefix(spec.id, prefix),
+    id: stripNamespacePrefixes(spec.id, prefix),
     publicInterfaces: spec.publicInterfaces.map(pi => ({
       ...pi,
-      component: pi.component ? stripPrefix(pi.component, prefix) : undefined,
-      interface: pi.interface ? stripPrefix(pi.interface, prefix) : undefined,
+      component: pi.component ? stripNamespacePrefixes(pi.component, prefix) : undefined,
+      interface: pi.interface ? stripNamespacePrefixes(pi.interface, prefix) : undefined,
     })),
   };
 }
@@ -410,31 +433,31 @@ function stripNamespaceFromSubsystem(spec: SubsystemSpec, prefix: string): Subsy
 function stripNamespaceFromComponent(spec: ComponentSpec, prefix: string): ComponentSpec {
   return {
     ...spec,
-    id: stripPrefix(spec.id, prefix),
-    subsystem: stripPrefix(spec.subsystem, prefix),
-    owns: spec.owns.map(o => stripPrefix(o, prefix)),
-    dependsOn: spec.dependsOn.map(d => stripPrefix(d, prefix)),
+    id: stripNamespacePrefixes(spec.id, prefix),
+    subsystem: stripNamespacePrefixes(spec.subsystem, prefix),
+    owns: spec.owns.map(o => stripNamespacePrefixes(o, prefix)),
+    dependsOn: spec.dependsOn.map(d => stripNamespacePrefixes(d, prefix)),
   };
 }
 
 function stripNamespaceFromInterface(spec: InterfaceSpec, prefix: string): InterfaceSpec {
   return {
     ...spec,
-    id: stripPrefix(spec.id, prefix),
-    component: stripPrefix(spec.component, prefix),
+    id: stripNamespacePrefixes(spec.id, prefix),
+    component: stripNamespacePrefixes(spec.component, prefix),
   };
 }
 
 function stripNamespaceFromImplementation(spec: ImplementationSpec, prefix: string): ImplementationSpec {
   return {
     ...spec,
-    id: stripPrefix(spec.id, prefix),
-    contract: stripPrefix(spec.contract, prefix),
+    id: stripNamespacePrefixes(spec.id, prefix),
+    contract: stripNamespacePrefixes(spec.contract, prefix),
     methods: spec.methods.map(m => ({
       ...m,
       narrative: m.narrative.map(step => ({
         ...step,
-        targetComponent: step.targetComponent ? stripPrefix(step.targetComponent, prefix) : undefined,
+        targetComponent: step.targetComponent ? stripNamespacePrefixes(step.targetComponent, prefix) : undefined,
       })),
     })),
   };
@@ -443,8 +466,8 @@ function stripNamespaceFromImplementation(spec: ImplementationSpec, prefix: stri
 function stripNamespaceFromType(spec: TypeSpec, prefix: string): TypeSpec {
   return {
     ...spec,
-    id: stripPrefix(spec.id, prefix),
-    subsystem: spec.subsystem ? stripPrefix(spec.subsystem, prefix) : undefined,
+    id: stripNamespacePrefixes(spec.id, prefix),
+    subsystem: spec.subsystem ? stripNamespacePrefixes(spec.subsystem, prefix) : undefined,
   };
 }
 
@@ -488,7 +511,15 @@ export function getSubsystemPath(id: string): string {
  * interface/port reference uses `dependsOn` and stays a flat sibling instead.
  */
 function findOwner(id: string, components: ComponentSpec[]): ComponentSpec | null {
-  return components.find((c) => c.id !== id && (c.owns ?? []).includes(id)) ?? null;
+  const { localId } = splitNamespace(id);
+  return components.find((c) => {
+    const { localId: cLocalId } = splitNamespace(c.id);
+    if (cLocalId === localId) return false;
+    return (c.owns ?? []).some(ownedId => {
+      const { localId: ownedLocalId } = splitNamespace(ownedId);
+      return ownedLocalId === localId;
+    });
+  }) ?? null;
 }
 
 export function getComponentPath(id: string, subsystemId?: string): string {
@@ -767,12 +798,16 @@ export function saveComponentSpec(spec: ComponentSpec): void {
   const p = getComponentPath(spec.id, spec.subsystem);
   ensureDir(path.dirname(p));
 
-  const { prefix } = splitNamespace(spec.id);
+  const subprojPrefix = getSubprojectPrefix(spec.id);
+  const prefix = subprojPrefix || splitNamespace(spec.id).prefix;
   const specToWrite = prefix ? stripNamespaceFromComponent(spec, prefix) : spec;
 
   const existing = loadComponentSpec(spec.id);
   if (existing) {
     specToWrite.createdAt = existing.createdAt;
+    if (existing.status && (!spec.status || spec.status === 'draft')) {
+      specToWrite.status = existing.status;
+    }
   }
   specToWrite.updatedAt = new Date().toISOString();
   writeYamlFile(p, specToWrite);
@@ -863,12 +898,23 @@ export function saveInterfaceSpec(spec: InterfaceSpec): void {
   const p = getInterfacePath(spec.id, spec.component);
   ensureDir(path.dirname(p));
 
-  const { prefix } = splitNamespace(spec.id);
+  const subprojPrefix = getSubprojectPrefix(spec.id);
+  const prefix = subprojPrefix || splitNamespace(spec.id).prefix;
   const specToWrite = prefix ? stripNamespaceFromInterface(spec, prefix) : spec;
 
   const existing = loadInterfaceSpec(spec.id);
   if (existing) {
     specToWrite.createdAt = existing.createdAt;
+    if (existing.status && (!spec.status || spec.status === 'draft')) {
+      specToWrite.status = existing.status;
+    }
+    // Preserve endpoint bindings for matching methods
+    for (const m of specToWrite.methods) {
+      const existingMethod = existing.methods.find(x => x.name === m.name);
+      if (existingMethod && existingMethod.endpoint) {
+        m.endpoint = existingMethod.endpoint;
+      }
+    }
   }
   specToWrite.updatedAt = new Date().toISOString();
   writeYamlFile(p, specToWrite);
@@ -907,12 +953,16 @@ export function saveImplementationSpec(spec: ImplementationSpec): void {
   const p = getImplementationPath(spec.id, spec.contract);
   ensureDir(path.dirname(p));
 
-  const { prefix } = splitNamespace(spec.id);
+  const subprojPrefix = getSubprojectPrefix(spec.id);
+  const prefix = subprojPrefix || splitNamespace(spec.id).prefix;
   const specToWrite = prefix ? stripNamespaceFromImplementation(spec, prefix) : spec;
 
   const existing = loadImplementationSpec(spec.id);
   if (existing) {
     specToWrite.createdAt = existing.createdAt;
+    if (existing.status && (!spec.status || spec.status === 'draft')) {
+      specToWrite.status = existing.status;
+    }
   }
   specToWrite.updatedAt = new Date().toISOString();
   writeYamlFile(p, specToWrite);
@@ -1001,15 +1051,20 @@ export function loadTypeSpec(id: string): TypeSpec | null {
 }
 
 export function saveTypeSpec(spec: TypeSpec): void {
-  const p = getTypePath(spec.id, spec.subsystem, spec.group);
+  const existing = loadTypeSpec(spec.id);
+  const group = spec.group || (existing ? existing.group : undefined);
+  const p = getTypePath(spec.id, spec.subsystem, group);
   ensureDir(path.dirname(p));
 
-  const { prefix } = splitNamespace(spec.id);
+  const subprojPrefix = getSubprojectPrefix(spec.id);
+  const prefix = subprojPrefix || splitNamespace(spec.id).prefix;
   const specToWrite = prefix ? stripNamespaceFromType(spec, prefix) : spec;
 
-  const existing = loadTypeSpec(spec.id);
   if (existing) {
     specToWrite.createdAt = existing.createdAt;
+    if (!specToWrite.group && existing.group) {
+      specToWrite.group = stripNamespacePrefixes(existing.group, prefix);
+    }
   }
   specToWrite.updatedAt = new Date().toISOString();
   writeYamlFile(p, specToWrite);
@@ -1278,7 +1333,7 @@ export function deleteGroupSpec(id: string): boolean {
 function stripNamespaceFromGroup(spec: GroupSpec, prefix: string): GroupSpec {
   return {
     ...spec,
-    id: stripPrefix(spec.id, prefix),
+    id: stripNamespacePrefixes(spec.id, prefix),
   };
 }
 
