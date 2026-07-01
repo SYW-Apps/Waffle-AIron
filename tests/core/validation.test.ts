@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { validateRegistry, validateProjectConfig, validateSddTree } from '../../src/core/validation.js';
+import { invalidateSpecCache } from '../../src/core/specs.js';
 import { createEmptyRegistry } from '../../src/models/registry.js';
 import { createAgentRecord } from '../../src/models/agent.js';
 import { RulesConfig } from '../../src/models/project.js';
@@ -129,6 +130,7 @@ describe('validateProjectConfig', () => {
 
 describe('validateSddTree', () => {
   function createTempProject() {
+    invalidateSpecCache();
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-sdd-test-'));
     const originalCwd = process.cwd();
 
@@ -166,6 +168,7 @@ describe('validateSddTree', () => {
         vi.spyOn(process, 'cwd').mockReturnValue(tempDir);
       },
       cleanup: () => {
+        invalidateSpecCache();
         vi.restoreAllMocks();
         try {
           fs.rmSync(tempDir, { recursive: true, force: true });
@@ -1716,7 +1719,7 @@ updatedAt: '2026-06-10T22:00:00Z'
     }
   });
 
-  it('flags UNUSED_COMPONENT and UNUSED_METHOD warnings for unreachable call chains', () => {
+  it('flags UNUSED_COMPONENT, UNUSED_METHOD, and UNUSED_TYPE warnings for unreachable chains', () => {
     const proj = createTempProject();
     proj.writeSpec('system', 'system', `
 schemaVersion: 1.0.0
@@ -1735,6 +1738,30 @@ publicInterfaces:
   - type: REST
     details: public rest api
     component: comp-entry
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('type', 'used-type', `
+schemaVersion: 1.0.0
+id: used-type
+kind: value-object
+name: UsedType
+subsystem: sub-a
+fields:
+  - name: id
+    type: string
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('type', 'unused-type', `
+schemaVersion: 1.0.0
+id: unused-type
+kind: value-object
+name: UnusedType
+subsystem: sub-a
+fields:
+  - name: id
+    type: string
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);
@@ -1759,7 +1786,7 @@ component: comp-entry
 methods:
   - name: entryMethod
     description: entry method
-    signature: "entryMethod(): Promise<void>"
+    signature: "entryMethod(data: UsedType): Promise<void>"
     returns: "Promise<void>"
     endpoint:
       transport: HTTP
@@ -1862,6 +1889,14 @@ updatedAt: '2026-06-10T22:00:00Z'
       expect(unusedMethodIssue).toBeDefined();
       expect(unusedMethodIssue!.severity).toBe('warning');
       expect(unusedMethodIssue!.message).toContain('uncalledMethod');
+
+      const unusedTypeIssue = res.issues.find(i => i.code === 'UNUSED_TYPE' && i.specId === 'unused-type');
+      expect(unusedTypeIssue).toBeDefined();
+      expect(unusedTypeIssue!.severity).toBe('warning');
+      expect(unusedTypeIssue!.message).toContain('unused-type');
+
+      const usedTypeIssue = res.issues.find(i => i.code === 'UNUSED_TYPE' && i.specId === 'used-type');
+      expect(usedTypeIssue).toBeUndefined();
     } finally {
       proj.cleanup();
     }

@@ -1370,6 +1370,63 @@ export function validateSddTree(
     }
   }
 
+  // Generate warnings for unused types
+  const referencedTypes = new Set<string>();
+  const markTypeReferenced = (ref: string) => {
+    const refLower = ref.toLowerCase();
+    if (BUILTIN_TYPES.has(refLower)) return;
+    for (const spec of types) {
+      const typeQualifiedId = spec.subsystem && !spec.id.startsWith(`${spec.subsystem}::`)
+        ? `${spec.subsystem}::${spec.id}`
+        : spec.id;
+      if (matchTypeRef(ref, typeQualifiedId)) {
+        referencedTypes.add(spec.id);
+      }
+    }
+  };
+
+  // 1. Scan type fields
+  for (const t of types) {
+    for (const field of t.fields) {
+      const refs = extractTypeIdentifiers(field.type);
+      for (const ref of refs) {
+        const typeGenerics = new Set(
+          Array.from(extractTypeGenerics(t.name)).map(g => g.toLowerCase())
+        );
+        if (typeGenerics.has(ref.toLowerCase())) {
+          continue;
+        }
+        markTypeReferenced(ref);
+      }
+    }
+  }
+
+  // 2. Scan interface method signatures & returns
+  for (const intf of interfaces) {
+    for (const m of intf.methods) {
+      const refs = extractTypesFromSignature(m.signature, m.returns);
+      for (const ref of refs) {
+        markTypeReferenced(ref);
+      }
+    }
+  }
+
+  for (const t of types) {
+    if (isSpecInScope(t.id)) {
+      if (!referencedTypes.has(t.id)) {
+        const sub = subsystems.find(s => s.id === t.subsystem);
+        const isDraftCtx = sub ? (sub.status === 'draft' || sub.status === 'design') : false;
+        addIssue(
+          'warning',
+          'UNUSED_TYPE',
+          `Type "${t.id}" is defined but never referenced by any type fields or interface methods.`,
+          t.id,
+          isDraftCtx
+        );
+      }
+    }
+  }
+
   return {
     valid: issues.every((i) => i.severity !== 'error'),
     issues,
