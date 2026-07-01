@@ -1272,6 +1272,104 @@ export function validateSddTree(
     }
   }
 
+  // 6. Unused / Unwired Components & Methods Detection
+  const reachedComponents = new Set<string>();
+  const reachedMethods = new Set<string>();
+  const queue: string[] = [];
+
+  // Collect root entry points (Portals, Observers, and components backing public subsystem interfaces)
+  const rootComponents = new Set<string>();
+  for (const comp of components) {
+    if (comp.componentType === 'Portal' || comp.componentType === 'Observer') {
+      rootComponents.add(comp.id);
+    }
+  }
+  for (const sub of subsystems) {
+    for (const pi of sub.publicInterfaces) {
+      if (pi.component) {
+        rootComponents.add(pi.component);
+      }
+    }
+  }
+
+  // Initialize queue with methods of root components
+  for (const compId of rootComponents) {
+    reachedComponents.add(compId);
+    const intf = interfaces.find(i => i.component === compId);
+    if (intf) {
+      for (const m of intf.methods) {
+        const methodKey = `${compId}::${m.name}`;
+        if (!reachedMethods.has(methodKey)) {
+          reachedMethods.add(methodKey);
+          queue.push(methodKey);
+        }
+      }
+    }
+  }
+
+  // Traverse the call graph recursively
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    const [compId, methodName] = current.split('::');
+
+    const intf = interfaces.find(i => i.component === compId);
+    if (!intf) continue;
+
+    const impl = implementations.find(imp => imp.contract === intf.id);
+    if (!impl) continue;
+
+    const methodImpl = impl.methods.find(m => m.name === methodName);
+    if (!methodImpl) continue;
+
+    for (const step of methodImpl.narrative) {
+      if (step.type === 'call' && step.targetComponent && step.targetMethod) {
+        const targetId = step.targetComponent;
+        const targetMethod = step.targetMethod;
+        const targetKey = `${targetId}::${targetMethod}`;
+
+        reachedComponents.add(targetId);
+        if (!reachedMethods.has(targetKey)) {
+          reachedMethods.add(targetKey);
+          queue.push(targetKey);
+        }
+      }
+    }
+  }
+
+  // Generate warnings for unused components
+  for (const comp of components) {
+    if (isSpecInScope(comp.id)) {
+      if (!reachedComponents.has(comp.id)) {
+        const isDraftCtx = comp.status === 'draft' || comp.status === 'design';
+        addIssue(
+          'warning',
+          'UNUSED_COMPONENT',
+          `Component "${comp.id}" is defined but never reached by any execution call chain starting from portals or entry points.`,
+          comp.id,
+          isDraftCtx
+        );
+      } else {
+        // Warn about unused methods on this reached component
+        const intf = interfaces.find(i => i.component === comp.id);
+        if (intf) {
+          for (const m of intf.methods) {
+            const methodKey = `${comp.id}::${m.name}`;
+            if (!reachedMethods.has(methodKey)) {
+              const isDraftCtx = comp.status === 'draft' || comp.status === 'design' || intf.status === 'draft' || intf.status === 'design';
+              addIssue(
+                'warning',
+                'UNUSED_METHOD',
+                `Method "${m.name}" on component "${comp.id}" is defined but never called by any narrative step.`,
+                comp.id,
+                isDraftCtx
+              );
+            }
+          }
+        }
+      }
+    }
+  }
+
   return {
     valid: issues.every((i) => i.severity !== 'error'),
     issues,

@@ -200,7 +200,7 @@ id: comp-a
 name: ComponentA
 description: Component A description
 subsystem: sub-a
-componentType: Orchestrator
+componentType: Observer
 dependsOn: []
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
@@ -1711,6 +1711,157 @@ updatedAt: '2026-06-10T22:00:00Z'
       expect(issue).toBeDefined();
       expect(issue!.severity).toBe('error');
       expect(res.valid).toBe(false);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('flags UNUSED_COMPONENT and UNUSED_METHOD warnings for unreachable call chains', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: Subsystem A description
+parentSystem: TestSystem
+publicInterfaces:
+  - type: REST
+    details: public rest api
+    component: comp-entry
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('component', 'comp-entry', `
+schemaVersion: 1.0.0
+id: comp-entry
+name: EntryPortal
+description: Entry portal
+subsystem: sub-a
+componentType: Portal
+portalType: HTTP_API
+dependsOn: [comp-called]
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('interface', 'icomp-entry', `
+schemaVersion: 1.0.0
+id: icomp-entry
+name: IEntryPortal
+description: Entry portal contract
+component: comp-entry
+methods:
+  - name: entryMethod
+    description: entry method
+    signature: "entryMethod(): Promise<void>"
+    returns: "Promise<void>"
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /entry
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('implementation', 'impl-entry', `
+schemaVersion: 1.0.0
+id: impl-entry
+name: ImplEntry
+description: Impl entry
+contract: icomp-entry
+methods:
+  - name: entryMethod
+    narrative:
+      - stepNumber: 1
+        description: Call another method
+        type: call
+        targetComponent: comp-called
+        targetMethod: calledMethod
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+    proj.writeSpec('component', 'comp-called', `
+schemaVersion: 1.0.0
+id: comp-called
+name: ComponentCalled
+description: Called component
+subsystem: sub-a
+componentType: Orchestrator
+dependsOn: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('interface', 'icomp-called', `
+schemaVersion: 1.0.0
+id: icomp-called
+name: IComponentCalled
+description: Called interface
+component: comp-called
+methods:
+  - name: calledMethod
+    description: called method
+    signature: "calledMethod(): Promise<void>"
+    returns: "Promise<void>"
+  - name: uncalledMethod
+    description: uncalled method
+    signature: "uncalledMethod(): Promise<void>"
+    returns: "Promise<void>"
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('implementation', 'impl-called', `
+schemaVersion: 1.0.0
+id: impl-called
+name: ImplCalled
+description: Impl called
+contract: icomp-called
+methods:
+  - name: calledMethod
+    narrative:
+      - stepNumber: 1
+        description: do local
+        type: local
+  - name: uncalledMethod
+    narrative:
+      - stepNumber: 1
+        description: do local
+        type: local
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+    proj.writeSpec('component', 'comp-unused', `
+schemaVersion: 1.0.0
+id: comp-unused
+name: UnusedComp
+description: Unused component
+subsystem: sub-a
+componentType: Orchestrator
+dependsOn: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.valid).toBe(true);
+
+      const unusedCompIssue = res.issues.find(i => i.code === 'UNUSED_COMPONENT');
+      expect(unusedCompIssue).toBeDefined();
+      expect(unusedCompIssue!.severity).toBe('warning');
+      expect(unusedCompIssue!.message).toContain('comp-unused');
+
+      const unusedMethodIssue = res.issues.find(i => i.code === 'UNUSED_METHOD');
+      expect(unusedMethodIssue).toBeDefined();
+      expect(unusedMethodIssue!.severity).toBe('warning');
+      expect(unusedMethodIssue!.message).toContain('uncalledMethod');
     } finally {
       proj.cleanup();
     }
