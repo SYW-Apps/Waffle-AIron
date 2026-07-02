@@ -69,6 +69,17 @@ migration*).
   minimization, "rearrange" toggle, PNG export.
 - **`wairon diagram --drawio` / `--excalidraw`** — editable exports in open
   formats with the same computed layout.
+- **Canvas 2.0**: SYW / light themes, redesigned toolbar, view levels
+  (System / Components / Full), presentation mode, per-browser layout
+  persistence with reset, search dims edges along with nodes, sidebar with
+  collapsible sections, hover-highlighting from references, narrative
+  flowchart modal (call drill-down with back navigation, PNG export), and an
+  Export menu (PNG / draw.io / Excalidraw) that uses the CURRENT — possibly
+  rearranged — positions. `--format <fmt>` flag added.
+- **CLI behavior change**: bare `wairon diagram` now writes the interactive
+  canvas (the primary format); Mermaid moved behind `--format mermaid` /
+  `--subsystem` and writes a file instead of printing to stdout (use a
+  `.mmd` `--out` for raw Mermaid).
 
 ### Testing & tooling
 

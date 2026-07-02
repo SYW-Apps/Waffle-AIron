@@ -117,6 +117,18 @@ export async function runDiagram(rawOptions: DiagramOptions = {}): Promise<void>
     return;
   }
 
+  // Bare `wairon diagram` (no format, no scope) → the interactive canvas.
+  const wantsMermaid = options.format?.toLowerCase().startsWith('mermaid')
+    || !!options.subsystem
+    || !!options.sequence;
+  if (!options.all && !options.sequence && !wantsMermaid) {
+    const dest = options.out ?? path.join(AI_PATHS.docsDir(), 'diagrams', 'canvas.html');
+    writeCanvas(dest);
+    logger.success(`Interactive canvas written to ${dest}`);
+    logger.info('Open it in a browser — fully self-contained (works offline). Other formats: --format mermaid|drawio|excalidraw.');
+    return;
+  }
+
   if (options.all) {
     const outDir = options.out ?? path.join(AI_PATHS.docsDir(), 'diagrams');
     const files = generateDiagramSet();
@@ -144,28 +156,32 @@ export async function runDiagram(rawOptions: DiagramOptions = {}): Promise<void>
     return;
   }
 
+  // Mermaid — like every other format, written to a file.
   let mermaid: string;
   let title: string;
+  let defaultDest: string;
+  const diagramsDir = path.join(AI_PATHS.docsDir(), 'diagrams');
   if (options.sequence) {
     const { component, method } = parseSequenceRef(options.sequence);
     mermaid = generateSequenceDiagram(component, method, { depth: options.depth });
     title = `${component}.${method} — narrative sequence`;
-  } else {
+    defaultDest = path.join(diagramsDir, 'sequences', `${component.replace(/::/g, '--')}.${method}.md`);
+  } else if (options.subsystem) {
     mermaid = generateComponentDiagram({ subsystem: options.subsystem });
-    title = options.subsystem
-      ? `${options.subsystem} — components`
-      : 'Component architecture';
+    title = `${options.subsystem} — components`;
+    defaultDest = path.join(diagramsDir, 'subsystems', `${options.subsystem.replace(/::/g, '--')}.md`);
+  } else {
+    mermaid = generateComponentDiagram();
+    title = 'Component architecture';
+    defaultDest = path.join(diagramsDir, 'system.md');
   }
 
-  if (options.out) {
-    ensureDir(path.dirname(path.resolve(options.out)));
-    const isMarkdown = options.out.endsWith('.md');
-    const content = isMarkdown
-      ? toMarkdown({ relPath: options.out, title, mermaid })
-      : `${mermaid}\n`;
-    fs.writeFileSync(options.out, content, 'utf-8');
-    logger.success(`Diagram written to ${options.out}`);
-  } else {
-    console.log(mermaid);
-  }
+  const dest = options.out ?? defaultDest;
+  ensureDir(path.dirname(path.resolve(dest)));
+  const content = dest.endsWith('.mmd')
+    ? `${mermaid}\n`
+    : toMarkdown({ relPath: dest, title, mermaid });
+  fs.writeFileSync(dest, content, 'utf-8');
+  logger.success(`Mermaid diagram written to ${dest}`);
+  logger.info('Renders on GitHub/IDE previews; use a .mmd --out path for raw Mermaid.');
 }

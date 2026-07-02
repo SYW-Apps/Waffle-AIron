@@ -1,279 +1,242 @@
 import { CanvasModel } from './canvas.js';
-import { computeLayout, LayoutBox } from './canvas-layout.js';
+import { computeLayout, LayoutResult } from './canvas-layout.js';
 
 // ---------------------------------------------------------------------------
 // Editable diagram exports: draw.io (mxGraph XML) and Excalidraw (scene JSON).
 //
-// Both are open formats importable by draw.io/diagrams.net, Excalidraw, and
-// tools that accept them (including whiteboard tools with drawio/excalidraw
-// import). Positions come from the same computeLayout used by the interactive
-// canvas, so every export shows the identical blueprint — subsystems as
-// containers (draggable as groups in draw.io), pattern members nested,
-// stereotype colors, thick red boundary-hop edges.
+// Both builders are SELF-CONTAINED BY DESIGN (no references to module scope):
+// the interactive canvas serializes them via Function.prototype.toString into
+// its HTML, so in-browser exports use the user's CURRENT (possibly rearranged)
+// node positions — while the CLI exporters below call them with the computed
+// blueprint layout. One implementation, both worlds.
 // ---------------------------------------------------------------------------
 
-const STEREO_COLORS: Record<string, { fill: string; stroke: string }> = {
-  entry: { fill: '#eef4ff', stroke: '#4a7dcf' },
-  logic: { fill: '#f4effd', stroke: '#8a63c9' },
-  data: { fill: '#fdf6e3', stroke: '#c9963f' },
-  adapter: { fill: '#eef8f1', stroke: '#4f9e6b' },
-  pattern: { fill: '#f6f8fa', stroke: '#6a737d' },
-};
-
-const PATTERN_TYPES = new Set(['Repository', 'Gateway', 'FeatureComponent', 'RouterComponent']);
-
-function stereoKey(componentType: string): keyof typeof STEREO_COLORS {
-  if (componentType === 'Portal' || componentType === 'Observer') return 'entry';
-  if (componentType === 'Store' || componentType === 'Index' || componentType === 'Registry') return 'data';
-  if (componentType === 'Adapter') return 'adapter';
-  if (PATTERN_TYPES.has(componentType)) return 'pattern';
-  return 'logic';
+/** Minimal model surface the builders need (structural subset of CanvasModel). */
+export interface ExportModel {
+  system: { name: string };
+  generatedAt: string;
+  subsystems: { id: string; name: string }[];
+  components: {
+    id: string;
+    name: string;
+    subsystem: string;
+    componentType: string;
+    portalType?: string;
+    public: boolean;
+    owner?: string;
+    owns: string[];
+  }[];
+  edges: { from: string; to: string; cross: boolean }[];
 }
 
-function escapeXml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+export function buildDrawioXml(model: ExportModel, L: LayoutResult): string {
+  const PATTERN_TYPES: Record<string, number> = { Repository: 1, Gateway: 1, FeatureComponent: 1, RouterComponent: 1 };
+  const COLORS: Record<string, { fill: string; stroke: string }> = {
+    entry: { fill: '#eef4ff', stroke: '#4a7dcf' },
+    logic: { fill: '#f4effd', stroke: '#8a5cf6' },
+    data: { fill: '#fdf6e3', stroke: '#c9963f' },
+    adapter: { fill: '#eef8f1', stroke: '#4f9e6b' },
+    pattern: { fill: '#f6f8fa', stroke: '#6a737d' },
+  };
+  function stereo(t: string): string {
+    if (t === 'Portal' || t === 'Observer') return 'entry';
+    if (t === 'Store' || t === 'Index' || t === 'Registry') return 'data';
+    if (t === 'Adapter') return 'adapter';
+    if (PATTERN_TYPES[t]) return 'pattern';
+    return 'logic';
+  }
+  function esc(s: string): string {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
 
-// ---------------------------------------------------------------------------
-// draw.io
-// ---------------------------------------------------------------------------
-
-export function generateDrawioXml(model: CanvasModel): string {
-  const L = computeLayout(model, {});
   const cells: string[] = [];
-  const subCell = (id: string) => `sub_${id}`;
-  const compCell = (id: string) => `comp_${id}`;
+  const compById: Record<string, ExportModel['components'][number]> = {};
+  model.components.forEach(function (c) { compById[c.id] = c; });
 
-  const vertex = (
-    id: string,
-    parent: string,
-    value: string,
-    style: string,
-    box: LayoutBox,
-    parentBox?: LayoutBox,
-  ) => {
+  function vertex(id: string, parent: string, value: string, style: string, box: { x: number; y: number; w: number; h: number }, parentBox?: { x: number; y: number }): void {
     const x = parentBox ? box.x - parentBox.x : box.x;
     const y = parentBox ? box.y - parentBox.y : box.y;
     cells.push(
-      `        <mxCell id="${escapeXml(id)}" value="${escapeXml(value)}" style="${escapeXml(style)}" vertex="1" parent="${escapeXml(parent)}">` +
-      `<mxGeometry x="${x}" y="${y}" width="${box.w}" height="${box.h}" as="geometry"/></mxCell>`,
+      '        <mxCell id="' + esc(id) + '" value="' + esc(value) + '" style="' + esc(style) + '" vertex="1" parent="' + esc(parent) + '">' +
+      '<mxGeometry x="' + x + '" y="' + y + '" width="' + box.w + '" height="' + box.h + '" as="geometry"/></mxCell>',
     );
-  };
+  }
 
-  for (const sub of model.subsystems) {
+  model.subsystems.forEach(function (sub) {
     const box = L.subs[sub.id];
-    if (!box) continue;
-    vertex(
-      subCell(sub.id),
-      '1',
-      sub.name,
+    if (!box) return;
+    vertex('sub_' + sub.id, '1', sub.name,
       'rounded=1;arcSize=4;fillColor=#ffffff;strokeColor=#b6c0cc;verticalAlign=top;fontStyle=1;fontSize=13;container=1;collapsible=1;whiteSpace=wrap;',
-      box,
-    );
-  }
+      box);
+  });
 
-  const componentById = new Map(model.components.map(c => [c.id, c]));
-  for (const comp of model.components) {
+  model.components.forEach(function (comp) {
     const box = L.boxes[comp.id];
-    if (!box) continue;
-    const isPattern = PATTERN_TYPES.has(comp.componentType) && comp.owns.length > 0;
-    const owner = comp.owner ? componentById.get(comp.owner) : undefined;
-    const parentId = owner && L.boxes[owner.id] ? compCell(owner.id) : subCell(comp.subsystem);
-    const parentBox = owner && L.boxes[owner.id] ? L.boxes[owner.id] : L.subs[comp.subsystem];
-    const colors = STEREO_COLORS[stereoKey(comp.componentType)];
-    const label = `${comp.name}\n«${comp.componentType}${comp.portalType ? '/' + comp.portalType : ''}»`;
+    if (!box) return;
+    const isPattern = !!PATTERN_TYPES[comp.componentType] && comp.owns.length > 0;
+    const owner = comp.owner ? compById[comp.owner] : undefined;
+    const nestInPattern = !!(owner && L.boxes[owner.id]);
+    const parentId = nestInPattern ? 'comp_' + owner!.id : 'sub_' + comp.subsystem;
+    const parentBox = nestInPattern ? L.boxes[owner!.id] : L.subs[comp.subsystem];
+    const colors = COLORS[stereo(comp.componentType)];
+    const label = comp.name + '\n«' + comp.componentType + (comp.portalType ? '/' + comp.portalType : '') + '»';
     const style = isPattern
-      ? `rounded=1;fillColor=${colors.fill};strokeColor=${colors.stroke};dashed=1;verticalAlign=top;fontStyle=1;container=1;collapsible=1;whiteSpace=wrap;`
-      : `rounded=1;fillColor=${colors.fill};strokeColor=${colors.stroke};whiteSpace=wrap;fontSize=11;` +
-        (comp.public ? 'strokeWidth=3;' : '');
-    vertex(compCell(comp.id), parentId, label, style, box, parentBox);
-  }
+      ? 'rounded=1;fillColor=' + colors.fill + ';strokeColor=' + colors.stroke + ';dashed=1;verticalAlign=top;fontStyle=1;container=1;collapsible=1;whiteSpace=wrap;'
+      : 'rounded=1;fillColor=' + colors.fill + ';strokeColor=' + colors.stroke + ';whiteSpace=wrap;fontSize=11;' + (comp.public ? 'strokeWidth=3;' : '');
+    vertex('comp_' + comp.id, parentId, label, style, box, parentBox);
+  });
 
   let edgeN = 0;
-  for (const edge of model.edges) {
-    if (!L.boxes[edge.from] || !L.boxes[edge.to]) continue;
+  model.edges.forEach(function (edge) {
+    if (!L.boxes[edge.from] || !L.boxes[edge.to]) return;
     const style = edge.cross
       ? 'edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#c26767;strokeWidth=2;endArrow=block;endFill=1;'
       : 'edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#8d97a5;endArrow=block;endFill=1;';
     cells.push(
-      `        <mxCell id="edge_${edgeN++}" style="${escapeXml(style)}" edge="1" parent="1" ` +
-      `source="${escapeXml(compCell(edge.from))}" target="${escapeXml(compCell(edge.to))}">` +
-      `<mxGeometry relative="1" as="geometry"/></mxCell>`,
+      '        <mxCell id="edge_' + (edgeN++) + '" style="' + esc(style) + '" edge="1" parent="1" ' +
+      'source="' + esc('comp_' + edge.from) + '" target="' + esc('comp_' + edge.to) + '">' +
+      '<mxGeometry relative="1" as="geometry"/></mxCell>',
     );
-  }
+  });
 
   return [
-    `<mxfile host="wairon" agent="wairon" modified="${escapeXml(model.generatedAt)}">`,
-    `  <diagram id="architecture" name="${escapeXml(model.system.name)} architecture">`,
+    '<mxfile host="wairon" agent="wairon" modified="' + esc(model.generatedAt) + '">',
+    '  <diagram id="architecture" name="' + esc(model.system.name) + ' architecture">',
     '    <mxGraphModel dx="1000" dy="700" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" math="0" shadow="0">',
     '      <root>',
     '        <mxCell id="0"/>',
     '        <mxCell id="1" parent="0"/>',
-    ...cells,
+  ].concat(cells, [
     '      </root>',
     '    </mxGraphModel>',
     '  </diagram>',
     '</mxfile>',
     '',
-  ].join('\n');
+  ]).join('\n');
 }
 
-// ---------------------------------------------------------------------------
-// Excalidraw
-// ---------------------------------------------------------------------------
-
-/** Deterministic pseudo-random seed per element id, so exports diff cleanly. */
-function seedFor(id: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < id.length; i++) {
-    h ^= id.charCodeAt(i);
-    h = Math.imul(h, 16777619);
+export function buildExcalidrawScene(model: ExportModel, L: LayoutResult): string {
+  const PATTERN_TYPES: Record<string, number> = { Repository: 1, Gateway: 1, FeatureComponent: 1, RouterComponent: 1 };
+  const COLORS: Record<string, { fill: string; stroke: string }> = {
+    entry: { fill: '#eef4ff', stroke: '#4a7dcf' },
+    logic: { fill: '#f4effd', stroke: '#8a5cf6' },
+    data: { fill: '#fdf6e3', stroke: '#c9963f' },
+    adapter: { fill: '#eef8f1', stroke: '#4f9e6b' },
+    pattern: { fill: '#f6f8fa', stroke: '#6a737d' },
+  };
+  function stereo(t: string): string {
+    if (t === 'Portal' || t === 'Observer') return 'entry';
+    if (t === 'Store' || t === 'Index' || t === 'Registry') return 'data';
+    if (t === 'Adapter') return 'adapter';
+    if (PATTERN_TYPES[t]) return 'pattern';
+    return 'logic';
   }
-  return Math.abs(h) || 1;
-}
+  function seedFor(id: string): number {
+    let h = 2166136261;
+    for (let i = 0; i < id.length; i++) {
+      h ^= id.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return Math.abs(h) || 1;
+  }
+  function base(id: string, type: string, box: { x: number; y: number; w: number; h: number }): any {
+    return {
+      id: id, type: type, x: box.x, y: box.y, width: box.w, height: box.h,
+      angle: 0, strokeColor: '#1f2328', backgroundColor: 'transparent',
+      fillStyle: 'solid', strokeWidth: 1, strokeStyle: 'solid', roughness: 0,
+      opacity: 100, groupIds: [], frameId: null, roundness: { type: 3 },
+      seed: seedFor(id), version: 1, versionNonce: seedFor(id + '#n'),
+      isDeleted: false, boundElements: [], updated: 1, link: null, locked: false,
+    };
+  }
+  function boundLabel(rect: any, text: string, fontSize: number, verticalAlign: string): any {
+    const id = rect.id + '-label';
+    const label = base(id, 'text', { x: rect.x + 8, y: rect.y + 6, w: rect.width - 16, h: 20 });
+    label.roundness = null;
+    label.text = text;
+    label.originalText = text;
+    label.fontSize = fontSize;
+    label.fontFamily = 1;
+    label.textAlign = 'center';
+    label.verticalAlign = verticalAlign;
+    label.containerId = rect.id;
+    label.autoResize = true;
+    label.lineHeight = 1.25;
+    rect.boundElements.push({ id: id, type: 'text' });
+    return label;
+  }
 
-interface ExElement {
-  [key: string]: unknown;
-}
+  const elements: any[] = [];
+  const rectById: Record<string, any> = {};
 
-function baseElement(id: string, type: string, box: LayoutBox): ExElement {
-  return {
-    id,
-    type,
-    x: box.x,
-    y: box.y,
-    width: box.w,
-    height: box.h,
-    angle: 0,
-    strokeColor: '#1f2328',
-    backgroundColor: 'transparent',
-    fillStyle: 'solid',
-    strokeWidth: 1,
-    strokeStyle: 'solid',
-    roughness: 0,
-    opacity: 100,
-    groupIds: [],
-    frameId: null,
-    roundness: { type: 3 },
-    seed: seedFor(id),
-    version: 1,
-    versionNonce: seedFor(id + '#n'),
-    isDeleted: false,
-    boundElements: [] as { id: string; type: string }[],
-    updated: 1,
-    link: null,
-    locked: false,
-  };
-}
-
-function boundLabel(
-  rect: ExElement,
-  text: string,
-  opts: { fontSize: number; verticalAlign: 'top' | 'middle'; color?: string },
-): ExElement {
-  const id = `${rect.id}-label`;
-  const label: ExElement = {
-    ...baseElement(id, 'text', { x: (rect.x as number) + 8, y: (rect.y as number) + 6, w: (rect.width as number) - 16, h: 20 }),
-    roundness: null,
-    text,
-    originalText: text,
-    fontSize: opts.fontSize,
-    fontFamily: 1,
-    textAlign: 'center',
-    verticalAlign: opts.verticalAlign,
-    containerId: rect.id,
-    autoResize: true,
-    lineHeight: 1.25,
-    strokeColor: opts.color ?? '#1f2328',
-  };
-  (rect.boundElements as { id: string; type: string }[]).push({ id, type: 'text' });
-  return label;
-}
-
-export function generateExcalidrawScene(model: CanvasModel): string {
-  const L = computeLayout(model, {});
-  const elements: ExElement[] = [];
-  const rectById = new Map<string, ExElement>();
-
-  for (const sub of model.subsystems) {
+  model.subsystems.forEach(function (sub) {
     const box = L.subs[sub.id];
-    if (!box) continue;
-    const rect = {
-      ...baseElement(`sub-${sub.id}`, 'rectangle', box),
-      backgroundColor: '#ffffff',
-      strokeColor: '#b6c0cc',
-    };
+    if (!box) return;
+    const rect = base('sub-' + sub.id, 'rectangle', box);
+    rect.backgroundColor = '#ffffff';
+    rect.strokeColor = '#b6c0cc';
     elements.push(rect);
-    elements.push(boundLabel(rect, sub.name, { fontSize: 14, verticalAlign: 'top', color: '#1f2328' }));
-  }
+    elements.push(boundLabel(rect, sub.name, 14, 'top'));
+  });
 
-  for (const comp of model.components) {
+  model.components.forEach(function (comp) {
     const box = L.boxes[comp.id];
-    if (!box) continue;
-    const isPattern = PATTERN_TYPES.has(comp.componentType) && comp.owns.length > 0;
-    const colors = STEREO_COLORS[stereoKey(comp.componentType)];
-    const rect = {
-      ...baseElement(`comp-${comp.id}`, 'rectangle', box),
-      backgroundColor: colors.fill,
-      strokeColor: colors.stroke,
-      strokeWidth: comp.public ? 3 : 1,
-      strokeStyle: isPattern || stereoKey(comp.componentType) === 'pattern' ? 'dashed' : 'solid',
-    };
+    if (!box) return;
+    const isPattern = !!PATTERN_TYPES[comp.componentType] && comp.owns.length > 0;
+    const colors = COLORS[stereo(comp.componentType)];
+    const rect = base('comp-' + comp.id, 'rectangle', box);
+    rect.backgroundColor = colors.fill;
+    rect.strokeColor = colors.stroke;
+    rect.strokeWidth = comp.public ? 3 : 1;
+    rect.strokeStyle = (isPattern || stereo(comp.componentType) === 'pattern') ? 'dashed' : 'solid';
     elements.push(rect);
-    rectById.set(comp.id, rect);
-    const label = `${comp.name}\n«${comp.componentType}${comp.portalType ? '/' + comp.portalType : ''}»`;
-    elements.push(boundLabel(rect, label, {
-      fontSize: 11,
-      verticalAlign: isPattern ? 'top' : 'middle',
-    }));
-  }
+    rectById[comp.id] = rect;
+    const label = comp.name + '\n«' + comp.componentType + (comp.portalType ? '/' + comp.portalType : '') + '»';
+    elements.push(boundLabel(rect, label, 11, isPattern ? 'top' : 'middle'));
+  });
 
   let edgeN = 0;
-  for (const edge of model.edges) {
+  model.edges.forEach(function (edge) {
     const a = L.boxes[edge.from], b = L.boxes[edge.to];
-    const src = rectById.get(edge.from), tgt = rectById.get(edge.to);
-    if (!a || !b || !src || !tgt) continue;
+    const src = rectById[edge.from], tgt = rectById[edge.to];
+    if (!a || !b || !src || !tgt) return;
     const leftToRight = b.x >= a.x + a.w;
-    const start = leftToRight
-      ? { x: a.x + a.w, y: a.y + a.h / 2 }
-      : { x: a.x, y: a.y + a.h / 2 };
-    const end = leftToRight
-      ? { x: b.x, y: b.y + b.h / 2 }
-      : { x: b.x + b.w, y: b.y + b.h / 2 };
-    const id = `edge-${edgeN++}`;
-    const arrow: ExElement = {
-      ...baseElement(id, 'arrow', { x: start.x, y: start.y, w: Math.abs(end.x - start.x), h: Math.abs(end.y - start.y) }),
-      roundness: { type: 2 },
-      backgroundColor: 'transparent',
-      strokeColor: edge.cross ? '#c26767' : '#8d97a5',
-      strokeWidth: edge.cross ? 2 : 1,
-      points: [[0, 0], [end.x - start.x, end.y - start.y]],
-      lastCommittedPoint: null,
-      startBinding: { elementId: src.id, focus: 0, gap: 4 },
-      endBinding: { elementId: tgt.id, focus: 0, gap: 4 },
-      startArrowhead: null,
-      endArrowhead: 'arrow',
-    };
-    (src.boundElements as { id: string; type: string }[]).push({ id, type: 'arrow' });
-    (tgt.boundElements as { id: string; type: string }[]).push({ id, type: 'arrow' });
+    const start = leftToRight ? { x: a.x + a.w, y: a.y + a.h / 2 } : { x: a.x, y: a.y + a.h / 2 };
+    const end = leftToRight ? { x: b.x, y: b.y + b.h / 2 } : { x: b.x + b.w, y: b.y + b.h / 2 };
+    const id = 'edge-' + (edgeN++);
+    const arrow = base(id, 'arrow', { x: start.x, y: start.y, w: Math.abs(end.x - start.x), h: Math.abs(end.y - start.y) });
+    arrow.roundness = { type: 2 };
+    arrow.strokeColor = edge.cross ? '#c26767' : '#8d97a5';
+    arrow.strokeWidth = edge.cross ? 2 : 1;
+    arrow.points = [[0, 0], [end.x - start.x, end.y - start.y]];
+    arrow.lastCommittedPoint = null;
+    arrow.startBinding = { elementId: src.id, focus: 0, gap: 4 };
+    arrow.endBinding = { elementId: tgt.id, focus: 0, gap: 4 };
+    arrow.startArrowhead = null;
+    arrow.endArrowhead = 'arrow';
+    src.boundElements.push({ id: id, type: 'arrow' });
+    tgt.boundElements.push({ id: id, type: 'arrow' });
     elements.push(arrow);
-  }
+  });
 
-  const scene = {
+  return JSON.stringify({
     type: 'excalidraw',
     version: 2,
     source: 'wairon',
-    elements,
-    appState: {
-      viewBackgroundColor: '#fafbfc',
-      gridSize: null,
-    },
+    elements: elements,
+    appState: { viewBackgroundColor: '#fafbfc', gridSize: null },
     files: {},
-  };
-  return JSON.stringify(scene, null, 2);
+  }, null, 2);
+}
+
+// ---------------------------------------------------------------------------
+// CLI-facing wrappers (blueprint layout)
+// ---------------------------------------------------------------------------
+
+export function generateDrawioXml(model: CanvasModel): string {
+  return buildDrawioXml(model, computeLayout(model, {}));
+}
+
+export function generateExcalidrawScene(model: CanvasModel): string {
+  return buildExcalidrawScene(model, computeLayout(model, {}));
 }

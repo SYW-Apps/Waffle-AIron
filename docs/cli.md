@@ -41,12 +41,16 @@ can emit, default severities, and any per-project overrides from
 rule is a self-contained module in `src/core/rules/`.
 
 ### `wairon diagram [--format <fmt>] [--subsystem <id>] [--sequence <component:method>] [--depth <n>] [--all] [--out <path>]`
-Generate Mermaid diagrams derived from the spec tree — living documentation
-from the same source of truth as the conformance gate:
+Generate architecture diagrams derived from the spec tree — living
+documentation from the same source of truth as the conformance gate. Every
+format writes a file (paths are printed); nothing opens automatically.
 
-- default: system-wide **component diagram** (subsystems as subgraphs,
-  `dependsOn` edges, thick edges for cross-subsystem boundary hops, dashed
-  `owns` containment, bold border on the published public surface).
+- **default (no flags): the interactive canvas** (`canvas.html`).
+- `--format mermaid` (or `--subsystem <id>`): system-wide or scoped Mermaid
+  **component diagram** as a markdown file (subsystems as subgraphs,
+  `dependsOn` edges, thick edges for boundary hops, dashed `owns`
+  containment, bold border on the published surface). Use a `.mmd` `--out`
+  path for raw Mermaid.
 - `--subsystem <id>`: scope to one subsystem plus its directly-connected
   external neighbors.
 - `--sequence <component:method>`: a **sequence diagram** derived from the
@@ -75,8 +79,11 @@ from the same source of truth as the conformance gate:
   `architecture.drawio`, and `architecture.excalidraw`) into
   `.wai/docs/diagrams/` (or `--out`).
 
-Without `--out`, prints raw Mermaid to stdout (pipe into `mmdc`, paste into
-mermaid.live, or embed in markdown).
+The canvas is a small single-page app: SYW/light themes, view levels
+(System / Components / Full), presentation mode, layout persistence (drag
+rearrangements are remembered per browser), narrative flowcharts with call
+drill-down, and an Export menu (PNG / draw.io / Excalidraw) that uses your
+current layout.
 
 ---
 

@@ -161,7 +161,7 @@ rulesCmd
 
 program
   .command('diagram')
-  .description('Generate Mermaid architecture diagrams from the spec tree (living documentation)')
+  .description('Generate architecture diagrams from the spec tree — interactive canvas by default; Mermaid / draw.io / Excalidraw via --format')
   .option('--subsystem <id>', 'scope the component diagram to one subsystem (plus its external neighbors)')
   .option('--sequence <component:method>', 'emit a sequence diagram derived from the method\'s L5 narrative')
   .option('--depth <n>', 'max call-expansion depth for sequence diagrams (default 3)', (v) => parseInt(v, 10))

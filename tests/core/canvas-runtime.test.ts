@@ -59,7 +59,12 @@ function makeDomShim() {
         download: '',
       };
     },
-    body: { appendChild() {} },
+    body: {
+      appendChild() {},
+      setAttribute() {},
+      removeAttribute() {},
+      classList: { add() {}, remove() {}, toggle() {} },
+    },
   };
   return { document, elements };
 }
@@ -123,7 +128,7 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     expect(cyInstance.getElementById('c~billing-store').parent().id()).toBe('c~billing-repo');
     // the published portal carries its class
     expect(cyInstance.getElementById('c~billing-portal').hasClass('public')).toBe(true);
-    // header issue counter was populated by the app script
-    expect(elements['issueCount'].textContent).toContain('warn');
+    // header issue counter was populated by the app script (0 errors / 1 warning)
+    expect(elements['issueCount'].textContent).toBe('0e/1w');
   });
 });

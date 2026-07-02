@@ -1,4 +1,4 @@
-<mxfile host="wairon" agent="wairon" modified="2026-07-02T18:10:29.722Z">
+<mxfile host="wairon" agent="wairon" modified="2026-07-02T19:36:34.605Z">
   <diagram id="architecture" name="Waffle-AIron architecture">
     <mxGraphModel dx="1000" dy="700" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" math="0" shadow="0">
       <root>
@@ -10,39 +10,39 @@
         <mxCell id="sub_sdd_skills" value="SDD Skills Exporter" style="rounded=1;arcSize=4;fillColor=#ffffff;strokeColor=#b6c0cc;verticalAlign=top;fontStyle=1;fontSize=13;container=1;collapsible=1;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="920" y="418" width="810" height="152" as="geometry"/></mxCell>
         <mxCell id="sub_sdd_validator" value="SDD Architectural Validator" style="rounded=1;arcSize=4;fillColor=#ffffff;strokeColor=#b6c0cc;verticalAlign=top;fontStyle=1;fontSize=13;container=1;collapsible=1;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="40" y="418" width="810" height="152" as="geometry"/></mxCell>
         <mxCell id="comp_agent_resolver" value="Agent Topology Resolver
-«Orchestrator»" style="rounded=1;fillColor=#f4effd;strokeColor=#8a63c9;whiteSpace=wrap;fontSize=11;" vertex="1" parent="sub_sdd_core"><mxGeometry x="310" y="57" width="190" height="52" as="geometry"/></mxCell>
+«Orchestrator»" style="rounded=1;fillColor=#f4effd;strokeColor=#8a5cf6;whiteSpace=wrap;fontSize=11;" vertex="1" parent="sub_sdd_core"><mxGeometry x="310" y="57" width="190" height="52" as="geometry"/></mxCell>
         <mxCell id="comp_cli_core_adapter" value="CLI Core Client Adapter
 «Adapter»" style="rounded=1;fillColor=#eef8f1;strokeColor=#4f9e6b;whiteSpace=wrap;fontSize=11;" vertex="1" parent="sub_sdd_cli"><mxGeometry x="310" y="57" width="190" height="52" as="geometry"/></mxCell>
         <mxCell id="comp_cli_runner" value="CLI Runner
-«Orchestrator»" style="rounded=1;fillColor=#f4effd;strokeColor=#8a63c9;whiteSpace=wrap;fontSize=11;strokeWidth=3;" vertex="1" parent="sub_sdd_cli"><mxGeometry x="30" y="135" width="190" height="52" as="geometry"/></mxCell>
+«Orchestrator»" style="rounded=1;fillColor=#f4effd;strokeColor=#8a5cf6;whiteSpace=wrap;fontSize=11;strokeWidth=3;" vertex="1" parent="sub_sdd_cli"><mxGeometry x="30" y="135" width="190" height="52" as="geometry"/></mxCell>
         <mxCell id="comp_cli_skills_adapter" value="CLI Skills Client Adapter
 «Adapter»" style="rounded=1;fillColor=#eef8f1;strokeColor=#4f9e6b;whiteSpace=wrap;fontSize=11;" vertex="1" parent="sub_sdd_cli"><mxGeometry x="310" y="135" width="190" height="52" as="geometry"/></mxCell>
         <mxCell id="comp_cli_validator_adapter" value="CLI Validator Client Adapter
 «Adapter»" style="rounded=1;fillColor=#eef8f1;strokeColor=#4f9e6b;whiteSpace=wrap;fontSize=11;" vertex="1" parent="sub_sdd_cli"><mxGeometry x="310" y="213" width="190" height="52" as="geometry"/></mxCell>
         <mxCell id="comp_core_orchestrator" value="Core Orchestrator
-«Orchestrator»" style="rounded=1;fillColor=#f4effd;strokeColor=#8a63c9;whiteSpace=wrap;fontSize=11;" vertex="1" parent="sub_sdd_core"><mxGeometry x="310" y="135" width="190" height="52" as="geometry"/></mxCell>
+«Orchestrator»" style="rounded=1;fillColor=#f4effd;strokeColor=#8a5cf6;whiteSpace=wrap;fontSize=11;" vertex="1" parent="sub_sdd_core"><mxGeometry x="310" y="135" width="190" height="52" as="geometry"/></mxCell>
         <mxCell id="comp_core_portal" value="Core Portal
 «Portal/Custom»" style="rounded=1;fillColor=#eef4ff;strokeColor=#4a7dcf;whiteSpace=wrap;fontSize=11;strokeWidth=3;" vertex="1" parent="sub_sdd_core"><mxGeometry x="30" y="96" width="190" height="52" as="geometry"/></mxCell>
         <mxCell id="comp_mcp_core_adapter" value="MCP Core Client Adapter
 «Adapter»" style="rounded=1;fillColor=#eef8f1;strokeColor=#4f9e6b;whiteSpace=wrap;fontSize=11;" vertex="1" parent="sub_sdd_mcp"><mxGeometry x="590" y="57" width="190" height="52" as="geometry"/></mxCell>
         <mxCell id="comp_mcp_orchestrator" value="MCP Orchestrator
-«Orchestrator»" style="rounded=1;fillColor=#f4effd;strokeColor=#8a63c9;whiteSpace=wrap;fontSize=11;" vertex="1" parent="sub_sdd_mcp"><mxGeometry x="310" y="57" width="190" height="52" as="geometry"/></mxCell>
+«Orchestrator»" style="rounded=1;fillColor=#f4effd;strokeColor=#8a5cf6;whiteSpace=wrap;fontSize=11;" vertex="1" parent="sub_sdd_mcp"><mxGeometry x="310" y="57" width="190" height="52" as="geometry"/></mxCell>
         <mxCell id="comp_mcp_portal" value="MCP Portal
 «Portal/Custom»" style="rounded=1;fillColor=#eef4ff;strokeColor=#4a7dcf;whiteSpace=wrap;fontSize=11;strokeWidth=3;" vertex="1" parent="sub_sdd_mcp"><mxGeometry x="30" y="96" width="190" height="52" as="geometry"/></mxCell>
         <mxCell id="comp_mcp_server" value="MCP Server Manager
-«Supervisor»" style="rounded=1;fillColor=#f4effd;strokeColor=#8a63c9;whiteSpace=wrap;fontSize=11;" vertex="1" parent="sub_sdd_mcp"><mxGeometry x="310" y="135" width="190" height="52" as="geometry"/></mxCell>
+«Supervisor»" style="rounded=1;fillColor=#f4effd;strokeColor=#8a5cf6;whiteSpace=wrap;fontSize=11;" vertex="1" parent="sub_sdd_mcp"><mxGeometry x="310" y="135" width="190" height="52" as="geometry"/></mxCell>
         <mxCell id="comp_mcp_validator_adapter" value="MCP Validator Client Adapter
 «Adapter»" style="rounded=1;fillColor=#eef8f1;strokeColor=#4f9e6b;whiteSpace=wrap;fontSize=11;" vertex="1" parent="sub_sdd_mcp"><mxGeometry x="590" y="135" width="190" height="52" as="geometry"/></mxCell>
         <mxCell id="comp_skills_exporter" value="Skills Exporter
 «Adapter»" style="rounded=1;fillColor=#eef8f1;strokeColor=#4f9e6b;whiteSpace=wrap;fontSize=11;" vertex="1" parent="sub_sdd_skills"><mxGeometry x="590" y="57" width="190" height="52" as="geometry"/></mxCell>
         <mxCell id="comp_skills_orchestrator" value="Skills Orchestrator
-«Orchestrator»" style="rounded=1;fillColor=#f4effd;strokeColor=#8a63c9;whiteSpace=wrap;fontSize=11;" vertex="1" parent="sub_sdd_skills"><mxGeometry x="310" y="57" width="190" height="52" as="geometry"/></mxCell>
+«Orchestrator»" style="rounded=1;fillColor=#f4effd;strokeColor=#8a5cf6;whiteSpace=wrap;fontSize=11;" vertex="1" parent="sub_sdd_skills"><mxGeometry x="310" y="57" width="190" height="52" as="geometry"/></mxCell>
         <mxCell id="comp_skills_portal" value="Skills Portal
 «Portal/Custom»" style="rounded=1;fillColor=#eef4ff;strokeColor=#4a7dcf;whiteSpace=wrap;fontSize=11;strokeWidth=3;" vertex="1" parent="sub_sdd_skills"><mxGeometry x="30" y="57" width="190" height="52" as="geometry"/></mxCell>
         <mxCell id="comp_spec_loader" value="Spec Loader
 «Registry»" style="rounded=1;fillColor=#fdf6e3;strokeColor=#c9963f;whiteSpace=wrap;fontSize=11;" vertex="1" parent="sub_sdd_core"><mxGeometry x="590" y="96" width="190" height="52" as="geometry"/></mxCell>
         <mxCell id="comp_spec_validator" value="Spec Validator
-«Specialist»" style="rounded=1;fillColor=#f4effd;strokeColor=#8a63c9;whiteSpace=wrap;fontSize=11;" vertex="1" parent="sub_sdd_validator"><mxGeometry x="310" y="57" width="190" height="52" as="geometry"/></mxCell>
+«Specialist»" style="rounded=1;fillColor=#f4effd;strokeColor=#8a5cf6;whiteSpace=wrap;fontSize=11;" vertex="1" parent="sub_sdd_validator"><mxGeometry x="310" y="57" width="190" height="52" as="geometry"/></mxCell>
         <mxCell id="comp_validator_core_adapter" value="Validator Core Client Adapter
 «Adapter»" style="rounded=1;fillColor=#eef8f1;strokeColor=#4f9e6b;whiteSpace=wrap;fontSize=11;" vertex="1" parent="sub_sdd_validator"><mxGeometry x="590" y="57" width="190" height="52" as="geometry"/></mxCell>
         <mxCell id="comp_validator_portal" value="Validator Portal
