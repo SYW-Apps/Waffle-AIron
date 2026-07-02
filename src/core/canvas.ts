@@ -658,6 +658,8 @@ var MODEL = __MODEL_JSON__;
       { selector: '.typeEntity', style: { 'background-color': t.typeE.fill, 'border-color': t.typeE.stroke, color: t.typeE.text, 'text-halign': 'center', 'font-size': 10.5 } },
       { selector: '.typeValue', style: { 'background-color': t.typeV.fill, 'border-color': t.typeV.stroke, color: t.typeV.text, 'border-style': 'dashed', 'font-size': 10.5 } },
       { selector: 'edge.typeref', style: { width: 1.4, 'line-style': 'solid' } },
+      { selector: '.proxyExt', style: { 'background-color': t.ghostFill, 'border-color': t.selGlow, 'border-style': 'dotted', 'border-width': 1.4, color: t.ghostText, 'font-size': 9.5 } },
+      { selector: 'edge.revealEdge', style: { 'line-color': t.selGlow, 'target-arrow-color': t.selGlow, 'line-style': 'dashed', width: 2.4, opacity: 0.95 } },
       { selector: 'edge', style: {
         'curve-style': 'bezier', width: 1.8, 'line-color': t.pageEdge,
         'target-arrow-shape': 'triangle', 'target-arrow-color': t.pageEdge, 'arrow-scale': 0.9,
@@ -692,16 +694,20 @@ var MODEL = __MODEL_JSON__;
   var INNER_W = 130, INNER_H = 36, INNER_GAPX = 26, INNER_GAPY = 12, HEAD_H = 34, PADI = 14;
 
   // Micro-layout for a container's direct children when Internals is on:
-  // layered mini columns + intra-container edges.
+  // layered mini columns + intra-container edges. External dependencies are
+  // represented by PROXY port tiles INSIDE the container ("⇠ external" /
+  // "external ⇢") that children connect to with normal short edges — the real
+  // cross-boundary line is only revealed on hover/pin of the proxy.
   function innerLayout(entry) {
     var kids = state.internals && entry.hasKids ? childrenOf({ kind: entry.kind, id: entry.id }) : [];
     if (!kids.length) return null;
     var scope = { kind: entry.kind, id: entry.id };
-    // aggregated edges among the kids
     var kidAnchor = {};
     kids.forEach(function (k) { kidAnchor[k.kind + ':' + k.id] = k; });
     var parentId = anchorNodeId(entry);
+    var pIn = 'p~in~' + parentId, pOut = 'p~out~' + parentId;
     var edges = {};
+    var extIn = {}, extOut = {};
     MODEL.edges.forEach(function (edge) {
       var a = childOfScopeContaining(edge.from, scope);
       var b = childOfScopeContaining(edge.to, scope);
@@ -711,13 +717,11 @@ var MODEL = __MODEL_JSON__;
         if (a.kind === b.kind && a.id === b.id) return;
         edges[IN(a.kind, a.id) + '=>' + IN(b.kind, b.id)] = { src: IN(a.kind, a.id), tgt: IN(b.kind, b.id) };
       } else if (aKid && !bKid) {
-        // Child depends on something OUTSIDE this container: a short stub from
-        // the tile to the container boundary — where the parent-level arrow
-        // for that same dependency begins.
-        edges['out:' + IN(a.kind, a.id)] = { src: IN(a.kind, a.id), tgt: parentId, stub: true };
+        edges['out:' + IN(a.kind, a.id)] = { src: IN(a.kind, a.id), tgt: pOut, stub: true };
+        extOut[edge.to] = 1;
       } else if (!aKid && bKid) {
-        // Something outside depends on this child (e.g. an entering Portal).
-        edges['in:' + IN(b.kind, b.id)] = { src: parentId, tgt: IN(b.kind, b.id), stub: true };
+        edges['in:' + IN(b.kind, b.id)] = { src: pIn, tgt: IN(b.kind, b.id), stub: true };
+        extIn[edge.from] = 1;
       }
     });
     // layering
@@ -746,7 +750,10 @@ var MODEL = __MODEL_JSON__;
     var cols = {};
     kids.forEach(function (k) { var l = layer[IN(k.kind, k.id)] || 0; (cols[l] = cols[l] || []).push(k); });
     var colKeys = Object.keys(cols).map(Number).sort(function (a, b) { return a - b; });
-    var tiles = [], x = PADI, maxH = 0;
+    var hasIn = Object.keys(extIn).length > 0;
+    var hasOut = Object.keys(extOut).length > 0;
+    var PROXY_W = 96, PROXY_H = 30;
+    var tiles = [], x = PADI + (hasIn ? PROXY_W + INNER_GAPX : 0), maxH = 0;
     colKeys.forEach(function (ck) {
       var col = cols[ck].sort(function (a, b) { return a.id < b.id ? -1 : 1; });
       var y = HEAD_H;
@@ -757,9 +764,14 @@ var MODEL = __MODEL_JSON__;
       maxH = Math.max(maxH, y);
       x += INNER_W + INNER_GAPX;
     });
+    var midY = HEAD_H + Math.max(0, (maxH - HEAD_H - INNER_GAPY) / 2);
+    var outX = x;
+    if (hasOut) x += PROXY_W + INNER_GAPX;
     return {
       tiles: tiles,
       edges: Object.keys(edges).map(function (k) { return edges[k]; }),
+      proxyIn: hasIn ? { id: pIn, x: PADI + PROXY_W / 2, y: midY, w: PROXY_W, h: PROXY_H, targets: Object.keys(extIn) } : null,
+      proxyOut: hasOut ? { id: pOut, x: outX + PROXY_W / 2, y: midY, w: PROXY_W, h: PROXY_H, targets: Object.keys(extOut) } : null,
       w: Math.max(x - INNER_GAPX + PADI, entry.kind === 'subsystem' ? SUBBOX_W : BOX_W),
       h: maxH - INNER_GAPY + PADI,
     };
@@ -911,6 +923,25 @@ var MODEL = __MODEL_JSON__;
     var inners = {};
     entries.forEach(function (e) { inners[anchorNodeId(e)] = innerLayout(e); });
 
+    // Resolve a proxy's external component ids to node ids in THIS view (sibling
+    // anchors, or ghost nodes when externals are shown) for hover/pin reveal.
+    var entryAnchors = {};
+    entries.forEach(function (e2) { entryAnchors[anchorNodeId(e2)] = 1; });
+    function resolveExtTargets(compIds) {
+      var seen = {}, list = [];
+      compIds.forEach(function (cid) {
+        var child = childOfScopeContaining(cid, scope);
+        var nid = null;
+        if (child && entryAnchors[anchorNodeId(child)]) nid = anchorNodeId(child);
+        else if (state.externals) {
+          var ext = externalAnchorFor(cid, scope);
+          if (ext && ve.ghosts[ext.gid]) nid = ext.gid;
+        }
+        if (nid && !seen[nid]) { seen[nid] = 1; list.push(nid); }
+      });
+      return list;
+    }
+
     var layerOf = {};
     function calcLayer(e, stack) {
       var key = anchorNodeId(e);
@@ -981,6 +1012,20 @@ var MODEL = __MODEL_JSON__;
             classes: 'inner' + (dim ? ' dimmed' : ''),
           });
         });
+        if (inner.proxyIn) {
+          eles.push({
+            data: { id: inner.proxyIn.id, parent: aid, label: '\\u21E0 external \\u00D7' + inner.proxyIn.targets.length, w: inner.proxyIn.w - 6, h: inner.proxyIn.h, tw: inner.proxyIn.w - 12, rvTargets: resolveExtTargets(inner.proxyIn.targets), rvDir: 'in' },
+            position: { x: p.x - p.w / 2 + inner.proxyIn.x, y: p.y - p.h / 2 + inner.proxyIn.y },
+            classes: 'proxyExt' + (dim ? ' dimmed' : ''),
+          });
+        }
+        if (inner.proxyOut) {
+          eles.push({
+            data: { id: inner.proxyOut.id, parent: aid, label: 'external \\u21E2 \\u00D7' + inner.proxyOut.targets.length, w: inner.proxyOut.w - 6, h: inner.proxyOut.h, tw: inner.proxyOut.w - 12, rvTargets: resolveExtTargets(inner.proxyOut.targets), rvDir: 'out' },
+            position: { x: p.x - p.w / 2 + inner.proxyOut.x, y: p.y - p.h / 2 + inner.proxyOut.y },
+            classes: 'proxyExt' + (dim ? ' dimmed' : ''),
+          });
+        }
         inner.edges.forEach(function (ie, k) {
           eles.push({ data: { id: aid + '-ie' + k, source: ie.src, target: ie.tgt, lbl: '' }, classes: 'inneredge' + (ie.stub ? ' toghost' : '') + (dim ? ' dimmed' : '') });
         });
@@ -1043,6 +1088,7 @@ var MODEL = __MODEL_JSON__;
     autounselectify: true,
   });
   cy.autolock(true);
+  var pinnedProxy = null;
   applySavedPositions();
   cy.fit(undefined, 60);
   renderCrumbs();
@@ -1068,6 +1114,7 @@ var MODEL = __MODEL_JSON__;
     persist();
   }
   function rebuild(fit) {
+    pinnedProxy = null;
     cy.batch(function () {
       cy.elements().remove();
       cy.add(buildElements());
@@ -1180,6 +1227,7 @@ var MODEL = __MODEL_JSON__;
   // ---- interactions -----------------------------------------------------------
   function idOf(node) {
     var raw = node.id();
+    if (raw.indexOf('p~') === 0) return { proxy: true, id: raw };
     if (raw.indexOf('x~') === 0) return { ghost: true, kind: node.data('extKind'), id: node.data('extId') };
     if (raw.indexOf('T~') === 0) return { kind: 'type', id: raw.slice(2) };
     if (raw.indexOf('i~') === 0) {
@@ -1190,13 +1238,49 @@ var MODEL = __MODEL_JSON__;
     return { kind: raw.charAt(0) === 's' ? 'subsystem' : 'component', id: raw.slice(2) };
   }
 
+  // Proxy reveal: hover shows the real cross-boundary line(s); tap pins them.
+  function showReveal(node) {
+    cy.remove('.revealEdge');
+    var targets = node.data('rvTargets') || [];
+    var dir = node.data('rvDir');
+    var adds = [];
+    targets.forEach(function (tid, i) {
+      if (!cy.getElementById(tid).length) return;
+      adds.push({
+        group: 'edges',
+        data: dir === 'out'
+          ? { id: 'rv' + i, source: node.id(), target: tid }
+          : { id: 'rv' + i, source: tid, target: node.id() },
+        classes: 'revealEdge',
+      });
+    });
+    if (adds.length) cy.add(adds);
+  }
+  function clearReveal() {
+    cy.remove('.revealEdge');
+  }
+  cy.on('mouseover', 'node.proxyExt', function (ev) { if (!pinnedProxy) showReveal(ev.target); });
+  cy.on('mouseout', 'node.proxyExt', function () { if (!pinnedProxy) clearReveal(); });
+
   cy.on('tap', 'node', function (ev) {
     var t = idOf(ev.target);
+    if (t.proxy) {
+      if (pinnedProxy === t.id) { pinnedProxy = null; clearReveal(); }
+      else { pinnedProxy = t.id; showReveal(ev.target); }
+      return;
+    }
+    if (pinnedProxy) { pinnedProxy = null; clearReveal(); }
     select(t.kind, t.id, false);
   });
-  cy.on('tap', function (ev) { if (ev.target === cy) select(null, null, false); });
+  cy.on('tap', function (ev) {
+    if (ev.target === cy) {
+      if (pinnedProxy) { pinnedProxy = null; clearReveal(); }
+      select(null, null, false);
+    }
+  });
   cy.on('dbltap', 'node', function (ev) {
     var t = idOf(ev.target);
+    if (t.proxy) return;
     if (t.kind === 'type') return;
     if (t.ghost) {
       state.view = parentViewOf(t.kind, t.id);

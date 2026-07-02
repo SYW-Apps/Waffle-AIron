@@ -161,16 +161,30 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     expect(pureInner.length).toBe(1); // billing-portal → billing-repo inside billing
     expect(pureInner[0].source().id()).toBe('i~component~billing-portal');
     expect(pureInner[0].target().id()).toBe('i~component~billing-repo');
-    // external stubs: shipping-client points OUT to its container boundary
-    // (its dep leaves the box), billing-portal receives IN from its boundary.
+
+    // External deps are represented by PROXY port tiles INSIDE the container,
+    // connected with short dashed edges that never leave the box.
+    const outProxy = cy.getElementById('p~out~s~shipping');
+    expect(outProxy.length).toBe(1);
+    expect(outProxy.parent().id()).toBe('s~shipping');
+    const inProxy = cy.getElementById('p~in~s~billing');
+    expect(inProxy.length).toBe(1);
+    expect(inProxy.parent().id()).toBe('s~billing');
     const stubs = cy.edges().filter((e: any) => e.hasClass('inneredge') && e.hasClass('toghost'));
     expect(stubs.length).toBe(2);
-    const out = stubs.filter((e: any) => e.source().id() === 'i~component~shipping-client');
-    expect(out.length).toBe(1);
-    expect(out[0].target().id()).toBe('s~shipping');
-    const inn = stubs.filter((e: any) => e.target().id() === 'i~component~billing-portal');
-    expect(inn.length).toBe(1);
-    expect(inn[0].source().id()).toBe('s~billing');
+    expect(stubs.filter((e: any) => e.source().id() === 'i~component~shipping-client' && e.target().id() === 'p~out~s~shipping').length).toBe(1);
+    expect(stubs.filter((e: any) => e.source().id() === 'p~in~s~billing' && e.target().id() === 'i~component~billing-portal').length).toBe(1);
+
+    // Hovering a proxy reveals the actual cross-boundary line to the target;
+    // leaving hides it again.
+    outProxy.emit('mouseover');
+    let reveals = cy.edges().filter((e: any) => e.hasClass('revealEdge'));
+    expect(reveals.length).toBe(1);
+    expect(reveals[0].source().id()).toBe('p~out~s~shipping');
+    expect(reveals[0].target().id()).toBe('s~billing');
+    outProxy.emit('mouseout');
+    reveals = cy.edges().filter((e: any) => e.hasClass('revealEdge'));
+    expect(reveals.length).toBe(0);
 
     // header issue counter was populated by the app script (0 errors / 1 warning)
     expect(elements['issueCount'].textContent).toBe('0e/1w');
