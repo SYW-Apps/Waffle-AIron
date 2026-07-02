@@ -169,6 +169,7 @@ program
   .option('--canvas', 'emit the interactive self-contained HTML canvas (pan/zoom, collapse boundaries, detail panel, issue overlay)')
   .option('--drawio', 'emit an editable draw.io / diagrams.net file (same layout as the canvas)')
   .option('--excalidraw', 'emit an editable Excalidraw scene (same layout as the canvas)')
+  .option('--format <fmt>', 'alias for the flags above: mermaid | canvas | drawio | excalidraw')
   .option('--out <path>', 'write to a file (or directory with --all; default .wai/docs/diagrams) instead of stdout')
   .action(async (opts) => {
     await runDiagram({
@@ -179,6 +180,7 @@ program
       canvas: opts.canvas,
       drawio: opts.drawio,
       excalidraw: opts.excalidraw,
+      format: opts.format,
       out: opts.out,
     });
   });

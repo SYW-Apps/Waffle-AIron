@@ -40,7 +40,7 @@ can emit, default severities, and any per-project overrides from
 `rules.sddRuleSeverity`. The gate is a documented architecture linter: each
 rule is a self-contained module in `src/core/rules/`.
 
-### `wairon diagram [--subsystem <id>] [--sequence <component:method>] [--depth <n>] [--all] [--out <path>]`
+### `wairon diagram [--format <fmt>] [--subsystem <id>] [--sequence <component:method>] [--depth <n>] [--all] [--out <path>]`
 Generate Mermaid diagrams derived from the spec tree — living documentation
 from the same source of truth as the conformance gate:
 
@@ -65,6 +65,7 @@ from the same source of truth as the conformance gate:
   to undo — and "export PNG" renders the full graph to a high-res image for
   Miro/docs/slides. Fully self-contained (Cytoscape.js embedded inline,
   works offline).
+- `--format <mermaid|canvas|drawio|excalidraw>`: friendly alias for the flags below/above.
 - `--drawio` / `--excalidraw`: **editable** exports in open formats
   (draw.io / diagrams.net XML, Excalidraw scene JSON) with the exact same
   computed layout as the canvas — import into diagrams.net, excalidraw.com,

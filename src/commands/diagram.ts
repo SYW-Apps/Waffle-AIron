@@ -38,8 +38,28 @@ export interface DiagramOptions {
   drawio?: boolean;
   /** Emit an editable Excalidraw scene file. */
   excalidraw?: boolean;
+  /** Friendly alias: mermaid | canvas | drawio | excalidraw (same as the dedicated flags). */
+  format?: string;
   /** Output file (or directory with --all). Default with --all: .wai/docs/diagrams */
   out?: string;
+}
+
+const FORMATS = ['mermaid', 'canvas', 'drawio', 'excalidraw'] as const;
+
+/** Map --format onto the dedicated flags so both spellings work identically. */
+function applyFormat(options: DiagramOptions): DiagramOptions {
+  if (!options.format) return options;
+  const fmt = options.format.toLowerCase().replace(/[^a-z]/g, ''); // "draw.io" → "drawio"
+  if (!(FORMATS as readonly string[]).includes(fmt)) {
+    throw new WaironError(`Unknown diagram format "${options.format}". Valid formats: ${FORMATS.join(', ')}.`);
+  }
+  return {
+    ...options,
+    canvas: options.canvas || fmt === 'canvas',
+    drawio: options.drawio || fmt === 'drawio',
+    excalidraw: options.excalidraw || fmt === 'excalidraw',
+    // mermaid is the default path — no flag needed
+  };
 }
 
 function collectIssues() {
@@ -67,8 +87,9 @@ function parseSequenceRef(ref: string): { component: string; method: string } {
   return { component: ref.slice(0, sep), method: ref.slice(sep + 1) };
 }
 
-export async function runDiagram(options: DiagramOptions = {}): Promise<void> {
+export async function runDiagram(rawOptions: DiagramOptions = {}): Promise<void> {
   assertProjectInitialized();
+  const options = applyFormat(rawOptions);
 
   if (options.canvas && !options.all) {
     const dest = options.out ?? path.join(AI_PATHS.docsDir(), 'diagrams', 'canvas.html');
