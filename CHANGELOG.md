@@ -50,8 +50,17 @@ migration*).
   (`catches` + `finallyStep`), `jump` (break/continue/rejoin), `return`,
   `throw`. Every existing narrative is already valid (linear = jump-free);
   older wairon binaries reject the new step types, so upgrade before adopting.
-- **New rules**: `MALFORMED_FLOW_STEP` / `INVALID_STEP_JUMP` *(error)* and
-  `UNREACHABLE_STEP` *(warning)* enforce structural soundness.
+- **New rules**: `MALFORMED_FLOW_STEP` / `INVALID_STEP_JUMP` /
+  `REGION_OVERLAP` *(error)* and `UNREACHABLE_STEP` / `JUMP_INTO_REGION` /
+  `FALLTHROUGH_INTO_HANDLER` / `BACKWARD_JUMP` *(warning)* enforce
+  structural soundness: regions must nest or be disjoint and are entered
+  through their header, try bodies must not fall through into their own
+  handlers, and backward jumps are only idiomatic as a continue to an
+  enclosing loop header.
+- **`LANGUAGE_FOREIGN_FLOW`** *(warning, requires `targetLanguage`)* —
+  narrative flow constructs the target language lacks are flagged
+  (try/throw in Rust, Go, C; do-while in Rust, Go, Python), with the
+  idiomatic re-modeling suggested.
 - **`sdd_update_spec` relocation**: narrative inserts/deletes renumber steps
   AND relocate every jump field automatically; deleting a jump target is
   rejected naming the referrers.

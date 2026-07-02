@@ -157,6 +157,88 @@ methods:
     } finally { proj.cleanup(); }
   });
 
+  it('flags interleaved regions, jumps into region bodies, handler fall-through, and unstructured backward jumps', () => {
+    const proj = createTempProject();
+    proj.component('orch-s', 'Orchestrator');
+    proj.writeSpec('interface', 'iorch-s', `schemaVersion: 1.0.0
+id: iorch-s
+name: IOrchS
+description: d
+component: orch-s
+methods:
+  - name: run
+    description: Runs everything with structure problems for the linter to find.
+    signature: "run(): void"
+    returns: "void"
+  - name: retryish
+    description: Emulates a loop with a backward branch instead of a loop step.
+    signature: "retryish(): void"
+    returns: "void"`);
+    proj.writeSpec('implementation', 'impl-orch-s', `schemaVersion: 1.0.0
+id: impl-orch-s
+name: ImplOrchS
+description: d
+contract: iorch-s
+methods:
+  - name: run
+    narrative:
+      - { stepNumber: 1, description: outer loop, type: loop, loopKind: while, condition: pending, endStep: 3 }
+      - { stepNumber: 2, description: interleaving try, type: try, endStep: 4, catches: [{ error: any, step: 5 }] }
+      - { stepNumber: 3, description: work, type: local }
+      - { stepNumber: 4, description: more work, type: local }
+      - { stepNumber: 5, description: handler entered by fall-through too, type: local }
+      - { stepNumber: 6, description: jump into the loop body from outside, type: jump, toStep: 3 }
+  - name: retryish
+    narrative:
+      - { stepNumber: 1, description: attempt the call, type: local }
+      - { stepNumber: 2, description: retry on failure, type: branch, condition: failed, onFalseStep: 4, onTrueStep: 1 }
+      - { stepNumber: 3, description: give up, type: throw, error: RetriesExhausted }
+      - { stepNumber: 4, description: done, type: return, outcome: success }`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      const cs = codes(res);
+      expect(cs).toContain('REGION_OVERLAP');       // loop 1..3 vs try 2..4 interleave
+      expect(cs).toContain('JUMP_INTO_REGION');     // step 6 jumps to 3, inside the loop body
+      expect(cs).toContain('FALLTHROUGH_INTO_HANDLER'); // try body ends at 4 (local), next is catch step 5
+      expect(cs).toContain('BACKWARD_JUMP');        // branch onTrueStep 1 with no enclosing loop
+    } finally { proj.cleanup(); }
+  });
+
+  it('allows continue-to-loop-header backward jumps and properly nested regions', () => {
+    const proj = createTempProject();
+    proj.component('orch-t', 'Orchestrator');
+    proj.writeSpec('interface', 'iorch-t', `schemaVersion: 1.0.0
+id: iorch-t
+name: IOrchT
+description: d
+component: orch-t
+methods:
+  - name: run
+    description: A well-structured loop with a continue jump back to its header.
+    signature: "run(): void"
+    returns: "void"`);
+    proj.writeSpec('implementation', 'impl-orch-t', `schemaVersion: 1.0.0
+id: impl-orch-t
+name: ImplOrchT
+description: d
+contract: iorch-t
+methods:
+  - name: run
+    narrative:
+      - { stepNumber: 1, description: each pending job, type: loop, loopKind: forEach, over: pending jobs, endStep: 4 }
+      - { stepNumber: 2, description: already handled, type: branch, condition: job.done, onFalseStep: 4 }
+      - { stepNumber: 3, description: skip it (continue), type: jump, toStep: 1 }
+      - { stepNumber: 4, description: process the job, type: local }
+      - { stepNumber: 5, description: all done, type: return, outcome: success }`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      const structural = res.issues.filter(i => ['REGION_OVERLAP', 'JUMP_INTO_REGION', 'FALLTHROUGH_INTO_HANDLER', 'BACKWARD_JUMP'].includes(i.code));
+      expect(structural).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
   it('warns about steps no path reaches', () => {
     const proj = createTempProject();
     proj.component('orch-c', 'Orchestrator');
@@ -187,6 +269,49 @@ methods:
       const unreachable = res.issues.filter(i => i.code === 'UNREACHABLE_STEP');
       expect(unreachable).toHaveLength(1);
       expect(unreachable[0].message).toContain('step(s) 3');
+    } finally { proj.cleanup(); }
+  });
+});
+
+describe('language-aware flow constraints', () => {
+  it('flags try/throw/do-while in a Rust subsystem, and stays silent without a targetLanguage', () => {
+    const proj = createTempProject();
+    proj.writeSpec('subsystem', 'sub-r', 'schemaVersion: 1.0.0\nid: sub-r\nname: SubR\ndescription: d\nparentSystem: TestSystem\ntargetLanguage: rust');
+    proj.writeSpec('component', 'orch-r', 'schemaVersion: 1.0.0\nid: orch-r\nname: orch-r\ndescription: d\nsubsystem: sub-r\ncomponentType: Orchestrator');
+    proj.component('orch-u', 'Orchestrator'); // sub-a: no targetLanguage anywhere
+    const iface = (id: string, comp: string) => `schemaVersion: 1.0.0
+id: ${id}
+name: I
+description: d
+component: ${comp}
+methods:
+  - name: run
+    description: Runs the pipeline with retries and error propagation handled.
+    signature: "run()"
+    returns: "unit"`;
+    proj.writeSpec('interface', 'iorch-r', iface('iorch-r', 'orch-r'));
+    proj.writeSpec('interface', 'iorch-u', iface('iorch-u', 'orch-u'));
+    const implBody = (id: string, contract: string) => `schemaVersion: 1.0.0
+id: ${id}
+name: Impl
+description: d
+contract: ${contract}
+methods:
+  - name: run
+    narrative:
+      - { stepNumber: 1, description: guard the work, type: try, endStep: 3, catches: [{ error: any, step: 4 }] }
+      - { stepNumber: 2, description: poll until drained, type: loop, loopKind: doWhile, condition: more work, endStep: 3 }
+      - { stepNumber: 3, description: drain one, type: local }
+      - { stepNumber: 4, description: propagate, type: throw, error: DrainFailed }`;
+    proj.writeSpec('implementation', 'impl-orch-r', implBody('impl-orch-r', 'iorch-r'));
+    proj.writeSpec('implementation', 'impl-orch-u', implBody('impl-orch-u', 'iorch-u'));
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      const flow = res.issues.filter(i => i.code === 'LANGUAGE_FOREIGN_FLOW');
+      expect(flow).toHaveLength(3); // try + doWhile + throw, only in the rust subsystem
+      expect(flow.every(i => i.specId === 'impl-orch-r')).toBe(true);
+      expect(flow.map(i => i.message).join(' ')).toContain('do-while');
     } finally { proj.cleanup(); }
   });
 });

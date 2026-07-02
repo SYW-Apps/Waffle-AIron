@@ -31,6 +31,10 @@ export const narrativeFlowRule: SddRule = {
     { code: 'MALFORMED_FLOW_STEP', defaultSeverity: 'error', summary: 'Flow step missing required config (or flow config on a local/call step)' },
     { code: 'INVALID_STEP_JUMP', defaultSeverity: 'error', summary: 'Jump field targets a step number that does not exist in the narrative' },
     { code: 'UNREACHABLE_STEP', defaultSeverity: 'warning', summary: 'Step not reachable from the first step following fall-through and jumps' },
+    { code: 'REGION_OVERLAP', defaultSeverity: 'error', summary: 'loop/try regions interleave — regions must nest or be disjoint to map onto structured code' },
+    { code: 'JUMP_INTO_REGION', defaultSeverity: 'warning', summary: 'Jump lands in the middle of a loop/try body from outside — regions are entered through their header' },
+    { code: 'FALLTHROUGH_INTO_HANDLER', defaultSeverity: 'warning', summary: 'try body falls through into its own catch/finally region on the success path' },
+    { code: 'BACKWARD_JUMP', defaultSeverity: 'warning', summary: 'Backward jump that is not a continue to an enclosing loop header — model repetition with a loop step' },
   ],
   check(ctx) {
     for (const impl of ctx.implementations) {
@@ -169,6 +173,92 @@ export const narrativeFlowRule: SddRule = {
             impl.id,
             isDraftCtx,
           );
+        }
+
+        // ---- structural soundness of regions and jumps ----------------------
+        // Regions (loop/try bodies) are numeric spans; structured code can only
+        // express them nested or disjoint, entered through their header.
+        const regions: { h: number; end: number; kind: string }[] = [];
+        for (const s of steps) {
+          if ((s.type === 'loop' || s.type === 'try') && s.endStep !== undefined) {
+            regions.push({ h: s.stepNumber, end: s.endStep, kind: s.type });
+          }
+        }
+        const inBody = (n: number, r: { h: number; end: number }): boolean => n > r.h && n <= r.end;
+
+        for (const a of regions) {
+          for (const b of regions) {
+            if (b.h > a.h && b.h <= a.end && b.end > a.end) {
+              ctx.addIssue(
+                'error',
+                'REGION_OVERLAP',
+                `${where}${b.kind} region ${b.h}..${b.end} interleaves with ${a.kind} region ${a.h}..${a.end} — regions must be nested or disjoint.`,
+                impl.id,
+                isDraftCtx,
+              );
+            }
+          }
+        }
+
+        const jumpEdges: { from: number; to: number; field: string; kind: string }[] = [];
+        for (const s of steps) {
+          const push = (field: string, to: number | undefined): void => {
+            if (to !== undefined) jumpEdges.push({ from: s.stepNumber, to, field, kind: s.type });
+          };
+          push('onTrueStep', s.onTrueStep);
+          push('onFalseStep', s.onFalseStep);
+          push('defaultStep', s.defaultStep);
+          push('toStep', s.toStep);
+          push('finallyStep', s.finallyStep);
+          (s.cases ?? []).forEach((c, i) => push(`cases[${i}].step`, c.step));
+          (s.catches ?? []).forEach((c, i) => push(`catches[${i}].step`, c.step));
+        }
+
+        for (const e of jumpEdges) {
+          for (const r of regions) {
+            if (inBody(e.to, r) && e.from !== r.h && !inBody(e.from, r)) {
+              ctx.addIssue(
+                'warning',
+                'JUMP_INTO_REGION',
+                `${where}step ${e.from} "${e.field}" jumps into the middle of the ${r.kind} region ${r.h}..${r.end} (step ${e.to}) — regions are entered through their header.`,
+                impl.id,
+                isDraftCtx,
+              );
+            }
+          }
+          // Backward jumps are only idiomatic as a continue to an enclosing
+          // loop header; anything else is an unstructured loop in disguise.
+          if ((e.kind === 'branch' || e.kind === 'switch' || e.kind === 'jump') && e.to < e.from) {
+            const continueToLoop = regions.some(r => r.kind === 'loop' && r.h === e.to && inBody(e.from, r));
+            if (!continueToLoop) {
+              ctx.addIssue(
+                'warning',
+                'BACKWARD_JUMP',
+                `${where}step ${e.from} "${e.field}" jumps backwards to step ${e.to} — model repetition with a loop step (backward jumps are only idiomatic as a continue to an enclosing loop header).`,
+                impl.id,
+                isDraftCtx,
+              );
+            }
+          }
+        }
+
+        // A try body whose last step simply falls through runs its handlers on
+        // the SUCCESS path — almost always a missing jump/return at the body end.
+        for (const s of steps) {
+          if (s.type !== 'try' || s.endStep === undefined) continue;
+          const handlerStarts = new Set<number>((s.catches ?? []).map(c => c.step));
+          if (s.finallyStep !== undefined) handlerStarts.add(s.finallyStep);
+          const last = byNum.get(s.endStep);
+          const nxt = nextOf(s.endStep);
+          if (last && (last.type === 'local' || last.type === 'call') && nxt !== undefined && handlerStarts.has(nxt)) {
+            ctx.addIssue(
+              'warning',
+              'FALLTHROUGH_INTO_HANDLER',
+              `${where}the try body ending at step ${s.endStep} falls through into its handler region (step ${nxt}) — end the body with a jump, return, or throw so handlers only run on error.`,
+              impl.id,
+              isDraftCtx,
+            );
+          }
         }
       }
     }
