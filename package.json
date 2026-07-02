@@ -63,13 +63,13 @@
     "@types/inquirer": "^8.2.10",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.14.0",
-    "@vitest/coverage-v8": "^1.6.0",
+    "@vitest/coverage-v8": "^4.1.9",
     "@yao-pkg/pkg": "^5.12.0",
     "cytoscape": "^3.34.0",
     "rimraf": "^5.0.7",
     "tsup": "^8.1.0",
     "tsx": "^4.15.7",
     "typescript": "^5.5.2",
-    "vitest": "^1.6.0"
+    "vitest": "^4.1.9"
   }
 }
