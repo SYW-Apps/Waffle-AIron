@@ -8,24 +8,24 @@ import {
   loadImplementationSpecs,
 } from './specs.js';
 import type { ValidationIssue } from './validation.js';
-import { computeLayout } from './canvas-layout.js';
 import { buildDrawioXml, buildExcalidrawScene } from './diagram-export.js';
 
 // ---------------------------------------------------------------------------
-// Interactive architecture canvas — a self-contained single-page app.
+// Interactive architecture canvas — a self-contained single-page app with
+// C4-style scoped navigation.
 //
 // One HTML file, zero network: Cytoscape.js is vendored inline, and the
-// layout + export builders (computeLayout / buildDrawioXml /
-// buildExcalidrawScene) are serialized verbatim from their TypeScript
-// modules, so the browser and the CLI share one implementation. In-browser
-// exports therefore use the user's CURRENT (possibly rearranged) positions.
+// export builders (buildDrawioXml / buildExcalidrawScene) are serialized
+// verbatim from their TypeScript modules — in-browser exports use the
+// CURRENT view and positions.
 //
-// Features: SYW / light themes, view levels (system → components → full),
-// collapse boundaries into tube edges, spec-derived detail sidebar with
-// collapsible sections, narrative flowchart modal with call drill-down and
-// back navigation, search that dims nodes AND their edges, hover-highlight
-// from sidebar references, layout persistence (localStorage), presentation
-// mode, and an export menu (PNG / draw.io / Excalidraw).
+// Navigation model: a VIEW renders exactly one scope's direct children —
+// System → top-level subsystems → a subsystem's children (nested subsystems
+// + components) → a pattern's members, infinitely deep by ownership.
+// Double-click drills in; the breadcrumb navigates back out. "Internals"
+// previews each child's own children inside its box (one level); "Externals"
+// shows ghost references to out-of-scope dependencies. Per-view layout
+// rearrangements persist in localStorage.
 // ---------------------------------------------------------------------------
 
 export interface CanvasModel {
@@ -212,7 +212,6 @@ export function renderCanvasHtml(model: CanvasModel): string {
     .replace('__SYSTEM_NAME__', () => escapeHtml(model.system.name))
     .replace('__GENERATED_AT__', () => escapeHtml(model.generatedAt))
     .replace('__CYTOSCAPE_LIB__', () => loadCytoscapeLib())
-    .replace('__LAYOUT_FN__', () => computeLayout.toString())
     .replace('__DRAWIO_FN__', () => buildDrawioXml.toString())
     .replace('__EXCALIDRAW_FN__', () => buildExcalidrawScene.toString())
     .replace('__MODEL_JSON__', () => embedJson(model));
@@ -246,10 +245,8 @@ const CANVAS_TEMPLATE = `<!DOCTYPE html>
   --syw-deep-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 .syw-gradient-text { background: var(--syw-primary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; display: inline-block; }
-.syw-glass { background: rgba(255,255,255,0.03); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; }
 * { box-sizing: border-box; }
 
-/* Theme variables */
 body[data-theme="syw"] {
   --bg: var(--syw-bg);
   --chrome: rgba(13, 27, 42, 0.92);
@@ -279,17 +276,16 @@ body[data-theme="light"] {
 body { margin:0; background:var(--bg); color:var(--ink); font:13px/1.45 "Inter", system-ui, "Segoe UI", sans-serif; overflow:hidden; }
 body[data-theme="syw"] { background-image: var(--syw-deep-space); background-attachment: fixed; }
 
-/* Header toolbar */
 header { display:flex; align-items:center; gap:10px; padding:0 14px; height:52px; background:var(--chrome); border-bottom:1px solid var(--chrome-border); position:relative; z-index:20; }
 header .brand { font-weight:800; font-size:17px; letter-spacing:.02em; }
-header .sysname { font-weight:600; font-size:13.5px; white-space:nowrap; max-width:220px; overflow:hidden; text-overflow:ellipsis; }
+#crumbs { display:flex; align-items:center; gap:4px; max-width:34vw; overflow-x:auto; white-space:nowrap; scrollbar-width:thin; }
+#crumbs .crumb { border:none; background:transparent; color:var(--dim); cursor:pointer; font:inherit; font-size:12.5px; padding:4px 7px; border-radius:7px; }
+#crumbs .crumb:hover { background:var(--hover-bg); color:var(--ink); }
+#crumbs .crumb.cur { color:var(--ink); font-weight:700; cursor:default; }
+#crumbs .sep { color:var(--dim); font-size:11px; }
 header .divider { width:1px; height:24px; background:var(--line); margin:0 2px; }
-header input[type="search"] { padding:6px 10px; border:1px solid var(--chrome-border); border-radius:8px; width:200px; font:inherit; background:var(--input-bg); color:var(--ink); }
+header input[type="search"] { padding:6px 10px; border:1px solid var(--chrome-border); border-radius:8px; width:170px; font:inherit; background:var(--input-bg); color:var(--ink); }
 header input[type="search"]::placeholder { color:var(--dim); }
-.seg { display:flex; border:1px solid var(--chrome-border); border-radius:8px; overflow:hidden; }
-.seg button { border:none; background:transparent; color:var(--dim); padding:6px 11px; cursor:pointer; font:inherit; font-size:12px; }
-.seg button.active { background:var(--syw-primary-gradient); color:#fff; font-weight:700; }
-body[data-theme="light"] .seg button.active { background:var(--accent); }
 .switch { display:inline-flex; align-items:center; gap:6px; cursor:pointer; color:var(--dim); font-size:12px; white-space:nowrap; user-select:none; padding:5px 8px; border-radius:8px; }
 .switch:hover { background:var(--hover-bg); color:var(--ink); }
 .switch input { accent-color:var(--accent); margin:0; }
@@ -297,7 +293,6 @@ body[data-theme="light"] .seg button.active { background:var(--accent); }
 .tbtn:hover { background:var(--hover-bg); border-color:var(--accent); }
 .spacer { flex:1; }
 
-/* Export dropdown */
 .dropdown { position:relative; }
 .dropdown .menu { display:none; position:absolute; right:0; top:calc(100% + 6px); background:var(--chrome); border:1px solid var(--chrome-border); border-radius:10px; box-shadow:var(--syw-deep-shadow); min-width:200px; padding:6px; z-index:50; }
 .dropdown.open .menu { display:block; }
@@ -305,14 +300,13 @@ body[data-theme="light"] .seg button.active { background:var(--accent); }
 .dropdown .menu button:hover { background:var(--hover-bg); }
 .dropdown .menu .hint { display:block; color:var(--dim); font-size:10.5px; }
 
-/* Layout */
 #wrap { display:flex; height:calc(100vh - 52px); }
 #stage { flex:1; position:relative; }
 #cy { position:absolute; inset:0; }
 .legend { position:absolute; left:12px; bottom:12px; background:var(--chrome); border:1px solid var(--chrome-border); border-radius:10px; padding:8px 12px; font-size:11px; color:var(--dim); z-index:5; pointer-events:none; }
 .legend .sw { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; vertical-align:-1px; border:1.5px solid; }
+.viewhint { position:absolute; top:10px; left:12px; color:var(--dim); font-size:11px; background:var(--chrome); border:1px solid var(--chrome-border); border-radius:9px; padding:5px 10px; z-index:5; pointer-events:none; }
 
-/* Sidebar */
 #panel { width:380px; border-left:1px solid var(--chrome-border); background:var(--chrome); overflow-y:auto; z-index:10; }
 #panel .head { padding:16px 18px 10px; border-bottom:1px solid var(--line); }
 #panel .head h2 { font-size:16px; margin:0 0 6px; }
@@ -321,6 +315,7 @@ body[data-theme="light"] .seg button.active { background:var(--accent); }
 #panel .chip[data-kind] { cursor:pointer; }
 #panel .chip[data-kind]:hover { border-color:var(--accent); background:var(--hover-bg); }
 #panel .desc { color:var(--dim); margin:8px 0 2px; }
+#panel .openbtn { margin:6px 0 0; }
 #panel details { border:1px solid var(--line); border-radius:10px; margin:10px 0; background:var(--card); overflow:hidden; }
 #panel summary { cursor:pointer; padding:9px 12px; font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--dim); user-select:none; display:flex; align-items:center; gap:8px; }
 #panel summary:hover { color:var(--ink); background:var(--hover-bg); }
@@ -338,20 +333,18 @@ body[data-theme="light"] .seg button.active { background:var(--accent); }
 #panel .issue.warning { border-left-color:var(--warn); }
 #panel .issue code { font-size:10.5px; color:var(--dim); }
 
-/* Presentation mode */
 body.presentation header, body.presentation #panel, body.presentation .legend { display:none; }
 body.presentation #wrap { height:100vh; }
 #exitPresent { display:none; position:fixed; top:10px; right:10px; z-index:100; border:1px solid var(--chrome-border); background:var(--chrome); color:var(--ink); border-radius:9px; padding:7px 13px; cursor:pointer; opacity:0.06; transition:opacity .15s ease; font:inherit; }
 #exitPresent:hover { opacity:1; box-shadow:var(--syw-glow); }
 body.presentation #exitPresent { display:block; }
 
-/* Flowchart modal */
 #flowModal { display:none; position:fixed; inset:0; background:rgba(4,6,12,0.6); backdrop-filter:blur(3px); z-index:80; align-items:center; justify-content:center; }
 #flowModal.open { display:flex; }
 #flowModal .box { width:min(860px, 92vw); height:min(640px, 88vh); background:var(--chrome); border:1px solid var(--chrome-border); border-radius:14px; box-shadow:var(--syw-deep-shadow); display:flex; flex-direction:column; overflow:hidden; }
 #flowModal .bar { display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--line); }
-#flowModal .bar .crumb { font-weight:700; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-#flowModal .bar .crumb .dimc { color:var(--dim); font-weight:400; }
+#flowModal .bar .crumbf { font-weight:700; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#flowModal .bar .crumbf .dimc { color:var(--dim); font-weight:400; }
 #flowCy { flex:1; }
 #flowModal .hintbar { padding:6px 14px; color:var(--dim); font-size:11px; border-top:1px solid var(--line); }
 </style>
@@ -359,25 +352,22 @@ body.presentation #exitPresent { display:block; }
 <body data-theme="syw">
 <header>
   <span class="brand syw-gradient-text">wairon</span>
-  <span class="sysname" title="__SYSTEM_NAME__">__SYSTEM_NAME__</span>
+  <nav id="crumbs"></nav>
   <span class="divider"></span>
-  <input id="search" type="search" placeholder="Search components…">
-  <div class="seg" id="viewSeg">
-    <button data-view="system" title="Subsystems only">System</button>
-    <button data-view="components" title="Components (patterns collapsed)">Components</button>
-    <button data-view="full" class="active" title="Everything expanded">Full</button>
-  </div>
+  <input id="search" type="search" placeholder="Search this view…">
+  <label class="switch" title="Preview each child's own children inside its box"><input type="checkbox" id="internalsToggle"><span>Internals</span></label>
+  <label class="switch" title="Show out-of-scope dependencies as ghost references"><input type="checkbox" id="externalsToggle" checked><span>Externals</span></label>
   <label class="switch"><input type="checkbox" id="issuesToggle"><span>Issues (<span id="issueCount"></span>)</span></label>
   <label class="switch"><input type="checkbox" id="dragToggle"><span>Rearrange</span></label>
   <span class="spacer"></span>
   <button class="tbtn" id="fitBtn" title="Fit graph to view">Fit</button>
-  <button class="tbtn" id="resetBtn" title="Discard saved rearrangement and restore the computed layout">Reset layout</button>
+  <button class="tbtn" id="resetBtn" title="Discard this view's saved rearrangement">Reset layout</button>
   <div class="dropdown" id="exportDd">
     <button class="tbtn" id="exportBtn">Export ▾</button>
     <div class="menu">
-      <button id="expPng">PNG image <span class="hint">high-res snapshot of the whole graph</span></button>
-      <button id="expDrawio">draw.io file <span class="hint">editable, uses your current layout</span></button>
-      <button id="expExcalidraw">Excalidraw file <span class="hint">editable, uses your current layout</span></button>
+      <button id="expPng">PNG image <span class="hint">this view, high-res</span></button>
+      <button id="expDrawio">draw.io file <span class="hint">this view, editable, current layout</span></button>
+      <button id="expExcalidraw">Excalidraw file <span class="hint">this view, editable, current layout</span></button>
     </div>
   </div>
   <button class="tbtn" id="themeBtn" title="Toggle theme">◐ Theme</button>
@@ -386,6 +376,7 @@ body.presentation #exitPresent { display:block; }
 <div id="wrap">
   <div id="stage">
     <div id="cy"></div>
+    <div class="viewhint" id="viewHint"></div>
     <div class="legend" id="legend"></div>
   </div>
   <div id="panel"></div>
@@ -395,7 +386,7 @@ body.presentation #exitPresent { display:block; }
   <div class="box">
     <div class="bar">
       <button class="tbtn" id="flowBack" title="Back to the calling narrative">← Back</button>
-      <span class="crumb" id="flowCrumb"></span>
+      <span class="crumbf" id="flowCrumb"></span>
       <span class="spacer"></span>
       <button class="tbtn" id="flowPng">Export PNG</button>
       <button class="tbtn" id="flowClose">✕</button>
@@ -411,13 +402,12 @@ var MODEL = __MODEL_JSON__;
 <script>
 (function () {
   'use strict';
-  var computeLayout = __LAYOUT_FN__;
   var buildDrawioXml = __DRAWIO_FN__;
   var buildExcalidrawScene = __EXCALIDRAW_FN__;
 
   var store = (typeof localStorage !== 'undefined') ? localStorage : null;
   var inBrowser = (typeof window !== 'undefined');
-  var STORE_KEY = 'wairon:canvas:' + MODEL.system.name;
+  var STORE_KEY = 'wairon:canvas2:' + MODEL.system.name;
 
   // ---- indexes -------------------------------------------------------------
   var compById = {};
@@ -444,35 +434,110 @@ var MODEL = __MODEL_JSON__;
   var CN = function (id) { return 'c~' + id; };
   var SN = function (id) { return 's~' + id; };
 
-  // ---- persisted state -------------------------------------------------------
-  var saved = { positions: {}, collapsed: [], theme: 'syw' };
-  try { if (store && store.getItem(STORE_KEY)) saved = JSON.parse(store.getItem(STORE_KEY)) || saved; } catch (e) { /* corrupted — ignore */ }
-
-  var state = {
-    collapsed: {},
-    selected: null,
-    selectedKind: null,
-    showIssues: false,
-    query: '',
-    theme: saved.theme === 'light' ? 'light' : 'syw',
-  };
-  (saved.collapsed || []).forEach(function (id) { state.collapsed[id] = true; });
-
-  function persist() {
-    if (!store) return;
-    try {
-      store.setItem(STORE_KEY, JSON.stringify({
-        positions: saved.positions || {},
-        collapsed: Object.keys(state.collapsed).filter(function (k) { return state.collapsed[k]; }),
-        theme: state.theme,
-      }));
-    } catch (e) { /* storage full/blocked — non-fatal */ }
+  // ---- ownership hierarchy ----------------------------------------------------
+  function topSubsystems() {
+    return MODEL.subsystems.filter(function (s) { return s.id.indexOf('::') < 0; });
+  }
+  function childSubsOf(subId) {
+    var prefix = subId + '::';
+    return MODEL.subsystems.filter(function (s) {
+      return s.id.indexOf(prefix) === 0 && s.id.slice(prefix.length).indexOf('::') < 0;
+    });
+  }
+  function childCompsOf(subId) {
+    return MODEL.components.filter(function (c) { return c.subsystem === subId && !c.owner; });
+  }
+  function memberCompsOf(compId) {
+    var c = compById[compId];
+    return c ? c.owns.map(function (id) { return compById[id]; }).filter(Boolean) : [];
+  }
+  // children of a scope, as {kind, id, hasKids} entries
+  function childrenOf(scope) {
+    var out = [];
+    if (scope.kind === 'system') {
+      topSubsystems().forEach(function (s) { out.push({ kind: 'subsystem', id: s.id }); });
+    } else if (scope.kind === 'subsystem') {
+      childSubsOf(scope.id).forEach(function (s) { out.push({ kind: 'subsystem', id: s.id }); });
+      childCompsOf(scope.id).forEach(function (c) { out.push({ kind: 'component', id: c.id }); });
+    } else if (scope.kind === 'component') {
+      memberCompsOf(scope.id).forEach(function (c) { out.push({ kind: 'component', id: c.id }); });
+    }
+    out.forEach(function (e) {
+      e.hasKids = e.kind === 'subsystem'
+        ? (childSubsOf(e.id).length + childCompsOf(e.id).length) > 0
+        : memberCompsOf(e.id).length > 0;
+    });
+    return out;
+  }
+  // is a component inside the subtree of a scope entry?
+  function subsystemChainOf(comp) {
+    // list of subsystem ids from top to comp's subsystem (namespaced ancestry)
+    var segs = comp.subsystem.split('::');
+    var out = [];
+    for (var i = 1; i <= segs.length; i++) out.push(segs.slice(0, i).join('::'));
+    return out;
+  }
+  function ownerChainOf(comp) {
+    var out = [];
+    var cur = comp;
+    while (cur && cur.owner) { out.unshift(cur.owner); cur = compById[cur.owner]; }
+    return out;
+  }
+  // The direct-child-of-scope entry containing comp, or null if outside scope.
+  function childOfScopeContaining(compId, scope) {
+    var c = compById[compId];
+    if (!c) return null;
+    var subs = subsystemChainOf(c);
+    var owners = ownerChainOf(c);
+    if (scope.kind === 'system') {
+      return { kind: 'subsystem', id: subs[0] };
+    }
+    if (scope.kind === 'subsystem') {
+      var idx = subs.indexOf(scope.id);
+      if (idx < 0) return null;
+      if (idx < subs.length - 1) return { kind: 'subsystem', id: subs[idx + 1] };
+      // comp lives directly in this subsystem — its child anchor is its top owner or itself
+      return { kind: 'component', id: owners.length ? owners[0] : c.id };
+    }
+    // component scope: comp must be a descendant member
+    var chain = owners.concat([c.id]);
+    var pos = chain.indexOf(scope.id);
+    if (pos < 0 || pos === chain.length - 1) return null;
+    return { kind: 'component', id: chain[pos + 1] };
+  }
+  function anchorNodeId(entry) { return entry.kind === 'subsystem' ? SN(entry.id) : CN(entry.id); }
+  function nameOf(entry) {
+    if (entry.kind === 'subsystem') { var s = subById[entry.id]; return s ? s.name : entry.id; }
+    var c = compById[entry.id]; return c ? c.name : entry.id;
   }
 
-  function matches(c) {
+  // ---- persisted state -------------------------------------------------------
+  var saved = { positionsByView: {}, theme: 'syw' };
+  try { if (store && store.getItem(STORE_KEY)) saved = JSON.parse(store.getItem(STORE_KEY)) || saved; } catch (e) { /* ignore */ }
+
+  var state = {
+    view: { kind: 'system', id: null },
+    internals: false,
+    externals: true,
+    showIssues: false,
+    query: '',
+    selected: null,
+    selectedKind: null,
+    theme: saved.theme === 'light' ? 'light' : 'syw',
+  };
+
+  function viewKey() {
+    return state.view.kind + ':' + (state.view.id || 'root') + (state.internals ? '+i' : '');
+  }
+  function persist() {
+    if (!store) return;
+    try { store.setItem(STORE_KEY, JSON.stringify({ positionsByView: saved.positionsByView || {}, theme: state.theme })); } catch (e) { /* non-fatal */ }
+  }
+
+  function matches(entry) {
     if (!state.query) return true;
     var q = state.query.toLowerCase();
-    return c.id.toLowerCase().indexOf(q) >= 0 || c.name.toLowerCase().indexOf(q) >= 0;
+    return entry.id.toLowerCase().indexOf(q) >= 0 || nameOf(entry).toLowerCase().indexOf(q) >= 0;
   }
 
   // ---- themes -----------------------------------------------------------------
@@ -481,6 +546,8 @@ var MODEL = __MODEL_JSON__;
       pageEdge: '#8d97a5', edgeText: '#57606a', cross: '#c26767', ink: '#1f2328',
       subFill: '#ffffff', subStroke: '#b6c0cc', subText: '#1f2328',
       patFill: '#f6f8fa', patStroke: '#6a737d',
+      ghostFill: '#f1f3f5', ghostStroke: '#adb5bd', ghostText: '#868e96',
+      innerFill: '#eef1f4', innerStroke: '#c3ccd6',
       stereo: {
         entry:   { fill: '#eef4ff', stroke: '#4a7dcf' },
         logic:   { fill: '#f4effd', stroke: '#8a5cf6' },
@@ -494,6 +561,8 @@ var MODEL = __MODEL_JSON__;
       pageEdge: '#5b6b82', edgeText: '#93a2b8', cross: '#ff6b81', ink: '#e8ecf3',
       subFill: 'rgba(13,27,42,0.88)', subStroke: 'rgba(34,221,255,0.45)', subText: '#22ddff',
       patFill: 'rgba(255,255,255,0.04)', patStroke: '#7a8699',
+      ghostFill: 'rgba(255,255,255,0.03)', ghostStroke: '#4a5568', ghostText: '#718096',
+      innerFill: 'rgba(255,255,255,0.05)', innerStroke: 'rgba(255,255,255,0.18)',
       stereo: {
         entry:   { fill: '#0d2b4d', stroke: '#22ddff' },
         logic:   { fill: '#241b45', stroke: '#8b5cf6' },
@@ -518,22 +587,21 @@ var MODEL = __MODEL_JSON__;
       { selector: '.data', style: { 'background-color': t.stereo.data.fill, 'border-color': t.stereo.data.stroke } },
       { selector: '.adapter', style: { 'background-color': t.stereo.adapter.fill, 'border-color': t.stereo.adapter.stroke } },
       { selector: '.patternLeaf', style: { 'background-color': t.stereo.patternLeaf.fill, 'border-color': t.stereo.patternLeaf.stroke, 'border-style': 'dashed' } },
+      { selector: '.subsysBox', style: { 'background-color': t.subFill, 'border-color': t.subStroke, color: t.subText, 'font-weight': 'bold', 'font-size': 12.5 } },
       { selector: 'node.public', style: { 'border-width': 3.5 } },
-      { selector: ':parent', style: {
-        'text-valign': 'top', 'text-halign': 'center', 'font-size': 12.5, 'font-weight': 'bold',
-        'text-margin-y': -6, padding: '16px', 'background-opacity': 1,
-      }},
-      { selector: '.subsysP', style: { 'background-color': t.subFill, 'border-color': t.subStroke, 'border-width': 1.4, color: t.subText } },
-      { selector: '.subsysC', style: { 'background-color': t.subFill, 'border-color': t.subStroke, 'font-weight': 'bold', 'font-size': 12.5, color: t.subText } },
-      { selector: '.patternP', style: { 'background-color': t.patFill, 'border-color': t.patStroke, 'border-style': 'dashed', color: t.ink } },
+      { selector: '.drillable', style: {} },
+      { selector: ':parent', style: { 'text-valign': 'top', 'text-halign': 'center', 'font-size': 12, 'font-weight': 'bold', 'text-margin-y': -5, padding: '12px', 'background-opacity': 1 } },
+      { selector: '.inner', style: { 'background-color': t.innerFill, 'border-color': t.innerStroke, 'border-width': 1, 'font-size': 9.5, color: t.ink } },
+      { selector: '.ghost', style: { 'background-color': t.ghostFill, 'border-color': t.ghostStroke, 'border-style': 'dotted', color: t.ghostText, 'font-size': 10 } },
       { selector: 'edge', style: {
-        'curve-style': 'bezier', width: 1.7, 'line-color': t.pageEdge,
+        'curve-style': 'bezier', width: 1.8, 'line-color': t.pageEdge,
         'target-arrow-shape': 'triangle', 'target-arrow-color': t.pageEdge, 'arrow-scale': 0.9,
         label: 'data(lbl)', 'font-size': 10, color: t.edgeText,
         'text-background-color': t.bgLabel, 'text-background-opacity': 0.85, 'text-rotation': 'autorotate',
       }},
       { selector: 'edge.cross', style: { 'line-color': t.cross, 'target-arrow-color': t.cross, width: 2.6 } },
-      { selector: 'edge.tube', style: { width: 5.5, opacity: 0.55 } },
+      { selector: 'edge.bundle', style: { width: 4.5, opacity: 0.6 } },
+      { selector: 'edge.toghost', style: { 'line-style': 'dashed', opacity: 0.7 } },
       { selector: '.dimmed', style: { opacity: 0.13 } },
       { selector: '.hasIssue', style: { 'border-color': t.issue, 'border-style': 'dashed', 'border-width': 3 } },
       { selector: '.sel', style: { 'overlay-color': t.selGlow, 'overlay-opacity': 0.2, 'overlay-padding': 5 } },
@@ -545,96 +613,205 @@ var MODEL = __MODEL_JSON__;
     var t = THEMES[state.theme];
     var sw = function (c) { return '<span class="sw" style="background:' + c.fill + ';border-color:' + c.stroke + '"></span>'; };
     document.getElementById('legend').innerHTML =
+      sw({ fill: t.subFill, stroke: t.subStroke }) + 'Subsystem&nbsp; ' +
       sw(t.stereo.entry) + 'Portal/Observer&nbsp; ' + sw(t.stereo.logic) + 'Logic&nbsp; ' +
       sw(t.stereo.data) + 'Data&nbsp; ' + sw(t.stereo.adapter) + 'Adapter&nbsp; ' +
-      sw(t.stereo.patternLeaf) + 'Pattern&nbsp; — bold border = published · ' +
-      '<span style="color:' + t.cross + '">red edge</span> = boundary hop · thick faded = collapsed tube';
+      sw(t.stereo.patternLeaf) + 'Pattern&nbsp; ' +
+      sw({ fill: t.ghostFill, stroke: t.ghostStroke }) + 'External&nbsp; — bold border = published · ' +
+      '<span style="color:' + t.cross + '">red</span> = boundary hop · double-click = open';
   }
 
-  // ---- graph construction -------------------------------------------------------
-  function layout() { return computeLayout(MODEL, state.collapsed); }
+  // ---- view layout ---------------------------------------------------------------
+  var BOX_W = 200, BOX_H = 56, SUBBOX_W = 230, SUBBOX_H = 84, GAP_X = 110, GAP_Y = 34;
+  var INNER_W = 120, INNER_H = 34, INNER_COLS = 2, INNER_GAP = 8, HEAD_H = 34, PADI = 14;
 
-  function anchorFor(id, L) {
-    var c = compById[id];
+  function innerKidsOf(entry) {
+    if (!state.internals || !entry.hasKids) return [];
+    return childrenOf({ kind: entry.kind, id: entry.id });
+  }
+  function sizeOf(entry) {
+    var kids = innerKidsOf(entry);
+    if (kids.length) {
+      var rows = Math.ceil(kids.length / INNER_COLS);
+      var w = Math.max(entry.kind === 'subsystem' ? SUBBOX_W : BOX_W, INNER_COLS * (INNER_W + INNER_GAP) + PADI * 2);
+      var h = HEAD_H + rows * (INNER_H + INNER_GAP) + PADI;
+      return { w: w, h: h };
+    }
+    return entry.kind === 'subsystem' ? { w: SUBBOX_W, h: SUBBOX_H } : { w: BOX_W, h: BOX_H };
+  }
+
+  // Aggregate model edges to view-level edges between child entries (+ externals).
+  function viewEdges(scope, entries) {
+    var entryByAnchor = {};
+    entries.forEach(function (e) { entryByAnchor[e.kind + ':' + e.id] = e; });
+    var agg = {}, ghosts = {};
+    MODEL.edges.forEach(function (edge) {
+      var a = childOfScopeContaining(edge.from, scope);
+      var b = childOfScopeContaining(edge.to, scope);
+      var aIn = a && entryByAnchor[a.kind + ':' + a.id];
+      var bIn = b && entryByAnchor[b.kind + ':' + b.id];
+      if (!aIn && !bIn) return; // fully outside this scope
+      var src, tgt, ghost = false;
+      if (aIn && bIn) {
+        if (a.kind === b.kind && a.id === b.id) return; // internal to one child
+        src = anchorNodeId(a); tgt = anchorNodeId(b);
+      } else if (state.externals) {
+        ghost = true;
+        if (aIn) {
+          var ext = externalAnchorFor(edge.to, scope);
+          if (!ext) return;
+          ghosts[ext.gid] = ext;
+          src = anchorNodeId(a); tgt = ext.gid;
+        } else {
+          var ext2 = externalAnchorFor(edge.from, scope);
+          if (!ext2) return;
+          ghosts[ext2.gid] = ext2;
+          src = ext2.gid; tgt = anchorNodeId(b);
+        }
+      } else {
+        return;
+      }
+      var key = src + '=>' + tgt;
+      if (!agg[key]) agg[key] = { src: src, tgt: tgt, n: 0, cross: false, ghost: ghost };
+      agg[key].n++;
+      if (edge.cross) agg[key].cross = true;
+    });
+    return { agg: agg, ghosts: ghosts };
+  }
+
+  // How an out-of-scope element is represented: the nearest "sibling-level" ancestor.
+  function externalAnchorFor(compId, scope) {
+    var c = compById[compId];
     if (!c) return null;
-    if (state.collapsed[c.subsystem]) return SN(c.subsystem);
-    if (c.owner && state.collapsed[c.owner]) return CN(c.owner);
-    if (L.boxes[id]) return CN(id);
+    // Walk outward from the scope: find the closest enclosing context that DOES contain the target.
+    var contexts = [];
+    if (scope.kind === 'component') {
+      var oc = compById[scope.id];
+      var chain = oc ? ownerChainOf(oc) : [];
+      for (var i = chain.length - 1; i >= 0; i--) contexts.push({ kind: 'component', id: chain[i] });
+      if (oc) subsystemChainOf(oc).reverse().forEach(function (sid) { contexts.push({ kind: 'subsystem', id: sid }); });
+    } else if (scope.kind === 'subsystem') {
+      var segs = scope.id.split('::');
+      for (var j = segs.length - 1; j >= 1; j--) contexts.push({ kind: 'subsystem', id: segs.slice(0, j).join('::') });
+    }
+    contexts.push({ kind: 'system', id: null });
+    for (var k = 0; k < contexts.length; k++) {
+      var child = childOfScopeContaining(compId, contexts[k]);
+      if (child) {
+        return { gid: 'x~' + child.kind + '~' + child.id, kind: child.kind, id: child.id, label: nameOf(child) };
+      }
+    }
     return null;
   }
 
   function buildElements() {
-    var L = layout();
+    var scope = state.view;
+    var entries = childrenOf(scope);
     var eles = [];
-    var dimmedAnchors = {};
+    var ve = viewEdges(scope, entries);
 
-    MODEL.subsystems.forEach(function (sub) {
-      var sb = L.subs[sub.id];
-      var dim = state.query && !MODEL.components.some(function (c) { return c.subsystem === sub.id && matches(c); });
-      if (dim) dimmedAnchors[SN(sub.id)] = true;
-      var extra = (dim ? ' dimmed' : '') + (state.showIssues && issuesBySpec[sub.id] ? ' hasIssue' : '')
-        + (state.selectedKind === 'subsystem' && state.selected === sub.id ? ' sel' : '');
-      if (sb.collapsed) {
-        eles.push({
-          data: { id: SN(sub.id), label: sub.name + '\\n(collapsed \\u25B8)', w: sb.w, h: sb.h, tw: sb.w - 20 },
-          position: { x: sb.x + sb.w / 2, y: sb.y + sb.h / 2 },
-          classes: 'subsysC boundary' + extra,
+    // simple layered placement: layer by aggregated deps among entries
+    var layerOf = {};
+    function calcLayer(e, stack) {
+      var key = anchorNodeId(e);
+      if (layerOf[key] !== undefined) return layerOf[key];
+      if (stack[key]) return 0;
+      stack[key] = 1;
+      var l = 0;
+      if (e.kind === 'component') {
+        var c = compById[e.id];
+        if (c && (c.componentType === 'Portal' || c.componentType === 'Observer')) { layerOf[key] = 0; delete stack[key]; return 0; }
+      }
+      Object.keys(ve.agg).forEach(function (k) {
+        var edge = ve.agg[k];
+        if (edge.tgt !== key) return;
+        var srcEntry = entries.filter(function (x) { return anchorNodeId(x) === edge.src; })[0];
+        if (srcEntry) l = Math.max(l, calcLayer(srcEntry, stack) + 1);
+      });
+      delete stack[key];
+      layerOf[key] = l;
+      return l;
+    }
+    entries.forEach(function (e) { calcLayer(e, {}); });
+    var cols = {};
+    entries.forEach(function (e) { var l = layerOf[anchorNodeId(e)] || 0; (cols[l] = cols[l] || []).push(e); });
+    var colKeys = Object.keys(cols).map(Number).sort(function (a, b) { return a - b; });
+    var x = 0, maxColH = 0;
+    var posByAnchor = {};
+    colKeys.forEach(function (ck) {
+      var col = cols[ck].sort(function (a, b) { return a.id < b.id ? -1 : 1; });
+      var colW = 0, y = 0;
+      col.forEach(function (e) { var s = sizeOf(e); colW = Math.max(colW, s.w); });
+      col.forEach(function (e) {
+        var s = sizeOf(e);
+        posByAnchor[anchorNodeId(e)] = { x: x + colW / 2, y: y + s.h / 2, w: s.w, h: s.h };
+        y += s.h + GAP_Y;
+      });
+      maxColH = Math.max(maxColH, y);
+      x += colW + GAP_X;
+    });
+
+    entries.forEach(function (e) {
+      var p = posByAnchor[anchorNodeId(e)];
+      var kids = innerKidsOf(e);
+      var dim = state.query && !matches(e);
+      var classes, label;
+      var isPub = e.kind === 'component' && compById[e.id] && compById[e.id].public;
+      if (e.kind === 'subsystem') {
+        classes = 'subsysBox';
+        label = nameOf(e) + (e.hasKids && !kids.length ? '\\n\\u25B8 open' : '');
+      } else {
+        var c = compById[e.id];
+        classes = stereoClass(c.componentType);
+        label = c.name + '\\n\\u00AB' + c.componentType + (c.portalType ? '/' + c.portalType : '') + '\\u00BB' + (e.hasKids && !kids.length ? ' \\u25B8' : '');
+      }
+      classes += (e.hasKids ? ' drillable' : '') + (isPub ? ' public' : '')
+        + (dim ? ' dimmed' : '')
+        + (state.showIssues && issuesBySpec[e.id] ? ' hasIssue' : '')
+        + (state.selectedKind === e.kind && state.selected === e.id ? ' sel' : '');
+      if (kids.length) {
+        eles.push({ data: { id: anchorNodeId(e), label: (e.kind === 'subsystem' ? nameOf(e) : label.split('\\n')[0]), w: p.w, h: p.h, tw: p.w - 16 }, classes: classes });
+        kids.forEach(function (kid, ki) {
+          var kc = ki % INNER_COLS, kr = Math.floor(ki / INNER_COLS);
+          eles.push({
+            data: {
+              id: 'i~' + kid.kind + '~' + kid.id, parent: anchorNodeId(e),
+              label: nameOf(kid), w: INNER_W, h: INNER_H, tw: INNER_W - 10,
+            },
+            position: {
+              x: p.x - p.w / 2 + PADI + kc * (INNER_W + INNER_GAP) + INNER_W / 2,
+              y: p.y - p.h / 2 + HEAD_H + kr * (INNER_H + INNER_GAP) + INNER_H / 2,
+            },
+            classes: 'inner' + (dim ? ' dimmed' : ''),
+          });
         });
       } else {
-        eles.push({ data: { id: SN(sub.id), label: sub.name, w: sb.w, h: sb.h, tw: sb.w - 20 }, classes: 'subsysP boundary' + extra });
+        eles.push({ data: { id: anchorNodeId(e), label: label, w: p.w, h: p.h, tw: p.w - 14 }, position: { x: p.x, y: p.y }, classes: classes });
       }
     });
 
-    var visible = Object.keys(L.boxes);
-    var patterns = visible.filter(function (id) { var c = compById[id]; return PATTERN_TYPES[c.componentType] && c.owns.length && !state.collapsed[id]; });
-    var leaves = visible.filter(function (id) { return patterns.indexOf(id) < 0; });
-
-    patterns.forEach(function (id) {
-      var c = compById[id], b = L.boxes[id];
-      var dim = state.query && !matches(c);
-      if (dim) dimmedAnchors[CN(id)] = true;
+    // ghosts column (externals) at far right
+    var gx = x + 40, gy = 0;
+    Object.keys(ve.ghosts).sort().forEach(function (gid) {
+      var g = ve.ghosts[gid];
       eles.push({
-        data: { id: CN(id), label: c.name + '  \\u00AB' + c.componentType + '\\u00BB', parent: SN(c.subsystem), w: b.w, h: b.h, tw: b.w - 16 },
-        classes: 'patternP boundary' + (dim ? ' dimmed' : '') + (state.showIssues && issuesBySpec[id] ? ' hasIssue' : '') + (state.selectedKind === 'component' && state.selected === id ? ' sel' : ''),
+        data: { id: gid, label: g.label + '\\n(external)', w: 170, h: 46, tw: 156, extKind: g.kind, extId: g.id },
+        position: { x: gx + 85, y: gy + 23 },
+        classes: 'ghost',
       });
+      gy += 46 + 18;
     });
 
-    leaves.forEach(function (id) {
-      var c = compById[id], b = L.boxes[id];
-      var parent = (c.owner && !state.collapsed[c.owner] && L.boxes[c.owner]) ? CN(c.owner) : SN(c.subsystem);
-      var collapsedPattern = PATTERN_TYPES[c.componentType] && c.owns.length && state.collapsed[id];
-      var dim = state.query && !matches(c);
-      if (dim) dimmedAnchors[CN(id)] = true;
-      var label = c.name + '\\n\\u00AB' + c.componentType + (c.portalType ? '/' + c.portalType : '') + '\\u00BB' + (collapsedPattern ? ' \\u25B8' : '');
-      eles.push({
-        data: { id: CN(id), label: label, parent: parent, w: b.w, h: b.h, tw: b.w - 14 },
-        position: { x: b.x + b.w / 2, y: b.y + b.h / 2 },
-        classes: stereoClass(c.componentType)
-          + (c.public ? ' public' : '')
-          + (collapsedPattern ? ' boundary' : '')
-          + (dim ? ' dimmed' : '')
-          + (state.showIssues && issuesBySpec[id] ? ' hasIssue' : '')
-          + (state.selectedKind === 'component' && state.selected === id ? ' sel' : ''),
-      });
-    });
-
-    // aggregated edges between visible anchors — dimmed when either endpoint is
-    var agg = {};
-    MODEL.edges.forEach(function (e) {
-      var a = anchorFor(e.from, L), b = anchorFor(e.to, L);
-      if (!a || !b || a === b) return;
-      var key = a + '=>' + b;
-      if (!agg[key]) agg[key] = { a: a, b: b, n: 0, cross: false, tube: a !== CN(e.from) || b !== CN(e.to) };
-      agg[key].n++;
-      if (e.cross) agg[key].cross = true;
-    });
+    var dimmedAnchors = {};
+    entries.forEach(function (e) { if (state.query && !matches(e)) dimmedAnchors[anchorNodeId(e)] = true; });
     var i = 0;
-    Object.keys(agg).forEach(function (key) {
-      var e = agg[key];
-      var dim = state.query && (dimmedAnchors[e.a] || dimmedAnchors[e.b]);
+    Object.keys(ve.agg).forEach(function (key) {
+      var e = ve.agg[key];
+      var bundle = e.n > 1;
+      var dim = state.query && (dimmedAnchors[e.src] || dimmedAnchors[e.tgt]);
       eles.push({
-        data: { id: 'e' + (i++), source: e.a, target: e.b, lbl: e.tube && e.n > 1 ? e.n + ' links' : '' },
-        classes: 'dep' + (e.cross ? ' cross' : '') + (e.tube ? ' tube' : '') + (dim ? ' dimmed' : ''),
+        data: { id: 'e' + (i++), source: e.src, target: e.tgt, lbl: bundle ? e.n + ' links' : '' },
+        classes: (e.cross ? 'cross ' : '') + (bundle ? 'bundle ' : '') + (e.ghost ? 'toghost ' : '') + (dim ? 'dimmed' : ''),
       });
     });
 
@@ -658,10 +835,12 @@ var MODEL = __MODEL_JSON__;
   });
   cy.autolock(true);
   applySavedPositions();
-  cy.fit(undefined, 40);
+  cy.fit(undefined, 50);
+  renderCrumbs();
+  renderViewHint();
 
   function applySavedPositions() {
-    var pos = saved.positions || {};
+    var pos = (saved.positionsByView || {})[viewKey()] || {};
     cy.nodes().forEach(function (n) {
       if (!n.isParent() && pos[n.id()]) {
         var locked = n.locked();
@@ -671,94 +850,149 @@ var MODEL = __MODEL_JSON__;
       }
     });
   }
-
-  function rebuild() {
+  function harvestPositions() {
+    var all = saved.positionsByView || {};
+    var pos = all[viewKey()] || {};
+    cy.nodes().forEach(function (n) { if (!n.isParent()) pos[n.id()] = { x: n.position('x'), y: n.position('y') }; });
+    all[viewKey()] = pos;
+    saved.positionsByView = all;
+    persist();
+  }
+  function rebuild(fit) {
     cy.batch(function () {
       cy.elements().remove();
       cy.add(buildElements());
     });
     applySavedPositions();
+    if (fit) cy.fit(undefined, 50);
+    renderCrumbs();
+    renderViewHint();
   }
 
-  function harvestPositions() {
-    var pos = saved.positions || {};
-    cy.nodes().forEach(function (n) {
-      if (!n.isParent()) pos[n.id()] = { x: n.position('x'), y: n.position('y') };
-    });
-    saved.positions = pos;
-    persist();
-  }
-
-  // Layout in {boxes, subs} shape from CURRENT node positions (for exports).
+  // Current-view layout in {boxes, subs} shape for the export builders.
   function harvestLayout() {
     var boxes = {}, subs = {};
-    MODEL.components.forEach(function (c) {
-      var n = cy.getElementById(CN(c.id));
-      if (!n.length) return;
+    cy.nodes().forEach(function (n) {
+      var id = n.id();
       var bb = n.boundingBox({ includeLabels: false, includeOverlays: false });
-      boxes[c.id] = { x: bb.x1, y: bb.y1, w: bb.w, h: bb.h };
-    });
-    MODEL.subsystems.forEach(function (s) {
-      var n = cy.getElementById(SN(s.id));
-      if (!n.length) return;
-      var bb = n.boundingBox({ includeLabels: false, includeOverlays: false });
-      subs[s.id] = { x: bb.x1, y: bb.y1, w: bb.w, h: bb.h, collapsed: !!state.collapsed[s.id] };
+      var box = { x: bb.x1, y: bb.y1, w: bb.w, h: bb.h };
+      if (id.indexOf('s~') === 0) subs[id.slice(2)] = { x: box.x, y: box.y, w: box.w, h: box.h, collapsed: true };
+      else if (id.indexOf('c~') === 0) boxes[id.slice(2)] = box;
     });
     return { boxes: boxes, subs: subs };
+  }
+
+  // ---- navigation -----------------------------------------------------------
+  function crumbPath() {
+    var path = [{ kind: 'system', id: null, label: MODEL.system.name }];
+    var v = state.view;
+    if (v.kind === 'subsystem') {
+      var segs = v.id.split('::');
+      for (var i = 1; i <= segs.length; i++) {
+        var sid = segs.slice(0, i).join('::');
+        path.push({ kind: 'subsystem', id: sid, label: nameOf({ kind: 'subsystem', id: sid }) });
+      }
+    } else if (v.kind === 'component') {
+      var c = compById[v.id];
+      if (c) {
+        subsystemChainOf(c).forEach(function (sid) {
+          path.push({ kind: 'subsystem', id: sid, label: nameOf({ kind: 'subsystem', id: sid }) });
+        });
+        ownerChainOf(c).forEach(function (oid) {
+          path.push({ kind: 'component', id: oid, label: nameOf({ kind: 'component', id: oid }) });
+        });
+        path.push({ kind: 'component', id: c.id, label: c.name });
+      }
+    }
+    return path;
+  }
+  function renderCrumbs() {
+    var el = document.getElementById('crumbs');
+    var path = crumbPath();
+    el.innerHTML = path.map(function (p, i) {
+      var cur = i === path.length - 1;
+      return '<button class="crumb' + (cur ? ' cur' : '') + '" data-ck="' + p.kind + '" data-ci="' + (p.id || '') + '">' + p.label + '</button>'
+        + (cur ? '' : '<span class="sep">\\u203A</span>');
+    }).join('');
+    var btns = el.querySelectorAll('button');
+    for (var i = 0; i < btns.length; i++) {
+      (function (b) {
+        b.addEventListener('click', function () {
+          navigateTo(b.getAttribute('data-ck'), b.getAttribute('data-ci') || null);
+        });
+      })(btns[i]);
+    }
+  }
+  function renderViewHint() {
+    var n = childrenOf(state.view).length;
+    var what = state.view.kind === 'system' ? 'top-level subsystems'
+      : state.view.kind === 'subsystem' ? 'children of this subsystem' : 'members of this pattern';
+    document.getElementById('viewHint').textContent = 'View: ' + n + ' ' + what + ' \\u00B7 double-click a box to open it';
+  }
+  function navigateTo(kind, id) {
+    if (state.view.kind === kind && state.view.id === id) return;
+    state.view = { kind: kind, id: id };
+    state.selected = null;
+    state.selectedKind = null;
+    rebuild(true);
+    renderPanel();
   }
 
   // ---- interactions -----------------------------------------------------------
   function idOf(node) {
     var raw = node.id();
+    if (raw.indexOf('x~') === 0) return { ghost: true, kind: node.data('extKind'), id: node.data('extId') };
+    if (raw.indexOf('i~') === 0) { var parts = raw.split('~'); return { inner: true, kind: parts[1], id: parts.slice(2).join('~') }; }
     return { kind: raw.charAt(0) === 's' ? 'subsystem' : 'component', id: raw.slice(2) };
   }
 
-  cy.on('tap', 'node', function (ev) { var t = idOf(ev.target); select(t.kind, t.id, false); });
+  cy.on('tap', 'node', function (ev) {
+    var t = idOf(ev.target);
+    select(t.kind, t.id, false);
+  });
   cy.on('tap', function (ev) { if (ev.target === cy) select(null, null, false); });
   cy.on('dbltap', 'node', function (ev) {
     var t = idOf(ev.target);
-    if (t.kind === 'subsystem') { state.collapsed[t.id] = !state.collapsed[t.id]; persist(); rebuild(); return; }
-    var c = compById[t.id];
-    if (c && PATTERN_TYPES[c.componentType] && c.owns.length) { state.collapsed[t.id] = !state.collapsed[t.id]; persist(); rebuild(); }
+    if (t.ghost) {
+      // jump to the external element's parent view and select it
+      var parentView = parentViewOf(t.kind, t.id);
+      state.view = parentView;
+      rebuild(true);
+      select(t.kind, t.id, true);
+      return;
+    }
+    var entry = { kind: t.kind, id: t.id };
+    var hasKids = t.kind === 'subsystem'
+      ? (childSubsOf(t.id).length + childCompsOf(t.id).length) > 0
+      : memberCompsOf(t.id).length > 0;
+    if (hasKids) navigateTo(t.kind, t.id);
   });
   cy.on('dragfree', 'node', function () { harvestPositions(); });
 
-  document.getElementById('search').addEventListener('input', function (ev) { state.query = ev.target.value.trim(); rebuild(); });
-  document.getElementById('issuesToggle').addEventListener('change', function (ev) { state.showIssues = ev.target.checked; rebuild(); renderPanel(); });
+  function parentViewOf(kind, id) {
+    if (kind === 'subsystem') {
+      var segs = id.split('::');
+      return segs.length > 1 ? { kind: 'subsystem', id: segs.slice(0, -1).join('::') } : { kind: 'system', id: null };
+    }
+    var c = compById[id];
+    if (c && c.owner) return { kind: 'component', id: c.owner };
+    return c ? { kind: 'subsystem', id: c.subsystem } : { kind: 'system', id: null };
+  }
+
+  document.getElementById('search').addEventListener('input', function (ev) { state.query = ev.target.value.trim(); rebuild(false); });
+  document.getElementById('internalsToggle').addEventListener('change', function (ev) { state.internals = ev.target.checked; rebuild(true); });
+  document.getElementById('externalsToggle').addEventListener('change', function (ev) { state.externals = ev.target.checked; rebuild(true); });
+  document.getElementById('issuesToggle').addEventListener('change', function (ev) { state.showIssues = ev.target.checked; rebuild(false); renderPanel(); });
   document.getElementById('dragToggle').addEventListener('change', function (ev) { cy.autolock(!ev.target.checked); });
-  document.getElementById('fitBtn').addEventListener('click', function () { cy.fit(undefined, 40); });
+  document.getElementById('fitBtn').addEventListener('click', function () { cy.fit(undefined, 50); });
   document.getElementById('resetBtn').addEventListener('click', function () {
-    saved.positions = {};
+    var all = saved.positionsByView || {};
+    delete all[viewKey()];
+    saved.positionsByView = all;
     persist();
-    rebuild();
-    cy.fit(undefined, 40);
+    rebuild(true);
   });
 
-  // View levels
-  var viewSeg = document.getElementById('viewSeg');
-  function setView(level) {
-    state.collapsed = {};
-    if (level === 'system') {
-      MODEL.subsystems.forEach(function (s) { state.collapsed[s.id] = true; });
-    } else if (level === 'components') {
-      MODEL.components.forEach(function (c) { if (PATTERN_TYPES[c.componentType] && c.owns.length) state.collapsed[c.id] = true; });
-    }
-    persist();
-    rebuild();
-    cy.fit(undefined, 40);
-    var btns = viewSeg.querySelectorAll('button');
-    for (var i = 0; i < btns.length; i++) {
-      if (btns[i].classList) btns[i].classList[btns[i].getAttribute('data-view') === level ? 'add' : 'remove']('active');
-    }
-  }
-  (function () {
-    var btns = viewSeg.querySelectorAll('button');
-    for (var i = 0; i < btns.length; i++) {
-      (function (b) { b.addEventListener('click', function () { setView(b.getAttribute('data-view')); }); })(btns[i]);
-    }
-  })();
-
-  // Theme toggle
   document.getElementById('themeBtn').addEventListener('click', function () {
     state.theme = state.theme === 'syw' ? 'light' : 'syw';
     document.body.setAttribute('data-theme', state.theme);
@@ -767,21 +1001,19 @@ var MODEL = __MODEL_JSON__;
     persist();
   });
 
-  // Presentation mode
   function setPresentation(on) {
     if (document.body.classList) document.body.classList[on ? 'add' : 'remove']('presentation');
     if (inBrowser) {
       try {
         if (on && document.documentElement && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
         else if (!on && document.exitFullscreen && document.fullscreenElement) document.exitFullscreen();
-      } catch (e) { /* fullscreen unavailable — mode still works */ }
+      } catch (e) { /* fullscreen unavailable */ }
     }
     setTimeout(function () { cy.resize(); cy.fit(undefined, 30); }, 60);
   }
   document.getElementById('presentBtn').addEventListener('click', function () { setPresentation(true); });
   document.getElementById('exitPresent').addEventListener('click', function () { setPresentation(false); });
 
-  // Export dropdown
   var dd = document.getElementById('exportDd');
   document.getElementById('exportBtn').addEventListener('click', function (ev) {
     if (ev && ev.stopPropagation) ev.stopPropagation();
@@ -798,7 +1030,10 @@ var MODEL = __MODEL_JSON__;
       }
     });
   }
-  function fileBase() { return String(MODEL.system.name).replace(/\\s+/g, '-').toLowerCase(); }
+  function fileBase() {
+    var scope = state.view.id ? state.view.id.replace(/::/g, '-') : 'system';
+    return (String(MODEL.system.name) + '-' + scope).replace(/\\s+/g, '-').toLowerCase();
+  }
   function downloadText(name, text, mime) {
     if (!inBrowser) return;
     var blob = new Blob([text], { type: mime });
@@ -814,14 +1049,14 @@ var MODEL = __MODEL_JSON__;
     if (!inBrowser) return;
     var uri = cy.png({ full: true, scale: 2, bg: THEMES[state.theme].png });
     var a = document.createElement('a');
-    a.href = uri; a.download = fileBase() + '-architecture.png';
+    a.href = uri; a.download = fileBase() + '.png';
     document.body.appendChild(a); a.click(); a.remove();
   });
   document.getElementById('expDrawio').addEventListener('click', function () {
-    downloadText(fileBase() + '-architecture.drawio', buildDrawioXml(MODEL, harvestLayout()), 'application/xml');
+    downloadText(fileBase() + '.drawio', buildDrawioXml(MODEL, harvestLayout()), 'application/xml');
   });
   document.getElementById('expExcalidraw').addEventListener('click', function () {
-    downloadText(fileBase() + '-architecture.excalidraw', buildExcalidrawScene(MODEL, harvestLayout()), 'application/json');
+    downloadText(fileBase() + '.excalidraw', buildExcalidrawScene(MODEL, harvestLayout()), 'application/json');
   });
 
   // ---- narrative flowchart modal ------------------------------------------------
@@ -938,6 +1173,11 @@ var MODEL = __MODEL_JSON__;
     renderPanel();
   }
 
+  function openViewButton(kind, id, hasKids) {
+    if (!hasKids) return '';
+    return '<div class="openbtn"><button class="tbtn" data-open-kind="' + kind + '" data-open-id="' + esc(id) + '">\\u25B8 Open as view</button></div>';
+  }
+
   function renderPanel() {
     var head = '', body = '';
     if (state.selectedKind === 'component' && compById[state.selected]) {
@@ -946,7 +1186,8 @@ var MODEL = __MODEL_JSON__;
         + staticChip('\\u00AB' + c.componentType + (c.portalType ? '/' + c.portalType : '') + '\\u00BB')
         + (c.public ? staticChip('published') : '')
         + (c.status ? staticChip(c.status) : '')
-        + chip(c.subsystem, 'subsystem', c.subsystem);
+        + chip(c.subsystem, 'subsystem', c.subsystem)
+        + openViewButton('component', c.id, c.owns.length > 0);
       body += '<p class="desc">' + esc(c.description) + '</p>';
 
       var depInner = (c.dependsOn.length ? c.dependsOn.map(function (d) { return chip(d, 'component', d); }).join('') : '<span class="desc">none</span>')
@@ -990,16 +1231,20 @@ var MODEL = __MODEL_JSON__;
       if (iss) body += section('Validation issues', iss.length, issueHtml(iss), true);
     } else if (state.selectedKind === 'subsystem' && subById[state.selected]) {
       var s = subById[state.selected];
+      var subKids = childSubsOf(s.id).length + childCompsOf(s.id).length;
       head = '<h2>' + esc(s.name) + '</h2>' + staticChip('subsystem')
         + (s.targetLanguage ? staticChip(s.targetLanguage) : '')
-        + (s.status ? staticChip(s.status) : '');
+        + (s.status ? staticChip(s.status) : '')
+        + openViewButton('subsystem', s.id, subKids > 0);
       body += '<p class="desc">' + esc(s.description) + '</p>';
       if (s.trustedLinks.length) {
         body += section('Trusted links (fast lanes)', s.trustedLinks.length, s.trustedLinks.map(function (t2) {
           return '<div class="method">' + chip(t2.subsystem, 'subsystem', t2.subsystem) + '<div class="mdesc">' + esc(t2.reason) + '</div></div>';
         }).join(''), true);
       }
-      var comps = MODEL.components.filter(function (c2) { return c2.subsystem === s.id; });
+      var subs2 = childSubsOf(s.id);
+      if (subs2.length) body += section('Nested subsystems', subs2.length, subs2.map(function (s2) { return chip(s2.id, 'subsystem', s2.id); }).join(''), true);
+      var comps = childCompsOf(s.id);
       body += section('Components', comps.length, comps.map(function (c2) { return chip(c2.id, 'component', c2.id); }).join(''), true);
       var iss2 = issuesBySpec[s.id];
       if (iss2) body += section('Validation issues', iss2.length, issueHtml(iss2), true);
@@ -1009,7 +1254,7 @@ var MODEL = __MODEL_JSON__;
         + staticChip(MODEL.subsystems.length + ' subsystems')
         + staticChip(MODEL.components.length + ' components');
       if (MODEL.system.vision) body += '<p class="desc">' + esc(MODEL.system.vision) + '</p>';
-      body += '<p class="desc">Click any component, pattern, or subsystem for details. Derived from <code style="display:inline">.wai/specs/</code> \\u2014 the same source of truth as the conformance gate.</p>';
+      body += '<p class="desc">Each view shows one scope\\u2019s direct children \\u2014 double-click a box (or use \\u201COpen as view\\u201D) to drill in, and the breadcrumb to come back. Derived from <code style="display:inline">.wai/specs/</code>.</p>';
       if (state.showIssues && MODEL.issues.length) body += section('All validation issues', MODEL.issues.length, issueHtml(MODEL.issues), true);
     }
     panel.innerHTML = '<div class="head">' + head + '</div><div class="body">' + body + '</div>';
@@ -1025,6 +1270,12 @@ var MODEL = __MODEL_JSON__;
         });
         n.addEventListener('mouseleave', function () { cy.nodes().removeClass('hoverhl'); });
       })(navs[i]);
+    }
+    var opens = panel.querySelectorAll('[data-open-kind]');
+    for (var k = 0; k < opens.length; k++) {
+      (function (b) {
+        b.addEventListener('click', function () { navigateTo(b.getAttribute('data-open-kind'), b.getAttribute('data-open-id')); });
+      })(opens[k]);
     }
     var flows = panel.querySelectorAll('[data-flow-comp]');
     for (var j = 0; j < flows.length; j++) {

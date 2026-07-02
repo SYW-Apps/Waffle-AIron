@@ -79,11 +79,14 @@ format writes a file (paths are printed); nothing opens automatically.
   `architecture.drawio`, and `architecture.excalidraw`) into
   `.wai/docs/diagrams/` (or `--out`).
 
-The canvas is a small single-page app: SYW/light themes, view levels
-(System / Components / Full), presentation mode, layout persistence (drag
-rearrangements are remembered per browser), narrative flowcharts with call
-drill-down, and an Export menu (PNG / draw.io / Excalidraw) that uses your
-current layout.
+The canvas is a small single-page app with **C4-style scoped navigation**:
+each view renders one scope's direct children (System → subsystems →
+components → pattern members, infinitely deep by ownership); double-click
+drills in, the breadcrumb navigates back, "Internals" previews children
+inside boxes, "Externals" shows out-of-scope references as ghosts. Plus
+SYW/light themes, presentation mode, per-view layout persistence,
+narrative flowcharts with call drill-down, and an Export menu
+(PNG / draw.io / Excalidraw) capturing the current view and layout.
 
 ---
 

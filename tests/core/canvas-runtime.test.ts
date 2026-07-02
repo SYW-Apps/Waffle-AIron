@@ -121,13 +121,14 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     run(cytoscape, document); // throws on any template JS error
 
     expect(cyInstance).not.toBeNull();
-    // 1 subsystem compound + 3 components + 1 dependsOn edge
-    expect(cyInstance.nodes().length).toBe(4);
-    expect(cyInstance.edges().length).toBe(1);
-    // the member is parented to its pattern compound
-    expect(cyInstance.getElementById('c~billing-store').parent().id()).toBe('c~billing-repo');
-    // the published portal carries its class
-    expect(cyInstance.getElementById('c~billing-portal').hasClass('public')).toBe(true);
+    // C4-style scoped navigation: the initial SYSTEM view renders only the
+    // top-level subsystems — one drillable box, no internal edges leaked.
+    expect(cyInstance.nodes().length).toBe(1);
+    expect(cyInstance.edges().length).toBe(0);
+    const subNode = cyInstance.getElementById('s~billing');
+    expect(subNode.length).toBe(1);
+    expect(subNode.hasClass('subsysBox')).toBe(true);
+    expect(subNode.hasClass('drillable')).toBe(true);
     // header issue counter was populated by the app script (0 errors / 1 warning)
     expect(elements['issueCount'].textContent).toBe('0e/1w');
   });

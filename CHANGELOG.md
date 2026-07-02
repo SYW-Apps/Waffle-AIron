@@ -76,6 +76,14 @@ migration*).
   flowchart modal (call drill-down with back navigation, PNG export), and an
   Export menu (PNG / draw.io / Excalidraw) that uses the CURRENT — possibly
   rearranged — positions. `--format <fmt>` flag added.
+- **Scoped C4-style navigation**: every canvas view renders exactly one
+  scope's direct children — System → top-level subsystems → a subsystem's
+  children (nested subsystems + components) → a pattern's members,
+  infinitely deep by ownership. Double-click (or "Open as view") drills in;
+  the breadcrumb navigates back. "Internals" previews each child's own
+  children inside its box; "Externals" shows out-of-scope dependencies as
+  ghost references (double-click a ghost jumps to it). Layout
+  rearrangements persist per view; exports capture the current view.
 - **CLI behavior change**: bare `wairon diagram` now writes the interactive
   canvas (the primary format); Mermaid moved behind `--format mermaid` /
   `--subsystem` and writes a file instead of printing to stdout (use a
