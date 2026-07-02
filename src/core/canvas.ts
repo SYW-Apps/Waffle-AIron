@@ -265,8 +265,11 @@ const CANVAS_TEMPLATE = `<!DOCTYPE html>
   <span class="sub">architecture canvas · generated __GENERATED_AT__ · <b>wairon</b></span>
   <input id="search" placeholder="search components…">
   <label><input type="checkbox" id="issuesToggle"> issues overlay (<span id="issueCount"></span>)</label>
+  <label><input type="checkbox" id="dragToggle"> rearrange</label>
   <button id="fitBtn">fit</button>
-  <span class="sub" style="margin-left:auto">drag nodes · double-click a boundary to collapse/expand · wheel to zoom</span>
+  <button id="resetBtn">reset layout</button>
+  <button id="pngBtn">export PNG</button>
+  <span class="sub" style="margin-left:auto">double-click a boundary to collapse/expand · wheel to zoom · layout locked (enable “rearrange” to drag)</span>
 </header>
 <div id="wrap">
   <div id="stage">
@@ -355,10 +358,63 @@ var MODEL = __MODEL_JSON__;
     return { w: BOX_W, h: BOX_H };
   }
 
+  // Subsystems ordered so callers sit left of the subsystems they depend on —
+  // cross-boundary edges then flow consistently rightward (shorter, fewer
+  // weird back-links). DFS post-order over the subsystem dep graph, reversed;
+  // alphabetical tiebreak; cycle-guarded (mutual deps keep declaration order).
+  function subsystemOrder() {
+    var deps = {};
+    MODEL.edges.forEach(function (e) {
+      if (!e.cross) return;
+      var fs = compById[e.from].subsystem, ts = compById[e.to].subsystem;
+      (deps[fs] = deps[fs] || {})[ts] = 1;
+    });
+    var ids = MODEL.subsystems.map(function (s) { return s.id; }).sort();
+    var order = [], mark = {};
+    function visit(id, stack) {
+      if (mark[id] || stack[id]) return;
+      stack[id] = 1;
+      Object.keys(deps[id] || {}).sort().forEach(function (d) { if (subById[d]) visit(d, stack); });
+      delete stack[id];
+      mark[id] = 1;
+      order.push(id);
+    }
+    ids.forEach(function (id) { visit(id, {}); });
+    order.reverse();
+    return order.map(function (id) { return subById[id]; });
+  }
+
+  // Barycenter crossing-reduction: within a subsystem, order each column's
+  // components by the mean row of their neighbors in the adjacent column
+  // (alternating sweep directions). Unconnected components keep their row.
+  function refineColumns(colInfo) {
+    function neighborsMean(c, refIds, fallback) {
+      var vals = [];
+      c.dependsOn.forEach(function (d) { if (refIds[d] !== undefined) vals.push(refIds[d]); });
+      MODEL.components.forEach(function (o) {
+        if (refIds[o.id] !== undefined && o.dependsOn.indexOf(c.id) >= 0) vals.push(refIds[o.id]);
+      });
+      if (!vals.length) return fallback;
+      return vals.reduce(function (s, v) { return s + v; }, 0) / vals.length;
+    }
+    for (var iter = 0; iter < 4; iter++) {
+      var forward = iter % 2 === 0;
+      colInfo.forEach(function (col, k) {
+        var refK = forward ? k - 1 : k + 1;
+        if (refK < 0 || refK >= colInfo.length) return;
+        var refIds = {};
+        colInfo[refK].comps.forEach(function (c, i) { refIds[c.id] = i; });
+        var keyed = col.comps.map(function (c, i) { return { c: c, key: neighborsMean(c, refIds, i) }; });
+        keyed.sort(function (a, b) { return a.key - b.key || (a.c.id < b.c.id ? -1 : 1); });
+        col.comps = keyed.map(function (x) { return x.c; });
+      });
+    }
+  }
+
   // boxes: component id -> {x,y,w,h}; subs: id -> {x,y,w,h,collapsed}
   function layout() {
     var boxes = {}, subs = {};
-    var order = MODEL.subsystems.slice().sort(function (a, b) { return a.id < b.id ? -1 : 1; });
+    var order = subsystemOrder();
     var sizes = {};
     order.forEach(function (sub) {
       if (state.collapsed[sub.id]) { sizes[sub.id] = { w: 240, h: 76, cols: [] }; return; }
@@ -369,13 +425,16 @@ var MODEL = __MODEL_JSON__;
       var cols = {};
       comps.forEach(function (c) { (cols[memo[c.id]] = cols[memo[c.id]] || []).push(c); });
       var colKeys = Object.keys(cols).map(Number).sort(function (a, b) { return a - b; });
-      var width = SUB_PAD * 2, height = 0;
       var colInfo = [];
       colKeys.forEach(function (k) {
-        var colComps = cols[k].sort(function (a, b) { return a.id < b.id ? -1 : 1; });
+        colInfo.push({ comps: cols[k].sort(function (a, b) { return a.id < b.id ? -1 : 1; }), w: 0, h: 0 });
+      });
+      refineColumns(colInfo);
+      var width = SUB_PAD * 2, height = 0;
+      colInfo.forEach(function (col) {
         var colW = 0, colH = 0;
-        colComps.forEach(function (c) { var s = boxSizeFor(c); colW = Math.max(colW, s.w); colH += s.h + GAP_Y; });
-        colInfo.push({ comps: colComps, w: colW, h: colH });
+        col.comps.forEach(function (c) { var s = boxSizeFor(c); colW = Math.max(colW, s.w); colH += s.h + GAP_Y; });
+        col.w = colW; col.h = colH;
         width += colW + GAP_X;
         height = Math.max(height, colH);
       });
@@ -542,6 +601,9 @@ var MODEL = __MODEL_JSON__;
     boxSelectionEnabled: false,
     autounselectify: true,
   });
+  // The computed layout is the source of truth: nodes are locked against
+  // dragging unless the user explicitly enables "rearrange".
+  cy.autolock(true);
   cy.fit(undefined, 40);
 
   function rebuild() {
@@ -587,7 +649,22 @@ var MODEL = __MODEL_JSON__;
     rebuild();
     renderPanel();
   });
+  document.getElementById('dragToggle').addEventListener('change', function (ev) {
+    cy.autolock(!ev.target.checked);
+  });
   document.getElementById('fitBtn').addEventListener('click', function () { cy.fit(undefined, 40); });
+  // Discard any manual rearranging and restore the computed layout.
+  document.getElementById('resetBtn').addEventListener('click', function () { rebuild(); cy.fit(undefined, 40); });
+  // High-res PNG of the whole graph — paste into Miro, docs, slides, PRs.
+  document.getElementById('pngBtn').addEventListener('click', function () {
+    var uri = cy.png({ full: true, scale: 2, bg: '#fafbfc' });
+    var a = document.createElement('a');
+    a.href = uri;
+    a.download = (MODEL.system.name + '-architecture.png').replace(/\\s+/g, '-').toLowerCase();
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  });
 
   // ---- detail panel -------------------------------------------------------------
   var panel = document.getElementById('panel');

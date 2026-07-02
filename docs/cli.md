@@ -54,12 +54,17 @@ from the same source of truth as the conformance gate:
   `--depth` limits expansion; default 3).
 - `--canvas`: an **interactive HTML canvas** — the whole system on one page.
   Subsystems as containers, pattern compounds nested inside, components laid
-  out in dependency layers (entrypoints left → data right). Pan/zoom,
+  out in dependency layers (entrypoints left → data right), subsystems in
+  topological order (callers left of providers) with barycenter
+  crossing-reduction so links stay short and untangled. Pan/zoom,
   double-click a boundary to collapse it (its external edges aggregate into
   labeled "tubes"), click anything for a spec-derived detail panel
   (description, interfaces, methods, endpoints, narratives, dependencies,
-  trusted links), search, and a validation-issue overlay. The file is fully
-  self-contained (no external libraries, works offline).
+  trusted links), search, and a validation-issue overlay. The computed
+  layout is locked by default — enable "rearrange" to drag, "reset layout"
+  to undo — and "export PNG" renders the full graph to a high-res image for
+  Miro/docs/slides. Fully self-contained (Cytoscape.js embedded inline,
+  works offline).
 - `--all`: write the full set (system, per-subsystem, one sequence per
   entrypoint method with a narrative, plus `canvas.html`) into
   `.wai/docs/diagrams/` (or `--out`).
