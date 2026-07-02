@@ -103,6 +103,7 @@ describe('interactive canvas generation', () => {
     expect(portal.interfaces[0].methods[0].endpoint).toEqual({ transport: 'HTTP', method: 'POST', path: '/charge' });
     expect(portal.interfaces[0].methods[0].params).toEqual([{ name: 'customerId', type: 'string' }]);
     expect(portal.narratives[0].steps[0].call).toEqual({ component: 'billing-orchestrator', method: 'process' });
+    expect(portal.narratives[0].steps[0].kind).toBe('call');
 
     const store = model.components.find(c => c.id === 'billing-store')!;
     expect(store.owner).toBe('billing-repo');

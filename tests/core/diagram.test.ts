@@ -187,4 +187,39 @@ describe('diagram generation from the spec tree', () => {
     buildFixture();
     expect(() => generateSequenceDiagram('billing-store', 'save')).toThrow(/No L4 narrative/);
   });
+
+  it('renders flow structures: loop/try as Mermaid blocks, branch/return as annotated markers', () => {
+    buildFixture();
+    saveImplementationSpec({
+      id: 'billing-orchestrator-impl',
+      name: 'Orchestrator Impl',
+      description: 'impl',
+      contract: 'ibilling-orchestrator',
+      methods: [{
+        name: 'process',
+        narrative: [
+          { stepNumber: 1, description: 'request is valid', type: 'branch', condition: 'payload valid', onFalseStep: 6 },
+          { stepNumber: 2, description: 'guard persistence', type: 'try', endStep: 4, catches: [{ error: 'StoreError', step: 5 }] },
+          { stepNumber: 3, description: 'retry each pending item', type: 'loop', loopKind: 'forEach', over: 'pending items', endStep: 4 },
+          { stepNumber: 4, description: 'persist one', type: 'call', targetComponent: 'billing-repo', targetMethod: 'save' },
+          { stepNumber: 5, description: 'persistence failed', type: 'throw', error: 'StoreError' },
+          { stepNumber: 6, description: 'reject the request', type: 'return', outcome: 'invalid' },
+        ],
+      }],
+      createdAt: now,
+      updatedAt: now,
+    } as any);
+    invalidateSpecCache();
+
+    const mmd = generateSequenceDiagram('billing-orchestrator', 'process');
+    expect(mmd).toContain('◇ if payload valid — else → step 6');
+    expect(mmd).toContain('critical guard persistence');
+    expect(mmd).toContain('loop pending items');
+    expect(mmd).toMatch(/billing_orchestrator->>billing_repo: save\(\)/);
+    expect(mmd).toContain('⚠ on StoreError → step 5');
+    expect(mmd).toContain('⚡ throw StoreError');
+    expect(mmd).toContain('⏎ return — invalid');
+    // both regions (try + loop) end at step 4 → two closing `end` lines
+    expect(mmd.split('\n').filter(l => l.trim() === 'end')).toHaveLength(2);
+  });
 });

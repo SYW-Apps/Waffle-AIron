@@ -71,8 +71,30 @@ export interface CanvasModel {
     }[];
     narratives: {
       method: string;
-      steps: { n: number; text: string; call?: { component: string; method: string } }[];
+      steps: {
+        n: number;
+        text: string;
+        kind: string;
+        call?: { component: string; method: string };
+        // flow config (present per kind; names kept short — this JSON ships inline in the HTML)
+        cond?: string;
+        onTrue?: number;
+        onFalse?: number;
+        on?: string;
+        cases?: { value: string; step: number }[];
+        defaultStep?: number;
+        loopKind?: string;
+        over?: string;
+        end?: number;
+        catches?: { error: string; step: number }[];
+        fin?: number;
+        to?: number;
+        outcome?: string;
+        err?: string;
+      }[];
     }[];
+    /** Methods specified as intent prose instead of a narrative (the detail dial). */
+    intents: { method: string; text: string }[];
   }[];
   edges: { from: string; to: string; cross: boolean }[];
   types: {
@@ -115,17 +137,36 @@ export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
     const contractIds = new Set(compInterfaces.map(i => i.id));
     const impls = implementations.filter(im => contractIds.has(im.contract));
     const narratives: CanvasModel['components'][number]['narratives'] = [];
+    const intents: CanvasModel['components'][number]['intents'] = [];
     for (const impl of impls) {
       for (const m of impl.methods) {
-        if (!m.narrative.length) continue;
+        if (!m.narrative.length) {
+          if (m.intent) intents.push({ method: m.name, text: m.intent });
+          continue;
+        }
         narratives.push({
           method: m.name,
           steps: m.narrative.map(s => ({
             n: s.stepNumber,
             text: s.description,
+            kind: s.type,
             ...(s.type === 'call' && s.targetComponent && s.targetMethod
               ? { call: { component: s.targetComponent, method: s.targetMethod } }
               : {}),
+            ...(s.condition ? { cond: s.condition } : {}),
+            ...(s.onTrueStep !== undefined ? { onTrue: s.onTrueStep } : {}),
+            ...(s.onFalseStep !== undefined ? { onFalse: s.onFalseStep } : {}),
+            ...(s.on ? { on: s.on } : {}),
+            ...(s.cases && s.cases.length ? { cases: s.cases } : {}),
+            ...(s.defaultStep !== undefined ? { defaultStep: s.defaultStep } : {}),
+            ...(s.loopKind ? { loopKind: s.loopKind } : {}),
+            ...(s.over ? { over: s.over } : {}),
+            ...(s.endStep !== undefined ? { end: s.endStep } : {}),
+            ...(s.catches && s.catches.length ? { catches: s.catches } : {}),
+            ...(s.finallyStep !== undefined ? { fin: s.finallyStep } : {}),
+            ...(s.toStep !== undefined ? { to: s.toStep } : {}),
+            ...(s.outcome ? { outcome: s.outcome } : {}),
+            ...(s.error ? { err: s.error } : {}),
           })),
         });
       }
@@ -157,6 +198,7 @@ export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
         })),
       })),
       narratives,
+      intents,
     };
   });
 
@@ -444,6 +486,7 @@ body.presentation #exitPresent { display:block; }
         <button data-fm="flow" class="active">Flow</button>
         <button data-fm="steps">Steps</button>
       </div>
+      <button class="tbtn" id="flowErrToggle" title="Hide the paths only reachable through error handling (catch regions, propagated throws)">Hide error paths</button>
       <div class="dropdown" id="flowExportDd">
         <button class="tbtn" id="flowExportBtn">Export ▾</button>
         <div class="menu">
@@ -1498,6 +1541,7 @@ var MODEL = __MODEL_JSON__;
   var flowCy = null;
   var flowStack = [];
   var flowMode = 'flow';
+  var flowHideErr = false;
   function narrativeFor(compId, method) {
     var c = compById[compId];
     if (!c) return null;
@@ -1521,27 +1565,145 @@ var MODEL = __MODEL_JSON__;
     flowStack.push({ comp: comp, method: method });
     renderFlowModal();
   }
+  // Shared flow-graph derivation: one node per step plus semantic edges
+  // (seq | true | false | case | default | enter | exit | back | error |
+  // finally | jump). Both the modal renderer and the exports consume it.
+  function buildFlowGraph(narrative) {
+    var steps = (narrative ? narrative.steps.slice() : []).sort(function (a, b) { return a.n - b.n; });
+    var byN = {}, nums = [];
+    steps.forEach(function (s) { byN[s.n] = s; nums.push(s.n); });
+    var idx = {};
+    nums.forEach(function (n, i) { idx[n] = i; });
+    function nextOf(n) { var i = idx[n]; return i !== undefined && i + 1 < nums.length ? nums[i + 1] : null; }
+
+    // Region depth (loop/try bodies) → indentation; loop body ends flow back
+    // to their header instead of falling through.
+    var depth = {}, open = [], loopEnd = {};
+    steps.forEach(function (s) {
+      while (open.length && open[open.length - 1] < s.n) open.pop();
+      depth[s.n] = open.length;
+      if ((s.kind === 'loop' || s.kind === 'try') && s.end !== undefined) open.push(s.end);
+      if (s.kind === 'loop' && s.end !== undefined) loopEnd[s.end] = s.n;
+    });
+
+    var edges = [];
+    function E(a, b, kind, label) { if (b !== null && b !== undefined && byN[b]) edges.push({ from: a, to: b, kind: kind, label: label || '' }); }
+    steps.forEach(function (s) {
+      var n = s.n;
+      switch (s.kind) {
+        case 'branch':
+          E(n, s.onTrue !== undefined ? s.onTrue : nextOf(n), 'true', 'true');
+          E(n, s.onFalse, 'false', 'false');
+          break;
+        case 'switch':
+          (s.cases || []).forEach(function (cse) { E(n, cse.step, 'case', cse.value); });
+          E(n, s.defaultStep !== undefined ? s.defaultStep : nextOf(n), 'default', 'default');
+          break;
+        case 'loop':
+          E(n, nextOf(n), 'enter', s.loopKind === 'doWhile' ? 'do' : '');
+          if (s.end !== undefined) {
+            E(s.end, n, 'back', s.loopKind === 'doWhile' ? 'while ' + (s.cond || '') : '\\u27F3');
+            E(n, nextOf(s.end), 'exit', 'done');
+          }
+          break;
+        case 'try':
+          E(n, nextOf(n), 'seq');
+          (s.catches || []).forEach(function (cc) { E(n, cc.step, 'error', cc.error); });
+          if (s.fin !== undefined) E(n, s.fin, 'finally', 'finally');
+          break;
+        case 'jump':
+          E(n, s.to, 'jump');
+          break;
+        case 'return':
+        case 'throw':
+          break;
+        default:
+          if (loopEnd[n] === undefined) E(n, nextOf(n), 'seq');
+      }
+    });
+    return { steps: steps, edges: edges, depth: depth, first: nums.length ? nums[0] : null };
+  }
+
+  // "Hide error paths": drop everything only reachable through error edges —
+  // catch regions, their throws — leaving the pure happy-path flow.
+  function pruneErrorPaths(graph) {
+    if (graph.first === null) return graph;
+    var adj = {};
+    graph.edges.forEach(function (e) {
+      if (e.kind === 'error') return;
+      (adj[e.from] = adj[e.from] || []).push(e.to);
+    });
+    var keep = {}, stack = [graph.first];
+    while (stack.length) {
+      var n = stack.pop();
+      if (keep[n]) continue;
+      keep[n] = 1;
+      (adj[n] || []).forEach(function (m) { if (!keep[m]) stack.push(m); });
+    }
+    return {
+      steps: graph.steps.filter(function (s) { return keep[s.n]; }),
+      edges: graph.edges.filter(function (e) { return e.kind !== 'error' && keep[e.from] && keep[e.to]; }),
+      depth: graph.depth,
+      first: graph.first,
+    };
+  }
+
+  function flowStepLabel(s) {
+    switch (s.kind) {
+      case 'branch': return s.n + '. \\u25C7 ' + (s.cond || s.text);
+      case 'switch': return s.n + '. \\u25C7 switch ' + (s.on || s.text);
+      case 'loop': return s.n + '. \\u27F3 ' + (s.loopKind === 'doWhile' ? 'do' : (s.loopKind || 'forEach')) + (s.over ? ' ' + s.over : s.cond ? ' while ' + s.cond : '');
+      case 'try': return s.n + '. \\u26E8 try \\u2014 ' + s.text;
+      case 'jump': return s.n + '. \\u21B7 ' + s.text;
+      case 'return': return s.n + '. \\u23CE return' + (s.outcome ? ' \\u2014 ' + s.outcome : '');
+      case 'throw': return s.n + '. \\u26A1 throw' + (s.err ? ' ' + s.err : '');
+      default: return s.n + '. ' + s.text;
+    }
+  }
+
   function renderFlowGraph() {
     var top = flowStack[flowStack.length - 1];
     var c = compById[top.comp];
     var narrative = narrativeFor(top.comp, top.method);
     var t = THEMES[state.theme];
 
+    var graph = buildFlowGraph(narrative);
+    if (flowHideErr) graph = pruneErrorPaths(graph);
+
     var eles = [];
     eles.push({ data: { id: 'start', label: (c ? c.name : top.comp) + '.' + top.method + '()', w: 280, h: 44, tw: 260 }, position: { x: 0, y: 0 }, classes: 'flowstart' });
-    var prev = 'start';
-    (narrative ? narrative.steps : []).forEach(function (s, i) {
-      var id = 'step' + i;
-      var isCall = !!s.call;
+    graph.steps.forEach(function (s, i) {
+      var id = 'n' + s.n;
+      var isCall = s.kind === 'call' && !!s.call;
       var callable = isCall && !!narrativeFor(s.call.component, s.call.method);
-      var label = s.n + '. ' + s.text + (isCall ? '\\n\\u2192 ' + s.call.component + '.' + s.call.method + '()' + (callable ? '  \\u21B4' : '') : '');
+      var isCond = s.kind === 'branch' || s.kind === 'switch' || s.kind === 'loop';
+      var label = flowStepLabel(s) + (isCall ? '\\n\\u2192 ' + s.call.component + '.' + s.call.method + '()' + (callable ? '  \\u21B4' : '') : '');
+      var cls = s.kind === 'branch' || s.kind === 'switch' ? 'flowcond'
+        : s.kind === 'loop' ? 'flowloop'
+        : s.kind === 'try' ? 'flowtry'
+        : s.kind === 'return' ? 'flowend'
+        : s.kind === 'throw' ? 'flowthrow'
+        : s.kind === 'jump' ? 'flowjumpn'
+        : isCall ? 'flowcall' : 'flowlocal';
       eles.push({
-        data: { id: id, label: label, w: 300, h: isCall ? 58 : 46, tw: 280, callComp: isCall ? s.call.component : '', callMethod: isCall ? s.call.method : '' },
-        position: { x: 0, y: (i + 1) * 86 },
-        classes: (isCall ? 'flowcall' : 'flowlocal') + (callable ? ' drill' : ''),
+        data: {
+          id: id, label: label,
+          w: isCond ? 320 : 300, h: isCall ? 58 : isCond ? 64 : 46, tw: isCond ? 210 : 280,
+          callComp: isCall ? s.call.component : '', callMethod: isCall ? s.call.method : '',
+        },
+        position: { x: (graph.depth[s.n] || 0) * 56, y: (i + 1) * 92 },
+        classes: cls + (callable ? ' drill' : ''),
       });
-      eles.push({ data: { id: 'fe' + i, source: prev, target: id } });
-      prev = id;
+    });
+    if (graph.first !== null) eles.push({ data: { id: 'fe-start', source: 'start', target: 'n' + graph.first, lbl: '' } });
+    graph.edges.forEach(function (e, i) {
+      var cls = e.kind === 'error' ? 'fErr'
+        : e.kind === 'back' ? 'fBack'
+        : e.kind === 'false' ? 'fAlt'
+        : e.kind === 'jump' || e.kind === 'finally' ? 'fJump'
+        : e.kind === 'case' || e.kind === 'default' ? 'fAlt'
+        : e.kind === 'exit' ? 'fAlt' : '';
+      eles.push({ data: { id: 'fe' + i, source: 'n' + e.from, target: 'n' + e.to, lbl: e.label }, classes: cls });
     });
 
     var style = [
@@ -1549,8 +1711,18 @@ var MODEL = __MODEL_JSON__;
       { selector: '.flowstart', style: { 'background-color': t.stereo.entry.fill, 'border-color': t.stereo.entry.stroke, color: t.stereo.entry.text, 'font-weight': 'bold' } },
       { selector: '.flowlocal', style: { 'background-color': t.innerFill, 'border-color': t.innerStroke, color: t.innerText } },
       { selector: '.flowcall', style: { 'background-color': t.stereo.logic.fill, 'border-color': t.stereo.logic.stroke, color: t.stereo.logic.text } },
+      { selector: '.flowcond', style: { shape: 'round-diamond', 'background-color': t.stereo.data.fill, 'border-color': t.stereo.data.stroke, color: t.stereo.data.text } },
+      { selector: '.flowloop', style: { shape: 'round-diamond', 'background-color': t.stereo.adapter.fill, 'border-color': t.stereo.adapter.stroke, color: t.stereo.adapter.text } },
+      { selector: '.flowtry', style: { 'background-color': t.innerFill, 'border-color': t.issue, 'border-style': 'dashed', color: t.innerText } },
+      { selector: '.flowend', style: { shape: 'round-rectangle', 'background-color': t.stereo.entry.fill, 'border-color': t.stereo.entry.stroke, color: t.stereo.entry.text, 'border-width': 2.5 } },
+      { selector: '.flowthrow', style: { shape: 'round-rectangle', 'background-color': t.ghostFill, 'border-color': t.issue, color: t.issue, 'border-width': 2.5 } },
+      { selector: '.flowjumpn', style: { 'background-color': t.ghostFill, 'border-color': t.ghostStroke, 'border-style': 'dotted', color: t.ghostText } },
       { selector: '.drill', style: { 'border-width': 2.5 } },
-      { selector: 'edge', style: { 'curve-style': 'bezier', width: 1.6, 'line-color': t.pageEdge, 'target-arrow-shape': 'triangle', 'target-arrow-color': t.pageEdge } },
+      { selector: 'edge', style: { 'curve-style': 'bezier', width: 1.6, 'line-color': t.pageEdge, 'target-arrow-shape': 'triangle', 'target-arrow-color': t.pageEdge, label: 'data(lbl)', 'font-size': 9.5, color: t.edgeText, 'text-background-color': t.bgLabel, 'text-background-opacity': 0.85, 'text-rotation': 'autorotate' } },
+      { selector: 'edge.fAlt', style: { 'line-style': 'dashed' } },
+      { selector: 'edge.fBack', style: { 'line-style': 'dashed', 'curve-style': 'unbundled-bezier', 'control-point-distances': [-70], 'control-point-weights': [0.5] } },
+      { selector: 'edge.fErr', style: { 'line-style': 'dashed', 'line-color': t.issue, 'target-arrow-color': t.issue, color: t.issue } },
+      { selector: 'edge.fJump', style: { 'line-style': 'dotted' } },
     ];
 
     if (!flowCy) {
@@ -1567,6 +1739,18 @@ var MODEL = __MODEL_JSON__;
     }
     flowCy.fit(undefined, 30);
   }
+  function flowStepText(s) {
+    switch (s.kind) {
+      case 'branch': return '\\u25C7 if ' + (s.cond || s.text) + (s.onFalse !== undefined ? ' \\u2014 else \\u2192 ' + s.onFalse : '');
+      case 'switch': return '\\u25C7 switch on ' + (s.on || s.text) + ' \\u2014 ' + (s.cases || []).map(function (c) { return c.value + ' \\u2192 ' + c.step; }).join(', ') + (s.defaultStep !== undefined ? ', default \\u2192 ' + s.defaultStep : '');
+      case 'loop': return '\\u27F3 ' + (s.loopKind || 'forEach') + (s.over ? ' ' + s.over : '') + (s.cond ? ' while ' + s.cond : '') + (s.end !== undefined ? ' (body \\u2192 ' + s.end + ')' : '');
+      case 'try': return '\\u26E8 try (body \\u2192 ' + s.end + ')' + (s.catches || []).map(function (c) { return ' \\u2014 on ' + c.error + ' \\u2192 ' + c.step; }).join('') + (s.fin !== undefined ? ' \\u2014 finally \\u2192 ' + s.fin : '');
+      case 'jump': return '\\u21B7 \\u2192 step ' + s.to + (s.text ? ' \\u2014 ' + s.text : '');
+      case 'return': return '\\u23CE return' + (s.outcome ? ' \\u2014 ' + s.outcome : '') + (s.text ? ' (' + s.text + ')' : '');
+      case 'throw': return '\\u26A1 throw' + (s.err ? ' ' + s.err : '') + (s.text ? ' \\u2014 ' + s.text : '');
+      default: return s.text;
+    }
+  }
   function renderFlowSteps() {
     var top = flowStack[flowStack.length - 1];
     var narrative = narrativeFor(top.comp, top.method);
@@ -1578,7 +1762,7 @@ var MODEL = __MODEL_JSON__;
         callHtml = ' \\u2192 <span class="call' + (callable ? ' drillstep' : '') + '" data-dc="' + s.call.component + '" data-dm="' + s.call.method + '">'
           + s.call.component + '.' + s.call.method + '()' + (callable ? ' \\u21B4' : '') + '</span>';
       }
-      return '<div class="fstep"><span class="num">' + s.n + '.</span> ' + escText(s.text) + callHtml + '</div>';
+      return '<div class="fstep"><span class="num">' + s.n + '.</span> ' + escText(flowStepText(s)) + callHtml + '</div>';
     }).join('') || '<div class="fstep">No narrative steps.</div>';
     el.innerHTML = html;
     var drills = el.querySelectorAll('.drillstep');
@@ -1615,6 +1799,14 @@ var MODEL = __MODEL_JSON__;
   }
   document.getElementById('flowClose').addEventListener('click', closeFlow);
   document.getElementById('flowBack').addEventListener('click', function () { if (flowStack.length > 1) { flowStack.pop(); renderFlowModal(); } });
+  document.getElementById('flowErrToggle').addEventListener('click', function () {
+    flowHideErr = !flowHideErr;
+    var b = document.getElementById('flowErrToggle');
+    b.textContent = flowHideErr ? 'Show error paths' : 'Hide error paths';
+    if (!flowStack.length) return;
+    renderFlowGraph();
+    if (flowCy) flowCy.fit(undefined, 30);
+  });
   (function () {
     var seg = document.getElementById('flowModeSeg');
     var btns = seg.querySelectorAll('button');
@@ -1637,12 +1829,17 @@ var MODEL = __MODEL_JSON__;
   function flowExportModel() {
     var top = flowStack[flowStack.length - 1];
     var narrative = narrativeFor(top.comp, top.method) || { steps: [] };
+    var graph = buildFlowGraph(narrative);
+    if (flowHideErr) graph = pruneErrorPaths(graph);
     var comps = [], edges = [];
     comps.push({ id: 'start', name: flowTitle() + '()', subsystem: 'flow', componentType: 'Start', public: false, owns: [] });
-    narrative.steps.forEach(function (s, i) {
-      var name = s.n + '. ' + s.text + (s.call ? ' \\u2192 ' + s.call.component + '.' + s.call.method + '()' : '');
-      comps.push({ id: 'step' + i, name: name, subsystem: 'flow', componentType: s.call ? 'Call' : 'Step', public: false, owns: [] });
-      edges.push({ from: i === 0 ? 'start' : 'step' + (i - 1), to: 'step' + i, cross: false });
+    graph.steps.forEach(function (s) {
+      var name = flowStepLabel(s) + (s.call ? ' \\u2192 ' + s.call.component + '.' + s.call.method + '()' : '');
+      comps.push({ id: 'n' + s.n, name: name, subsystem: 'flow', componentType: s.kind === 'call' ? 'Call' : 'Step', public: false, owns: [] });
+    });
+    if (graph.first !== null) edges.push({ from: 'start', to: 'n' + graph.first, cross: false });
+    graph.edges.forEach(function (e) {
+      edges.push({ from: 'n' + e.from, to: 'n' + e.to, cross: e.kind === 'error' });
     });
     return {
       system: { name: MODEL.system.name },
@@ -1733,14 +1930,19 @@ var MODEL = __MODEL_JSON__;
         return '<div style="margin:6px 0 2px"><b>' + esc(intf.name) + '</b> <code style="font-size:10.5px;display:inline">' + esc(intf.id) + '</code></div>'
           + intf.methods.map(function (m) {
             var hasNarr = !!narrativeFor(c.id, m.name);
+            var mIntent = null;
+            (c.intents || []).forEach(function (x) { if (x.method === m.name) mIntent = x.text; });
             return '<div class="method"><div class="mname">' + esc(m.name) + '<span class="grow"></span>'
               + (hasNarr
                 ? '<button class="flowbtn" data-flow-comp="' + esc(c.id) + '" data-flow-method="' + esc(m.name) + '" data-flow-mode="flow">flow \\u25F7</button>'
                   + '<button class="flowbtn" data-flow-comp="' + esc(c.id) + '" data-flow-method="' + esc(m.name) + '" data-flow-mode="steps">steps</button>'
-                : '<span class="chip" style="opacity:.6">no narrative</span>')
+                : mIntent
+                  ? '<span class="chip">intent</span>'
+                  : '<span class="chip" style="opacity:.6">no narrative</span>')
               + '</div>'
               + '<code>' + esc(m.signature) + '</code>'
               + '<div class="mdesc">' + esc(m.description) + ' \\u2014 returns <code style="display:inline">' + esc(m.returns) + '</code></div>'
+              + (mIntent && !hasNarr ? '<div class="mdesc" style="font-style:italic">' + esc(mIntent) + '</div>' : '')
               + (m.params ? '<div class="mdesc">params: ' + m.params.map(function (p) { return esc(p.name) + ': ' + esc(p.type); }).join(', ') + '</div>' : '')
               + (m.endpoint ? '<code>' + esc(JSON.stringify(m.endpoint)) + '</code>' : '')
               + (m.guarantees ? '<div style="margin-top:4px">' + m.guarantees.map(staticChip).join('') + '</div>' : '')

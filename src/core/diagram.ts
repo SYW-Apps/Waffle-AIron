@@ -320,29 +320,81 @@ export function generateSequenceDiagram(
     nextStack.add(key);
     const selfId = ids.idFor(comp.id);
 
-    for (const step of methodImpl.narrative) {
-      if (step.type === 'local') {
-        lines.push(`  Note over ${selfId}: ${escapeLabel(truncate(step.description, 70))}`);
-        continue;
+    // Region blocks (loop / try) have an explicit endStep, so they map
+    // cleanly onto Mermaid `loop` / `critical` fragments; free-form jumps
+    // (branch / switch / jump / return / throw) become annotated markers —
+    // the canvas flowchart is where arbitrary branching renders faithfully.
+    const pendingEnds: number[] = [];
+    const closeRegionsAfter = (stepNumber: number): void => {
+      while (pendingEnds.length && pendingEnds[pendingEnds.length - 1] <= stepNumber) {
+        pendingEnds.pop();
+        lines.push('  end');
       }
-      if (!step.targetComponent || !step.targetMethod) continue;
-      const target = componentById.get(step.targetComponent);
-      if (!target) {
-        lines.push(`  Note over ${selfId}: ${escapeLabel(`calls unknown "${step.targetComponent}"`)}`);
-        continue;
+    };
+
+    const steps = [...methodImpl.narrative].sort((a, b) => a.stepNumber - b.stepNumber);
+    for (const step of steps) {
+      switch (step.type) {
+        case 'local':
+          lines.push(`  Note over ${selfId}: ${escapeLabel(truncate(step.description, 70))}`);
+          break;
+        case 'branch':
+          lines.push(`  Note over ${selfId}: ${escapeLabel(truncate(`◇ if ${step.condition ?? step.description}${step.onFalseStep !== undefined ? ` — else → step ${step.onFalseStep}` : ''}`, 80))}`);
+          break;
+        case 'switch':
+          lines.push(`  Note over ${selfId}: ${escapeLabel(truncate(`◇ switch on ${step.on ?? step.description} (${step.cases?.length ?? 0} cases)`, 80))}`);
+          break;
+        case 'loop':
+          if (step.endStep !== undefined) {
+            lines.push(`  loop ${escapeLabel(truncate(step.over ?? step.condition ?? step.description, 60))}`);
+            pendingEnds.push(step.endStep);
+          } else {
+            lines.push(`  Note over ${selfId}: ${escapeLabel(truncate(`⟳ ${step.description}`, 70))}`);
+          }
+          break;
+        case 'try':
+          if (step.endStep !== undefined) {
+            lines.push(`  critical ${escapeLabel(truncate(step.description, 60))}`);
+            pendingEnds.push(step.endStep);
+          }
+          for (const c of step.catches ?? []) {
+            lines.push(`  Note over ${selfId}: ${escapeLabel(truncate(`⚠ on ${c.error} → step ${c.step}`, 70))}`);
+          }
+          break;
+        case 'jump':
+          lines.push(`  Note over ${selfId}: ${escapeLabel(`↷ → step ${step.toStep}`)}`);
+          break;
+        case 'return':
+          lines.push(`  Note over ${selfId}: ${escapeLabel(truncate(`⏎ return${step.outcome ? ` — ${step.outcome}` : ''}`, 70))}`);
+          break;
+        case 'throw':
+          lines.push(`  Note over ${selfId}: ${escapeLabel(truncate(`⚡ throw${step.error ? ` ${step.error}` : ''}`, 70))}`);
+          break;
+        case 'call': {
+          if (!step.targetComponent || !step.targetMethod) break;
+          const target = componentById.get(step.targetComponent);
+          if (!target) {
+            lines.push(`  Note over ${selfId}: ${escapeLabel(`calls unknown "${step.targetComponent}"`)}`);
+            break;
+          }
+          const targetId = declare(target);
+          const expandable = depth < maxDepth
+            && !!findMethodImpl(target.id, step.targetMethod)
+            && target.id !== comp.id;
+          if (expandable) {
+            lines.push(`  ${selfId}->>+${targetId}: ${escapeLabel(step.targetMethod)}()`);
+            walk(target, step.targetMethod, depth + 1, nextStack);
+            lines.push(`  ${targetId}-->>-${selfId}: return`);
+          } else {
+            lines.push(`  ${selfId}->>${targetId}: ${escapeLabel(step.targetMethod)}()`);
+          }
+          break;
+        }
       }
-      const targetId = declare(target);
-      const expandable = depth < maxDepth
-        && !!findMethodImpl(target.id, step.targetMethod)
-        && target.id !== comp.id;
-      if (expandable) {
-        lines.push(`  ${selfId}->>+${targetId}: ${escapeLabel(step.targetMethod)}()`);
-        walk(target, step.targetMethod, depth + 1, nextStack);
-        lines.push(`  ${targetId}-->>-${selfId}: return`);
-      } else {
-        lines.push(`  ${selfId}->>${targetId}: ${escapeLabel(step.targetMethod)}()`);
-      }
+      closeRegionsAfter(step.stepNumber);
     }
+    // Force-close any region whose endStep pointed past the last step.
+    while (pendingEnds.length) { pendingEnds.pop(); lines.push('  end'); }
   };
 
   lines.push(`  Note over ${caller}: ${escapeLabel(`${methodName}()`)}`);
