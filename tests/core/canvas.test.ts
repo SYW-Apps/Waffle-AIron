@@ -124,6 +124,8 @@ describe('interactive canvas generation', () => {
     expect(html).toContain('CanvasSys — architecture canvas');
     expect(html).toContain('var MODEL = ');
     expect(html).toContain('billing-orchestrator');
+    // cytoscape is embedded inline (vendored), not fetched
+    expect(html).toContain('Cytoscape Consortium');
     // strictly self-contained: no external URLs of any kind
     expect(html).not.toMatch(/src\s*=\s*["']https?:/);
     expect(html).not.toMatch(/href\s*=\s*["']https?:/);

@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import {
   loadSystemSpec,
   loadSubsystemSpecs,
@@ -10,16 +12,18 @@ import type { ValidationIssue } from './validation.js';
 // ---------------------------------------------------------------------------
 // Interactive architecture canvas (stage 2 of spec-driven visualization).
 //
-// Emits a SINGLE self-contained HTML file — no external libraries, no network
-// (wairon's offline invariant), no build step. The whole spec tree is embedded
-// as JSON; a small hand-rolled SVG renderer draws subsystems as containers,
-// pattern compounds nested inside them, and components as stereotype-colored
-// boxes laid out in dependency layers (entrypoints left → data right).
+// Emits a SINGLE self-contained HTML file. Cytoscape.js (vendored, embedded
+// inline — no network, honoring the offline invariant) renders the graph:
+// subsystems and patterns as compound containers, components as
+// stereotype-colored nodes. Positions come from wairon's own deterministic
+// layered layout (entrypoints left → data right) fed to cytoscape as a preset
+// layout — organized like a blueprint, not force-directed scatter — while
+// cytoscape provides dragging, pan/zoom, and compound interaction.
 //
-// Interactions: pan/zoom, collapse/expand boundaries (external edges of a
-// collapsed boundary aggregate into labeled "tube" edges), click-through
-// detail panel (description, interfaces, methods, narratives, dependencies),
-// search, and a validation-issue overlay.
+// Interactions: drag nodes/boundaries, pan/zoom, double-click a boundary to
+// collapse it (its external edges aggregate into labeled "tube" edges),
+// click-through detail panel (description, interfaces, methods, narratives,
+// dependencies, trusted links), search, and a validation-issue overlay.
 // ---------------------------------------------------------------------------
 
 export interface CanvasModel {
@@ -186,25 +190,45 @@ function embedJson(value: unknown): string {
   return JSON.stringify(value).replace(/</g, '\\u003c');
 }
 
+/** The vendored cytoscape bundle, shipped with wairon's templates. */
+function loadCytoscapeLib(): string {
+  const candidates = [
+    path.resolve(__dirname, '..', 'templates', 'canvas', 'cytoscape.min.js'), // src/core & dist/cli
+    path.resolve(__dirname, 'templates', 'canvas', 'cytoscape.min.js'),       // dist (library entry)
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      return fs.readFileSync(p, 'utf-8').replace(/<\/script/gi, '<\\/script');
+    }
+  }
+  throw new Error('Vendored cytoscape bundle not found (templates/canvas/cytoscape.min.js) — the wairon installation is incomplete.');
+}
+
 export function renderCanvasHtml(model: CanvasModel): string {
   const title = `${model.system.name} — architecture canvas`;
-  // NOTE: the inline script below deliberately avoids template literals so this
-  // outer TypeScript template stays trivially safe to compose.
-  return `<!DOCTYPE html>
+  const html = CANVAS_TEMPLATE
+    .replace('__TITLE__', () => escapeHtml(title))
+    .replace('__SYSTEM_NAME__', () => escapeHtml(model.system.name))
+    .replace('__GENERATED_AT__', () => escapeHtml(model.generatedAt))
+    .replace('__CYTOSCAPE_LIB__', () => loadCytoscapeLib())
+    .replace('__MODEL_JSON__', () => embedJson(model));
+  return html;
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// The inline script avoids template literals so this outer file stays simple.
+const CANVAS_TEMPLATE = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(title)}</title>
+<title>__TITLE__</title>
 <style>
   :root {
-    --entry-fill:#eef4ff; --entry-stroke:#4a7dcf;
-    --logic-fill:#f4effd; --logic-stroke:#8a63c9;
-    --data-fill:#fdf6e3;  --data-stroke:#c9963f;
-    --adapter-fill:#eef8f1; --adapter-stroke:#4f9e6b;
-    --pattern-fill:#f6f8fa; --pattern-stroke:#6a737d;
-    --ink:#1f2328; --dim:#57606a; --line:#8d97a5; --cross:#c26767;
-    --bg:#fafbfc; --panel:#ffffff; --border:#d8dee4;
+    --ink:#1f2328; --dim:#57606a; --bg:#fafbfc; --panel:#ffffff; --border:#d8dee4; --cross:#c26767;
   }
   * { box-sizing: border-box; }
   body { margin:0; font:13px/1.45 system-ui, "Segoe UI", sans-serif; color:var(--ink); background:var(--bg); overflow:hidden; }
@@ -213,9 +237,10 @@ export function renderCanvasHtml(model: CanvasModel): string {
   header .sub { color:var(--dim); font-size:12px; }
   header input { padding:5px 9px; border:1px solid var(--border); border-radius:6px; width:220px; font:inherit; }
   header label { display:flex; align-items:center; gap:5px; color:var(--dim); cursor:pointer; white-space:nowrap; }
+  header button { padding:4px 10px; border:1px solid var(--border); border-radius:6px; background:var(--bg); cursor:pointer; font:inherit; }
   #wrap { display:flex; height:calc(100vh - 46px); }
-  #stage { flex:1; overflow:hidden; cursor:grab; position:relative; }
-  #stage.panning { cursor:grabbing; }
+  #stage { flex:1; position:relative; }
+  #cy { position:absolute; inset:0; }
   #panel { width:360px; border-left:1px solid var(--border); background:var(--panel); overflow-y:auto; padding:14px 16px; }
   #panel h2 { font-size:15px; margin:0 0 2px; }
   #panel h3 { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--dim); margin:16px 0 6px; }
@@ -226,65 +251,40 @@ export function renderCanvasHtml(model: CanvasModel): string {
   #panel .method code { font-size:11.5px; word-break:break-all; }
   #panel .method .ret { color:var(--dim); font-size:11.5px; }
   #panel .step { margin:2px 0; }
-  #panel .step .call { color:var(--entry-stroke); cursor:pointer; text-decoration:underline dotted; }
+  #panel .step .call { color:#4a7dcf; cursor:pointer; text-decoration:underline dotted; }
   #panel .issue { border-left:3px solid var(--cross); padding:4px 8px; margin:5px 0; background:#fff6f6; font-size:12px; }
-  #panel .issue.warning { border-left-color:var(--data-stroke); background:#fffaf0; }
+  #panel .issue.warning { border-left-color:#c9963f; background:#fffaf0; }
   #panel .issue code { font-size:11px; color:var(--dim); }
-  .legend { position:absolute; left:12px; bottom:12px; background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:8px 12px; font-size:11.5px; color:var(--dim); }
+  .legend { position:absolute; left:12px; bottom:12px; background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:8px 12px; font-size:11.5px; color:var(--dim); z-index:5; pointer-events:none; }
   .legend .sw { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:-1px; border:1.5px solid; }
-  svg text { user-select:none; }
-  .comp { cursor:pointer; }
-  .comp rect { stroke-width:1.4; }
-  .comp.public rect { stroke-width:3; }
-  .comp.dimmed, .subsys.dimmed { opacity:.25; }
-  .comp.selected rect { filter:drop-shadow(0 0 4px rgba(74,125,207,.9)); }
-  .comp.hasIssue rect { stroke:#cf4a4a !important; stroke-dasharray:5 3; }
-  .subsys > rect.frame { fill:#ffffff; stroke:#b6c0cc; stroke-width:1.2; rx:10; }
-  .subsys > rect.head { fill:#eef1f5; stroke:none; }
-  .subsys.collapsed > rect.frame { fill:#eef1f5; }
-  .subheader { font-weight:600; font-size:13px; cursor:pointer; }
-  .subtoggle { cursor:pointer; font-size:12px; fill:var(--dim); }
-  .pattern > rect { fill:var(--pattern-fill); stroke:var(--pattern-stroke); stroke-dasharray:6 3; }
-  .edge { fill:none; stroke:var(--line); stroke-width:1.4; }
-  .edge.cross { stroke:var(--cross); stroke-width:2.2; }
-  .edge.tube { stroke-width:4.5; opacity:.55; }
-  .edgeLabel { font-size:10.5px; fill:var(--dim); }
 </style>
 </head>
 <body>
 <header>
-  <h1>${escapeHtml(model.system.name)}</h1>
-  <span class="sub">architecture canvas · generated ${escapeHtml(model.generatedAt)} · <b>wairon</b></span>
+  <h1>__SYSTEM_NAME__</h1>
+  <span class="sub">architecture canvas · generated __GENERATED_AT__ · <b>wairon</b></span>
   <input id="search" placeholder="search components…">
   <label><input type="checkbox" id="issuesToggle"> issues overlay (<span id="issueCount"></span>)</label>
-  <span class="sub" style="margin-left:auto">double-click a boundary to collapse/expand · drag to pan · wheel to zoom</span>
+  <button id="fitBtn">fit</button>
+  <span class="sub" style="margin-left:auto">drag nodes · double-click a boundary to collapse/expand · wheel to zoom</span>
 </header>
 <div id="wrap">
   <div id="stage">
-    <svg id="svg" width="100%" height="100%">
-      <defs>
-        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-          <path d="M 0 1 L 9 5 L 0 9 z" fill="#8d97a5"></path>
-        </marker>
-        <marker id="arrowCross" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-          <path d="M 0 1 L 9 5 L 0 9 z" fill="#c26767"></path>
-        </marker>
-      </defs>
-      <g id="root"></g>
-    </svg>
+    <div id="cy"></div>
     <div class="legend">
-      <span class="sw" style="background:var(--entry-fill);border-color:var(--entry-stroke)"></span>Portal/Observer&nbsp;&nbsp;
-      <span class="sw" style="background:var(--logic-fill);border-color:var(--logic-stroke)"></span>Logic&nbsp;&nbsp;
-      <span class="sw" style="background:var(--data-fill);border-color:var(--data-stroke)"></span>Data&nbsp;&nbsp;
-      <span class="sw" style="background:var(--adapter-fill);border-color:var(--adapter-stroke)"></span>Adapter&nbsp;&nbsp;
-      <span class="sw" style="background:var(--pattern-fill);border-color:var(--pattern-stroke)"></span>Pattern&nbsp;&nbsp;
-      — bold border = published · <span style="color:var(--cross)">thick red edge</span> = boundary hop · thick faded edge = collapsed tube
+      <span class="sw" style="background:#eef4ff;border-color:#4a7dcf"></span>Portal/Observer&nbsp;&nbsp;
+      <span class="sw" style="background:#f4effd;border-color:#8a63c9"></span>Logic&nbsp;&nbsp;
+      <span class="sw" style="background:#fdf6e3;border-color:#c9963f"></span>Data&nbsp;&nbsp;
+      <span class="sw" style="background:#eef8f1;border-color:#4f9e6b"></span>Adapter&nbsp;&nbsp;
+      <span class="sw" style="background:#f6f8fa;border-color:#6a737d"></span>Pattern&nbsp;&nbsp;
+      — bold border = published · <span style="color:#c26767">red edge</span> = boundary hop · thick faded edge = collapsed tube
     </div>
   </div>
   <div id="panel"><h2>Architecture canvas</h2><p class="desc">Click any component, pattern, or subsystem for details. Derived from <code>.wai/specs/</code> — the same source of truth as the conformance gate.</p></div>
 </div>
+<script>__CYTOSCAPE_LIB__</script>
 <script>
-var MODEL = ${embedJson(model)};
+var MODEL = __MODEL_JSON__;
 </script>
 <script>
 (function () {
@@ -303,31 +303,31 @@ var MODEL = ${embedJson(model)};
     MODEL.issues.filter(function (i) { return i.severity === 'error'; }).length + ' err / ' +
     MODEL.issues.filter(function (i) { return i.severity === 'warning'; }).length + ' warn';
 
-  var state = {
-    collapsed: {},          // subsystem or pattern id -> true
-    selected: null,
-    showIssues: false,
-    query: ''
-  };
+  var state = { collapsed: {}, selected: null, showIssues: false, query: '' };
 
+  var PATTERN_TYPES = { Repository:1, Gateway:1, FeatureComponent:1, RouterComponent:1 };
   function stereoClass(t) {
     if (t === 'Portal' || t === 'Observer') return 'entry';
     if (t === 'Store' || t === 'Index' || t === 'Registry') return 'data';
     if (t === 'Adapter') return 'adapter';
-    if (t === 'Repository' || t === 'Gateway' || t === 'FeatureComponent' || t === 'RouterComponent') return 'pattern';
+    if (PATTERN_TYPES[t]) return 'patternLeaf';
     return 'logic';
   }
-  var FILL = { entry:'#eef4ff', logic:'#f4effd', data:'#fdf6e3', adapter:'#eef8f1', pattern:'#f6f8fa' };
-  var STROKE = { entry:'#4a7dcf', logic:'#8a63c9', data:'#c9963f', adapter:'#4f9e6b', pattern:'#6a737d' };
-  var PATTERN_TYPES = { Repository:1, Gateway:1, FeatureComponent:1, RouterComponent:1 };
+  function matches(c) {
+    if (!state.query) return true;
+    var q = state.query.toLowerCase();
+    return c.id.toLowerCase().indexOf(q) >= 0 || c.name.toLowerCase().indexOf(q) >= 0;
+  }
+  var CN = function (id) { return 'c~' + id; };
+  var SN = function (id) { return 's~' + id; };
 
-  // ---- layout --------------------------------------------------------------
-  var BOX_W = 188, BOX_H = 50, GAP_X = 70, GAP_Y = 22, SUB_PAD = 22, SUB_HEAD = 36;
-  var MEMBER_W = 168, MEMBER_H = 42, PAT_PAD = 12, PAT_HEAD = 30;
+  // ---- deterministic layered layout (preset positions for cytoscape) --------
+  var BOX_W = 190, BOX_H = 52, GAP_X = 90, GAP_Y = 26, SUB_PAD = 30, SUB_HEAD = 44;
+  var MEMBER_W = 168, MEMBER_H = 44, PAT_PAD = 16, PAT_HEAD = 34;
 
   function layerOf(comp, topIds, memo, stack) {
     if (memo[comp.id] !== undefined) return memo[comp.id];
-    if (stack[comp.id]) return 0; // cycle guard
+    if (stack[comp.id]) return 0;
     stack[comp.id] = true;
     var l;
     if (comp.componentType === 'Portal' || comp.componentType === 'Observer') {
@@ -350,19 +350,18 @@ var MODEL = ${embedJson(model)};
 
   function boxSizeFor(comp) {
     if (PATTERN_TYPES[comp.componentType] && comp.owns.length && !state.collapsed[comp.id]) {
-      return { w: MEMBER_W + PAT_PAD * 2 + 20, h: PAT_HEAD + comp.owns.length * (MEMBER_H + 10) + PAT_PAD };
+      return { w: MEMBER_W + PAT_PAD * 2 + 24, h: PAT_HEAD + comp.owns.length * (MEMBER_H + 12) + PAT_PAD };
     }
     return { w: BOX_W, h: BOX_H };
   }
 
-  // Returns { boxes: {id:{x,y,w,h,kind}}, subs: {id:{x,y,w,h,collapsed}}, width, height }
+  // boxes: component id -> {x,y,w,h}; subs: id -> {x,y,w,h,collapsed}
   function layout() {
     var boxes = {}, subs = {};
-    // subsystem order: alphabetical, stable and predictable
     var order = MODEL.subsystems.slice().sort(function (a, b) { return a.id < b.id ? -1 : 1; });
     var sizes = {};
     order.forEach(function (sub) {
-      if (state.collapsed[sub.id]) { sizes[sub.id] = { w: 240, h: 72, cols: [] }; return; }
+      if (state.collapsed[sub.id]) { sizes[sub.id] = { w: 240, h: 76, cols: [] }; return; }
       var comps = MODEL.components.filter(function (c) { return c.subsystem === sub.id && !c.owner; });
       var topIds = {}; comps.forEach(function (c) { topIds[c.id] = true; });
       var memo = {};
@@ -384,167 +383,254 @@ var MODEL = ${embedJson(model)};
       sizes[sub.id] = { w: Math.max(width, 240), h: SUB_HEAD + height + SUB_PAD, cols: colInfo };
     });
 
-    // place subsystems in rows
-    var MAX_ROW = 1750, x = 30, y = 20, rowH = 0, totalW = 0;
+    var MAX_ROW = 2100, x = 40, y = 40, rowH = 0;
     order.forEach(function (sub) {
       var s = sizes[sub.id];
-      if (x + s.w > MAX_ROW && x > 30) { x = 30; y += rowH + 46; rowH = 0; }
+      if (x + s.w > MAX_ROW && x > 40) { x = 40; y += rowH + 70; rowH = 0; }
       subs[sub.id] = { x: x, y: y, w: s.w, h: s.h, collapsed: !!state.collapsed[sub.id] };
-      // place its components
       if (!state.collapsed[sub.id]) {
         var cx = x + SUB_PAD;
         s.cols.forEach(function (col) {
-          var cy = y + SUB_HEAD + (s.h - SUB_HEAD - SUB_PAD - col.h + GAP_Y) / 2;
+          var cy0 = y + SUB_HEAD + Math.max(0, (s.h - SUB_HEAD - SUB_PAD - col.h + GAP_Y) / 2);
           col.comps.forEach(function (c) {
             var bs = boxSizeFor(c);
-            boxes[c.id] = { x: cx, y: cy, w: bs.w, h: bs.h, kind: 'comp' };
-            // pattern members inside
+            boxes[c.id] = { x: cx, y: cy0, w: bs.w, h: bs.h };
             if (PATTERN_TYPES[c.componentType] && c.owns.length && !state.collapsed[c.id]) {
-              var my = cy + PAT_HEAD;
+              var my = cy0 + PAT_HEAD;
               c.owns.forEach(function (mid) {
-                boxes[mid] = { x: cx + PAT_PAD + 10, y: my, w: MEMBER_W, h: MEMBER_H, kind: 'member' };
-                my += MEMBER_H + 10;
+                boxes[mid] = { x: cx + PAT_PAD + 12, y: my, w: MEMBER_W, h: MEMBER_H };
+                my += MEMBER_H + 12;
               });
             }
-            cy += bs.h + GAP_Y;
+            cy0 += bs.h + GAP_Y;
           });
           cx += col.w + GAP_X;
         });
       }
-      x += s.w + 46;
+      x += s.w + 70;
       rowH = Math.max(rowH, s.h);
-      totalW = Math.max(totalW, x);
     });
-    return { boxes: boxes, subs: subs, width: totalW + 40, height: y + rowH + 60 };
+    return { boxes: boxes, subs: subs };
   }
 
-  // The visible box representing a component id under current collapse state.
+  // The visible node id representing a component under the collapse state.
   function anchorFor(id, L) {
     var c = compById[id];
     if (!c) return null;
-    if (state.collapsed[c.subsystem]) return { id: c.subsystem, box: L.subs[c.subsystem] };
-    if (c.owner && state.collapsed[c.owner]) return { id: c.owner, box: L.boxes[c.owner] };
-    if (L.boxes[id]) return { id: id, box: L.boxes[id] };
+    if (state.collapsed[c.subsystem]) return SN(c.subsystem);
+    if (c.owner && state.collapsed[c.owner]) return CN(c.owner);
+    if (L.boxes[id]) return CN(id);
     return null;
   }
 
-  // ---- svg helpers ----------------------------------------------------------
-  var SVG = 'http://www.w3.org/2000/svg';
-  function el(tag, attrs, parent) {
-    var e = document.createElementNS(SVG, tag);
-    for (var k in attrs) e.setAttribute(k, attrs[k]);
-    if (parent) parent.appendChild(e);
-    return e;
-  }
-  function textEl(parent, x, y, str, attrs) {
-    var t = el('text', Object.assign({ x: x, y: y }, attrs || {}), parent);
-    t.textContent = str;
-    return t;
-  }
-  function trunc(s, n) { return s.length > n ? s.slice(0, n - 1) + '…' : s; }
-
-  function matches(c) {
-    if (!state.query) return true;
-    var q = state.query.toLowerCase();
-    return c.id.toLowerCase().indexOf(q) >= 0 || c.name.toLowerCase().indexOf(q) >= 0;
-  }
-
-  // ---- render ----------------------------------------------------------------
-  var root = document.getElementById('root');
-  function render() {
+  // ---- element construction ---------------------------------------------------
+  function buildElements() {
     var L = layout();
-    while (root.firstChild) root.removeChild(root.firstChild);
+    var eles = [];
 
-    // subsystem containers
     MODEL.subsystems.forEach(function (sub) {
       var sb = L.subs[sub.id];
-      var g = el('g', { 'class': 'subsys' + (sb.collapsed ? ' collapsed' : '') + (state.query && !MODEL.components.some(function (c) { return c.subsystem === sub.id && matches(c); }) ? ' dimmed' : '') }, root);
-      el('rect', { 'class': 'frame', x: sb.x, y: sb.y, width: sb.w, height: sb.h, rx: 10 }, g);
-      el('rect', { 'class': 'head', x: sb.x + 1, y: sb.y + 1, width: sb.w - 2, height: SUB_HEAD - 8, rx: 9 }, g);
-      var head = textEl(g, sb.x + 14, sb.y + 20, trunc(sub.name, 40), { 'class': 'subheader' });
-      textEl(g, sb.x + sb.w - 22, sb.y + 20, sb.collapsed ? '▸' : '▾', { 'class': 'subtoggle' });
-      if (sb.collapsed) textEl(g, sb.x + 14, sb.y + 46, trunc(sub.description, 34), { fill: '#57606a', 'font-size': '11px' });
-      g.addEventListener('dblclick', function (ev) { ev.stopPropagation(); state.collapsed[sub.id] = !state.collapsed[sub.id]; render(); });
-      head.addEventListener('click', function (ev) { ev.stopPropagation(); select({ kind: 'subsystem', id: sub.id }); });
-      g.addEventListener('click', function () { select({ kind: 'subsystem', id: sub.id }); });
+      var dim = state.query && !MODEL.components.some(function (c) { return c.subsystem === sub.id && matches(c); });
+      if (sb.collapsed) {
+        eles.push({
+          data: { id: SN(sub.id), label: sub.name + '\\n(collapsed \\u25B8)', w: sb.w, h: sb.h, tw: sb.w - 20 },
+          position: { x: sb.x + sb.w / 2, y: sb.y + sb.h / 2 },
+          classes: 'subsysC boundary' + (dim ? ' dimmed' : '') + (state.showIssues && issuesBySpec[sub.id] ? ' hasIssue' : ''),
+        });
+      } else {
+        eles.push({
+          data: { id: SN(sub.id), label: sub.name, w: sb.w, h: sb.h, tw: sb.w - 20 },
+          classes: 'subsysP boundary' + (dim ? ' dimmed' : '') + (state.showIssues && issuesBySpec[sub.id] ? ' hasIssue' : ''),
+        });
+      }
     });
 
-    // edges (aggregated by visible anchors)
+    // parents before children: patterns next, then leaves
+    var visible = Object.keys(L.boxes);
+    var patterns = visible.filter(function (id) { var c = compById[id]; return PATTERN_TYPES[c.componentType] && c.owns.length && !state.collapsed[id]; });
+    var leaves = visible.filter(function (id) { return patterns.indexOf(id) < 0; });
+
+    patterns.forEach(function (id) {
+      var c = compById[id], b = L.boxes[id];
+      eles.push({
+        data: { id: CN(id), label: c.name + '  \\u00AB' + c.componentType + '\\u00BB', parent: SN(c.subsystem), w: b.w, h: b.h, tw: b.w - 16 },
+        classes: 'patternP boundary' + (state.query && !matches(c) ? ' dimmed' : '') + (state.showIssues && issuesBySpec[id] ? ' hasIssue' : '') + (state.selected === id ? ' sel' : ''),
+      });
+    });
+
+    leaves.forEach(function (id) {
+      var c = compById[id], b = L.boxes[id];
+      var parent = (c.owner && !state.collapsed[c.owner] && L.boxes[c.owner]) ? CN(c.owner) : SN(c.subsystem);
+      var collapsedPattern = PATTERN_TYPES[c.componentType] && c.owns.length && state.collapsed[id];
+      var label = c.name + '\\n\\u00AB' + c.componentType + (c.portalType ? '/' + c.portalType : '') + '\\u00BB' + (collapsedPattern ? ' \\u25B8' : '');
+      eles.push({
+        data: { id: CN(id), label: label, parent: parent, w: b.w, h: b.h, tw: b.w - 14 },
+        position: { x: b.x + b.w / 2, y: b.y + b.h / 2 },
+        classes: stereoClass(c.componentType)
+          + (c.public ? ' public' : '')
+          + (collapsedPattern ? ' boundary' : '')
+          + (state.query && !matches(c) ? ' dimmed' : '')
+          + (state.showIssues && issuesBySpec[id] ? ' hasIssue' : '')
+          + (state.selected === id ? ' sel' : ''),
+      });
+    });
+
+    // aggregated edges between visible anchors
     var agg = {};
     MODEL.edges.forEach(function (e) {
       var a = anchorFor(e.from, L), b = anchorFor(e.to, L);
-      if (!a || !b || a.id === b.id) return;
-      var key = a.id + '=>' + b.id;
-      if (!agg[key]) agg[key] = { a: a, b: b, n: 0, cross: false, tube: a.id !== e.from || b.id !== e.to };
+      if (!a || !b || a === b) return;
+      var key = a + '=>' + b;
+      if (!agg[key]) agg[key] = { a: a, b: b, n: 0, cross: false, tube: a !== CN(e.from) || b !== CN(e.to) };
       agg[key].n++;
       if (e.cross) agg[key].cross = true;
     });
+    var i = 0;
     Object.keys(agg).forEach(function (key) {
       var e = agg[key];
-      var x1 = e.a.box.x + e.a.box.w, y1 = e.a.box.y + e.a.box.h / 2;
-      var x2 = e.b.box.x, y2 = e.b.box.y + e.b.box.h / 2;
-      if (x2 < x1 - 10) { x1 = e.a.box.x; x2 = e.b.box.x + e.b.box.w; }
-      var dx = Math.max(40, Math.abs(x2 - x1) / 2);
-      var d = 'M ' + x1 + ' ' + y1 + ' C ' + (x1 + (x2 >= x1 ? dx : -dx)) + ' ' + y1 + ', ' + (x2 + (x2 >= x1 ? -dx : dx)) + ' ' + y2 + ', ' + x2 + ' ' + y2;
-      var cls = 'edge' + (e.cross ? ' cross' : '') + (e.tube ? ' tube' : '');
-      el('path', { d: d, 'class': cls, 'marker-end': e.cross ? 'url(#arrowCross)' : 'url(#arrow)' }, root);
-      if (e.tube && e.n > 1) {
-        textEl(root, (x1 + x2) / 2, (y1 + y2) / 2 - 6, e.n + ' links', { 'class': 'edgeLabel', 'text-anchor': 'middle' });
-      }
+      eles.push({
+        data: { id: 'e' + (i++), source: e.a, target: e.b, lbl: e.tube && e.n > 1 ? e.n + ' links' : '' },
+        classes: 'dep' + (e.cross ? ' cross' : '') + (e.tube ? ' tube' : ''),
+      });
     });
 
-    // component boxes (patterns first so members draw on top)
-    var drawn = Object.keys(L.boxes).map(function (id) { return compById[id]; }).filter(Boolean);
-    drawn.sort(function (a, b) { return (L.boxes[a.id].kind === 'member' ? 1 : 0) - (L.boxes[b.id].kind === 'member' ? 1 : 0); });
-    drawn.forEach(function (c) {
-      var b = L.boxes[c.id];
-      var sc = stereoClass(c.componentType);
-      var isPattern = PATTERN_TYPES[c.componentType] && c.owns.length && !state.collapsed[c.id];
-      var cls = 'comp' + (c.public ? ' public' : '') + (isPattern ? ' pattern' : '')
-        + (state.selected && state.selected.id === c.id ? ' selected' : '')
-        + (state.query && !matches(c) ? ' dimmed' : '')
-        + (state.showIssues && issuesBySpec[c.id] ? ' hasIssue' : '');
-      var g = el('g', { 'class': cls }, root);
-      el('rect', { x: b.x, y: b.y, width: b.w, height: b.h, rx: 8, fill: FILL[sc], stroke: STROKE[sc] }, g);
-      textEl(g, b.x + 10, b.y + 19, trunc(c.name, b.w > 180 ? 24 : 21), { 'font-weight': 600, 'font-size': '12px' });
-      textEl(g, b.x + 10, b.y + 34, '«' + c.componentType + (c.portalType ? '/' + c.portalType : '') + '»', { fill: '#57606a', 'font-size': '10.5px' });
-      if (isPattern) {
-        g.addEventListener('dblclick', function (ev) { ev.stopPropagation(); state.collapsed[c.id] = true; render(); });
-      } else if (PATTERN_TYPES[c.componentType] && c.owns.length) {
-        g.addEventListener('dblclick', function (ev) { ev.stopPropagation(); delete state.collapsed[c.id]; render(); });
-      }
-      g.addEventListener('click', function (ev) { ev.stopPropagation(); select({ kind: 'component', id: c.id }); });
+    return eles;
+  }
+
+  // ---- cytoscape ----------------------------------------------------------------
+  var STYLE = [
+    { selector: 'node', style: {
+      shape: 'round-rectangle', width: 'data(w)', height: 'data(h)',
+      label: 'data(label)', 'text-wrap': 'wrap', 'text-max-width': 'data(tw)',
+      'font-family': 'system-ui, sans-serif', 'font-size': 11, color: '#1f2328',
+      'text-valign': 'center', 'text-halign': 'center', 'border-width': 1.5,
+    }},
+    { selector: '.entry', style: { 'background-color': '#eef4ff', 'border-color': '#4a7dcf' } },
+    { selector: '.logic', style: { 'background-color': '#f4effd', 'border-color': '#8a63c9' } },
+    { selector: '.data', style: { 'background-color': '#fdf6e3', 'border-color': '#c9963f' } },
+    { selector: '.adapter', style: { 'background-color': '#eef8f1', 'border-color': '#4f9e6b' } },
+    { selector: '.patternLeaf', style: { 'background-color': '#f6f8fa', 'border-color': '#6a737d', 'border-style': 'dashed' } },
+    { selector: 'node.public', style: { 'border-width': 3.5 } },
+    { selector: ':parent', style: {
+      'text-valign': 'top', 'text-halign': 'center', 'font-size': 12.5, 'font-weight': 'bold',
+      'text-margin-y': -6, padding: '16px', 'background-opacity': 1,
+    }},
+    { selector: '.subsysP', style: { 'background-color': '#ffffff', 'border-color': '#b6c0cc', 'border-width': 1.4 } },
+    { selector: '.subsysC', style: { 'background-color': '#eef1f5', 'border-color': '#b6c0cc', 'font-weight': 'bold', 'font-size': 12.5 } },
+    { selector: '.patternP', style: { 'background-color': '#f6f8fa', 'border-color': '#6a737d', 'border-style': 'dashed' } },
+    { selector: 'edge', style: {
+      'curve-style': 'bezier', width: 1.7, 'line-color': '#8d97a5',
+      'target-arrow-shape': 'triangle', 'target-arrow-color': '#8d97a5', 'arrow-scale': 0.9,
+      label: 'data(lbl)', 'font-size': 10, color: '#57606a',
+      'text-background-color': '#fafbfc', 'text-background-opacity': 0.85, 'text-rotation': 'autorotate',
+    }},
+    { selector: 'edge.cross', style: { 'line-color': '#c26767', 'target-arrow-color': '#c26767', width: 2.6 } },
+    { selector: 'edge.tube', style: { width: 5.5, opacity: 0.55 } },
+    { selector: '.dimmed', style: { opacity: 0.18 } },
+    { selector: '.hasIssue', style: { 'border-color': '#cf4a4a', 'border-style': 'dashed', 'border-width': 3 } },
+    { selector: '.sel', style: { 'overlay-color': '#4a7dcf', 'overlay-opacity': 0.18, 'overlay-padding': 5 } },
+  ];
+
+  var cy = cytoscape({
+    container: document.getElementById('cy'),
+    elements: buildElements(),
+    style: STYLE,
+    layout: { name: 'preset' },
+    wheelSensitivity: 0.2,
+    minZoom: 0.08,
+    maxZoom: 3,
+    boxSelectionEnabled: false,
+    autounselectify: true,
+  });
+  cy.fit(undefined, 40);
+
+  function rebuild() {
+    cy.batch(function () {
+      cy.elements().remove();
+      cy.add(buildElements());
     });
   }
 
-  // ---- detail panel ----------------------------------------------------------
+  // ---- interactions -----------------------------------------------------------
+  function idOf(node) {
+    var raw = node.id();
+    return { kind: raw.charAt(0) === 's' ? 'subsystem' : 'component', id: raw.slice(2) };
+  }
+
+  cy.on('tap', 'node', function (ev) {
+    var t = idOf(ev.target);
+    select(t.kind, t.id, false);
+  });
+  cy.on('tap', function (ev) {
+    if (ev.target === cy) select(null, null, false);
+  });
+  cy.on('dbltap', 'node', function (ev) {
+    var t = idOf(ev.target);
+    if (t.kind === 'subsystem') {
+      state.collapsed[t.id] = !state.collapsed[t.id];
+      rebuild();
+      return;
+    }
+    var c = compById[t.id];
+    if (c && PATTERN_TYPES[c.componentType] && c.owns.length) {
+      state.collapsed[t.id] = !state.collapsed[t.id];
+      rebuild();
+    }
+  });
+
+  document.getElementById('search').addEventListener('input', function (ev) {
+    state.query = ev.target.value.trim();
+    rebuild();
+  });
+  document.getElementById('issuesToggle').addEventListener('change', function (ev) {
+    state.showIssues = ev.target.checked;
+    rebuild();
+    renderPanel();
+  });
+  document.getElementById('fitBtn').addEventListener('click', function () { cy.fit(undefined, 40); });
+
+  // ---- detail panel -------------------------------------------------------------
   var panel = document.getElementById('panel');
+  var selectedKind = null;
   function esc(s) { var d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
-  function chip(label, target) {
-    return '<span class="chip" data-goto="' + esc(target || '') + '">' + esc(label) + '</span>';
+  function chip(label, kind, target) {
+    return '<span class="chip" data-kind="' + kind + '" data-id="' + esc(target) + '">' + esc(label) + '</span>';
   }
   function issueHtml(list) {
     return list.map(function (i) {
       return '<div class="issue ' + esc(i.severity) + '"><code>' + esc(i.code) + '</code><br>' + esc(i.message) + '</div>';
     }).join('');
   }
-  function select(sel) {
-    state.selected = sel;
+  function select(kind, id, focus) {
+    selectedKind = kind;
+    state.selected = id;
+    cy.nodes().removeClass('sel');
+    if (id) {
+      var node = cy.getElementById(kind === 'subsystem' ? SN(id) : CN(id));
+      if (node.length) {
+        node.addClass('sel');
+        if (focus) cy.animate({ center: { eles: node }, duration: 250 });
+      }
+    }
+    renderPanel();
+  }
+  function renderPanel() {
     var html = '';
-    if (sel && sel.kind === 'component') {
-      var c = compById[sel.id];
+    if (selectedKind === 'component' && compById[state.selected]) {
+      var c = compById[state.selected];
       html += '<h2>' + esc(c.name) + '</h2>';
-      html += '<span class="chip static">«' + esc(c.componentType) + (c.portalType ? '/' + esc(c.portalType) : '') + '»</span>';
+      html += '<span class="chip static">\\u00AB' + esc(c.componentType) + (c.portalType ? '/' + esc(c.portalType) : '') + '\\u00BB</span>';
       if (c.public) html += '<span class="chip static">published</span>';
       if (c.status) html += '<span class="chip static">' + esc(c.status) + '</span>';
-      html += '<span class="chip" data-goto="sub:' + esc(c.subsystem) + '">' + esc(c.subsystem) + '</span>';
+      html += chip(c.subsystem, 'subsystem', c.subsystem);
       html += '<p class="desc">' + esc(c.description) + '</p>';
-      if (c.dependsOn.length) { html += '<h3>Depends on</h3>' + c.dependsOn.map(function (d) { return chip(d, 'comp:' + d); }).join(''); }
-      if (c.owns.length) { html += '<h3>Owns</h3>' + c.owns.map(function (d) { return chip(d, 'comp:' + d); }).join(''); }
+      if (c.dependsOn.length) { html += '<h3>Depends on</h3>' + c.dependsOn.map(function (d) { return chip(d, 'component', d); }).join(''); }
+      if (c.owns.length) { html += '<h3>Owns</h3>' + c.owns.map(function (d) { return chip(d, 'component', d); }).join(''); }
       c.interfaces.forEach(function (intf) {
         html += '<h3>' + esc(intf.name) + ' <code>' + esc(intf.id) + '</code></h3>';
         intf.methods.forEach(function (m) {
           html += '<div class="method"><b>' + esc(m.name) + '</b><br><code>' + esc(m.signature) + '</code><br><span class="ret">returns ' + esc(m.returns) + '</span>';
+          if (m.params) html += '<br><span class="ret">params: ' + m.params.map(function (p) { return esc(p.name) + ': ' + esc(p.type); }).join(', ') + '</span>';
           if (m.endpoint) html += '<br><code>' + esc(JSON.stringify(m.endpoint)) + '</code>';
           if (m.guarantees) html += '<br>' + m.guarantees.map(function (g) { return '<span class="chip static">' + esc(g) + '</span>'; }).join('');
           html += '</div>';
@@ -556,7 +642,7 @@ var MODEL = ${embedJson(model)};
           html += '<div class="method"><b>' + esc(n.method) + '()</b>';
           n.steps.forEach(function (s) {
             html += '<div class="step">' + s.n + '. ' + esc(s.text);
-            if (s.call) html += ' → <span class="call" data-goto="comp:' + esc(s.call.component) + '">' + esc(s.call.component) + '.' + esc(s.call.method) + '()</span>';
+            if (s.call) html += ' \\u2192 <span class="call chip-nav" data-kind="component" data-id="' + esc(s.call.component) + '">' + esc(s.call.component) + '.' + esc(s.call.method) + '()</span>';
             html += '</div>';
           });
           html += '</div>';
@@ -564,17 +650,17 @@ var MODEL = ${embedJson(model)};
       }
       var iss = issuesBySpec[c.id];
       if (iss) html += '<h3>Validation issues</h3>' + issueHtml(iss);
-    } else if (sel && sel.kind === 'subsystem') {
-      var s = subById[sel.id];
+    } else if (selectedKind === 'subsystem' && subById[state.selected]) {
+      var s = subById[state.selected];
       html += '<h2>' + esc(s.name) + '</h2><span class="chip static">subsystem</span>';
       if (s.targetLanguage) html += '<span class="chip static">' + esc(s.targetLanguage) + '</span>';
       html += '<p class="desc">' + esc(s.description) + '</p>';
       if (s.trustedLinks.length) {
         html += '<h3>Trusted links (fast lanes)</h3>';
-        s.trustedLinks.forEach(function (t) { html += '<div class="method">' + chip(t.subsystem, 'sub:' + t.subsystem) + '<br><span class="desc">' + esc(t.reason) + '</span></div>'; });
+        s.trustedLinks.forEach(function (t) { html += '<div class="method">' + chip(t.subsystem, 'subsystem', t.subsystem) + '<br><span class="desc">' + esc(t.reason) + '</span></div>'; });
       }
       var comps = MODEL.components.filter(function (c) { return c.subsystem === s.id; });
-      html += '<h3>Components (' + comps.length + ')</h3>' + comps.map(function (c) { return chip(c.id, 'comp:' + c.id); }).join('');
+      html += '<h3>Components (' + comps.length + ')</h3>' + comps.map(function (c) { return chip(c.id, 'component', c.id); }).join('');
       var iss2 = issuesBySpec[s.id];
       if (iss2) html += '<h3>Validation issues</h3>' + issueHtml(iss2);
     } else {
@@ -584,49 +670,16 @@ var MODEL = ${embedJson(model)};
       if (state.showIssues && MODEL.issues.length) html += '<h3>All validation issues</h3>' + issueHtml(MODEL.issues);
     }
     panel.innerHTML = html;
-    panel.querySelectorAll('[data-goto]').forEach(function (n) {
+    panel.querySelectorAll('[data-kind]').forEach(function (n) {
       n.addEventListener('click', function () {
-        var t = n.getAttribute('data-goto');
-        if (t.indexOf('comp:') === 0) select({ kind: 'component', id: t.slice(5) });
-        if (t.indexOf('sub:') === 0) select({ kind: 'subsystem', id: t.slice(4) });
+        select(n.getAttribute('data-kind'), n.getAttribute('data-id'), true);
       });
     });
-    render();
   }
 
-  // ---- pan & zoom -------------------------------------------------------------
-  var view = { x: 20, y: 20, k: 1 };
-  var svg = document.getElementById('svg'), stage = document.getElementById('stage');
-  function applyView() { root.setAttribute('transform', 'translate(' + view.x + ' ' + view.y + ') scale(' + view.k + ')'); }
-  stage.addEventListener('wheel', function (ev) {
-    ev.preventDefault();
-    var rect = svg.getBoundingClientRect();
-    var mx = ev.clientX - rect.left, my = ev.clientY - rect.top;
-    var factor = ev.deltaY < 0 ? 1.12 : 1 / 1.12;
-    var k2 = Math.min(3, Math.max(0.15, view.k * factor));
-    view.x = mx - (mx - view.x) * (k2 / view.k);
-    view.y = my - (my - view.y) * (k2 / view.k);
-    view.k = k2;
-    applyView();
-  }, { passive: false });
-  var panning = null;
-  stage.addEventListener('mousedown', function (ev) { panning = { x: ev.clientX - view.x, y: ev.clientY - view.y }; stage.classList.add('panning'); });
-  window.addEventListener('mousemove', function (ev) { if (!panning) return; view.x = ev.clientX - panning.x; view.y = ev.clientY - panning.y; applyView(); });
-  window.addEventListener('mouseup', function () { panning = null; stage.classList.remove('panning'); });
-
-  // ---- controls -----------------------------------------------------------------
-  document.getElementById('search').addEventListener('input', function (ev) { state.query = ev.target.value.trim(); render(); });
-  document.getElementById('issuesToggle').addEventListener('change', function (ev) { state.showIssues = ev.target.checked; select(state.selected); });
-
-  render();
-  applyView();
+  renderPanel();
 })();
 </script>
 </body>
 </html>
 `;
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
