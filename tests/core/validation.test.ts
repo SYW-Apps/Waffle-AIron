@@ -2340,6 +2340,91 @@ updatedAt: '2026-06-10T22:00:00Z'
       proj.cleanup();
     }
   });
+
+  it('treats structured params as authoritative over the prose signature for type references', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: v
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: d
+parentSystem: TestSystem
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('type', 'ledger-entry', `
+schemaVersion: 1.0.0
+id: ledger-entry
+kind: entity
+name: LedgerEntry
+subsystem: sub-a
+fields:
+  - name: id
+    type: string
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('component', 'comp-a', `
+schemaVersion: 1.0.0
+id: comp-a
+name: ComponentA
+description: d
+subsystem: sub-a
+componentType: Specialist
+dependsOn: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    // The prose signature contains junk the tokenizer would trip on
+    // (WeirdProseToken); with structured params it must be ignored entirely.
+    proj.writeSpec('interface', 'icomp-a', `
+schemaVersion: 1.0.0
+id: icomp-a
+name: IComponentA
+description: d
+component: comp-a
+methods:
+  - name: record
+    description: record an entry
+    signature: "record(entry, opts) applies WeirdProseToken semantics, see docs"
+    returns: "void"
+    params:
+      - name: entry
+        type: LedgerEntry
+      - name: opts
+        type: string
+  - name: broken
+    description: bad structured param
+    signature: "broken(x)"
+    returns: "void"
+    params:
+      - name: x
+        type: GhostType
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      const undef = res.issues.filter(i => i.code === 'UNDEFINED_TYPE_REFERENCE');
+      // Only GhostType (from structured params) is flagged; WeirdProseToken in
+      // the prose signature is never tokenized because params are authoritative.
+      expect(undef).toHaveLength(1);
+      expect(undef[0].message).toContain('GhostType');
+      expect(undef.some(i => i.message.includes('WeirdProseToken'))).toBe(false);
+      // And LedgerEntry counts as referenced (no UNUSED_TYPE for it)
+      expect(res.issues.find(i => i.code === 'UNUSED_TYPE' && i.specId === 'ledger-entry')).toBeUndefined();
+    } finally {
+      proj.cleanup();
+    }
+  });
 });
 
 

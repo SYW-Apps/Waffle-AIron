@@ -182,11 +182,29 @@ export const SEMANTIC_GUARANTEES = ['idempotent', 'atomic', 'transactional', 'ex
 export const GuaranteeSchema = z.enum(SEMANTIC_GUARANTEES);
 export type Guarantee = z.infer<typeof GuaranteeSchema>;
 
+/**
+ * A structured method parameter. When a method declares `params`, they are the
+ * AUTHORITATIVE source for type-reference validation — the free-form
+ * `signature` string becomes display-only and is never tokenized. Strongly
+ * preferred over prose signatures: it removes the whole heuristic-parsing
+ * class of false positives/negatives.
+ */
+export const MethodParamSchema = z.object({
+  name: z.string(),
+  /** A primitive/builtin or a defined type id (qualified across subsystems, e.g. "billing.Invoice"). */
+  type: z.string(),
+  description: z.string().optional(),
+  optional: z.boolean().optional(),
+});
+export type MethodParam = z.infer<typeof MethodParamSchema>;
+
 export const MethodSignatureSchema = z.object({
   name: z.string().regex(/^[a-zA-Z0-9_]+$/, 'Method name must be alphanumeric'),
   description: z.string(),
   signature: z.string(), // e.g. "save(key: string, data: Buffer): Promise<void>"
   returns: z.string(),   // e.g. "Promise<void>"
+  /** Structured parameters (authoritative for type checking when present). */
+  params: z.array(MethodParamSchema).optional(),
   /** Concrete wire binding for this method when its component is a Portal (set via sdd_set_endpoints). */
   endpoint: EndpointSchema.optional(),
   /**

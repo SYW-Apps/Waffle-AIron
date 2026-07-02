@@ -371,10 +371,10 @@ export function createMcpServer(): McpServer {
     },
   );
 
-  reg<{ id: string; name: string; description: string; component: string; methods?: { name: string; description: string; signature: string; returns: string; guarantees?: ('idempotent' | 'atomic' | 'transactional' | 'exactly-once')[] }[] }>(server,
+  reg<{ id: string; name: string; description: string; component: string; methods?: { name: string; description: string; signature: string; returns: string; params?: { name: string; type: string; description?: string; optional?: boolean }[]; guarantees?: ('idempotent' | 'atomic' | 'transactional' | 'exactly-once')[] }[] }>(server,
     'sdd_define_interface',
     {
-      description: 'Define an L3 Contract / Interface with method signatures for a component.',
+      description: 'Define an L3 Contract / Interface with method signatures for a component. Prefer supplying structured `params` per method — they are the authoritative source for type checking (the free-form signature string then becomes display-only and is never heuristically parsed).',
       inputSchema: {
         id: z.string().describe('Lowercase identifier prefixed with "i", e.g. "istorage"'),
         name: z.string().describe('Human-readable contract name'),
@@ -385,6 +385,12 @@ export function createMcpServer(): McpServer {
           description: z.string(),
           signature: z.string(),
           returns: z.string(),
+          params: z.array(z.object({
+            name: z.string(),
+            type: z.string().describe('A primitive/builtin or a defined type id (qualified across subsystems, e.g. "billing.Invoice")'),
+            description: z.string().optional(),
+            optional: z.boolean().optional(),
+          })).optional().describe('Structured parameters — AUTHORITATIVE for type-reference validation when present (strongly preferred over relying on the prose signature)'),
           guarantees: z.array(z.enum(['idempotent', 'atomic', 'transactional', 'exactly-once'])).optional().describe('Semantic guarantees this method promises (combinable). The implementer must honour them; the gate requires any guarantee a narrative step asserts to be declared here. Set when an L0 requirement or a narrative step depends on the guarantee.'),
         })).optional().describe('List of method signature contracts'),
       },

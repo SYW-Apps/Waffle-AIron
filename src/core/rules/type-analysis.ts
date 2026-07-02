@@ -165,6 +165,29 @@ export function extractTypesFromSignature(signature: string, returns: string): s
   return Array.from(new Set(types));
 }
 
+/**
+ * The type references of a method. Structured `params` are authoritative when
+ * present (no prose parsing); otherwise falls back to tokenizing the free-form
+ * signature string.
+ */
+export interface MethodLike {
+  signature: string;
+  returns: string;
+  params?: { name: string; type: string }[];
+}
+
+export function methodTypeRefs(m: MethodLike): string[] {
+  if (m.params && m.params.length > 0) {
+    const refs: string[] = [];
+    for (const p of m.params) {
+      refs.push(...extractTypeIdentifiers(p.type));
+    }
+    refs.push(...extractTypeIdentifiers(m.returns));
+    return Array.from(new Set(refs));
+  }
+  return extractTypesFromSignature(m.signature, m.returns);
+}
+
 function normalizePart(part: string): string {
   return part.toLowerCase().replace(/[^a-z0-9]/g, '');
 }

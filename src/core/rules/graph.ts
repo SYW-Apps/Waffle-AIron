@@ -1,5 +1,5 @@
 import { SddRule } from './types.js';
-import { BUILTIN_TYPES, extractTypeIdentifiers, extractTypeGenerics, extractTypesFromSignature, matchTypeRef } from './type-analysis.js';
+import { BUILTIN_TYPES, extractTypeIdentifiers, extractTypeGenerics, methodTypeRefs, matchTypeRef } from './type-analysis.js';
 
 /** Dependency-cycle detection over the component dependsOn graph. */
 export const cyclesRule: SddRule = {
@@ -198,10 +198,10 @@ export const reachabilityRule: SddRule = {
       }
     }
 
-    // 2. Scan interface method signatures & returns
+    // 2. Scan interface method signatures & returns (structured params preferred)
     for (const intf of ctx.interfaces) {
       for (const m of intf.methods) {
-        const refs = extractTypesFromSignature(m.signature, m.returns);
+        const refs = methodTypeRefs(m);
         for (const ref of refs) {
           markTypeReferenced(ref);
         }

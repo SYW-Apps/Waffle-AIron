@@ -1,5 +1,5 @@
 import { SddRule } from './types.js';
-import { LANGUAGE_MARKERS, normalizeLanguage, extractTypesFromSignature } from './type-analysis.js';
+import { LANGUAGE_MARKERS, normalizeLanguage, methodTypeRefs } from './type-analysis.js';
 
 /**
  * Language-aware contract hygiene: when a system/subsystem declares a
@@ -31,7 +31,7 @@ export const languageRule: SddRule = {
 
       const isDraftCtx = ctx.isComponentDraft(intf.component) || intf.status === 'draft' || intf.status === 'design';
       for (const m of intf.methods) {
-        const refs = extractTypesFromSignature(m.signature, m.returns);
+        const refs = methodTypeRefs(m);
         for (const ref of refs) {
           const refLower = ref.toLowerCase();
           if (ownMarkers?.has(refLower)) continue;

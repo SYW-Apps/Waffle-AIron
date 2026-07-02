@@ -4,7 +4,7 @@ import {
   extractTypeIdentifiers,
   extractGenericTypeVariables,
   extractTypeGenerics,
-  extractTypesFromSignature,
+  methodTypeRefs,
   matchTypeRef,
 } from './type-analysis.js';
 
@@ -81,7 +81,7 @@ export const typeReferencesRule: SddRule = {
           Array.from(extractGenericTypeVariables(m.signature)).map(g => g.toLowerCase()),
         );
         const allGenerics = new Set([...interfaceGenerics, ...methodGenerics]);
-        const refs = extractTypesFromSignature(m.signature, m.returns);
+        const refs = methodTypeRefs(m);
         for (const ref of refs) {
           if (!ctx.isTypeResolved(ref, allGenerics)) {
             ctx.addIssue(
