@@ -1901,6 +1901,182 @@ updatedAt: '2026-06-10T22:00:00Z'
       proj.cleanup();
     }
   });
+
+  it('traverses ALL interfaces of a component in the unused-detection reachability walk', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: Subsystem A description
+parentSystem: TestSystem
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    // Root component (Observer) exposing TWO interfaces; each interface's method
+    // reaches a different interface of the helper. With the old single-interface
+    // lookup, ientry-b / ihelper-b were invisible to the walk.
+    proj.writeSpec('component', 'comp-entry', `
+schemaVersion: 1.0.0
+id: comp-entry
+name: EntryObserver
+description: Entry observer
+subsystem: sub-a
+componentType: Observer
+dependsOn: [comp-helper]
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('interface', 'ientry-a', `
+schemaVersion: 1.0.0
+id: ientry-a
+name: IEntryA
+description: First entry contract
+component: comp-entry
+methods:
+  - name: handleA
+    description: handle A
+    signature: "handleA(): Promise<void>"
+    returns: "Promise<void>"
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('interface', 'ientry-b', `
+schemaVersion: 1.0.0
+id: ientry-b
+name: IEntryB
+description: Second entry contract
+component: comp-entry
+methods:
+  - name: handleB
+    description: handle B
+    signature: "handleB(): Promise<void>"
+    returns: "Promise<void>"
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('implementation', 'impl-entry-a', `
+schemaVersion: 1.0.0
+id: impl-entry-a
+name: ImplEntryA
+description: Impl entry A
+contract: ientry-a
+methods:
+  - name: handleA
+    narrative:
+      - stepNumber: 1
+        description: Call first helper method
+        type: call
+        targetComponent: comp-helper
+        targetMethod: doFirst
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('implementation', 'impl-entry-b', `
+schemaVersion: 1.0.0
+id: impl-entry-b
+name: ImplEntryB
+description: Impl entry B
+contract: ientry-b
+methods:
+  - name: handleB
+    narrative:
+      - stepNumber: 1
+        description: Call second helper method
+        type: call
+        targetComponent: comp-helper
+        targetMethod: doSecond
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('component', 'comp-helper', `
+schemaVersion: 1.0.0
+id: comp-helper
+name: Helper
+description: Helper specialist
+subsystem: sub-a
+componentType: Specialist
+dependsOn: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('interface', 'ihelper-a', `
+schemaVersion: 1.0.0
+id: ihelper-a
+name: IHelperA
+description: First helper contract
+component: comp-helper
+methods:
+  - name: doFirst
+    description: do first
+    signature: "doFirst(): Promise<void>"
+    returns: "Promise<void>"
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('interface', 'ihelper-b', `
+schemaVersion: 1.0.0
+id: ihelper-b
+name: IHelperB
+description: Second helper contract
+component: comp-helper
+methods:
+  - name: doSecond
+    description: do second
+    signature: "doSecond(): Promise<void>"
+    returns: "Promise<void>"
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('implementation', 'impl-helper-a', `
+schemaVersion: 1.0.0
+id: impl-helper-a
+name: ImplHelperA
+description: Impl helper A
+contract: ihelper-a
+methods:
+  - name: doFirst
+    narrative:
+      - stepNumber: 1
+        description: do local work
+        type: local
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('implementation', 'impl-helper-b', `
+schemaVersion: 1.0.0
+id: impl-helper-b
+name: ImplHelperB
+description: Impl helper B
+contract: ihelper-b
+methods:
+  - name: doSecond
+    narrative:
+      - stepNumber: 1
+        description: do local work
+        type: local
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.valid).toBe(true);
+
+      const unusedIssues = res.issues.filter(i => i.code === 'UNUSED_METHOD' || i.code === 'UNUSED_COMPONENT');
+      expect(unusedIssues).toEqual([]);
+    } finally {
+      proj.cleanup();
+    }
+  });
 });
 
 

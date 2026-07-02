@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { z } from 'zod';
 import { AI_PATHS } from '../config/loader.js';
 import { ensureDir, listFiles, listFilesRecursive, pathExists, getProjectRoot, setProjectRoot, getProjectRootOverride } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
@@ -58,11 +59,57 @@ let cachedRootDir: string | null = null;
 let cachedRecursive: boolean | number | null = null;
 const rootSubsystems = new Set<string>();
 
+// Freshness tracking for external edits (a human or another process editing spec
+// YAML while a long-running MCP server holds the cache). We record every specs
+// dir the scan visited and a signature over file paths + mtimes + sizes; cache
+// hits re-verify the signature at most once per TTL window so hot loops stay fast.
+let cachedSpecDirs: string[] = [];
+let cachedSignature: string | null = null;
+let lastSignatureCheckMs = 0;
+const SIGNATURE_TTL_MS = 2000;
+
+function computeSpecTreeSignature(dirs: string[]): string {
+  const parts: string[] = [];
+  for (const dir of dirs) {
+    if (!fs.existsSync(dir)) {
+      parts.push(`${dir}:missing`);
+      continue;
+    }
+    for (const f of listFilesRecursive(dir, '.yaml')) {
+      try {
+        const st = fs.statSync(f);
+        parts.push(`${f}:${st.mtimeMs}:${st.size}`);
+      } catch {
+        parts.push(`${f}:gone`);
+      }
+    }
+  }
+  return parts.join('|');
+}
+
 export function invalidateSpecCache(): void {
   cachedIndex = null;
   cachedRootDir = null;
   cachedRecursive = null;
+  cachedSpecDirs = [];
+  cachedSignature = null;
+  lastSignatureCheckMs = 0;
   rootSubsystems.clear();
+}
+
+/**
+ * Validate a spec object against its schema before it is written to disk, so a
+ * malformed delta (e.g. via sdd_update_spec) fails loudly instead of writing a
+ * corrupt file that only surfaces on the next scan. Returns the parsed value
+ * (with schema defaults applied).
+ */
+function parseOrThrow<S extends z.ZodTypeAny>(schema: S, value: unknown, kind: string, id: string): z.infer<S> {
+  const res = schema.safeParse(value);
+  if (!res.success) {
+    const detail = res.error.issues.map(i => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');
+    throw new Error(`Refusing to write invalid ${kind} spec "${id}": ${detail}`);
+  }
+  return res.data;
 }
 
 function qualifyId(id: string, prefix: string): string;
@@ -111,6 +158,9 @@ function scanSpecsForProject(projectDir: string, namespacePrefix: string, visite
 
   try {
     const specsDir = AI_PATHS.specsDir();
+    // Track every visited specs dir (even absent ones, so their later creation
+    // is picked up) for the freshness signature.
+    scanVisitedSpecDirs.push(specsDir);
     if (!pathExists(specsDir)) return index;
 
     const files = listFilesRecursive(specsDir, '.yaml');
@@ -345,19 +395,33 @@ function scanSpecsForProject(projectDir: string, namespacePrefix: string, visite
   return index;
 }
 
+let scanVisitedSpecDirs: string[] = [];
+
 export function scanAllSpecs(options?: { recursive?: boolean | number }): SpecIndex {
   const recursive = options?.recursive ?? true;
   const rootDir = getProjectRoot();
-  if (cachedIndex && cachedRootDir === rootDir && cachedRecursive === recursive) return cachedIndex;
+  if (cachedIndex && cachedRootDir === rootDir && cachedRecursive === recursive) {
+    // Cache hit — but the files may have been edited externally (hand edits, another
+    // process) since we scanned. Re-verify via mtime signature at most once per TTL.
+    const now = Date.now();
+    if (now - lastSignatureCheckMs <= SIGNATURE_TTL_MS) return cachedIndex;
+    lastSignatureCheckMs = now;
+    if (computeSpecTreeSignature(cachedSpecDirs) === cachedSignature) return cachedIndex;
+    invalidateSpecCache();
+  }
 
   loaderIssues = [];
   rootSubsystems.clear();
   cachedRootDir = rootDir;
   cachedRecursive = recursive;
   const visited = new Set<string>([path.resolve(rootDir)]);
-  
+
   const maxDepth = typeof recursive === 'number' ? recursive : (recursive ? Infinity : 0);
+  scanVisitedSpecDirs = [];
   cachedIndex = scanSpecsForProject(rootDir, '', visited, maxDepth, 0);
+  cachedSpecDirs = scanVisitedSpecDirs;
+  cachedSignature = computeSpecTreeSignature(cachedSpecDirs);
+  lastSignatureCheckMs = Date.now();
   return cachedIndex;
 }
 
@@ -699,7 +763,7 @@ export function loadSystemSpec(): SystemSpec | null {
 export function saveSystemSpec(spec: SystemSpec): void {
   const p = AI_PATHS.specsSystem();
   ensureDir(path.dirname(p));
-  writeYamlFile(p, spec);
+  writeYamlFile(p, parseOrThrow(SystemSpecSchema, spec, 'system', spec.name));
   invalidateSpecCache();
 }
 
@@ -762,7 +826,7 @@ export function saveSubsystemSpec(spec: SubsystemSpec): void {
     specToWrite.createdAt = existing.createdAt;
   }
   specToWrite.updatedAt = new Date().toISOString();
-  writeYamlFile(p, specToWrite);
+  writeYamlFile(p, parseOrThrow(SubsystemSpecSchema, specToWrite, 'subsystem', spec.id));
   invalidateSpecCache();
 }
 
@@ -794,7 +858,18 @@ export function loadComponentSpec(id: string): ComponentSpec | null {
   }
 }
 
-export function saveComponentSpec(spec: ComponentSpec): void {
+/**
+ * Options for the spec save functions.
+ * `allowStatusDemotion`: by default a re-save carrying status 'draft' does NOT
+ * demote an existing 'design'/'complete' spec (the add tools always pass
+ * 'draft', and re-adding must not silently reopen a locked spec). An explicit
+ * status change via sdd_update_spec sets this to make deliberate demotion work.
+ */
+export interface SaveSpecOptions {
+  allowStatusDemotion?: boolean;
+}
+
+export function saveComponentSpec(spec: ComponentSpec, opts?: SaveSpecOptions): void {
   const p = getComponentPath(spec.id, spec.subsystem);
   ensureDir(path.dirname(p));
 
@@ -805,12 +880,12 @@ export function saveComponentSpec(spec: ComponentSpec): void {
   const existing = loadComponentSpec(spec.id);
   if (existing) {
     specToWrite.createdAt = existing.createdAt;
-    if (existing.status && (!spec.status || spec.status === 'draft')) {
+    if (!opts?.allowStatusDemotion && existing.status && (!spec.status || spec.status === 'draft')) {
       specToWrite.status = existing.status;
     }
   }
   specToWrite.updatedAt = new Date().toISOString();
-  writeYamlFile(p, specToWrite);
+  writeYamlFile(p, parseOrThrow(ComponentSpecSchema, specToWrite, 'component', spec.id));
   invalidateSpecCache();
   // Keep the physical layout in sync with ownership: nest owned members under
   // their pattern, and move anything an `owns` change has displaced.
@@ -894,7 +969,7 @@ export function loadInterfaceSpec(id: string): InterfaceSpec | null {
   }
 }
 
-export function saveInterfaceSpec(spec: InterfaceSpec): void {
+export function saveInterfaceSpec(spec: InterfaceSpec, opts?: SaveSpecOptions): void {
   const p = getInterfacePath(spec.id, spec.component);
   ensureDir(path.dirname(p));
 
@@ -905,11 +980,12 @@ export function saveInterfaceSpec(spec: InterfaceSpec): void {
   const existing = loadInterfaceSpec(spec.id);
   if (existing) {
     specToWrite.createdAt = existing.createdAt;
-    if (existing.status && (!spec.status || spec.status === 'draft')) {
+    if (!opts?.allowStatusDemotion && existing.status && (!spec.status || spec.status === 'draft')) {
       specToWrite.status = existing.status;
     }
-    // Preserve endpoint bindings for matching methods
+    // Preserve endpoint bindings for matching methods that don't carry their own
     for (const m of specToWrite.methods) {
+      if (m.endpoint) continue;
       const existingMethod = existing.methods.find(x => x.name === m.name);
       if (existingMethod && existingMethod.endpoint) {
         m.endpoint = existingMethod.endpoint;
@@ -917,7 +993,7 @@ export function saveInterfaceSpec(spec: InterfaceSpec): void {
     }
   }
   specToWrite.updatedAt = new Date().toISOString();
-  writeYamlFile(p, specToWrite);
+  writeYamlFile(p, parseOrThrow(InterfaceSpecSchema, specToWrite, 'interface', spec.id));
   invalidateSpecCache();
 }
 
@@ -949,7 +1025,7 @@ export function loadImplementationSpec(id: string): ImplementationSpec | null {
   }
 }
 
-export function saveImplementationSpec(spec: ImplementationSpec): void {
+export function saveImplementationSpec(spec: ImplementationSpec, opts?: SaveSpecOptions): void {
   const p = getImplementationPath(spec.id, spec.contract);
   ensureDir(path.dirname(p));
 
@@ -960,12 +1036,12 @@ export function saveImplementationSpec(spec: ImplementationSpec): void {
   const existing = loadImplementationSpec(spec.id);
   if (existing) {
     specToWrite.createdAt = existing.createdAt;
-    if (existing.status && (!spec.status || spec.status === 'draft')) {
+    if (!opts?.allowStatusDemotion && existing.status && (!spec.status || spec.status === 'draft')) {
       specToWrite.status = existing.status;
     }
   }
   specToWrite.updatedAt = new Date().toISOString();
-  writeYamlFile(p, specToWrite);
+  writeYamlFile(p, parseOrThrow(ImplementationSpecSchema, specToWrite, 'implementation', spec.id));
   invalidateSpecCache();
 }
 
@@ -1067,7 +1143,7 @@ export function saveTypeSpec(spec: TypeSpec): void {
     }
   }
   specToWrite.updatedAt = new Date().toISOString();
-  writeYamlFile(p, specToWrite);
+  writeYamlFile(p, parseOrThrow(TypeSpecSchema, specToWrite, 'type', spec.id));
   invalidateSpecCache();
 }
 
@@ -1317,7 +1393,7 @@ export function saveGroupSpec(spec: GroupSpec): void {
     specToWrite.createdAt = existing.createdAt;
   }
   specToWrite.updatedAt = new Date().toISOString();
-  writeYamlFile(p, specToWrite);
+  writeYamlFile(p, parseOrThrow(GroupSpecSchema, specToWrite, 'group', spec.id));
   invalidateSpecCache();
 }
 
@@ -1526,11 +1602,17 @@ export function updateSpec(
   const mergedResult = mergeDelta(result, delta);
   mergedResult.updatedAt = new Date().toISOString();
 
+  // An explicit status in the delta is a deliberate change — allow demotion
+  // (e.g. reopening a completed spec to 'draft' for revision).
+  const opts: SaveSpecOptions = {
+    allowStatusDemotion: Object.prototype.hasOwnProperty.call(delta, 'status'),
+  };
+
   switch (kind) {
     case 'subsystem':      saveSubsystemSpec(mergedResult); break;
-    case 'component':      saveComponentSpec(mergedResult); break;
-    case 'interface':      saveInterfaceSpec(mergedResult); break;
-    case 'implementation': saveImplementationSpec(mergedResult); break;
+    case 'component':      saveComponentSpec(mergedResult, opts); break;
+    case 'interface':      saveInterfaceSpec(mergedResult, opts); break;
+    case 'implementation': saveImplementationSpec(mergedResult, opts); break;
     case 'type':           saveTypeSpec(mergedResult); break;
   }
 }

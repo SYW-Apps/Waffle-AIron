@@ -1275,7 +1275,11 @@ export function validateSddTree(
   // 6. Unused / Unwired Components & Methods Detection
   const reachedComponents = new Set<string>();
   const reachedMethods = new Set<string>();
-  const queue: string[] = [];
+  const queue: { compId: string; methodName: string }[] = [];
+
+  // Key with '#': component ids may themselves contain '::' (namespaced subprojects),
+  // so '::' cannot separate component from method.
+  const methodKey = (compId: string, methodName: string) => `${compId}#${methodName}`;
 
   // Collect root entry points (Portals, Observers, and components backing public subsystem interfaces)
   const rootComponents = new Set<string>();
@@ -1292,16 +1296,15 @@ export function validateSddTree(
     }
   }
 
-  // Initialize queue with methods of root components
+  // Initialize queue with methods of root components (across ALL their interfaces)
   for (const compId of rootComponents) {
     reachedComponents.add(compId);
-    const intf = interfaces.find(i => i.component === compId);
-    if (intf) {
+    for (const intf of interfaces.filter(i => i.component === compId)) {
       for (const m of intf.methods) {
-        const methodKey = `${compId}::${m.name}`;
-        if (!reachedMethods.has(methodKey)) {
-          reachedMethods.add(methodKey);
-          queue.push(methodKey);
+        const key = methodKey(compId, m.name);
+        if (!reachedMethods.has(key)) {
+          reachedMethods.add(key);
+          queue.push({ compId, methodName: m.name });
         }
       }
     }
@@ -1309,28 +1312,24 @@ export function validateSddTree(
 
   // Traverse the call graph recursively
   while (queue.length > 0) {
-    const current = queue.shift()!;
-    const [compId, methodName] = current.split('::');
+    const { compId, methodName } = queue.shift()!;
 
-    const intf = interfaces.find(i => i.component === compId);
-    if (!intf) continue;
-
-    const impl = implementations.find(imp => imp.contract === intf.id);
+    // The method may be implemented against any of the component's interfaces.
+    const compInterfaceIds = new Set(interfaces.filter(i => i.component === compId).map(i => i.id));
+    const impl = implementations.find(
+      imp => compInterfaceIds.has(imp.contract) && imp.methods.some(m => m.name === methodName),
+    );
     if (!impl) continue;
 
-    const methodImpl = impl.methods.find(m => m.name === methodName);
-    if (!methodImpl) continue;
+    const methodImpl = impl.methods.find(m => m.name === methodName)!;
 
     for (const step of methodImpl.narrative) {
       if (step.type === 'call' && step.targetComponent && step.targetMethod) {
-        const targetId = step.targetComponent;
-        const targetMethod = step.targetMethod;
-        const targetKey = `${targetId}::${targetMethod}`;
-
-        reachedComponents.add(targetId);
+        reachedComponents.add(step.targetComponent);
+        const targetKey = methodKey(step.targetComponent, step.targetMethod);
         if (!reachedMethods.has(targetKey)) {
           reachedMethods.add(targetKey);
-          queue.push(targetKey);
+          queue.push({ compId: step.targetComponent, methodName: step.targetMethod });
         }
       }
     }
@@ -1349,12 +1348,10 @@ export function validateSddTree(
           isDraftCtx
         );
       } else {
-        // Warn about unused methods on this reached component
-        const intf = interfaces.find(i => i.component === comp.id);
-        if (intf) {
+        // Warn about unused methods on this reached component (across ALL its interfaces)
+        for (const intf of interfaces.filter(i => i.component === comp.id)) {
           for (const m of intf.methods) {
-            const methodKey = `${comp.id}::${m.name}`;
-            if (!reachedMethods.has(methodKey)) {
+            if (!reachedMethods.has(methodKey(comp.id, m.name))) {
               const isDraftCtx = comp.status === 'draft' || comp.status === 'design' || intf.status === 'draft' || intf.status === 'design';
               addIssue(
                 'warning',

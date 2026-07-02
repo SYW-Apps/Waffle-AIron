@@ -265,4 +265,84 @@ describe('granular specification updates via updateSpec', () => {
     expect(intfSpec).not.toBeNull();
     expect(intfSpec!.methods[0].endpoint).toEqual({ transport: 'HTTP', method: 'POST', path: '/charge' });
   });
+
+  it('rejects a delta that would produce a schema-invalid spec and leaves the file untouched', () => {
+    proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-invalid-delta-test-'));
+    fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
+    setProjectRoot(proj);
+
+    saveInterfaceSpec({
+      id: 'ibilling-portal',
+      name: 'IBillingPortal',
+      description: 'Portal interface',
+      component: 'billing-portal',
+      methods: [
+        { name: 'authorize', signature: 'auth()', returns: 'Promise<void>', description: 'auth method' },
+      ],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // Upserting a method missing required fields (signature/returns/description)
+    // must fail loudly at write time, not corrupt the file for the next scan.
+    expect(() =>
+      updateSpec('interface', 'ibilling-portal', { methods: [{ name: 'broken' }] })
+    ).toThrow(/Refusing to write invalid interface spec/);
+
+    const intact = loadInterfaceSpec('ibilling-portal');
+    expect(intact).not.toBeNull();
+    expect(intact!.methods).toHaveLength(1);
+    expect(intact!.methods[0].name).toBe('authorize');
+  });
+
+  it('allows explicit status demotion via updateSpec while re-adds still cannot demote', () => {
+    proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-demote-test-'));
+    fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
+    setProjectRoot(proj);
+
+    saveSubsystemSpec({
+      schemaVersion: '1.0.0',
+      id: 'billing',
+      name: 'Billing Subsystem',
+      description: 'Billing',
+      parentSystem: 'GK',
+      publicInterfaces: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    saveComponentSpec({
+      schemaVersion: '1.0.0',
+      id: 'billing-engine',
+      name: 'BillingEngine',
+      description: 'Engine',
+      subsystem: 'billing',
+      componentType: 'Orchestrator',
+      owns: [],
+      dependsOn: [],
+      status: 'complete',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // A re-add carrying 'draft' (the add tools always do) must NOT reopen it…
+    saveComponentSpec({
+      schemaVersion: '1.0.0',
+      id: 'billing-engine',
+      name: 'BillingEngine',
+      description: 'Engine',
+      subsystem: 'billing',
+      componentType: 'Orchestrator',
+      owns: [],
+      dependsOn: [],
+      status: 'draft',
+      createdAt: now,
+      updatedAt: now,
+    });
+    expect(loadComponentSpec('billing-engine')!.status).toBe('complete');
+
+    // …but an explicit status change through updateSpec is deliberate and must work.
+    updateSpec('component', 'billing-engine', { status: 'draft' });
+    expect(loadComponentSpec('billing-engine')!.status).toBe('draft');
+  });
 });
