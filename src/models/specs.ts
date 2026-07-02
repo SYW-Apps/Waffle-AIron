@@ -233,9 +233,42 @@ export type InterfaceSpec = z.infer<typeof InterfaceSpecSchema>;
 
 // ---------------------------------------------------------------------------
 // Level 5: Method / Narrative Step (embedded in L4)
+//
+// Narratives are a FLAT ordered list whose order mimics the code lines. Flow
+// structure is expressed by special step types whose config jumps by step
+// number ("when false, jump to step 6") — blocks are just skipped regions.
+// Syntax variants are config on one type (all four loop forms are `loop` +
+// `loopKind`), so renderers/validators handle one shape per concept.
+// Structural soundness (jump targets exist, regions well-formed) is enforced
+// by the narrative-flow validation rule, not the schema.
 // ---------------------------------------------------------------------------
-export const NarrativeStepTypeSchema = z.enum(['local', 'call']);
+export const NarrativeStepTypeSchema = z.enum([
+  'local',   // in-component work
+  'call',    // cross-component call (targetComponent/targetMethod)
+  'branch',  // if/else: condition + onTrueStep (default next) / onFalseStep
+  'switch',  // multiway dispatch: on + cases[{value, step}] + defaultStep
+  'loop',    // header step; body = next..endStep; loopKind picks the form
+  'try',     // guarded region: body = next..endStep; catches[{error, step}] + finallyStep
+  'jump',    // unconditional goto (break / continue / rejoin-after-catch)
+  'return',  // terminator (happy or handled-failure exit)
+  'throw',   // error terminator: this path raises/propagates
+]);
 export type NarrativeStepType = z.infer<typeof NarrativeStepTypeSchema>;
+
+export const LoopKindSchema = z.enum(['forEach', 'for', 'while', 'doWhile']);
+export type LoopKind = z.infer<typeof LoopKindSchema>;
+
+export const SwitchCaseSchema = z.object({
+  value: z.string(),                        // the matched value/case label
+  step: z.number().int().positive(),        // first step of this case's region
+});
+export type SwitchCase = z.infer<typeof SwitchCaseSchema>;
+
+export const CatchClauseSchema = z.object({
+  error: z.string(),                        // error/condition caught (free text; 'any' for catch-all)
+  step: z.number().int().positive(),        // first step of the handler region
+});
+export type CatchClause = z.infer<typeof CatchClauseSchema>;
 
 export const NarrativeStepSchema = z.object({
   stepNumber: z.number().int().positive(),
@@ -244,6 +277,22 @@ export const NarrativeStepSchema = z.object({
   targetComponent: z.string().optional(), // Required if type is 'call', references L2 Component id
   targetMethod: z.string().optional(),    // Required if type is 'call', references Method name on target interface
   assertsGuarantees: z.array(GuaranteeSchema).optional(),
+
+  // --- flow config (per type; validated by the narrative-flow rule) ---------
+  condition: z.string().optional(),        // branch; loop (while/doWhile)
+  onTrueStep: z.number().int().positive().optional(),  // branch (default: next step)
+  onFalseStep: z.number().int().positive().optional(), // branch (required)
+  on: z.string().optional(),               // switch: the dispatched value
+  cases: z.array(SwitchCaseSchema).optional(),          // switch (required)
+  defaultStep: z.number().int().positive().optional(),  // switch (default: next step)
+  loopKind: LoopKindSchema.optional(),     // loop (default: forEach when `over`, else while)
+  over: z.string().optional(),             // loop (forEach/for): iteration source
+  endStep: z.number().int().positive().optional(),      // loop/try: last step of the body region
+  catches: z.array(CatchClauseSchema).optional(),        // try
+  finallyStep: z.number().int().positive().optional(),   // try: first step of the always-runs region
+  toStep: z.number().int().positive().optional(),        // jump (required)
+  outcome: z.string().optional(),          // return: 'success' / 'not found' / …
+  error: z.string().optional(),            // throw: the raised error
 });
 
 export type NarrativeStep = z.infer<typeof NarrativeStepSchema>;
@@ -251,9 +300,27 @@ export type NarrativeStep = z.infer<typeof NarrativeStepSchema>;
 // ---------------------------------------------------------------------------
 // Level 4: Implementation Spec (implementations/*.yaml)
 // ---------------------------------------------------------------------------
+
+/**
+ * The narrative detail dial — declared per method (or per spec as a default),
+ * IN the implementation spec. Absent = the component stereotype's default
+ * (Portal/Observer/Adapter → calls-only, Store/Index/Registry → intent,
+ * everything else → full). Levels are floors, not ceilings.
+ */
+export const NarrativeDetailSchema = z.enum(['full', 'calls-only', 'intent']);
+export type NarrativeDetail = z.infer<typeof NarrativeDetailSchema>;
+
 export const MethodImplementationSchema = z.object({
   name: z.string(), // Must match a method name in the L3 interface contract
   narrative: z.array(NarrativeStepSchema).default([]), // Level 5 Narrative
+  /** Detail level for THIS method (overrides the spec-level default). */
+  detail: NarrativeDetailSchema.optional(),
+  /**
+   * Behavioral specification as prose — the narrative substitute at
+   * detail: intent. Subject to the INTENT_FLOOR check: non-trivial, and
+   * failure behavior stated here or in the contract's guarantees.
+   */
+  intent: z.string().optional(),
 });
 
 export type MethodImplementation = z.infer<typeof MethodImplementationSchema>;
@@ -265,6 +332,8 @@ export const ImplementationSpecSchema = z.object({
   contract: z.string(), // References L3 Interface id
   sourcePath: z.string().optional(), // Path to the concrete source code file (e.g. "src/storage/vfs.ts")
   methods: z.array(MethodImplementationSchema).default([]),
+  /** Spec-level narrative detail default for all methods (each may override). */
+  detail: NarrativeDetailSchema.optional(),
   status: SpecStatusSchema.optional().default('complete'),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),

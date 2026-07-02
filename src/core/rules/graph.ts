@@ -1,5 +1,6 @@
 import { SddRule } from './types.js';
 import { BUILTIN_TYPES, extractTypeIdentifiers, extractTypeGenerics, methodTypeRefs, matchTypeRef } from './type-analysis.js';
+import { effectiveNarrativeDetail } from './narrative-detail.js';
 
 /** Dependency-cycle detection over the component dependsOn graph. */
 export const cyclesRule: SddRule = {
@@ -131,6 +132,31 @@ export const reachabilityRule: SddRule = {
           if (!reachedMethods.has(targetKey)) {
             reachedMethods.add(targetKey);
             queue.push({ compId: step.targetComponent, methodName: step.targetMethod });
+          }
+        }
+      }
+
+      // Detail-dial fallback: an intent/calls-only method with no narrative
+      // contributes no call edges, so walk its component's L2 dependsOn/owns
+      // at component granularity (all contract methods) instead — the lower
+      // declared fidelity must not false-positive its collaborators as
+      // unused. Full-detail methods get NO fallback: their missing narrative
+      // is a reported gap (MISSING_NARRATIVE) and unused-detection stays strong.
+      if (methodImpl.narrative.length === 0) {
+        const comp = ctx.componentMap.get(compId);
+        if (comp && effectiveNarrativeDetail(methodImpl, impl, comp).level !== 'full') {
+          for (const depId of [...comp.dependsOn, ...comp.owns]) {
+            if (!ctx.componentMap.has(depId)) continue;
+            reachedComponents.add(depId);
+            for (const intf of ctx.interfaces.filter(i => i.component === depId)) {
+              for (const m of intf.methods) {
+                const k = methodKey(depId, m.name);
+                if (!reachedMethods.has(k)) {
+                  reachedMethods.add(k);
+                  queue.push({ compId: depId, methodName: m.name });
+                }
+              }
+            }
           }
         }
       }

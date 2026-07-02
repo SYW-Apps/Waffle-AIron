@@ -14,6 +14,8 @@ import { BUILTIN_TYPES, matchTypeRef, normalizeLanguage } from './type-analysis.
 import { hierarchyRule } from './hierarchy.js';
 import { typeReferencesRule } from './type-references.js';
 import { contractsRule } from './contracts.js';
+import { narrativeFlowRule } from './narrative-flow.js';
+import { narrativeDetailRule } from './narrative-detail.js';
 import { portalsRule } from './portals.js';
 import { stereotypeDepsRule } from './stereotype-deps.js';
 import { patternsRule } from './patterns.js';
@@ -35,6 +37,8 @@ export const SDD_RULES: SddRule[] = [
   hierarchyRule,
   typeReferencesRule,
   contractsRule,
+  narrativeFlowRule,
+  narrativeDetailRule,
   portalsRule,
   stereotypeDepsRule,
   patternsRule,
@@ -50,6 +54,8 @@ export const SDD_RULES: SddRule[] = [
 // still draft/design — the tree is allowed to be unfinished, not inconsistent.
 const COMPLETENESS_RULES = new Set([
   'MISSING_IMPLEMENTATION_METHOD',
+  'MISSING_NARRATIVE',
+  'INTENT_FLOOR',
   'MISSING_ENDPOINT',
   'ENDPOINT_TRANSPORT_MISMATCH',
   'MISSING_PORTAL_TYPE',
