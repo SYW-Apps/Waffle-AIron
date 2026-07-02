@@ -162,27 +162,44 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     expect(pureInner[0].source().id()).toBe('i~component~billing-portal');
     expect(pureInner[0].target().id()).toBe('i~component~billing-repo');
 
-    // External deps are represented by PROXY port tiles INSIDE the container,
-    // connected with short dashed edges that never leave the box.
-    const outProxy = cy.getElementById('p~out~s~shipping');
+    // Each external relation gets its own small PORT node INSIDE the container
+    // (one per external counterpart), connected with short dashed edges that
+    // never leave the box. Incoming and outgoing ports carry distinct classes.
+    const outProxy = cy.getElementById('p~out~s~shipping~billing-portal');
     expect(outProxy.length).toBe(1);
     expect(outProxy.parent().id()).toBe('s~shipping');
-    const inProxy = cy.getElementById('p~in~s~billing');
+    expect(outProxy.hasClass('proxyOut')).toBe(true);
+    const inProxy = cy.getElementById('p~in~s~billing~shipping-client');
     expect(inProxy.length).toBe(1);
     expect(inProxy.parent().id()).toBe('s~billing');
+    expect(inProxy.hasClass('proxyIn')).toBe(true);
     const stubs = cy.edges().filter((e: any) => e.hasClass('inneredge') && e.hasClass('toghost'));
     expect(stubs.length).toBe(2);
-    expect(stubs.filter((e: any) => e.source().id() === 'i~component~shipping-client' && e.target().id() === 'p~out~s~shipping').length).toBe(1);
-    expect(stubs.filter((e: any) => e.source().id() === 'p~in~s~billing' && e.target().id() === 'i~component~billing-portal').length).toBe(1);
+    expect(stubs.filter((e: any) => e.source().id() === 'i~component~shipping-client' && e.target().id() === outProxy.id()).length).toBe(1);
+    expect(stubs.filter((e: any) => e.source().id() === inProxy.id() && e.target().id() === 'i~component~billing-portal').length).toBe(1);
 
-    // Hovering a proxy reveals the actual cross-boundary line to the target;
+    // Hovering a port reveals the actual cross-boundary line to the target;
     // leaving hides it again.
     outProxy.emit('mouseover');
     let reveals = cy.edges().filter((e: any) => e.hasClass('revealEdge'));
     expect(reveals.length).toBe(1);
-    expect(reveals[0].source().id()).toBe('p~out~s~shipping');
+    expect(reveals[0].source().id()).toBe(outProxy.id());
     expect(reveals[0].target().id()).toBe('s~billing');
     outProxy.emit('mouseout');
+    reveals = cy.edges().filter((e: any) => e.hasClass('revealEdge'));
+    expect(reveals.length).toBe(0);
+
+    // Tapping a port SELECTS it: visible focus (sel class), counterpart
+    // details in the sidebar, and the reveal line pinned across mouseout.
+    outProxy.emit('tap');
+    expect(outProxy.hasClass('sel')).toBe(true);
+    expect(elements['panel'].innerHTML).toContain('Billing Portal');
+    expect(elements['panel'].innerHTML).toContain('external dependency');
+    outProxy.emit('mouseout');
+    reveals = cy.edges().filter((e: any) => e.hasClass('revealEdge'));
+    expect(reveals.length).toBe(1); // pinned while selected
+    cy.emit('tap'); // background tap: deselect + unpin
+    expect(outProxy.hasClass('sel')).toBe(false);
     reveals = cy.edges().filter((e: any) => e.hasClass('revealEdge'));
     expect(reveals.length).toBe(0);
 

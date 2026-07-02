@@ -609,6 +609,8 @@ var MODEL = __MODEL_JSON__;
       ghostFill: '#eceff2', ghostStroke: '#7d8a97', ghostText: '#414b55',
       typeE: { fill: '#e6efd8', stroke: '#4e6b23', text: '#22300d' },
       typeV: { fill: '#ecdff3', stroke: '#6e4288', text: '#2d1740' },
+      proxyIn: { fill: '#d5eef8', stroke: '#14708f' },
+      proxyOut: { fill: '#f7e8cd', stroke: '#8a6116' },
       stereo: {
         entry:   { fill: '#dcebff', stroke: '#2f5fa8', text: '#0f2a4d' },
         logic:   { fill: '#ece2fb', stroke: '#6d3fbf', text: '#2a1650' },
@@ -626,6 +628,8 @@ var MODEL = __MODEL_JSON__;
       ghostFill: '#16202f', ghostStroke: '#5d6b80', ghostText: '#aab8cc',
       typeE: { fill: '#1e3317', stroke: '#8fd14f', text: '#e2f5cf' },
       typeV: { fill: '#321a3d', stroke: '#c084fc', text: '#f0dcff' },
+      proxyIn: { fill: '#0d3b4a', stroke: '#22ddff' },
+      proxyOut: { fill: '#3b2a10', stroke: '#f59e0b' },
       stereo: {
         entry:   { fill: '#0d2b4d', stroke: '#22ddff', text: '#d8f6ff' },
         logic:   { fill: '#2a2052', stroke: '#a78bfa', text: '#eae2ff' },
@@ -658,7 +662,9 @@ var MODEL = __MODEL_JSON__;
       { selector: '.typeEntity', style: { 'background-color': t.typeE.fill, 'border-color': t.typeE.stroke, color: t.typeE.text, 'text-halign': 'center', 'font-size': 10.5 } },
       { selector: '.typeValue', style: { 'background-color': t.typeV.fill, 'border-color': t.typeV.stroke, color: t.typeV.text, 'border-style': 'dashed', 'font-size': 10.5 } },
       { selector: 'edge.typeref', style: { width: 1.4, 'line-style': 'solid' } },
-      { selector: '.proxyExt', style: { 'background-color': t.ghostFill, 'border-color': t.selGlow, 'border-style': 'dotted', 'border-width': 1.4, color: t.ghostText, 'font-size': 9.5 } },
+      { selector: '.proxyExt', style: { 'font-size': 12, 'border-width': 1.6 } },
+      { selector: '.proxyIn', style: { 'background-color': t.proxyIn.fill, 'border-color': t.proxyIn.stroke, color: t.proxyIn.stroke } },
+      { selector: '.proxyOut', style: { 'background-color': t.proxyOut.fill, 'border-color': t.proxyOut.stroke, color: t.proxyOut.stroke } },
       { selector: 'edge.revealEdge', style: { 'line-color': t.selGlow, 'target-arrow-color': t.selGlow, 'line-style': 'dashed', width: 2.4, opacity: 0.95 } },
       { selector: 'edge', style: {
         'curve-style': 'bezier', width: 1.8, 'line-color': t.pageEdge,
@@ -685,7 +691,8 @@ var MODEL = __MODEL_JSON__;
       sw(t.stereo.entry) + 'Portal/Observer&nbsp; ' + sw(t.stereo.logic) + 'Logic&nbsp; ' +
       sw(t.stereo.data) + 'Data&nbsp; ' + sw(t.stereo.adapter) + 'Adapter&nbsp; ' +
       sw(t.stereo.patternLeaf) + 'Pattern&nbsp; ' +
-      sw({ fill: t.ghostFill, stroke: t.ghostStroke }) + 'External&nbsp; — bold border = published · ' +
+      sw({ fill: t.ghostFill, stroke: t.ghostStroke }) + 'External&nbsp; ' +
+      sw(t.proxyIn) + '\\u21E0 in-port&nbsp; ' + sw(t.proxyOut) + '\\u21E2 out-port&nbsp; — bold border = published · ' +
       '<span style="color:' + t.cross + '">red</span> = boundary hop · double-click = open';
   }
 
@@ -694,10 +701,11 @@ var MODEL = __MODEL_JSON__;
   var INNER_W = 130, INNER_H = 36, INNER_GAPX = 26, INNER_GAPY = 12, HEAD_H = 34, PADI = 14;
 
   // Micro-layout for a container's direct children when Internals is on:
-  // layered mini columns + intra-container edges. External dependencies are
-  // represented by PROXY port tiles INSIDE the container ("⇠ external" /
-  // "external ⇢") that children connect to with normal short edges — the real
-  // cross-boundary line is only revealed on hover/pin of the proxy.
+  // layered mini columns + intra-container edges. Each external relation gets
+  // its own small PORT node INSIDE the container (one per external
+  // counterpart; incoming left, outgoing right). Children connect to ports
+  // with short edges that never leave the box — the real cross-boundary line
+  // is only revealed on hover, or pinned while the port is selected.
   function innerLayout(entry) {
     var kids = state.internals && entry.hasKids ? childrenOf({ kind: entry.kind, id: entry.id }) : [];
     if (!kids.length) return null;
@@ -705,7 +713,7 @@ var MODEL = __MODEL_JSON__;
     var kidAnchor = {};
     kids.forEach(function (k) { kidAnchor[k.kind + ':' + k.id] = k; });
     var parentId = anchorNodeId(entry);
-    var pIn = 'p~in~' + parentId, pOut = 'p~out~' + parentId;
+    var pBaseIn = 'p~in~' + parentId + '~', pBaseOut = 'p~out~' + parentId + '~';
     var edges = {};
     var extIn = {}, extOut = {};
     MODEL.edges.forEach(function (edge) {
@@ -717,11 +725,13 @@ var MODEL = __MODEL_JSON__;
         if (a.kind === b.kind && a.id === b.id) return;
         edges[IN(a.kind, a.id) + '=>' + IN(b.kind, b.id)] = { src: IN(a.kind, a.id), tgt: IN(b.kind, b.id) };
       } else if (aKid && !bKid) {
-        edges['out:' + IN(a.kind, a.id)] = { src: IN(a.kind, a.id), tgt: pOut, stub: true };
-        extOut[edge.to] = 1;
+        var ro = extOut[edge.to] = extOut[edge.to] || { kids: {} };
+        ro.kids[a.kind + ':' + a.id] = a;
+        edges[IN(a.kind, a.id) + '=>' + pBaseOut + edge.to] = { src: IN(a.kind, a.id), tgt: pBaseOut + edge.to, stub: true };
       } else if (!aKid && bKid) {
-        edges['in:' + IN(b.kind, b.id)] = { src: pIn, tgt: IN(b.kind, b.id), stub: true };
-        extIn[edge.from] = 1;
+        var ri = extIn[edge.from] = extIn[edge.from] || { kids: {} };
+        ri.kids[b.kind + ':' + b.id] = b;
+        edges[pBaseIn + edge.from + '=>' + IN(b.kind, b.id)] = { src: pBaseIn + edge.from, tgt: IN(b.kind, b.id), stub: true };
       }
     });
     // layering
@@ -750,9 +760,9 @@ var MODEL = __MODEL_JSON__;
     var cols = {};
     kids.forEach(function (k) { var l = layer[IN(k.kind, k.id)] || 0; (cols[l] = cols[l] || []).push(k); });
     var colKeys = Object.keys(cols).map(Number).sort(function (a, b) { return a - b; });
-    var hasIn = Object.keys(extIn).length > 0;
-    var hasOut = Object.keys(extOut).length > 0;
-    var PROXY_W = 96, PROXY_H = 30;
+    var inIds = Object.keys(extIn).sort(), outIds = Object.keys(extOut).sort();
+    var hasIn = inIds.length > 0, hasOut = outIds.length > 0;
+    var PROXY_W = 22, PROXY_H = 22, PROXY_GAP = 8;
     var tiles = [], x = PADI + (hasIn ? PROXY_W + INNER_GAPX : 0), maxH = 0;
     colKeys.forEach(function (ck) {
       var col = cols[ck].sort(function (a, b) { return a.id < b.id ? -1 : 1; });
@@ -764,14 +774,25 @@ var MODEL = __MODEL_JSON__;
       maxH = Math.max(maxH, y);
       x += INNER_W + INNER_GAPX;
     });
+    var stackMax = Math.max(inIds.length, outIds.length);
+    maxH = Math.max(maxH, HEAD_H + stackMax * PROXY_H + Math.max(0, stackMax - 1) * PROXY_GAP + INNER_GAPY);
     var midY = HEAD_H + Math.max(0, (maxH - HEAD_H - INNER_GAPY) / 2);
     var outX = x;
     if (hasOut) x += PROXY_W + INNER_GAPX;
+    function stackPorts(ids, recs, base, cx, dir) {
+      var total = ids.length * PROXY_H + Math.max(0, ids.length - 1) * PROXY_GAP;
+      var y0 = Math.max(HEAD_H + PROXY_H / 2, midY - total / 2 + PROXY_H / 2);
+      return ids.map(function (eid, i) {
+        var km = recs[eid].kids, klist = [];
+        Object.keys(km).forEach(function (key) { klist.push(km[key]); });
+        return { id: base + eid, extId: eid, dir: dir, kids: klist, x: cx, y: y0 + i * (PROXY_H + PROXY_GAP), w: PROXY_W, h: PROXY_H };
+      });
+    }
     return {
       tiles: tiles,
       edges: Object.keys(edges).map(function (k) { return edges[k]; }),
-      proxyIn: hasIn ? { id: pIn, x: PADI + PROXY_W / 2, y: midY, w: PROXY_W, h: PROXY_H, targets: Object.keys(extIn) } : null,
-      proxyOut: hasOut ? { id: pOut, x: outX + PROXY_W / 2, y: midY, w: PROXY_W, h: PROXY_H, targets: Object.keys(extOut) } : null,
+      proxies: stackPorts(inIds, extIn, pBaseIn, PADI + PROXY_W / 2, 'in')
+        .concat(stackPorts(outIds, extOut, pBaseOut, outX + PROXY_W / 2, 'out')),
       w: Math.max(x - INNER_GAPX + PADI, entry.kind === 'subsystem' ? SUBBOX_W : BOX_W),
       h: maxH - INNER_GAPY + PADI,
     };
@@ -1012,20 +1033,21 @@ var MODEL = __MODEL_JSON__;
             classes: 'inner' + (dim ? ' dimmed' : ''),
           });
         });
-        if (inner.proxyIn) {
+        (inner.proxies || []).forEach(function (px) {
           eles.push({
-            data: { id: inner.proxyIn.id, parent: aid, label: '\\u21E0 external \\u00D7' + inner.proxyIn.targets.length, w: inner.proxyIn.w - 6, h: inner.proxyIn.h, tw: inner.proxyIn.w - 12, rvTargets: resolveExtTargets(inner.proxyIn.targets), rvDir: 'in' },
-            position: { x: p.x - p.w / 2 + inner.proxyIn.x, y: p.y - p.h / 2 + inner.proxyIn.y },
-            classes: 'proxyExt' + (dim ? ' dimmed' : ''),
+            data: {
+              id: px.id, parent: aid, label: px.dir === 'in' ? '\\u21E0' : '\\u21E2',
+              w: px.w, h: px.h, tw: px.w,
+              extId: px.extId, dir: px.dir,
+              rvTargets: resolveExtTargets([px.extId]), rvDir: px.dir,
+              viaKids: px.kids.map(function (k2) { return { kind: k2.kind, id: k2.id, label: nameOf(k2) }; }),
+            },
+            position: { x: p.x - p.w / 2 + px.x, y: p.y - p.h / 2 + px.y },
+            classes: 'proxyExt ' + (px.dir === 'in' ? 'proxyIn' : 'proxyOut')
+              + (dim ? ' dimmed' : '')
+              + (state.selectedKind === 'external' && state.selected === px.id ? ' sel' : ''),
           });
-        }
-        if (inner.proxyOut) {
-          eles.push({
-            data: { id: inner.proxyOut.id, parent: aid, label: 'external \\u21E2 \\u00D7' + inner.proxyOut.targets.length, w: inner.proxyOut.w - 6, h: inner.proxyOut.h, tw: inner.proxyOut.w - 12, rvTargets: resolveExtTargets(inner.proxyOut.targets), rvDir: 'out' },
-            position: { x: p.x - p.w / 2 + inner.proxyOut.x, y: p.y - p.h / 2 + inner.proxyOut.y },
-            classes: 'proxyExt' + (dim ? ' dimmed' : ''),
-          });
-        }
+        });
         inner.edges.forEach(function (ie, k) {
           eles.push({ data: { id: aid + '-ie' + k, source: ie.src, target: ie.tgt, lbl: '' }, classes: 'inneredge' + (ie.stub ? ' toghost' : '') + (dim ? ' dimmed' : '') });
         });
@@ -1121,6 +1143,13 @@ var MODEL = __MODEL_JSON__;
     });
     applySavedPositions();
     if (fit) cy.fit(undefined, 60);
+    // A selected port survives a rebuild (e.g. issue toggle) if it still
+    // exists; otherwise (Internals off) drop the selection cleanly.
+    if (state.selectedKind === 'external') {
+      var pn = cy.getElementById(state.selected);
+      if (pn.length) { pinnedProxy = state.selected; showReveal(pn); }
+      else { state.selectedKind = null; state.selected = null; renderPanel(); }
+    }
     renderCrumbs();
     renderViewHint();
   }
@@ -1141,6 +1170,7 @@ var MODEL = __MODEL_JSON__;
   // the exact node, its inner tile, or the visible child-of-scope containing it.
   function nodeForRef(kind, id) {
     if (kind === 'type') return cy.getElementById('T~' + id);
+    if (kind === 'external') return cy.getElementById(id);
     var direct = cy.getElementById(kind === 'subsystem' ? SN(id) : CN(id));
     if (direct.length) return direct;
     var tile = cy.getElementById(IN(kind, id));
@@ -1259,14 +1289,22 @@ var MODEL = __MODEL_JSON__;
   function clearReveal() {
     cy.remove('.revealEdge');
   }
-  cy.on('mouseover', 'node.proxyExt', function (ev) { if (!pinnedProxy) showReveal(ev.target); });
-  cy.on('mouseout', 'node.proxyExt', function () { if (!pinnedProxy) clearReveal(); });
+  cy.on('mouseover', 'node.proxyExt', function (ev) { showReveal(ev.target); });
+  cy.on('mouseout', 'node.proxyExt', function () {
+    if (pinnedProxy) {
+      var pn = cy.getElementById(pinnedProxy);
+      if (pn.length) { showReveal(pn); return; }
+    }
+    clearReveal();
+  });
 
   cy.on('tap', 'node', function (ev) {
     var t = idOf(ev.target);
     if (t.proxy) {
-      if (pinnedProxy === t.id) { pinnedProxy = null; clearReveal(); }
-      else { pinnedProxy = t.id; showReveal(ev.target); }
+      // Ports are real nodes: selecting one pins its cross-boundary line and
+      // shows the external counterpart's details in the sidebar.
+      if (pinnedProxy === t.id) { pinnedProxy = null; clearReveal(); select(null, null, false); }
+      else { pinnedProxy = t.id; showReveal(ev.target); select('external', t.id, false); }
       return;
     }
     if (pinnedProxy) { pinnedProxy = null; clearReveal(); }
@@ -1704,6 +1742,28 @@ var MODEL = __MODEL_JSON__;
 
       var iss = issuesBySpec[c.id];
       if (iss) body += section('Validation issues', iss.length, issueHtml(iss), true);
+    } else if (state.selectedKind === 'external') {
+      var pn2 = cy.getElementById(state.selected);
+      var pd = pn2.length ? pn2.data() : null;
+      if (pd) {
+        var xt = compById[pd.extId];
+        head = '<h2>' + esc(xt ? xt.name : pd.extId) + '</h2>'
+          + staticChip(pd.dir === 'in' ? '\\u21E0 external caller' : 'external dependency \\u21E2')
+          + (xt ? staticChip('\\u00AB' + xt.componentType + (xt.portalType ? '/' + xt.portalType : '') + '\\u00BB') : '')
+          + (xt ? chip(xt.subsystem, 'subsystem', xt.subsystem) : '');
+        body += '<p class="desc">' + (pd.dir === 'in'
+          ? 'Lives outside this box and depends on something inside it. The dashed line shows the actual cross-boundary link while this port is selected.'
+          : 'A dependency of this box\\u2019s internals that lives outside it. The dashed line shows the actual cross-boundary link while this port is selected.') + '</p>';
+        if (xt) {
+          body += section('External component', null,
+            chip(xt.id, 'component', xt.id) + '<div class="mdesc">' + esc(xt.description) + '</div>', true);
+        }
+        var via = pd.viaKids || [];
+        if (via.length) {
+          body += section(pd.dir === 'in' ? 'Enters through' : 'Used by (inside this box)', via.length,
+            via.map(function (v) { return chip(v.label, v.kind, v.id); }).join(''), true);
+        }
+      }
     } else if (state.selectedKind === 'type') {
       var ty = null;
       MODEL.types.forEach(function (t2) { if (t2.id === state.selected) ty = t2; });
