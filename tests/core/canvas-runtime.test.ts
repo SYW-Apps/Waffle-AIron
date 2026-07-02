@@ -198,6 +198,18 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     outProxy.emit('mouseout');
     reveals = cy.edges().filter((e: any) => e.hasClass('revealEdge'));
     expect(reveals.length).toBe(1); // pinned while selected
+
+    // Hovering a DIFFERENT port while one is pinned renders both sets of
+    // lines simultaneously; leaving drops only the hovered one.
+    inProxy.emit('mouseover');
+    reveals = cy.edges().filter((e: any) => e.hasClass('revealEdge'));
+    expect(reveals.length).toBe(2);
+    expect(reveals.filter((e: any) => e.hasClass('revealPin')).length).toBe(1);
+    expect(reveals.filter((e: any) => e.hasClass('revealHover')).length).toBe(1);
+    inProxy.emit('mouseout');
+    reveals = cy.edges().filter((e: any) => e.hasClass('revealEdge'));
+    expect(reveals.length).toBe(1);
+
     cy.emit('tap'); // background tap: deselect + unpin
     expect(outProxy.hasClass('sel')).toBe(false);
     reveals = cy.edges().filter((e: any) => e.hasClass('revealEdge'));

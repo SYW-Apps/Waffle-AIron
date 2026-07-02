@@ -1146,8 +1146,7 @@ var MODEL = __MODEL_JSON__;
     // A selected port survives a rebuild (e.g. issue toggle) if it still
     // exists; otherwise (Internals off) drop the selection cleanly.
     if (state.selectedKind === 'external') {
-      var pn = cy.getElementById(state.selected);
-      if (pn.length) { pinnedProxy = state.selected; showReveal(pn); }
+      if (cy.getElementById(state.selected).length) { pinnedProxy = state.selected; showPinned(); }
       else { state.selectedKind = null; state.selected = null; renderPanel(); }
     }
     renderCrumbs();
@@ -1268,9 +1267,10 @@ var MODEL = __MODEL_JSON__;
     return { kind: raw.charAt(0) === 's' ? 'subsystem' : 'component', id: raw.slice(2) };
   }
 
-  // Proxy reveal: hover shows the real cross-boundary line(s); tap pins them.
-  function showReveal(node) {
-    cy.remove('.revealEdge');
+  // Port reveal: the selected (pinned) port and a hovered port each draw
+  // their own cross-boundary lines in independent namespaces, so both can be
+  // visible at the same time.
+  function revealEdgesFor(node, cls) {
     var targets = node.data('rvTargets') || [];
     var dir = node.data('rvDir');
     var adds = [];
@@ -1279,32 +1279,36 @@ var MODEL = __MODEL_JSON__;
       adds.push({
         group: 'edges',
         data: dir === 'out'
-          ? { id: 'rv' + i, source: node.id(), target: tid }
-          : { id: 'rv' + i, source: tid, target: node.id() },
-        classes: 'revealEdge',
+          ? { id: 'rv~' + cls + '~' + node.id() + '~' + i, source: node.id(), target: tid }
+          : { id: 'rv~' + cls + '~' + node.id() + '~' + i, source: tid, target: node.id() },
+        classes: 'revealEdge ' + cls,
       });
     });
     if (adds.length) cy.add(adds);
   }
+  function showPinned() {
+    cy.remove('.revealPin');
+    if (!pinnedProxy) return;
+    var pn = cy.getElementById(pinnedProxy);
+    if (pn.length) revealEdgesFor(pn, 'revealPin');
+  }
   function clearReveal() {
     cy.remove('.revealEdge');
   }
-  cy.on('mouseover', 'node.proxyExt', function (ev) { showReveal(ev.target); });
-  cy.on('mouseout', 'node.proxyExt', function () {
-    if (pinnedProxy) {
-      var pn = cy.getElementById(pinnedProxy);
-      if (pn.length) { showReveal(pn); return; }
-    }
-    clearReveal();
+  cy.on('mouseover', 'node.proxyExt', function (ev) {
+    cy.remove('.revealHover');
+    if (ev.target.id() !== pinnedProxy) revealEdgesFor(ev.target, 'revealHover');
   });
+  cy.on('mouseout', 'node.proxyExt', function () { cy.remove('.revealHover'); });
 
   cy.on('tap', 'node', function (ev) {
     var t = idOf(ev.target);
     if (t.proxy) {
       // Ports are real nodes: selecting one pins its cross-boundary line and
       // shows the external counterpart's details in the sidebar.
-      if (pinnedProxy === t.id) { pinnedProxy = null; clearReveal(); select(null, null, false); }
-      else { pinnedProxy = t.id; showReveal(ev.target); select('external', t.id, false); }
+      cy.remove('.revealHover');
+      if (pinnedProxy === t.id) { pinnedProxy = null; showPinned(); select(null, null, false); }
+      else { pinnedProxy = t.id; showPinned(); select('external', t.id, false); }
       return;
     }
     if (pinnedProxy) { pinnedProxy = null; clearReveal(); }
