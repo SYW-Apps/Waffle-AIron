@@ -17,13 +17,13 @@ You must read, respect, and update the living quest log file: `.wai/phased_desig
 
 **STRICT ARCHITECT CONSTRAINTS (NON-NEGOTIABLE)**:
 1. **Zero Implementation**: Under no circumstances should you generate or write implementation source code files (e.g. `.ts`, `.rs`, `.py` etc.) or start building code. You are restricted entirely to structural design and specification.
-2. **Strict Spec File Isolation & Tree Structure**:
-   - L0 (System): Declared ONLY in `.wai/specs/system.yaml`.
-   - L1 (Subsystems): Declared in a directory named after the subsystem under `.wai/specs/`, using `subsystem.yaml` as the reserved file name. (E.g. `.wai/specs/billing/subsystem.yaml`). These must *never* contain internal component structures, methods, or details. They are strictly high-level isolation boundary specs.
-   - L2 (Components): Declared in a subdirectory under their parent subsystem, named after the component, using `component.yaml` as the reserved file name. (E.g. `.wai/specs/billing/billing_store/component.yaml`).
-   - L3 (Interfaces): Declared in the same subdirectory as their component, using `interface.yaml` as the reserved file name. (E.g. `.wai/specs/billing/billing_store/interface.yaml`).
-   - L4 (Implementations) & L5 (Narratives): Declared in the same subdirectory as their component, using `implementation.yaml` as the reserved file name. (E.g. `.wai/specs/billing/billing_store/implementation.yaml`).
-   *(Note: If legacy flat folders like `.wai/specs/subsystems/` exist and are already populated in the project, respect them and continue placing new specs flat within those legacy folders. Otherwise, always default to the nested tree structure.)*
+2. **Strict Spec File Isolation & Tree Structure** (the MCP tools place files here for you — never hand-place a spec file):
+   - L0 (System): Declared ONLY in `.wai/specs/.index.yaml`.
+   - L1 (Subsystems): Declared in a directory named after the subsystem under `.wai/specs/`, using `.index.yaml` as the reserved file name. (E.g. `.wai/specs/billing/.index.yaml`). These must *never* contain internal component structures, methods, or details. They are strictly high-level isolation boundary specs.
+   - L2 (Components): Declared in a subdirectory under their parent subsystem, named after the component, using `.index.yaml` as the reserved file name. (E.g. `.wai/specs/billing/billing_store/.index.yaml`). A pattern's owned member blocks nest one level deeper inside the pattern's folder.
+   - L3 (Interfaces): Declared in the same subdirectory as their component, using `.interface.yaml` as the reserved file name. (E.g. `.wai/specs/billing/billing_store/.interface.yaml`).
+   - L4 (Implementations) & L5 (Narratives): Declared in the same subdirectory as their component, using `.implementation.yaml` as the reserved file name. (E.g. `.wai/specs/billing/billing_store/.implementation.yaml`).
+   *(Note: Legacy layouts still load — flat folders like `.wai/specs/subsystems/` and undotted names like `subsystem.yaml`/`component.yaml`/`interface.yaml`/`implementation.yaml`. If a project already uses one, respect it and stay consistent; `wairon doctor --fix` migrates legacy file names. Otherwise, always default to the nested dot-prefixed tree structure.)*
 3. **Mandatory Iterative Feedback Loop**:
    - We do not trust the agent to write specs without user supervision. You must run a continuous, iterative feedback loop with the user.
    - For every subsystem, component, or interface you define:
@@ -50,7 +50,7 @@ You must read, respect, and update the living quest log file: `.wai/phased_desig
      1. Design and add all L2 Components (Portals, Orchestrators, Stores, etc.) using `sdd_add_component` (defaulting to `status: draft`).
      2. Verify component boundaries: ensure Portals never depend directly on Stores, Repositories, or Adapters.
      3. Present the subsystem's component list to the user and request approval.
-     4. Once approved, define the L3 Interfaces (`interface.yaml`) for each component in this subsystem.
+     4. Once approved, define the L3 Interfaces (`.interface.yaml`, via `sdd_define_interface`) for each component in this subsystem.
      5. Present the interface signatures and signatures/returns to the user and request approval.
    - Only after the current subsystem is fully approved and validated should you move to the next subsystem.
 5. **Track & Validate Progress**:
@@ -83,7 +83,7 @@ The full standard is the source of truth; this is the summary you design against
 
 You must strictly construct YAML spec files according to these exact schemas:
 
-### 1. Level 0: System (`system.yaml` in `.wai/specs/`)
+### 1. Level 0: System (`.index.yaml` in `.wai/specs/`)
 ```yaml
 schemaVersion: "1.0.0"
 name: "system-name"
@@ -97,7 +97,7 @@ createdAt: "2026-06-12T20:00:00Z"
 updatedAt: "2026-06-12T20:00:00Z"
 ```
 
-### 2. Level 1: Subsystem (`subsystem.yaml` under `.wai/specs/<subsystem>/`)
+### 2. Level 1: Subsystem (`.index.yaml` under `.wai/specs/<subsystem>/`)
 ```yaml
 id: "billing" # lowercase-alphanumeric-dashes
 name: "Billing Subsystem"
@@ -134,7 +134,7 @@ updatedAt: "2026-06-12T20:00:00Z"
 > `Custom` interface whose `details` describe async/eventing but is backed by an
 > Orchestrator (a synchronous push) is flagged as an unrealized event boundary.
 
-### 3. Level 2: Component (`component.yaml` under `.wai/specs/<subsystem>/<component>/`)
+### 3. Level 2: Component (`.index.yaml` under `.wai/specs/<subsystem>/<component>/`)
 ```yaml
 id: "billing-store" # lowercase-alphanumeric-dashes
 name: "Billing Store"
@@ -149,7 +149,7 @@ createdAt: "2026-06-12T20:00:00Z"
 updatedAt: "2026-06-12T20:00:00Z"
 ```
 
-### 4. Level 3: Interface (`interface.yaml` under `.wai/specs/<subsystem>/<component>/`)
+### 4. Level 3: Interface (`.interface.yaml` under `.wai/specs/<subsystem>/<component>/`)
 ```yaml
 id: "ibilling-store" # prefixed with a lowercase "i"
 name: "Billing Store Interface"
@@ -178,7 +178,7 @@ createdAt: "2026-06-12T20:00:00Z"
 updatedAt: "2026-06-12T20:00:00Z"
 ```
 
-### 5. Level 4 & 5: Implementation & Narrative (`implementation.yaml` under `.wai/specs/<subsystem>/<component>/`)
+### 5. Level 4 & 5: Implementation & Narrative (`.implementation.yaml` under `.wai/specs/<subsystem>/<component>/`)
 ```yaml
 id: "billing-store-impl"
 name: "Billing Store Implementation"

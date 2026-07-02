@@ -26,12 +26,12 @@ The labels L0–L5 walk down containment first, then refinement:
 
 | Label | Axis | Artifact |
 |---|---|---|
-| **L0 System** | containment | `system.yaml` |
-| **L1 Subsystem** | containment | `<subsystem>/subsystem.yaml` |
-| **L2 Component** | containment leaf **and** refinement root (structure) | `<component>/component.yaml` |
-| **L3 Interface** | refinement | `<component>/interface.yaml` |
-| **L4 Implementation** | refinement | `<component>/implementation.yaml` |
-| **L5 Narrative** | refinement (a *sub-field* of L4, not a separate file) | steps inside `implementation.yaml` |
+| **L0 System** | containment | `.index.yaml` (specs root) |
+| **L1 Subsystem** | containment | `<subsystem>/.index.yaml` |
+| **L2 Component** | containment leaf **and** refinement root (structure) | `<component>/.index.yaml` |
+| **L3 Interface** | refinement | `<component>/.interface.yaml` |
+| **L4 Implementation** | refinement | `<component>/.implementation.yaml` |
+| **L5 Narrative** | refinement (a *sub-field* of L4, not a separate file) | steps inside `.implementation.yaml` |
 
 ---
 
@@ -39,29 +39,29 @@ The labels L0–L5 walk down containment first, then refinement:
 
 ```
 .wai/specs/
-  system.yaml                      ← L0  system: vision, boundaries, global requirements
+  .index.yaml                      ← L0  system: vision, boundaries, global requirements
   types/                           ← shared value objects (Money, Address, Email …)
     money.yaml
   <subsystem>/                     ← L1  a bounded context / service
-    subsystem.yaml                 ← L1  public interface(s) the service exposes
+    .index.yaml                    ← L1  public interface(s) the service exposes
     types/                         ← entities/aggregates owned by THIS subsystem (e.g. order.yaml)
     <component>/                   ← L2  a standalone block OR a pattern facade
-      component.yaml               ← L2  structure: role/stereotype, responsibility, owns, dependsOn
-      interface.yaml               ← L3  contract: method signatures (referencing types by id)
-      implementation.yaml          ← L4+L5  sourcePath, concurrency variant, per-method narrative
+      .index.yaml                  ← L2  structure: role/stereotype, responsibility, owns, dependsOn
+      .interface.yaml              ← L3  contract: method signatures (referencing types by id)
+      .implementation.yaml         ← L4+L5  sourcePath, concurrency variant, per-method narrative
       <owned-block>/               ← (only if this component is a pattern) a private owned block
-        component.yaml
-        interface.yaml
-        implementation.yaml
+        .index.yaml
+        .interface.yaml
+        .implementation.yaml
 ```
 
 **File contents:**
-- `component.yaml` (L2) — identity, **role/stereotype**, **responsibility description**, `owns` (member blocks; patterns only), `dependsOn` (collaborators). No methods, no narratives.
-- `interface.yaml` (L3) — **method signatures** (name, params/returns referencing types, optional HTTP/gRPC/event binding). Interfaces are **method contracts only** — fields are implementation, never part of the contract.
-- `implementation.yaml` (L4+L5) — `sourcePath`, the **concurrency variant**, and the **per-method narrative** (L5 steps).
+- `.index.yaml` (L2) — identity, **role/stereotype**, **responsibility description**, `owns` (member blocks; patterns only), `dependsOn` (collaborators). No methods, no narratives.
+- `.interface.yaml` (L3) — **method signatures** (name, params/returns referencing types, optional HTTP/gRPC/event binding). Interfaces are **method contracts only** — fields are implementation, never part of the contract.
+- `.implementation.yaml` (L4+L5) — `sourcePath`, the **concurrency variant**, and the **per-method narrative** (L5 steps).
 
 Different agents own different refinement files: the **architect** owns
-`component.yaml` + `interface.yaml`; the **implementer** owns `implementation.yaml`.
+`.index.yaml` + `.interface.yaml`; the **implementer** owns `.implementation.yaml`. (Legacy undotted names — `system.yaml`, `subsystem.yaml`, `component.yaml`, `interface.yaml`, `implementation.yaml` — still load; `wairon doctor --fix` migrates them.)
 
 ---
 

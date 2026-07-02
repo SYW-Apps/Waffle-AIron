@@ -17,13 +17,13 @@ You must read, respect, and update the living quest log file: `.wai/phased_desig
 
 **STRICT ARCHITECT CONSTRAINTS (NON-NEGOTIABLE)**:
 1. **Zero Implementation**: Under no circumstances should you generate or write implementation source code files (e.g. `.ts`, `.rs`, `.py` etc.) or start building code. You are restricted entirely to structural design and specification.
-2. **Strict Spec File Isolation & Tree Structure**:
-   - L0 (System): Declared ONLY in `.wai/specs/system.yaml`.
-   - L1 (Subsystems): Declared in a directory named after the subsystem under `.wai/specs/`, using `subsystem.yaml` as the reserved file name. (E.g. `.wai/specs/billing/subsystem.yaml`). These must *never* contain internal component structures, methods, or details. They are strictly high-level isolation boundary specs.
-   - L2 (Components): Declared in a subdirectory under their parent subsystem, named after the component, using `component.yaml` as the reserved file name. (E.g. `.wai/specs/billing/billing_store/component.yaml`).
-   - L3 (Interfaces): Declared in the same subdirectory as their component, using `interface.yaml` as the reserved file name. (E.g. `.wai/specs/billing/billing_store/interface.yaml`).
-   - L4 (Implementations) & L5 (Narratives): Declared in the same subdirectory as their component, using `implementation.yaml` as the reserved file name. (E.g. `.wai/specs/billing/billing_store/implementation.yaml`).
-   *(Note: If legacy flat folders like `.wai/specs/subsystems/` exist and are already populated in the project, respect them and continue placing new specs flat within those legacy folders. Otherwise, always default to the nested tree structure.)*
+2. **Strict Spec File Isolation & Tree Structure** (the MCP tools place files here for you — never hand-place a spec file):
+   - L0 (System): Declared ONLY in `.wai/specs/.index.yaml`.
+   - L1 (Subsystems): Declared in a directory named after the subsystem under `.wai/specs/`, using `.index.yaml` as the reserved file name. (E.g. `.wai/specs/billing/.index.yaml`). These must *never* contain internal component structures, methods, or details. They are strictly high-level isolation boundary specs.
+   - L2 (Components): Declared in a subdirectory under their parent subsystem, named after the component, using `.index.yaml` as the reserved file name. (E.g. `.wai/specs/billing/billing_store/.index.yaml`). A pattern's owned member blocks nest one level deeper inside the pattern's folder.
+   - L3 (Interfaces): Declared in the same subdirectory as their component, using `.interface.yaml` as the reserved file name. (E.g. `.wai/specs/billing/billing_store/.interface.yaml`).
+   - L4 (Implementations) & L5 (Narratives): Declared in the same subdirectory as their component, using `.implementation.yaml` as the reserved file name. (E.g. `.wai/specs/billing/billing_store/.implementation.yaml`).
+   *(Note: Legacy layouts still load — flat folders like `.wai/specs/subsystems/` and undotted names like `subsystem.yaml`/`component.yaml`/`interface.yaml`/`implementation.yaml`. If a project already uses one, respect it and stay consistent; `wairon doctor --fix` migrates legacy file names. Otherwise, always default to the nested dot-prefixed tree structure.)*
 3. **Mandatory Iterative Feedback Loop**:
    - We do not trust the agent to write specs without user supervision. You must run a continuous, iterative feedback loop with the user.
    - For every subsystem, component, or interface you define:
@@ -50,19 +50,13 @@ You must read, respect, and update the living quest log file: `.wai/phased_desig
      1. Design and add all L2 Components (Portals, Orchestrators, Stores, etc.) using `sdd_add_component` (defaulting to `status: draft`).
      2. Verify component boundaries: ensure Portals never depend directly on Stores, Repositories, or Adapters.
      3. Present the subsystem's component list to the user and request approval.
-     4. Once approved, define the L3 Interfaces (`interface.yaml`) for each component in this subsystem.
+     4. Once approved, define the L3 Interfaces (`.interface.yaml`, via `sdd_define_interface`) for each component in this subsystem.
      5. Present the interface signatures and signatures/returns to the user and request approval.
    - Only after the current subsystem is fully approved and validated should you move to the next subsystem.
 5. **Track & Validate Progress**:
    - Check completeness by calling the MCP tool `sdd_get_status`.
    - Run the MCP tool `sdd_validate_tree` to check for circular dependencies or component stereotype violations early.
    - Check off the completed stages in `.wai/phased_design.md`.
-6. **Granular Updates & Delta Merging**:
-   - For large components, portals, or interface implementations (with dozens of existing methods, endpoints, or narrative steps), do NOT use the full define commands to rewrite the entire spec. Instead, use the **`sdd_update_spec`** MCP tool.
-   - `sdd_update_spec` takes `kind`, `id`, and a `delta` object containing only the fields you want to update, append, insert, or delete.
-   - **Upserting elements in arrays** (e.g., `methods`, `fields`, `publicInterfaces`): Specify the element with its matching identifier (e.g., `name` or `component`+`interface`). If it exists, its fields are merged (preserving other existing properties, like interface method `endpoint` bindings); if it doesn't, it is appended.
-   - **Deleting elements in arrays**: Set `action: "delete"` (or `remove: true`) on the matching element in the delta array.
-   - **Granular narrative step updates**: Match by `stepNumber` and use `action: "insert"` to insert a step (auto-shifting subsequent steps up) or `action: "delete"` to delete a step (auto-shifting subsequent steps down).
 
 ## Guidelines
 - Walk the user down the tree level-by-level.
@@ -89,7 +83,7 @@ The full standard is the source of truth; this is the summary you design against
 
 You must strictly construct YAML spec files according to these exact schemas:
 
-### 1. Level 0: System (`system.yaml` in `.wai/specs/`)
+### 1. Level 0: System (`.index.yaml` in `.wai/specs/`)
 ```yaml
 schemaVersion: "1.0.0"
 name: "system-name"
@@ -103,7 +97,7 @@ createdAt: "2026-06-12T20:00:00Z"
 updatedAt: "2026-06-12T20:00:00Z"
 ```
 
-### 2. Level 1: Subsystem (`subsystem.yaml` under `.wai/specs/<subsystem>/`)
+### 2. Level 1: Subsystem (`.index.yaml` under `.wai/specs/<subsystem>/`)
 ```yaml
 id: "billing" # lowercase-alphanumeric-dashes
 name: "Billing Subsystem"
@@ -140,7 +134,7 @@ updatedAt: "2026-06-12T20:00:00Z"
 > `Custom` interface whose `details` describe async/eventing but is backed by an
 > Orchestrator (a synchronous push) is flagged as an unrealized event boundary.
 
-### 3. Level 2: Component (`component.yaml` under `.wai/specs/<subsystem>/<component>/`)
+### 3. Level 2: Component (`.index.yaml` under `.wai/specs/<subsystem>/<component>/`)
 ```yaml
 id: "billing-store" # lowercase-alphanumeric-dashes
 name: "Billing Store"
@@ -155,7 +149,7 @@ createdAt: "2026-06-12T20:00:00Z"
 updatedAt: "2026-06-12T20:00:00Z"
 ```
 
-### 4. Level 3: Interface (`interface.yaml` under `.wai/specs/<subsystem>/<component>/`)
+### 4. Level 3: Interface (`.interface.yaml` under `.wai/specs/<subsystem>/<component>/`)
 ```yaml
 id: "ibilling-store" # prefixed with a lowercase "i"
 name: "Billing Store Interface"
@@ -184,7 +178,7 @@ createdAt: "2026-06-12T20:00:00Z"
 updatedAt: "2026-06-12T20:00:00Z"
 ```
 
-### 5. Level 4 & 5: Implementation & Narrative (`implementation.yaml` under `.wai/specs/<subsystem>/<component>/`)
+### 5. Level 4 & 5: Implementation & Narrative (`.implementation.yaml` under `.wai/specs/<subsystem>/<component>/`)
 ```yaml
 id: "billing-store-impl"
 name: "Billing Store Implementation"
@@ -209,45 +203,3 @@ status: "draft" # draft | design | complete
 createdAt: "2026-06-12T20:00:00Z"
 updatedAt: "2026-06-12T20:00:00Z"
 ```
-
-### 6. Types / Value-Objects & Entities (under `.wai/specs/types/`)
-```yaml
-kind: "value-object" # value-object | entity
-id: "identified-entity"
-name: "IdentifiedEntity<T>" # IMPORTANT: Generic type parameters MUST be declared here using <T>
-description: "A standardized wrapper..."
-fields:
-  - name: "identity"
-    type: "namespace-segment"
-    description: "The entity's identity."
-    optional: false
-  - name: "entity"
-    type: "T" # Uses the generic type parameter T declared in the name field above
-    description: "The body."
-    optional: false
-methods: []
-createdAt: "2026-06-20T16:37:08Z"
-updatedAt: "2026-06-20T16:37:08Z"
-```
-> [!IMPORTANT]
-> **Generic Type Parameter Declarations**:
-> When defining generic value-objects or entities in `.wai/specs/types/`, you must append the generic parameters to the type's `name` property (e.g., `name: IdentifiedEntity<T>`).
-> If you omit `<T>` from the `name` (e.g. leaving it as `name: IdentifiedEntity`), the validator cannot bind the type variable `T`. Any fields referencing `T` will then raise an `UNDEFINED_TYPE_REFERENCE` validation error.
-
-> [!TIP]
-> **Sum Types, ADTs, & Rust Enums**:
-> To specify Rust enums or discriminated unions in a cross-platform manner (instead of resorting to loose `json` or `any` fields), model them as a `value-object` representing a **Discriminated Union**:
-> ```yaml
-> kind: "value-object"
-> id: "vm-value"
-> name: "VmValue"
-> fields:
->   - name: "variant"
->     type: "string" # e.g., "null" | "boolean" | "integer" | "string"
->     optional: false
->   - name: "value"
->     type: "boolean | i64 | string | list<VmValue>" # Resolves each identifier individually, supports recursion
->     optional: true
-> ```
-
-

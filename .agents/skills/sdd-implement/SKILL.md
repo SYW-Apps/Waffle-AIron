@@ -47,7 +47,7 @@ You are the **Spec-to-Code Compiler**. Your job is to generate concrete source c
    - Locate the target implementation source file (mapped by `sourcePath` in L4).
 3. **Write Tests First (TDD)**:
    - Create or update the companion test file (e.g. `<component>.test.ts` or similar).
-   - Mock all direct L2 dependencies using the signatures defined in their respective L3 `interface.yaml` files.
+   - Mock all direct L2 dependencies using the signatures defined in their respective L3 `.interface.yaml` files.
    - Write test cases for every method covering success scenarios, boundary values, and simulated error returns.
    - Run the test suite and verify that the tests fail.
 4. **Compile Code**:
