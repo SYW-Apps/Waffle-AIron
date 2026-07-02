@@ -192,7 +192,7 @@ export function createMcpServer(): McpServer {
 
   // ── SDD Spec-Driven Development Tools ─────────────────────────────────────
 
-  reg<{ name: string; vision: string; boundaries?: any[]; globalRequirements?: any[] }>(server,
+  reg<{ name: string; vision: string; boundaries?: any[]; globalRequirements?: any[]; targetLanguage?: string }>(server,
     'sdd_initialize_system',
     {
       description: 'Initialize the L0 System Specification (system.yaml).',
@@ -201,9 +201,10 @@ export function createMcpServer(): McpServer {
         vision: z.string().describe('Vision, mission, and core goals of the system'),
         boundaries: z.array(z.union([z.string(), z.object({ name: z.string(), description: z.string().optional() })])).optional().describe('System boundary rules or scope statements (strings or name/description objects)'),
         globalRequirements: z.array(z.union([z.string(), z.object({ description: z.string() })])).optional().describe('Global functional and non-functional requirements (strings or description objects)'),
+        targetLanguage: z.string().optional().describe('Default implementation language for the system (e.g. "typescript", "rust", "python"). Subsystems may override. Enables language-aware validation.'),
       },
     },
-    ({ name, vision, boundaries, globalRequirements }) => {
+    ({ name, vision, boundaries, globalRequirements, targetLanguage }) => {
       try {
         const { saveSystemSpec } = requireSpecs();
         const now = new Date().toISOString();
@@ -213,6 +214,7 @@ export function createMcpServer(): McpServer {
           vision,
           boundaries: boundaries ?? [],
           globalRequirements: globalRequirements ?? [],
+          ...(targetLanguage ? { targetLanguage } : {}),
           createdAt: now,
           updatedAt: now,
         });
@@ -223,7 +225,7 @@ export function createMcpServer(): McpServer {
     },
   );
 
-  reg<{ id: string; name: string; description: string; publicInterfaces?: { type: 'REST' | 'GraphQL' | 'MessageBus' | 'RPC' | 'Custom'; details: string; component?: string; interface?: string }[]; projectPath?: string }>(server,
+  reg<{ id: string; name: string; description: string; publicInterfaces?: { type: 'REST' | 'GraphQL' | 'MessageBus' | 'RPC' | 'Custom'; details: string; component?: string; interface?: string }[]; projectPath?: string; targetLanguage?: string; trustedLinks?: { subsystem: string; reason: string }[] }>(server,
     'sdd_add_subsystem',
     {
       description: 'Add an L1 Subsystem / Service under the system boundary. publicInterfaces should bind each entry to the component that realizes it (the subsystem\'s published surface); if components do not exist yet, add them later with sdd_set_public_interfaces.',
@@ -238,9 +240,14 @@ export function createMcpServer(): McpServer {
           interface: z.string().optional().describe('Optional L3 interface id on that component backing this entry'),
         })).optional().describe('Public entrypoints exposed by this subsystem, each bound to a realizing component'),
         projectPath: z.string().optional().describe('Relative path to external project root for subsystem chaining'),
+        targetLanguage: z.string().optional().describe('Override of the system-level targetLanguage for this subsystem'),
+        trustedLinks: z.array(z.object({
+          subsystem: z.string().describe('Peer subsystem id this link sanctions tight coupling with'),
+          reason: z.string().describe('Why the coupling is sanctioned (e.g. "runtime dispatch latency fast lane — bus round-trip too slow")'),
+        })).optional().describe('Explicitly sanctioned tight couplings with peer subsystems. Required to acknowledge a mutual subsystem dependency (fast lanes); the Adapter → published Portal shape still applies.'),
       },
     },
-    ({ id, name, description, publicInterfaces, projectPath }) => {
+    ({ id, name, description, publicInterfaces, projectPath, targetLanguage, trustedLinks }) => {
       try {
         const { loadSystemSpec, saveSubsystemSpec } = requireSpecs();
         const system = loadSystemSpec();
@@ -253,6 +260,8 @@ export function createMcpServer(): McpServer {
           parentSystem: system.name,
           publicInterfaces: publicInterfaces ?? [],
           projectPath,
+          ...(targetLanguage ? { targetLanguage } : {}),
+          trustedLinks: trustedLinks ?? [],
           status: 'draft',
           createdAt: now,
           updatedAt: now,

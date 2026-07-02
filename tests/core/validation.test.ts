@@ -2077,6 +2077,269 @@ updatedAt: '2026-06-10T22:00:00Z'
       proj.cleanup();
     }
   });
+
+  function writeMutualDepFixture(proj: ReturnType<typeof createTempProject>, trustedLinksYaml: string) {
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: Subsystem A
+parentSystem: TestSystem
+publicInterfaces:
+  - type: Custom
+    details: front door
+    component: a-portal
+${trustedLinksYaml}
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-b', `
+schemaVersion: 1.0.0
+id: sub-b
+name: SubsystemB
+description: Subsystem B
+parentSystem: TestSystem
+publicInterfaces:
+  - type: Custom
+    details: front door
+    component: b-portal
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    const portal = (id: string, sub: string) => `
+schemaVersion: 1.0.0
+id: ${id}
+name: ${id}
+description: portal
+subsystem: ${sub}
+componentType: Portal
+portalType: Custom
+dependsOn: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`;
+    const adapter = (id: string, sub: string, dep: string) => `
+schemaVersion: 1.0.0
+id: ${id}
+name: ${id}
+description: client adapter
+subsystem: ${sub}
+componentType: Adapter
+dependsOn: [${dep}]
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`;
+    proj.writeSpec('component', 'a-portal', portal('a-portal', 'sub-a'));
+    proj.writeSpec('component', 'b-portal', portal('b-portal', 'sub-b'));
+    proj.writeSpec('component', 'a-client', adapter('a-client', 'sub-a', 'b-portal'));
+    proj.writeSpec('component', 'b-client', adapter('b-client', 'sub-b', 'a-portal'));
+  }
+
+  it('warns on mutual subsystem dependencies unless a trustedLink acknowledges the pair', () => {
+    const proj = createTempProject();
+    writeMutualDepFixture(proj, '');
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.valid).toBe(true); // warning, not error — both directions use the sanctioned shape
+      const mutual = res.issues.find(i => i.code === 'MUTUAL_SUBSYSTEM_DEPENDENCY');
+      expect(mutual).toBeDefined();
+      expect(mutual!.severity).toBe('warning');
+      expect(mutual!.message).toContain('trustedLinks');
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('accepts a mutual subsystem dependency declared as a trusted link (fast lane)', () => {
+    const proj = createTempProject();
+    writeMutualDepFixture(proj, `trustedLinks:
+  - subsystem: sub-b
+    reason: runtime dispatch latency fast lane — bus round-trip too slow
+`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.issues.find(i => i.code === 'MUTUAL_SUBSYSTEM_DEPENDENCY')).toBeUndefined();
+      expect(res.issues.find(i => i.code === 'UNUSED_TRUSTED_LINK')).toBeUndefined();
+      expect(res.issues.find(i => i.code === 'INVALID_TRUSTED_LINK')).toBeUndefined();
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('flags trusted links to non-existent or unconnected subsystems', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: v
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: d
+parentSystem: TestSystem
+trustedLinks:
+  - subsystem: ghost-subsystem
+    reason: typo'd peer
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-b', `
+schemaVersion: 1.0.0
+id: sub-b
+name: SubsystemB
+description: d
+parentSystem: TestSystem
+trustedLinks:
+  - subsystem: sub-a
+    reason: declared but never wired
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      const invalid = res.issues.find(i => i.code === 'INVALID_TRUSTED_LINK');
+      expect(invalid).toBeDefined();
+      expect(invalid!.severity).toBe('error');
+      expect(res.valid).toBe(false);
+      const unused = res.issues.find(i => i.code === 'UNUSED_TRUSTED_LINK');
+      expect(unused).toBeDefined();
+      expect(unused!.severity).toBe('warning');
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('flags god components with excessive dependency fan-out', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: v
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: d
+parentSystem: TestSystem
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    const specialists: string[] = [];
+    for (let i = 1; i <= 9; i++) {
+      const id = `worker-${i}`;
+      specialists.push(id);
+      proj.writeSpec('component', id, `
+schemaVersion: 1.0.0
+id: ${id}
+name: Worker${i}
+description: d
+subsystem: sub-a
+componentType: Specialist
+dependsOn: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    }
+    proj.writeSpec('component', 'mega-orchestrator', `
+schemaVersion: 1.0.0
+id: mega-orchestrator
+name: MegaOrchestrator
+description: d
+subsystem: sub-a
+componentType: Orchestrator
+dependsOn: [${specialists.join(', ')}]
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      const god = res.issues.find(i => i.code === 'GOD_COMPONENT');
+      expect(god).toBeDefined();
+      expect(god!.severity).toBe('warning');
+      expect(god!.message).toContain('mega-orchestrator');
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('flags foreign-language builtins in signatures when a targetLanguage is declared', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: v
+targetLanguage: typescript
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: d
+parentSystem: TestSystem
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('component', 'comp-a', `
+schemaVersion: 1.0.0
+id: comp-a
+name: ComponentA
+description: d
+subsystem: sub-a
+componentType: Specialist
+dependsOn: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('interface', 'icomp-a', `
+schemaVersion: 1.0.0
+id: icomp-a
+name: IComponentA
+description: d
+component: comp-a
+methods:
+  - name: listItems
+    description: list
+    signature: "listItems(): Vec<string>"
+    returns: "Vec<string>"
+  - name: fetchItems
+    description: fetch
+    signature: "fetchItems(): Promise<string>"
+    returns: "Promise<string>"
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      const foreign = res.issues.filter(i => i.code === 'LANGUAGE_FOREIGN_BUILTIN');
+      // Vec is a Rust marker → flagged in a TypeScript system; Promise is native → not flagged.
+      expect(foreign).toHaveLength(1);
+      expect(foreign[0].message).toContain('Vec');
+      expect(foreign[0].severity).toBe('warning');
+    } finally {
+      proj.cleanup();
+    }
+  });
 });
 
 

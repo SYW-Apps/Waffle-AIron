@@ -32,6 +32,13 @@ export const SystemSpecSchema = z.object({
   vision: z.string(),
   boundaries: z.array(BoundaryItemSchema).default([]),
   globalRequirements: z.array(RequirementItemSchema).default([]),
+  /**
+   * Default implementation language for the whole system (e.g. "typescript",
+   * "rust", "python"). Subsystems may override. Drives language-aware
+   * validation (builtin-type vocabulary, language rule packs); free-form but
+   * normalized to lowercase by the validator.
+   */
+  targetLanguage: z.string().optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -55,6 +62,22 @@ export const PublicInterfaceSchema = z.object({
 
 export type PublicInterface = z.infer<typeof PublicInterfaceSchema>;
 
+/**
+ * An explicitly sanctioned tight coupling with a peer subsystem — e.g. a
+ * latency "fast lane" where a trusted sibling calls directly instead of going
+ * over the message bus. Mutual subsystem dependencies are flagged unless one
+ * side declares the link, turning the exception into reviewable spec instead
+ * of tribal knowledge. The cross-subsystem shape (client Adapter → published
+ * Portal) still applies; a trusted link never licenses reaching internals.
+ */
+export const TrustedLinkSchema = z.object({
+  /** The peer subsystem id this link sanctions tight coupling with. */
+  subsystem: SpecIdSchema,
+  /** Why this coupling is sanctioned (e.g. "runtime dispatch latency — bus round-trip too slow"). */
+  reason: z.string(),
+});
+export type TrustedLink = z.infer<typeof TrustedLinkSchema>;
+
 export const SubsystemSpecSchema = z.object({
   id: SpecIdSchema,
   name: z.string(),
@@ -63,6 +86,10 @@ export const SubsystemSpecSchema = z.object({
   publicInterfaces: z.array(PublicInterfaceSchema).default([]),
   profile: z.enum(['backend', 'frontend-reactive', 'frontend-controller', 'lowlevel-os', 'game-ecs', 'realtime-embedded', 'plc-cyclic']).optional(), // Optional subsystem override for fullstack
   projectPath: z.string().optional(), // Relative path to external project root for subsystem chaining
+  /** Optional override of the system-level targetLanguage for this subsystem. */
+  targetLanguage: z.string().optional(),
+  /** Explicitly sanctioned tight couplings with peer subsystems (see TrustedLinkSchema). */
+  trustedLinks: z.array(TrustedLinkSchema).default([]),
   status: SpecStatusSchema.optional().default('complete'),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),

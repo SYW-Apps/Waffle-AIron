@@ -34,6 +34,12 @@ List, or show full details of, the agents resolved from the spec tree
 (`system-architect`, `<subsystem>-owner`, `<component>-implementer`, and owners
 for free-standing domains).
 
+### `wairon rules list`
+List the SDD conformance rule registry — every rule group, the issue codes it
+can emit, default severities, and any per-project overrides from
+`rules.sddRuleSeverity`. The gate is a documented architecture linter: each
+rule is a self-contained module in `src/core/rules/`.
+
 ### `wairon diagram [--subsystem <id>] [--sequence <component:method>] [--depth <n>] [--all] [--out <path>]`
 Generate Mermaid diagrams derived from the spec tree — living documentation
 from the same source of truth as the conformance gate:

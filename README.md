@@ -159,6 +159,7 @@ See [docs/cli.md](docs/cli.md). Summary:
 | `wairon generate [--target] [--domain] [--dry-run]` | Regenerate agent files + install skills |
 | `wairon list` / `wairon show <id>` | Inspect agents resolved from the spec tree |
 | `wairon diagram [--all] [--subsystem <id>] [--sequence <comp:method>]` | Mermaid component + narrative-sequence diagrams (living docs) |
+| `wairon rules list` | The conformance rule registry (the architecture linter) |
 | `wairon domains list \| scan \| add \| remove` | Domains (subsystem-derived + free-standing) |
 | `wairon skills list \| install` | Manage the SDD skills installed into your tools |
 | `wairon mcp serve \| install \| status` | The wairon MCP server (`sdd_*` tools) |

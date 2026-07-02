@@ -28,6 +28,7 @@ import {
   runSkillsInstall,
   runDoctor,
   runDiagram,
+  runRulesList,
 } from '../commands/index.js';
 
 // Clean up any .old binary left over from a previous Windows self-update
@@ -136,6 +137,22 @@ program
   .option('--fix', 'regenerate stale in-project guides/context/skills and register the MCP server')
   .action(async (opts) => {
     await runDoctor({ fix: opts.fix });
+  });
+
+// ---------------------------------------------------------------------------
+// rules
+// ---------------------------------------------------------------------------
+
+const rulesCmd = program
+  .command('rules')
+  .description('The SDD conformance rule registry (the architecture linter)');
+
+rulesCmd
+  .command('list')
+  .alias('ls')
+  .description('List every conformance rule, its issue codes, default severities, and project overrides')
+  .action(async () => {
+    await runRulesList();
   });
 
 // ---------------------------------------------------------------------------
