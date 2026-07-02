@@ -242,9 +242,9 @@ export function createMcpServer(): McpServer {
         projectPath: z.string().optional().describe('Relative path to external project root for subsystem chaining'),
         targetLanguage: z.string().optional().describe('Override of the system-level targetLanguage for this subsystem'),
         trustedLinks: z.array(z.object({
-          subsystem: z.string().describe('Peer subsystem id this link sanctions tight coupling with'),
-          reason: z.string().describe('Why the coupling is sanctioned (e.g. "runtime dispatch latency fast lane — bus round-trip too slow")'),
-        })).optional().describe('Explicitly sanctioned tight couplings with peer subsystems. Required to acknowledge a mutual subsystem dependency (fast lanes); the Adapter → published Portal shape still applies.'),
+          subsystem: z.string().describe('Peer subsystem id'),
+          reason: z.string().describe('Why the coupling is sanctioned (e.g. "dispatch latency fast lane")'),
+        })).optional().describe('Sanctioned tight couplings with peers — required to acknowledge a mutual subsystem dependency; the Adapter → published Portal shape still applies.'),
       },
     },
     ({ id, name, description, publicInterfaces, projectPath, targetLanguage, trustedLinks }) => {
@@ -387,11 +387,11 @@ export function createMcpServer(): McpServer {
           returns: z.string(),
           params: z.array(z.object({
             name: z.string(),
-            type: z.string().describe('A primitive/builtin or a defined type id (qualified across subsystems, e.g. "billing.Invoice")'),
+            type: z.string().describe('A primitive/builtin or a defined type id (e.g. "billing.Invoice")'),
             description: z.string().optional(),
             optional: z.boolean().optional(),
-          })).optional().describe('Structured parameters — AUTHORITATIVE for type-reference validation when present (strongly preferred over relying on the prose signature)'),
-          guarantees: z.array(z.enum(['idempotent', 'atomic', 'transactional', 'exactly-once'])).optional().describe('Semantic guarantees this method promises (combinable). The implementer must honour them; the gate requires any guarantee a narrative step asserts to be declared here. Set when an L0 requirement or a narrative step depends on the guarantee.'),
+          })).optional().describe('Structured parameters — authoritative for type checking (the prose signature becomes display-only). Strongly preferred.'),
+          guarantees: z.array(z.enum(['idempotent', 'atomic', 'transactional', 'exactly-once'])).optional().describe('Semantic guarantees the method promises (combinable); any guarantee a narrative step asserts must be declared here'),
         })).optional().describe('List of method signature contracts'),
       },
     },
@@ -426,7 +426,7 @@ export function createMcpServer(): McpServer {
   reg<{ interface: string; endpoints: Array<{ method: string; transport: 'HTTP' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'NamedPipe' | 'IPC' | 'CLI' | 'Custom'; httpMethod?: string; path?: string; service?: string; rpcMethod?: string; operation?: string; field?: string; topic?: string; event?: string; queue?: string; direction?: string; pipe?: string; channel?: string; command?: string; address?: string }> }>(server,
     'sdd_set_endpoints',
     {
-      description: 'Bind the concrete wire endpoint for one or more methods on an L3 interface. ONE generic tool for every transport (HTTP, gRPC, GraphQL, MessageBus, NamedPipe, IPC, CLI, Custom) — pick `transport` and fill that transport\'s address fields. Required to satisfy the gate for any Portal component. The interface and its methods must already exist (call sdd_define_interface first).',
+      description: 'Bind concrete wire endpoints to existing L3 interface methods (required for every Portal). Pick `transport` and fill that transport\'s address fields. Run after sdd_define_interface.',
       inputSchema: {
         interface: z.string().describe('The L3 interface ID (e.g. "ibilling-gateway")'),
         endpoints: z.array(z.object({

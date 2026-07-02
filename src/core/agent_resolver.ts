@@ -192,6 +192,20 @@ function inferSourcePathForComponent(comp: ComponentSpec, subsystems: any[]): st
   }
 }
 
+/**
+ * Compact one-line summary for agent descriptions. Descriptions are loaded
+ * into EVERY session's agent list by the host tool — at scale (a hundred-plus
+ * agents) an uncapped multi-sentence description per agent is a permanent
+ * token tax. First sentence, hard-capped, single line.
+ */
+function summarize(text: string, max = 140): string {
+  const clean = text.replace(/\s+/g, ' ').trim();
+  const period = clean.indexOf('. ');
+  const firstSentence = period > 0 ? clean.slice(0, period + 1) : clean;
+  if (firstSentence.length <= max) return firstSentence;
+  return `${firstSentence.slice(0, max - 1).trimEnd()}…`;
+}
+
 // ---------------------------------------------------------------------------
 // Topology Resolver: Translates SDD Spec Tree into Agent Topology
 // ---------------------------------------------------------------------------
@@ -217,7 +231,7 @@ export function resolveAgentTopology(): AgentRecord[] {
   agents.push({
     id: 'system-architect',
     name: `${system.name} Architect`,
-    description: `Global architect for ${system.name}. Vision: ${system.vision}`,
+    description: `Global architect for ${system.name} — owns the spec tree and topology. ${summarize(system.vision)}`,
     template: 'architect',
     creationReason: 'Automatically inferred from L0 system spec',
     ownedPaths: ['.wai/specs/**'],
@@ -287,7 +301,7 @@ export function resolveAgentTopology(): AgentRecord[] {
     agents.push({
       id: `${sub.id}-owner`,
       name: `${sub.name} Owner`,
-      description: `Domain owner responsible for subsystem: ${sub.description}`,
+      description: `Owns the ${sub.id} subsystem. ${summarize(sub.description)}`,
       template: 'domain-owner',
       creationReason: `Automatically inferred from L1 subsystem spec: ${sub.id}`,
       domainRoot: sub.id,
@@ -362,7 +376,7 @@ export function resolveAgentTopology(): AgentRecord[] {
     agents.push({
       id: `${dom.id}-owner`,
       name: `${dom.name ?? dom.id} Owner`,
-      description: dom.description ?? `Owner agent for the free-standing "${dom.id}" domain.`,
+      description: dom.description ? summarize(dom.description) : `Owner agent for the free-standing "${dom.id}" domain.`,
       template: 'domain-owner',
       creationReason: 'Inferred from a free-standing domain in .wai/topology.yaml',
       domainRoot: dom.id,

@@ -24,6 +24,6 @@ instructions: |
   * Stop and escalate to domain owner or Architect if task needs out-of-scope edits.
 
   ## Spec-Driven Development (SDD)
-  * Follow **sdd-implement** and **sdd-narrative** rules (read `.gemini/skills/sdd-implement.md`/`.gemini/skills/sdd-narrative.md` or `.claude/` equivalents).
+  * Follow the **sdd-implement** and **sdd-narrative** skills (installed in your tool's skills directory).
   * Implementation must match L3 interfaces and L5 narratives exactly.
   * Run `sdd_validate_tree` to verify architectural boundaries before declaring complete.
