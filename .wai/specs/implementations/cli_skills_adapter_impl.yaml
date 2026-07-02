@@ -3,7 +3,7 @@ id: "cli_skills_adapter_impl"
 name: "CLI Skills Adapter Implementation"
 description: "Concrete implementation forwarding skills exporting requests to the skills portal."
 contract: "icli_skills_adapter"
-sourcePath: ".wai/specs/implementations/cli_skills_adapter_impl.yaml"
+sourcePath: "src/commands/skills.ts"
 methods:
   - name: "exportSddSkills"
     narrative:

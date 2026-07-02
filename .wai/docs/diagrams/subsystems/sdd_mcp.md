@@ -9,6 +9,7 @@ title: "Waffle-AIron — sdd_mcp (components)"
 flowchart LR
   subgraph sub_sdd_mcp["SDD MCP Server"]
     mcp_core_adapter["MCP Core Client Adapter<br/>«Adapter»"]
+    mcp_orchestrator["MCP Orchestrator<br/>«Orchestrator»"]
     mcp_portal(["MCP Portal<br/>«Portal»"])
     mcp_server["MCP Server Manager<br/>«Supervisor»"]
     mcp_validator_adapter["MCP Validator Client Adapter<br/>«Adapter»"]
@@ -20,7 +21,10 @@ flowchart LR
     validator_portal(["Validator Portal<br/>«Portal»"])
   end
   mcp_core_adapter ==> core_portal
+  mcp_orchestrator --> mcp_core_adapter
+  mcp_orchestrator --> mcp_validator_adapter
   mcp_portal --> mcp_server
+  mcp_portal --> mcp_orchestrator
   mcp_server --> mcp_core_adapter
   mcp_server --> mcp_validator_adapter
   mcp_validator_adapter ==> validator_portal
@@ -32,7 +36,7 @@ flowchart LR
   classDef pattern fill:#f6f8fa,stroke:#6a737d,color:#24292e;
   classDef publicSurface stroke-width:3px;
   class mcp_core_adapter,mcp_validator_adapter adapter
+  class mcp_orchestrator,mcp_server logic
   class mcp_portal,core_portal,validator_portal entry
   class mcp_portal,core_portal,validator_portal publicSurface
-  class mcp_server logic
 ```

@@ -3,7 +3,7 @@ id: "mcp_validator_adapter_impl"
 name: "MCP Validator Adapter Implementation"
 description: "Concrete implementation forwarding MCP validate requests to validator portal."
 contract: "imcp_validator_adapter"
-sourcePath: ".wai/specs/implementations/mcp_validator_adapter_impl.yaml"
+sourcePath: "src/mcp/server.ts"
 methods:
   - name: "validateSddTree"
     narrative:

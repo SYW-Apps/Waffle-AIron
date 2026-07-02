@@ -243,7 +243,9 @@ export function resolveAgentTopology(): AgentRecord[] {
     }
 
     if (!config.rules.generateComponentImplementers) {
-      // Aggregate all component implementation source paths under the subsystem owner
+      // Aggregate all component implementation source paths under the subsystem owner.
+      // Several spec-level roles may be realized in one shared module, so dedupe —
+      // an owner claiming the same path twice would trip OVERLAPPING_OWNERSHIP.
       for (const comp of subComponents) {
         // Find contract interfaces for this component
         const compInterfaces = interfaces.filter((i) => i.component === comp.id);
@@ -253,7 +255,7 @@ export function resolveAgentTopology(): AgentRecord[] {
         const compImpls = implementations.filter((impl) => compInterfaceIds.includes(impl.contract));
 
         for (const impl of compImpls) {
-          if (impl.sourcePath) {
+          if (impl.sourcePath && !ownedPaths.includes(impl.sourcePath)) {
             ownedPaths.push(impl.sourcePath);
           }
         }

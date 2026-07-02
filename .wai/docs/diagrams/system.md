@@ -21,6 +21,7 @@ flowchart LR
   end
   subgraph sub_sdd_mcp["SDD MCP Server"]
     mcp_core_adapter["MCP Core Client Adapter<br/>«Adapter»"]
+    mcp_orchestrator["MCP Orchestrator<br/>«Orchestrator»"]
     mcp_portal(["MCP Portal<br/>«Portal»"])
     mcp_server["MCP Server Manager<br/>«Supervisor»"]
     mcp_validator_adapter["MCP Validator Client Adapter<br/>«Adapter»"]
@@ -46,7 +47,10 @@ flowchart LR
   core_portal --> agent_resolver
   core_portal --> core_orchestrator
   mcp_core_adapter ==> core_portal
+  mcp_orchestrator --> mcp_core_adapter
+  mcp_orchestrator --> mcp_validator_adapter
   mcp_portal --> mcp_server
+  mcp_portal --> mcp_orchestrator
   mcp_server --> mcp_core_adapter
   mcp_server --> mcp_validator_adapter
   mcp_validator_adapter ==> validator_portal
@@ -62,7 +66,7 @@ flowchart LR
   classDef adapter fill:#eef8f1,stroke:#4f9e6b,color:#173322;
   classDef pattern fill:#f6f8fa,stroke:#6a737d,color:#24292e;
   classDef publicSurface stroke-width:3px;
-  class agent_resolver,core_orchestrator,cli_runner,mcp_server,skills_orchestrator,spec_validator logic
+  class agent_resolver,core_orchestrator,cli_runner,mcp_orchestrator,mcp_server,skills_orchestrator,spec_validator logic
   class core_portal,mcp_portal,skills_portal,validator_portal entry
   class core_portal,cli_runner,mcp_portal,skills_portal,validator_portal publicSurface
   class spec_loader data

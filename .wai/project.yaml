@@ -22,6 +22,11 @@ targets:
 rules:
   noOverlappingOwnership: true
   requireOwnedPaths: true
+  # wairon's code realizes several spec-level roles inside shared modules
+  # (e.g. portal+orchestrator+adapters folded into src/mcp/server.ts), so
+  # per-component implementer agents would claim overlapping paths. Subsystem
+  # owners own their code until the code-side split lands.
+  generateComponentImplementers: false
   metaAgentTags:
     - meta
     - guardian

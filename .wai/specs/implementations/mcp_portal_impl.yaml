@@ -1,9 +1,9 @@
 schemaVersion: "1.0.0"
 id: "mcp_portal_impl"
 name: "MCP Portal Implementation"
-description: "Concrete implementation forwarding portal calls to the MCP server supervisor."
+description: "Dispatches sdd_* tool calls to the MCP orchestrator; server bootstrap is forwarded to the MCP server supervisor. Realized today inside src/mcp/server.ts (the portal role is folded into the server module pending the code-side split)."
 contract: "imcp_portal"
-sourcePath: ".wai/specs/implementations/mcp_portal_impl.yaml"
+sourcePath: "src/mcp/server.ts"
 methods:
   - name: "createMcpServer"
     narrative:
@@ -12,5 +12,54 @@ methods:
         type: "call"
         targetComponent: "mcp_server"
         targetMethod: "createMcpServer"
+  - name: "sdd_initialize_system"
+    narrative:
+      - stepNumber: 1
+        description: "Dispatch to the initializeSystem workflow"
+        type: "call"
+        targetComponent: "mcp_orchestrator"
+        targetMethod: "initializeSystem"
+  - name: "sdd_add_subsystem"
+    narrative:
+      - stepNumber: 1
+        description: "Dispatch to the addSubsystem workflow"
+        type: "call"
+        targetComponent: "mcp_orchestrator"
+        targetMethod: "addSubsystem"
+  - name: "sdd_add_component"
+    narrative:
+      - stepNumber: 1
+        description: "Dispatch to the addComponent workflow"
+        type: "call"
+        targetComponent: "mcp_orchestrator"
+        targetMethod: "addComponent"
+  - name: "sdd_define_interface"
+    narrative:
+      - stepNumber: 1
+        description: "Dispatch to the defineInterface workflow"
+        type: "call"
+        targetComponent: "mcp_orchestrator"
+        targetMethod: "defineInterface"
+  - name: "sdd_write_narrative"
+    narrative:
+      - stepNumber: 1
+        description: "Dispatch to the writeNarrative workflow"
+        type: "call"
+        targetComponent: "mcp_orchestrator"
+        targetMethod: "writeNarrative"
+  - name: "sdd_validate_tree"
+    narrative:
+      - stepNumber: 1
+        description: "Dispatch to the validateTree workflow"
+        type: "call"
+        targetComponent: "mcp_orchestrator"
+        targetMethod: "validateTree"
+  - name: "sdd_get_status"
+    narrative:
+      - stepNumber: 1
+        description: "Dispatch to the getStatus workflow"
+        type: "call"
+        targetComponent: "mcp_orchestrator"
+        targetMethod: "getStatus"
 createdAt: "2026-06-19T12:00:00Z"
-updatedAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-07-02T00:00:00Z"

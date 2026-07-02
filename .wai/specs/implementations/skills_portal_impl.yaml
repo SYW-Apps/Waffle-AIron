@@ -3,7 +3,7 @@ id: "skills_portal_impl"
 name: "Skills Portal Implementation"
 description: "Concrete implementation forwarding portal requests to skills orchestrator."
 contract: "iskills_portal"
-sourcePath: ".wai/specs/implementations/skills_portal_impl.yaml"
+sourcePath: "src/core/skills.ts"
 methods:
   - name: "exportSddSkills"
     narrative:

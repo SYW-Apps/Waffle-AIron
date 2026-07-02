@@ -3,7 +3,7 @@ id: "validator_portal_impl"
 name: "Validator Portal Implementation"
 description: "Concrete implementation forwarding portal requests to spec validator."
 contract: "ivalidator_portal"
-sourcePath: ".wai/specs/implementations/validator_portal_impl.yaml"
+sourcePath: "src/core/validation.ts"
 methods:
   - name: "validateSddTree"
     narrative:

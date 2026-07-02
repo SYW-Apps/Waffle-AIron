@@ -3,7 +3,7 @@ id: "core_orchestrator_impl"
 name: "Core Orchestrator Implementation"
 description: "Concrete implementation forwarding to registry loader."
 contract: "icore_orchestrator"
-sourcePath: ".wai/specs/implementations/core_orchestrator_impl.yaml"
+sourcePath: "src/core/specs.ts"
 methods:
   - name: "loadSystemSpec"
     narrative:
