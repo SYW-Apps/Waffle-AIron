@@ -12,6 +12,7 @@ import {
   loadSpecGraph,
 } from '../core/diagram.js';
 import { buildCanvasModel, renderCanvasHtml } from '../core/canvas.js';
+import { generateDrawioXml, generateExcalidrawScene } from '../core/diagram-export.js';
 import { validateSddTree } from '../core/validation.js';
 import { loadProjectConfig } from '../config/loader.js';
 import { WaironError } from '../utils/errors.js';
@@ -33,6 +34,10 @@ export interface DiagramOptions {
   all?: boolean;
   /** Emit the interactive self-contained HTML canvas instead of Mermaid. */
   canvas?: boolean;
+  /** Emit an editable draw.io (diagrams.net) file. */
+  drawio?: boolean;
+  /** Emit an editable Excalidraw scene file. */
+  excalidraw?: boolean;
   /** Output file (or directory with --all). Default with --all: .wai/docs/diagrams */
   out?: string;
 }
@@ -73,6 +78,24 @@ export async function runDiagram(options: DiagramOptions = {}): Promise<void> {
     return;
   }
 
+  if (options.drawio && !options.all) {
+    const dest = options.out ?? path.join(AI_PATHS.docsDir(), 'diagrams', 'architecture.drawio');
+    ensureDir(path.dirname(path.resolve(dest)));
+    fs.writeFileSync(dest, generateDrawioXml(buildCanvasModel()), 'utf-8');
+    logger.success(`draw.io diagram written to ${dest}`);
+    logger.info('Open with draw.io / diagrams.net (or import into tools that accept the format).');
+    return;
+  }
+
+  if (options.excalidraw && !options.all) {
+    const dest = options.out ?? path.join(AI_PATHS.docsDir(), 'diagrams', 'architecture.excalidraw');
+    ensureDir(path.dirname(path.resolve(dest)));
+    fs.writeFileSync(dest, generateExcalidrawScene(buildCanvasModel()), 'utf-8');
+    logger.success(`Excalidraw scene written to ${dest}`);
+    logger.info('Open with excalidraw.com or the VS Code extension.');
+    return;
+  }
+
   if (options.all) {
     const outDir = options.out ?? path.join(AI_PATHS.docsDir(), 'diagrams');
     const files = generateDiagramSet();
@@ -86,6 +109,9 @@ export async function runDiagram(options: DiagramOptions = {}): Promise<void> {
       fs.writeFileSync(dest, toMarkdown(file), 'utf-8');
     }
     writeCanvas(path.join(outDir, 'canvas.html'));
+    const exportModel = buildCanvasModel();
+    fs.writeFileSync(path.join(outDir, 'architecture.drawio'), generateDrawioXml(exportModel), 'utf-8');
+    fs.writeFileSync(path.join(outDir, 'architecture.excalidraw'), generateExcalidrawScene(exportModel), 'utf-8');
     const graph = loadSpecGraph();
     const indexPath = path.join(outDir, 'README.md');
     fs.writeFileSync(indexPath, diagramSetIndex(files, graph.systemName), 'utf-8');

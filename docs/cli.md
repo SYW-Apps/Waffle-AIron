@@ -65,8 +65,13 @@ from the same source of truth as the conformance gate:
   to undo — and "export PNG" renders the full graph to a high-res image for
   Miro/docs/slides. Fully self-contained (Cytoscape.js embedded inline,
   works offline).
+- `--drawio` / `--excalidraw`: **editable** exports in open formats
+  (draw.io / diagrams.net XML, Excalidraw scene JSON) with the exact same
+  computed layout as the canvas — import into diagrams.net, excalidraw.com,
+  VS Code extensions, or any whiteboard tool that accepts these formats.
 - `--all`: write the full set (system, per-subsystem, one sequence per
-  entrypoint method with a narrative, plus `canvas.html`) into
+  entrypoint method with a narrative, plus `canvas.html`,
+  `architecture.drawio`, and `architecture.excalidraw`) into
   `.wai/docs/diagrams/` (or `--out`).
 
 Without `--out`, prints raw Mermaid to stdout (pipe into `mmdc`, paste into

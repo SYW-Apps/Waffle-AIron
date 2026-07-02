@@ -167,6 +167,8 @@ program
   .option('--depth <n>', 'max call-expansion depth for sequence diagrams (default 3)', (v) => parseInt(v, 10))
   .option('--all', 'write the full diagram set: system, per-subsystem, entrypoint sequences, and the interactive canvas')
   .option('--canvas', 'emit the interactive self-contained HTML canvas (pan/zoom, collapse boundaries, detail panel, issue overlay)')
+  .option('--drawio', 'emit an editable draw.io / diagrams.net file (same layout as the canvas)')
+  .option('--excalidraw', 'emit an editable Excalidraw scene (same layout as the canvas)')
   .option('--out <path>', 'write to a file (or directory with --all; default .wai/docs/diagrams) instead of stdout')
   .action(async (opts) => {
     await runDiagram({
@@ -175,6 +177,8 @@ program
       depth: opts.depth,
       all: opts.all,
       canvas: opts.canvas,
+      drawio: opts.drawio,
+      excalidraw: opts.excalidraw,
       out: opts.out,
     });
   });
