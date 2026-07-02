@@ -157,10 +157,20 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
 
     const crossEdges = cy.edges().filter((e: any) => e.hasClass('cross'));
     expect(crossEdges.length).toBe(1); // the view-level arrow survived
-    const innerEdges = cy.edges().filter((e: any) => e.hasClass('inneredge'));
-    expect(innerEdges.length).toBe(1); // billing-portal → billing-repo inside billing
-    expect(innerEdges[0].source().id()).toBe('i~component~billing-portal');
-    expect(innerEdges[0].target().id()).toBe('i~component~billing-repo');
+    const pureInner = cy.edges().filter((e: any) => e.hasClass('inneredge') && !e.hasClass('toghost'));
+    expect(pureInner.length).toBe(1); // billing-portal → billing-repo inside billing
+    expect(pureInner[0].source().id()).toBe('i~component~billing-portal');
+    expect(pureInner[0].target().id()).toBe('i~component~billing-repo');
+    // external stubs: shipping-client points OUT to its container boundary
+    // (its dep leaves the box), billing-portal receives IN from its boundary.
+    const stubs = cy.edges().filter((e: any) => e.hasClass('inneredge') && e.hasClass('toghost'));
+    expect(stubs.length).toBe(2);
+    const out = stubs.filter((e: any) => e.source().id() === 'i~component~shipping-client');
+    expect(out.length).toBe(1);
+    expect(out[0].target().id()).toBe('s~shipping');
+    const inn = stubs.filter((e: any) => e.target().id() === 'i~component~billing-portal');
+    expect(inn.length).toBe(1);
+    expect(inn[0].source().id()).toBe('s~billing');
 
     // header issue counter was populated by the app script (0 errors / 1 warning)
     expect(elements['issueCount'].textContent).toBe('0e/1w');
