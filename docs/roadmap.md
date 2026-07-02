@@ -36,11 +36,14 @@ reflects what is actually shipped in `src/` and what is planned.
 
 - **Conformance engine depth** — glob-aware ownership overlap, richer stereotype
   rules, and clearer remediation messages. This is wairon's core differentiator.
-- **Spec-driven diagram generation (V2)** — the spec tree is a typed graph, so it
-  renders to diagrams with no extra modeling: component/`dependsOn` → C4 &
-  component diagrams, `owns` → containment diagrams, and **L5 narratives →
-  sequence diagrams**. Living, always-accurate documentation from the same source
-  of truth as the code.
+- **Spec-driven diagram generation** — stage 1 shipped: `wairon diagram` emits
+  Mermaid component diagrams (subsystem subgraphs, boundary-hop edges, `owns`
+  containment, public-surface marking) and **L5 narrative → sequence diagrams**.
+  Stage 2 planned: an interactive single-canvas HTML view (compound nodes =
+  subsystem/pattern boundaries, expand/collapse zoom, cross-boundary edges
+  routed as bundled "tubes" through the published Portal ports, click-through
+  component details: description, interfaces, dependencies). Living,
+  always-accurate documentation from the same source of truth as the code.
 - **Derive specs from existing code** — bootstrap a draft spec tree from a repo
   so teams can adopt conformance without greenfield modeling.
 - **`wairon generate` cohesion** — optional MCP auto-registration during

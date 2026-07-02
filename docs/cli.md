@@ -34,6 +34,24 @@ List, or show full details of, the agents resolved from the spec tree
 (`system-architect`, `<subsystem>-owner`, `<component>-implementer`, and owners
 for free-standing domains).
 
+### `wairon diagram [--subsystem <id>] [--sequence <component:method>] [--depth <n>] [--all] [--out <path>]`
+Generate Mermaid diagrams derived from the spec tree — living documentation
+from the same source of truth as the conformance gate:
+
+- default: system-wide **component diagram** (subsystems as subgraphs,
+  `dependsOn` edges, thick edges for cross-subsystem boundary hops, dashed
+  `owns` containment, bold border on the published public surface).
+- `--subsystem <id>`: scope to one subsystem plus its directly-connected
+  external neighbors.
+- `--sequence <component:method>`: a **sequence diagram** derived from the
+  method's L5 narrative, recursively expanding `call` steps (cycle-guarded,
+  `--depth` limits expansion; default 3).
+- `--all`: write the full set (system, per-subsystem, and one sequence per
+  entrypoint method with a narrative) into `.wai/docs/diagrams/` (or `--out`).
+
+Without `--out`, prints raw Mermaid to stdout (pipe into `mmdc`, paste into
+mermaid.live, or embed in markdown).
+
 ---
 
 ## Domains
