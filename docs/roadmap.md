@@ -39,10 +39,12 @@ reflects what is actually shipped in `src/` and what is planned.
 - **Spec-driven diagram generation** — stage 1 shipped: `wairon diagram` emits
   Mermaid component diagrams (subsystem subgraphs, boundary-hop edges, `owns`
   containment, public-surface marking) and **L5 narrative → sequence diagrams**.
-  Stage 2 planned: an interactive single-canvas HTML view (compound nodes =
-  subsystem/pattern boundaries, expand/collapse zoom, cross-boundary edges
-  routed as bundled "tubes" through the published Portal ports, click-through
-  component details: description, interfaces, dependencies). Living,
+  Stage 2 shipped: `wairon diagram --canvas` emits an interactive single-page
+  HTML canvas — subsystem/pattern boundaries as collapsible containers,
+  collapsed boundaries aggregate external edges into labeled tubes,
+  click-through detail panel (description, interfaces, methods, endpoints,
+  narratives, dependencies, trusted links), search, and a validation-issue
+  overlay. Fully self-contained (no libraries, offline). Living,
   always-accurate documentation from the same source of truth as the code.
 - **Derive specs from existing code** — bootstrap a draft spec tree from a repo
   so teams can adopt conformance without greenfield modeling.

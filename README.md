@@ -158,7 +158,7 @@ See [docs/cli.md](docs/cli.md). Summary:
 | `wairon validate [--ci]` | Architecture-conformance gate |
 | `wairon generate [--target] [--domain] [--dry-run]` | Regenerate agent files + install skills |
 | `wairon list` / `wairon show <id>` | Inspect agents resolved from the spec tree |
-| `wairon diagram [--all] [--subsystem <id>] [--sequence <comp:method>]` | Mermaid component + narrative-sequence diagrams (living docs) |
+| `wairon diagram [--all] [--canvas] [--subsystem <id>] [--sequence <comp:method>]` | Mermaid diagrams + interactive architecture canvas (living docs) |
 | `wairon rules list` | The conformance rule registry (the architecture linter) |
 | `wairon domains list \| scan \| add \| remove` | Domains (subsystem-derived + free-standing) |
 | `wairon skills list \| install` | Manage the SDD skills installed into your tools |

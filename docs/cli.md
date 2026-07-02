@@ -52,8 +52,17 @@ from the same source of truth as the conformance gate:
 - `--sequence <component:method>`: a **sequence diagram** derived from the
   method's L5 narrative, recursively expanding `call` steps (cycle-guarded,
   `--depth` limits expansion; default 3).
-- `--all`: write the full set (system, per-subsystem, and one sequence per
-  entrypoint method with a narrative) into `.wai/docs/diagrams/` (or `--out`).
+- `--canvas`: an **interactive HTML canvas** — the whole system on one page.
+  Subsystems as containers, pattern compounds nested inside, components laid
+  out in dependency layers (entrypoints left → data right). Pan/zoom,
+  double-click a boundary to collapse it (its external edges aggregate into
+  labeled "tubes"), click anything for a spec-derived detail panel
+  (description, interfaces, methods, endpoints, narratives, dependencies,
+  trusted links), search, and a validation-issue overlay. The file is fully
+  self-contained (no external libraries, works offline).
+- `--all`: write the full set (system, per-subsystem, one sequence per
+  entrypoint method with a narrative, plus `canvas.html`) into
+  `.wai/docs/diagrams/` (or `--out`).
 
 Without `--out`, prints raw Mermaid to stdout (pipe into `mmdc`, paste into
 mermaid.live, or embed in markdown).

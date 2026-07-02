@@ -11,6 +11,9 @@ import {
   diagramSetIndex,
   loadSpecGraph,
 } from '../core/diagram.js';
+import { buildCanvasModel, renderCanvasHtml } from '../core/canvas.js';
+import { validateSddTree } from '../core/validation.js';
+import { loadProjectConfig } from '../config/loader.js';
 import { WaironError } from '../utils/errors.js';
 
 // ---------------------------------------------------------------------------
@@ -28,8 +31,25 @@ export interface DiagramOptions {
   sequence?: string;
   depth?: number;
   all?: boolean;
+  /** Emit the interactive self-contained HTML canvas instead of Mermaid. */
+  canvas?: boolean;
   /** Output file (or directory with --all). Default with --all: .wai/docs/diagrams */
   out?: string;
+}
+
+function collectIssues() {
+  try {
+    const config = loadProjectConfig();
+    return validateSddTree({ rules: config.rules, projectType: config.projectType }).issues;
+  } catch {
+    return validateSddTree().issues;
+  }
+}
+
+function writeCanvas(dest: string): void {
+  const model = buildCanvasModel(collectIssues());
+  ensureDir(path.dirname(path.resolve(dest)));
+  fs.writeFileSync(dest, renderCanvasHtml(model), 'utf-8');
 }
 
 function parseSequenceRef(ref: string): { component: string; method: string } {
@@ -45,6 +65,14 @@ function parseSequenceRef(ref: string): { component: string; method: string } {
 export async function runDiagram(options: DiagramOptions = {}): Promise<void> {
   assertProjectInitialized();
 
+  if (options.canvas && !options.all) {
+    const dest = options.out ?? path.join(AI_PATHS.docsDir(), 'diagrams', 'canvas.html');
+    writeCanvas(dest);
+    logger.success(`Interactive canvas written to ${dest}`);
+    logger.info('Open it in a browser — fully self-contained (works offline).');
+    return;
+  }
+
   if (options.all) {
     const outDir = options.out ?? path.join(AI_PATHS.docsDir(), 'diagrams');
     const files = generateDiagramSet();
@@ -57,10 +85,11 @@ export async function runDiagram(options: DiagramOptions = {}): Promise<void> {
       ensureDir(path.dirname(dest));
       fs.writeFileSync(dest, toMarkdown(file), 'utf-8');
     }
+    writeCanvas(path.join(outDir, 'canvas.html'));
     const graph = loadSpecGraph();
     const indexPath = path.join(outDir, 'README.md');
     fs.writeFileSync(indexPath, diagramSetIndex(files, graph.systemName), 'utf-8');
-    logger.success(`Generated ${files.length} diagram(s) + index into ${outDir}`);
+    logger.success(`Generated ${files.length} diagram(s) + interactive canvas.html + index into ${outDir}`);
     for (const file of files.slice(0, 12)) {
       logger.info(`  ${file.relPath}`);
     }

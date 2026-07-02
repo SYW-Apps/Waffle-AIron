@@ -165,7 +165,8 @@ program
   .option('--subsystem <id>', 'scope the component diagram to one subsystem (plus its external neighbors)')
   .option('--sequence <component:method>', 'emit a sequence diagram derived from the method\'s L5 narrative')
   .option('--depth <n>', 'max call-expansion depth for sequence diagrams (default 3)', (v) => parseInt(v, 10))
-  .option('--all', 'write the full diagram set: system, per-subsystem, and entrypoint sequences')
+  .option('--all', 'write the full diagram set: system, per-subsystem, entrypoint sequences, and the interactive canvas')
+  .option('--canvas', 'emit the interactive self-contained HTML canvas (pan/zoom, collapse boundaries, detail panel, issue overlay)')
   .option('--out <path>', 'write to a file (or directory with --all; default .wai/docs/diagrams) instead of stdout')
   .action(async (opts) => {
     await runDiagram({
@@ -173,6 +174,7 @@ program
       sequence: opts.sequence,
       depth: opts.depth,
       all: opts.all,
+      canvas: opts.canvas,
       out: opts.out,
     });
   });

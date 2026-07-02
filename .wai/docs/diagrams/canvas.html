@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Waffle-AIron — architecture canvas</title>
+<style>
+  :root {
+    --entry-fill:#eef4ff; --entry-stroke:#4a7dcf;
+    --logic-fill:#f4effd; --logic-stroke:#8a63c9;
+    --data-fill:#fdf6e3;  --data-stroke:#c9963f;
+    --adapter-fill:#eef8f1; --adapter-stroke:#4f9e6b;
+    --pattern-fill:#f6f8fa; --pattern-stroke:#6a737d;
+    --ink:#1f2328; --dim:#57606a; --line:#8d97a5; --cross:#c26767;
+    --bg:#fafbfc; --panel:#ffffff; --border:#d8dee4;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font:13px/1.45 system-ui, "Segoe UI", sans-serif; color:var(--ink); background:var(--bg); overflow:hidden; }
+  header { display:flex; align-items:center; gap:14px; padding:8px 14px; background:var(--panel); border-bottom:1px solid var(--border); }
+  header h1 { font-size:15px; margin:0; white-space:nowrap; }
+  header .sub { color:var(--dim); font-size:12px; }
+  header input { padding:5px 9px; border:1px solid var(--border); border-radius:6px; width:220px; font:inherit; }
+  header label { display:flex; align-items:center; gap:5px; color:var(--dim); cursor:pointer; white-space:nowrap; }
+  #wrap { display:flex; height:calc(100vh - 46px); }
+  #stage { flex:1; overflow:hidden; cursor:grab; position:relative; }
+  #stage.panning { cursor:grabbing; }
+  #panel { width:360px; border-left:1px solid var(--border); background:var(--panel); overflow-y:auto; padding:14px 16px; }
+  #panel h2 { font-size:15px; margin:0 0 2px; }
+  #panel h3 { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--dim); margin:16px 0 6px; }
+  #panel .chip { display:inline-block; padding:1px 8px; border-radius:10px; font-size:11px; border:1px solid var(--border); margin:0 4px 4px 0; background:var(--bg); cursor:pointer; }
+  #panel .chip.static { cursor:default; }
+  #panel .desc { color:var(--dim); }
+  #panel .method { border:1px solid var(--border); border-radius:6px; padding:6px 9px; margin-bottom:6px; }
+  #panel .method code { font-size:11.5px; word-break:break-all; }
+  #panel .method .ret { color:var(--dim); font-size:11.5px; }
+  #panel .step { margin:2px 0; }
+  #panel .step .call { color:var(--entry-stroke); cursor:pointer; text-decoration:underline dotted; }
+  #panel .issue { border-left:3px solid var(--cross); padding:4px 8px; margin:5px 0; background:#fff6f6; font-size:12px; }
+  #panel .issue.warning { border-left-color:var(--data-stroke); background:#fffaf0; }
+  #panel .issue code { font-size:11px; color:var(--dim); }
+  .legend { position:absolute; left:12px; bottom:12px; background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:8px 12px; font-size:11.5px; color:var(--dim); }
+  .legend .sw { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:-1px; border:1.5px solid; }
+  svg text { user-select:none; }
+  .comp { cursor:pointer; }
+  .comp rect { stroke-width:1.4; }
+  .comp.public rect { stroke-width:3; }
+  .comp.dimmed, .subsys.dimmed { opacity:.25; }
+  .comp.selected rect { filter:drop-shadow(0 0 4px rgba(74,125,207,.9)); }
+  .comp.hasIssue rect { stroke:#cf4a4a !important; stroke-dasharray:5 3; }
+  .subsys > rect.frame { fill:#ffffff; stroke:#b6c0cc; stroke-width:1.2; rx:10; }
+  .subsys > rect.head { fill:#eef1f5; stroke:none; }
+  .subsys.collapsed > rect.frame { fill:#eef1f5; }
+  .subheader { font-weight:600; font-size:13px; cursor:pointer; }
+  .subtoggle { cursor:pointer; font-size:12px; fill:var(--dim); }
+  .pattern > rect { fill:var(--pattern-fill); stroke:var(--pattern-stroke); stroke-dasharray:6 3; }
+  .edge { fill:none; stroke:var(--line); stroke-width:1.4; }
+  .edge.cross { stroke:var(--cross); stroke-width:2.2; }
+  .edge.tube { stroke-width:4.5; opacity:.55; }
+  .edgeLabel { font-size:10.5px; fill:var(--dim); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Waffle-AIron</h1>
+  <span class="sub">architecture canvas · generated 2026-07-02T17:05:17.646Z · <b>wairon</b></span>
+  <input id="search" placeholder="search components…">
+  <label><input type="checkbox" id="issuesToggle"> issues overlay (<span id="issueCount"></span>)</label>
+  <span class="sub" style="margin-left:auto">double-click a boundary to collapse/expand · drag to pan · wheel to zoom</span>
+</header>
+<div id="wrap">
+  <div id="stage">
+    <svg id="svg" width="100%" height="100%">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 1 L 9 5 L 0 9 z" fill="#8d97a5"></path>
+        </marker>
+        <marker id="arrowCross" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 1 L 9 5 L 0 9 z" fill="#c26767"></path>
+        </marker>
+      </defs>
+      <g id="root"></g>
+    </svg>
+    <div class="legend">
+      <span class="sw" style="background:var(--entry-fill);border-color:var(--entry-stroke)"></span>Portal/Observer&nbsp;&nbsp;
+      <span class="sw" style="background:var(--logic-fill);border-color:var(--logic-stroke)"></span>Logic&nbsp;&nbsp;
+      <span class="sw" style="background:var(--data-fill);border-color:var(--data-stroke)"></span>Data&nbsp;&nbsp;
+      <span class="sw" style="background:var(--adapter-fill);border-color:var(--adapter-stroke)"></span>Adapter&nbsp;&nbsp;
+      <span class="sw" style="background:var(--pattern-fill);border-color:var(--pattern-stroke)"></span>Pattern&nbsp;&nbsp;
+      — bold border = published · <span style="color:var(--cross)">thick red edge</span> = boundary hop · thick faded edge = collapsed tube
+    </div>
+  </div>
+  <div id="panel"><h2>Architecture canvas</h2><p class="desc">Click any component, pattern, or subsystem for details. Derived from <code>.wai/specs/</code> — the same source of truth as the conformance gate.</p></div>
+</div>
+<script>
+var MODEL = {"system":{"name":"Waffle-AIron","vision":"To provide a local, spec-driven development (SDD) orchestration environment that enforces top-down design, interface contract compatibility, and dynamic agent topology sandboxing across software projects, guaranteeing blueprint-to-code symmetry.\n","targetLanguage":"typescript"},"generatedAt":"2026-07-02T17:05:17.646Z","subsystems":[{"id":"sdd_cli","name":"Wairon CLI Interfaces","description":"Terminal entry points for initializing, validating, generating, and listing spec-driven topology.","status":"complete","trustedLinks":[]},{"id":"sdd_core","name":"SDD Core Spec Manager","description":"Handles physical spec tree reading, parsing, writing, and dynamic agent topology resolution.","status":"complete","trustedLinks":[]},{"id":"sdd_mcp","name":"SDD MCP Server","description":"Hosts the stdio Model Context Protocol (MCP) server, exposing the sdd_* authoring, validation, and status tools for AI specification manipulation.","status":"complete","trustedLinks":[]},{"id":"sdd_skills","name":"SDD Skills Exporter","description":"Bootstraps and synchronizes the 4 SDD AI Skills to local AI CLI directories.","status":"complete","trustedLinks":[]},{"id":"sdd_validator","name":"SDD Architectural Validator","description":"Checks spec tree completeness, interface contract compliance, and enforces component-type interaction boundaries.","status":"complete","trustedLinks":[]}],"components":[{"id":"agent_resolver","name":"Agent Topology Resolver","description":"Resolves legacy-compatible AgentRecord structures dynamically from the loaded spec tree.","subsystem":"sdd_core","componentType":"Orchestrator","status":"complete","public":false,"owns":[],"dependsOn":["spec_loader"],"interfaces":[{"id":"iagent_resolver","name":"Agent Topology Resolver Interface","description":"Interface contract for resolving agent topology from specification files.","methods":[{"name":"resolveAgentTopology","description":"Resolves AgentRecord structures dynamically from the loaded specs","signature":"resolveAgentTopology(): AgentRecord[]","returns":"AgentRecord[]"}]}],"narratives":[{"method":"resolveAgentTopology","steps":[{"n":1,"text":"Load system spec","call":{"component":"spec_loader","method":"loadSystemSpec"}},{"n":2,"text":"Load subsystem specs","call":{"component":"spec_loader","method":"loadSubsystemSpecs"}},{"n":3,"text":"Load component specs","call":{"component":"spec_loader","method":"loadComponentSpecs"}},{"n":4,"text":"Load interface specs","call":{"component":"spec_loader","method":"loadInterfaceSpecs"}},{"n":5,"text":"Load implementation specs","call":{"component":"spec_loader","method":"loadImplementationSpecs"}},{"n":6,"text":"Combine loaded specs to build a dynamic list of AgentRecord objects representing the system architect, subsystem owners, and component implementers."}]}]},{"id":"cli_core_adapter","name":"CLI Core Client Adapter","description":"Local client adapter in sdd_cli to cross the subsystem boundary to sdd_core.","subsystem":"sdd_cli","componentType":"Adapter","status":"complete","public":false,"owns":[],"dependsOn":["core_portal"],"interfaces":[{"id":"icli_core_adapter","name":"CLI Core Adapter Interface","description":"Adapter contract for the CLI to load specifications from the core subsystem.","methods":[{"name":"loadSystemSpec","description":"Calls loadSystemSpec on the core portal","signature":"loadSystemSpec(): SystemSpec | null","returns":"SystemSpec | null"}]}],"narratives":[{"method":"loadSystemSpec","steps":[{"n":1,"text":"Call loadSystemSpec on the core portal","call":{"component":"core_portal","method":"loadSystemSpec"}}]}]},{"id":"cli_runner","name":"CLI Runner","description":"Coordinates terminal subcommand actions and flags, mapping CLI input to core engine execution.","subsystem":"sdd_cli","componentType":"Orchestrator","status":"complete","public":true,"owns":[],"dependsOn":["cli_core_adapter","cli_validator_adapter","cli_skills_adapter"],"interfaces":[{"id":"icli_runner","name":"CLI Runner Interface","description":"Interface contract for handling command line inputs and executing CLI actions.","methods":[{"name":"runInit","description":"Initializes a new wairon workspace and exports static skills","signature":"runInit(options: { yes?: boolean }): Promise\u003cvoid>","returns":"Promise\u003cvoid>"},{"name":"runGenerate","description":"Generates output configs/agents based on spec topology","signature":"runGenerate(options: { target?: string; domain?: string; domains?: string; root?: boolean; dryRun?: boolean }): Promise\u003cvoid>","returns":"Promise\u003cvoid>"},{"name":"runValidate","description":"Runs architectural validations on project configs and spec trees","signature":"runValidate(options: { ci?: boolean }): Promise\u003cvoid>","returns":"Promise\u003cvoid>"},{"name":"runList","description":"Lists all dynamically resolved agents","signature":"runList(): Promise\u003cvoid>","returns":"Promise\u003cvoid>"},{"name":"runShow","description":"Shows details for a single dynamically resolved agent","signature":"runShow(id: string): Promise\u003cvoid>","returns":"Promise\u003cvoid>"},{"name":"runUpdate","description":"Checks for updates or performs self-updates","signature":"runUpdate(options: { check?: boolean; channel?: string }): Promise\u003cvoid>","returns":"Promise\u003cvoid>"}]}],"narratives":[{"method":"runInit","steps":[{"n":1,"text":"Verify if workspace is already initialized"},{"n":2,"text":"Bootstrap standard .wai directory structure"},{"n":3,"text":"Export SDD skills templates","call":{"component":"cli_skills_adapter","method":"exportSddSkills"}},{"n":4,"text":"Generate default L0/L1/L2 spec files if empty"}]},{"method":"runValidate","steps":[{"n":1,"text":"Load project configuration file"},{"n":2,"text":"Validate registry rules","call":{"component":"cli_validator_adapter","method":"validateRegistry"}},{"n":3,"text":"Validate project configuration","call":{"component":"cli_validator_adapter","method":"validateProjectConfig"}},{"n":4,"text":"Validate SDD specification tree","call":{"component":"cli_validator_adapter","method":"validateSddTree"}},{"n":5,"text":"Print validation errors/warnings and exit process if invalid"}]},{"method":"runGenerate","steps":[{"n":1,"text":"Load spec system","call":{"component":"cli_core_adapter","method":"loadSystemSpec"}},{"n":2,"text":"Generate Dynamic Agent outputs matching configured target engines"}]},{"method":"runList","steps":[{"n":1,"text":"Load specs using spec loader","call":{"component":"cli_core_adapter","method":"loadSystemSpec"}},{"n":2,"text":"Format and print resolved dynamic agent list to stdout"}]},{"method":"runShow","steps":[{"n":1,"text":"Load spec system","call":{"component":"cli_core_adapter","method":"loadSystemSpec"}},{"n":2,"text":"Format and display details for specified dynamic agent"}]},{"method":"runUpdate","steps":[{"n":1,"text":"Check remote github release page for new releases"},{"n":2,"text":"If new release is found and not in check-only mode, pull and apply updates"}]}]},{"id":"cli_skills_adapter","name":"CLI Skills Client Adapter","description":"Local client adapter in sdd_cli to cross the subsystem boundary to sdd_skills.","subsystem":"sdd_cli","componentType":"Adapter","status":"complete","public":false,"owns":[],"dependsOn":["skills_portal"],"interfaces":[{"id":"icli_skills_adapter","name":"CLI Skills Adapter Interface","description":"Adapter contract for the CLI to export skills.","methods":[{"name":"exportSddSkills","description":"Calls exportSddSkills on the skills portal","signature":"exportSddSkills(): void","returns":"void"}]}],"narratives":[{"method":"exportSddSkills","steps":[{"n":1,"text":"Call exportSddSkills on the skills portal","call":{"component":"skills_portal","method":"exportSddSkills"}}]}]},{"id":"cli_validator_adapter","name":"CLI Validator Client Adapter","description":"Local client adapter in sdd_cli to cross the subsystem boundary to sdd_validator.","subsystem":"sdd_cli","componentType":"Adapter","status":"complete","public":false,"owns":[],"dependsOn":["validator_portal"],"interfaces":[{"id":"icli_validator_adapter","name":"CLI Validator Adapter Interface","description":"Adapter contract for the CLI to run validations.","methods":[{"name":"validateSddTree","description":"Calls validateSddTree on the validator portal","signature":"validateSddTree(): ValidationResult","returns":"ValidationResult"},{"name":"validateRegistry","description":"Calls validateRegistry on the validator portal","signature":"validateRegistry(registry: Registry, rules: RulesConfig): ValidationResult","returns":"ValidationResult"},{"name":"validateProjectConfig","description":"Calls validateProjectConfig on the validator portal","signature":"validateProjectConfig(config: ProjectConfig): ValidationResult","returns":"ValidationResult"}]}],"narratives":[{"method":"validateSddTree","steps":[{"n":1,"text":"Call validateSddTree on the validator portal","call":{"component":"validator_portal","method":"validateSddTree"}}]},{"method":"validateRegistry","steps":[{"n":1,"text":"Call validateRegistry on the validator portal","call":{"component":"validator_portal","method":"validateRegistry"}}]},{"method":"validateProjectConfig","steps":[{"n":1,"text":"Call validateProjectConfig on the validator portal","call":{"component":"validator_portal","method":"validateProjectConfig"}}]}]},{"id":"core_orchestrator","name":"Core Orchestrator","description":"Orchestrates spec loading and manipulation in the core subsystem.","subsystem":"sdd_core","componentType":"Orchestrator","status":"complete","public":false,"owns":[],"dependsOn":["spec_loader"],"interfaces":[{"id":"icore_orchestrator","name":"Core Orchestrator Interface","description":"Orchestrator contract for coordinate loading specs.","methods":[{"name":"loadSystemSpec","description":"Delegate loading system spec to spec loader","signature":"loadSystemSpec(): SystemSpec | null","returns":"SystemSpec | null"},{"name":"loadSubsystemSpecs","description":"Delegate loading subsystem specs to spec loader","signature":"loadSubsystemSpecs(): SubsystemSpec[]","returns":"SubsystemSpec[]"},{"name":"loadComponentSpecs","description":"Delegate loading component specs to spec loader","signature":"loadComponentSpecs(): ComponentSpec[]","returns":"ComponentSpec[]"},{"name":"loadInterfaceSpecs","description":"Delegate loading interface specs to spec loader","signature":"loadInterfaceSpecs(): InterfaceSpec[]","returns":"InterfaceSpec[]"},{"name":"loadImplementationSpecs","description":"Delegate loading implementation specs to spec loader","signature":"loadImplementationSpecs(): ImplementationSpec[]","returns":"ImplementationSpec[]"},{"name":"loadSubsystemSpec","description":"Delegate loading a single subsystem spec to spec loader","signature":"loadSubsystemSpec(id: string): SubsystemSpec | null","returns":"SubsystemSpec | null"},{"name":"loadComponentSpec","description":"Delegate loading a single component spec to spec loader","signature":"loadComponentSpec(id: string): ComponentSpec | null","returns":"ComponentSpec | null"},{"name":"loadInterfaceSpec","description":"Delegate loading a single interface spec to spec loader","signature":"loadInterfaceSpec(id: string): InterfaceSpec | null","returns":"InterfaceSpec | null"},{"name":"loadImplementationSpec","description":"Delegate loading a single implementation spec to spec loader","signature":"loadImplementationSpec(id: string): ImplementationSpec | null","returns":"ImplementationSpec | null"},{"name":"saveSystemSpec","description":"Delegate persisting the L0 system spec to spec loader","signature":"saveSystemSpec(spec: SystemSpec): void","returns":"void"},{"name":"saveSubsystemSpec","description":"Delegate persisting an L1 subsystem spec to spec loader","signature":"saveSubsystemSpec(spec: SubsystemSpec): void","returns":"void"},{"name":"saveComponentSpec","description":"Delegate persisting an L2 component spec to spec loader","signature":"saveComponentSpec(spec: ComponentSpec): void","returns":"void"},{"name":"saveInterfaceSpec","description":"Delegate persisting an L3 interface spec to spec loader","signature":"saveInterfaceSpec(spec: InterfaceSpec): void","returns":"void"},{"name":"saveImplementationSpec","description":"Delegate persisting an L4 implementation spec to spec loader","signature":"saveImplementationSpec(spec: ImplementationSpec): void","returns":"void"}]}],"narratives":[{"method":"loadSystemSpec","steps":[{"n":1,"text":"Call loadSystemSpec on spec loader","call":{"component":"spec_loader","method":"loadSystemSpec"}}]},{"method":"loadSubsystemSpecs","steps":[{"n":1,"text":"Call loadSubsystemSpecs on spec loader","call":{"component":"spec_loader","method":"loadSubsystemSpecs"}}]},{"method":"loadComponentSpecs","steps":[{"n":1,"text":"Call loadComponentSpecs on spec loader","call":{"component":"spec_loader","method":"loadComponentSpecs"}}]},{"method":"loadInterfaceSpecs","steps":[{"n":1,"text":"Call loadInterfaceSpecs on spec loader","call":{"component":"spec_loader","method":"loadInterfaceSpecs"}}]},{"method":"loadImplementationSpecs","steps":[{"n":1,"text":"Call loadImplementationSpecs on spec loader","call":{"component":"spec_loader","method":"loadImplementationSpecs"}}]},{"method":"loadSubsystemSpec","steps":[{"n":1,"text":"Call loadSubsystemSpec on spec loader","call":{"component":"spec_loader","method":"loadSubsystemSpec"}}]},{"method":"loadComponentSpec","steps":[{"n":1,"text":"Call loadComponentSpec on spec loader","call":{"component":"spec_loader","method":"loadComponentSpec"}}]},{"method":"loadInterfaceSpec","steps":[{"n":1,"text":"Call loadInterfaceSpec on spec loader","call":{"component":"spec_loader","method":"loadInterfaceSpec"}}]},{"method":"loadImplementationSpec","steps":[{"n":1,"text":"Call loadImplementationSpec on spec loader","call":{"component":"spec_loader","method":"loadImplementationSpec"}}]},{"method":"saveSystemSpec","steps":[{"n":1,"text":"Call saveSystemSpec on spec loader","call":{"component":"spec_loader","method":"saveSystemSpec"}}]},{"method":"saveSubsystemSpec","steps":[{"n":1,"text":"Call saveSubsystemSpec on spec loader","call":{"component":"spec_loader","method":"saveSubsystemSpec"}}]},{"method":"saveComponentSpec","steps":[{"n":1,"text":"Call saveComponentSpec on spec loader","call":{"component":"spec_loader","method":"saveComponentSpec"}}]},{"method":"saveInterfaceSpec","steps":[{"n":1,"text":"Call saveInterfaceSpec on spec loader","call":{"component":"spec_loader","method":"saveInterfaceSpec"}}]},{"method":"saveImplementationSpec","steps":[{"n":1,"text":"Call saveImplementationSpec on spec loader","call":{"component":"spec_loader","method":"saveImplementationSpec"}}]}]},{"id":"core_portal","name":"Core Portal","description":"Inbound portal for the SDD core subsystem, dispatching requests internally.","subsystem":"sdd_core","componentType":"Portal","portalType":"Custom","status":"complete","public":true,"owns":[],"dependsOn":["agent_resolver","core_orchestrator"],"interfaces":[{"id":"icore_portal","name":"Core Portal Interface","description":"Inbound Portal contract for the core subsystem, exposing services to client adapters.","methods":[{"name":"loadSystemSpec","description":"Loads the system spec","signature":"loadSystemSpec(): SystemSpec | null","returns":"SystemSpec | null"},{"name":"loadSubsystemSpecs","description":"Loads subsystem specs","signature":"loadSubsystemSpecs(): SubsystemSpec[]","returns":"SubsystemSpec[]"},{"name":"loadComponentSpecs","description":"Loads component specs","signature":"loadComponentSpecs(): ComponentSpec[]","returns":"ComponentSpec[]"},{"name":"loadInterfaceSpecs","description":"Loads interface specs","signature":"loadInterfaceSpecs(): InterfaceSpec[]","returns":"InterfaceSpec[]"},{"name":"loadImplementationSpecs","description":"Loads implementation specs","signature":"loadImplementationSpecs(): ImplementationSpec[]","returns":"ImplementationSpec[]"},{"name":"resolveAgentTopology","description":"Resolves dynamic agent topology","signature":"resolveAgentTopology(): AgentRecord[]","returns":"AgentRecord[]"},{"name":"loadSubsystemSpec","description":"Loads a single subsystem spec by id","signature":"loadSubsystemSpec(id: string): SubsystemSpec | null","returns":"SubsystemSpec | null"},{"name":"loadComponentSpec","description":"Loads a single component spec by id","signature":"loadComponentSpec(id: string): ComponentSpec | null","returns":"ComponentSpec | null"},{"name":"loadInterfaceSpec","description":"Loads a single interface spec by id","signature":"loadInterfaceSpec(id: string): InterfaceSpec | null","returns":"InterfaceSpec | null"},{"name":"loadImplementationSpec","description":"Loads a single implementation spec by id","signature":"loadImplementationSpec(id: string): ImplementationSpec | null","returns":"ImplementationSpec | null"},{"name":"saveSystemSpec","description":"Persists the L0 system spec (sdd_initialize_system write path)","signature":"saveSystemSpec(spec: SystemSpec): void","returns":"void"},{"name":"saveSubsystemSpec","description":"Persists an L1 subsystem spec (sdd_add_subsystem write path)","signature":"saveSubsystemSpec(spec: SubsystemSpec): void","returns":"void"},{"name":"saveComponentSpec","description":"Persists an L2 component spec (sdd_add_component write path)","signature":"saveComponentSpec(spec: ComponentSpec): void","returns":"void"},{"name":"saveInterfaceSpec","description":"Persists an L3 interface spec (sdd_define_interface / sdd_set_endpoints write path)","signature":"saveInterfaceSpec(spec: InterfaceSpec): void","returns":"void"},{"name":"saveImplementationSpec","description":"Persists an L4 implementation spec (sdd_write_narrative write path)","signature":"saveImplementationSpec(spec: ImplementationSpec): void","returns":"void"}]}],"narratives":[{"method":"loadSystemSpec","steps":[{"n":1,"text":"Forward loadSystemSpec call to core orchestrator","call":{"component":"core_orchestrator","method":"loadSystemSpec"}}]},{"method":"loadSubsystemSpecs","steps":[{"n":1,"text":"Forward loadSubsystemSpecs call to core orchestrator","call":{"component":"core_orchestrator","method":"loadSubsystemSpecs"}}]},{"method":"loadComponentSpecs","steps":[{"n":1,"text":"Forward loadComponentSpecs call to core orchestrator","call":{"component":"core_orchestrator","method":"loadComponentSpecs"}}]},{"method":"loadInterfaceSpecs","steps":[{"n":1,"text":"Forward loadInterfaceSpecs call to core orchestrator","call":{"component":"core_orchestrator","method":"loadInterfaceSpecs"}}]},{"method":"loadImplementationSpecs","steps":[{"n":1,"text":"Forward loadImplementationSpecs call to core orchestrator","call":{"component":"core_orchestrator","method":"loadImplementationSpecs"}}]},{"method":"resolveAgentTopology","steps":[{"n":1,"text":"Forward resolveAgentTopology call to agent resolver","call":{"component":"agent_resolver","method":"resolveAgentTopology"}}]},{"method":"loadSubsystemSpec","steps":[{"n":1,"text":"Forward loadSubsystemSpec call to core orchestrator","call":{"component":"core_orchestrator","method":"loadSubsystemSpec"}}]},{"method":"loadComponentSpec","steps":[{"n":1,"text":"Forward loadComponentSpec call to core orchestrator","call":{"component":"core_orchestrator","method":"loadComponentSpec"}}]},{"method":"loadInterfaceSpec","steps":[{"n":1,"text":"Forward loadInterfaceSpec call to core orchestrator","call":{"component":"core_orchestrator","method":"loadInterfaceSpec"}}]},{"method":"loadImplementationSpec","steps":[{"n":1,"text":"Forward loadImplementationSpec call to core orchestrator","call":{"component":"core_orchestrator","method":"loadImplementationSpec"}}]},{"method":"saveSystemSpec","steps":[{"n":1,"text":"Forward saveSystemSpec call to core orchestrator","call":{"component":"core_orchestrator","method":"saveSystemSpec"}}]},{"method":"saveSubsystemSpec","steps":[{"n":1,"text":"Forward saveSubsystemSpec call to core orchestrator","call":{"component":"core_orchestrator","method":"saveSubsystemSpec"}}]},{"method":"saveComponentSpec","steps":[{"n":1,"text":"Forward saveComponentSpec call to core orchestrator","call":{"component":"core_orchestrator","method":"saveComponentSpec"}}]},{"method":"saveInterfaceSpec","steps":[{"n":1,"text":"Forward saveInterfaceSpec call to core orchestrator","call":{"component":"core_orchestrator","method":"saveInterfaceSpec"}}]},{"method":"saveImplementationSpec","steps":[{"n":1,"text":"Forward saveImplementationSpec call to core orchestrator","call":{"component":"core_orchestrator","method":"saveImplementationSpec"}}]}]},{"id":"mcp_core_adapter","name":"MCP Core Client Adapter","description":"Local client adapter in sdd_mcp to cross the subsystem boundary to sdd_core.","subsystem":"sdd_mcp","componentType":"Adapter","status":"complete","public":false,"owns":[],"dependsOn":["core_portal"],"interfaces":[{"id":"imcp_core_adapter","name":"MCP Core Adapter Interface","description":"Client adapter contract for the MCP subsystem's hop into sdd_core: spec reads/writes and topology resolution via the core portal (in-process today; swappable for a remote transport).","methods":[{"name":"loadSystemSpec","description":"Calls loadSystemSpec on core portal","signature":"loadSystemSpec(): SystemSpec | null","returns":"SystemSpec | null"},{"name":"resolveAgentTopology","description":"Calls resolveAgentTopology on core portal","signature":"resolveAgentTopology(): AgentRecord[]","returns":"AgentRecord[]"},{"name":"saveSystemSpec","description":"Calls saveSystemSpec on core portal","signature":"saveSystemSpec(spec: SystemSpec): void","returns":"void"},{"name":"saveSubsystemSpec","description":"Calls saveSubsystemSpec on core portal","signature":"saveSubsystemSpec(spec: SubsystemSpec): void","returns":"void"},{"name":"loadSubsystemSpec","description":"Calls loadSubsystemSpec on core portal","signature":"loadSubsystemSpec(id: string): SubsystemSpec | null","returns":"SubsystemSpec | null"},{"name":"loadSubsystemSpecs","description":"Calls loadSubsystemSpecs on core portal","signature":"loadSubsystemSpecs(): SubsystemSpec[]","returns":"SubsystemSpec[]"},{"name":"saveComponentSpec","description":"Calls saveComponentSpec on core portal","signature":"saveComponentSpec(spec: ComponentSpec): void","returns":"void"},{"name":"loadComponentSpec","description":"Calls loadComponentSpec on core portal","signature":"loadComponentSpec(id: string): ComponentSpec | null","returns":"ComponentSpec | null"},{"name":"loadComponentSpecs","description":"Calls loadComponentSpecs on core portal","signature":"loadComponentSpecs(): ComponentSpec[]","returns":"ComponentSpec[]"},{"name":"saveInterfaceSpec","description":"Calls saveInterfaceSpec on core portal","signature":"saveInterfaceSpec(spec: InterfaceSpec): void","returns":"void"},{"name":"loadInterfaceSpec","description":"Calls loadInterfaceSpec on core portal","signature":"loadInterfaceSpec(id: string): InterfaceSpec | null","returns":"InterfaceSpec | null"},{"name":"loadInterfaceSpecs","description":"Calls loadInterfaceSpecs on core portal","signature":"loadInterfaceSpecs(): InterfaceSpec[]","returns":"InterfaceSpec[]"},{"name":"saveImplementationSpec","description":"Calls saveImplementationSpec on core portal","signature":"saveImplementationSpec(spec: ImplementationSpec): void","returns":"void"},{"name":"loadImplementationSpecs","description":"Calls loadImplementationSpecs on core portal","signature":"loadImplementationSpecs(): ImplementationSpec[]","returns":"ImplementationSpec[]"}]}],"narratives":[{"method":"loadSystemSpec","steps":[{"n":1,"text":"Call loadSystemSpec on core portal","call":{"component":"core_portal","method":"loadSystemSpec"}}]},{"method":"resolveAgentTopology","steps":[{"n":1,"text":"Call resolveAgentTopology on core portal","call":{"component":"core_portal","method":"resolveAgentTopology"}}]},{"method":"saveSystemSpec","steps":[{"n":1,"text":"Call saveSystemSpec on core portal","call":{"component":"core_portal","method":"saveSystemSpec"}}]},{"method":"saveSubsystemSpec","steps":[{"n":1,"text":"Call saveSubsystemSpec on core portal","call":{"component":"core_portal","method":"saveSubsystemSpec"}}]},{"method":"loadSubsystemSpec","steps":[{"n":1,"text":"Call loadSubsystemSpec on core portal","call":{"component":"core_portal","method":"loadSubsystemSpec"}}]},{"method":"loadSubsystemSpecs","steps":[{"n":1,"text":"Call loadSubsystemSpecs on core portal","call":{"component":"core_portal","method":"loadSubsystemSpecs"}}]},{"method":"saveComponentSpec","steps":[{"n":1,"text":"Call saveComponentSpec on core portal","call":{"component":"core_portal","method":"saveComponentSpec"}}]},{"method":"loadComponentSpec","steps":[{"n":1,"text":"Call loadComponentSpec on core portal","call":{"component":"core_portal","method":"loadComponentSpec"}}]},{"method":"loadComponentSpecs","steps":[{"n":1,"text":"Call loadComponentSpecs on core portal","call":{"component":"core_portal","method":"loadComponentSpecs"}}]},{"method":"saveInterfaceSpec","steps":[{"n":1,"text":"Call saveInterfaceSpec on core portal","call":{"component":"core_portal","method":"saveInterfaceSpec"}}]},{"method":"loadInterfaceSpec","steps":[{"n":1,"text":"Call loadInterfaceSpec on core portal","call":{"component":"core_portal","method":"loadInterfaceSpec"}}]},{"method":"loadInterfaceSpecs","steps":[{"n":1,"text":"Call loadInterfaceSpecs on core portal","call":{"component":"core_portal","method":"loadInterfaceSpecs"}}]},{"method":"saveImplementationSpec","steps":[{"n":1,"text":"Call saveImplementationSpec on core portal","call":{"component":"core_portal","method":"saveImplementationSpec"}}]},{"method":"loadImplementationSpecs","steps":[{"n":1,"text":"Call loadImplementationSpecs on core portal","call":{"component":"core_portal","method":"loadImplementationSpecs"}}]}]},{"id":"mcp_orchestrator","name":"MCP Orchestrator","description":"Owns the sdd_* tool workflows: validates tool inputs, coordinates the core client adapter for spec reads/writes and the validator client adapter for conformance runs, and shapes tool responses.","subsystem":"sdd_mcp","componentType":"Orchestrator","status":"complete","public":false,"owns":[],"dependsOn":["mcp_core_adapter","mcp_validator_adapter"],"interfaces":[{"id":"imcp_orchestrator","name":"MCP Orchestrator Interface","description":"Workflow contract for the sdd_* tools: each method owns one authoring/validation workflow behind the portal.","methods":[{"name":"initializeSystem","description":"Persist the L0 system specification","signature":"initializeSystem(spec: SystemSpec): void","returns":"void"},{"name":"addSubsystem","description":"Persist an L1 subsystem specification","signature":"addSubsystem(spec: SubsystemSpec): void","returns":"void"},{"name":"addComponent","description":"Verify the parent subsystem exists, then persist an L2 component specification","signature":"addComponent(spec: ComponentSpec): void","returns":"void"},{"name":"defineInterface","description":"Verify the owning component exists, then persist an L3 interface specification","signature":"defineInterface(spec: InterfaceSpec): void","returns":"void"},{"name":"writeNarrative","description":"Verify the contract interface exists, then persist an L4 implementation specification","signature":"writeNarrative(spec: ImplementationSpec): void","returns":"void"},{"name":"validateTree","description":"Run the architecture-conformance gate and return the result","signature":"validateTree(): ValidationResult","returns":"ValidationResult"},{"name":"getStatus","description":"Compose the spec-tree completeness dashboard","signature":"getStatus(): string","returns":"string"}]}],"narratives":[{"method":"initializeSystem","steps":[{"n":1,"text":"Persist the L0 system spec via the core client adapter","call":{"component":"mcp_core_adapter","method":"saveSystemSpec"}}]},{"method":"addSubsystem","steps":[{"n":1,"text":"Verify the system spec exists (parent gate)","call":{"component":"mcp_core_adapter","method":"loadSystemSpec"}},{"n":2,"text":"Persist the L1 subsystem spec via the core client adapter","call":{"component":"mcp_core_adapter","method":"saveSubsystemSpec"}}]},{"method":"addComponent","steps":[{"n":1,"text":"Verify the parent subsystem exists","call":{"component":"mcp_core_adapter","method":"loadSubsystemSpec"}},{"n":2,"text":"Persist the L2 component spec via the core client adapter","call":{"component":"mcp_core_adapter","method":"saveComponentSpec"}}]},{"method":"defineInterface","steps":[{"n":1,"text":"Verify the owning component exists","call":{"component":"mcp_core_adapter","method":"loadComponentSpec"}},{"n":2,"text":"Persist the L3 interface spec via the core client adapter","call":{"component":"mcp_core_adapter","method":"saveInterfaceSpec"}}]},{"method":"writeNarrative","steps":[{"n":1,"text":"Verify the contract interface exists","call":{"component":"mcp_core_adapter","method":"loadInterfaceSpec"}},{"n":2,"text":"Persist the L4 implementation spec via the core client adapter","call":{"component":"mcp_core_adapter","method":"saveImplementationSpec"}}]},{"method":"validateTree","steps":[{"n":1,"text":"Run the conformance gate via the validator client adapter","call":{"component":"mcp_validator_adapter","method":"validateSddTree"}}]},{"method":"getStatus","steps":[{"n":1,"text":"Load subsystem specs for the dashboard","call":{"component":"mcp_core_adapter","method":"loadSubsystemSpecs"}},{"n":2,"text":"Load component specs for the dashboard","call":{"component":"mcp_core_adapter","method":"loadComponentSpecs"}},{"n":3,"text":"Load interface specs for the dashboard","call":{"component":"mcp_core_adapter","method":"loadInterfaceSpecs"}},{"n":4,"text":"Load implementation specs for the dashboard","call":{"component":"mcp_core_adapter","method":"loadImplementationSpecs"}},{"n":5,"text":"Compose the hierarchical completeness report"}]}]},{"id":"mcp_portal","name":"MCP Portal","description":"Inbound portal for the SDD MCP subsystem: receives sdd_* tool calls over MCP stdio (JSON-RPC) and dispatches them to the MCP orchestrator; server lifecycle is delegated to the MCP server supervisor.","subsystem":"sdd_mcp","componentType":"Portal","portalType":"Custom","status":"complete","public":true,"owns":[],"dependsOn":["mcp_server","mcp_orchestrator"],"interfaces":[{"id":"imcp_portal","name":"MCP Portal Interface","description":"Inbound Portal contract for the MCP subsystem: server bootstrap plus the sdd_* tool surface exposed over MCP stdio (JSON-RPC).","methods":[{"name":"createMcpServer","description":"Initializes and registers the MCP server (tool registration + stdio transport)","signature":"createMcpServer(): McpServer","returns":"McpServer","endpoint":{"transport":"Custom","address":"stdio json-rpc: server bootstrap (wairon mcp serve)"}},{"name":"sdd_initialize_system","description":"Tool: initialize the L0 system specification","signature":"sdd_initialize_system(spec: SystemSpec): void","returns":"void","endpoint":{"transport":"Custom","address":"mcp tools/call sdd_initialize_system"}},{"name":"sdd_add_subsystem","description":"Tool: add an L1 subsystem under the system boundary","signature":"sdd_add_subsystem(spec: SubsystemSpec): void","returns":"void","endpoint":{"transport":"Custom","address":"mcp tools/call sdd_add_subsystem"}},{"name":"sdd_add_component","description":"Tool: add an L2 component under a subsystem","signature":"sdd_add_component(spec: ComponentSpec): void","returns":"void","endpoint":{"transport":"Custom","address":"mcp tools/call sdd_add_component"}},{"name":"sdd_define_interface","description":"Tool: define an L3 interface contract for a component","signature":"sdd_define_interface(spec: InterfaceSpec): void","returns":"void","endpoint":{"transport":"Custom","address":"mcp tools/call sdd_define_interface"}},{"name":"sdd_write_narrative","description":"Tool: write an L4 implementation spec with L5 method narratives","signature":"sdd_write_narrative(spec: ImplementationSpec): void","returns":"void","endpoint":{"transport":"Custom","address":"mcp tools/call sdd_write_narrative"}},{"name":"sdd_validate_tree","description":"Tool: run the architecture-conformance gate over the spec tree","signature":"sdd_validate_tree(): ValidationResult","returns":"ValidationResult","endpoint":{"transport":"Custom","address":"mcp tools/call sdd_validate_tree"}},{"name":"sdd_get_status","description":"Tool: completeness status dashboard of the spec tree","signature":"sdd_get_status(): string","returns":"string","endpoint":{"transport":"Custom","address":"mcp tools/call sdd_get_status"}}]}],"narratives":[{"method":"createMcpServer","steps":[{"n":1,"text":"Forward createMcpServer call to the MCP server supervisor","call":{"component":"mcp_server","method":"createMcpServer"}}]},{"method":"sdd_initialize_system","steps":[{"n":1,"text":"Dispatch to the initializeSystem workflow","call":{"component":"mcp_orchestrator","method":"initializeSystem"}}]},{"method":"sdd_add_subsystem","steps":[{"n":1,"text":"Dispatch to the addSubsystem workflow","call":{"component":"mcp_orchestrator","method":"addSubsystem"}}]},{"method":"sdd_add_component","steps":[{"n":1,"text":"Dispatch to the addComponent workflow","call":{"component":"mcp_orchestrator","method":"addComponent"}}]},{"method":"sdd_define_interface","steps":[{"n":1,"text":"Dispatch to the defineInterface workflow","call":{"component":"mcp_orchestrator","method":"defineInterface"}}]},{"method":"sdd_write_narrative","steps":[{"n":1,"text":"Dispatch to the writeNarrative workflow","call":{"component":"mcp_orchestrator","method":"writeNarrative"}}]},{"method":"sdd_validate_tree","steps":[{"n":1,"text":"Dispatch to the validateTree workflow","call":{"component":"mcp_orchestrator","method":"validateTree"}}]},{"method":"sdd_get_status","steps":[{"n":1,"text":"Dispatch to the getStatus workflow","call":{"component":"mcp_orchestrator","method":"getStatus"}}]}]},{"id":"mcp_server","name":"MCP Server Manager","description":"Exposes the 6 standard SDD tools and manages their request/response lifecycles.","subsystem":"sdd_mcp","componentType":"Supervisor","status":"complete","public":false,"owns":[],"dependsOn":["mcp_core_adapter","mcp_validator_adapter"],"interfaces":[{"id":"imcp_server","name":"MCP Server Interface","description":"Interface contract for starting and configuring the wairon Model Context Protocol (MCP) server.","methods":[{"name":"createMcpServer","description":"Factory method to create, configure, and register standard tools on the MCP server","signature":"createMcpServer(): McpServer","returns":"McpServer"}]}],"narratives":[{"method":"createMcpServer","steps":[{"n":1,"text":"Instantiate McpServer with name 'wairon' and version"},{"n":2,"text":"Register tool 'listAgents' which resolves dynamic agent topology using agent_resolver","call":{"component":"mcp_core_adapter","method":"resolveAgentTopology"}},{"n":3,"text":"Register tool 'getAgent' which retrieves a single resolved agent's details","call":{"component":"mcp_core_adapter","method":"resolveAgentTopology"}},{"n":4,"text":"Register validation tools executing validateSddTree","call":{"component":"mcp_validator_adapter","method":"validateSddTree"}},{"n":5,"text":"Register loader tools to fetch system, subsystem, and component specs from spec_loader","call":{"component":"mcp_core_adapter","method":"loadSystemSpec"}},{"n":6,"text":"Return configured McpServer instance"}]}]},{"id":"mcp_validator_adapter","name":"MCP Validator Client Adapter","description":"Local client adapter in sdd_mcp to cross the subsystem boundary to sdd_validator.","subsystem":"sdd_mcp","componentType":"Adapter","status":"complete","public":false,"owns":[],"dependsOn":["validator_portal"],"interfaces":[{"id":"imcp_validator_adapter","name":"MCP Validator Adapter Interface","description":"Adapter contract for MCP to run spec validations.","methods":[{"name":"validateSddTree","description":"Calls validateSddTree on validator portal","signature":"validateSddTree(): ValidationResult","returns":"ValidationResult"}]}],"narratives":[{"method":"validateSddTree","steps":[{"n":1,"text":"Call validateSddTree on validator portal","call":{"component":"validator_portal","method":"validateSddTree"}}]}]},{"id":"skills_exporter","name":"Skills Exporter","description":"Copies the static SDD AI Skill definitions to user-approved local AI CLI configuration directories.","subsystem":"sdd_skills","componentType":"Adapter","status":"complete","public":false,"owns":[],"dependsOn":[],"interfaces":[{"id":"iskills_exporter","name":"Skills Exporter Interface","description":"Interface contract for copying static workflow skills to agent config directories.","methods":[{"name":"exportSddSkills","description":"Copies built-in SDD skills templates into the project's local config folders","signature":"exportSddSkills(): void","returns":"void"}]}],"narratives":[{"method":"exportSddSkills","steps":[{"n":1,"text":"Determine build template directory for skills"},{"n":2,"text":"Ensure destination .gemini/skills/ and .claude/ folders are created"},{"n":3,"text":"Iterate over static skill template files and copy them to destination directories"}]}]},{"id":"skills_orchestrator","name":"Skills Orchestrator","description":"Orchestrates skills exporting logic.","subsystem":"sdd_skills","componentType":"Orchestrator","status":"complete","public":false,"owns":[],"dependsOn":["skills_exporter"],"interfaces":[{"id":"iskills_orchestrator","name":"Skills Orchestrator Interface","description":"Orchestrator contract for exporting skills.","methods":[{"name":"exportSddSkills","description":"Export skills via exporter","signature":"exportSddSkills(): void","returns":"void"}]}],"narratives":[{"method":"exportSddSkills","steps":[{"n":1,"text":"Call exportSddSkills on skills exporter adapter","call":{"component":"skills_exporter","method":"exportSddSkills"}}]}]},{"id":"skills_portal","name":"Skills Portal","description":"Inbound portal for the SDD skills subsystem.","subsystem":"sdd_skills","componentType":"Portal","portalType":"Custom","status":"complete","public":true,"owns":[],"dependsOn":["skills_orchestrator"],"interfaces":[{"id":"iskills_portal","name":"Skills Portal Interface","description":"Inbound Portal contract for skills subsystem.","methods":[{"name":"exportSddSkills","description":"Triggers skill exporting","signature":"exportSddSkills(): void","returns":"void"}]}],"narratives":[{"method":"exportSddSkills","steps":[{"n":1,"text":"Forward exportSddSkills call to skills orchestrator","call":{"component":"skills_orchestrator","method":"exportSddSkills"}}]}]},{"id":"spec_loader","name":"Spec Loader","description":"I/O manager for specification YAML files under .wai/specs/","subsystem":"sdd_core","componentType":"Registry","status":"complete","public":false,"owns":[],"dependsOn":[],"interfaces":[{"id":"ispec_loader","name":"Spec Loader Interface","description":"Interface contract for spec loading, saving, and resolving.","methods":[{"name":"loadSystemSpec","description":"Loads L0 system specification from system.yaml","signature":"loadSystemSpec(): SystemSpec | null","returns":"SystemSpec | null"},{"name":"saveSystemSpec","description":"Saves L0 system specification to system.yaml","signature":"saveSystemSpec(spec: SystemSpec): void","returns":"void"},{"name":"loadSubsystemSpecs","description":"Loads all L1 subsystem specifications from subsystems/*.yaml","signature":"loadSubsystemSpecs(): SubsystemSpec[]","returns":"SubsystemSpec[]"},{"name":"loadSubsystemSpec","description":"Loads a single subsystem specification by id","signature":"loadSubsystemSpec(id: string): SubsystemSpec | null","returns":"SubsystemSpec | null"},{"name":"saveSubsystemSpec","description":"Saves a subsystem specification","signature":"saveSubsystemSpec(spec: SubsystemSpec): void","returns":"void"},{"name":"loadComponentSpecs","description":"Loads all L2 component specifications from components/*.yaml","signature":"loadComponentSpecs(): ComponentSpec[]","returns":"ComponentSpec[]"},{"name":"loadComponentSpec","description":"Loads a single component specification by id","signature":"loadComponentSpec(id: string): ComponentSpec | null","returns":"ComponentSpec | null"},{"name":"saveComponentSpec","description":"Saves a component specification","signature":"saveComponentSpec(spec: ComponentSpec): void","returns":"void"},{"name":"loadInterfaceSpecs","description":"Loads all L3 interface specifications from interfaces/*.yaml","signature":"loadInterfaceSpecs(): InterfaceSpec[]","returns":"InterfaceSpec[]"},{"name":"loadInterfaceSpec","description":"Loads a single interface specification by id","signature":"loadInterfaceSpec(id: string): InterfaceSpec | null","returns":"InterfaceSpec | null"},{"name":"saveInterfaceSpec","description":"Saves an interface specification","signature":"saveInterfaceSpec(spec: InterfaceSpec): void","returns":"void"},{"name":"loadImplementationSpecs","description":"Loads all L4 implementation specifications from implementations/*.yaml","signature":"loadImplementationSpecs(): ImplementationSpec[]","returns":"ImplementationSpec[]"},{"name":"loadImplementationSpec","description":"Loads a single implementation specification by id","signature":"loadImplementationSpec(id: string): ImplementationSpec | null","returns":"ImplementationSpec | null"},{"name":"saveImplementationSpec","description":"Saves an implementation specification","signature":"saveImplementationSpec(spec: ImplementationSpec): void","returns":"void"}]}],"narratives":[{"method":"loadSystemSpec","steps":[{"n":1,"text":"Determine the system spec path using AI_PATHS.specsSystem()"},{"n":2,"text":"Read system.yaml if it exists and parse it using SystemSpecSchema"}]},{"method":"saveSystemSpec","steps":[{"n":1,"text":"Serialize the SystemSpec object and write to system.yaml"}]},{"method":"loadSubsystemSpecs","steps":[{"n":1,"text":"List all YAML files in the subsystems specification directory"},{"n":2,"text":"Read and parse each file against SubsystemSpecSchema, collecting Zod errors"}]},{"method":"loadSubsystemSpec","steps":[{"n":1,"text":"Read the specified subsystem spec file and validate against SubsystemSpecSchema"}]},{"method":"saveSubsystemSpec","steps":[{"n":1,"text":"Update the updatedAt timestamp and write the subsystem spec to subsystems/*.yaml"}]},{"method":"loadComponentSpecs","steps":[{"n":1,"text":"List all YAML files in the components specification directory"},{"n":2,"text":"Read and parse each file against ComponentSpecSchema, collecting Zod errors"}]},{"method":"loadComponentSpec","steps":[{"n":1,"text":"Read the specified component spec file and validate against ComponentSpecSchema"}]},{"method":"saveComponentSpec","steps":[{"n":1,"text":"Update the updatedAt timestamp and write the component spec to components/*.yaml"}]},{"method":"loadInterfaceSpecs","steps":[{"n":1,"text":"List all YAML files in the interfaces specification directory"},{"n":2,"text":"Read and parse each file against InterfaceSpecSchema, collecting Zod errors"}]},{"method":"loadInterfaceSpec","steps":[{"n":1,"text":"Read the specified interface spec file and validate against InterfaceSpecSchema"}]},{"method":"saveInterfaceSpec","steps":[{"n":1,"text":"Update the updatedAt timestamp and write the interface spec to interfaces/*.yaml"}]},{"method":"loadImplementationSpecs","steps":[{"n":1,"text":"List all YAML files in the implementations specification directory"},{"n":2,"text":"Read and parse each file against ImplementationSpecSchema, collecting Zod errors"}]},{"method":"loadImplementationSpec","steps":[{"n":1,"text":"Read the specified implementation spec file and validate against ImplementationSpecSchema"}]},{"method":"saveImplementationSpec","steps":[{"n":1,"text":"Update the updatedAt timestamp and write the implementation spec to implementations/*.yaml"}]}]},{"id":"spec_validator","name":"Spec Validator","description":"Validation linter checking spec completeness, method contracts, and component type boundaries.","subsystem":"sdd_validator","componentType":"Specialist","status":"complete","public":false,"owns":[],"dependsOn":["validator_core_adapter"],"interfaces":[{"id":"ispec_validator","name":"Spec Validator Interface","description":"Interface contract for validating spec tree hierarchies, registry ownerships, and project configs.","methods":[{"name":"validateSddTree","description":"Performs full SDD spec tree structural validation and returns results","signature":"validateSddTree(): ValidationResult","returns":"ValidationResult"},{"name":"validateRegistry","description":"Validates legacy/resolved Agent registry constraints","signature":"validateRegistry(registry: Registry, rules: RulesConfig): ValidationResult","returns":"ValidationResult"},{"name":"validateProjectConfig","description":"Validates project.yaml configuration file structure","signature":"validateProjectConfig(config: ProjectConfig): ValidationResult","returns":"ValidationResult"}]}],"narratives":[{"method":"validateSddTree","steps":[{"n":1,"text":"Clear loader issues"},{"n":2,"text":"Load system spec","call":{"component":"validator_core_adapter","method":"loadSystemSpec"}},{"n":3,"text":"Load subsystem specs","call":{"component":"validator_core_adapter","method":"loadSubsystemSpecs"}},{"n":4,"text":"Load component specs","call":{"component":"validator_core_adapter","method":"loadComponentSpecs"}},{"n":5,"text":"Load interface specs","call":{"component":"validator_core_adapter","method":"loadInterfaceSpecs"}},{"n":6,"text":"Load implementation specs","call":{"component":"validator_core_adapter","method":"loadImplementationSpecs"}},{"n":7,"text":"Integrate Zod schema loader errors"},{"n":8,"text":"Validate spec hierarchy and entity references"},{"n":9,"text":"Validate method implementation signatures against contracts"},{"n":10,"text":"Validate narrative call steps target declared dependencies"},{"n":11,"text":"Enforce architectural component type interaction boundaries"},{"n":12,"text":"Run DFS circular dependency cycle detection"}]},{"method":"validateRegistry","steps":[{"n":1,"text":"Validate agent ID uniqueness"},{"n":2,"text":"Validate per-agent properties like owned paths"},{"n":3,"text":"Check for overlapping workspace file ownerships"}]},{"method":"validateProjectConfig","steps":[{"n":1,"text":"Ensure at least one output target is configured in project.yaml"},{"n":2,"text":"Verify that configured targets are enabled"}]}]},{"id":"validator_core_adapter","name":"Validator Core Client Adapter","description":"Local client adapter in sdd_validator to cross the subsystem boundary to sdd_core.","subsystem":"sdd_validator","componentType":"Adapter","status":"complete","public":false,"owns":[],"dependsOn":["core_portal"],"interfaces":[{"id":"ivalidator_core_adapter","name":"Validator Core Adapter Interface","description":"Adapter contract for validator to load specs from core portal.","methods":[{"name":"loadSystemSpec","description":"Loads the system spec via core portal","signature":"loadSystemSpec(): SystemSpec | null","returns":"SystemSpec | null"},{"name":"loadSubsystemSpecs","description":"Loads subsystem specs via core portal","signature":"loadSubsystemSpecs(): SubsystemSpec[]","returns":"SubsystemSpec[]"},{"name":"loadComponentSpecs","description":"Loads component specs via core portal","signature":"loadComponentSpecs(): ComponentSpec[]","returns":"ComponentSpec[]"},{"name":"loadInterfaceSpecs","description":"Loads interface specs via core portal","signature":"loadInterfaceSpecs(): InterfaceSpec[]","returns":"InterfaceSpec[]"},{"name":"loadImplementationSpecs","description":"Loads implementation specs via core portal","signature":"loadImplementationSpecs(): ImplementationSpec[]","returns":"ImplementationSpec[]"}]}],"narratives":[{"method":"loadSystemSpec","steps":[{"n":1,"text":"Call loadSystemSpec on core portal","call":{"component":"core_portal","method":"loadSystemSpec"}}]},{"method":"loadSubsystemSpecs","steps":[{"n":1,"text":"Call loadSubsystemSpecs on core portal","call":{"component":"core_portal","method":"loadSubsystemSpecs"}}]},{"method":"loadComponentSpecs","steps":[{"n":1,"text":"Call loadComponentSpecs on core portal","call":{"component":"core_portal","method":"loadComponentSpecs"}}]},{"method":"loadInterfaceSpecs","steps":[{"n":1,"text":"Call loadInterfaceSpecs on core portal","call":{"component":"core_portal","method":"loadInterfaceSpecs"}}]},{"method":"loadImplementationSpecs","steps":[{"n":1,"text":"Call loadImplementationSpecs on core portal","call":{"component":"core_portal","method":"loadImplementationSpecs"}}]}]},{"id":"validator_portal","name":"Validator Portal","description":"Inbound portal for the SDD validator subsystem.","subsystem":"sdd_validator","componentType":"Portal","portalType":"Custom","status":"complete","public":true,"owns":[],"dependsOn":["spec_validator"],"interfaces":[{"id":"ivalidator_portal","name":"Validator Portal Interface","description":"Inbound Portal contract for validator subsystem.","methods":[{"name":"validateSddTree","description":"Performs full SDD tree validation","signature":"validateSddTree(): ValidationResult","returns":"ValidationResult"},{"name":"validateRegistry","description":"Validates registry","signature":"validateRegistry(registry: Registry, rules: RulesConfig): ValidationResult","returns":"ValidationResult"},{"name":"validateProjectConfig","description":"Validates project config","signature":"validateProjectConfig(config: ProjectConfig): ValidationResult","returns":"ValidationResult"}]}],"narratives":[{"method":"validateSddTree","steps":[{"n":1,"text":"Forward validateSddTree call to spec validator","call":{"component":"spec_validator","method":"validateSddTree"}}]},{"method":"validateRegistry","steps":[{"n":1,"text":"Forward validateRegistry call to spec validator","call":{"component":"spec_validator","method":"validateRegistry"}}]},{"method":"validateProjectConfig","steps":[{"n":1,"text":"Forward validateProjectConfig call to spec validator","call":{"component":"spec_validator","method":"validateProjectConfig"}}]}]}],"edges":[{"from":"agent_resolver","to":"spec_loader","cross":false},{"from":"cli_core_adapter","to":"core_portal","cross":true},{"from":"cli_runner","to":"cli_core_adapter","cross":false},{"from":"cli_runner","to":"cli_validator_adapter","cross":false},{"from":"cli_runner","to":"cli_skills_adapter","cross":false},{"from":"cli_skills_adapter","to":"skills_portal","cross":true},{"from":"cli_validator_adapter","to":"validator_portal","cross":true},{"from":"core_orchestrator","to":"spec_loader","cross":false},{"from":"core_portal","to":"agent_resolver","cross":false},{"from":"core_portal","to":"core_orchestrator","cross":false},{"from":"mcp_core_adapter","to":"core_portal","cross":true},{"from":"mcp_orchestrator","to":"mcp_core_adapter","cross":false},{"from":"mcp_orchestrator","to":"mcp_validator_adapter","cross":false},{"from":"mcp_portal","to":"mcp_server","cross":false},{"from":"mcp_portal","to":"mcp_orchestrator","cross":false},{"from":"mcp_server","to":"mcp_core_adapter","cross":false},{"from":"mcp_server","to":"mcp_validator_adapter","cross":false},{"from":"mcp_validator_adapter","to":"validator_portal","cross":true},{"from":"skills_orchestrator","to":"skills_exporter","cross":false},{"from":"skills_portal","to":"skills_orchestrator","cross":false},{"from":"spec_validator","to":"validator_core_adapter","cross":false},{"from":"validator_core_adapter","to":"core_portal","cross":true},{"from":"validator_portal","to":"spec_validator","cross":false}],"issues":[]};
+</script>
+<script>
+(function () {
+  'use strict';
+  // ---- indexes -------------------------------------------------------------
+  var compById = {};
+  MODEL.components.forEach(function (c) { compById[c.id] = c; });
+  var subById = {};
+  MODEL.subsystems.forEach(function (s) { subById[s.id] = s; });
+  var issuesBySpec = {};
+  MODEL.issues.forEach(function (i) {
+    if (!i.specId) return;
+    (issuesBySpec[i.specId] = issuesBySpec[i.specId] || []).push(i);
+  });
+  document.getElementById('issueCount').textContent =
+    MODEL.issues.filter(function (i) { return i.severity === 'error'; }).length + ' err / ' +
+    MODEL.issues.filter(function (i) { return i.severity === 'warning'; }).length + ' warn';
+
+  var state = {
+    collapsed: {},          // subsystem or pattern id -> true
+    selected: null,
+    showIssues: false,
+    query: ''
+  };
+
+  function stereoClass(t) {
+    if (t === 'Portal' || t === 'Observer') return 'entry';
+    if (t === 'Store' || t === 'Index' || t === 'Registry') return 'data';
+    if (t === 'Adapter') return 'adapter';
+    if (t === 'Repository' || t === 'Gateway' || t === 'FeatureComponent' || t === 'RouterComponent') return 'pattern';
+    return 'logic';
+  }
+  var FILL = { entry:'#eef4ff', logic:'#f4effd', data:'#fdf6e3', adapter:'#eef8f1', pattern:'#f6f8fa' };
+  var STROKE = { entry:'#4a7dcf', logic:'#8a63c9', data:'#c9963f', adapter:'#4f9e6b', pattern:'#6a737d' };
+  var PATTERN_TYPES = { Repository:1, Gateway:1, FeatureComponent:1, RouterComponent:1 };
+
+  // ---- layout --------------------------------------------------------------
+  var BOX_W = 188, BOX_H = 50, GAP_X = 70, GAP_Y = 22, SUB_PAD = 22, SUB_HEAD = 36;
+  var MEMBER_W = 168, MEMBER_H = 42, PAT_PAD = 12, PAT_HEAD = 30;
+
+  function layerOf(comp, topIds, memo, stack) {
+    if (memo[comp.id] !== undefined) return memo[comp.id];
+    if (stack[comp.id]) return 0; // cycle guard
+    stack[comp.id] = true;
+    var l;
+    if (comp.componentType === 'Portal' || comp.componentType === 'Observer') {
+      l = 0;
+    } else {
+      l = 0;
+      MODEL.components.forEach(function (other) {
+        if (other.subsystem !== comp.subsystem) return;
+        if (!topIds[other.id]) return;
+        if (other.dependsOn.indexOf(comp.id) >= 0) {
+          l = Math.max(l, layerOf(other, topIds, memo, stack) + 1);
+        }
+      });
+      if (l === 0) l = 1;
+    }
+    delete stack[comp.id];
+    memo[comp.id] = l;
+    return l;
+  }
+
+  function boxSizeFor(comp) {
+    if (PATTERN_TYPES[comp.componentType] && comp.owns.length && !state.collapsed[comp.id]) {
+      return { w: MEMBER_W + PAT_PAD * 2 + 20, h: PAT_HEAD + comp.owns.length * (MEMBER_H + 10) + PAT_PAD };
+    }
+    return { w: BOX_W, h: BOX_H };
+  }
+
+  // Returns { boxes: {id:{x,y,w,h,kind}}, subs: {id:{x,y,w,h,collapsed}}, width, height }
+  function layout() {
+    var boxes = {}, subs = {};
+    // subsystem order: alphabetical, stable and predictable
+    var order = MODEL.subsystems.slice().sort(function (a, b) { return a.id < b.id ? -1 : 1; });
+    var sizes = {};
+    order.forEach(function (sub) {
+      if (state.collapsed[sub.id]) { sizes[sub.id] = { w: 240, h: 72, cols: [] }; return; }
+      var comps = MODEL.components.filter(function (c) { return c.subsystem === sub.id && !c.owner; });
+      var topIds = {}; comps.forEach(function (c) { topIds[c.id] = true; });
+      var memo = {};
+      comps.forEach(function (c) { layerOf(c, topIds, memo, {}); });
+      var cols = {};
+      comps.forEach(function (c) { (cols[memo[c.id]] = cols[memo[c.id]] || []).push(c); });
+      var colKeys = Object.keys(cols).map(Number).sort(function (a, b) { return a - b; });
+      var width = SUB_PAD * 2, height = 0;
+      var colInfo = [];
+      colKeys.forEach(function (k) {
+        var colComps = cols[k].sort(function (a, b) { return a.id < b.id ? -1 : 1; });
+        var colW = 0, colH = 0;
+        colComps.forEach(function (c) { var s = boxSizeFor(c); colW = Math.max(colW, s.w); colH += s.h + GAP_Y; });
+        colInfo.push({ comps: colComps, w: colW, h: colH });
+        width += colW + GAP_X;
+        height = Math.max(height, colH);
+      });
+      if (colInfo.length) width -= GAP_X;
+      sizes[sub.id] = { w: Math.max(width, 240), h: SUB_HEAD + height + SUB_PAD, cols: colInfo };
+    });
+
+    // place subsystems in rows
+    var MAX_ROW = 1750, x = 30, y = 20, rowH = 0, totalW = 0;
+    order.forEach(function (sub) {
+      var s = sizes[sub.id];
+      if (x + s.w > MAX_ROW && x > 30) { x = 30; y += rowH + 46; rowH = 0; }
+      subs[sub.id] = { x: x, y: y, w: s.w, h: s.h, collapsed: !!state.collapsed[sub.id] };
+      // place its components
+      if (!state.collapsed[sub.id]) {
+        var cx = x + SUB_PAD;
+        s.cols.forEach(function (col) {
+          var cy = y + SUB_HEAD + (s.h - SUB_HEAD - SUB_PAD - col.h + GAP_Y) / 2;
+          col.comps.forEach(function (c) {
+            var bs = boxSizeFor(c);
+            boxes[c.id] = { x: cx, y: cy, w: bs.w, h: bs.h, kind: 'comp' };
+            // pattern members inside
+            if (PATTERN_TYPES[c.componentType] && c.owns.length && !state.collapsed[c.id]) {
+              var my = cy + PAT_HEAD;
+              c.owns.forEach(function (mid) {
+                boxes[mid] = { x: cx + PAT_PAD + 10, y: my, w: MEMBER_W, h: MEMBER_H, kind: 'member' };
+                my += MEMBER_H + 10;
+              });
+            }
+            cy += bs.h + GAP_Y;
+          });
+          cx += col.w + GAP_X;
+        });
+      }
+      x += s.w + 46;
+      rowH = Math.max(rowH, s.h);
+      totalW = Math.max(totalW, x);
+    });
+    return { boxes: boxes, subs: subs, width: totalW + 40, height: y + rowH + 60 };
+  }
+
+  // The visible box representing a component id under current collapse state.
+  function anchorFor(id, L) {
+    var c = compById[id];
+    if (!c) return null;
+    if (state.collapsed[c.subsystem]) return { id: c.subsystem, box: L.subs[c.subsystem] };
+    if (c.owner && state.collapsed[c.owner]) return { id: c.owner, box: L.boxes[c.owner] };
+    if (L.boxes[id]) return { id: id, box: L.boxes[id] };
+    return null;
+  }
+
+  // ---- svg helpers ----------------------------------------------------------
+  var SVG = 'http://www.w3.org/2000/svg';
+  function el(tag, attrs, parent) {
+    var e = document.createElementNS(SVG, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function textEl(parent, x, y, str, attrs) {
+    var t = el('text', Object.assign({ x: x, y: y }, attrs || {}), parent);
+    t.textContent = str;
+    return t;
+  }
+  function trunc(s, n) { return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+
+  function matches(c) {
+    if (!state.query) return true;
+    var q = state.query.toLowerCase();
+    return c.id.toLowerCase().indexOf(q) >= 0 || c.name.toLowerCase().indexOf(q) >= 0;
+  }
+
+  // ---- render ----------------------------------------------------------------
+  var root = document.getElementById('root');
+  function render() {
+    var L = layout();
+    while (root.firstChild) root.removeChild(root.firstChild);
+
+    // subsystem containers
+    MODEL.subsystems.forEach(function (sub) {
+      var sb = L.subs[sub.id];
+      var g = el('g', { 'class': 'subsys' + (sb.collapsed ? ' collapsed' : '') + (state.query && !MODEL.components.some(function (c) { return c.subsystem === sub.id && matches(c); }) ? ' dimmed' : '') }, root);
+      el('rect', { 'class': 'frame', x: sb.x, y: sb.y, width: sb.w, height: sb.h, rx: 10 }, g);
+      el('rect', { 'class': 'head', x: sb.x + 1, y: sb.y + 1, width: sb.w - 2, height: SUB_HEAD - 8, rx: 9 }, g);
+      var head = textEl(g, sb.x + 14, sb.y + 20, trunc(sub.name, 40), { 'class': 'subheader' });
+      textEl(g, sb.x + sb.w - 22, sb.y + 20, sb.collapsed ? '▸' : '▾', { 'class': 'subtoggle' });
+      if (sb.collapsed) textEl(g, sb.x + 14, sb.y + 46, trunc(sub.description, 34), { fill: '#57606a', 'font-size': '11px' });
+      g.addEventListener('dblclick', function (ev) { ev.stopPropagation(); state.collapsed[sub.id] = !state.collapsed[sub.id]; render(); });
+      head.addEventListener('click', function (ev) { ev.stopPropagation(); select({ kind: 'subsystem', id: sub.id }); });
+      g.addEventListener('click', function () { select({ kind: 'subsystem', id: sub.id }); });
+    });
+
+    // edges (aggregated by visible anchors)
+    var agg = {};
+    MODEL.edges.forEach(function (e) {
+      var a = anchorFor(e.from, L), b = anchorFor(e.to, L);
+      if (!a || !b || a.id === b.id) return;
+      var key = a.id + '=>' + b.id;
+      if (!agg[key]) agg[key] = { a: a, b: b, n: 0, cross: false, tube: a.id !== e.from || b.id !== e.to };
+      agg[key].n++;
+      if (e.cross) agg[key].cross = true;
+    });
+    Object.keys(agg).forEach(function (key) {
+      var e = agg[key];
+      var x1 = e.a.box.x + e.a.box.w, y1 = e.a.box.y + e.a.box.h / 2;
+      var x2 = e.b.box.x, y2 = e.b.box.y + e.b.box.h / 2;
+      if (x2 < x1 - 10) { x1 = e.a.box.x; x2 = e.b.box.x + e.b.box.w; }
+      var dx = Math.max(40, Math.abs(x2 - x1) / 2);
+      var d = 'M ' + x1 + ' ' + y1 + ' C ' + (x1 + (x2 >= x1 ? dx : -dx)) + ' ' + y1 + ', ' + (x2 + (x2 >= x1 ? -dx : dx)) + ' ' + y2 + ', ' + x2 + ' ' + y2;
+      var cls = 'edge' + (e.cross ? ' cross' : '') + (e.tube ? ' tube' : '');
+      el('path', { d: d, 'class': cls, 'marker-end': e.cross ? 'url(#arrowCross)' : 'url(#arrow)' }, root);
+      if (e.tube && e.n > 1) {
+        textEl(root, (x1 + x2) / 2, (y1 + y2) / 2 - 6, e.n + ' links', { 'class': 'edgeLabel', 'text-anchor': 'middle' });
+      }
+    });
+
+    // component boxes (patterns first so members draw on top)
+    var drawn = Object.keys(L.boxes).map(function (id) { return compById[id]; }).filter(Boolean);
+    drawn.sort(function (a, b) { return (L.boxes[a.id].kind === 'member' ? 1 : 0) - (L.boxes[b.id].kind === 'member' ? 1 : 0); });
+    drawn.forEach(function (c) {
+      var b = L.boxes[c.id];
+      var sc = stereoClass(c.componentType);
+      var isPattern = PATTERN_TYPES[c.componentType] && c.owns.length && !state.collapsed[c.id];
+      var cls = 'comp' + (c.public ? ' public' : '') + (isPattern ? ' pattern' : '')
+        + (state.selected && state.selected.id === c.id ? ' selected' : '')
+        + (state.query && !matches(c) ? ' dimmed' : '')
+        + (state.showIssues && issuesBySpec[c.id] ? ' hasIssue' : '');
+      var g = el('g', { 'class': cls }, root);
+      el('rect', { x: b.x, y: b.y, width: b.w, height: b.h, rx: 8, fill: FILL[sc], stroke: STROKE[sc] }, g);
+      textEl(g, b.x + 10, b.y + 19, trunc(c.name, b.w > 180 ? 24 : 21), { 'font-weight': 600, 'font-size': '12px' });
+      textEl(g, b.x + 10, b.y + 34, '«' + c.componentType + (c.portalType ? '/' + c.portalType : '') + '»', { fill: '#57606a', 'font-size': '10.5px' });
+      if (isPattern) {
+        g.addEventListener('dblclick', function (ev) { ev.stopPropagation(); state.collapsed[c.id] = true; render(); });
+      } else if (PATTERN_TYPES[c.componentType] && c.owns.length) {
+        g.addEventListener('dblclick', function (ev) { ev.stopPropagation(); delete state.collapsed[c.id]; render(); });
+      }
+      g.addEventListener('click', function (ev) { ev.stopPropagation(); select({ kind: 'component', id: c.id }); });
+    });
+  }
+
+  // ---- detail panel ----------------------------------------------------------
+  var panel = document.getElementById('panel');
+  function esc(s) { var d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
+  function chip(label, target) {
+    return '<span class="chip" data-goto="' + esc(target || '') + '">' + esc(label) + '</span>';
+  }
+  function issueHtml(list) {
+    return list.map(function (i) {
+      return '<div class="issue ' + esc(i.severity) + '"><code>' + esc(i.code) + '</code><br>' + esc(i.message) + '</div>';
+    }).join('');
+  }
+  function select(sel) {
+    state.selected = sel;
+    var html = '';
+    if (sel && sel.kind === 'component') {
+      var c = compById[sel.id];
+      html += '<h2>' + esc(c.name) + '</h2>';
+      html += '<span class="chip static">«' + esc(c.componentType) + (c.portalType ? '/' + esc(c.portalType) : '') + '»</span>';
+      if (c.public) html += '<span class="chip static">published</span>';
+      if (c.status) html += '<span class="chip static">' + esc(c.status) + '</span>';
+      html += '<span class="chip" data-goto="sub:' + esc(c.subsystem) + '">' + esc(c.subsystem) + '</span>';
+      html += '<p class="desc">' + esc(c.description) + '</p>';
+      if (c.dependsOn.length) { html += '<h3>Depends on</h3>' + c.dependsOn.map(function (d) { return chip(d, 'comp:' + d); }).join(''); }
+      if (c.owns.length) { html += '<h3>Owns</h3>' + c.owns.map(function (d) { return chip(d, 'comp:' + d); }).join(''); }
+      c.interfaces.forEach(function (intf) {
+        html += '<h3>' + esc(intf.name) + ' <code>' + esc(intf.id) + '</code></h3>';
+        intf.methods.forEach(function (m) {
+          html += '<div class="method"><b>' + esc(m.name) + '</b><br><code>' + esc(m.signature) + '</code><br><span class="ret">returns ' + esc(m.returns) + '</span>';
+          if (m.endpoint) html += '<br><code>' + esc(JSON.stringify(m.endpoint)) + '</code>';
+          if (m.guarantees) html += '<br>' + m.guarantees.map(function (g) { return '<span class="chip static">' + esc(g) + '</span>'; }).join('');
+          html += '</div>';
+        });
+      });
+      if (c.narratives.length) {
+        html += '<h3>Narratives (L5)</h3>';
+        c.narratives.forEach(function (n) {
+          html += '<div class="method"><b>' + esc(n.method) + '()</b>';
+          n.steps.forEach(function (s) {
+            html += '<div class="step">' + s.n + '. ' + esc(s.text);
+            if (s.call) html += ' → <span class="call" data-goto="comp:' + esc(s.call.component) + '">' + esc(s.call.component) + '.' + esc(s.call.method) + '()</span>';
+            html += '</div>';
+          });
+          html += '</div>';
+        });
+      }
+      var iss = issuesBySpec[c.id];
+      if (iss) html += '<h3>Validation issues</h3>' + issueHtml(iss);
+    } else if (sel && sel.kind === 'subsystem') {
+      var s = subById[sel.id];
+      html += '<h2>' + esc(s.name) + '</h2><span class="chip static">subsystem</span>';
+      if (s.targetLanguage) html += '<span class="chip static">' + esc(s.targetLanguage) + '</span>';
+      html += '<p class="desc">' + esc(s.description) + '</p>';
+      if (s.trustedLinks.length) {
+        html += '<h3>Trusted links (fast lanes)</h3>';
+        s.trustedLinks.forEach(function (t) { html += '<div class="method">' + chip(t.subsystem, 'sub:' + t.subsystem) + '<br><span class="desc">' + esc(t.reason) + '</span></div>'; });
+      }
+      var comps = MODEL.components.filter(function (c) { return c.subsystem === s.id; });
+      html += '<h3>Components (' + comps.length + ')</h3>' + comps.map(function (c) { return chip(c.id, 'comp:' + c.id); }).join('');
+      var iss2 = issuesBySpec[s.id];
+      if (iss2) html += '<h3>Validation issues</h3>' + issueHtml(iss2);
+    } else {
+      html += '<h2>' + esc(MODEL.system.name) + '</h2>';
+      if (MODEL.system.targetLanguage) html += '<span class="chip static">' + esc(MODEL.system.targetLanguage) + '</span>';
+      if (MODEL.system.vision) html += '<p class="desc">' + esc(MODEL.system.vision) + '</p>';
+      if (state.showIssues && MODEL.issues.length) html += '<h3>All validation issues</h3>' + issueHtml(MODEL.issues);
+    }
+    panel.innerHTML = html;
+    panel.querySelectorAll('[data-goto]').forEach(function (n) {
+      n.addEventListener('click', function () {
+        var t = n.getAttribute('data-goto');
+        if (t.indexOf('comp:') === 0) select({ kind: 'component', id: t.slice(5) });
+        if (t.indexOf('sub:') === 0) select({ kind: 'subsystem', id: t.slice(4) });
+      });
+    });
+    render();
+  }
+
+  // ---- pan & zoom -------------------------------------------------------------
+  var view = { x: 20, y: 20, k: 1 };
+  var svg = document.getElementById('svg'), stage = document.getElementById('stage');
+  function applyView() { root.setAttribute('transform', 'translate(' + view.x + ' ' + view.y + ') scale(' + view.k + ')'); }
+  stage.addEventListener('wheel', function (ev) {
+    ev.preventDefault();
+    var rect = svg.getBoundingClientRect();
+    var mx = ev.clientX - rect.left, my = ev.clientY - rect.top;
+    var factor = ev.deltaY < 0 ? 1.12 : 1 / 1.12;
+    var k2 = Math.min(3, Math.max(0.15, view.k * factor));
+    view.x = mx - (mx - view.x) * (k2 / view.k);
+    view.y = my - (my - view.y) * (k2 / view.k);
+    view.k = k2;
+    applyView();
+  }, { passive: false });
+  var panning = null;
+  stage.addEventListener('mousedown', function (ev) { panning = { x: ev.clientX - view.x, y: ev.clientY - view.y }; stage.classList.add('panning'); });
+  window.addEventListener('mousemove', function (ev) { if (!panning) return; view.x = ev.clientX - panning.x; view.y = ev.clientY - panning.y; applyView(); });
+  window.addEventListener('mouseup', function () { panning = null; stage.classList.remove('panning'); });
+
+  // ---- controls -----------------------------------------------------------------
+  document.getElementById('search').addEventListener('input', function (ev) { state.query = ev.target.value.trim(); render(); });
+  document.getElementById('issuesToggle').addEventListener('change', function (ev) { state.showIssues = ev.target.checked; select(state.selected); });
+
+  render();
+  applyView();
+})();
+</script>
+</body>
+</html>
