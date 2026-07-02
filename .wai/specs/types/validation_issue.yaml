@@ -1,8 +1,25 @@
 kind: value-object
 id: validation_issue
 name: ValidationIssue
-description: Validation issue
-fields: []
+description: A single validation finding produced by the spec validator
+fields:
+  - name: severity
+    type: string
+    description: Issue severity — error or warning
+  - name: code
+    type: string
+    description: Stable machine-readable rule code (e.g. CIRCULAR_DEPENDENCY)
+  - name: message
+    type: string
+    description: Human-readable description with remediation guidance
+  - name: agentId
+    type: string
+    description: Related agent id, when the issue concerns topology
+    optional: true
+  - name: specId
+    type: string
+    description: Related spec id, when the issue concerns a spec node
+    optional: true
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-06-10T22:00:00.000Z'
+updatedAt: '2026-07-02T00:00:00.000Z'

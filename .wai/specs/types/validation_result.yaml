@@ -1,8 +1,14 @@
 kind: value-object
 id: validation_result
 name: ValidationResult
-description: Validation result
-fields: []
+description: Aggregate outcome of a validation run over the spec tree or registry
+fields:
+  - name: valid
+    type: boolean
+    description: True when no error-severity issues were found
+  - name: issues
+    type: ValidationIssue[]
+    description: All findings (errors and warnings) collected during the run
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-06-10T22:00:00.000Z'
+updatedAt: '2026-07-02T00:00:00.000Z'

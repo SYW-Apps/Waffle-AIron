@@ -47,5 +47,68 @@ methods:
         type: "call"
         targetComponent: "agent_resolver"
         targetMethod: "resolveAgentTopology"
+  - name: "loadSubsystemSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Forward loadSubsystemSpec call to core orchestrator"
+        type: "call"
+        targetComponent: "core_orchestrator"
+        targetMethod: "loadSubsystemSpec"
+  - name: "loadComponentSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Forward loadComponentSpec call to core orchestrator"
+        type: "call"
+        targetComponent: "core_orchestrator"
+        targetMethod: "loadComponentSpec"
+  - name: "loadInterfaceSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Forward loadInterfaceSpec call to core orchestrator"
+        type: "call"
+        targetComponent: "core_orchestrator"
+        targetMethod: "loadInterfaceSpec"
+  - name: "loadImplementationSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Forward loadImplementationSpec call to core orchestrator"
+        type: "call"
+        targetComponent: "core_orchestrator"
+        targetMethod: "loadImplementationSpec"
+  - name: "saveSystemSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Forward saveSystemSpec call to core orchestrator"
+        type: "call"
+        targetComponent: "core_orchestrator"
+        targetMethod: "saveSystemSpec"
+  - name: "saveSubsystemSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Forward saveSubsystemSpec call to core orchestrator"
+        type: "call"
+        targetComponent: "core_orchestrator"
+        targetMethod: "saveSubsystemSpec"
+  - name: "saveComponentSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Forward saveComponentSpec call to core orchestrator"
+        type: "call"
+        targetComponent: "core_orchestrator"
+        targetMethod: "saveComponentSpec"
+  - name: "saveInterfaceSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Forward saveInterfaceSpec call to core orchestrator"
+        type: "call"
+        targetComponent: "core_orchestrator"
+        targetMethod: "saveInterfaceSpec"
+  - name: "saveImplementationSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Forward saveImplementationSpec call to core orchestrator"
+        type: "call"
+        targetComponent: "core_orchestrator"
+        targetMethod: "saveImplementationSpec"
 createdAt: "2026-06-19T12:00:00Z"
-updatedAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-07-02T00:00:00Z"
