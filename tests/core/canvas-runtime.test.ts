@@ -178,16 +178,26 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     expect(stubs.filter((e: any) => e.source().id() === 'i~component~shipping-client' && e.target().id() === outProxy.id()).length).toBe(1);
     expect(stubs.filter((e: any) => e.source().id() === inProxy.id() && e.target().id() === 'i~component~billing-portal').length).toBe(1);
 
-    // Hovering a port reveals the actual cross-boundary line to the target;
-    // leaving hides it again.
+    // Hovering a port reveals the actual cross-boundary line. Since BOTH
+    // containers render their internals, the two matching ports connect
+    // PORT-TO-PORT (not port-to-parent-box); leaving hides the line again.
     outProxy.emit('mouseover');
     let reveals = cy.edges().filter((e: any) => e.hasClass('revealEdge'));
     expect(reveals.length).toBe(1);
     expect(reveals[0].source().id()).toBe(outProxy.id());
-    expect(reveals[0].target().id()).toBe('s~billing');
+    expect(reveals[0].target().id()).toBe(inProxy.id());
     outProxy.emit('mouseout');
     reveals = cy.edges().filter((e: any) => e.hasClass('revealEdge'));
     expect(reveals.length).toBe(0);
+
+    // The IN port of the same relation reveals the SAME line (same endpoints,
+    // same direction) — the two ports share it.
+    inProxy.emit('mouseover');
+    reveals = cy.edges().filter((e: any) => e.hasClass('revealEdge'));
+    expect(reveals.length).toBe(1);
+    expect(reveals[0].source().id()).toBe(outProxy.id());
+    expect(reveals[0].target().id()).toBe(inProxy.id());
+    inProxy.emit('mouseout');
 
     // Tapping a port SELECTS it: visible focus (sel class), counterpart
     // details in the sidebar, and the reveal line pinned across mouseout.
@@ -199,13 +209,12 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     reveals = cy.edges().filter((e: any) => e.hasClass('revealEdge'));
     expect(reveals.length).toBe(1); // pinned while selected
 
-    // Hovering a DIFFERENT port while one is pinned renders both sets of
-    // lines simultaneously; leaving drops only the hovered one.
+    // Hovering the OTHER end of the pinned relation does not stack a twin
+    // line — both ports share the one pinned line, which survives mouseout.
     inProxy.emit('mouseover');
     reveals = cy.edges().filter((e: any) => e.hasClass('revealEdge'));
-    expect(reveals.length).toBe(2);
-    expect(reveals.filter((e: any) => e.hasClass('revealPin')).length).toBe(1);
-    expect(reveals.filter((e: any) => e.hasClass('revealHover')).length).toBe(1);
+    expect(reveals.length).toBe(1);
+    expect(reveals[0].hasClass('revealPin')).toBe(true);
     inProxy.emit('mouseout');
     reveals = cy.edges().filter((e: any) => e.hasClass('revealEdge'));
     expect(reveals.length).toBe(1);

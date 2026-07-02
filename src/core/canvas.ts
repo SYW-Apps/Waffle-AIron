@@ -725,12 +725,16 @@ var MODEL = __MODEL_JSON__;
         if (a.kind === b.kind && a.id === b.id) return;
         edges[IN(a.kind, a.id) + '=>' + IN(b.kind, b.id)] = { src: IN(a.kind, a.id), tgt: IN(b.kind, b.id) };
       } else if (aKid && !bKid) {
-        var ro = extOut[edge.to] = extOut[edge.to] || { kids: {} };
+        // raws = raw ids on OUR side of the relation — they key the matching
+        // port inside the counterpart's container (port-to-port reveal).
+        var ro = extOut[edge.to] = extOut[edge.to] || { kids: {}, raws: {} };
         ro.kids[a.kind + ':' + a.id] = a;
+        ro.raws[edge.from] = 1;
         edges[IN(a.kind, a.id) + '=>' + pBaseOut + edge.to] = { src: IN(a.kind, a.id), tgt: pBaseOut + edge.to, stub: true };
       } else if (!aKid && bKid) {
-        var ri = extIn[edge.from] = extIn[edge.from] || { kids: {} };
+        var ri = extIn[edge.from] = extIn[edge.from] || { kids: {}, raws: {} };
         ri.kids[b.kind + ':' + b.id] = b;
+        ri.raws[edge.to] = 1;
         edges[pBaseIn + edge.from + '=>' + IN(b.kind, b.id)] = { src: pBaseIn + edge.from, tgt: IN(b.kind, b.id), stub: true };
       }
     });
@@ -785,7 +789,7 @@ var MODEL = __MODEL_JSON__;
       return ids.map(function (eid, i) {
         var km = recs[eid].kids, klist = [];
         Object.keys(km).forEach(function (key) { klist.push(km[key]); });
-        return { id: base + eid, extId: eid, dir: dir, kids: klist, x: cx, y: y0 + i * (PROXY_H + PROXY_GAP), w: PROXY_W, h: PROXY_H };
+        return { id: base + eid, extId: eid, dir: dir, kids: klist, raws: Object.keys(recs[eid].raws), x: cx, y: y0 + i * (PROXY_H + PROXY_GAP), w: PROXY_W, h: PROXY_H };
       });
     }
     return {
@@ -944,23 +948,32 @@ var MODEL = __MODEL_JSON__;
     var inners = {};
     entries.forEach(function (e) { inners[anchorNodeId(e)] = innerLayout(e); });
 
-    // Resolve a proxy's external component ids to node ids in THIS view (sibling
-    // anchors, or ghost nodes when externals are shown) for hover/pin reveal.
+    // Resolve a port's reveal target(s) in THIS view. Preference order: the
+    // MATCHING PORT inside the counterpart's container (a port-to-port line
+    // both endpoints share), then the counterpart's container box, then a
+    // ghost node when externals are shown.
     var entryAnchors = {};
     entries.forEach(function (e2) { entryAnchors[anchorNodeId(e2)] = 1; });
-    function resolveExtTargets(compIds) {
-      var seen = {}, list = [];
-      compIds.forEach(function (cid) {
-        var child = childOfScopeContaining(cid, scope);
-        var nid = null;
-        if (child && entryAnchors[anchorNodeId(child)]) nid = anchorNodeId(child);
-        else if (state.externals) {
-          var ext = externalAnchorFor(cid, scope);
-          if (ext && ve.ghosts[ext.gid]) nid = ext.gid;
+    function resolvePortTargets(px) {
+      var child = childOfScopeContaining(px.extId, scope);
+      if (child && entryAnchors[anchorNodeId(child)]) {
+        var cAid = anchorNodeId(child);
+        var cInner = inners[cAid];
+        if (cInner && cInner.proxies) {
+          var base = (px.dir === 'out' ? 'p~in~' : 'p~out~') + cAid + '~';
+          var have = {};
+          cInner.proxies.forEach(function (q) { have[q.id] = 1; });
+          var hits = [];
+          (px.raws || []).forEach(function (r) { if (have[base + r]) hits.push(base + r); });
+          if (hits.length) return hits;
         }
-        if (nid && !seen[nid]) { seen[nid] = 1; list.push(nid); }
-      });
-      return list;
+        return [cAid];
+      }
+      if (state.externals) {
+        var ext = externalAnchorFor(px.extId, scope);
+        if (ext && ve.ghosts[ext.gid]) return [ext.gid];
+      }
+      return [];
     }
 
     var layerOf = {};
@@ -1039,7 +1052,7 @@ var MODEL = __MODEL_JSON__;
               id: px.id, parent: aid, label: px.dir === 'in' ? '\\u21E0' : '\\u21E2',
               w: px.w, h: px.h, tw: px.w,
               extId: px.extId, dir: px.dir,
-              rvTargets: resolveExtTargets([px.extId]), rvDir: px.dir,
+              rvTargets: resolvePortTargets(px), rvDir: px.dir,
               viaKids: px.kids.map(function (k2) { return { kind: k2.kind, id: k2.id, label: nameOf(k2) }; }),
             },
             position: { x: p.x - p.w / 2 + px.x, y: p.y - p.h / 2 + px.y },
@@ -1116,16 +1129,18 @@ var MODEL = __MODEL_JSON__;
   renderCrumbs();
   renderViewHint();
 
+  // NOTE: lift autolock globally instead of lock-juggling per node — with
+  // autolock on, n.locked() is true for EVERY node, so restoring it would
+  // set individual locks that survive rearrange mode (frozen tiles that no
+  // longer follow their dragged parent).
   function applySavedPositions() {
     var pos = (saved.positionsByView || {})[viewKey()] || {};
+    var wasAuto = cy.autolock();
+    if (wasAuto) cy.autolock(false);
     cy.nodes().forEach(function (n) {
-      if (!n.isParent() && pos[n.id()]) {
-        var locked = n.locked();
-        if (locked) n.unlock();
-        n.position(pos[n.id()]);
-        if (locked) n.lock();
-      }
+      if (!n.isParent() && pos[n.id()]) n.position(pos[n.id()]);
     });
+    if (wasAuto) cy.autolock(true);
   }
   function harvestPositions() {
     var all = saved.positionsByView || {};
@@ -1270,19 +1285,21 @@ var MODEL = __MODEL_JSON__;
   // Port reveal: the selected (pinned) port and a hovered port each draw
   // their own cross-boundary lines in independent namespaces, so both can be
   // visible at the same time.
+  // Reveal edge ids are canonical by ENDPOINTS (not by which port initiated),
+  // so the two ports of one relation share a single line — hovering one end
+  // of an already-pinned relation adds nothing instead of stacking a twin.
   function revealEdgesFor(node, cls) {
     var targets = node.data('rvTargets') || [];
     var dir = node.data('rvDir');
     var adds = [];
-    targets.forEach(function (tid, i) {
+    targets.forEach(function (tid) {
       if (!cy.getElementById(tid).length) return;
-      adds.push({
-        group: 'edges',
-        data: dir === 'out'
-          ? { id: 'rv~' + cls + '~' + node.id() + '~' + i, source: node.id(), target: tid }
-          : { id: 'rv~' + cls + '~' + node.id() + '~' + i, source: tid, target: node.id() },
-        classes: 'revealEdge ' + cls,
-      });
+      var src = dir === 'out' ? node.id() : tid;
+      var tgt = dir === 'out' ? tid : node.id();
+      var eid = 'rv~' + cls + '~' + src + '~' + tgt;
+      if (cy.getElementById(eid).length) return;
+      if (cls === 'revealHover' && cy.getElementById('rv~revealPin~' + src + '~' + tgt).length) return;
+      adds.push({ group: 'edges', data: { id: eid, source: src, target: tgt }, classes: 'revealEdge ' + cls });
     });
     if (adds.length) cy.add(adds);
   }
