@@ -17,8 +17,9 @@ const now = new Date().toISOString();
 // ---------------------------------------------------------------------------
 // Runtime check for the generated canvas: extract the REAL inline scripts from
 // canvas.html and execute them against headless cytoscape + a minimal DOM
-// shim. A typo or ReferenceError in the template's JS then fails here instead
-// of only surfacing in a browser.
+// shim. A typo or ReferenceError in the template's JS fails here instead of
+// only surfacing in a browser — and the shim captures event handlers so we
+// can drive toggles (Internals) and assert the resulting graph.
 // ---------------------------------------------------------------------------
 
 function escapeHtml(s: string): string {
@@ -27,15 +28,19 @@ function escapeHtml(s: string): string {
 
 function makeDomShim() {
   const elements: Record<string, any> = {};
+  const handlers: Record<string, (ev: any) => void> = {};
   const stub = (id: string) => {
     if (!elements[id]) {
       elements[id] = {
+        _id: id,
         textContent: '',
         innerHTML: '',
         checked: false,
         value: '',
-        classList: { add() {}, remove() {} },
-        addEventListener() {},
+        style: {},
+        classList: { add() {}, remove() {}, toggle() {} },
+        addEventListener(ev: string, fn: (e: any) => void) { handlers[id + ':' + ev] = fn; },
+        getAttribute() { return null; },
         querySelectorAll() { return []; },
         appendChild() {},
         removeChild() {},
@@ -59,6 +64,7 @@ function makeDomShim() {
         download: '',
       };
     },
+    addEventListener() {},
     body: {
       appendChild() {},
       setAttribute() {},
@@ -66,7 +72,12 @@ function makeDomShim() {
       classList: { add() {}, remove() {}, toggle() {} },
     },
   };
-  return { document, elements };
+  const fire = (id: string, ev: string, payload: any) => {
+    const h = handlers[id + ':' + ev];
+    if (!h) throw new Error(`no handler bound for ${id}:${ev}`);
+    h(payload);
+  };
+  return { document, elements, fire };
 }
 
 describe('canvas runtime (headless execution of the generated scripts)', () => {
@@ -77,7 +88,7 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     if (proj) fs.rmSync(proj, { recursive: true, force: true });
   });
 
-  it('initializes without errors and builds the full element set', () => {
+  it('renders the scoped system view, keeps arrows with Internals on, and shows inner relations', () => {
     proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-canvas-rt-'));
     fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
     setProjectRoot(proj);
@@ -91,6 +102,10 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
       publicInterfaces: [{ type: 'REST', details: 'api', component: 'billing-portal' }],
       trustedLinks: [], createdAt: now, updatedAt: now,
     });
+    saveSubsystemSpec({
+      id: 'shipping', name: 'Shipping', description: 'd', parentSystem: 'RtSys',
+      publicInterfaces: [], trustedLinks: [], createdAt: now, updatedAt: now,
+    });
     const comp = (over: Record<string, unknown>) => ({
       id: '', name: '', description: 'd', subsystem: 'billing',
       componentType: 'Orchestrator' as const, owns: [] as string[], dependsOn: [] as string[],
@@ -99,36 +114,54 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     saveComponentSpec(comp({ id: 'billing-portal', name: 'Billing Portal', componentType: 'Portal', portalType: 'HTTP_API', dependsOn: ['billing-repo'] }) as any);
     saveComponentSpec(comp({ id: 'billing-store', name: 'Billing Store', componentType: 'Store' }) as any);
     saveComponentSpec(comp({ id: 'billing-repo', name: 'Billing Repository', componentType: 'Repository', owns: ['billing-store'] }) as any);
+    saveComponentSpec(comp({ id: 'shipping-client', name: 'Shipping Client', subsystem: 'shipping', componentType: 'Adapter', dependsOn: ['billing-portal'] }) as any);
 
     const html = renderCanvasHtml(buildCanvasModel([
       { severity: 'warning', code: 'UNUSED_COMPONENT', message: 'unused', specId: 'billing-store' },
     ]));
 
-    // scripts: [0] vendored cytoscape, [1] MODEL, [2] the app
     const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
     expect(scripts).toHaveLength(3);
 
-    const { document, elements } = makeDomShim();
-    let cyInstance: any = null;
-    // Substitute the vendored bundle with the same library in headless mode
-    // (no real DOM available; rendering styles are irrelevant here).
+    const { document, elements, fire } = makeDomShim();
+    let cyInstances: any[] = [];
     const cytoscape = (opts: any) => {
-      cyInstance = realCytoscape({ ...opts, container: undefined, headless: true, styleEnabled: false });
-      return cyInstance;
+      const inst = realCytoscape({ ...opts, container: undefined, headless: true, styleEnabled: false });
+      cyInstances.push(inst);
+      return inst;
     };
 
     const run = new Function('cytoscape', 'document', `${scripts[1]}\n${scripts[2]}`);
     run(cytoscape, document); // throws on any template JS error
 
-    expect(cyInstance).not.toBeNull();
-    // C4-style scoped navigation: the initial SYSTEM view renders only the
-    // top-level subsystems — one drillable box, no internal edges leaked.
-    expect(cyInstance.nodes().length).toBe(1);
-    expect(cyInstance.edges().length).toBe(0);
-    const subNode = cyInstance.getElementById('s~billing');
-    expect(subNode.length).toBe(1);
-    expect(subNode.hasClass('subsysBox')).toBe(true);
-    expect(subNode.hasClass('drillable')).toBe(true);
+    const cy = cyInstances[0];
+    expect(cy).toBeDefined();
+
+    // System view: two top-level subsystem boxes + ONE cross-subsystem arrow.
+    expect(cy.nodes().length).toBe(2);
+    expect(cy.edges().length).toBe(1);
+    expect(cy.getElementById('s~billing').hasClass('subsysBox')).toBe(true);
+    expect(cy.getElementById('s~billing').hasClass('drillable')).toBe(true);
+    const viewEdge = cy.edges()[0];
+    expect(viewEdge.source().id()).toBe('s~shipping');
+    expect(viewEdge.target().id()).toBe('s~billing');
+    expect(viewEdge.hasClass('cross')).toBe(true);
+
+    // Enable Internals: subsystem-level arrows must SURVIVE, children render as
+    // inner tiles, and intra-container relations appear as inner edges.
+    fire('internalsToggle', 'change', { target: { checked: true } });
+
+    expect(cy.getElementById('i~component~billing-portal').length).toBe(1);
+    expect(cy.getElementById('i~component~billing-portal').parent().id()).toBe('s~billing');
+    expect(cy.getElementById('i~component~shipping-client').parent().id()).toBe('s~shipping');
+
+    const crossEdges = cy.edges().filter((e: any) => e.hasClass('cross'));
+    expect(crossEdges.length).toBe(1); // the view-level arrow survived
+    const innerEdges = cy.edges().filter((e: any) => e.hasClass('inneredge'));
+    expect(innerEdges.length).toBe(1); // billing-portal → billing-repo inside billing
+    expect(innerEdges[0].source().id()).toBe('i~component~billing-portal');
+    expect(innerEdges[0].target().id()).toBe('i~component~billing-repo');
+
     // header issue counter was populated by the app script (0 errors / 1 warning)
     expect(elements['issueCount'].textContent).toBe('0e/1w');
   });
