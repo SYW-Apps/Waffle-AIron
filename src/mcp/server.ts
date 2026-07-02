@@ -489,29 +489,51 @@ export function createMcpServer(): McpServer {
     },
   );
 
-  reg<{ id: string; name: string; description: string; contract: string; sourcePath?: string; methods?: { name: string; narrative: { stepNumber: number; description: string; type: 'local' | 'call'; targetComponent?: string; targetMethod?: string }[] }[] }>(server,
+  const stepNo = () => z.number().int().positive();
+  const narrativeStepInput = z.object({
+    stepNumber: stepNo().optional().describe('Defaults to the 1-based array position — jump fields reference these numbers'),
+    description: z.string(),
+    type: z.enum(['local', 'call', 'branch', 'switch', 'loop', 'try', 'jump', 'return', 'throw']),
+    targetComponent: z.string().optional().describe('call: L2 component id'),
+    targetMethod: z.string().optional().describe('call: method name on the target'),
+    condition: z.string().optional().describe('branch / while / doWhile'),
+    onTrueStep: stepNo().optional().describe('branch: default = next step'),
+    onFalseStep: stepNo().optional().describe('branch: required'),
+    on: z.string().optional().describe('switch: the dispatched value'),
+    cases: z.array(z.object({ value: z.string(), step: stepNo() })).optional().describe('switch: required'),
+    defaultStep: stepNo().optional().describe('switch: default = next step'),
+    loopKind: z.enum(['forEach', 'for', 'while', 'doWhile']).optional().describe('loop: default forEach when "over" is set, else while'),
+    over: z.string().optional().describe('loop forEach/for: iteration source'),
+    endStep: stepNo().optional().describe('loop/try: last step of the body region (required)'),
+    catches: z.array(z.object({ error: z.string(), step: stepNo() })).optional().describe('try: handler regions'),
+    finallyStep: stepNo().optional().describe('try: first step of the always-runs region'),
+    toStep: stepNo().optional().describe('jump: required (break/continue/rejoin)'),
+    outcome: z.string().optional().describe('return: e.g. "success", "not found"'),
+    error: z.string().optional().describe('throw: the raised error'),
+  });
+  type NarrativeStepIn = z.infer<typeof narrativeStepInput>;
+  const detailEnum = z.enum(['full', 'calls-only', 'intent']);
+
+  reg<{ id: string; name: string; description: string; contract: string; sourcePath?: string; detail?: 'full' | 'calls-only' | 'intent'; methods?: { name: string; detail?: 'full' | 'calls-only' | 'intent'; intent?: string; narrative?: NarrativeStepIn[] }[] }>(server,
     'sdd_write_narrative',
     {
-      description: 'Write L4 Concrete Implementation spec containing L5 method narratives.',
+      description: 'Write L4 Concrete Implementation spec containing L5 method narratives. Narratives are a FLAT ordered step list; flow steps (branch/switch/loop/try/jump/return/throw) jump by step number — blocks are just skipped regions. Detail dial per method: full (narrative required) | calls-only (call choreography suffices) | intent (prose instead of steps); omitted = stereotype default (Portal/Observer/Adapter: calls-only, Store/Index/Registry: intent, else full).',
       inputSchema: {
         id: z.string().describe('Lowercase identifier, e.g. "vfs_storage"'),
         name: z.string().describe('Human-readable implementation name'),
         description: z.string().describe('Implementation details'),
         contract: z.string().describe('The L3 Interface contract ID this implements'),
         sourcePath: z.string().optional().describe('Optional: target source code file path relative to project root'),
+        detail: detailEnum.optional().describe('Spec-level narrative detail default for all methods'),
         methods: z.array(z.object({
           name: z.string(),
-          narrative: z.array(z.object({
-            stepNumber: z.number().int().positive(),
-            description: z.string(),
-            type: z.enum(['local', 'call']),
-            targetComponent: z.string().optional(),
-            targetMethod: z.string().optional(),
-          })),
+          detail: detailEnum.optional().describe('Detail level for this method (overrides the spec default)'),
+          intent: z.string().optional().describe('detail: intent — behavioral prose (what it does and how it fails); substitute for a narrative'),
+          narrative: z.array(narrativeStepInput).optional(),
         })).optional().describe('Method implementations containing L5 narratives'),
       },
     },
-    ({ id, name, description, contract, sourcePath, methods }) => {
+    ({ id, name, description, contract, sourcePath, detail, methods }) => {
       try {
         const { loadInterfaceSpec, saveImplementationSpec } = requireSpecs();
         const intf = loadInterfaceSpec(contract);
@@ -523,7 +545,11 @@ export function createMcpServer(): McpServer {
           description,
           contract,
           sourcePath,
-          methods: methods ?? [],
+          detail,
+          methods: (methods ?? []).map(m => ({
+            ...m,
+            narrative: (m.narrative ?? []).map((s, i) => ({ ...s, stepNumber: s.stepNumber ?? i + 1 })),
+          })),
           status: 'draft',
           createdAt: now,
           updatedAt: now,
@@ -667,7 +693,7 @@ export function createMcpServer(): McpServer {
       inputSchema: {
         kind: z.enum(['subsystem', 'component', 'interface', 'implementation', 'type']).describe('The spec kind to update'),
         id: z.string().describe('The ID of the spec to update (namespaced if needed)'),
-        delta: z.record(z.any()).describe('The partial fields to merge into the spec. For arrays (like methods or fields), elements are matched by "name" (or "id") and merged/upserted. Add "action: \'delete\'" (or "remove: true") to delete a named element. For narrative steps, match by "stepNumber" and use "action: \'insert\'" (shifts subsequent steps up) or "action: \'delete\'" (shifts subsequent steps down and removes it).'),
+        delta: z.record(z.any()).describe('The partial fields to merge into the spec. For arrays (like methods or fields), elements are matched by "name" (or "id") and merged/upserted. Add "action: \'delete\'" (or "remove: true") to delete a named element. For narrative steps, match by "stepNumber" and use "action: \'insert\'" (shifts subsequent steps up) or "action: \'delete\'" (shifts subsequent steps down and removes it). Renumbering RELOCATES every flow jump field (onTrueStep/onFalseStep/cases.step/defaultStep/endStep/catches.step/finallyStep/toStep) in the same narrative; deleting a step that is a jump target is rejected until the referrers are retargeted.'),
       },
     },
     ({ kind, id, delta }) => {

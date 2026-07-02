@@ -103,6 +103,65 @@ describe('granular specification updates via updateSpec', () => {
     expect(authorizeMethod!.narrative[2]).toEqual({ stepNumber: 3, description: 'Step 2', type: 'local' });
   });
 
+  it('relocates flow jump fields on narrative insert/delete and refuses to delete a jump target', () => {
+    proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-update-flow-'));
+    fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
+    setProjectRoot(proj);
+
+    saveSubsystemSpec({
+      schemaVersion: '1.0.0', id: 'billing', name: 'Billing', description: 'd',
+      parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now,
+    });
+    saveInterfaceSpec({
+      id: 'iflow', name: 'IFlow', description: 'd', component: 'flow-comp',
+      methods: [{ name: 'run', signature: 'run()', returns: 'void', description: 'runs it all, with branching' }],
+      createdAt: now, updatedAt: now,
+    });
+    saveImplementationSpec({
+      id: 'flow-impl', name: 'FlowImpl', description: 'd', contract: 'iflow',
+      methods: [{
+        name: 'run',
+        narrative: [
+          { stepNumber: 1, description: 'check input', type: 'branch', condition: 'input valid', onFalseStep: 4 },
+          { stepNumber: 2, description: 'retry loop', type: 'loop', loopKind: 'while', condition: 'attempts left', endStep: 3 },
+          { stepNumber: 3, description: 'do the work', type: 'local' },
+          { stepNumber: 4, description: 'bail out', type: 'return', outcome: 'invalid input' },
+        ],
+      }],
+      createdAt: now, updatedAt: now,
+    });
+
+    // Insert a step at position 3 (inside the loop body): the branch's
+    // onFalseStep (4) and the loop's endStep (3) must both relocate to +1.
+    updateSpec('implementation', 'flow-impl', {
+      methods: [{
+        name: 'run',
+        narrative: [{ stepNumber: 3, action: 'insert', description: 'log the attempt', type: 'local' }],
+      }],
+    });
+
+    let narr = loadImplementationSpec('flow-impl')!.methods[0].narrative;
+    expect(narr).toHaveLength(5);
+    expect(narr[0]).toMatchObject({ stepNumber: 1, type: 'branch', onFalseStep: 5 });
+    expect(narr[1]).toMatchObject({ stepNumber: 2, type: 'loop', endStep: 4 });
+    expect(narr[2]).toMatchObject({ stepNumber: 3, description: 'log the attempt' });
+    expect(narr[4]).toMatchObject({ stepNumber: 5, type: 'return' });
+
+    // Deleting a step that is a jump target must be rejected, naming the referrer.
+    expect(() => updateSpec('implementation', 'flow-impl', {
+      methods: [{ name: 'run', narrative: [{ stepNumber: 5, action: 'delete' }] }],
+    })).toThrow(/jump target of step\(s\) 1 \(onFalseStep\)/);
+
+    // Deleting an un-referenced step relocates the jumps back down.
+    updateSpec('implementation', 'flow-impl', {
+      methods: [{ name: 'run', narrative: [{ stepNumber: 3, action: 'delete' }] }],
+    });
+    narr = loadImplementationSpec('flow-impl')!.methods[0].narrative;
+    expect(narr).toHaveLength(4);
+    expect(narr[0]).toMatchObject({ stepNumber: 1, onFalseStep: 4 });
+    expect(narr[1]).toMatchObject({ stepNumber: 2, endStep: 3 });
+  });
+
   it('preserves metadata, groups, status, and endpoint bindings on updates and resolves nested component path ownership', () => {
     proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-preserve-test-'));
     fs.mkdirSync(path.join(proj, '.wai', 'specs', 'subsystems'), { recursive: true });

@@ -1425,6 +1425,39 @@ export class SpecWorkspace {
       throw new Error(`Spec of kind "${kind}" with ID "${id}" does not exist. Define it first.`);
     }
 
+    // Flow-step jump fields relocate with renumbering, exactly like an
+    // assembler relocating addresses: inserts/deletes shift every jump field
+    // in the SAME narrative that points at or beyond the mutation point.
+    const JUMP_FIELDS = ['onTrueStep', 'onFalseStep', 'defaultStep', 'endStep', 'finallyStep', 'toStep'] as const;
+    const JUMP_LIST_FIELDS = ['cases', 'catches'] as const;
+
+    const relocateJumps = (step: any, shiftFrom: number, deltaN: number): any => {
+      const hit = (v: number) => (deltaN > 0 ? v >= shiftFrom : v > shiftFrom);
+      const out = { ...step };
+      for (const f of JUMP_FIELDS) {
+        if (typeof out[f] === 'number' && hit(out[f])) out[f] = out[f] + deltaN;
+      }
+      for (const lf of JUMP_LIST_FIELDS) {
+        if (Array.isArray(out[lf])) {
+          out[lf] = out[lf].map((c: any) =>
+            typeof c?.step === 'number' && hit(c.step) ? { ...c, step: c.step + deltaN } : c,
+          );
+        }
+      }
+      return out;
+    };
+
+    const jumpRefsTo = (step: any, target: number): string[] => {
+      const refs: string[] = [];
+      for (const f of JUMP_FIELDS) if (step[f] === target) refs.push(f);
+      for (const lf of JUMP_LIST_FIELDS) {
+        (Array.isArray(step[lf]) ? step[lf] : []).forEach((c: any, i: number) => {
+          if (c?.step === target) refs.push(`${lf}[${i}].step`);
+        });
+      }
+      return refs;
+    };
+
     const mergeNarrative = (existingSteps: any[], deltaSteps: any[]): any[] => {
       let steps = [...existingSteps];
       const sortedDeltas = [...deltaSteps].sort((a, b) => a.stepNumber - b.stepNumber);
@@ -1433,21 +1466,32 @@ export class SpecWorkspace {
         if (deltaStep.action === 'delete' || deltaStep.remove === true) {
           const idx = steps.findIndex(s => s.stepNumber === stepNum);
           if (idx !== -1) {
+            const referrers = steps
+              .filter(s => s.stepNumber !== stepNum)
+              .map(s => ({ n: s.stepNumber, refs: jumpRefsTo(s, stepNum) }))
+              .filter(r => r.refs.length > 0);
+            if (referrers.length) {
+              throw new Error(
+                `Cannot delete narrative step ${stepNum}: it is a jump target of step(s) `
+                + referrers.map(r => `${r.n} (${r.refs.join(', ')})`).join(', ')
+                + '. Retarget or delete the referring steps first.',
+              );
+            }
             steps.splice(idx, 1);
-            steps = steps.map(s => {
-              if (s.stepNumber > stepNum) {
-                return { ...s, stepNumber: s.stepNumber - 1 };
-              }
-              return s;
-            });
+            steps = steps.map(s => relocateJumps(
+              s.stepNumber > stepNum ? { ...s, stepNumber: s.stepNumber - 1 } : s,
+              stepNum,
+              -1,
+            ));
           }
         } else if (deltaStep.action === 'insert') {
-          steps = steps.map(s => {
-            if (s.stepNumber >= stepNum) {
-              return { ...s, stepNumber: s.stepNumber + 1 };
-            }
-            return s;
-          });
+          // The inserted step's own jump fields are taken as-is: they refer
+          // to the POST-insert numbering the author is creating.
+          steps = steps.map(s => relocateJumps(
+            s.stepNumber >= stepNum ? { ...s, stepNumber: s.stepNumber + 1 } : s,
+            stepNum,
+            1,
+          ));
           const { action, remove, ...cleanStep } = deltaStep;
           steps.push(cleanStep);
         } else {
