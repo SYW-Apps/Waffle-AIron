@@ -42,6 +42,34 @@ migration*).
   type-reference validation and the free-form `signature` string is never
   heuristically parsed. Strongly recommended for new specs.
 
+### Narrative control flow + the detail dial (L5)
+
+- **Flow steps**: narratives stay a FLAT ordered list (order mimics the code
+  lines) and gain 7 step types that jump by step number — `branch` (if/else),
+  `switch`, `loop` (`loopKind: forEach | for | while | doWhile`), `try`
+  (`catches` + `finallyStep`), `jump` (break/continue/rejoin), `return`,
+  `throw`. Every existing narrative is already valid (linear = jump-free);
+  older wairon binaries reject the new step types, so upgrade before adopting.
+- **New rules**: `MALFORMED_FLOW_STEP` / `INVALID_STEP_JUMP` *(error)* and
+  `UNREACHABLE_STEP` *(warning)* enforce structural soundness.
+- **`sdd_update_spec` relocation**: narrative inserts/deletes renumber steps
+  AND relocate every jump field automatically; deleting a jump target is
+  rejected naming the referrers.
+- **Narrative detail dial**: `detail: full | calls-only | intent` per method
+  (or L4 spec-level default); omitted = stereotype default
+  (Portal/Observer/Adapter → calls-only, Store/Index/Registry → intent,
+  logic components → full). `intent` methods specify behavior as an `intent`
+  paragraph instead of steps. `MISSING_NARRATIVE` / `INTENT_FLOOR` hold each
+  method to its declared (or defaulted) level — explicit declarations as
+  errors, stereotype-defaulted gaps as warnings. Unused-detection falls back
+  to L2 edges for intent-level methods so collaborators don't false-positive
+  as unused.
+- **Renderers**: the canvas narrative modal draws real flowcharts (diamonds
+  with labeled true/false/case edges, loop back-edges, dashed error edges,
+  return/throw terminators, region indentation) with a **"Hide error paths"**
+  toggle; Mermaid sequence diagrams render `loop`/`try` as native
+  `loop`/`critical` fragments and other flow steps as annotated markers.
+
 ### Spec engine
 
 - **SpecWorkspace**: all spec-tree state (index cache, loader issues) lives on
@@ -123,6 +151,10 @@ After upgrading, run `wairon validate` locally and review new warnings:
 3. **New `UNUSED_COMPONENT`/`UNUSED_METHOD` findings** — these were always
    true; the walk previously missed multi-interface components and
    namespaced ids. Wire the narratives or remove the dead surface.
+3b. **`MISSING_NARRATIVE` / `INTENT_FLOOR`** — methods are now held to their
+   narrative detail level (stereotype-defaulted gaps are warnings). Either
+   write the missing narrative, add substantive `intent`/description prose,
+   or declare a lower `detail` level where the stereotype default is wrong.
 4. Any rule can be tuned per project in `.wai/project.yaml`:
 
    ```yaml

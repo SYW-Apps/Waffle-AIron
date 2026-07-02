@@ -1,7 +1,8 @@
 # Design: control flow in L5 narratives + the narrative detail dial
 
-Status: **proposal — not implemented**. Companion to the flowchart renderer in
-the canvas.
+Status: **implemented** (schema + rules, MCP authoring with jump relocation,
+flow-aware renderers, detail dial — July 2026). Kept as the design record;
+§10 lists the decisions as resolved.
 
 ## 1. Motivation
 
@@ -222,59 +223,68 @@ and loop bodies keep counting as usage.
 - All schema fields optional/additive; `sdd_write_narrative` calls written for
   today's shape keep working verbatim.
 
-## 8. The detail dial — `narrativeDetail` (answers "is full L5 overkill?")
+## 8. The detail dial — declared per method, IN the L5 spec (answers "is full L5 overkill?")
 
 Full flow-level narratives for every method WOULD be overkill (a CRUD
 passthrough doesn't need a flowchart, and writing one is just programming in
-YAML). The fix is not to weaken L5 — it's to make the fidelity level a
-**declared, validated property of a scope** instead of an implicit global
-obligation:
+YAML). The fix is not to weaken L5 — it's to make the fidelity level an
+**explicit, per-method declaration in the implementation spec itself**. No
+subsystem-level dial, no cascading overrides across layers — the decision
+lives exactly where the detail lives:
 
 ```yaml
-# L1 subsystem (or L2 component override)
-narrativeDetail: full | calls-only | skip
-skipReason: pure CRUD passthroughs — structure-level design is sufficient  # required for skip
+# L4 implementation spec
+detail: calls-only            # optional spec-level default for all methods
+methods:
+  - name: forwardRequest      # inherits calls-only: narrative = call steps
+    narrative:
+      - { stepNumber: 1, type: call, description: pass through to the orchestrator, targetComponent: job-orchestrator, targetMethod: runNext }
+  - name: healthCheck
+    detail: intent            # per-method override — no narrative needed
+    intent: >
+      Returns 200 with build metadata; 503 when the orchestrator's readiness
+      probe fails. No side effects, no auth.
+  - name: negotiateProtocol
+    detail: full              # this one IS worth a flowchart
+    narrative: [ ... flow steps ... ]
 ```
 
-- **`full`** (default): narratives expected on the public surface; flow steps
-  encouraged where the logic branches.
-- **`calls-only`**: narratives only need the cross-component `call`
-  choreography; local detail and flow structure optional. Cheap to author and
-  keeps the unused/reachability analysis fully sound (it only consumes call
-  steps anyway).
-- **`skip`**: narratives optional in this scope. Requires `skipReason` (same
-  philosophy as `trustedLinks`: exceptions become reviewable spec, never
-  silence). Validator consequences: narrative-completeness warnings are
-  suppressed for the scope, and the unused-walk falls back to L2 `dependsOn`
-  edges (component granularity) for callers inside the scope so their callees
-  don't false-positive as unused. Status/canvas surface the declared level, so
-  a reviewer always sees "this area was deliberately designed to structural
-  level only".
+- **`full`** — narrative required; flow steps encouraged where logic branches.
+- **`calls-only`** — narrative required but only the cross-component `call`
+  choreography is expected; local/flow detail optional. Keeps the
+  unused/reachability analysis fully sound (it only consumes call steps).
+- **`intent`** — narrative optional; behavior is specified as prose instead.
+  The **intent floor** applies: the method's `intent` field (or, if absent,
+  its L3 `description`) must be non-trivial — not missing, not a few words
+  restating the name — and failure behavior must be stated there or in
+  `guarantees`. `INTENT_FLOOR` fires as an error otherwise.
 
-**Skipping L5 must never mean skipping intent — the intent floor.** An
-implementing agent without a narrative still needs to know *what* each method
-must do; it just doesn't get told *how* step by step. That intent already has
-a home in the spec — it does not need a new free-text field:
+Detail levels are **floors, not ceilings** — extra detail is never penalized.
+Precedence: method `detail` → spec-level `detail` → **stereotype default**:
 
-- L3 method `description` + `guarantees` + structured `params`/`returns`,
-- L2 component `description` and stereotype,
-- the type definitions the signature references.
+| Stereotype | Default | Rationale |
+|------------|---------|-----------|
+| Portal, Observer, Adapter | `calls-only` | boundary pass-throughs — real logic belongs in the Orchestrator they forward to; a flowchart of "receive → forward" is noise |
+| Store, Index, Registry | `intent` | persistence semantics are a contract paragraph, not choreography |
+| Orchestrator, Supervisor, Actor, Specialist, Repository, Gateway, patterns | `full` | this is where flows branch and cross boundaries — the review surface |
 
-For `full` scopes a thin method description is tolerable (the narrative
-carries the detail); for `calls-only`/`skip` scopes those fields become the
-ONLY specification of behavior, so the dial tightens quality enforcement
-instead of adding fields: a new `INTENT_FLOOR` check (error in `skip` scopes,
-warning in `calls-only`) rejects public methods whose description is missing,
-placeholder-thin (a few words / restating the name), or has no `guarantees`
-when the description doesn't state the failure behavior.
+Stereotype defaults mean the common case needs **zero extra fields** (an
+Adapter spec with call-step narratives is already conformant), while any
+method can be dialed up or down explicitly — including a Portal endpoint that
+genuinely branches (which is itself a smell the docs should note: heavy Portal
+logic usually belongs in a dedicated Orchestrator).
 
-Can an agent implement accurately from signature + description + guarantees +
-types alone? For the code `skip` is appropriate for — CRUD passthroughs,
+Can an agent implement accurately from signature + intent + guarantees +
+types alone? For the code `intent` is appropriate for — CRUD passthroughs,
 mappers, thin adapters — yes, reliably; that is precisely what makes them
-skippable. If a method can't be specified adequately in a paragraph of intent,
-that is the signal the scope needs `calls-only` or `full` instead. The dial
-self-selects: `skip` + intent floor for trivial scopes, narratives where
-behavior has structure worth reviewing.
+skippable. If a method can't be specified adequately in a paragraph, that is
+the signal it needs `calls-only` or `full`. The dial self-selects.
+
+Why keep detailed L5 at all, for AI-driven development (unchanged): the
+narrative is the review surface a human can approve BEFORE code exists, the
+cross-boundary choreography record mocked unit tests never verify, the
+durable regeneratable asset, and the granularity code↔spec conformance
+checking needs.
 
 Why keep detailed L5 at all, for AI-driven development: the narrative is the
 **review surface** (a human can approve a flowchart before code exists, but
@@ -289,12 +299,12 @@ effort on the flows where review-before-code actually pays.
 
 | Area | Change |
 |------|--------|
-| `src/models/specs.ts` | step-type enum + optional flow fields; `narrativeDetail`/`skipReason` on L1/L2 |
-| `src/core/rules/` (intent floor) | `INTENT_FLOOR` check scoped by `narrativeDetail` |
+| `src/models/specs.ts` | step-type enum + optional flow fields; `detail` on L4 spec + methods, `intent` on methods |
+| `src/core/rules/narrative-detail.ts` (new) | `MISSING_NARRATIVE` + `INTENT_FLOOR`, driven by method → spec → stereotype detail resolution |
 | `src/mcp/server.ts` | `sdd_write_narrative` input schema + description; `sdd_update_spec` docs |
 | `src/core/specs.ts` | renumber-and-relocate on narrative insert/delete; reject deleting a jump target |
 | `src/core/rules/narrative-flow.ts` (new) + `index.ts` | 3 new codes (§5) |
-| `src/core/rules/graph.ts` | `skip`-scope fallback to L2 edges in the unused-walk |
+| `src/core/rules/graph.ts` | `intent`-level callers fall back to L2 `dependsOn` edges in the unused-walk |
 | `src/core/diagram.ts` | Mermaid sequence `alt`/`loop` blocks |
 | `src/core/canvas.ts` | flow modal: diamonds, labeled/back edges, terminators; steps-mode text |
 | skills + standards docs | authoring guidance & examples |
@@ -312,14 +322,12 @@ Resolved (user-approved 2026-07-03):
   forms, try/catch/finally, throw, return, jump. `parallel` deferred.
 - **Error paths live in the SAME flowchart**, visually distinct, with a
   "hide error paths" renderer toggle — no separate happy/unhappy charts.
-- **`narrativeDetail` dial approved**, with the intent floor (§8) so `skip`
-  never means "no behavioral specification".
-
-Still open:
-
-1. Jump-by-step-number with tool-side relocation (recommended, §2) vs stable
-   step labels — labels are insert-proof but add authoring friction.
-2. Should `narrativeDetail` default depend on stereotype (e.g. `full` for
-   Portal/Orchestrator, `calls-only` for Store/Adapter)?
-3. Ship the detail dial in the same release as flow steps (recommended — they
-   answer the same criticism from both sides) or as a follow-up.
+- **Jump-by-step-number with tool-side relocation** — a flat list whose order
+  mimics the code lines; blocks are just skipped regions.
+- **Detail dial approved and reshaped** (user, 2026-07-03): declared per
+  method in the L4/L5 spec (`detail: full | calls-only | intent` +
+  `intent` prose), spec-level default, **stereotype defaults** (Portals and
+  Adapters are pass-throughs; their flowcharts are redundant), no
+  subsystem-level dial. Intent floor (§8) so `intent` never means "no
+  behavioral specification".
+- Flow steps and the detail dial ship in the same release.

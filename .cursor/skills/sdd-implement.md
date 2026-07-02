@@ -20,6 +20,13 @@ You are the **Spec-to-Code Compiler**. Your job is to generate concrete source c
    - The `sdd_validate_tree` MCP tool reports zero errors.
 2. **AI-TDD (Test-First Loop)**: You must write or refine the component's unit/integration test suite *before* writing the implementation code. Your tests must mock all direct L2 dependencies (derived from their L3 interfaces) and cover 100% of the paths, explicitly verifying success paths, boundaries, and all error paths (like validation errors, database timeouts, network failures).
 3. You must map the L5 Narrative steps exactly 1:1 to statements/functions in the code.
+   Flow steps map to their language construct: `branch` → if/else, `switch` → switch,
+   `loop` → the loopKind's loop form, `try` → try/catch/finally, `jump` → the loop
+   break/continue or the structured rejoin it encodes, `return`/`throw` → return/throw.
+   Methods at `detail: calls-only` fix the CALL choreography (order and targets of the
+   call steps); local glue between calls is yours. Methods at `detail: intent` have no
+   steps — implement the `intent` prose (or L3 description) faithfully, including the
+   stated failure behavior.
 4. You may not invent new steps.
 5. You may not omit any steps.
 6. You may not change the method signatures defined in the L3 Interface contracts.
