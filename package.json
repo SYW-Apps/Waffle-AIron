@@ -40,7 +40,6 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "lint": "eslint src --ext .ts",
     "clean": "rimraf dist"
   },
   "pkg": {

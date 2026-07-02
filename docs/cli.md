@@ -9,7 +9,7 @@ flags: `--verbose`, `--silent`, `-v`/`--version`.
 
 ### `wairon init [-y, --yes]`
 Bootstrap `.wai/` in the current project: project config, the SDD spec tree
-(an L0 `system.yaml` is seeded), the shared `.wai/context/`, the architect agent
+(an L0 `.index.yaml` is seeded), the shared `.wai/context/`, the architect agent
 file, and the SDD skills installed into each selected target tool. `--yes` uses
 defaults without prompts. Re-running on an initialized project is a no-op that
 points you back to the SDD flow.
@@ -118,8 +118,10 @@ and author specs directly.
 
 **Tools:** `listAgents`, `getAgent`, `listDomains`, `validateTopology`,
 `getProjectConfig`, `sdd_initialize_system`, `sdd_add_subsystem`,
-`sdd_add_component`, `sdd_define_interface`, `sdd_write_narrative`,
-`sdd_add_type`, `sdd_validate_tree`, `sdd_get_status`.
+`sdd_set_public_interfaces`, `sdd_set_subsystem_project_path`,
+`sdd_add_component`, `sdd_define_interface`, `sdd_set_endpoints`,
+`sdd_write_narrative`, `sdd_add_type`, `sdd_get_spec`, `sdd_update_spec`,
+`sdd_delete_spec`, `sdd_validate_tree`, `sdd_get_status`.
 
 ---
 

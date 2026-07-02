@@ -42,12 +42,15 @@ A complete system is specified top-down across six levels:
 
 | Level | File | What it defines |
 |-------|------|-----------------|
-| **L0 System** | `.wai/specs/system.yaml` | Vision, boundaries, global requirements |
-| **L1 Subsystem** | `.wai/specs/<sub>/subsystem.yaml` | An isolated software service and its public interfaces |
-| **L2 Component** | `…/<component>/component.yaml` | A building block (Portal, Orchestrator, Supervisor, Actor, Store, Index, Registry, Adapter, Observer, Specialist) or pattern (Repository, Gateway) + `owns`/`dependsOn` |
-| **L3 Interface** | `…/<component>/interface.yaml` | Method signatures (+ optional HTTP/gRPC/event bindings) |
-| **L4 Implementation** | `…/<component>/implementation.yaml` | Maps a contract to a source file |
+| **L0 System** | `.wai/specs/.index.yaml` | Vision, boundaries, global requirements, target language |
+| **L1 Subsystem** | `.wai/specs/<sub>/.index.yaml` | An isolated software service, its public interfaces, and trusted links |
+| **L2 Component** | `…/<component>/.index.yaml` | A building block (Portal, Orchestrator, Supervisor, Actor, Store, Index, Registry, Adapter, Observer, Specialist) or pattern (Repository, Gateway) + `owns`/`dependsOn` |
+| **L3 Interface** | `…/<component>/.interface.yaml` | Method signatures & structured params (+ optional wire endpoint bindings) |
+| **L4 Implementation** | `…/<component>/.implementation.yaml` | Maps a contract to a source file |
 | **L5 Narrative** | (within L4) | Step-by-step method logic; each `call` step resolves to a real dependency method |
+
+(Legacy undotted names — `system.yaml`, `subsystem.yaml`, … — still load;
+`wairon doctor --fix` migrates them.)
 
 `wairon validate` enforces conformance across the tree: reference integrity,
 contract↔implementation method symmetry, narrative-call resolution, the
@@ -158,7 +161,7 @@ See [docs/cli.md](docs/cli.md). Summary:
 | `wairon validate [--ci]` | Architecture-conformance gate |
 | `wairon generate [--target] [--domain] [--dry-run]` | Regenerate agent files + install skills |
 | `wairon list` / `wairon show <id>` | Inspect agents resolved from the spec tree |
-| `wairon diagram [--all] [--canvas] [--subsystem <id>] [--sequence <comp:method>]` | Mermaid diagrams + interactive architecture canvas (living docs) |
+| `wairon diagram [--all] [--canvas] [--drawio] [--excalidraw] [--sequence <comp:method>]` | Mermaid, interactive canvas, and editable draw.io/Excalidraw exports |
 | `wairon rules list` | The conformance rule registry (the architecture linter) |
 | `wairon domains list \| scan \| add \| remove` | Domains (subsystem-derived + free-standing) |
 | `wairon skills list \| install` | Manage the SDD skills installed into your tools |
