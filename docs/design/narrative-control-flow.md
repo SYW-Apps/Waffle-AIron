@@ -37,35 +37,30 @@ Why jumps instead of nested `children` blocks:
 Nesting was rejected: more expressive on paper, but it breaks the flat
 authoring model, complicates every consumer, and offers no rendering benefit.
 
-## 3. Schema (additive)
+## 3. Schema (additive) — the complete vocabulary
 
 `NarrativeStepTypeSchema` grows from `['local', 'call']` to:
 
 ```
-['local', 'call', 'branch', 'loop', 'switch', 'return']
+['local', 'call', 'branch', 'switch', 'loop', 'try', 'jump', 'return', 'throw']
 ```
 
-New **optional** fields on `NarrativeStepSchema` (unused by old types):
+Nine types cover every classical control structure. Deliberately, syntax
+variants are **config on one type**, not separate types (all four loop forms
+are `loop` + `loopKind`) — renderers and validators then handle one shape per
+concept. New **optional** fields on `NarrativeStepSchema` (unused by old
+types):
 
 ```yaml
-# branch — "if <condition> continue at onTrueStep (default: next step),
-#           otherwise jump to onFalseStep"
+# branch — if/else: "if <condition> continue at onTrueStep (default: next
+#           step), otherwise jump to onFalseStep"
 - stepNumber: 3
   type: branch
   description: cache entry exists and is fresh
   condition: cache hit && age < ttl        # prose or pseudo-expression
   onTrueStep: 4                            # optional, default = next step
   onFalseStep: 6                           # required
-
-# loop — header step; body = steps (stepNumber+1 .. endStep); after the body
-#        control returns to the header; when the condition no longer holds
-#        (or the iteration source is exhausted) control continues at endStep+1
-- stepNumber: 6
-  type: loop
-  description: for each pending job
-  over: pending jobs from the queue        # for-each source (or use condition)
-  condition: null                          # while-style alternative to over
-  endStep: 9                               # required, > stepNumber
+# else-if chains = the onFalseStep target is itself a branch step.
 
 # switch — multiway dispatch on a value
 - stepNumber: 10
@@ -79,15 +74,76 @@ New **optional** fields on `NarrativeStepSchema` (unused by old types):
       step: 14
   defaultStep: 17                          # optional; default = next step
 
-# return — early terminator (success or failure path)
+# loop — header step; body = steps (stepNumber+1 .. endStep). All four
+#        classical forms via loopKind:
+#          forEach — iterate `over` a collection
+#          for     — indexed/counted; put the range in `over` ("i in 0..n")
+#          while   — `condition` checked BEFORE each iteration
+#          doWhile — `condition` checked AFTER the body (body runs >= once)
+#        When the loop ends, control continues at endStep+1.
+- stepNumber: 6
+  type: loop
+  loopKind: forEach                        # forEach | for | while | doWhile
+  description: for each pending job
+  over: pending jobs from the queue        # forEach/for iteration source
+  condition: null                          # while/doWhile condition
+  endStep: 9                               # required, > stepNumber
+
+# try — guarded region: body = steps (stepNumber+1 .. endStep); a matching
+#       error during the body jumps to that catch's step; finallyStep (if
+#       set) names the first step of a region that runs on every path out.
+- stepNumber: 4
+  type: try
+  description: guard the external dispatch
+  endStep: 7                               # required
+  catches:
+    - error: TimeoutError                  # free text — the error/condition caught
+      step: 8
+    - error: any
+      step: 11
+  finallyStep: 13                          # optional
+
+# jump — unconditional goto. THE glue primitive: `break` = jump past
+#        endStep+1, `continue` = jump to the loop header, and how a catch
+#        block rejoins the main flow. Use sparingly; UNREACHABLE_STEP and
+#        review keep it honest.
+- stepNumber: 12
+  type: jump
+  description: recovered — rejoin the normal flow
+  toStep: 14                               # required
+
+# return — terminator (happy or handled-failure exit)
 - stepNumber: 13
   type: return
   description: job already completed — nothing to do
   outcome: success                         # free text; 'success' / 'not found' / …
+
+# throw — error terminator: this path ends by raising/propagating an error
+- stepNumber: 9
+  type: throw
+  description: retries exhausted
+  error: DispatchFailedError               # free text
 ```
 
 `call` and `local` steps are unchanged and remain valid jump targets.
 `assertsGuarantees` keeps working on every type.
+
+**Considered and deferred:** a `parallel` fan-out step (concurrent calls,
+`Promise.all`-style). Real in orchestrators, but it complicates every renderer
+and validator for a case that a `local` step ("in parallel: dispatch to all
+runners") plus individual `call` steps describes acceptably today. Revisit
+when a concrete Waffler narrative actually needs joined-branch semantics.
+Recursion needs nothing special (`call` may target the method itself), and
+async/await is intentionally NOT flow structure here — awaiting is an
+implementation concern, not narrative-level control flow.
+
+**On try/catch belonging in flowcharts:** classical flowcharts predate
+structured exception handling and typically show only the happy path — but
+SDD narratives are not decorative flowcharts; they are the review surface,
+and error paths (compensation, rollback, retries, propagation across
+subsystem boundaries) are precisely where review-before-code pays the most.
+So `try`/`throw` are in. The happy path stays readable through rendering,
+not through omission (§6).
 
 ## 4. Authoring via MCP
 
@@ -121,9 +177,9 @@ catches breakage at validate time.
 
 | Code                 | Severity | Meaning                                                        |
 |----------------------|----------|----------------------------------------------------------------|
-| `MALFORMED_FLOW_STEP`| error    | branch without `condition`/`onFalseStep`; loop without `endStep` or `endStep <= stepNumber`; switch without `cases`; flow config on a `local`/`call` step |
-| `INVALID_STEP_JUMP`  | error    | any jump field targeting a step number that does not exist in the narrative |
-| `UNREACHABLE_STEP`   | warning  | step not reachable from step 1 following fall-through + jumps  |
+| `MALFORMED_FLOW_STEP`| error    | branch without `condition`/`onFalseStep`; loop without `endStep` or `endStep <= stepNumber`; `while`/`doWhile` without `condition`, `forEach`/`for` without `over`; switch without `cases`; try without `endStep` or with neither `catches` nor `finallyStep`; jump without `toStep`; flow config on a `local`/`call` step |
+| `INVALID_STEP_JUMP`  | error    | any jump field (`onTrueStep`, `onFalseStep`, `cases[].step`, `defaultStep`, `endStep`, `catches[].step`, `finallyStep`, `toStep`) targeting a step number that does not exist in the narrative |
+| `UNREACHABLE_STEP`   | warning  | step not reachable from step 1 following fall-through + jumps (catch/finally regions count as reachable from their try) |
 
 Registered in the rule registry like the other 12 modules (severity
 overridable per project, listed by `wairon rules list`). The existing
@@ -135,15 +191,27 @@ and loop bodies keep counting as usage.
 
 - **Steps mode** (sidebar / modal): one line per step —
   `3. ◇ if cache entry is fresh … else → 6`, `6. ⟳ for each pending job (6–9)`,
-  `13. ⏎ return — success`.
+  `4. ⛨ try (5–7) — on TimeoutError → 8`, `13. ⏎ return — success`,
+  `9. ⚡ throw DispatchFailedError`.
 - **Flowchart mode** (canvas modal): `branch`/`switch` render as diamonds with
-  labeled outgoing edges (true/false, case values), `loop` as a diamond with a
-  back-edge from `endStep`, `return` as a rounded terminator. Main spine stays
-  vertical; jump edges route beside it. Call drill-down and PNG/draw.io/
-  Excalidraw export work unchanged (they consume the same step graph).
+  labeled outgoing edges (true/false, case values); `loop` as a diamond with a
+  back-edge from `endStep` (for `doWhile` the diamond sits at the END of the
+  body); `try` as a subtle guarded region with dashed error edges to its
+  catch steps; `return` as a rounded terminator and `throw` as an error-tinted
+  one. Main spine stays vertical; jump/error edges route beside it. Call
+  drill-down and PNG/draw.io/Excalidraw export work unchanged (they consume
+  the same step graph).
+- **One flowchart, not separate happy/unhappy charts.** Splitting paths into
+  parallel diagrams invites drift and hides exactly the junction points a
+  reviewer needs to see (where the flow *leaves* the happy path). Instead the
+  happy path reads as the main spine, error edges/terminators are visually
+  distinct (dashed, error color), and the flow modal gets a **"hide error
+  paths" toggle** that filters catch regions, `throw` terminators, and error
+  edges from the one source of truth when a pure happy-path view is wanted.
 - **Mermaid sequence diagrams**: `branch` → `alt`/`else`, `loop` → `loop`,
-  `switch` → `alt` with one branch per case, `return` ends the fragment —
-  Mermaid supports all of these natively.
+  `switch` → `alt` with one branch per case, `try`/`catches` → `critical`/
+  `option` (or `alt` fallback), `return`/`throw` end the fragment — Mermaid
+  supports all of these natively.
 
 ## 7. Compatibility & migration
 
@@ -183,6 +251,31 @@ skipReason: pure CRUD passthroughs — structure-level design is sufficient  # r
   a reviewer always sees "this area was deliberately designed to structural
   level only".
 
+**Skipping L5 must never mean skipping intent — the intent floor.** An
+implementing agent without a narrative still needs to know *what* each method
+must do; it just doesn't get told *how* step by step. That intent already has
+a home in the spec — it does not need a new free-text field:
+
+- L3 method `description` + `guarantees` + structured `params`/`returns`,
+- L2 component `description` and stereotype,
+- the type definitions the signature references.
+
+For `full` scopes a thin method description is tolerable (the narrative
+carries the detail); for `calls-only`/`skip` scopes those fields become the
+ONLY specification of behavior, so the dial tightens quality enforcement
+instead of adding fields: a new `INTENT_FLOOR` check (error in `skip` scopes,
+warning in `calls-only`) rejects public methods whose description is missing,
+placeholder-thin (a few words / restating the name), or has no `guarantees`
+when the description doesn't state the failure behavior.
+
+Can an agent implement accurately from signature + description + guarantees +
+types alone? For the code `skip` is appropriate for — CRUD passthroughs,
+mappers, thin adapters — yes, reliably; that is precisely what makes them
+skippable. If a method can't be specified adequately in a paragraph of intent,
+that is the signal the scope needs `calls-only` or `full` instead. The dial
+self-selects: `skip` + intent floor for trivial scopes, narratives where
+behavior has structure worth reviewing.
+
 Why keep detailed L5 at all, for AI-driven development: the narrative is the
 **review surface** (a human can approve a flowchart before code exists, but
 cannot meaningfully review 10k lines of generated diff), the **cross-boundary
@@ -197,6 +290,7 @@ effort on the flows where review-before-code actually pays.
 | Area | Change |
 |------|--------|
 | `src/models/specs.ts` | step-type enum + optional flow fields; `narrativeDetail`/`skipReason` on L1/L2 |
+| `src/core/rules/` (intent floor) | `INTENT_FLOOR` check scoped by `narrativeDetail` |
 | `src/mcp/server.ts` | `sdd_write_narrative` input schema + description; `sdd_update_spec` docs |
 | `src/core/specs.ts` | renumber-and-relocate on narrative insert/delete; reject deleting a jump target |
 | `src/core/rules/narrative-flow.ts` (new) + `index.ts` | 3 new codes (§5) |
@@ -210,7 +304,18 @@ Phasing: (1) schema + validation + update semantics, (2) MCP authoring, (3)
 renderers, (4) detail dial. Each phase lands green and is independently
 useful; nothing before (3) changes any visual output.
 
-## 10. Open decisions
+## 10. Decisions
+
+Resolved (user-approved 2026-07-03):
+
+- **Complete flow vocabulary** (§3): branch/if-else, switch, all four loop
+  forms, try/catch/finally, throw, return, jump. `parallel` deferred.
+- **Error paths live in the SAME flowchart**, visually distinct, with a
+  "hide error paths" renderer toggle — no separate happy/unhappy charts.
+- **`narrativeDetail` dial approved**, with the intent floor (§8) so `skip`
+  never means "no behavioral specification".
+
+Still open:
 
 1. Jump-by-step-number with tool-side relocation (recommended, §2) vs stable
    step labels — labels are insert-proof but add authoring friction.
