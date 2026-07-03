@@ -47,28 +47,41 @@ export const languageRule: SddRule = {
     { code: 'LANGUAGE_FOREIGN_FLOW', defaultSeverity: 'warning', summary: 'Narrative flow step uses a construct the target language does not have' },
   ],
   check(ctx) {
+    // Effective per-language tables: built-ins merged with extension-pack
+    // languages (packs may add whole platforms, e.g. "make", or extend a
+    // built-in language's tables).
+    const markersFor = (family: string): ReadonlySet<string> | undefined => {
+      const base = LANGUAGE_MARKERS[family];
+      const extra = ctx.ext.languages[family]?.foreignBuiltins;
+      if (!extra?.length) return base;
+      return new Set([...(base ?? []), ...extra.map(s => s.toLowerCase())]);
+    };
+    const families = new Set([...Object.keys(LANGUAGE_MARKERS), ...Object.keys(ctx.ext.languages)]);
+    const gapsFor = (lang: string): Record<string, string> => ({
+      ...(UNSUPPORTED_FLOW[lang] ?? {}),
+      ...(ctx.ext.languages[lang]?.unsupportedFlow ?? {}),
+    });
+
     for (const intf of ctx.interfaces) {
       const comp = ctx.componentMap.get(intf.component);
       const lang = ctx.targetLanguageFor(comp?.subsystem);
       if (!lang) continue;
       const normalized = normalizeLanguage(lang);
-      const ownMarkers = LANGUAGE_MARKERS[normalized];
-      // Unknown language: nothing reliable to check against.
-      if (!ownMarkers && !(normalized in LANGUAGE_MARKERS)) {
-        // Still check foreign markers only if we at least know the language? No —
-        // an unknown language could legitimately share any vocabulary. Skip.
-        continue;
-      }
+      const ownMarkers = markersFor(normalized);
+      // A language with no builtin vocabulary of its own (unknown, or a pack
+      // platform that declared none) could legitimately share any builtin —
+      // nothing reliable to check against.
+      if (!ownMarkers || ownMarkers.size === 0) continue;
 
       const isDraftCtx = ctx.isComponentDraft(intf.component) || intf.status === 'draft' || intf.status === 'design';
       for (const m of intf.methods) {
         const refs = methodTypeRefs(m);
         for (const ref of refs) {
           const refLower = ref.toLowerCase();
-          if (ownMarkers?.has(refLower)) continue;
-          for (const [family, markers] of Object.entries(LANGUAGE_MARKERS)) {
+          if (ownMarkers.has(refLower)) continue;
+          for (const family of families) {
             if (family === normalized) continue;
-            if (markers.has(refLower)) {
+            if (markersFor(family)?.has(refLower)) {
               ctx.addIssue(
                 'warning',
                 'LANGUAGE_FOREIGN_BUILTIN',
@@ -90,8 +103,8 @@ export const languageRule: SddRule = {
       const comp = ctx.componentMap.get(contract.component);
       const lang = ctx.targetLanguageFor(comp?.subsystem);
       if (!lang) continue;
-      const gaps = UNSUPPORTED_FLOW[normalizeLanguage(lang)];
-      if (!gaps) continue;
+      const gaps = gapsFor(normalizeLanguage(lang));
+      if (Object.keys(gaps).length === 0) continue;
 
       const isDraftCtx = impl.status === 'draft' || impl.status === 'design'
         || contract.status === 'draft' || contract.status === 'design'
@@ -99,14 +112,21 @@ export const languageRule: SddRule = {
 
       for (const implMethod of impl.methods) {
         for (const step of implMethod.narrative) {
+          // The full construct keyspace: branch | switch | forEach | for |
+          // while | doWhile | try | throw | jump (local/call/return are
+          // universal and never gated).
           const construct = step.type === 'loop'
-            ? ((step.loopKind ?? (step.over ? 'forEach' : 'while')) === 'doWhile' ? 'doWhile' : null)
-            : (step.type === 'try' || step.type === 'throw') ? step.type : null;
-          if (!construct || !gaps[construct]) continue;
+            ? (step.loopKind ?? (step.over ? 'forEach' : 'while'))
+            : step.type;
+          const guidance = gaps[construct];
+          if (!guidance) continue;
+          const label = construct === 'doWhile' ? 'a do-while loop'
+            : (construct === 'forEach' || construct === 'for' || construct === 'while') ? `a ${construct} loop`
+              : `a ${construct} step`;
           ctx.addIssue(
             'warning',
             'LANGUAGE_FOREIGN_FLOW',
-            `Step ${step.stepNumber} of "${implMethod.name}" in implementation "${impl.id}" uses ${construct === 'doWhile' ? 'a do-while loop' : `a ${construct} step`}, but the target language is ${normalizeLanguage(lang)}: ${gaps[construct]}.`,
+            `Step ${step.stepNumber} of "${implMethod.name}" in implementation "${impl.id}" uses ${label}, but the target language is ${normalizeLanguage(lang)}: ${guidance}.`,
             impl.id,
             isDraftCtx,
           );

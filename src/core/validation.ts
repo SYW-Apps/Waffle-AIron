@@ -13,7 +13,8 @@ import {
   getLoaderIssues,
   scanAllSpecs,
 } from './specs.js';
-import { SDD_RULES, buildRuleContext, makeScopeFilter } from './rules/index.js';
+import { buildRuleContext, composeRuleSequence, makeScopeFilter } from './rules/index.js';
+import { LoadedExtensions, loadProjectExtensions } from './extensions.js';
 
 // ---------------------------------------------------------------------------
 // Validation
@@ -168,6 +169,12 @@ export interface ValidationOptions {
   projectType?: string;
   scopeSubsystem?: string;
   recursive?: boolean | number;
+  /**
+   * Pre-loaded extension packs (the programmatic-wrapper path). When omitted,
+   * the packs declared in the project's own config are loaded — so CLI and
+   * MCP callers get pack rules/profiles/languages without passing anything.
+   */
+  extensions?: LoadedExtensions;
 }
 
 export function validateSddTree(
@@ -177,14 +184,17 @@ export function validateSddTree(
   let rules = rulesOrOptions as RulesConfig | undefined;
   let scopeSubsystem: string | undefined;
   let recursive: boolean | number = true;
+  let extensions: LoadedExtensions | undefined;
 
-  if (rulesOrOptions && ('scopeSubsystem' in rulesOrOptions || 'recursive' in rulesOrOptions || 'rules' in rulesOrOptions || 'projectType' in rulesOrOptions)) {
+  if (rulesOrOptions && ('scopeSubsystem' in rulesOrOptions || 'recursive' in rulesOrOptions || 'rules' in rulesOrOptions || 'projectType' in rulesOrOptions || 'extensions' in rulesOrOptions)) {
     const opts = rulesOrOptions as ValidationOptions;
     rules = opts.rules;
     projectType = opts.projectType ?? 'backend';
     scopeSubsystem = opts.scopeSubsystem;
     recursive = opts.recursive ?? true;
+    extensions = opts.extensions;
   }
+  extensions ??= loadProjectExtensions();
 
   // Configure spec loader recursion
   scanAllSpecs({ recursive });
@@ -214,6 +224,12 @@ export function validateSddTree(
     return { valid: false, issues };
   }
 
+  // A pack that fails to load is an error, never a silent skip — otherwise
+  // the gate would quietly run without the doctrine the project declared.
+  for (const err of extensions.errors) {
+    issues.push(issue('error', 'EXTENSION_LOAD_ERROR', err));
+  }
+
   const ctx = buildRuleContext({
     system,
     subsystems,
@@ -224,10 +240,11 @@ export function validateSddTree(
     rules,
     projectType,
     scopeSubsystem,
+    extensions,
     issues,
   });
 
-  for (const rule of SDD_RULES) {
+  for (const rule of composeRuleSequence(extensions.rules)) {
     rule.check(ctx);
   }
 

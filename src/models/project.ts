@@ -82,9 +82,12 @@ export const ProjectConfigSchema = z.object({
 
   /**
    * The type/profile of the project, which configures targeted guidelines, rules,
-   * templates, and validation constraints.
+   * templates, and validation constraints. Open string: built-ins are backend,
+   * frontend-reactive, frontend-controller, lowlevel-os, game-ecs,
+   * realtime-embedded, plc-cyclic, fullstack, system-of-systems, monorepo;
+   * extension packs may register more (unknown names get UNKNOWN_PROFILE).
    */
-  projectType: z.enum(['backend', 'frontend-reactive', 'frontend-controller', 'lowlevel-os', 'game-ecs', 'realtime-embedded', 'plc-cyclic', 'fullstack', 'system-of-systems', 'monorepo']).default('backend'),
+  projectType: z.string().default('backend'),
 
   /** Optional short description of this project */
   description: z.string().optional(),
@@ -96,6 +99,16 @@ export const ProjectConfigSchema = z.object({
   targets: z.array(TargetConfigSchema).default([]),
 
   rules: RulesConfigSchema.default({}),
+
+  /**
+   * Extension packs — wairon's plugin surface. Each entry is a relative path
+   * to a declarative YAML pack (custom profiles + language/platform tables)
+   * or a requireable JS module id (which may also inject SddRule[] `rules`).
+   * Loaded identically by CLI and MCP at validation time.
+   */
+  extensions: z.object({
+    packs: z.array(z.string()).default([]),
+  }).optional(),
 
   paths: PathsConfigSchema.default({}),
 

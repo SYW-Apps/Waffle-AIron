@@ -105,7 +105,13 @@ export const SubsystemSpecSchema = z.object({
   description: z.string(),
   parentSystem: z.string(), // References L0 System Name or file
   publicInterfaces: z.array(PublicInterfaceSchema).default([]),
-  profile: z.enum(['backend', 'frontend-reactive', 'frontend-controller', 'lowlevel-os', 'game-ecs', 'realtime-embedded', 'plc-cyclic']).optional(), // Optional subsystem override for fullstack
+  /**
+   * Optional subsystem profile override (e.g. for fullstack systems). Open
+   * string: built-ins are backend, frontend-reactive, frontend-controller,
+   * lowlevel-os, game-ecs, realtime-embedded, plc-cyclic; extension packs
+   * may register more. Unknown names get UNKNOWN_PROFILE.
+   */
+  profile: z.string().optional(),
   projectPath: z.string().optional(), // Relative path to external project root for subsystem chaining
   /** Optional override of the system-level targetLanguage for this subsystem. */
   targetLanguage: z.string().optional(),

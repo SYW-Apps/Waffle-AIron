@@ -73,9 +73,11 @@ its core.
      relative YAML file (declarative pack) or a requireable JS module
      (programmatic pack).
    - **Declarative packs** carry data: custom profile definitions
-     (forbidden/discouraged stereotypes with reasons), and language/platform
-     packs (unsupported flow constructs with guidance, foreign builtin
-     markers, construct display aliases like `switch` → "router").
+     (`family` opting into built-in stereotype fencing + forbidden/
+     discouraged stereotype lists with reasons), and language/platform
+     packs (unsupported flow constructs with remodeling guidance, foreign
+     builtin markers). Construct display aliases (`switch` → "router")
+     deferred to the skill-skin phase — nothing would read them yet.
    - **Programmatic packs** export `rules: SddRule[]` (plus optionally
      profiles/languages) against wairon's exported `SddRule`/`RuleContext`
      API. Loaded via `createRequire` from the project root; CLI and MCP load

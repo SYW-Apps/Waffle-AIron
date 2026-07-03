@@ -8,7 +8,8 @@ import {
   RulesConfig,
 } from '../../models/index.js';
 import type { ValidationIssue } from '../validation.js';
-import { ArchProfile, RuleContext, SddRule, Severity } from './types.js';
+import { emptyExtensions, LoadedExtensions } from '../extensions.js';
+import { ArchProfile, BUILTIN_PROFILES, RuleContext, SddRule, Severity } from './types.js';
 import { BUILTIN_TYPES, matchTypeRef, normalizeLanguage } from './type-analysis.js';
 
 import { hierarchyRule } from './hierarchy.js';
@@ -55,6 +56,16 @@ export const SDD_RULES: SddRule[] = [
   // actually consumed (stale/unknown allows).
   lintAllowsRule,
 ];
+
+/**
+ * The full rule sequence for a validation run: built-ins, then extension-pack
+ * rules, with the lint-allows audit LAST so it also sees every allow the pack
+ * rules consumed (otherwise a suppressed pack warning reads as a stale allow).
+ */
+export function composeRuleSequence(extraRules: SddRule[] = []): SddRule[] {
+  const base = SDD_RULES.filter(r => r !== lintAllowsRule);
+  return [...base, ...extraRules, lintAllowsRule];
+}
 
 // Completeness rules downgrade to warnings while the surrounding specs are
 // still draft/design — the tree is allowed to be unfinished, not inconsistent.
@@ -127,12 +138,15 @@ export interface BuildContextOptions {
   rules?: RulesConfig;
   projectType: string;
   scopeSubsystem?: string;
+  /** Loaded extension packs (pack profiles/languages/rules); empty when absent. */
+  extensions?: LoadedExtensions;
   /** Collector the context's addIssue pushes into. */
   issues: ValidationIssue[];
 }
 
 export function buildRuleContext(opts: BuildContextOptions): RuleContext {
   const { system, subsystems, components, interfaces, implementations, types, rules, projectType, scopeSubsystem, issues } = opts;
+  const extensions = opts.extensions ?? emptyExtensions();
 
   const componentMap = new Map(components.map(c => [c.id, c]));
   const interfaceMap = new Map(interfaces.map(i => [i.id, i]));
@@ -170,9 +184,8 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     if (sub && sub.profile) {
       return sub.profile;
     }
-    const validProfiles = ['frontend-reactive', 'frontend-controller', 'lowlevel-os', 'game-ecs', 'realtime-embedded', 'plc-cyclic'];
-    if (validProfiles.includes(projectType)) {
-      return projectType as ArchProfile;
+    if ((BUILTIN_PROFILES as readonly string[]).includes(projectType) || projectType in extensions.profiles) {
+      return projectType;
     }
     return 'backend';
   };
@@ -233,7 +246,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
   for (const im of implementations) collectAllows(im.id, im.lint);
   for (const t of types) collectAllows(t.id, t.lint);
 
-  const knownIssueCodes = new Set(SDD_RULES.flatMap(r => r.codes.map(c => c.code)));
+  const knownIssueCodes = new Set([...SDD_RULES, ...extensions.rules].flatMap(r => r.codes.map(c => c.code)));
 
   const addIssue = (
     defaultSeverity: Severity,
@@ -278,6 +291,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     isTypeResolved,
     targetLanguageFor,
     isSpecInScope,
+    ext: { profiles: extensions.profiles, languages: extensions.languages },
     lintAllows,
     knownIssueCodes,
     addIssue,
