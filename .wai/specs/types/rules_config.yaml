@@ -2,7 +2,23 @@ kind: value-object
 id: rules_config
 name: RulesConfig
 description: Rules configuration
-fields: []
+fields:
+  - name: noOverlappingOwnership
+    type: boolean
+    description: Two agents may not own the same path
+  - name: requireOwnedPaths
+    type: boolean
+    description: Non-meta agents must declare ownedPaths
+  - name: metaAgentTags
+    type: string[]
+    description: Tags exempting an agent from ownership requirements
+  - name: enforceReproducibility
+    type: boolean
+    description: Generated files must be reproducible from the registry
+  - name: sddRuleSeverity
+    type: object
+    description: Per-code severity overrides for the SDD conformance rules
+    optional: true
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-06-10T22:00:00.000Z'
+updatedAt: '2026-07-03T00:00:00.000Z'

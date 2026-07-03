@@ -106,7 +106,7 @@ export interface CanvasModel {
     methods: { name: string; signature: string; returns: string; description?: string }[];
   }[];
   /** Type → type references derived from field type strings (ERD edges). */
-  typeEdges: { from: string; to: string; field: string }[];
+  typeEdges: { from: string; to: string; field: string; card: '1' | '0..1' | '*' }[];
   issues: { severity: string; code: string; message: string; specId?: string }[];
 }
 
@@ -225,6 +225,9 @@ export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
     fields: t.fields.map(f => ({ name: f.name, type: f.type, ...(f.optional ? { optional: true } : {}) })),
     methods: t.methods.map(m => ({ name: m.name, signature: m.signature, returns: m.returns, ...(m.description ? { description: m.description } : {}) })),
   }));
+  // Cardinality is derivable from the field's type string: collection shapes
+  // mean "many", the optional flag means 0..1 — real ERD multiplicity for free.
+  const MANY_SHAPE = /\[\s*\]|Array<|Vec<|Set<|List<|Map<|Record<|HashMap</i;
   const typeEdges: CanvasModel['typeEdges'] = [];
   for (const t of typeSpecs) {
     for (const field of t.fields) {
@@ -236,7 +239,8 @@ export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
           return matchTypeRef(ref, qualified);
         });
         if (target && target.id !== t.id) {
-          typeEdges.push({ from: t.id, to: target.id, field: field.name });
+          const card = MANY_SHAPE.test(field.type) ? '*' : field.optional ? '0..1' : '1';
+          typeEdges.push({ from: t.id, to: target.id, field: field.name, card });
         }
       }
     }
@@ -702,9 +706,9 @@ var MODEL = __MODEL_JSON__;
       { selector: ':parent', style: { 'text-valign': 'top', 'text-halign': 'center', 'font-size': 12, 'font-weight': 'bold', 'text-margin-y': -5, padding: '10px', 'background-opacity': 1 } },
       { selector: '.inner', style: { 'background-color': t.innerFill, 'border-color': t.innerStroke, 'border-width': 1.2, 'font-size': 9.5, color: t.innerText } },
       { selector: '.ghost', style: { 'background-color': t.ghostFill, 'border-color': t.ghostStroke, 'border-style': 'dotted', color: t.ghostText, 'font-size': 10 } },
-      { selector: '.typeEntity', style: { 'background-color': t.typeE.fill, 'border-color': t.typeE.stroke, color: t.typeE.text, 'text-halign': 'center', 'font-size': 10.5 } },
-      { selector: '.typeValue', style: { 'background-color': t.typeV.fill, 'border-color': t.typeV.stroke, color: t.typeV.text, 'border-style': 'dashed', 'font-size': 10.5 } },
-      { selector: 'edge.typeref', style: { width: 1.4, 'line-style': 'solid' } },
+      { selector: '.typeEntity', style: { 'background-color': t.typeE.fill, 'border-color': t.typeE.stroke, color: t.typeE.text, 'text-halign': 'center', 'font-size': 10.5, 'text-justification': 'left' } },
+      { selector: '.typeValue', style: { 'background-color': t.typeV.fill, 'border-color': t.typeV.stroke, color: t.typeV.text, 'border-style': 'dashed', 'font-size': 10.5, 'text-justification': 'left' } },
+      { selector: 'edge.typeref', style: { width: 1.4, 'line-style': 'solid', 'target-label': 'data(tcard)', 'target-text-offset': 24, 'font-size': 9.5 } },
       { selector: '.proxyExt', style: { 'font-size': 12, 'border-width': 1.6 } },
       { selector: '.proxyIn', style: { 'background-color': t.proxyIn.fill, 'border-color': t.proxyIn.stroke, color: t.proxyIn.stroke } },
       { selector: '.proxyOut', style: { 'background-color': t.proxyOut.fill, 'border-color': t.proxyOut.stroke, color: t.proxyOut.stroke } },
@@ -919,12 +923,25 @@ var MODEL = __MODEL_JSON__;
   }
   function buildTypeElements() {
     var eles = [];
+    // Aggregate references per (from, to) pair; the strongest multiplicity
+    // wins the target-end label (* > 0..1 > 1) — UML-style logical ERD.
+    var CARD_RANK = { '1': 0, '0..1': 1, '*': 2 };
     var aggRefs = {};
     MODEL.typeEdges.forEach(function (e) {
       var key = e.from + '=>' + e.to;
-      if (!aggRefs[key]) aggRefs[key] = { from: e.from, to: e.to, fields: [] };
+      if (!aggRefs[key]) aggRefs[key] = { from: e.from, to: e.to, fields: [], card: e.card || '1' };
       if (aggRefs[key].fields.indexOf(e.field) < 0) aggRefs[key].fields.push(e.field);
+      if (CARD_RANK[e.card] > CARD_RANK[aggRefs[key].card]) aggRefs[key].card = e.card;
     });
+    // Group by owning subsystem (system-level shared types in their own box),
+    // each group laid out as its own layered block, stacked vertically.
+    var groups = {}, groupIds = [];
+    MODEL.types.forEach(function (t) {
+      var g = t.subsystem || '\\u2014 shared \\u2014';
+      if (!groups[g]) { groups[g] = []; groupIds.push(g); }
+      groups[g].push(t);
+    });
+    groupIds.sort();
     // layered by reference direction (referencing types left, referenced right)
     var layer = {};
     function calc(id, stack) {
@@ -942,33 +959,47 @@ var MODEL = __MODEL_JSON__;
       return l;
     }
     MODEL.types.forEach(function (t) { calc(t.id, {}); });
-    var cols = {};
-    MODEL.types.forEach(function (t) { var l = layer[t.id] || 0; (cols[l] = cols[l] || []).push(t); });
-    var colKeys = Object.keys(cols).map(Number).sort(function (a, b) { return a - b; });
-    var x = 0;
-    colKeys.forEach(function (ck) {
-      var col = cols[ck].sort(function (a, b) { return a.id < b.id ? -1 : 1; });
-      var y = 0, colW = 0;
-      col.forEach(function (t) {
-        var shown = t.fields.slice(0, 6);
-        var lines = shown.map(function (f) { return '\\u00B7 ' + f.name + ': ' + f.type; });
-        if (t.fields.length > 6) lines.push('\\u2026 +' + (t.fields.length - 6) + ' more');
-        if (t.methods.length) lines.push('\\u0192 ' + t.methods.length + ' method' + (t.methods.length > 1 ? 's' : ''));
-        var label = t.name + '  \\u00AB' + t.kind + '\\u00BB' + (lines.length ? '\\n' + lines.join('\\n') : '');
-        var h = 40 + lines.length * 13;
-        var dim = !typeMatches(t);
-        eles.push({
-          data: { id: 'T~' + t.id, label: label, w: 220, h: h, tw: 206 },
-          position: { x: x + 110, y: y + h / 2 },
-          classes: (t.kind === 'entity' ? 'typeEntity' : 'typeValue')
-            + (dim ? ' dimmed' : '')
-            + (state.showIssues && issuesBySpec[t.id] ? ' hasIssue' : '')
-            + (state.selectedKind === 'type' && state.selected === t.id ? ' sel' : ''),
+
+    var FIELD_CAP = 9;
+    var groupY = 0;
+    groupIds.forEach(function (g) {
+      var gid = 'TG~' + g;
+      var multi = groupIds.length > 1;
+      if (multi) eles.push({ data: { id: gid, label: g }, classes: 'subsysBox' });
+      var cols = {};
+      groups[g].forEach(function (t) { var l = layer[t.id] || 0; (cols[l] = cols[l] || []).push(t); });
+      var colKeys = Object.keys(cols).map(Number).sort(function (a, b) { return a - b; });
+      var x = 0, groupH = 0;
+      colKeys.forEach(function (ck) {
+        var col = cols[ck].sort(function (a, b) { return a.id < b.id ? -1 : 1; });
+        var y = groupY, colW = 240;
+        col.forEach(function (t) {
+          var shown = t.fields.slice(0, FIELD_CAP);
+          var lines = shown.map(function (f) { return f.name + (f.optional ? '?' : '') + ': ' + f.type; });
+          if (t.fields.length > FIELD_CAP) lines.push('\\u2026 +' + (t.fields.length - FIELD_CAP) + ' more');
+          t.methods.forEach(function (m) { lines.push('\\u0192 ' + m.name + '(): ' + m.returns); });
+          var head = t.name + '  \\u00AB' + t.kind + '\\u00BB';
+          var longest = head.length;
+          lines.forEach(function (ln) { if (ln.length > longest) longest = ln.length; });
+          var w = Math.max(220, Math.min(360, longest * 6.6 + 26));
+          var label = head + (lines.length ? '\\n\\u2500\\u2500\\u2500\\n' + lines.join('\\n') : '');
+          var h = 42 + (lines.length ? (lines.length + 1) * 13.5 : 0);
+          var dim = !typeMatches(t);
+          eles.push({
+            data: { id: 'T~' + t.id, parent: multi ? gid : undefined, label: label, w: w, h: h, tw: w - 14 },
+            position: { x: x + w / 2, y: y + h / 2 },
+            classes: (t.kind === 'entity' ? 'typeEntity' : 'typeValue')
+              + (dim ? ' dimmed' : '')
+              + (state.showIssues && issuesBySpec[t.id] ? ' hasIssue' : '')
+              + (state.selectedKind === 'type' && state.selected === t.id ? ' sel' : ''),
+          });
+          y += h + 28;
+          if (w > colW) colW = w;
         });
-        y += h + 26;
-        colW = Math.max(colW, 220);
+        groupH = Math.max(groupH, y - groupY);
+        x += colW + 120;
       });
-      x += 220 + 110;
+      groupY += groupH + 90;
     });
     var i = 0;
     var typeById = {};
@@ -977,7 +1008,10 @@ var MODEL = __MODEL_JSON__;
       var r = aggRefs[k];
       var dim = state.query && (!typeMatches(typeById[r.from] || { id: r.from, name: '' }) || !typeMatches(typeById[r.to] || { id: r.to, name: '' }));
       var lbl = r.fields.slice(0, 2).join(', ') + (r.fields.length > 2 ? ' +' + (r.fields.length - 2) : '');
-      eles.push({ data: { id: 'te' + (i++), source: 'T~' + r.from, target: 'T~' + r.to, lbl: lbl }, classes: 'typeref' + (dim ? ' dimmed' : '') });
+      eles.push({
+        data: { id: 'te' + (i++), source: 'T~' + r.from, target: 'T~' + r.to, lbl: lbl, tcard: r.card },
+        classes: 'typeref' + (dim ? ' dimmed' : ''),
+      });
     });
     return eles;
   }
@@ -1316,6 +1350,7 @@ var MODEL = __MODEL_JSON__;
     var raw = node.id();
     if (raw.indexOf('p~') === 0) return { proxy: true, id: raw };
     if (raw.indexOf('x~') === 0) return { ghost: true, kind: node.data('extKind'), id: node.data('extId') };
+    if (raw.indexOf('TG~') === 0) return { group: true, id: raw };
     if (raw.indexOf('T~') === 0) return { kind: 'type', id: raw.slice(2) };
     if (raw.indexOf('i~') === 0) {
       var rest = raw.slice(2);
@@ -1363,6 +1398,7 @@ var MODEL = __MODEL_JSON__;
 
   cy.on('tap', 'node', function (ev) {
     var t = idOf(ev.target);
+    if (t.group) return;
     if (t.proxy) {
       // Ports are real nodes: selecting one pins its cross-boundary line and
       // shows the external counterpart's details in the sidebar.
@@ -1382,7 +1418,7 @@ var MODEL = __MODEL_JSON__;
   });
   cy.on('dbltap', 'node', function (ev) {
     var t = idOf(ev.target);
-    if (t.proxy) return;
+    if (t.proxy || t.group) return;
     if (t.kind === 'type') return;
     if (t.ghost) {
       state.view = parentViewOf(t.kind, t.id);
@@ -2007,8 +2043,8 @@ var MODEL = __MODEL_JSON__;
         var refsOut = MODEL.typeEdges.filter(function (e2) { return e2.from === ty.id; });
         var refsIn = MODEL.typeEdges.filter(function (e2) { return e2.to === ty.id; });
         if (refsOut.length || refsIn.length) {
-          var refInner = (refsOut.length ? '<div class="mdesc"><b>References:</b></div>' + refsOut.map(function (e2) { return chip(e2.to + ' (' + e2.field + ')', 'type', e2.to); }).join('') : '')
-            + (refsIn.length ? '<div class="mdesc" style="margin-top:6px"><b>Referenced by:</b></div>' + refsIn.map(function (e2) { return chip(e2.from + ' (' + e2.field + ')', 'type', e2.from); }).join('') : '');
+          var refInner = (refsOut.length ? '<div class="mdesc"><b>References:</b></div>' + refsOut.map(function (e2) { return chip(e2.to + ' \\u00B7 ' + e2.field + ' [' + (e2.card || '1') + ']', 'type', e2.to); }).join('') : '')
+            + (refsIn.length ? '<div class="mdesc" style="margin-top:6px"><b>Referenced by:</b></div>' + refsIn.map(function (e2) { return chip(e2.from + ' \\u00B7 ' + e2.field + ' [' + (e2.card || '1') + ']', 'type', e2.from); }).join('') : '');
           body += section('Relations', refsOut.length + refsIn.length, refInner, true);
         }
         var issT = issuesBySpec[ty.id];

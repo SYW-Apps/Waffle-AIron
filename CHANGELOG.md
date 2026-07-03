@@ -126,6 +126,18 @@ migration*).
   `--subsystem` and writes a file instead of printing to stdout (use a
   `.mmd` `--out` for raw Mermaid).
 
+### Types & ERD
+
+- **`HOLLOW_TYPE`** *(warning)* — a type with no fields and no methods is a
+  placeholder that informs neither implementers nor the ERD; fill it or
+  delete it.
+- **Canvas Types view is a real logical ERD now**: boxes render as
+  UML-style tables (header, divider, `field?: type` rows sized to content,
+  intrinsic methods), reference edges carry **multiplicity** derived from
+  the field shape (`LineItem[]` → `*`, optional → `0..1`, plain → `1`) as a
+  target-end label, and types group into per-subsystem containers (shared
+  system-level types in their own box) — ready for large trees.
+
 ### Testing & tooling
 
 - End-to-end MCP stdio integration tests (spawn the real server, drive the

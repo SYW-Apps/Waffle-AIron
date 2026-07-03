@@ -273,6 +273,21 @@ methods:
   });
 });
 
+describe('type shape rules', () => {
+  it('flags a type with no fields and no methods as HOLLOW_TYPE', () => {
+    const proj = createTempProject();
+    proj.writeSpec('type', 'ghost-shape', 'kind: value-object\nid: ghost-shape\nname: GhostShape\ndescription: a placeholder\nfields: []\nmethods: []');
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      const hollow = res.issues.filter(i => i.code === 'HOLLOW_TYPE');
+      expect(hollow).toHaveLength(1);
+      expect(hollow[0].specId).toBe('ghost-shape');
+      expect(hollow[0].severity).toBe('warning');
+    } finally { proj.cleanup(); }
+  });
+});
+
 describe('language-aware flow constraints', () => {
   it('flags try/throw/do-while in a Rust subsystem, and stays silent without a targetLanguage', () => {
     const proj = createTempProject();

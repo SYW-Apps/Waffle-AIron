@@ -2,7 +2,10 @@ kind: value-object
 id: registry
 name: Registry
 description: Agent registry
-fields: []
+fields:
+  - name: agents
+    type: AgentRecord[]
+    description: Every agent in the resolved topology
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-06-10T22:00:00.000Z'
+updatedAt: '2026-07-03T00:00:00.000Z'

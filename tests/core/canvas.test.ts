@@ -9,6 +9,7 @@ import {
   saveComponentSpec,
   saveInterfaceSpec,
   saveImplementationSpec,
+  saveTypeSpec,
   invalidateSpecCache,
 } from '../../src/core/specs.js';
 import { buildCanvasModel, renderCanvasHtml } from '../../src/core/canvas.js';
@@ -115,6 +116,35 @@ describe('interactive canvas generation', () => {
     expect(billing.trustedLinks).toEqual([{ subsystem: 'shipping', reason: 'latency fast lane' }]);
 
     expect(model.issues).toHaveLength(1);
+  });
+
+  it('derives ERD edge cardinality from field type shapes and the optional flag', () => {
+    buildFixture();
+    saveTypeSpec({
+      kind: 'value-object', id: 'line-item', name: 'LineItem', description: 'one invoice line',
+      fields: [{ name: 'sku', type: 'string', optional: false }],
+      methods: [], createdAt: now, updatedAt: now,
+    } as any);
+    saveTypeSpec({
+      kind: 'value-object', id: 'discount', name: 'Discount', description: 'optional rebate',
+      fields: [{ name: 'pct', type: 'number', optional: false }],
+      methods: [], createdAt: now, updatedAt: now,
+    } as any);
+    saveTypeSpec({
+      kind: 'entity', id: 'invoice', name: 'Invoice', description: 'a bill',
+      fields: [
+        { name: 'items', type: 'LineItem[]', optional: false },
+        { name: 'discount', type: 'Discount', optional: true },
+      ],
+      methods: [], createdAt: now, updatedAt: now,
+    } as any);
+    invalidateSpecCache();
+
+    const model = buildCanvasModel();
+    const items = model.typeEdges.find(e => e.field === 'items')!;
+    expect(items).toMatchObject({ from: 'invoice', to: 'line-item', card: '*' });
+    const disc = model.typeEdges.find(e => e.field === 'discount')!;
+    expect(disc).toMatchObject({ from: 'invoice', to: 'discount', card: '0..1' });
   });
 
   it('renders a self-contained HTML canvas with the embedded model and no external references', () => {

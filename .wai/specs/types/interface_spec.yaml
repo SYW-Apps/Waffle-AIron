@@ -2,7 +2,26 @@ kind: value-object
 id: interface_spec
 name: InterfaceSpec
 description: L3 Interface specification
-fields: []
+fields:
+  - name: id
+    type: string
+    description: Interface id (i-prefixed)
+  - name: name
+    type: string
+    description: Human-readable contract name
+  - name: description
+    type: string
+    description: What the contract covers
+  - name: component
+    type: string
+    description: L2 component realizing this contract
+  - name: methods
+    type: object[]
+    description: 'Method signatures: name, params, returns, guarantees, endpoint'
+  - name: status
+    type: string
+    description: draft | design | complete
+    optional: true
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-06-10T22:00:00.000Z'
+updatedAt: '2026-07-03T00:00:00.000Z'

@@ -20,6 +20,7 @@ export const typeReferencesRule: SddRule = {
   codes: [
     { code: 'INVALID_SUBSYSTEM_REFERENCE', defaultSeverity: 'error', summary: 'Type references a non-existent owning subsystem' },
     { code: 'UNDEFINED_TYPE_REFERENCE', defaultSeverity: 'error', summary: 'Reference to a type that is not defined anywhere' },
+    { code: 'HOLLOW_TYPE', defaultSeverity: 'warning', summary: 'Type declares no fields and no methods — a placeholder that informs neither implementers nor the ERD' },
   ],
   check(ctx) {
     // Check types reference existing subsystem and resolve fields
@@ -31,6 +32,19 @@ export const typeReferencesRule: SddRule = {
           'error',
           'INVALID_SUBSYSTEM_REFERENCE',
           `Type "${t.id}" references non-existent subsystem "${t.subsystem}".`,
+          t.id,
+          isDraftCtx,
+        );
+      }
+
+      // A type with neither fields nor methods carries a name and nothing
+      // else — it can't inform implementers, can't participate in the ERD,
+      // and usually marks a post-hoc "make validation pass" placeholder.
+      if ((!t.fields || t.fields.length === 0) && (!t.methods || t.methods.length === 0)) {
+        ctx.addIssue(
+          'warning',
+          'HOLLOW_TYPE',
+          `Type "${t.id}" (${t.kind}) declares no fields and no methods. Fill in the shape it actually models, or delete it.`,
           t.id,
           isDraftCtx,
         );
