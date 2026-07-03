@@ -1,21 +1,16 @@
 #!/usr/bin/env node
 /*
- * Example wrapper tool — a template for building a product on top of wairon.
- *
- * The wrapper pattern: wairon stays the engine (spec tree, rule registry,
- * CLI, MCP server); the wrapper injects its platform doctrine as extension
- * packs and brands the report. No fork, and wairon core never learns about
- * the platform. A spec-only product (implementation happens elsewhere, e.g.
- * in a cloud automation platform) uses exactly this shape: the wrapped
- * project keeps specs + docs in the repository, and this gate enforces the
- * doctrine on them.
+ * ADVANCED path: embedding wairon as a library — e.g. to build a branded
+ * gate binary with its doctrine compiled in. Most wrapper products do NOT
+ * need this: ship packs + install.js instead (the packs are injected once
+ * and plain `wairon validate` enforces them from then on).
  *
  * Run from the repo root after `npm run build`:
  *   node examples/wrapper/wrapper.js [path-to-project]
  * (defaults to ./demo-project)
  *
- * In a real wrapper, replace the relative require with:
- *   const wairon = require('waffle-airon');
+ * Embedding requires a built checkout of this repo as a `file:` dependency
+ * (wairon is distributed as standalone CLI binaries, not on npm).
  */
 const path = require('path');
 const wairon = require('../../dist/index.js');

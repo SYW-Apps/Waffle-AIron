@@ -108,6 +108,12 @@ export const ProjectConfigSchema = z.object({
    */
   extensions: z.object({
     packs: z.array(z.string()).default([]),
+    /**
+     * Whether to also load machine-wide packs from the global folder
+     * (WAIRON_PACKS_DIR or ~/.wairon/packs). Default true; set false for
+     * strict reproducibility (only committed project packs apply).
+     */
+    useGlobalPacks: z.boolean().default(true),
   }).optional(),
 
   paths: PathsConfigSchema.default({}),

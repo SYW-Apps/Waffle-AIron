@@ -166,6 +166,18 @@ migration*).
   pack-registered names; unregistered names get **`UNKNOWN_PROFILE`**
   *(warning)*. Pack profiles enforce **`PROFILE_FORBIDDEN_STEREOTYPE`**
   *(error)* / **`PROFILE_DISCOURAGED_STEREOTYPE`** *(warning)*.
+- **`wairon packs add | list | remove`** — first-class pack installation.
+  `add <source>` vendors a pack (file or directory with a `pack.yaml` /
+  `pack.cjs` entry) into `.wai/packs/` and registers it in project.yaml
+  (committed → CI and every clone enforce it); `add --global` installs
+  machine-wide into `WAIRON_PACKS_DIR` / `~/.wairon/packs`, auto-loaded for
+  every project (project packs win on collision; opt out via
+  `extensions.useGlobalPacks: false`). `remove <name>` is the uninstall.
+  **`wairon init --pack <source>`** applies doctrine at project birth.
+- **Distribution needs no npm**: wrapper products ship a release ZIP (pack
+  files + an install script that runs `wairon packs add`) on top of the
+  standalone wairon binaries — see the ZIP recipe in
+  `docs/extending-wairon.md`.
 - The narrative **flow algebra stays closed** (packs can gate and re-label
   constructs, never inject step kinds — reachability analysis and jump
   relocation depend on a closed successor semantics). The

@@ -187,6 +187,56 @@ lint:
     } finally { proj.cleanup(); }
   });
 
+  it('auto-loads global packs (WAIRON_PACKS_DIR) and honors useGlobalPacks: false', () => {
+    const globalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-global-packs-'));
+    fs.writeFileSync(path.join(globalDir, 'org.yaml'), `name: org-doctrine
+profiles:
+  org-profile:
+    family: neutral
+`);
+    process.env.WAIRON_PACKS_DIR = globalDir;
+    // Project references the globally-provided profile.
+    const proj = createTempProject();
+    proj.writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem\nprofile: org-profile');
+    proj.activate();
+    try {
+      expect(validateSddTree().issues.some(i => i.code === 'UNKNOWN_PROFILE')).toBe(false);
+    } finally {
+      proj.cleanup();
+      delete process.env.WAIRON_PACKS_DIR;
+      try { fs.rmSync(globalDir, { recursive: true, force: true }); } catch { /* win */ }
+    }
+
+    // Same setup, but the project opts out of global packs.
+    const globalDir2 = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-global-packs-'));
+    fs.writeFileSync(path.join(globalDir2, 'org.yaml'), `name: org-doctrine
+profiles:
+  org-profile:
+    family: neutral
+`);
+    process.env.WAIRON_PACKS_DIR = globalDir2;
+    const proj2 = createTempProject();
+    proj2.writeFile('.wai/project.yaml', JSON.stringify({
+      schemaVersion: '1.0.0',
+      name: 'test-project',
+      projectType: 'backend',
+      targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+      rules: {},
+      extensions: { packs: [], useGlobalPacks: false },
+      createdAt: '2026-07-03T10:00:00Z',
+      updatedAt: '2026-07-03T10:00:00Z',
+    }));
+    proj2.writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem\nprofile: org-profile');
+    proj2.activate();
+    try {
+      expect(validateSddTree().issues.some(i => i.code === 'UNKNOWN_PROFILE' && i.specId === 'sub-a')).toBe(true);
+    } finally {
+      proj2.cleanup();
+      delete process.env.WAIRON_PACKS_DIR;
+      try { fs.rmSync(globalDir2, { recursive: true, force: true }); } catch { /* win */ }
+    }
+  });
+
   it('surfaces a broken pack as EXTENSION_LOAD_ERROR (error severity)', () => {
     const proj = createTempProject(['.wai/packs/missing.yaml']);
     proj.writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem');

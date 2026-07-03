@@ -29,6 +29,9 @@ import {
   runDoctor,
   runDiagram,
   runRulesList,
+  runPacksAdd,
+  runPacksList,
+  runPacksRemove,
 } from '../commands/index.js';
 
 // Clean up any .old binary left over from a previous Windows self-update
@@ -60,8 +63,12 @@ program
   .command('init')
   .description('Initialize wairon and bootstrap the SDD Spec Tree (.wai/specs/) in the current project')
   .option('-y, --yes', 'use defaults without interactive prompts')
+  .option('--pack <source>', 'vendor + register an extension pack right after init (repeatable)', (v: string, all: string[]) => [...all, v], [] as string[])
   .action(async (opts) => {
     await runInit({ yes: opts.yes });
+    for (const source of opts.pack as string[]) {
+      await runPacksAdd(source);
+    }
   });
 
 // ---------------------------------------------------------------------------
@@ -153,6 +160,39 @@ rulesCmd
   .description('List every conformance rule, its issue codes, default severities, and project overrides')
   .action(async () => {
     await runRulesList();
+  });
+
+// ---------------------------------------------------------------------------
+// packs
+// ---------------------------------------------------------------------------
+
+const packsCmd = program
+  .command('packs')
+  .description('Extension packs: injected profiles, language tables, and conformance rules');
+
+packsCmd
+  .command('list')
+  .alias('ls')
+  .description('List global and project extension packs with what they provide')
+  .action(async () => {
+    await runPacksList();
+  });
+
+packsCmd
+  .command('add <source>')
+  .description('Vendor a pack into the project (.wai/packs/ + project.yaml), or install machine-wide with --global')
+  .option('-g, --global', 'install into the global packs folder (WAIRON_PACKS_DIR or ~/.wairon/packs)')
+  .action(async (source, opts) => {
+    await runPacksAdd(source, { global: opts.global });
+  });
+
+packsCmd
+  .command('remove <name>')
+  .alias('rm')
+  .description('Deregister a pack by name (deletes vendored files under .wai/packs); --global removes a machine-wide pack')
+  .option('-g, --global', 'remove from the global packs folder')
+  .action(async (name, opts) => {
+    await runPacksRemove(name, { global: opts.global });
   });
 
 // ---------------------------------------------------------------------------
