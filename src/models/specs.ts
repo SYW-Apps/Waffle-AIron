@@ -382,6 +382,14 @@ export const TypeFieldSchema = z.object({
   type: z.string(), // a primitive, or another type id (qualified across subsystems, e.g. "billing.Invoice")
   description: z.string().optional(),
   optional: z.boolean().default(false),
+  /**
+   * Identity marker for ERD / later schema derivation: 'primary' (PK) or
+   * 'unique'. Foreign-key markers are NOT declared — they are derived from
+   * the field's type referencing another defined type. These are logical
+   * system types, not a flattened database schema; storage mapping stays
+   * downstream (EF-style).
+   */
+  key: z.enum(['primary', 'unique']).optional(),
 });
 export type TypeField = z.infer<typeof TypeFieldSchema>;
 

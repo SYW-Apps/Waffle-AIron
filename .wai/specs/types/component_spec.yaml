@@ -6,6 +6,7 @@ fields:
   - name: id
     type: string
     description: Stable component identifier
+    key: primary
   - name: name
     type: string
     description: Human-readable component name

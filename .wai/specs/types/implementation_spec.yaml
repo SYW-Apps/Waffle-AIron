@@ -6,6 +6,7 @@ fields:
   - name: id
     type: string
     description: Implementation spec id
+    key: primary
   - name: name
     type: string
     description: Human-readable implementation name

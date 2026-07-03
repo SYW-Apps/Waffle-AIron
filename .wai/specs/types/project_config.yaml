@@ -6,6 +6,7 @@ fields:
   - name: name
     type: string
     description: Project name
+    key: primary
   - name: targets
     type: object[]
     description: 'Output targets: type (claude | gemini | custom), outputDir, enabled'

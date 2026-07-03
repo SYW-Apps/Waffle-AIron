@@ -9,7 +9,7 @@ import {
   loadTypeSpecs,
 } from './specs.js';
 import type { ValidationIssue } from './validation.js';
-import { extractTypeIdentifiers, matchTypeRef } from './rules/type-analysis.js';
+import { extractTypeIdentifiers, matchTypeRef, methodTypeRefs } from './rules/type-analysis.js';
 import { buildDrawioXml, buildExcalidrawScene } from './diagram-export.js';
 
 // ---------------------------------------------------------------------------
@@ -102,8 +102,10 @@ export interface CanvasModel {
     name: string;
     kind: string;
     subsystem?: string;
-    fields: { name: string; type: string; optional?: boolean }[];
+    fields: { name: string; type: string; optional?: boolean; key?: string }[];
     methods: { name: string; signature: string; returns: string; description?: string }[];
+    /** Interface methods whose params/returns reference this type (usage trace). */
+    usedBy: { component: string; method: string }[];
   }[];
   /** Type → type references derived from field type strings (ERD edges). */
   typeEdges: { from: string; to: string; field: string; card: '1' | '0..1' | '*' }[];
@@ -217,13 +219,32 @@ export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
 
   // Types + ERD reference edges (field type strings → defined types)
   const typeSpecs = loadTypeSpecs();
+  // Usage trace: every interface method whose params/returns reference a type.
+  const usedByFor = (t: (typeof typeSpecs)[number]): { component: string; method: string }[] => {
+    const qualified = t.subsystem && !t.id.startsWith(`${t.subsystem}::`) ? `${t.subsystem}::${t.id}` : t.id;
+    const seen = new Set<string>();
+    const out: { component: string; method: string }[] = [];
+    for (const intf of interfaces) {
+      for (const m of intf.methods) {
+        for (const ref of methodTypeRefs(m)) {
+          if (!matchTypeRef(ref, qualified)) continue;
+          const k = `${intf.component}#${m.name}`;
+          if (!seen.has(k)) { seen.add(k); out.push({ component: intf.component, method: m.name }); }
+          break;
+        }
+      }
+    }
+    return out;
+  };
+
   const modelTypes: CanvasModel['types'] = typeSpecs.map(t => ({
     id: t.id,
     name: t.name,
     kind: t.kind,
     ...(t.subsystem ? { subsystem: t.subsystem } : {}),
-    fields: t.fields.map(f => ({ name: f.name, type: f.type, ...(f.optional ? { optional: true } : {}) })),
+    fields: t.fields.map(f => ({ name: f.name, type: f.type, ...(f.optional ? { optional: true } : {}), ...(f.key ? { key: f.key } : {}) })),
     methods: t.methods.map(m => ({ name: m.name, signature: m.signature, returns: m.returns, ...(m.description ? { description: m.description } : {}) })),
+    usedBy: usedByFor(t),
   }));
   // Cardinality is derivable from the field's type string: collection shapes
   // mean "many", the optional flag means 0..1 — real ERD multiplicity for free.
@@ -449,6 +470,10 @@ body.presentation #exitPresent { display:block; }
 <body data-theme="syw">
 <header>
   <span class="brand syw-gradient-text">wairon</span>
+  <div class="seg" id="modeSeg" title="Switch between the component architecture and the type ERD">
+    <button data-vm="components" class="active">Components</button>
+    <button data-vm="types">Types</button>
+  </div>
   <nav id="crumbs"></nav>
   <span class="divider"></span>
   <input id="search" type="search" placeholder="Search this view…">
@@ -456,7 +481,12 @@ body.presentation #exitPresent { display:block; }
   <label class="switch" title="Show out-of-scope dependencies as ghost references"><input type="checkbox" id="externalsToggle" checked><span>Externals</span></label>
   <label class="switch"><input type="checkbox" id="issuesToggle"><span>Issues (<span id="issueCount"></span>)</span></label>
   <label class="switch"><input type="checkbox" id="dragToggle"><span>Rearrange</span></label>
-  <button class="tbtn" id="typesBtn" title="Entity-relation view of all defined types (ERD)">Types</button>
+  <div class="seg" id="typesDetailSeg" style="display:none" title="ERD detail level">
+    <button data-td="full">Full</button>
+    <button data-td="fields">Fields</button>
+    <button data-td="keys">Keys</button>
+    <button data-td="names">Names</button>
+  </div>
   <span class="spacer"></span>
   <button class="tbtn" id="fitBtn" title="Fit graph to view">Fit</button>
   <button class="tbtn" id="resetBtn" title="Discard this view's saved rearrangement">Reset layout</button>
@@ -503,7 +533,7 @@ body.presentation #exitPresent { display:block; }
     </div>
     <div id="flowCy"></div>
     <div id="flowSteps"></div>
-    <div class="hintbar">Narrative (L5) — click a call step to drill into the target method; Back returns to the caller.</div>
+    <div class="hintbar">Narrative (L5) — double-click a call step to drill into the target method; Back returns to the caller.</div>
   </div>
 </div>
 <script>__CYTOSCAPE_LIB__</script>
@@ -630,14 +660,18 @@ var MODEL = __MODEL_JSON__;
     selected: null,
     selectedKind: null,
     theme: saved.theme === 'light' ? 'light' : 'syw',
+    typesDetail: ['full', 'fields', 'keys', 'names'].indexOf(saved.typesDetail) >= 0 ? saved.typesDetail : 'full',
   };
 
   function viewKey() {
+    // 'types2' + detail level: table sizes differ per detail, and the prefix
+    // bump invalidates layouts saved for the old compact type boxes.
+    if (state.view.kind === 'types') return 'types2:' + (state.view.id || 'root') + ':' + state.typesDetail;
     return state.view.kind + ':' + (state.view.id || 'root') + (state.internals ? '+i' : '');
   }
   function persist() {
     if (!store) return;
-    try { store.setItem(STORE_KEY, JSON.stringify({ positionsByView: saved.positionsByView || {}, theme: state.theme })); } catch (e) { /* non-fatal */ }
+    try { store.setItem(STORE_KEY, JSON.stringify({ positionsByView: saved.positionsByView || {}, theme: state.theme, typesDetail: state.typesDetail })); } catch (e) { /* non-fatal */ }
   }
 
   function matches(entry) {
@@ -706,9 +740,15 @@ var MODEL = __MODEL_JSON__;
       { selector: ':parent', style: { 'text-valign': 'top', 'text-halign': 'center', 'font-size': 12, 'font-weight': 'bold', 'text-margin-y': -5, padding: '10px', 'background-opacity': 1 } },
       { selector: '.inner', style: { 'background-color': t.innerFill, 'border-color': t.innerStroke, 'border-width': 1.2, 'font-size': 9.5, color: t.innerText } },
       { selector: '.ghost', style: { 'background-color': t.ghostFill, 'border-color': t.ghostStroke, 'border-style': 'dotted', color: t.ghostText, 'font-size': 10 } },
-      { selector: '.typeEntity', style: { 'background-color': t.typeE.fill, 'border-color': t.typeE.stroke, color: t.typeE.text, 'text-halign': 'center', 'font-size': 10.5, 'text-justification': 'left' } },
-      { selector: '.typeValue', style: { 'background-color': t.typeV.fill, 'border-color': t.typeV.stroke, color: t.typeV.text, 'border-style': 'dashed', 'font-size': 10.5, 'text-justification': 'left' } },
-      { selector: 'edge.typeref', style: { width: 1.4, 'line-style': 'solid', 'target-label': 'data(tcard)', 'target-text-offset': 24, 'font-size': 9.5 } },
+      { selector: '.typeEntity', style: { 'background-color': t.typeE.fill, 'border-color': t.typeE.stroke, color: t.typeE.text, 'text-halign': 'center', 'font-size': 10.5 } },
+      { selector: '.typeValue', style: { 'background-color': t.typeV.fill, 'border-color': t.typeV.stroke, color: t.typeV.text, 'border-style': 'dashed', 'font-size': 10.5 } },
+      { selector: '.typeBox', style: { 'background-opacity': 0.18, padding: '0px', 'border-width': 1.8 } },
+      { selector: '.typeHead', style: { 'font-weight': 'bold', 'font-size': 11 } },
+      { selector: '.typeRow', style: { 'background-color': t.innerFill, 'border-color': t.innerStroke, 'border-width': 0.5, color: t.innerText, 'font-size': 10, 'text-justification': 'left', shape: 'rectangle' } },
+      { selector: '.typePlain', style: { 'font-weight': 'bold' } },
+      { selector: 'edge.typeref', style: { width: 1.4, 'line-style': 'solid' } },
+      { selector: 'edge.erd', style: { 'source-label': '1', 'target-label': 'data(tcard)', 'source-text-offset': 16, 'target-text-offset': 22, 'font-size': 9.5, color: t.edgeText } },
+      { selector: 'edge.fieldhl', style: { 'line-color': t.selGlow, 'target-arrow-color': t.selGlow, width: 2.6 } },
       { selector: '.proxyExt', style: { 'font-size': 12, 'border-width': 1.6 } },
       { selector: '.proxyIn', style: { 'background-color': t.proxyIn.fill, 'border-color': t.proxyIn.stroke, color: t.proxyIn.stroke } },
       { selector: '.proxyOut', style: { 'background-color': t.proxyOut.fill, 'border-color': t.proxyOut.stroke, color: t.proxyOut.stroke } },
@@ -921,28 +961,63 @@ var MODEL = __MODEL_JSON__;
     var q = state.query.toLowerCase();
     return t.id.toLowerCase().indexOf(q) >= 0 || t.name.toLowerCase().indexOf(q) >= 0;
   }
+  // Types visible in the current ERD scope: the focused subsystem's own
+  // (and nested) types, plus system-level shared ones. Unscoped = all.
+  function typesInScope() {
+    var sid = state.view.id;
+    return MODEL.types.filter(function (t) {
+      if (!sid) return true;
+      if (!t.subsystem) return true;
+      return t.subsystem === sid || t.subsystem.indexOf(sid + '::') === 0;
+    });
+  }
+
+  // ERD proper: each type is a compound TABLE — header row + one child node
+  // per field (marker | name | type), so relation edges anchor at the exact
+  // field they originate from. Detail levels: full (+methods), fields, keys
+  // (PK/U/FK rows only), names (headers + aggregated dependency lines).
   function buildTypeElements() {
     var eles = [];
-    // Aggregate references per (from, to) pair; the strongest multiplicity
-    // wins the target-end label (* > 0..1 > 1) — UML-style logical ERD.
+    var det = state.typesDetail;
+    var list = typesInScope();
+    var inList = {};
+    list.forEach(function (t) { inList[t.id] = 1; });
+
     var CARD_RANK = { '1': 0, '0..1': 1, '*': 2 };
-    var aggRefs = {};
+    var fkBy = {}, aggRefs = {};
     MODEL.typeEdges.forEach(function (e) {
+      if (!inList[e.from] || !inList[e.to]) return;
+      (fkBy[e.from] = fkBy[e.from] || {})[e.field] = e;
       var key = e.from + '=>' + e.to;
-      if (!aggRefs[key]) aggRefs[key] = { from: e.from, to: e.to, fields: [], card: e.card || '1' };
-      if (aggRefs[key].fields.indexOf(e.field) < 0) aggRefs[key].fields.push(e.field);
-      if (CARD_RANK[e.card] > CARD_RANK[aggRefs[key].card]) aggRefs[key].card = e.card;
+      if (!aggRefs[key]) aggRefs[key] = { from: e.from, to: e.to, card: e.card || '1' };
+      else if (CARD_RANK[e.card] > CARD_RANK[aggRefs[key].card]) aggRefs[key].card = e.card;
     });
-    // Group by owning subsystem (system-level shared types in their own box),
-    // each group laid out as its own layered block, stacked vertically.
+
+    function markerOf(t, f) {
+      if (f.key === 'primary') return 'PK';
+      if (f.key === 'unique') return 'U';
+      if (fkBy[t.id] && fkBy[t.id][f.name]) return 'FK';
+      return '';
+    }
+    function visibleFields(t) {
+      if (det === 'names') return [];
+      if (det === 'keys') return t.fields.filter(function (f) { return markerOf(t, f) !== ''; });
+      return t.fields;
+    }
+    function rowText(t, f) {
+      var m = markerOf(t, f);
+      return (m ? '[' + m + '] ' : '') + f.name + (f.optional ? '?' : '') + ': ' + f.type;
+    }
+
     var groups = {}, groupIds = [];
-    MODEL.types.forEach(function (t) {
+    list.forEach(function (t) {
       var g = t.subsystem || '\\u2014 shared \\u2014';
       if (!groups[g]) { groups[g] = []; groupIds.push(g); }
       groups[g].push(t);
     });
     groupIds.sort();
-    // layered by reference direction (referencing types left, referenced right)
+    var multi = groupIds.length > 1;
+
     var layer = {};
     function calc(id, stack) {
       if (layer[id] !== undefined) return layer[id];
@@ -958,13 +1033,13 @@ var MODEL = __MODEL_JSON__;
       layer[id] = l;
       return l;
     }
-    MODEL.types.forEach(function (t) { calc(t.id, {}); });
+    list.forEach(function (t) { calc(t.id, {}); });
 
-    var FIELD_CAP = 9;
+    var ROW_H = 20, TH_H = 26, X_GAP = 170, Y_GAP = 60, GROUP_GAP = 130;
+    var rowIds = {};
     var groupY = 0;
     groupIds.forEach(function (g) {
       var gid = 'TG~' + g;
-      var multi = groupIds.length > 1;
       if (multi) eles.push({ data: { id: gid, label: g }, classes: 'subsysBox' });
       var cols = {};
       groups[g].forEach(function (t) { var l = layer[t.id] || 0; (cols[l] = cols[l] || []).push(t); });
@@ -972,47 +1047,96 @@ var MODEL = __MODEL_JSON__;
       var x = 0, groupH = 0;
       colKeys.forEach(function (ck) {
         var col = cols[ck].sort(function (a, b) { return a.id < b.id ? -1 : 1; });
-        var y = groupY, colW = 240;
+        var y = groupY, colW = 230;
         col.forEach(function (t) {
-          var shown = t.fields.slice(0, FIELD_CAP);
-          var lines = shown.map(function (f) { return f.name + (f.optional ? '?' : '') + ': ' + f.type; });
-          if (t.fields.length > FIELD_CAP) lines.push('\\u2026 +' + (t.fields.length - FIELD_CAP) + ' more');
-          t.methods.forEach(function (m) { lines.push('\\u0192 ' + m.name + '(): ' + m.returns); });
+          var fields = visibleFields(t);
+          var meths = det === 'full' ? t.methods : [];
           var head = t.name + '  \\u00AB' + t.kind + '\\u00BB';
-          var longest = head.length;
-          lines.forEach(function (ln) { if (ln.length > longest) longest = ln.length; });
-          var w = Math.max(220, Math.min(360, longest * 6.6 + 26));
-          var label = head + (lines.length ? '\\n\\u2500\\u2500\\u2500\\n' + lines.join('\\n') : '');
-          var h = 42 + (lines.length ? (lines.length + 1) * 13.5 : 0);
+          var rows = fields.map(function (f) { return rowText(t, f); })
+            .concat(meths.map(function (m) { return '\\u0192 ' + m.name + '(): ' + m.returns; }));
+          var longest = head.length + 4;
+          rows.forEach(function (r) { if (r.length > longest) longest = r.length; });
+          var W = Math.max(210, Math.min(400, longest * 6.6 + 30));
+          var kindCls = t.kind === 'entity' ? 'typeEntity' : 'typeValue';
           var dim = !typeMatches(t);
-          eles.push({
-            data: { id: 'T~' + t.id, parent: multi ? gid : undefined, label: label, w: w, h: h, tw: w - 14 },
-            position: { x: x + w / 2, y: y + h / 2 },
-            classes: (t.kind === 'entity' ? 'typeEntity' : 'typeValue')
-              + (dim ? ' dimmed' : '')
-              + (state.showIssues && issuesBySpec[t.id] ? ' hasIssue' : '')
-              + (state.selectedKind === 'type' && state.selected === t.id ? ' sel' : ''),
-          });
-          y += h + 28;
-          if (w > colW) colW = w;
+          var extra = (dim ? ' dimmed' : '')
+            + (state.showIssues && issuesBySpec[t.id] ? ' hasIssue' : '')
+            + (state.selectedKind === 'type' && state.selected === t.id ? ' sel' : '');
+          if (!rows.length) {
+            var pw = Math.max(170, head.length * 6.8 + 26);
+            eles.push({
+              data: { id: 'T~' + t.id, parent: multi ? gid : undefined, label: head, w: pw, h: 40, tw: pw - 12 },
+              position: { x: x + pw / 2, y: y + 20 },
+              classes: 'typePlain ' + kindCls + extra,
+            });
+            y += 40 + Y_GAP;
+            if (pw > colW) colW = pw;
+          } else {
+            eles.push({ data: { id: 'T~' + t.id, parent: multi ? gid : undefined, label: '' }, classes: 'typeBox ' + kindCls + extra });
+            eles.push({
+              data: { id: 'TH~' + t.id, parent: 'T~' + t.id, label: head, w: W, h: TH_H, tw: W - 12 },
+              position: { x: x + W / 2, y: y + TH_H / 2 },
+              classes: 'typeHead ' + kindCls + (dim ? ' dimmed' : ''),
+              grabbable: false,
+            });
+            var ry = y + TH_H;
+            fields.forEach(function (f) {
+              var rid = 'TF~' + t.id + '~' + f.name;
+              rowIds[rid] = 1;
+              eles.push({
+                data: { id: rid, parent: 'T~' + t.id, label: rowText(t, f), w: W, h: ROW_H, tw: W - 14 },
+                position: { x: x + W / 2, y: ry + ROW_H / 2 },
+                classes: 'typeRow' + (fkBy[t.id] && fkBy[t.id][f.name] ? ' fkRow' : '') + (dim ? ' dimmed' : ''),
+                grabbable: false,
+              });
+              ry += ROW_H;
+            });
+            meths.forEach(function (m, mi) {
+              eles.push({
+                data: { id: 'TM~' + t.id + '~' + mi, parent: 'T~' + t.id, label: '\\u0192 ' + m.name + '(): ' + m.returns, w: W, h: ROW_H, tw: W - 14 },
+                position: { x: x + W / 2, y: ry + ROW_H / 2 },
+                classes: 'typeRow methRow' + (dim ? ' dimmed' : ''),
+                grabbable: false,
+              });
+              ry += ROW_H;
+            });
+            y = ry + Y_GAP;
+            if (W > colW) colW = W;
+          }
         });
         groupH = Math.max(groupH, y - groupY);
-        x += colW + 120;
+        x += colW + X_GAP;
       });
-      groupY += groupH + 90;
+      groupY += groupH + GROUP_GAP;
     });
+
     var i = 0;
     var typeById = {};
     MODEL.types.forEach(function (t) { typeById[t.id] = t; });
-    Object.keys(aggRefs).forEach(function (k) {
-      var r = aggRefs[k];
-      var dim = state.query && (!typeMatches(typeById[r.from] || { id: r.from, name: '' }) || !typeMatches(typeById[r.to] || { id: r.to, name: '' }));
-      var lbl = r.fields.slice(0, 2).join(', ') + (r.fields.length > 2 ? ' +' + (r.fields.length - 2) : '');
-      eles.push({
-        data: { id: 'te' + (i++), source: 'T~' + r.from, target: 'T~' + r.to, lbl: lbl, tcard: r.card },
-        classes: 'typeref' + (dim ? ' dimmed' : ''),
+    var dimEdge = function (from, to) {
+      return state.query && (!typeMatches(typeById[from] || { id: from, name: '' }) || !typeMatches(typeById[to] || { id: to, name: '' }));
+    };
+    if (det === 'names') {
+      // Header-only mode: plain aggregated dependency lines, no ERD labels.
+      Object.keys(aggRefs).forEach(function (k) {
+        var r = aggRefs[k];
+        eles.push({ data: { id: 'te' + (i++), source: 'T~' + r.from, target: 'T~' + r.to, lbl: '' }, classes: 'typeref plain' + (dimEdge(r.from, r.to) ? ' dimmed' : '') });
       });
-    });
+    } else {
+      // One relation line per field, anchored AT that field's row, with
+      // UML multiplicity on the ends (1 at the owner, card at the target).
+      MODEL.typeEdges.forEach(function (e) {
+        if (!inList[e.from] || !inList[e.to]) return;
+        var rowId = 'TF~' + e.from + '~' + e.field;
+        eles.push({
+          data: {
+            id: 'te' + (i++), source: rowIds[rowId] ? rowId : 'T~' + e.from, target: 'T~' + e.to,
+            lbl: '', tcard: e.card || '1', ffrom: e.from, ffield: e.field,
+          },
+          classes: 'typeref erd' + (dimEdge(e.from, e.to) ? ' dimmed' : ''),
+        });
+      });
+    }
     return eles;
   }
 
@@ -1243,6 +1367,7 @@ var MODEL = __MODEL_JSON__;
     }
     renderCrumbs();
     renderViewHint();
+    updateHeaderSegs();
   }
 
   function harvestLayout() {
@@ -1286,7 +1411,14 @@ var MODEL = __MODEL_JSON__;
     var path = [{ kind: 'system', id: null, label: MODEL.system.name }];
     var v = state.view;
     if (v.kind === 'types') {
-      path.push({ kind: 'types', id: null, label: 'Types (ERD)' });
+      if (v.id) {
+        var tsegs = v.id.split('::');
+        for (var ti = 1; ti <= tsegs.length; ti++) {
+          var tsid = tsegs.slice(0, ti).join('::');
+          path.push({ kind: 'subsystem', id: tsid, label: nameOf({ kind: 'subsystem', id: tsid }) });
+        }
+      }
+      path.push({ kind: 'types', id: v.id || null, label: 'Types (ERD)' });
       return path;
     }
     if (v.kind === 'subsystem') {
@@ -1328,7 +1460,10 @@ var MODEL = __MODEL_JSON__;
   }
   function renderViewHint() {
     if (state.view.kind === 'types') {
-      document.getElementById('viewHint').textContent = 'View: ' + MODEL.types.length + ' types (ERD) \\u00B7 edges = field references';
+      var scoped = typesInScope().length;
+      document.getElementById('viewHint').textContent = 'View: ' + scoped + ' types (ERD'
+        + (state.view.id ? ', ' + state.view.id + ' + shared' : '') + ') \\u00B7 '
+        + (state.typesDetail === 'names' ? 'dependency lines' : 'relation lines anchor at their field \\u00B7 double-click an FK row to jump to its type');
       return;
     }
     var n = childrenOf(state.view).length;
@@ -1351,6 +1486,13 @@ var MODEL = __MODEL_JSON__;
     if (raw.indexOf('p~') === 0) return { proxy: true, id: raw };
     if (raw.indexOf('x~') === 0) return { ghost: true, kind: node.data('extKind'), id: node.data('extId') };
     if (raw.indexOf('TG~') === 0) return { group: true, id: raw };
+    if (raw.indexOf('TH~') === 0) return { kind: 'type', id: raw.slice(3) };
+    if (raw.indexOf('TM~') === 0) return { kind: 'type', id: raw.slice(3, raw.lastIndexOf('~')) };
+    if (raw.indexOf('TF~') === 0) {
+      var trest = raw.slice(3);
+      var tcut = trest.lastIndexOf('~');
+      return { kind: 'type', id: trest.slice(0, tcut), field: trest.slice(tcut + 1) };
+    }
     if (raw.indexOf('T~') === 0) return { kind: 'type', id: raw.slice(2) };
     if (raw.indexOf('i~') === 0) {
       var rest = raw.slice(2);
@@ -1409,6 +1551,11 @@ var MODEL = __MODEL_JSON__;
     }
     if (pinnedProxy) { pinnedProxy = null; clearReveal(); }
     select(t.kind, t.id, false);
+    // Tapping a field row also spotlights the relation line leaving it.
+    if (t.kind === 'type' && t.field) {
+      cy.edges().removeClass('fieldhl');
+      cy.edges().filter(function (e) { return e.data('ffrom') === t.id && e.data('ffield') === t.field; }).addClass('fieldhl');
+    }
   });
   cy.on('tap', function (ev) {
     if (ev.target === cy) {
@@ -1419,7 +1566,15 @@ var MODEL = __MODEL_JSON__;
   cy.on('dbltap', 'node', function (ev) {
     var t = idOf(ev.target);
     if (t.proxy || t.group) return;
-    if (t.kind === 'type') return;
+    if (t.kind === 'type') {
+      // Double-clicking an FK field row jumps to the referenced type.
+      if (t.field) {
+        var fe = null;
+        MODEL.typeEdges.forEach(function (e) { if (!fe && e.from === t.id && e.field === t.field) fe = e; });
+        if (fe) select('type', fe.to, true);
+      }
+      return;
+    }
     if (t.ghost) {
       state.view = parentViewOf(t.kind, t.id);
       rebuild(true);
@@ -1448,7 +1603,58 @@ var MODEL = __MODEL_JSON__;
   document.getElementById('externalsToggle').addEventListener('change', function (ev) { state.externals = ev.target.checked; rebuild(true); });
   document.getElementById('issuesToggle').addEventListener('change', function (ev) { state.showIssues = ev.target.checked; rebuild(false); renderPanel(); });
   document.getElementById('dragToggle').addEventListener('change', function (ev) { cy.autolock(!ev.target.checked); });
-  document.getElementById('typesBtn').addEventListener('click', function () { navigateTo('types', null); });
+  // Mode seg: Components ⇄ Types. Entering Types keeps the current subsystem
+  // scope, so a subsystem's own types (plus shared ones) show scoped.
+  function typesScopeFromView() {
+    if (state.view.kind === 'subsystem') return state.view.id;
+    if (state.view.kind === 'component') {
+      var c = compById[state.view.id];
+      return c ? c.subsystem : null;
+    }
+    if (state.view.kind === 'types') return state.view.id;
+    return null;
+  }
+  (function () {
+    var seg = document.getElementById('modeSeg');
+    var btns = seg.querySelectorAll('button');
+    for (var i = 0; i < btns.length; i++) {
+      (function (b) {
+        b.addEventListener('click', function () {
+          var vm = b.getAttribute('data-vm');
+          if (vm === 'types' && state.view.kind !== 'types') navigateTo('types', typesScopeFromView());
+          else if (vm === 'components' && state.view.kind === 'types') navigateTo(state.view.id ? 'subsystem' : 'system', state.view.id || null);
+        });
+      })(btns[i]);
+    }
+  })();
+  (function () {
+    var seg = document.getElementById('typesDetailSeg');
+    var btns = seg.querySelectorAll('button');
+    for (var i = 0; i < btns.length; i++) {
+      (function (b) {
+        b.addEventListener('click', function () {
+          state.typesDetail = b.getAttribute('data-td');
+          persist();
+          if (state.view.kind === 'types') rebuild(true);
+          else updateHeaderSegs();
+        });
+      })(btns[i]);
+    }
+  })();
+  function updateHeaderSegs() {
+    var seg = document.getElementById('modeSeg');
+    var btns = seg.querySelectorAll('button');
+    for (var i = 0; i < btns.length; i++) {
+      var active = (btns[i].getAttribute('data-vm') === 'types') === (state.view.kind === 'types');
+      if (btns[i].classList) btns[i].classList[active ? 'add' : 'remove']('active');
+    }
+    var td = document.getElementById('typesDetailSeg');
+    td.style.display = state.view.kind === 'types' ? '' : 'none';
+    var tbs = td.querySelectorAll('button');
+    for (var j = 0; j < tbs.length; j++) {
+      if (tbs[j].classList) tbs[j].classList[tbs[j].getAttribute('data-td') === state.typesDetail ? 'add' : 'remove']('active');
+    }
+  }
   document.getElementById('fitBtn').addEventListener('click', function () { cy.fit(undefined, 60); });
   document.getElementById('resetBtn').addEventListener('click', function () {
     var all = saved.positionsByView || {};
@@ -1528,12 +1734,16 @@ var MODEL = __MODEL_JSON__;
   }
   // Types (ERD) view exports through the same builders via a synthetic model.
   function typesExportModel() {
-    var comps = MODEL.types.map(function (t) {
+    var list = typesInScope();
+    var inScope = {};
+    list.forEach(function (t) { inScope[t.id] = 1; });
+    var comps = list.map(function (t) {
       return { id: t.id, name: t.name, subsystem: 'types', componentType: t.kind === 'entity' ? 'Entity' : 'ValueObject', public: false, owns: [] };
     });
     var seen = {};
     var edges = [];
     MODEL.typeEdges.forEach(function (e) {
+      if (!inScope[e.from] || !inScope[e.to]) return;
       var k = e.from + '=>' + e.to;
       if (seen[k]) return;
       seen[k] = 1;
@@ -1765,7 +1975,9 @@ var MODEL = __MODEL_JSON__;
       flowCy = cytoscape({ container: document.getElementById('flowCy'), elements: eles, style: style, layout: { name: 'preset' }, boxSelectionEnabled: false, autounselectify: true });
       // Flowcharts are fixed documentation — never rearrangeable.
       flowCy.autolock(true);
-      flowCy.on('tap', 'node.drill', function (ev) {
+      // Drill on DOUBLE-click only — single taps in a dense flowchart are
+      // too easy to land accidentally.
+      flowCy.on('dbltap', 'node.drill', function (ev) {
         var d = ev.target.data();
         drillFlow(d.callComp, d.callMethod);
       });
@@ -1804,7 +2016,7 @@ var MODEL = __MODEL_JSON__;
     var drills = el.querySelectorAll('.drillstep');
     for (var i = 0; i < drills.length; i++) {
       (function (d) {
-        d.addEventListener('click', function () { drillFlow(d.getAttribute('data-dc'), d.getAttribute('data-dm')); });
+        d.addEventListener('dblclick', function () { drillFlow(d.getAttribute('data-dc'), d.getAttribute('data-dm')); });
       })(drills[i]);
     }
   }
@@ -1913,6 +2125,25 @@ var MODEL = __MODEL_JSON__;
     return '<span class="chip" data-kind="' + kind + '" data-id="' + esc(target) + '">' + esc(label) + '</span>';
   }
   function staticChip(label) { return '<span class="chip">' + esc(label) + '</span>'; }
+  // Resolve a signature type reference (possibly wrapped: Foo[], Array<Foo>)
+  // to a defined type id, for click-through from method cards into the ERD.
+  function typeIdFor(ref) {
+    if (!ref) return null;
+    var r = String(ref).toLowerCase();
+    for (var i = 0; i < MODEL.types.length; i++) {
+      var t2 = MODEL.types[i];
+      if (r === t2.id.toLowerCase() || r === t2.name.toLowerCase()) return t2.id;
+    }
+    for (var j = 0; j < MODEL.types.length; j++) {
+      var t3 = MODEL.types[j];
+      if (t3.name.length > 2 && r.indexOf(t3.name.toLowerCase()) >= 0) return t3.id;
+    }
+    return null;
+  }
+  function typeRefHtml(ref) {
+    var tid = typeIdFor(ref);
+    return tid ? chip(ref, 'type', tid) : esc(ref);
+  }
   function section(title, count, inner, open) {
     return '<details' + (open ? ' open' : '') + '><summary>' + esc(title)
       + (count !== null ? '<span class="count">' + count + '</span>' : '') + '</summary><div class="inner">' + inner + '</div></details>';
@@ -1924,9 +2155,16 @@ var MODEL = __MODEL_JSON__;
   }
 
   function select(kind, id, focus) {
+    // Selecting a type from a component view (param chip, "Used by" chip…)
+    // switches into the ERD first, keeping the current subsystem scope.
+    if (kind === 'type' && state.view.kind !== 'types') {
+      state.view = { kind: 'types', id: typesScopeFromView() };
+      rebuild(true);
+    }
     state.selectedKind = kind;
     state.selected = id;
     cy.nodes().removeClass('sel');
+    cy.edges().removeClass('fieldhl');
     if (id) {
       var node = nodeForRef(kind, id);
       if (node.length) {
@@ -1977,9 +2215,9 @@ var MODEL = __MODEL_JSON__;
                   : '<span class="chip" style="opacity:.6">no narrative</span>')
               + '</div>'
               + '<code>' + esc(m.signature) + '</code>'
-              + '<div class="mdesc">' + esc(m.description) + ' \\u2014 returns <code style="display:inline">' + esc(m.returns) + '</code></div>'
+              + '<div class="mdesc">' + esc(m.description) + ' \\u2014 returns ' + typeRefHtml(m.returns) + '</div>'
               + (mIntent && !hasNarr ? '<div class="mdesc" style="font-style:italic">' + esc(mIntent) + '</div>' : '')
-              + (m.params ? '<div class="mdesc">params: ' + m.params.map(function (p) { return esc(p.name) + ': ' + esc(p.type); }).join(', ') + '</div>' : '')
+              + (m.params ? '<div class="mdesc">params: ' + m.params.map(function (p) { return esc(p.name) + ': ' + typeRefHtml(p.type); }).join(', ') + '</div>' : '')
               + (m.endpoint ? '<code>' + esc(JSON.stringify(m.endpoint)) + '</code>' : '')
               + (m.guarantees ? '<div style="margin-top:4px">' + m.guarantees.map(staticChip).join('') + '</div>' : '')
               + '</div>';
@@ -2031,10 +2269,22 @@ var MODEL = __MODEL_JSON__;
           + (ty.subsystem ? chip(ty.subsystem, 'subsystem', ty.subsystem) : staticChip('system-level shared'));
         var fieldsInner = ty.fields.length
           ? ty.fields.map(function (f) {
-              return '<div class="method"><div class="mname">' + esc(f.name) + (f.optional ? ' <span class="chip" style="opacity:.7">optional</span>' : '') + '</div><code>' + esc(f.type) + '</code></div>';
+              var fk = null;
+              MODEL.typeEdges.forEach(function (e2) { if (!fk && e2.from === ty.id && e2.field === f.name) fk = e2; });
+              return '<div class="method"><div class="mname">' + esc(f.name)
+                + (f.key === 'primary' ? ' <span class="chip">PK</span>' : f.key === 'unique' ? ' <span class="chip">unique</span>' : '')
+                + (f.optional ? ' <span class="chip" style="opacity:.7">optional</span>' : '')
+                + '</div><code>' + esc(f.type) + '</code>'
+                + (fk ? '<div class="mdesc">FK \\u2192 ' + chip(fk.to + ' [' + (fk.card || '1') + ']', 'type', fk.to) + '</div>' : '')
+                + '</div>';
             }).join('')
           : '<span class="desc">no fields</span>';
         body += section('Fields', ty.fields.length, fieldsInner, true);
+        if (ty.usedBy && ty.usedBy.length) {
+          body += section('Used by methods', ty.usedBy.length, ty.usedBy.map(function (u) {
+            return chip(u.component + '.' + u.method + '()', 'component', u.component);
+          }).join(''), true);
+        }
         if (ty.methods.length) {
           body += section('Methods (pure intrinsic)', ty.methods.length, ty.methods.map(function (m2) {
             return '<div class="method"><div class="mname">' + esc(m2.name) + '</div><code>' + esc(m2.signature) + '</code><div class="mdesc">' + esc(m2.description || '') + ' \\u2014 returns <code style="display:inline">' + esc(m2.returns) + '</code></div></div>';

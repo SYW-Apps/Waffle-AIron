@@ -6,6 +6,7 @@ fields:
   - name: name
     type: string
     description: System name — the root identity of the spec tree
+    key: primary
   - name: vision
     type: string
     description: One-paragraph statement of what the system is for
