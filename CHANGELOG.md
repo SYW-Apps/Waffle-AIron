@@ -184,11 +184,12 @@ migration*).
   `LANGUAGE_FOREIGN_FLOW` gate now covers the full construct keyspace
   (branch/switch/forEach/for/while/doWhile/try/throw/jump), so a pack can
   mark e.g. `forEach` unsupported on its platform with guidance.
-- **Wrapper-tool template**: `examples/wrapper/` — packs (custom profile +
-  language table + injected rule), a wrapper binary embedding wairon as a
-  library, and a CI-clean **spec-only** demo project (implementation lives
-  on the platform; `requireOwnedPaths: false`) — guarded by a golden test
-  so the example cannot rot. Full reference: `docs/extending-wairon.md`.
+- **Wrapper-product template**: `examples/wrapper/` — packs (custom profile
+  + language table + injected rule), the installer such a product ships
+  (`install.js` → `wairon packs add`), an advanced library-embedding demo,
+  and a CI-clean **spec-only** demo project (implementation lives on the
+  platform; `requireOwnedPaths: false`) — guarded by a golden test so the
+  example cannot rot. Full reference: `docs/extending-wairon.md`.
 - Design record: `docs/design/technology-boundaries-and-extensibility.md`.
 
 ### Per-spec lint suppression — `lint.allow`

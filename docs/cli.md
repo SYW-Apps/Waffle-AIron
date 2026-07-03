@@ -7,12 +7,13 @@ flags: `--verbose`, `--silent`, `-v`/`--version`.
 
 ## Project
 
-### `wairon init [-y, --yes]`
+### `wairon init [-y, --yes] [--pack <source>]`
 Bootstrap `.wai/` in the current project: project config, the SDD spec tree
 (an L0 `.index.yaml` is seeded), the shared `.wai/context/`, the architect agent
 file, and the SDD skills installed into each selected target tool. `--yes` uses
-defaults without prompts. Re-running on an initialized project is a no-op that
-points you back to the SDD flow.
+defaults without prompts; `--pack <source>` (repeatable) vendors + registers an
+extension pack right after init (see `wairon packs`). Re-running on an
+initialized project is a no-op that points you back to the SDD flow.
 
 ### `wairon status`
 Print a hierarchical completeness dashboard of the SDD spec tree (which
@@ -38,7 +39,26 @@ for free-standing domains).
 List the SDD conformance rule registry — every rule group, the issue codes it
 can emit, default severities, and any per-project overrides from
 `rules.sddRuleSeverity`. The gate is a documented architecture linter: each
-rule is a self-contained module in `src/core/rules/`.
+rule is a self-contained module in `src/core/rules/`. Rules injected by
+extension packs are listed too, tagged with their pack.
+
+### `wairon packs list | add <source> [--global] | remove <name> [--global]`
+Extension packs — plain config files (YAML, or a JS module for programmatic
+rules) injecting custom profiles, language/platform tables, and conformance
+rules (see [Extending wairon](extending-wairon.md)).
+
+- `add <source>`: verify the pack loads, then vendor it into `.wai/packs/`
+  and register it in `project.yaml → extensions.packs` (commit `.wai/` so CI
+  and every clone enforce it). With `--global`, install machine-wide into
+  `WAIRON_PACKS_DIR` / `~/.wairon/packs` — auto-loaded for every project on
+  this machine (project packs win on collision; a project opts out via
+  `extensions.useGlobalPacks: false`). A source may be a file or a directory
+  with a pack entry file (`pack.yaml` | `pack.cjs` | `index.cjs` | …).
+- `list`: global + project packs and what each provides (profiles,
+  languages, rules), with load errors inline.
+- `remove <name>`: deregister by pack name and delete vendored files under
+  `.wai/packs/` (files elsewhere are left in place); `--global` removes a
+  machine-wide pack.
 
 ### `wairon diagram [--format <fmt>] [--subsystem <id>] [--sequence <component:method>] [--depth <n>] [--all] [--out <path>]`
 Generate architecture diagrams derived from the spec tree — living

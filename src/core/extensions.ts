@@ -21,8 +21,8 @@ import type { SddRule } from './rules/types.js';
 //     custom profile definitions and language/platform tables. Data only.
 //   - Programmatic JS (anything else — a requireable module id or relative
 //     path): the same data plus `rules: SddRule[]` written against wairon's
-//     exported rule API. Loaded via createRequire from the project root, so
-//     npm-installed packs resolve like any dependency.
+//     exported rule API. Loaded via createRequire from the project root
+//     (Node resolution semantics for module ids).
 //
 // Packs load identically in the CLI and the MCP server: validateSddTree
 // auto-loads them from project config unless the caller passes its own

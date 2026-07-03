@@ -3,9 +3,13 @@
 **Waffle AIron** — an AI-Driven Development (AIDD) support tool built around
 **Spec-Driven Development (SDD)**.
 
-> **Status:** v0.1 — the SDD spec tree, architecture-conformance validation,
-> spec-derived agent topology, skills, and MCP server are working. See the
-> [roadmap](docs/roadmap.md) for what's next.
+> **Status:** v0.2 — the SDD spec tree, the conformance gate (a 16-module
+> rule registry with narrative control-flow validation, technology
+> boundaries, and per-spec `lint.allow`), spec-derived agent topology,
+> skills, the MCP server, diagrams (Mermaid, interactive canvas + ERD,
+> draw.io/Excalidraw), and extension packs (injectable profiles, language
+> tables, and rules) are working. See the [roadmap](docs/roadmap.md) for
+> what's next.
 
 ---
 
@@ -46,17 +50,21 @@ A complete system is specified top-down across six levels:
 | **L1 Subsystem** | `.wai/specs/<sub>/.index.yaml` | An isolated software service, its public interfaces, and trusted links |
 | **L2 Component** | `…/<component>/.index.yaml` | A building block (Portal, Orchestrator, Supervisor, Actor, Store, Index, Registry, Adapter, Observer, Specialist) or pattern (Repository, Gateway) + `owns`/`dependsOn` |
 | **L3 Interface** | `…/<component>/.interface.yaml` | Method signatures & structured params (+ optional wire endpoint bindings) |
-| **L4 Implementation** | `…/<component>/.implementation.yaml` | Maps a contract to a source file |
-| **L5 Narrative** | (within L4) | Step-by-step method logic; each `call` step resolves to a real dependency method |
+| **L4 Implementation** | `…/<component>/.implementation.yaml` | Concrete implementation of a contract: narrative detail level, bound `technologies` (the swap seam for vendors/engines), optional source path |
+| **L5 Narrative** | (within L4) | Step-by-step method logic as a flat numbered list — `call` steps resolve to real dependency methods, and flow steps (`branch`/`switch`/`loop`/`try`/`jump`/`return`/`throw`) jump by step number |
 
 (Legacy undotted names — `system.yaml`, `subsystem.yaml`, … — still load;
 `wairon doctor --fix` migrates them.)
 
 `wairon validate` enforces conformance across the tree: reference integrity,
-contract↔implementation method symmetry, narrative-call resolution, the
-component-stereotype dependency rules (e.g. a Portal may not depend on a Store),
-and dependency-cycle detection. Severity is relaxed to warnings while specs are
-`draft`/`design`.
+contract↔implementation method symmetry, narrative-call resolution and
+control-flow soundness, the component-stereotype dependency rules (e.g. a
+Portal may not depend on a Store), technology-leakage fencing, language-aware
+checks, and dependency-cycle detection — a documented rule registry
+(`wairon rules list`) with per-project severity overrides and per-spec
+`lint.allow` suppressions. Severity is relaxed to warnings while specs are
+`draft`/`design`. Extension packs can inject custom profiles, language
+tables, and rules — see [Extending wairon](docs/extending-wairon.md).
 
 ---
 
@@ -93,13 +101,8 @@ irm https://raw.githubusercontent.com/SYW-Apps/Waffle-AIron/main/install.ps1 | i
 curl -fsSL https://raw.githubusercontent.com/SYW-Apps/Waffle-AIron/main/install.sh | sh
 ```
 
-### npm install
-
-```sh
-npm install -g wairon
-```
-
-Both `wairon` and `wai` are registered as commands.
+Both `wairon` and `wai` are registered as commands. (wairon is distributed
+as standalone binaries — it is not published to npm.)
 
 ### Local development
 
@@ -163,6 +166,7 @@ See [docs/cli.md](docs/cli.md). Summary:
 | `wairon list` / `wairon show <id>` | Inspect agents resolved from the spec tree |
 | `wairon diagram [--all] [--canvas] [--drawio] [--excalidraw] [--sequence <comp:method>]` | Mermaid, interactive canvas, and editable draw.io/Excalidraw exports |
 | `wairon rules list` | The conformance rule registry (the architecture linter) |
+| `wairon packs add \| list \| remove [--global]` | Extension packs: injected profiles, language tables, and rules |
 | `wairon domains list \| scan \| add \| remove` | Domains (subsystem-derived + free-standing) |
 | `wairon skills list \| install` | Manage the SDD skills installed into your tools |
 | `wairon mcp serve \| install \| status` | The wairon MCP server (`sdd_*` tools) |
@@ -177,6 +181,7 @@ See [docs/cli.md](docs/cli.md). Summary:
 - [Roadmap](docs/roadmap.md) — what's done and what's next
 - [Vision](docs/vision.md) — long-term direction
 - [CLI Reference](docs/cli.md) — all commands
+- [Extending wairon](docs/extending-wairon.md) — extension packs & wrapper products (with a [working example](examples/wrapper/))
 - [Templates](docs/templates.md) — agent rendering templates
 - [Standards](docs/standards/INDEX.md) — the architecture standards the SDD model is built on
 
