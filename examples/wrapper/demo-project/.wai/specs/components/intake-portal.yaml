@@ -1,0 +1,10 @@
+schemaVersion: 1.0.0
+id: intake-portal
+name: Intake Portal
+description: Webhook entry point that accepts triggered record payloads and hands them to routing.
+subsystem: scenario-hub
+componentType: Portal
+portalType: MessageBus
+dependsOn: [routing-orchestrator]
+createdAt: '2026-07-03T12:00:00Z'
+updatedAt: '2026-07-03T12:00:00Z'

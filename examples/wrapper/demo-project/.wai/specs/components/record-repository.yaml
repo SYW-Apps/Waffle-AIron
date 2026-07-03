@@ -1,0 +1,10 @@
+schemaVersion: 1.0.0
+id: record-repository
+name: Record Repository
+description: Persistence facade for scenario records — agnostic to the storage solution behind it.
+subsystem: scenario-hub
+componentType: Repository
+owns: [record-store, sheets-adapter]
+dependsOn: []
+createdAt: '2026-07-03T12:00:00Z'
+updatedAt: '2026-07-03T12:00:00Z'

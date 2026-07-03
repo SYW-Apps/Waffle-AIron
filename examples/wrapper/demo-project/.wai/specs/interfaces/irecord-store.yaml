@@ -1,0 +1,22 @@
+schemaVersion: 1.0.0
+id: irecord-store
+name: IRecordStore
+description: Row-level record persistence.
+component: record-store
+methods:
+  - name: readRow
+    description: Reads the row for a record id.
+    signature: "readRow(id: string): scenario_record"
+    returns: "scenario_record"
+    params:
+      - name: id
+        type: string
+  - name: writeRow
+    description: Writes the row for a record.
+    signature: "writeRow(record: scenario_record): void"
+    returns: "void"
+    params:
+      - name: record
+        type: scenario_record
+createdAt: '2026-07-03T12:00:00Z'
+updatedAt: '2026-07-03T12:00:00Z'

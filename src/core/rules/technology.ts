@@ -13,19 +13,31 @@ import type { MethodSignature } from '../../models/index.js';
 /** Stereotypes that may legitimately bind a technology directly. */
 const DATA_LAYER = new Set(['Adapter', 'Store', 'Registry', 'Index']);
 
-/** "js-yaml" → "jsyaml". Tokens shorter than 3 chars are too noisy to police. */
-function normalizeTech(tech: string): string {
-  return tech.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).join('');
-}
-
 /**
- * Identifier-aware containment: the text splits into alphanumeric words and
- * a word containing the token is a hit — so "MySqlCustomerStore" hits
- * "mysql" but "my sql notes" does not.
+ * Identifier-aware matcher for one technology token. The token normalizes to
+ * its fused alphanumeric form ("js-yaml" → "jsyaml"); text splits into
+ * alphanumeric words. Single-part tokens hit when a word contains them
+ * ("MySqlCustomerStore" hits "mysql"; "my sql notes" does not). Multi-part
+ * tokens additionally hit when that many CONSECUTIVE words fuse to contain
+ * them, so prose "Google Sheets" / "google-sheets" hits token
+ * "google-sheets". Returns null for tokens under 3 chars — too noisy to
+ * police.
  */
-function hits(text: string | undefined | null, token: string): boolean {
-  if (!text) return false;
-  return text.toLowerCase().split(/[^a-z0-9]+/).some(w => w.length > 0 && w.includes(token));
+function makeMatcher(tech: string): ((text: string | undefined | null) => boolean) | null {
+  const parts = tech.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const joined = parts.join('');
+  if (joined.length < 3) return null;
+  const n = parts.length;
+  return (text) => {
+    if (!text) return false;
+    const words = text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+    if (words.some(w => w.includes(joined))) return true;
+    if (n < 2) return false;
+    for (let i = 0; i + n <= words.length; i++) {
+      if (words.slice(i, i + n).join('').includes(joined)) return true;
+    }
+    return false;
+  };
 }
 
 /** The identifier surfaces of a contract method (prose descriptions excluded). */
@@ -73,7 +85,12 @@ export const technologyRule: SddRule = {
     };
 
     // -- collect declarations → per-token owning scopes ------------------------
-    interface TechHome { label: string; ownerComponents: Set<string>; scope: Set<string> }
+    interface TechHome {
+      label: string;
+      match: (text: string | undefined | null) => boolean;
+      ownerComponents: Set<string>;
+      scope: Set<string>;
+    }
     const homes = new Map<string, TechHome>();
 
     for (const impl of ctx.implementations) {
@@ -111,25 +128,26 @@ export const technologyRule: SddRule = {
       }
 
       for (const tech of impl.technologies) {
-        const token = normalizeTech(tech);
-        if (token.length < 3) continue; // unpoliceable without drowning in noise
-        const home = homes.get(token) ?? { label: tech, ownerComponents: new Set<string>(), scope: new Set<string>() };
+        const match = makeMatcher(tech);
+        if (!match) continue; // unpoliceable without drowning in noise
+        const key = tech.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).join('');
+        const home = homes.get(key) ?? { label: tech, match, ownerComponents: new Set<string>(), scope: new Set<string>() };
         home.ownerComponents.add(comp.id);
         for (const id of scope) home.scope.add(id);
-        homes.set(token, home);
+        homes.set(key, home);
       }
     }
     if (homes.size === 0) return;
 
     const ownersDesc = (h: TechHome): string => [...h.ownerComponents].map(c => `"${c}"`).join(', ');
 
-    for (const [token, home] of homes) {
+    for (const home of homes.values()) {
       // L3 identifier surfaces — ALL interfaces, including the owning
       // component's own: the contract is the swap seam, so the vendor name
       // is wrong even there. (Prose descriptions inside the owning scope may
       // name the tech — that is honest documentation, not coupling.)
       for (const intf of ctx.interfaces) {
-        const offending = intf.methods.filter(m => hits(contractIdentifiers(m), token)).map(m => m.name);
+        const offending = intf.methods.filter(m => home.match(contractIdentifiers(m))).map(m => m.name);
         if (offending.length) {
           ctx.addIssue(
             'warning',
@@ -151,7 +169,7 @@ export const technologyRule: SddRule = {
           ['owns', comp.owns.join(' ')],
           ['basePath', comp.basePath],
         ];
-        const found = surfaces.filter(([, t]) => hits(t, token)).map(([s]) => s);
+        const found = surfaces.filter(([, t]) => home.match(t)).map(([s]) => s);
         if (found.length) {
           ctx.addIssue(
             'warning',
@@ -165,7 +183,7 @@ export const technologyRule: SddRule = {
 
       for (const sub of ctx.subsystems) {
         if (home.scope.has(sub.id)) continue;
-        if (hits(`${sub.id} ${sub.name} ${sub.description}`, token)) {
+        if (home.match(`${sub.id} ${sub.name} ${sub.description}`)) {
           ctx.addIssue(
             'warning',
             'TECH_LEAKAGE',
@@ -178,7 +196,7 @@ export const technologyRule: SddRule = {
       for (const intf of ctx.interfaces) {
         if (home.scope.has(intf.id)) continue;
         const prose = [intf.description, ...intf.methods.map(m => m.description)].join(' ');
-        if (hits(prose, token)) {
+        if (home.match(prose)) {
           ctx.addIssue(
             'warning',
             'TECH_LEAKAGE',
@@ -200,7 +218,7 @@ export const technologyRule: SddRule = {
             for (const c of s.catches ?? []) parts.push(c.error);
           }
         }
-        if (hits(parts.filter(Boolean).join(' '), token)) {
+        if (home.match(parts.filter(Boolean).join(' '))) {
           ctx.addIssue(
             'warning',
             'TECH_LEAKAGE',
@@ -216,7 +234,7 @@ export const technologyRule: SddRule = {
         const parts: string[] = [t.id, t.name, t.description ?? ''];
         for (const f of t.fields ?? []) parts.push(f.name, f.type);
         for (const m of t.methods ?? []) parts.push(m.name, m.signature, m.returns);
-        if (hits(parts.join(' '), token)) {
+        if (home.match(parts.join(' '))) {
           ctx.addIssue(
             'warning',
             'TECH_LEAKAGE',

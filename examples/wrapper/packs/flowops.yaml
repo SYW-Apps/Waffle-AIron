@@ -1,0 +1,32 @@
+# Declarative extension pack — the data half of a wrapper tool's doctrine.
+# Referenced from a project's `.wai/project.yaml → extensions.packs`, or
+# injected programmatically by the wrapper (see ../wrapper.js).
+#
+# "FlowOps" is a fictional low-code automation platform standing in for
+# Make.com / n8n / Zapier — the wairon core never learns it exists.
+name: flowops-doctrine
+
+profiles:
+  # Registered profiles become valid values for a subsystem's `profile`
+  # (and projectType). family: neutral opts out of the built-in
+  # backend/frontend stereotype fencing; the explicit lists below carry
+  # this platform's own doctrine, each with a stated reason.
+  flowops-automation:
+    family: neutral
+    forbiddenStereotypes:
+      - types: [Actor, Supervisor]
+        reason: FlowOps scenarios are stateless runs triggered by the platform — there are no long-lived concurrent processes to model; use scheduled or triggered scenarios instead
+
+languages:
+  # Registered via targetLanguage (L0 or per-subsystem). unsupportedFlow
+  # gates narrative flow constructs (warning severity — guidance, not
+  # prohibition; lint.allow applies) over the full construct keyspace:
+  # branch | switch | forEach | for | while | doWhile | try | throw | jump.
+  flowops:
+    unsupportedFlow:
+      doWhile: FlowOps has no do-while — model as a repeater (loopKind for) with a post-check filter on the following module
+      jump: FlowOps modules cannot jump arbitrarily — restructure with routers (switch) and filters (branch) so control flow stays a forward pipeline
+    # Builtin-type vocabulary unambiguous to THIS platform. Declaring it
+    # enables the foreign-builtin check both ways (e.g. `Promise` in a
+    # flowops system is flagged as a typescript builtin).
+    foreignBuiltins: [bundle]

@@ -1,0 +1,9 @@
+schemaVersion: 1.0.0
+id: routing-orchestrator
+name: Routing Orchestrator
+description: Decides whether an incoming record is new and stores it via the record repository.
+subsystem: scenario-hub
+componentType: Orchestrator
+dependsOn: [record-repository]
+createdAt: '2026-07-03T12:00:00Z'
+updatedAt: '2026-07-03T12:00:00Z'

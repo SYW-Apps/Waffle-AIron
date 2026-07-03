@@ -1,0 +1,14 @@
+schemaVersion: 1.0.0
+id: impl-record-store
+name: Record Store Implementation
+description: Maps scenario records onto raw rows behind the adapter.
+contract: irecord-store
+methods:
+  - name: readRow
+    detail: intent
+    intent: Fetches the raw row through the adapter and maps it into a scenario record; unknown ids yield the empty record marker.
+  - name: writeRow
+    detail: intent
+    intent: Serializes the record into a row shape and appends or updates it through the adapter in a single operation.
+createdAt: '2026-07-03T12:00:00Z'
+updatedAt: '2026-07-03T12:00:00Z'

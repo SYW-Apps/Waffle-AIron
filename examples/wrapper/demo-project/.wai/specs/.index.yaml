@@ -1,0 +1,11 @@
+schemaVersion: 1.0.0
+name: FlowOpsDemo
+vision: Demonstrate a wrapper tool injecting platform doctrine (profiles, language tables, rules) into wairon without forking it.
+targetLanguage: flowops
+boundaries:
+  - name: google-sheets
+    description: External spreadsheet storage — abstracted behind the sheets-adapter inside record-repository.
+globalRequirements:
+  - Records are deduplicated by id before storage.
+createdAt: '2026-07-03T12:00:00Z'
+updatedAt: '2026-07-03T12:00:00Z'

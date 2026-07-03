@@ -1,0 +1,22 @@
+schemaVersion: 1.0.0
+id: isheets-adapter
+name: ISheetsAdapter
+description: Raw tabular row access — intent-language, so the backing product stays swappable.
+component: sheets-adapter
+methods:
+  - name: fetchRow
+    description: Fetches one raw row by key.
+    signature: "fetchRow(rowKey: string): string"
+    returns: "string"
+    params:
+      - name: rowKey
+        type: string
+  - name: appendRow
+    description: Appends serialized values as a new row.
+    signature: "appendRow(values: string): void"
+    returns: "void"
+    params:
+      - name: values
+        type: string
+createdAt: '2026-07-03T12:00:00Z'
+updatedAt: '2026-07-03T12:00:00Z'

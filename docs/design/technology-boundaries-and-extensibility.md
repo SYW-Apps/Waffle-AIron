@@ -57,8 +57,10 @@ its core.
    Token matching is identifier-aware: the token is normalized
    (`js-yaml` → `jsyaml`), text splits into alphanumeric words, and a word
    containing the normalized token is a hit (`MySqlCustomerStore` hits
-   `mysql`). Tokens under 3 chars are ignored. Common-English-word tech
-   names ("make") will false-positive — pick distinctive tokens.
+   `mysql`). Multi-part tokens additionally match that many consecutive
+   words fused, so prose "Google Sheets" hits `google-sheets`. Tokens under
+   3 chars are ignored. Common-English-word tech names ("make") will
+   false-positive — pick distinctive tokens.
 
    This is the spec-side hook for future code↔spec conformance checking:
    the same declaration later gates actual imports in code.
