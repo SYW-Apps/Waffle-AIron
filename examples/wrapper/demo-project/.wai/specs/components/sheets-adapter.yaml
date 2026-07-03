@@ -1,0 +1,9 @@
+schemaVersion: 1.0.0
+id: sheets-adapter
+name: Sheets Adapter
+description: Owns external spreadsheet access behind an intent interface; the rest of the system never learns which spreadsheet product sits behind it.
+subsystem: scenario-hub
+componentType: Adapter
+dependsOn: []
+createdAt: '2026-07-03T12:00:00Z'
+updatedAt: '2026-07-03T12:00:00Z'

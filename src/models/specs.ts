@@ -105,7 +105,13 @@ export const SubsystemSpecSchema = z.object({
   description: z.string(),
   parentSystem: z.string(), // References L0 System Name or file
   publicInterfaces: z.array(PublicInterfaceSchema).default([]),
-  profile: z.enum(['backend', 'frontend-reactive', 'frontend-controller', 'lowlevel-os', 'game-ecs', 'realtime-embedded', 'plc-cyclic']).optional(), // Optional subsystem override for fullstack
+  /**
+   * Optional subsystem profile override (e.g. for fullstack systems). Open
+   * string: built-ins are backend, frontend-reactive, frontend-controller,
+   * lowlevel-os, game-ecs, realtime-embedded, plc-cyclic; extension packs
+   * may register more. Unknown names get UNKNOWN_PROFILE.
+   */
+  profile: z.string().optional(),
   projectPath: z.string().optional(), // Relative path to external project root for subsystem chaining
   /** Optional override of the system-level targetLanguage for this subsystem. */
   targetLanguage: z.string().optional(),
@@ -358,6 +364,15 @@ export const ImplementationSpecSchema = z.object({
   description: z.string(),
   contract: z.string(), // References L3 Interface id
   sourcePath: z.string().optional(), // Path to the concrete source code file (e.g. "src/storage/vfs.ts")
+  /**
+   * External technologies (vendor, engine, SDK, service) this implementation
+   * binds to — e.g. ["mysql"], ["sendgrid"]. Declaring one makes this
+   * component's ownership tree the technology's home: references anywhere
+   * outside it are flagged (TECH_LEAKAGE), contract identifiers must stay
+   * intent-language (VENDOR_NAME_IN_CONTRACT), and only data-layer
+   * stereotypes should bind tech directly (TECH_ON_LOGIC_COMPONENT).
+   */
+  technologies: z.array(z.string()).optional(),
   methods: z.array(MethodImplementationSchema).default([]),
   /** Spec-level narrative detail default for all methods (each may override). */
   detail: NarrativeDetailSchema.optional(),

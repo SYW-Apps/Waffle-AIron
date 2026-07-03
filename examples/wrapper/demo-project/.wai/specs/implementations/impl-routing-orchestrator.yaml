@@ -1,0 +1,17 @@
+schemaVersion: 1.0.0
+id: impl-routing-orchestrator
+name: Routing Orchestrator Implementation
+description: Deduplicates by record id, then persists new records.
+contract: irouting-orchestrator
+methods:
+  - name: route
+    detail: full
+    narrative:
+      - { stepNumber: 1, description: parse the payload into a candidate record, type: local }
+      - { stepNumber: 2, description: look up an existing record with the same id, type: call, targetComponent: record-repository, targetMethod: getRecord }
+      - { stepNumber: 3, description: a record with this id already exists, type: branch, condition: existing record found, onFalseStep: 5 }
+      - { stepNumber: 4, description: skip the duplicate, type: return, outcome: duplicate ignored }
+      - { stepNumber: 5, description: persist the new record, type: call, targetComponent: record-repository, targetMethod: saveRecord }
+      - { stepNumber: 6, description: report the stored record id, type: return, outcome: stored }
+createdAt: '2026-07-03T12:00:00Z'
+updatedAt: '2026-07-03T12:00:00Z'

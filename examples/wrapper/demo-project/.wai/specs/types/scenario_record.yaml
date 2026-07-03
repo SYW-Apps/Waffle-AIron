@@ -1,0 +1,20 @@
+schemaVersion: 1.0.0
+kind: entity
+id: scenario_record
+name: ScenarioRecord
+description: One record flowing through the scenario hub.
+subsystem: scenario-hub
+fields:
+  - name: id
+    type: string
+    key: primary
+  - name: source
+    type: string
+  - name: payload
+    type: string
+  - name: processed
+    type: boolean
+    optional: true
+methods: []
+createdAt: '2026-07-03T12:00:00Z'
+updatedAt: '2026-07-03T12:00:00Z'

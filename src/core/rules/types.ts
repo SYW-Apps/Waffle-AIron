@@ -7,6 +7,7 @@ import {
   TypeSpec,
   RulesConfig,
 } from '../../models/index.js';
+import type { ProfileDef, LanguagePackDef } from '../extensions.js';
 
 // ---------------------------------------------------------------------------
 // Rule registry contracts
@@ -28,14 +29,22 @@ export interface RuleCode {
   summary: string;
 }
 
-export type ArchProfile =
-  | 'backend'
-  | 'frontend-reactive'
-  | 'frontend-controller'
-  | 'lowlevel-os'
-  | 'game-ecs'
-  | 'realtime-embedded'
-  | 'plc-cyclic';
+/** The built-in architectural profiles; extension packs may register more. */
+export const BUILTIN_PROFILES = [
+  'backend',
+  'frontend-reactive',
+  'frontend-controller',
+  'lowlevel-os',
+  'game-ecs',
+  'realtime-embedded',
+  'plc-cyclic',
+] as const;
+
+/**
+ * A profile id — one of BUILTIN_PROFILES or a pack-registered name (open
+ * string; UNKNOWN_PROFILE flags anything unregistered).
+ */
+export type ArchProfile = string;
 
 export interface RuleContext {
   system: SystemSpec;
@@ -67,6 +76,16 @@ export interface RuleContext {
   targetLanguageFor(subsystemId: string | undefined): string | undefined;
   /** Scope filter for granular (per-subsystem) validation. */
   isSpecInScope(specId: string): boolean;
+
+  /**
+   * Extension-pack data (empty objects when no packs are loaded): pack-
+   * registered profiles and language/platform tables. Rules merge these over
+   * their built-in tables.
+   */
+  ext: {
+    profiles: Record<string, ProfileDef>;
+    languages: Record<string, LanguagePackDef>;
+  };
 
   /**
    * Bookkeeping for per-spec lint suppressions (lint.allow). Suppression

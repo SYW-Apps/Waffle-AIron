@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
 import { SDD_RULES } from '../core/rules/index.js';
+import { loadProjectExtensions } from '../core/extensions.js';
 import { isProjectInitialized, loadProjectConfig } from '../config/loader.js';
 
 // ---------------------------------------------------------------------------
@@ -27,19 +28,33 @@ export async function runRulesList(): Promise<void> {
     return chalk.gray('off    ');
   };
 
-  console.log(chalk.bold(`\nSDD conformance rules (${SDD_RULES.length} rule groups)\n`));
-  for (const rule of SDD_RULES) {
-    console.log(chalk.bold.cyan(`■ ${rule.name}`));
-    console.log(`  ${chalk.dim(rule.description)}`);
-    for (const c of rule.codes) {
-      const effective = overrides[c.code] ?? c.defaultSeverity;
-      const overridden = overrides[c.code] && overrides[c.code] !== c.defaultSeverity;
-      console.log(
-        `    ${sevLabel(effective)} ${c.code}${overridden ? chalk.magenta(` (override; default ${c.defaultSeverity})`) : ''}`,
-      );
-      console.log(`            ${chalk.dim(c.summary)}`);
+  const ext = loadProjectExtensions();
+  const groups: { rules: typeof SDD_RULES; tag?: string }[] = [
+    { rules: SDD_RULES },
+    ...(ext.rules.length ? [{ rules: ext.rules, tag: `pack: ${ext.packNames.join(', ')}` }] : []),
+  ];
+
+  console.log(chalk.bold(`\nSDD conformance rules (${SDD_RULES.length + ext.rules.length} rule groups)\n`));
+  for (const group of groups) {
+    for (const rule of group.rules) {
+      console.log(chalk.bold.cyan(`■ ${rule.name}`) + (group.tag ? chalk.magenta(`  [${group.tag}]`) : ''));
+      console.log(`  ${chalk.dim(rule.description)}`);
+      for (const c of rule.codes) {
+        const effective = overrides[c.code] ?? c.defaultSeverity;
+        const overridden = overrides[c.code] && overrides[c.code] !== c.defaultSeverity;
+        console.log(
+          `    ${sevLabel(effective)} ${c.code}${overridden ? chalk.magenta(` (override; default ${c.defaultSeverity})`) : ''}`,
+        );
+        console.log(`            ${chalk.dim(c.summary)}`);
+      }
+      console.log('');
     }
-    console.log('');
+  }
+  for (const err of ext.errors) {
+    logger.error(err);
   }
   logger.info('Override severities per project via rules.sddRuleSeverity in .wai/project.yaml (error | warning | off).');
+  if (ext.packNames.length) {
+    logger.info(`Extension packs loaded: ${ext.packNames.join(', ')} (.wai/project.yaml → extensions.packs).`);
+  }
 }

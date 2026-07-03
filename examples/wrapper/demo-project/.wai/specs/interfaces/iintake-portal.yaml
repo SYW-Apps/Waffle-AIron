@@ -1,0 +1,21 @@
+schemaVersion: 1.0.0
+id: iintake-portal
+name: IIntakePortal
+description: Inbound record intake surface.
+component: intake-portal
+methods:
+  - name: onRecordReceived
+    description: Accepts a triggered record payload and routes it for processing.
+    signature: "onRecordReceived(payload: string): void"
+    returns: "void"
+    params:
+      - name: payload
+        type: string
+        description: Raw record payload from the trigger
+    endpoint:
+      transport: MessageBus
+      topic: records
+      event: record.received
+      direction: subscribe
+createdAt: '2026-07-03T12:00:00Z'
+updatedAt: '2026-07-03T12:00:00Z'

@@ -1,0 +1,12 @@
+schemaVersion: 1.0.0
+id: impl-intake-portal
+name: Intake Portal Implementation
+description: Forwards each received payload to the routing orchestrator.
+contract: iintake-portal
+methods:
+  - name: onRecordReceived
+    detail: calls-only
+    narrative:
+      - { stepNumber: 1, description: forward the payload to routing, type: call, targetComponent: routing-orchestrator, targetMethod: route }
+createdAt: '2026-07-03T12:00:00Z'
+updatedAt: '2026-07-03T12:00:00Z'

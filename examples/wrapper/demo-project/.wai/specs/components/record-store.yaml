@@ -1,0 +1,9 @@
+schemaVersion: 1.0.0
+id: record-store
+name: Record Store
+description: Row-level persistence for scenario records, delegating raw access to the adapter.
+subsystem: scenario-hub
+componentType: Store
+dependsOn: [sheets-adapter]
+createdAt: '2026-07-03T12:00:00Z'
+updatedAt: '2026-07-03T12:00:00Z'

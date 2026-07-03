@@ -10,9 +10,9 @@ migration*).
 
 ### Conformance gate (the architecture linter)
 
-- The validator is now a **rule registry**: 12 documented rule modules under
+- The validator is now a **rule registry**: 16 documented rule modules under
   `src/core/rules/`, inspectable via the new **`wairon rules list`** (codes,
-  default severities, per-project overrides).
+  default severities, per-project overrides), plus any extension-pack rules.
 - **New rules:**
   - `MUTUAL_SUBSYSTEM_DEPENDENCY` *(warning)* — two subsystems depending on
     each other must be acknowledged with a `trustedLinks` declaration on
@@ -125,6 +125,72 @@ migration*).
   canvas (the primary format); Mermaid moved behind `--format mermaid` /
   `--subsystem` and writes a file instead of printing to stdout (use a
   `.mmd` `--out` for raw Mermaid).
+
+### Technology boundaries (L4 `technologies`)
+
+- An external technology is abstracted as a component: an Adapter behind an
+  intent interface (inside a Repository/Gateway). The L4 of that component
+  declares the binding — `technologies: [mysql]` — and the ownership tree
+  becomes the technology's home. New warning-severity, `lint.allow`-able
+  rules police the declaration (no hardcoded vendor lists — only declared
+  tokens are checked):
+  - **`TECH_LEAKAGE`** — the token referenced in any spec outside the owning
+    boundary (prose, ids, `dependsOn` facade bypasses, vendor-shaped types
+    in the shared type space).
+  - **`VENDOR_NAME_IN_CONTRACT`** — the token in ANY L3 identifier surface
+    (method names, signatures, params, endpoints), including the owning
+    adapter's own contract: the L3 is the swap seam.
+  - **`TECH_ON_LOGIC_COMPONENT`** — technology bound outside
+    Adapter/Store/Registry/Index suggests a missing Adapter wrapper.
+  This is also the spec-side hook for future code↔spec conformance checking
+  (the same declaration later gates actual imports).
+
+### Extension packs (`extensions.packs`)
+
+- Wairon is now a **profile enforcer with a plugin surface**: platform-
+  specific profiles and rules are injected from outside — a wrapper tool
+  (e.g. an automation-platform SDD product) layers its doctrine on wairon
+  without forking it, and wairon core never learns about the platform.
+- `.wai/project.yaml` gains `extensions: { packs: [...] }` — each entry a
+  relative **declarative YAML pack** (custom profiles: `family` +
+  forbidden/discouraged stereotypes with reasons; language/platform tables:
+  unsupported flow constructs with remodeling guidance, foreign builtin
+  markers) or a requireable **programmatic JS pack** (the same data plus
+  `rules: SddRule[]` written against the now-exported rule API). CLI and
+  MCP load packs identically, so `sdd_validate_tree` enforces injected
+  rules; pack rule codes work with `lint.allow` and `rules.sddRuleSeverity`
+  unchanged; `wairon rules list` shows pack rules tagged with their pack.
+  A broken pack is an **`EXTENSION_LOAD_ERROR`** (error), never a silent
+  skip.
+- **Profiles are open**: L1 `profile` and `projectType` accept
+  pack-registered names; unregistered names get **`UNKNOWN_PROFILE`**
+  *(warning)*. Pack profiles enforce **`PROFILE_FORBIDDEN_STEREOTYPE`**
+  *(error)* / **`PROFILE_DISCOURAGED_STEREOTYPE`** *(warning)*.
+- **`wairon packs add | list | remove`** — first-class pack installation.
+  `add <source>` vendors a pack (file or directory with a `pack.yaml` /
+  `pack.cjs` entry) into `.wai/packs/` and registers it in project.yaml
+  (committed → CI and every clone enforce it); `add --global` installs
+  machine-wide into `WAIRON_PACKS_DIR` / `~/.wairon/packs`, auto-loaded for
+  every project (project packs win on collision; opt out via
+  `extensions.useGlobalPacks: false`). `remove <name>` is the uninstall.
+  **`wairon init --pack <source>`** applies doctrine at project birth.
+- **Distribution needs no npm**: wrapper products ship a release ZIP (pack
+  files + an install script that runs `wairon packs add`) on top of the
+  standalone wairon binaries — see the ZIP recipe in
+  `docs/extending-wairon.md`.
+- The narrative **flow algebra stays closed** (packs can gate and re-label
+  constructs, never inject step kinds — reachability analysis and jump
+  relocation depend on a closed successor semantics). The
+  `LANGUAGE_FOREIGN_FLOW` gate now covers the full construct keyspace
+  (branch/switch/forEach/for/while/doWhile/try/throw/jump), so a pack can
+  mark e.g. `forEach` unsupported on its platform with guidance.
+- **Wrapper-product template**: `examples/wrapper/` — packs (custom profile
+  + language table + injected rule), the installer such a product ships
+  (`install.js` → `wairon packs add`), an advanced library-embedding demo,
+  and a CI-clean **spec-only** demo project (implementation lives on the
+  platform; `requireOwnedPaths: false`) — guarded by a golden test so the
+  example cannot rot. Full reference: `docs/extending-wairon.md`.
+- Design record: `docs/design/technology-boundaries-and-extensibility.md`.
 
 ### Per-spec lint suppression — `lint.allow`
 

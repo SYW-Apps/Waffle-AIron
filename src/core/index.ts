@@ -2,6 +2,8 @@ export * from './detection.js';
 export * from './domains.js';
 export * from './templates.js';
 export * from './validation.js';
+export * from './extensions.js';
+export * from './rules/index.js';
 export * from './specs.js';
 export * from './agent_resolver.js';
 export * from './skills.js';

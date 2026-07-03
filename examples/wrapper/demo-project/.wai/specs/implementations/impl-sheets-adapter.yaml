@@ -1,0 +1,18 @@
+schemaVersion: 1.0.0
+id: impl-sheets-adapter
+name: Sheets Adapter Implementation
+description: Binds row access to the external spreadsheet product.
+contract: isheets-adapter
+# The technology is an implementation detail of THIS adapter — its home.
+# Any other spec mentioning it gets TECH_LEAKAGE; swapping the product
+# later means editing this one L4.
+technologies: [google-sheets]
+methods:
+  - name: fetchRow
+    detail: intent
+    intent: Reads one row from the backing Google Sheets range and returns its raw serialized cells; an empty range yields an empty payload.
+  - name: appendRow
+    detail: intent
+    intent: Appends the serialized values as a new row at the end of the backing Google Sheets range, creating the sheet tab when it is missing.
+createdAt: '2026-07-03T12:00:00Z'
+updatedAt: '2026-07-03T12:00:00Z'

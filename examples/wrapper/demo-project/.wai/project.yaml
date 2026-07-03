@@ -1,0 +1,25 @@
+# Demo project governed by the FlowOps wrapper (see ../..).
+# `extensions.packs` shows the config-injected path: the project itself pulls
+# in the wrapper's doctrine, so plain `wairon validate` (and the MCP server's
+# sdd_validate_tree) enforce it — no wrapper binary required.
+schemaVersion: 1.0.0
+name: flowops-demo
+projectType: backend
+description: Example project whose specs are enforced by injected FlowOps doctrine.
+targets:
+  - type: claude
+    outputDir: .claude/agents
+    enabled: true
+# Spec-only project: implementation happens on the platform (not in this
+# repo), so derived agents have no source paths to own and per-component
+# implementer agents make no sense here.
+rules:
+  requireOwnedPaths: false
+  generateComponentImplementers: false
+extensions:
+  packs:
+    - ../packs/flowops.yaml
+    - ../packs/flowops-rules.cjs
+paths: {}
+createdAt: '2026-07-03T12:00:00Z'
+updatedAt: '2026-07-03T12:00:00Z'

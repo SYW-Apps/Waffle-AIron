@@ -1,0 +1,15 @@
+schemaVersion: 1.0.0
+id: irouting-orchestrator
+name: IRoutingOrchestrator
+description: Deduplicating record routing.
+component: routing-orchestrator
+methods:
+  - name: route
+    description: Parses a payload, deduplicates against stored records, and persists new ones.
+    signature: "route(payload: string): string"
+    returns: "string"
+    params:
+      - name: payload
+        type: string
+createdAt: '2026-07-03T12:00:00Z'
+updatedAt: '2026-07-03T12:00:00Z'

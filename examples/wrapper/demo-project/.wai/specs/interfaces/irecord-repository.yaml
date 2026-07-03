@@ -1,0 +1,22 @@
+schemaVersion: 1.0.0
+id: irecord-repository
+name: IRecordRepository
+description: Intent-language persistence contract for scenario records.
+component: record-repository
+methods:
+  - name: getRecord
+    description: Loads a stored scenario record by its id.
+    signature: "getRecord(id: string): scenario_record"
+    returns: "scenario_record"
+    params:
+      - name: id
+        type: string
+  - name: saveRecord
+    description: Persists a scenario record.
+    signature: "saveRecord(record: scenario_record): void"
+    returns: "void"
+    params:
+      - name: record
+        type: scenario_record
+createdAt: '2026-07-03T12:00:00Z'
+updatedAt: '2026-07-03T12:00:00Z'
