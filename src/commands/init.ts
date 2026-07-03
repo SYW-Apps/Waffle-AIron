@@ -425,7 +425,7 @@ async function executeInit(
   logger.info('  .wai/               — source of truth for agent topology');
   logger.info('  .wai/project.yaml   — project config');
   logger.info('  .wai/phased_design.md — spec kit alternative design workbook');
-  logger.info('  .wai/specs/         — SDD spec tree (L0 system.yaml bootstrapped)');
+  logger.info('  .wai/specs/         — SDD spec tree (L0 .index.yaml bootstrapped)');
   logger.info('  .wai/context/       — shared context directory (domains.md, wairon-guide.md)');
   logger.blank();
   logger.info('Next steps:');
@@ -527,9 +527,9 @@ Define the non-negotiable architectural guardrails here. The AI agent must follo
 
 ## Stage 2: System Definition (Level 0 & Level 1)
 
-*   [ ] **System Vision (L0):** Define \`.wai/specs/system.yaml\`.
+*   [ ] **System Vision (L0):** Define \`.wai/specs/.index.yaml\`.
     *   *AI Action:* Run \`sdd_initialize_system\` to create the system vision.
-*   [ ] **Subsystem Isolation (L1):** Define subsystems in \`.wai/specs/subsystems/*.yaml\`.
+*   [ ] **Subsystem Isolation (L1):** Define subsystems in \`.wai/specs/<subsystem>/.index.yaml\`.
     *   *AI Action:* Run \`sdd_add_subsystem\` to declare the core bounded contexts (e.g. \`billing\`, \`catalog\`, \`users\`).
 
 ---

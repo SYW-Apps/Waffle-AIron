@@ -20,12 +20,25 @@ You must read, respect, and update `.wai/phased_design.md` (specifically Stage 5
 ## Workflow Rules
 1. **Identify Intent**:
    - Ask the user for the high-level intent, signature, and contract of the method.
-2. **Draft Narrative Steps**:
-   - Outline sequential steps (e.g. Step 1: Read config, Step 2: Call database repository).
-   - For every step, classify it as:
-     - `local`: Internal logic (e.g., calculations, state mapping).
-     - `call`: Call to another component.
-3. **Verify Contracts & Boundaries (MCP)**:
+2. **Choose the detail level FIRST** (the narrative detail dial):
+   - `full` — a step-by-step narrative, with flow structure where the logic branches. Default for Orchestrators, Supervisors, Actors, Specialists, and patterns.
+   - `calls-only` — only the cross-component `call` choreography. Default for Portals, Observers, and Adapters (boundary pass-throughs: real logic belongs in the Orchestrator they forward to — if a Portal method needs branching, that is a smell).
+   - `intent` — no steps; instead write an `intent` paragraph stating what the method does and how it fails. Default for Stores, Indexes, and Registries. The validator enforces an intent floor: placeholder-thin prose is rejected.
+   - Omit `detail` when the stereotype default already matches; declare it (per method or spec-level) only to override. Levels are floors — extra detail is never penalized.
+3. **Draft Narrative Steps** (for `full` / `calls-only`):
+   - Narratives are a FLAT ordered list; the order mimics the code lines. Flow structure jumps by step number — blocks are just skipped regions.
+   - Step types:
+     - `local`: internal logic (calculations, state mapping).
+     - `call`: call to another component (`targetComponent` + `targetMethod`).
+     - `branch`: if/else — `condition` + `onFalseStep` (true continues at `onTrueStep` or the next step). Chain else-ifs by targeting another branch step.
+     - `switch`: `on` + `cases: [{value, step}]` + optional `defaultStep`.
+     - `loop`: header step; body = next step through `endStep`. `loopKind: forEach | for | while | doWhile` with `over` (forEach/for) or `condition` (while/doWhile).
+     - `try`: guarded region (body = next through `endStep`) with `catches: [{error, step}]` and optional `finallyStep`.
+     - `jump`: unconditional goto (`toStep`) — how a loop breaks/continues and how a catch block rejoins the main flow (put one at the end of a try body to skip the handlers).
+     - `return`: terminator (optional `outcome`); `throw`: error terminator (optional `error`).
+   - `stepNumber` may be omitted in `sdd_write_narrative` — it defaults to the 1-based array position; jump fields reference those numbers. `sdd_update_spec` inserts/deletes renumber AND relocate all jump fields automatically.
+   - Error paths belong in the SAME narrative (the flowchart renderer visually separates them and can hide them) — never write separate happy/unhappy narratives.
+4. **Verify Contracts & Boundaries (MCP)**:
    - For every `call` step, query the MCP server to verify that the target component is declared in the calling component's dependencies and that the target method exists on its L3 interfaces.
    - Run `sdd_validate_tree` to ensure this narrative doesn't create circular dependencies or break component type boundaries.
    - **Verify asserted semantics against the contract.** If a step claims a semantic
@@ -39,7 +52,7 @@ You must read, respect, and update `.wai/phased_design.md` (specifically Stage 5
      that is on you and the implementer. If the contract lacks the needed method or
      guarantee, revise the L3 interface first (mandatory when an L0 `globalRequirement`
      depends on it).
-4. **Register & Promote**:
+5. **Register & Promote**:
    - Present the drafted narrative content (the exact step-by-step YAML structure) and a concise summary of the key flow/design choices directly in the chat message to the user. Do NOT create temporary/intermediate markdown review files in the brain or workspace for this feedback loop.
    - Upon user approval, call `sdd_write_narrative` to save it in the spec tree.
    - Once the interface, narrative, and spec for this component compile without errors, recommend changing the component's status field to `status: complete`.

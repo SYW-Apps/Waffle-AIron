@@ -2,7 +2,38 @@ kind: value-object
 id: subsystem_spec
 name: SubsystemSpec
 description: L1 Subsystem specification
-fields: []
+fields:
+  - name: id
+    type: string
+    description: Stable subsystem identifier
+    key: primary
+  - name: name
+    type: string
+    description: Human-readable subsystem name
+  - name: description
+    type: string
+    description: What this subsystem is responsible for
+  - name: parentSystem
+    type: string
+    description: Name of the owning L0 system
+  - name: targetLanguage
+    type: string
+    description: Language override for this subsystem
+    optional: true
+  - name: projectPath
+    type: string
+    description: Subproject root for chained/namespaced spec trees
+    optional: true
+  - name: publicInterfaces
+    type: object[]
+    description: 'Published surface: type + details + realizing component'
+  - name: trustedLinks
+    type: object[]
+    description: 'Acknowledged mutual couplings: subsystem + reason'
+  - name: status
+    type: string
+    description: draft | design | complete
+    optional: true
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-06-10T22:00:00.000Z'
+updatedAt: '2026-07-03T00:00:00.000Z'

@@ -1,9 +1,9 @@
 schemaVersion: "1.0.0"
 id: "mcp_core_adapter_impl"
 name: "MCP Core Adapter Implementation"
-description: "Concrete implementation forwarding MCP requests to core portal."
+description: "Pure 1:1 forwarding into sdd_core's front door (core portal). In-process require() seam today inside src/mcp/server.ts; swappable for a remote transport without changing callers."
 contract: "imcp_core_adapter"
-sourcePath: ".wai/specs/implementations/mcp_core_adapter_impl.yaml"
+sourcePath: "src/mcp/server.ts"
 methods:
   - name: "loadSystemSpec"
     narrative:
@@ -19,5 +19,89 @@ methods:
         type: "call"
         targetComponent: "core_portal"
         targetMethod: "resolveAgentTopology"
+  - name: "saveSystemSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Call saveSystemSpec on core portal"
+        type: "call"
+        targetComponent: "core_portal"
+        targetMethod: "saveSystemSpec"
+  - name: "saveSubsystemSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Call saveSubsystemSpec on core portal"
+        type: "call"
+        targetComponent: "core_portal"
+        targetMethod: "saveSubsystemSpec"
+  - name: "loadSubsystemSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Call loadSubsystemSpec on core portal"
+        type: "call"
+        targetComponent: "core_portal"
+        targetMethod: "loadSubsystemSpec"
+  - name: "loadSubsystemSpecs"
+    narrative:
+      - stepNumber: 1
+        description: "Call loadSubsystemSpecs on core portal"
+        type: "call"
+        targetComponent: "core_portal"
+        targetMethod: "loadSubsystemSpecs"
+  - name: "saveComponentSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Call saveComponentSpec on core portal"
+        type: "call"
+        targetComponent: "core_portal"
+        targetMethod: "saveComponentSpec"
+  - name: "loadComponentSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Call loadComponentSpec on core portal"
+        type: "call"
+        targetComponent: "core_portal"
+        targetMethod: "loadComponentSpec"
+  - name: "loadComponentSpecs"
+    narrative:
+      - stepNumber: 1
+        description: "Call loadComponentSpecs on core portal"
+        type: "call"
+        targetComponent: "core_portal"
+        targetMethod: "loadComponentSpecs"
+  - name: "saveInterfaceSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Call saveInterfaceSpec on core portal"
+        type: "call"
+        targetComponent: "core_portal"
+        targetMethod: "saveInterfaceSpec"
+  - name: "loadInterfaceSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Call loadInterfaceSpec on core portal"
+        type: "call"
+        targetComponent: "core_portal"
+        targetMethod: "loadInterfaceSpec"
+  - name: "loadInterfaceSpecs"
+    narrative:
+      - stepNumber: 1
+        description: "Call loadInterfaceSpecs on core portal"
+        type: "call"
+        targetComponent: "core_portal"
+        targetMethod: "loadInterfaceSpecs"
+  - name: "saveImplementationSpec"
+    narrative:
+      - stepNumber: 1
+        description: "Call saveImplementationSpec on core portal"
+        type: "call"
+        targetComponent: "core_portal"
+        targetMethod: "saveImplementationSpec"
+  - name: "loadImplementationSpecs"
+    narrative:
+      - stepNumber: 1
+        description: "Call loadImplementationSpecs on core portal"
+        type: "call"
+        targetComponent: "core_portal"
+        targetMethod: "loadImplementationSpecs"
 createdAt: "2026-06-19T12:00:00Z"
-updatedAt: "2026-06-19T12:00:00Z"
+updatedAt: "2026-07-02T00:00:00Z"

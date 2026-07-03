@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { validateRegistry, validateProjectConfig, validateSddTree } from '../../src/core/validation.js';
+import { invalidateSpecCache } from '../../src/core/specs.js';
 import { createEmptyRegistry } from '../../src/models/registry.js';
 import { createAgentRecord } from '../../src/models/agent.js';
 import { RulesConfig } from '../../src/models/project.js';
@@ -129,6 +130,7 @@ describe('validateProjectConfig', () => {
 
 describe('validateSddTree', () => {
   function createTempProject() {
+    invalidateSpecCache();
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-sdd-test-'));
     const originalCwd = process.cwd();
 
@@ -166,6 +168,7 @@ describe('validateSddTree', () => {
         vi.spyOn(process, 'cwd').mockReturnValue(tempDir);
       },
       cleanup: () => {
+        invalidateSpecCache();
         vi.restoreAllMocks();
         try {
           fs.rmSync(tempDir, { recursive: true, force: true });
@@ -200,7 +203,7 @@ id: comp-a
 name: ComponentA
 description: Component A description
 subsystem: sub-a
-componentType: Orchestrator
+componentType: Observer
 dependsOn: []
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
@@ -1711,6 +1714,713 @@ updatedAt: '2026-06-10T22:00:00Z'
       expect(issue).toBeDefined();
       expect(issue!.severity).toBe('error');
       expect(res.valid).toBe(false);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('flags UNUSED_COMPONENT, UNUSED_METHOD, and UNUSED_TYPE warnings for unreachable chains', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: Subsystem A description
+parentSystem: TestSystem
+publicInterfaces:
+  - type: REST
+    details: public rest api
+    component: comp-entry
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('type', 'used-type', `
+schemaVersion: 1.0.0
+id: used-type
+kind: value-object
+name: UsedType
+subsystem: sub-a
+fields:
+  - name: id
+    type: string
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('type', 'unused-type', `
+schemaVersion: 1.0.0
+id: unused-type
+kind: value-object
+name: UnusedType
+subsystem: sub-a
+fields:
+  - name: id
+    type: string
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('component', 'comp-entry', `
+schemaVersion: 1.0.0
+id: comp-entry
+name: EntryPortal
+description: Entry portal
+subsystem: sub-a
+componentType: Portal
+portalType: HTTP_API
+dependsOn: [comp-called]
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('interface', 'icomp-entry', `
+schemaVersion: 1.0.0
+id: icomp-entry
+name: IEntryPortal
+description: Entry portal contract
+component: comp-entry
+methods:
+  - name: entryMethod
+    description: entry method
+    signature: "entryMethod(data: UsedType): Promise<void>"
+    returns: "Promise<void>"
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /entry
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('implementation', 'impl-entry', `
+schemaVersion: 1.0.0
+id: impl-entry
+name: ImplEntry
+description: Impl entry
+contract: icomp-entry
+methods:
+  - name: entryMethod
+    narrative:
+      - stepNumber: 1
+        description: Call another method
+        type: call
+        targetComponent: comp-called
+        targetMethod: calledMethod
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+    proj.writeSpec('component', 'comp-called', `
+schemaVersion: 1.0.0
+id: comp-called
+name: ComponentCalled
+description: Called component
+subsystem: sub-a
+componentType: Orchestrator
+dependsOn: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('interface', 'icomp-called', `
+schemaVersion: 1.0.0
+id: icomp-called
+name: IComponentCalled
+description: Called interface
+component: comp-called
+methods:
+  - name: calledMethod
+    description: called method
+    signature: "calledMethod(): Promise<void>"
+    returns: "Promise<void>"
+  - name: uncalledMethod
+    description: uncalled method
+    signature: "uncalledMethod(): Promise<void>"
+    returns: "Promise<void>"
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('implementation', 'impl-called', `
+schemaVersion: 1.0.0
+id: impl-called
+name: ImplCalled
+description: Impl called
+contract: icomp-called
+methods:
+  - name: calledMethod
+    narrative:
+      - stepNumber: 1
+        description: do local
+        type: local
+  - name: uncalledMethod
+    narrative:
+      - stepNumber: 1
+        description: do local
+        type: local
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+    proj.writeSpec('component', 'comp-unused', `
+schemaVersion: 1.0.0
+id: comp-unused
+name: UnusedComp
+description: Unused component
+subsystem: sub-a
+componentType: Orchestrator
+dependsOn: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.valid).toBe(true);
+
+      const unusedCompIssue = res.issues.find(i => i.code === 'UNUSED_COMPONENT');
+      expect(unusedCompIssue).toBeDefined();
+      expect(unusedCompIssue!.severity).toBe('warning');
+      expect(unusedCompIssue!.message).toContain('comp-unused');
+
+      const unusedMethodIssue = res.issues.find(i => i.code === 'UNUSED_METHOD');
+      expect(unusedMethodIssue).toBeDefined();
+      expect(unusedMethodIssue!.severity).toBe('warning');
+      expect(unusedMethodIssue!.message).toContain('uncalledMethod');
+
+      const unusedTypeIssue = res.issues.find(i => i.code === 'UNUSED_TYPE' && i.specId === 'unused-type');
+      expect(unusedTypeIssue).toBeDefined();
+      expect(unusedTypeIssue!.severity).toBe('warning');
+      expect(unusedTypeIssue!.message).toContain('unused-type');
+
+      const usedTypeIssue = res.issues.find(i => i.code === 'UNUSED_TYPE' && i.specId === 'used-type');
+      expect(usedTypeIssue).toBeUndefined();
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('traverses ALL interfaces of a component in the unused-detection reachability walk', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: Subsystem A description
+parentSystem: TestSystem
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    // Root component (Observer) exposing TWO interfaces; each interface's method
+    // reaches a different interface of the helper. With the old single-interface
+    // lookup, ientry-b / ihelper-b were invisible to the walk.
+    proj.writeSpec('component', 'comp-entry', `
+schemaVersion: 1.0.0
+id: comp-entry
+name: EntryObserver
+description: Entry observer
+subsystem: sub-a
+componentType: Observer
+dependsOn: [comp-helper]
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('interface', 'ientry-a', `
+schemaVersion: 1.0.0
+id: ientry-a
+name: IEntryA
+description: First entry contract
+component: comp-entry
+methods:
+  - name: handleA
+    description: handle A
+    signature: "handleA(): Promise<void>"
+    returns: "Promise<void>"
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('interface', 'ientry-b', `
+schemaVersion: 1.0.0
+id: ientry-b
+name: IEntryB
+description: Second entry contract
+component: comp-entry
+methods:
+  - name: handleB
+    description: handle B
+    signature: "handleB(): Promise<void>"
+    returns: "Promise<void>"
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('implementation', 'impl-entry-a', `
+schemaVersion: 1.0.0
+id: impl-entry-a
+name: ImplEntryA
+description: Impl entry A
+contract: ientry-a
+methods:
+  - name: handleA
+    narrative:
+      - stepNumber: 1
+        description: Call first helper method
+        type: call
+        targetComponent: comp-helper
+        targetMethod: doFirst
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('implementation', 'impl-entry-b', `
+schemaVersion: 1.0.0
+id: impl-entry-b
+name: ImplEntryB
+description: Impl entry B
+contract: ientry-b
+methods:
+  - name: handleB
+    narrative:
+      - stepNumber: 1
+        description: Call second helper method
+        type: call
+        targetComponent: comp-helper
+        targetMethod: doSecond
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('component', 'comp-helper', `
+schemaVersion: 1.0.0
+id: comp-helper
+name: Helper
+description: Helper specialist
+subsystem: sub-a
+componentType: Specialist
+dependsOn: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('interface', 'ihelper-a', `
+schemaVersion: 1.0.0
+id: ihelper-a
+name: IHelperA
+description: First helper contract
+component: comp-helper
+methods:
+  - name: doFirst
+    description: do first
+    signature: "doFirst(): Promise<void>"
+    returns: "Promise<void>"
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('interface', 'ihelper-b', `
+schemaVersion: 1.0.0
+id: ihelper-b
+name: IHelperB
+description: Second helper contract
+component: comp-helper
+methods:
+  - name: doSecond
+    description: do second
+    signature: "doSecond(): Promise<void>"
+    returns: "Promise<void>"
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('implementation', 'impl-helper-a', `
+schemaVersion: 1.0.0
+id: impl-helper-a
+name: ImplHelperA
+description: Impl helper A
+contract: ihelper-a
+methods:
+  - name: doFirst
+    narrative:
+      - stepNumber: 1
+        description: do local work
+        type: local
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('implementation', 'impl-helper-b', `
+schemaVersion: 1.0.0
+id: impl-helper-b
+name: ImplHelperB
+description: Impl helper B
+contract: ihelper-b
+methods:
+  - name: doSecond
+    narrative:
+      - stepNumber: 1
+        description: do local work
+        type: local
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.valid).toBe(true);
+
+      const unusedIssues = res.issues.filter(i => i.code === 'UNUSED_METHOD' || i.code === 'UNUSED_COMPONENT');
+      expect(unusedIssues).toEqual([]);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  function writeMutualDepFixture(proj: ReturnType<typeof createTempProject>, trustedLinksYaml: string) {
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: Subsystem A
+parentSystem: TestSystem
+publicInterfaces:
+  - type: Custom
+    details: front door
+    component: a-portal
+${trustedLinksYaml}
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-b', `
+schemaVersion: 1.0.0
+id: sub-b
+name: SubsystemB
+description: Subsystem B
+parentSystem: TestSystem
+publicInterfaces:
+  - type: Custom
+    details: front door
+    component: b-portal
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    const portal = (id: string, sub: string) => `
+schemaVersion: 1.0.0
+id: ${id}
+name: ${id}
+description: portal
+subsystem: ${sub}
+componentType: Portal
+portalType: Custom
+dependsOn: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`;
+    const adapter = (id: string, sub: string, dep: string) => `
+schemaVersion: 1.0.0
+id: ${id}
+name: ${id}
+description: client adapter
+subsystem: ${sub}
+componentType: Adapter
+dependsOn: [${dep}]
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`;
+    proj.writeSpec('component', 'a-portal', portal('a-portal', 'sub-a'));
+    proj.writeSpec('component', 'b-portal', portal('b-portal', 'sub-b'));
+    proj.writeSpec('component', 'a-client', adapter('a-client', 'sub-a', 'b-portal'));
+    proj.writeSpec('component', 'b-client', adapter('b-client', 'sub-b', 'a-portal'));
+  }
+
+  it('warns on mutual subsystem dependencies unless a trustedLink acknowledges the pair', () => {
+    const proj = createTempProject();
+    writeMutualDepFixture(proj, '');
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.valid).toBe(true); // warning, not error — both directions use the sanctioned shape
+      const mutual = res.issues.find(i => i.code === 'MUTUAL_SUBSYSTEM_DEPENDENCY');
+      expect(mutual).toBeDefined();
+      expect(mutual!.severity).toBe('warning');
+      expect(mutual!.message).toContain('trustedLinks');
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('accepts a mutual subsystem dependency declared as a trusted link (fast lane)', () => {
+    const proj = createTempProject();
+    writeMutualDepFixture(proj, `trustedLinks:
+  - subsystem: sub-b
+    reason: runtime dispatch latency fast lane — bus round-trip too slow
+`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.issues.find(i => i.code === 'MUTUAL_SUBSYSTEM_DEPENDENCY')).toBeUndefined();
+      expect(res.issues.find(i => i.code === 'UNUSED_TRUSTED_LINK')).toBeUndefined();
+      expect(res.issues.find(i => i.code === 'INVALID_TRUSTED_LINK')).toBeUndefined();
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('flags trusted links to non-existent or unconnected subsystems', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: v
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: d
+parentSystem: TestSystem
+trustedLinks:
+  - subsystem: ghost-subsystem
+    reason: typo'd peer
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-b', `
+schemaVersion: 1.0.0
+id: sub-b
+name: SubsystemB
+description: d
+parentSystem: TestSystem
+trustedLinks:
+  - subsystem: sub-a
+    reason: declared but never wired
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      const invalid = res.issues.find(i => i.code === 'INVALID_TRUSTED_LINK');
+      expect(invalid).toBeDefined();
+      expect(invalid!.severity).toBe('error');
+      expect(res.valid).toBe(false);
+      const unused = res.issues.find(i => i.code === 'UNUSED_TRUSTED_LINK');
+      expect(unused).toBeDefined();
+      expect(unused!.severity).toBe('warning');
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('flags god components with excessive dependency fan-out', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: v
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: d
+parentSystem: TestSystem
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    const specialists: string[] = [];
+    for (let i = 1; i <= 9; i++) {
+      const id = `worker-${i}`;
+      specialists.push(id);
+      proj.writeSpec('component', id, `
+schemaVersion: 1.0.0
+id: ${id}
+name: Worker${i}
+description: d
+subsystem: sub-a
+componentType: Specialist
+dependsOn: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    }
+    proj.writeSpec('component', 'mega-orchestrator', `
+schemaVersion: 1.0.0
+id: mega-orchestrator
+name: MegaOrchestrator
+description: d
+subsystem: sub-a
+componentType: Orchestrator
+dependsOn: [${specialists.join(', ')}]
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      const god = res.issues.find(i => i.code === 'GOD_COMPONENT');
+      expect(god).toBeDefined();
+      expect(god!.severity).toBe('warning');
+      expect(god!.message).toContain('mega-orchestrator');
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('flags foreign-language builtins in signatures when a targetLanguage is declared', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: v
+targetLanguage: typescript
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: d
+parentSystem: TestSystem
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('component', 'comp-a', `
+schemaVersion: 1.0.0
+id: comp-a
+name: ComponentA
+description: d
+subsystem: sub-a
+componentType: Specialist
+dependsOn: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('interface', 'icomp-a', `
+schemaVersion: 1.0.0
+id: icomp-a
+name: IComponentA
+description: d
+component: comp-a
+methods:
+  - name: listItems
+    description: list
+    signature: "listItems(): Vec<string>"
+    returns: "Vec<string>"
+  - name: fetchItems
+    description: fetch
+    signature: "fetchItems(): Promise<string>"
+    returns: "Promise<string>"
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      const foreign = res.issues.filter(i => i.code === 'LANGUAGE_FOREIGN_BUILTIN');
+      // Vec is a Rust marker → flagged in a TypeScript system; Promise is native → not flagged.
+      expect(foreign).toHaveLength(1);
+      expect(foreign[0].message).toContain('Vec');
+      expect(foreign[0].severity).toBe('warning');
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('treats structured params as authoritative over the prose signature for type references', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: v
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: d
+parentSystem: TestSystem
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('type', 'ledger-entry', `
+schemaVersion: 1.0.0
+id: ledger-entry
+kind: entity
+name: LedgerEntry
+subsystem: sub-a
+fields:
+  - name: id
+    type: string
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('component', 'comp-a', `
+schemaVersion: 1.0.0
+id: comp-a
+name: ComponentA
+description: d
+subsystem: sub-a
+componentType: Specialist
+dependsOn: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    // The prose signature contains junk the tokenizer would trip on
+    // (WeirdProseToken); with structured params it must be ignored entirely.
+    proj.writeSpec('interface', 'icomp-a', `
+schemaVersion: 1.0.0
+id: icomp-a
+name: IComponentA
+description: d
+component: comp-a
+methods:
+  - name: record
+    description: record an entry
+    signature: "record(entry, opts) applies WeirdProseToken semantics, see docs"
+    returns: "void"
+    params:
+      - name: entry
+        type: LedgerEntry
+      - name: opts
+        type: string
+  - name: broken
+    description: bad structured param
+    signature: "broken(x)"
+    returns: "void"
+    params:
+      - name: x
+        type: GhostType
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      const undef = res.issues.filter(i => i.code === 'UNDEFINED_TYPE_REFERENCE');
+      // Only GhostType (from structured params) is flagged; WeirdProseToken in
+      // the prose signature is never tokenized because params are authoritative.
+      expect(undef).toHaveLength(1);
+      expect(undef[0].message).toContain('GhostType');
+      expect(undef.some(i => i.message.includes('WeirdProseToken'))).toBe(false);
+      // And LedgerEntry counts as referenced (no UNUSED_TYPE for it)
+      expect(res.issues.find(i => i.code === 'UNUSED_TYPE' && i.specId === 'ledger-entry')).toBeUndefined();
     } finally {
       proj.cleanup();
     }

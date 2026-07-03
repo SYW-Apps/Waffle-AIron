@@ -3,7 +3,7 @@ id: "cli_core_adapter_impl"
 name: "CLI Core Adapter Implementation"
 description: "Concrete implementation forwarding spec loading requests to the core portal."
 contract: "icli_core_adapter"
-sourcePath: ".wai/specs/implementations/cli_core_adapter_impl.yaml"
+sourcePath: "src/commands/index.ts"
 methods:
   - name: "loadSystemSpec"
     narrative:

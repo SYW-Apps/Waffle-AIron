@@ -174,22 +174,11 @@ export function renderWaironGuide(): string {
   if (mcpInstalled) {
     lines.push('# wairon MCP Tools');
     lines.push('');
-    lines.push('The **wairon MCP server** is active in this project. You can call these tools directly:');
+    lines.push('The **wairon MCP server** is active in this project. The tools are self-describing; call them directly:');
     lines.push('');
-    lines.push('| Tool | Purpose |');
-    lines.push('|------|---------|');
-    lines.push('| `listAgents` | List agents resolved from the spec tree (optionally filter by domainId) |');
-    lines.push('| `getAgent` | Get full details of an agent by id |');
-    lines.push('| `listDomains` | List domains (subsystem-derived + free-standing) |');
-    lines.push('| `validateTopology` | Check for topology errors/warnings |');
-    lines.push('| `getProjectConfig` | Get the project configuration |');
-    lines.push('| `sdd_initialize_system` | Create the L0 system spec |');
-    lines.push('| `sdd_add_subsystem` | Add an L1 subsystem |');
-    lines.push('| `sdd_add_component` | Add an L2 component |');
-    lines.push('| `sdd_define_interface` | Define an L3 interface contract |');
-    lines.push('| `sdd_write_narrative` | Write an L4 implementation + L5 narrative |');
-    lines.push('| `sdd_validate_tree` | Validate the whole spec tree |');
-    lines.push('| `sdd_get_status` | Spec-tree completeness dashboard |');
+    lines.push('- Authoring: `sdd_initialize_system`, `sdd_add_subsystem`, `sdd_set_public_interfaces`, `sdd_set_subsystem_project_path`, `sdd_add_component`, `sdd_define_interface`, `sdd_set_endpoints`, `sdd_write_narrative`, `sdd_add_type`.');
+    lines.push('- Reading & maintenance: `sdd_get_spec`, `sdd_update_spec`, `sdd_delete_spec`, `sdd_validate_tree`, `sdd_get_status`.');
+    lines.push('- Topology: `listAgents`, `getAgent`, `listDomains`, `validateTopology`, `getProjectConfig`.');
     lines.push('');
     lines.push('Use these MCP tools to query and change project state — never the `wairon` CLI (that is the human developer\'s tool).');
     lines.push('');

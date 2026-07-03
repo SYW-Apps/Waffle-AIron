@@ -2,7 +2,24 @@ kind: value-object
 id: system_spec
 name: SystemSpec
 description: L0 System specification
-fields: []
+fields:
+  - name: name
+    type: string
+    description: System name — the root identity of the spec tree
+    key: primary
+  - name: vision
+    type: string
+    description: One-paragraph statement of what the system is for
+  - name: targetLanguage
+    type: string
+    description: Default implementation language for language-aware validation
+    optional: true
+  - name: boundaries
+    type: string[]
+    description: Declared system boundaries
+  - name: globalRequirements
+    type: string[]
+    description: System-wide requirements every subsystem must honour
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-06-10T22:00:00.000Z'
+updatedAt: '2026-07-03T00:00:00.000Z'

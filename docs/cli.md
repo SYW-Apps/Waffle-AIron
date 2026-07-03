@@ -9,7 +9,7 @@ flags: `--verbose`, `--silent`, `-v`/`--version`.
 
 ### `wairon init [-y, --yes]`
 Bootstrap `.wai/` in the current project: project config, the SDD spec tree
-(an L0 `system.yaml` is seeded), the shared `.wai/context/`, the architect agent
+(an L0 `.index.yaml` is seeded), the shared `.wai/context/`, the architect agent
 file, and the SDD skills installed into each selected target tool. `--yes` uses
 defaults without prompts. Re-running on an initialized project is a no-op that
 points you back to the SDD flow.
@@ -33,6 +33,60 @@ SDD skills. Filters limit generation to a target type or to specific domains.
 List, or show full details of, the agents resolved from the spec tree
 (`system-architect`, `<subsystem>-owner`, `<component>-implementer`, and owners
 for free-standing domains).
+
+### `wairon rules list`
+List the SDD conformance rule registry — every rule group, the issue codes it
+can emit, default severities, and any per-project overrides from
+`rules.sddRuleSeverity`. The gate is a documented architecture linter: each
+rule is a self-contained module in `src/core/rules/`.
+
+### `wairon diagram [--format <fmt>] [--subsystem <id>] [--sequence <component:method>] [--depth <n>] [--all] [--out <path>]`
+Generate architecture diagrams derived from the spec tree — living
+documentation from the same source of truth as the conformance gate. Every
+format writes a file (paths are printed); nothing opens automatically.
+
+- **default (no flags): the interactive canvas** (`canvas.html`).
+- `--format mermaid` (or `--subsystem <id>`): system-wide or scoped Mermaid
+  **component diagram** as a markdown file (subsystems as subgraphs,
+  `dependsOn` edges, thick edges for boundary hops, dashed `owns`
+  containment, bold border on the published surface). Use a `.mmd` `--out`
+  path for raw Mermaid.
+- `--subsystem <id>`: scope to one subsystem plus its directly-connected
+  external neighbors.
+- `--sequence <component:method>`: a **sequence diagram** derived from the
+  method's L5 narrative, recursively expanding `call` steps (cycle-guarded,
+  `--depth` limits expansion; default 3).
+- `--canvas`: an **interactive HTML canvas** — the whole system on one page.
+  Subsystems as containers, pattern compounds nested inside, components laid
+  out in dependency layers (entrypoints left → data right), subsystems in
+  topological order (callers left of providers) with barycenter
+  crossing-reduction so links stay short and untangled. Pan/zoom,
+  double-click a boundary to collapse it (its external edges aggregate into
+  labeled "tubes"), click anything for a spec-derived detail panel
+  (description, interfaces, methods, endpoints, narratives, dependencies,
+  trusted links), search, and a validation-issue overlay. The computed
+  layout is locked by default — enable "rearrange" to drag, "reset layout"
+  to undo — and "export PNG" renders the full graph to a high-res image for
+  Miro/docs/slides. Fully self-contained (Cytoscape.js embedded inline,
+  works offline).
+- `--format <mermaid|canvas|drawio|excalidraw>`: friendly alias for the flags below/above.
+- `--drawio` / `--excalidraw`: **editable** exports in open formats
+  (draw.io / diagrams.net XML, Excalidraw scene JSON) with the exact same
+  computed layout as the canvas — import into diagrams.net, excalidraw.com,
+  VS Code extensions, or any whiteboard tool that accepts these formats.
+- `--all`: write the full set (system, per-subsystem, one sequence per
+  entrypoint method with a narrative, plus `canvas.html`,
+  `architecture.drawio`, and `architecture.excalidraw`) into
+  `.wai/docs/diagrams/` (or `--out`).
+
+The canvas is a small single-page app with **C4-style scoped navigation**:
+each view renders one scope's direct children (System → subsystems →
+components → pattern members, infinitely deep by ownership); double-click
+drills in, the breadcrumb navigates back, "Internals" previews children
+inside boxes, "Externals" shows out-of-scope references as ghosts. Plus
+SYW/light themes, presentation mode, per-view layout persistence,
+narrative flowcharts with call drill-down, and an Export menu
+(PNG / draw.io / Excalidraw) capturing the current view and layout.
 
 ---
 
@@ -75,8 +129,10 @@ and author specs directly.
 
 **Tools:** `listAgents`, `getAgent`, `listDomains`, `validateTopology`,
 `getProjectConfig`, `sdd_initialize_system`, `sdd_add_subsystem`,
-`sdd_add_component`, `sdd_define_interface`, `sdd_write_narrative`,
-`sdd_add_type`, `sdd_validate_tree`, `sdd_get_status`.
+`sdd_set_public_interfaces`, `sdd_set_subsystem_project_path`,
+`sdd_add_component`, `sdd_define_interface`, `sdd_set_endpoints`,
+`sdd_write_narrative`, `sdd_add_type`, `sdd_get_spec`, `sdd_update_spec`,
+`sdd_delete_spec`, `sdd_validate_tree`, `sdd_get_status`.
 
 ---
 

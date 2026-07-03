@@ -8,6 +8,7 @@ boundaries:
   - "The system only operates within the workspace boundaries of initialized wairon projects (directories containing a .wai/ folder)."
   - "All spec definitions, metadata, and cache structures must be stored locally under .wai/."
   - "AI tooling configuration injection is limited to user-approved standard folders (.gemini/skills/ and .claude/)."
+targetLanguage: "typescript"
 globalRequirements:
   - "Enforce strict top-down spec dependencies (cannot define lower-level specs without parent specs)."
   - "Expose an MCP server with tools for spec manipulation, validation, and analysis."

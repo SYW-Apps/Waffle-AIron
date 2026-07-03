@@ -192,7 +192,7 @@ export function createMcpServer(): McpServer {
 
   // ── SDD Spec-Driven Development Tools ─────────────────────────────────────
 
-  reg<{ name: string; vision: string; boundaries?: any[]; globalRequirements?: any[] }>(server,
+  reg<{ name: string; vision: string; boundaries?: any[]; globalRequirements?: any[]; targetLanguage?: string }>(server,
     'sdd_initialize_system',
     {
       description: 'Initialize the L0 System Specification (system.yaml).',
@@ -201,9 +201,10 @@ export function createMcpServer(): McpServer {
         vision: z.string().describe('Vision, mission, and core goals of the system'),
         boundaries: z.array(z.union([z.string(), z.object({ name: z.string(), description: z.string().optional() })])).optional().describe('System boundary rules or scope statements (strings or name/description objects)'),
         globalRequirements: z.array(z.union([z.string(), z.object({ description: z.string() })])).optional().describe('Global functional and non-functional requirements (strings or description objects)'),
+        targetLanguage: z.string().optional().describe('Default implementation language for the system (e.g. "typescript", "rust", "python"). Subsystems may override. Enables language-aware validation.'),
       },
     },
-    ({ name, vision, boundaries, globalRequirements }) => {
+    ({ name, vision, boundaries, globalRequirements, targetLanguage }) => {
       try {
         const { saveSystemSpec } = requireSpecs();
         const now = new Date().toISOString();
@@ -213,6 +214,7 @@ export function createMcpServer(): McpServer {
           vision,
           boundaries: boundaries ?? [],
           globalRequirements: globalRequirements ?? [],
+          ...(targetLanguage ? { targetLanguage } : {}),
           createdAt: now,
           updatedAt: now,
         });
@@ -223,7 +225,7 @@ export function createMcpServer(): McpServer {
     },
   );
 
-  reg<{ id: string; name: string; description: string; publicInterfaces?: { type: 'REST' | 'GraphQL' | 'MessageBus' | 'RPC' | 'Custom'; details: string; component?: string; interface?: string }[]; projectPath?: string }>(server,
+  reg<{ id: string; name: string; description: string; publicInterfaces?: { type: 'REST' | 'GraphQL' | 'MessageBus' | 'RPC' | 'Custom'; details: string; component?: string; interface?: string }[]; projectPath?: string; targetLanguage?: string; trustedLinks?: { subsystem: string; reason: string }[] }>(server,
     'sdd_add_subsystem',
     {
       description: 'Add an L1 Subsystem / Service under the system boundary. publicInterfaces should bind each entry to the component that realizes it (the subsystem\'s published surface); if components do not exist yet, add them later with sdd_set_public_interfaces.',
@@ -238,9 +240,14 @@ export function createMcpServer(): McpServer {
           interface: z.string().optional().describe('Optional L3 interface id on that component backing this entry'),
         })).optional().describe('Public entrypoints exposed by this subsystem, each bound to a realizing component'),
         projectPath: z.string().optional().describe('Relative path to external project root for subsystem chaining'),
+        targetLanguage: z.string().optional().describe('Override of the system-level targetLanguage for this subsystem'),
+        trustedLinks: z.array(z.object({
+          subsystem: z.string().describe('Peer subsystem id'),
+          reason: z.string().describe('Why the coupling is sanctioned (e.g. "dispatch latency fast lane")'),
+        })).optional().describe('Sanctioned tight couplings with peers — required to acknowledge a mutual subsystem dependency; the Adapter → published Portal shape still applies.'),
       },
     },
-    ({ id, name, description, publicInterfaces, projectPath }) => {
+    ({ id, name, description, publicInterfaces, projectPath, targetLanguage, trustedLinks }) => {
       try {
         const { loadSystemSpec, saveSubsystemSpec } = requireSpecs();
         const system = loadSystemSpec();
@@ -253,6 +260,8 @@ export function createMcpServer(): McpServer {
           parentSystem: system.name,
           publicInterfaces: publicInterfaces ?? [],
           projectPath,
+          ...(targetLanguage ? { targetLanguage } : {}),
+          trustedLinks: trustedLinks ?? [],
           status: 'draft',
           createdAt: now,
           updatedAt: now,
@@ -362,10 +371,10 @@ export function createMcpServer(): McpServer {
     },
   );
 
-  reg<{ id: string; name: string; description: string; component: string; methods?: { name: string; description: string; signature: string; returns: string; guarantees?: ('idempotent' | 'atomic' | 'transactional' | 'exactly-once')[] }[] }>(server,
+  reg<{ id: string; name: string; description: string; component: string; methods?: { name: string; description: string; signature: string; returns: string; params?: { name: string; type: string; description?: string; optional?: boolean }[]; guarantees?: ('idempotent' | 'atomic' | 'transactional' | 'exactly-once')[] }[] }>(server,
     'sdd_define_interface',
     {
-      description: 'Define an L3 Contract / Interface with method signatures for a component.',
+      description: 'Define an L3 Contract / Interface with method signatures for a component. Prefer supplying structured `params` per method — they are the authoritative source for type checking (the free-form signature string then becomes display-only and is never heuristically parsed).',
       inputSchema: {
         id: z.string().describe('Lowercase identifier prefixed with "i", e.g. "istorage"'),
         name: z.string().describe('Human-readable contract name'),
@@ -376,7 +385,13 @@ export function createMcpServer(): McpServer {
           description: z.string(),
           signature: z.string(),
           returns: z.string(),
-          guarantees: z.array(z.enum(['idempotent', 'atomic', 'transactional', 'exactly-once'])).optional().describe('Semantic guarantees this method promises (combinable). The implementer must honour them; the gate requires any guarantee a narrative step asserts to be declared here. Set when an L0 requirement or a narrative step depends on the guarantee.'),
+          params: z.array(z.object({
+            name: z.string(),
+            type: z.string().describe('A primitive/builtin or a defined type id (e.g. "billing.Invoice")'),
+            description: z.string().optional(),
+            optional: z.boolean().optional(),
+          })).optional().describe('Structured parameters — authoritative for type checking (the prose signature becomes display-only). Strongly preferred.'),
+          guarantees: z.array(z.enum(['idempotent', 'atomic', 'transactional', 'exactly-once'])).optional().describe('Semantic guarantees the method promises (combinable); any guarantee a narrative step asserts must be declared here'),
         })).optional().describe('List of method signature contracts'),
       },
     },
@@ -411,7 +426,7 @@ export function createMcpServer(): McpServer {
   reg<{ interface: string; endpoints: Array<{ method: string; transport: 'HTTP' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'NamedPipe' | 'IPC' | 'CLI' | 'Custom'; httpMethod?: string; path?: string; service?: string; rpcMethod?: string; operation?: string; field?: string; topic?: string; event?: string; queue?: string; direction?: string; pipe?: string; channel?: string; command?: string; address?: string }> }>(server,
     'sdd_set_endpoints',
     {
-      description: 'Bind the concrete wire endpoint for one or more methods on an L3 interface. ONE generic tool for every transport (HTTP, gRPC, GraphQL, MessageBus, NamedPipe, IPC, CLI, Custom) — pick `transport` and fill that transport\'s address fields. Required to satisfy the gate for any Portal component. The interface and its methods must already exist (call sdd_define_interface first).',
+      description: 'Bind concrete wire endpoints to existing L3 interface methods (required for every Portal). Pick `transport` and fill that transport\'s address fields. Run after sdd_define_interface.',
       inputSchema: {
         interface: z.string().describe('The L3 interface ID (e.g. "ibilling-gateway")'),
         endpoints: z.array(z.object({
@@ -474,29 +489,51 @@ export function createMcpServer(): McpServer {
     },
   );
 
-  reg<{ id: string; name: string; description: string; contract: string; sourcePath?: string; methods?: { name: string; narrative: { stepNumber: number; description: string; type: 'local' | 'call'; targetComponent?: string; targetMethod?: string }[] }[] }>(server,
+  const stepNo = () => z.number().int().positive();
+  const narrativeStepInput = z.object({
+    stepNumber: stepNo().optional().describe('Defaults to the 1-based array position — jump fields reference these numbers'),
+    description: z.string(),
+    type: z.enum(['local', 'call', 'branch', 'switch', 'loop', 'try', 'jump', 'return', 'throw']),
+    targetComponent: z.string().optional().describe('call: L2 component id'),
+    targetMethod: z.string().optional().describe('call: method name on the target'),
+    condition: z.string().optional().describe('branch / while / doWhile'),
+    onTrueStep: stepNo().optional().describe('branch: default = next step'),
+    onFalseStep: stepNo().optional().describe('branch: required'),
+    on: z.string().optional().describe('switch: the dispatched value'),
+    cases: z.array(z.object({ value: z.string(), step: stepNo() })).optional().describe('switch: required'),
+    defaultStep: stepNo().optional().describe('switch: default = next step'),
+    loopKind: z.enum(['forEach', 'for', 'while', 'doWhile']).optional().describe('loop: default forEach when "over" is set, else while'),
+    over: z.string().optional().describe('loop forEach/for: iteration source'),
+    endStep: stepNo().optional().describe('loop/try: last step of the body region (required)'),
+    catches: z.array(z.object({ error: z.string(), step: stepNo() })).optional().describe('try: handler regions'),
+    finallyStep: stepNo().optional().describe('try: first step of the always-runs region'),
+    toStep: stepNo().optional().describe('jump: required (break/continue/rejoin)'),
+    outcome: z.string().optional().describe('return: e.g. "success", "not found"'),
+    error: z.string().optional().describe('throw: the raised error'),
+  });
+  type NarrativeStepIn = z.infer<typeof narrativeStepInput>;
+  const detailEnum = z.enum(['full', 'calls-only', 'intent']);
+
+  reg<{ id: string; name: string; description: string; contract: string; sourcePath?: string; detail?: 'full' | 'calls-only' | 'intent'; methods?: { name: string; detail?: 'full' | 'calls-only' | 'intent'; intent?: string; narrative?: NarrativeStepIn[] }[] }>(server,
     'sdd_write_narrative',
     {
-      description: 'Write L4 Concrete Implementation spec containing L5 method narratives.',
+      description: 'Write L4 Concrete Implementation spec containing L5 method narratives. Narratives are a FLAT ordered step list; flow steps (branch/switch/loop/try/jump/return/throw) jump by step number — blocks are just skipped regions. Detail dial per method: full (narrative required) | calls-only (call choreography suffices) | intent (prose instead of steps); omitted = stereotype default (Portal/Observer/Adapter: calls-only, Store/Index/Registry: intent, else full).',
       inputSchema: {
         id: z.string().describe('Lowercase identifier, e.g. "vfs_storage"'),
         name: z.string().describe('Human-readable implementation name'),
         description: z.string().describe('Implementation details'),
         contract: z.string().describe('The L3 Interface contract ID this implements'),
         sourcePath: z.string().optional().describe('Optional: target source code file path relative to project root'),
+        detail: detailEnum.optional().describe('Spec-level narrative detail default for all methods'),
         methods: z.array(z.object({
           name: z.string(),
-          narrative: z.array(z.object({
-            stepNumber: z.number().int().positive(),
-            description: z.string(),
-            type: z.enum(['local', 'call']),
-            targetComponent: z.string().optional(),
-            targetMethod: z.string().optional(),
-          })),
+          detail: detailEnum.optional().describe('Detail level for this method (overrides the spec default)'),
+          intent: z.string().optional().describe('detail: intent — behavioral prose (what it does and how it fails); substitute for a narrative'),
+          narrative: z.array(narrativeStepInput).optional(),
         })).optional().describe('Method implementations containing L5 narratives'),
       },
     },
-    ({ id, name, description, contract, sourcePath, methods }) => {
+    ({ id, name, description, contract, sourcePath, detail, methods }) => {
       try {
         const { loadInterfaceSpec, saveImplementationSpec } = requireSpecs();
         const intf = loadInterfaceSpec(contract);
@@ -508,7 +545,11 @@ export function createMcpServer(): McpServer {
           description,
           contract,
           sourcePath,
-          methods: methods ?? [],
+          detail,
+          methods: (methods ?? []).map(m => ({
+            ...m,
+            narrative: (m.narrative ?? []).map((s, i) => ({ ...s, stepNumber: s.stepNumber ?? i + 1 })),
+          })),
           status: 'draft',
           createdAt: now,
           updatedAt: now,
@@ -520,7 +561,7 @@ export function createMcpServer(): McpServer {
     },
   );
 
-  reg<{ kind: 'entity' | 'value-object'; id: string; name: string; description?: string; subsystem?: string; group?: string; fields?: { name: string; type: string; description?: string; optional?: boolean }[]; methods?: { name: string; signature: string; returns: string; description?: string }[] }>(server,
+  reg<{ kind: 'entity' | 'value-object'; id: string; name: string; description?: string; subsystem?: string; group?: string; fields?: { name: string; type: string; description?: string; optional?: boolean; key?: 'primary' | 'unique' }[]; methods?: { name: string; signature: string; returns: string; description?: string }[] }>(server,
     'sdd_add_type',
     {
       description: 'Define an entity or value-object type (the data components operate on). Entities are owned by a subsystem; shared value objects omit subsystem (system-level). Fields are data; methods are PURE intrinsic behaviour only — anything needing a collaborator belongs on a component, taking the entity as an argument.',
@@ -531,7 +572,7 @@ export function createMcpServer(): McpServer {
         description: z.string().optional(),
         subsystem: z.string().optional().describe('Owning subsystem id; omit for a system-level shared value object'),
         group: z.string().optional().describe('Optional logical group ID to organize this type in subfolders'),
-        fields: z.array(z.object({ name: z.string(), type: z.string(), description: z.string().optional(), optional: z.boolean().optional() })).optional().describe('Data fields (type is a primitive or a qualified type id, e.g. "billing.Invoice")'),
+        fields: z.array(z.object({ name: z.string(), type: z.string(), description: z.string().optional(), optional: z.boolean().optional(), key: z.enum(['primary', 'unique']).optional().describe('Identity marker (PK/unique) for ERD and later schema derivation; FK is derived from the type reference') })).optional().describe('Data fields (type is a primitive or a qualified type id, e.g. "billing.Invoice")'),
         methods: z.array(z.object({ name: z.string(), signature: z.string(), returns: z.string(), description: z.string().optional() })).optional().describe('Pure intrinsic methods only'),
       },
     },
@@ -652,7 +693,7 @@ export function createMcpServer(): McpServer {
       inputSchema: {
         kind: z.enum(['subsystem', 'component', 'interface', 'implementation', 'type']).describe('The spec kind to update'),
         id: z.string().describe('The ID of the spec to update (namespaced if needed)'),
-        delta: z.record(z.any()).describe('The partial fields to merge into the spec. For arrays (like methods or fields), elements are matched by "name" (or "id") and merged/upserted. Add "action: \'delete\'" (or "remove: true") to delete a named element. For narrative steps, match by "stepNumber" and use "action: \'insert\'" (shifts subsequent steps up) or "action: \'delete\'" (shifts subsequent steps down and removes it).'),
+        delta: z.record(z.any()).describe('The partial fields to merge into the spec. For arrays (like methods or fields), elements are matched by "name" (or "id") and merged/upserted. Add "action: \'delete\'" (or "remove: true") to delete a named element. For narrative steps, match by "stepNumber" and use "action: \'insert\'" (shifts subsequent steps up) or "action: \'delete\'" (shifts subsequent steps down and removes it). Renumbering RELOCATES every flow jump field (onTrueStep/onFalseStep/cases.step/defaultStep/endStep/catches.step/finallyStep/toStep) in the same narrative; deleting a step that is a jump target is rejected until the referrers are retargeted. Per-spec lint suppression: set "lint: { allow: [{ code, reason }] }" to silence a WARNING code on this spec only (errors always surface; stale allows are flagged).'),
       },
     },
     ({ kind, id, delta }) => {

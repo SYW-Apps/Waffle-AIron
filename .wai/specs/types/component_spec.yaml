@@ -2,7 +2,37 @@ kind: value-object
 id: component_spec
 name: ComponentSpec
 description: L2 Component specification
-fields: []
+fields:
+  - name: id
+    type: string
+    description: Stable component identifier
+    key: primary
+  - name: name
+    type: string
+    description: Human-readable component name
+  - name: description
+    type: string
+    description: What this component does
+  - name: subsystem
+    type: string
+    description: Owning subsystem id
+  - name: componentType
+    type: string
+    description: 'Stereotype: Portal, Orchestrator, Store, Adapter, …'
+  - name: portalType
+    type: string
+    description: Wire flavour when componentType is Portal (HTTP_API, gRPC, …)
+    optional: true
+  - name: owns
+    type: string[]
+    description: Private member component ids (pattern containment, one hop)
+  - name: dependsOn
+    type: string[]
+    description: Collaborator component ids
+  - name: status
+    type: string
+    description: draft | design | complete
+    optional: true
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-06-10T22:00:00.000Z'
+updatedAt: '2026-07-03T00:00:00.000Z'

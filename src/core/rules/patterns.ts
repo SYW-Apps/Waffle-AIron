@@ -1,0 +1,122 @@
+import { SddRule } from './types.js';
+import { PATTERN_TYPES } from '../../models/index.js';
+
+/**
+ * Pattern ownership: only patterns own member blocks (exactly one hop, one
+ * owner), containment matches the pattern's definition, and nobody reaches a
+ * block privately owned by another pattern.
+ */
+export const patternsRule: SddRule = {
+  name: 'pattern-ownership',
+  description:
+    'Patterns (Repository/Gateway/FeatureComponent/RouterComponent) own member blocks with the containment their definition prescribes; blocks own nothing; a member has exactly one owner; and private members are reachable only via their facade or siblings.',
+  codes: [
+    { code: 'EMPTY_PATTERN', defaultSeverity: 'error', summary: 'Pattern with no owned member blocks' },
+    { code: 'BLOCK_OWNS_MEMBERS', defaultSeverity: 'error', summary: 'Building block using owns' },
+    { code: 'INVALID_OWNED_MEMBER', defaultSeverity: 'error', summary: 'owns names a non-existent component' },
+    { code: 'PATTERN_OWNS_PATTERN', defaultSeverity: 'error', summary: 'Pattern owning another pattern' },
+    { code: 'SHARED_OWNED_MEMBER', defaultSeverity: 'error', summary: 'Block owned by two patterns' },
+    { code: 'REPOSITORY_CONTAINMENT', defaultSeverity: 'error', summary: 'Repository owning a non Store/Registry/Index/Adapter member' },
+    { code: 'GATEWAY_CONTAINMENT', defaultSeverity: 'error', summary: 'Gateway owning a non Portal/Orchestrator/Specialist member' },
+    { code: 'FEATURE_COMPONENT_CONTAINMENT', defaultSeverity: 'error', summary: 'FeatureComponent not owning exactly one Orchestrator + one View' },
+    { code: 'ROUTER_COMPONENT_CONTAINMENT', defaultSeverity: 'error', summary: 'RouterComponent missing its Portal facade or children' },
+    { code: 'VISIBILITY_VIOLATION', defaultSeverity: 'error', summary: 'Dependency on a block privately owned by another pattern' },
+  ],
+  check(ctx) {
+    const ownedBy = new Map<string, string>(); // member block id -> owning pattern id
+    for (const comp of ctx.components) {
+      const isDraftCtx = ctx.isComponentDraft(comp.id);
+      const isPattern = PATTERN_TYPES.has(comp.componentType);
+
+      if (isPattern && comp.owns.length === 0) {
+        ctx.addIssue('error', 'EMPTY_PATTERN', `Pattern "${comp.id}" (${comp.componentType}) must own member blocks via "owns".`, comp.id, isDraftCtx);
+      }
+      if (!isPattern && comp.owns.length > 0) {
+        ctx.addIssue('error', 'BLOCK_OWNS_MEMBERS', `Building block "${comp.id}" (${comp.componentType}) cannot own members; only patterns (${Array.from(PATTERN_TYPES).join('/')}) use "owns".`, comp.id, isDraftCtx);
+      }
+
+      for (const memberId of comp.owns) {
+        const member = ctx.componentMap.get(memberId);
+        if (!member) {
+          ctx.addIssue('error', 'INVALID_OWNED_MEMBER', `Component "${comp.id}" owns "${memberId}" which does not exist.`, comp.id, isDraftCtx);
+          continue;
+        }
+        if (PATTERN_TYPES.has(member.componentType)) {
+          ctx.addIssue('error', 'PATTERN_OWNS_PATTERN', `Pattern "${comp.id}" owns "${memberId}", which is itself a pattern. Patterns own only building blocks — compose patterns at the subsystem (L1) level.`, comp.id, isDraftCtx);
+        }
+        const prev = ownedBy.get(memberId);
+        if (prev && prev !== comp.id) {
+          ctx.addIssue('error', 'SHARED_OWNED_MEMBER', `Block "${memberId}" is owned by both "${prev}" and "${comp.id}"; a block has exactly one owner.`, comp.id, isDraftCtx);
+        }
+        ownedBy.set(memberId, comp.id);
+      }
+
+      // Repository containment: only Store / Registry / Index / Adapter
+      if (comp.componentType === 'Repository') {
+        const allowed = new Set(['Store', 'Registry', 'Index', 'Adapter']);
+        for (const memberId of comp.owns) {
+          const t = ctx.componentMap.get(memberId)?.componentType;
+          if (t && !allowed.has(t)) {
+            ctx.addIssue('error', 'REPOSITORY_CONTAINMENT', `Repository "${comp.id}" owns "${memberId}" of type ${t}; a Repository may own only Store, Registry, Index, and (optionally) Adapter.`, comp.id, isDraftCtx);
+          }
+        }
+      }
+
+      // Gateway containment: only Portal / Orchestrator / Specialist
+      if (comp.componentType === 'Gateway') {
+        const allowed = new Set(['Portal', 'Orchestrator', 'Specialist']);
+        for (const memberId of comp.owns) {
+          const t = ctx.componentMap.get(memberId)?.componentType;
+          if (t && !allowed.has(t)) {
+            ctx.addIssue('error', 'GATEWAY_CONTAINMENT', `Gateway "${comp.id}" owns "${memberId}" of type ${t}; a Gateway may own only a Portal, Orchestrators, and Specialists.`, comp.id, isDraftCtx);
+          }
+        }
+      }
+
+      // FeatureComponent containment: exactly one Orchestrator and one View
+      if (comp.componentType === 'FeatureComponent') {
+        let hasOrchestrator = false;
+        let hasView = false;
+        for (const memberId of comp.owns) {
+          const t = ctx.componentMap.get(memberId)?.componentType;
+          if (t === 'Orchestrator') hasOrchestrator = true;
+          if (t === 'View') hasView = true;
+        }
+        if (comp.owns.length !== 2 || !hasOrchestrator || !hasView) {
+          ctx.addIssue('error', 'FEATURE_COMPONENT_CONTAINMENT', `FeatureComponent "${comp.id}" must own exactly one Orchestrator (logic side) and one View (UI side) component.`, comp.id, isDraftCtx);
+        }
+      }
+
+      // RouterComponent containment: exactly one Portal facade and at least one other child component/View
+      if (comp.componentType === 'RouterComponent') {
+        let hasPortal = false;
+        let hasChildren = false;
+        for (const memberId of comp.owns) {
+          const t = ctx.componentMap.get(memberId)?.componentType;
+          if (t === 'Portal') hasPortal = true;
+          else if (t) hasChildren = true;
+        }
+        if (!hasPortal) {
+          ctx.addIssue('error', 'ROUTER_COMPONENT_CONTAINMENT', `RouterComponent "${comp.id}" must own exactly one Portal component to act as its facade.`, comp.id, isDraftCtx);
+        }
+        if (!hasChildren) {
+          ctx.addIssue('error', 'ROUTER_COMPONENT_CONTAINMENT', `RouterComponent "${comp.id}" must own at least one child component/View to route to.`, comp.id, isDraftCtx);
+        }
+      }
+    }
+
+    // Visibility rule: a component may depend on (a) blocks within its OWN group
+    // (it is the owning pattern, or a sibling member of the same pattern), (b) any
+    // pattern facade, or (c) a standalone block — never on a block privately owned by
+    // ANOTHER pattern.
+    for (const comp of ctx.components) {
+      for (const depId of comp.dependsOn) {
+        const owner = ownedBy.get(depId);
+        if (!owner) continue;                         // dep is a facade or standalone block — fine
+        if (owner === comp.id) continue;              // the owning pattern depending on its own member — fine
+        if (ownedBy.get(comp.id) === owner) continue; // a sibling member of the same group — fine
+        ctx.addIssue('error', 'VISIBILITY_VIOLATION', `Component "${comp.id}" depends on "${depId}", which is privately owned by pattern "${owner}". Depend on the facade "${owner}" instead.`, comp.id, ctx.isComponentDraft(comp.id) || ctx.isComponentDraft(depId));
+      }
+    }
+  },
+};

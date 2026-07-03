@@ -17,13 +17,13 @@ You must read, respect, and update the living quest log file: `.wai/phased_desig
 
 **STRICT ARCHITECT CONSTRAINTS (NON-NEGOTIABLE)**:
 1. **Zero Implementation**: Under no circumstances should you generate or write implementation source code files (e.g. `.ts`, `.rs`, `.py` etc.) or start building code. You are restricted entirely to structural design and specification.
-2. **Strict Spec File Isolation & Tree Structure**:
-   - L0 (System): Declared ONLY in `.wai/specs/system.yaml`.
-   - L1 (Subsystems): Declared in a directory named after the subsystem under `.wai/specs/`, using `subsystem.yaml` as the reserved file name. (E.g. `.wai/specs/billing/subsystem.yaml`). These must *never* contain internal component structures, methods, or details. They are strictly high-level isolation boundary specs.
-   - L2 (Components): Declared in a subdirectory under their parent subsystem, named after the component, using `component.yaml` as the reserved file name. (E.g. `.wai/specs/billing/billing_store/component.yaml`).
-   - L3 (Interfaces): Declared in the same subdirectory as their component, using `interface.yaml` as the reserved file name. (E.g. `.wai/specs/billing/billing_store/interface.yaml`).
-   - L4 (Implementations) & L5 (Narratives): Declared in the same subdirectory as their component, using `implementation.yaml` as the reserved file name. (E.g. `.wai/specs/billing/billing_store/implementation.yaml`).
-   *(Note: If legacy flat folders like `.wai/specs/subsystems/` exist and are already populated in the project, respect them and continue placing new specs flat within those legacy folders. Otherwise, always default to the nested tree structure.)*
+2. **Strict Spec File Isolation & Tree Structure** (the MCP tools place files here for you — never hand-place a spec file):
+   - L0 (System): Declared ONLY in `.wai/specs/.index.yaml`.
+   - L1 (Subsystems): Declared in a directory named after the subsystem under `.wai/specs/`, using `.index.yaml` as the reserved file name. (E.g. `.wai/specs/billing/.index.yaml`). These must *never* contain internal component structures, methods, or details. They are strictly high-level isolation boundary specs.
+   - L2 (Components): Declared in a subdirectory under their parent subsystem, named after the component, using `.index.yaml` as the reserved file name. (E.g. `.wai/specs/billing/billing_store/.index.yaml`). A pattern's owned member blocks nest one level deeper inside the pattern's folder.
+   - L3 (Interfaces): Declared in the same subdirectory as their component, using `.interface.yaml` as the reserved file name. (E.g. `.wai/specs/billing/billing_store/.interface.yaml`).
+   - L4 (Implementations) & L5 (Narratives): Declared in the same subdirectory as their component, using `.implementation.yaml` as the reserved file name. (E.g. `.wai/specs/billing/billing_store/.implementation.yaml`).
+   *(Note: Legacy layouts still load — flat folders like `.wai/specs/subsystems/` and undotted names like `subsystem.yaml`/`component.yaml`/`interface.yaml`/`implementation.yaml`. If a project already uses one, respect it and stay consistent; `wairon doctor --fix` migrates legacy file names. Otherwise, always default to the nested dot-prefixed tree structure.)*
 3. **Mandatory Iterative Feedback Loop**:
    - We do not trust the agent to write specs without user supervision. You must run a continuous, iterative feedback loop with the user.
    - For every subsystem, component, or interface you define:
@@ -50,7 +50,7 @@ You must read, respect, and update the living quest log file: `.wai/phased_desig
      1. Design and add all L2 Components (Portals, Orchestrators, Stores, etc.) using `sdd_add_component` (defaulting to `status: draft`).
      2. Verify component boundaries: ensure Portals never depend directly on Stores, Repositories, or Adapters.
      3. Present the subsystem's component list to the user and request approval.
-     4. Once approved, define the L3 Interfaces (`interface.yaml`) for each component in this subsystem.
+     4. Once approved, define the L3 Interfaces (`.interface.yaml`, via `sdd_define_interface`) for each component in this subsystem.
      5. Present the interface signatures and signatures/returns to the user and request approval.
    - Only after the current subsystem is fully approved and validated should you move to the next subsystem.
 5. **Track & Validate Progress**:
@@ -79,127 +79,19 @@ The full standard is the source of truth; this is the summary you design against
 7. **Right-size**: L1, concurrency, and events are all optional. However, **layer boundaries and persistence structures are mandatory**. Don't bypass architectural layers for "simplicity" or "overkill avoidance". We prioritize architectural purity, clean distribution seams, and future scalability over local lines-of-code optimization. Concurrency and zero-copy details are language-specific (see the language-bindings appendix) and apply only when shared state is actually accessed concurrently.
 8. **Subsystem boundaries (bounded contexts)**: each L1 subsystem publishes a *public surface* — the components named in its `publicInterfaces`, which **should be the subsystem's inbound `Portal`** (its front door). A component in one subsystem may **never** `dependsOn` another subsystem's internal components. Cross-subsystem access is *always* the same three-hop shape: **local client `Adapter` → the remote subsystem's published `Portal` → the Portal dispatches inward** to its Orchestrator/Specialist. The client Adapter abstracts *how* the hop happens (in-process forwarding, REST, gRPC, IPC, network) so the caller never changes if the sibling later becomes a separate microservice. Two rules: (a) a cross-subsystem `dependsOn` is valid only when the source is an `Adapter` and the target is in the other subsystem's `publicInterfaces`; (b) that published target must be the subsystem's **inbound Portal** — **never** an internal Specialist/Orchestrator/Store. Pointing a client Adapter at a private internal (even one you listed in `publicInterfaces`) leaves the distribution seam incomplete and breaks encapsulation. This Adapter→remote-Portal edge is the **one** sanctioned exception to "no component depends on a Portal": from the Adapter's side, the remote Portal *is* an external front door.
 
-## 📋 Spec File YAML Schemas
+## 📋 Spec Shapes (compact reference)
 
-You must strictly construct YAML spec files according to these exact schemas:
+The `sdd_*` MCP tools are **self-describing** — their input schemas are the
+authoritative field reference, and `sdd_get_spec` returns any written spec as
+JSON for review. You never hand-author spec YAML. What to know beyond the tool
+schemas:
 
-### 1. Level 0: System (`system.yaml` in `.wai/specs/`)
-```yaml
-schemaVersion: "1.0.0"
-name: "system-name"
-vision: "High-level vision of the system..."
-boundaries:
-  - name: "Boundary Name"
-    description: "Scope details..."
-globalRequirements:
-  - description: "Must support high-throughput metering..."
-createdAt: "2026-06-12T20:00:00Z"
-updatedAt: "2026-06-12T20:00:00Z"
-```
-
-### 2. Level 1: Subsystem (`subsystem.yaml` under `.wai/specs/<subsystem>/`)
-```yaml
-id: "billing" # lowercase-alphanumeric-dashes
-name: "Billing Subsystem"
-description: "Handles subscriptions and invoicing..."
-parentSystem: "system-name"
-publicInterfaces:
-  - type: "REST" # REST | GraphQL | MessageBus | RPC | Custom
-    details: "/api/v1/billing endpoint"
-    component: "billing-gateway" # the L2 component that REALIZES this interface (this subsystem's published surface)
-    interface: "ibilling-gateway" # optional: the L3 interface on that component
-status: "complete" # draft | design | complete
-createdAt: "2026-06-12T20:00:00Z"
-updatedAt: "2026-06-12T20:00:00Z"
-```
-> Each `publicInterface` MUST name the `component` that realizes it, and its `type`
-> must match that component (REST→Portal/HTTP_API, RPC→Portal/gRPC,
-> MessageBus→Portal/MessageBus or Observer, …). A declared interface with no
-> backing component fails the gate. Components are L2, so if they don't exist yet
-> when you create the subsystem, **backfill the bindings later with
-> `sdd_set_public_interfaces`**.
->
-> **If this subsystem is consumed by sibling subsystems, publish its inbound `Portal`**
-> as the public component, so a sibling's client Adapter targets the Portal (the front
-> door) and the Portal dispatches inward. Do **not** publish an internal
-> Specialist/Orchestrator/Store as the cross-subsystem entry point — even though
-> `type: Custom` currently accepts *any* component, a published internal is a leaked
-> boundary (see Rule 8). For an in-process sibling boundary, an `RPC` (Portal/gRPC) or a
-> Portal-backed `Custom` interface is the right surface.
->
-> Pick the `type` that matches the *real* contract — don't reach for `Custom` to
-> dodge the type check. `Custom` is for genuinely bespoke surfaces, not an escape
-> hatch. If a boundary is event-driven (a queue/stream others subscribe to), type
-> it **MessageBus** and back it with an **Observer** or a **Portal/MessageBus** — a
-> `Custom` interface whose `details` describe async/eventing but is backed by an
-> Orchestrator (a synchronous push) is flagged as an unrealized event boundary.
-
-### 3. Level 2: Component (`component.yaml` under `.wai/specs/<subsystem>/<component>/`)
-```yaml
-id: "billing-store" # lowercase-alphanumeric-dashes
-name: "Billing Store"
-description: "Authoritative state storage for billing data"
-subsystem: "billing" # references L1 Subsystem ID
-componentType: "Store" # Blocks: Portal|Orchestrator|Supervisor|Actor|Store|Index|Registry|Adapter|Observer|Specialist — Patterns: Repository|Gateway
-owns: [] # member block ids (Repository/Gateway patterns only; never another pattern)
-dependsOn:
-  - "database-adapter" # other L2 component ids this collaborates with (facades or standalone blocks)
-status: "draft" # draft | design | complete
-createdAt: "2026-06-12T20:00:00Z"
-updatedAt: "2026-06-12T20:00:00Z"
-```
-
-### 4. Level 3: Interface (`interface.yaml` under `.wai/specs/<subsystem>/<component>/`)
-```yaml
-id: "ibilling-store" # prefixed with a lowercase "i"
-name: "Billing Store Interface"
-description: "Read/write contract for billing data"
-component: "billing-store" # references L2 Component ID
-methods:
-  - name: "save_invoice" # alphanumeric-underscores
-    description: "Saves a generated invoice to the store"
-    signature: "save_invoice(invoice: Invoice): Promise<void>"
-    returns: "Promise<void>"
-    # guarantees: [idempotent]   # optional, combinable: idempotent | atomic | transactional | exactly-once.
-    #                            # Set when an L0 requirement or a narrative step asserts the property.
-    #                            # The gate requires any guarantee a narrative claims to be declared here.
-    # Concrete wire binding — ONE generic `endpoint` field, discriminated by `transport`.
-    # Set it via the `sdd_set_endpoints` MCP tool (don't hand-author). Required on every
-    # method whose component is a Portal; the gate flags MISSING_ENDPOINT otherwise.
-    endpoint:
-      transport: "HTTP" # HTTP | gRPC | GraphQL | MessageBus | NamedPipe | IPC | CLI | Custom
-      method: "POST"    # HTTP: GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD ; path: "/invoices"
-      path: "/invoices"
-    # Other transports (same slot): gRPC {service, method} · GraphQL {operation, field} ·
-    # MessageBus {topic, event, queue?, direction} · NamedPipe {pipe} · IPC {channel} ·
-    # CLI {command} · Custom {address}. The endpoint's transport MUST match the Portal's portalType.
-status: "draft" # draft | design | complete
-createdAt: "2026-06-12T20:00:00Z"
-updatedAt: "2026-06-12T20:00:00Z"
-```
-
-### 5. Level 4 & 5: Implementation & Narrative (`implementation.yaml` under `.wai/specs/<subsystem>/<component>/`)
-```yaml
-id: "billing-store-impl"
-name: "Billing Store Implementation"
-description: "Memory-based billing store with VFS sync"
-contract: "ibilling-store" # references L3 Interface ID
-sourcePath: "src/billing/store.ts" # optional path to source code
-methods:
-  - name: "save_invoice" # matches L3 method name
-    narrative: # L5 Narrative sequence
-      - stepNumber: 1
-        description: "Validate the invoice schema matches specifications"
-        type: "local" # local | call
-      - stepNumber: 2
-        description: "Write invoice data to active memory storage"
-        type: "local"
-      - stepNumber: 3
-        description: "Sync the change to the disk registry via VFS"
-        type: "call"
-        targetComponent: "vfs-registry" # required for 'call'
-        targetMethod: "write_file"      # required for 'call'
-status: "draft" # draft | design | complete
-createdAt: "2026-06-12T20:00:00Z"
-updatedAt: "2026-06-12T20:00:00Z"
-```
+- **Levels & files** (written by the tools): L0 `.wai/specs/.index.yaml` → L1 `<sub>/.index.yaml` → L2 `<sub>/<comp>/.index.yaml` (owned members nest one level deeper) → L3 `.interface.yaml` → L4+L5 `.implementation.yaml`. Types live under `types/` (system-level shared, or per subsystem).
+- **Statuses**: `draft` → `design` → `complete`. Completeness rules relax to warnings while draft/design; `wairon lock` (human-run) freezes the tree.
+- **publicInterfaces (L1)**: each entry MUST name the `component` realizing it, with a matching type (REST→Portal/HTTP_API, RPC→Portal/gRPC, MessageBus→Portal/MessageBus or Observer). Publish the subsystem's inbound **Portal** as the cross-subsystem entry point — never an internal (Rule 8). Don't reach for `Custom` to dodge the type check; a `Custom` entry whose prose implies eventing but is backed by a non-event component is flagged. Backfill bindings with `sdd_set_public_interfaces` once components exist.
+- **trustedLinks (L1)**: `{ subsystem, reason }` — the required acknowledgment when two subsystems depend on each other (e.g. a latency fast lane). The Adapter → published Portal shape still applies in both directions.
+- **targetLanguage**: set on L0 (`sdd_initialize_system`), override per L1 — enables language-aware validation (foreign builtins and flow constructs the language lacks are flagged).
+- **lint.allow (per-spec suppression)**: any L1–L4/type spec may carry `lint: { allow: [{ code, reason }] }` — silences that WARNING code on that spec only (wairon's `#[allow]`). Errors are never locally suppressible; unknown codes and allows that no longer match anything are flagged. Prefer fixing — an allow is for a documented false positive or a deliberate, reviewable exception.
+- **Methods (L3)**: prefer structured `params: [{name, type}]` — authoritative for type checking; the prose `signature` is then display-only. `guarantees` (idempotent | atomic | transactional | exactly-once) must back any guarantee a narrative step asserts. Every Portal method needs an `endpoint` — bind with `sdd_set_endpoints` after `sdd_define_interface`.
+- **Narratives (L5, inside L4)**: a FLAT numbered step list; order mimics the code lines. `type: local | call | branch | switch | loop | try | jump | return | throw` — flow steps jump by step number (branch: `condition` + `onFalseStep`; loop/try: body = next step through `endStep`; see the sdd-narrative skill for full config). A `call` step names `targetComponent` + `targetMethod`, which must exist on a declared dependency's interface. Granular edits (insert/delete/update steps, reopen status) go through `sdd_update_spec`, which renumbers AND relocates jump fields automatically.
+- **Narrative detail dial**: per method (or L4 spec-level) `detail: full | calls-only | intent`; omitted = stereotype default (Portal/Observer/Adapter → calls-only, Store/Index/Registry → intent, logic components → full). `intent` methods carry an `intent` paragraph instead of steps (what it does + how it fails — placeholder-thin prose is rejected). Levels are floors, not ceilings.

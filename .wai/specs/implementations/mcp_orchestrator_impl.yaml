@@ -1,0 +1,96 @@
+schemaVersion: "1.0.0"
+id: "mcp_orchestrator_impl"
+name: "MCP Orchestrator Implementation"
+description: "The sdd_* tool workflows: input verification against existing parents, spec persistence via the core client adapter, and conformance runs via the validator client adapter. Realized today inside src/mcp/server.ts tool handlers (pending the code-side split)."
+contract: "imcp_orchestrator"
+sourcePath: "src/mcp/server.ts"
+methods:
+  - name: "initializeSystem"
+    narrative:
+      - stepNumber: 1
+        description: "Persist the L0 system spec via the core client adapter"
+        type: "call"
+        targetComponent: "mcp_core_adapter"
+        targetMethod: "saveSystemSpec"
+  - name: "addSubsystem"
+    narrative:
+      - stepNumber: 1
+        description: "Verify the system spec exists (parent gate)"
+        type: "call"
+        targetComponent: "mcp_core_adapter"
+        targetMethod: "loadSystemSpec"
+      - stepNumber: 2
+        description: "Persist the L1 subsystem spec via the core client adapter"
+        type: "call"
+        targetComponent: "mcp_core_adapter"
+        targetMethod: "saveSubsystemSpec"
+  - name: "addComponent"
+    narrative:
+      - stepNumber: 1
+        description: "Verify the parent subsystem exists"
+        type: "call"
+        targetComponent: "mcp_core_adapter"
+        targetMethod: "loadSubsystemSpec"
+      - stepNumber: 2
+        description: "Persist the L2 component spec via the core client adapter"
+        type: "call"
+        targetComponent: "mcp_core_adapter"
+        targetMethod: "saveComponentSpec"
+  - name: "defineInterface"
+    narrative:
+      - stepNumber: 1
+        description: "Verify the owning component exists"
+        type: "call"
+        targetComponent: "mcp_core_adapter"
+        targetMethod: "loadComponentSpec"
+      - stepNumber: 2
+        description: "Persist the L3 interface spec via the core client adapter"
+        type: "call"
+        targetComponent: "mcp_core_adapter"
+        targetMethod: "saveInterfaceSpec"
+  - name: "writeNarrative"
+    narrative:
+      - stepNumber: 1
+        description: "Verify the contract interface exists"
+        type: "call"
+        targetComponent: "mcp_core_adapter"
+        targetMethod: "loadInterfaceSpec"
+      - stepNumber: 2
+        description: "Persist the L4 implementation spec via the core client adapter"
+        type: "call"
+        targetComponent: "mcp_core_adapter"
+        targetMethod: "saveImplementationSpec"
+  - name: "validateTree"
+    narrative:
+      - stepNumber: 1
+        description: "Run the conformance gate via the validator client adapter"
+        type: "call"
+        targetComponent: "mcp_validator_adapter"
+        targetMethod: "validateSddTree"
+  - name: "getStatus"
+    narrative:
+      - stepNumber: 1
+        description: "Load subsystem specs for the dashboard"
+        type: "call"
+        targetComponent: "mcp_core_adapter"
+        targetMethod: "loadSubsystemSpecs"
+      - stepNumber: 2
+        description: "Load component specs for the dashboard"
+        type: "call"
+        targetComponent: "mcp_core_adapter"
+        targetMethod: "loadComponentSpecs"
+      - stepNumber: 3
+        description: "Load interface specs for the dashboard"
+        type: "call"
+        targetComponent: "mcp_core_adapter"
+        targetMethod: "loadInterfaceSpecs"
+      - stepNumber: 4
+        description: "Load implementation specs for the dashboard"
+        type: "call"
+        targetComponent: "mcp_core_adapter"
+        targetMethod: "loadImplementationSpecs"
+      - stepNumber: 5
+        description: "Compose the hierarchical completeness report"
+        type: "local"
+createdAt: "2026-07-02T00:00:00Z"
+updatedAt: "2026-07-02T00:00:00Z"

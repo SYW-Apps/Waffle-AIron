@@ -27,6 +27,8 @@ import {
   runSkillsList,
   runSkillsInstall,
   runDoctor,
+  runDiagram,
+  runRulesList,
 } from '../commands/index.js';
 
 // Clean up any .old binary left over from a previous Windows self-update
@@ -135,6 +137,52 @@ program
   .option('--fix', 'regenerate stale in-project guides/context/skills and register the MCP server')
   .action(async (opts) => {
     await runDoctor({ fix: opts.fix });
+  });
+
+// ---------------------------------------------------------------------------
+// rules
+// ---------------------------------------------------------------------------
+
+const rulesCmd = program
+  .command('rules')
+  .description('The SDD conformance rule registry (the architecture linter)');
+
+rulesCmd
+  .command('list')
+  .alias('ls')
+  .description('List every conformance rule, its issue codes, default severities, and project overrides')
+  .action(async () => {
+    await runRulesList();
+  });
+
+// ---------------------------------------------------------------------------
+// diagram
+// ---------------------------------------------------------------------------
+
+program
+  .command('diagram')
+  .description('Generate architecture diagrams from the spec tree — interactive canvas by default; Mermaid / draw.io / Excalidraw via --format')
+  .option('--subsystem <id>', 'scope the component diagram to one subsystem (plus its external neighbors)')
+  .option('--sequence <component:method>', 'emit a sequence diagram derived from the method\'s L5 narrative')
+  .option('--depth <n>', 'max call-expansion depth for sequence diagrams (default 3)', (v) => parseInt(v, 10))
+  .option('--all', 'write the full diagram set: system, per-subsystem, entrypoint sequences, and the interactive canvas')
+  .option('--canvas', 'emit the interactive self-contained HTML canvas (pan/zoom, collapse boundaries, detail panel, issue overlay)')
+  .option('--drawio', 'emit an editable draw.io / diagrams.net file (same layout as the canvas)')
+  .option('--excalidraw', 'emit an editable Excalidraw scene (same layout as the canvas)')
+  .option('--format <fmt>', 'alias for the flags above: mermaid | canvas | drawio | excalidraw')
+  .option('--out <path>', 'write to a file (or directory with --all; default .wai/docs/diagrams) instead of stdout')
+  .action(async (opts) => {
+    await runDiagram({
+      subsystem: opts.subsystem,
+      sequence: opts.sequence,
+      depth: opts.depth,
+      all: opts.all,
+      canvas: opts.canvas,
+      drawio: opts.drawio,
+      excalidraw: opts.excalidraw,
+      format: opts.format,
+      out: opts.out,
+    });
   });
 
 // ---------------------------------------------------------------------------

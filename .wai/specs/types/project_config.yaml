@@ -2,7 +2,17 @@ kind: value-object
 id: project_config
 name: ProjectConfig
 description: Project configuration
-fields: []
+fields:
+  - name: name
+    type: string
+    description: Project name
+    key: primary
+  - name: targets
+    type: object[]
+    description: 'Output targets: type (claude | gemini | custom), outputDir, enabled'
+  - name: rules
+    type: RulesConfig
+    description: Topology + conformance rule configuration
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-06-10T22:00:00.000Z'
+updatedAt: '2026-07-03T00:00:00.000Z'
