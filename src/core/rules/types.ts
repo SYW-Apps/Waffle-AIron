@@ -69,6 +69,15 @@ export interface RuleContext {
   isSpecInScope(specId: string): boolean;
 
   /**
+   * Bookkeeping for per-spec lint suppressions (lint.allow). Suppression
+   * itself happens inside addIssue (warnings only — errors always surface);
+   * the lint-allows rule audits these entries at the end of the run.
+   */
+  lintAllows: { specId: string; code: string; reason: string; used: boolean }[];
+  /** Every issue code any registered rule can emit (for allow validation). */
+  knownIssueCodes: Set<string>;
+
+  /**
    * Report an issue. Applies scope filtering, user severity overrides
    * (rules.sddRuleSeverity), and draft-context downgrades for completeness
    * rules. 'off' suppresses the issue entirely.

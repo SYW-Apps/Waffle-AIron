@@ -24,6 +24,7 @@ import { publicSurfaceRule } from './public-surface.js';
 import { cyclesRule, reachabilityRule } from './graph.js';
 import { couplingRule } from './coupling.js';
 import { languageRule } from './language.js';
+import { lintAllowsRule } from './lint-allows.js';
 
 export * from './types.js';
 export * from './type-analysis.js';
@@ -48,6 +49,9 @@ export const SDD_RULES: SddRule[] = [
   reachabilityRule,
   couplingRule,
   languageRule,
+  // MUST run last: it audits which lint.allow entries the earlier rules
+  // actually consumed (stale/unknown allows).
+  lintAllowsRule,
 ];
 
 // Completeness rules downgrade to warnings while the surrounding specs are
@@ -206,6 +210,29 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     return defaultSeverity;
   };
 
+  // Per-spec lint suppressions — wairon's #[allow(...)]. Collected from every
+  // spec kind that carries a `lint` block; addIssue consults them AFTER
+  // severity resolution: a matching allow silences a WARNING, while an error
+  // still surfaces (architecture violations are never locally suppressible —
+  // the allow is only marked used so it isn't flagged as stale).
+  const lintAllows: RuleContext['lintAllows'] = [];
+  const allowLookup = new Map<string, Map<string, RuleContext['lintAllows'][number]>>();
+  const collectAllows = (specId: string, lint?: { allow: { code: string; reason: string }[] }): void => {
+    for (const a of lint?.allow ?? []) {
+      const entry = { specId, code: a.code, reason: a.reason, used: false };
+      lintAllows.push(entry);
+      if (!allowLookup.has(specId)) allowLookup.set(specId, new Map());
+      allowLookup.get(specId)!.set(a.code, entry);
+    }
+  };
+  for (const s of subsystems) collectAllows(s.id, s.lint);
+  for (const c of components) collectAllows(c.id, c.lint);
+  for (const i of interfaces) collectAllows(i.id, i.lint);
+  for (const im of implementations) collectAllows(im.id, im.lint);
+  for (const t of types) collectAllows(t.id, t.lint);
+
+  const knownIssueCodes = new Set(SDD_RULES.flatMap(r => r.codes.map(c => c.code)));
+
   const addIssue = (
     defaultSeverity: Severity,
     code: string,
@@ -217,9 +244,15 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
       return;
     }
     const severity = getRuleSeverity(code, defaultSeverity, isDraftContext);
-    if (severity !== 'off') {
-      issues.push({ severity, code, message, specId });
+    if (severity === 'off') return;
+    if (specId) {
+      const allow = allowLookup.get(specId)?.get(code);
+      if (allow) {
+        allow.used = true;
+        if (severity === 'warning') return;
+      }
     }
+    issues.push({ severity, code, message, specId });
   };
 
   return {
@@ -243,6 +276,8 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     isTypeResolved,
     targetLanguageFor,
     isSpecInScope,
+    lintAllows,
+    knownIssueCodes,
     addIssue,
   };
 }

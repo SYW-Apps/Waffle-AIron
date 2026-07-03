@@ -126,6 +126,17 @@ migration*).
   `--subsystem` and writes a file instead of printing to stdout (use a
   `.mmd` `--out` for raw Mermaid).
 
+### Per-spec lint suppression — `lint.allow`
+
+- Any L1–L4 or type spec may declare
+  `lint: { allow: [{ code, reason }] }` — wairon's `#[allow(...)]`: the
+  named WARNING code is silenced **on that spec only**, with the reason in
+  reviewable spec (same philosophy as `trustedLinks`). Error-severity
+  findings are never locally suppressible (a human can still re-tune codes
+  globally via `rules.sddRuleSeverity`). `UNKNOWN_LINT_ALLOW_CODE` /
+  `UNUSED_LINT_ALLOW` *(warning)* keep suppressions honest: typo'd codes
+  and allows that no longer match anything are flagged.
+
 ### Types & ERD
 
 - **`HOLLOW_TYPE`** *(warning)* — a type with no fields and no methods is a

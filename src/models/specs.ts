@@ -78,6 +78,27 @@ export const TrustedLinkSchema = z.object({
 });
 export type TrustedLink = z.infer<typeof TrustedLinkSchema>;
 
+/**
+ * Per-spec lint suppression — wairon's #[allow(...)]. An allow silences
+ * WARNING-severity findings of the named code on THIS spec only; error
+ * findings are architecture violations and are never locally suppressible
+ * (a human can still re-tune codes globally via rules.sddRuleSeverity in
+ * project.yaml). Same philosophy as trustedLinks: the exception becomes
+ * reviewable spec — reason required, stale allows are flagged.
+ */
+export const LintAllowSchema = z.object({
+  /** The issue code being allowed (see `wairon rules list`). */
+  code: z.string(),
+  /** Why this finding is acceptable here (e.g. "dispatcher — fan-out is the point"). */
+  reason: z.string().min(1),
+});
+export type LintAllow = z.infer<typeof LintAllowSchema>;
+
+export const LintConfigSchema = z.object({
+  allow: z.array(LintAllowSchema).default([]),
+});
+export type LintConfig = z.infer<typeof LintConfigSchema>;
+
 export const SubsystemSpecSchema = z.object({
   id: SpecIdSchema,
   name: z.string(),
@@ -90,6 +111,8 @@ export const SubsystemSpecSchema = z.object({
   targetLanguage: z.string().optional(),
   /** Explicitly sanctioned tight couplings with peer subsystems (see TrustedLinkSchema). */
   trustedLinks: z.array(TrustedLinkSchema).default([]),
+  /** Per-spec lint suppressions (see LintConfigSchema). */
+  lint: LintConfigSchema.optional(),
   status: SpecStatusSchema.optional().default('complete'),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -139,6 +162,8 @@ export const ComponentSpecSchema = z.object({
   dependsOn: z.array(z.string()).default([]),
   portalType: PortalTypeSchema.optional(),
   basePath: z.string().optional(),
+  /** Per-spec lint suppressions (see LintConfigSchema). */
+  lint: LintConfigSchema.optional(),
   status: SpecStatusSchema.optional().default('complete'),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -224,6 +249,8 @@ export const InterfaceSpecSchema = z.object({
   description: z.string(),
   component: z.string(), // References L2 Component id
   methods: z.array(MethodSignatureSchema).default([]),
+  /** Per-spec lint suppressions (see LintConfigSchema). */
+  lint: LintConfigSchema.optional(),
   status: SpecStatusSchema.optional().default('complete'),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -334,6 +361,8 @@ export const ImplementationSpecSchema = z.object({
   methods: z.array(MethodImplementationSchema).default([]),
   /** Spec-level narrative detail default for all methods (each may override). */
   detail: NarrativeDetailSchema.optional(),
+  /** Per-spec lint suppressions (see LintConfigSchema). */
+  lint: LintConfigSchema.optional(),
   status: SpecStatusSchema.optional().default('complete'),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -377,6 +406,8 @@ export const TypeSpecSchema = z.object({
   fields: z.array(TypeFieldSchema).default([]),
   /** Pure intrinsic behaviour only — anything needing a collaborator belongs on a component. */
   methods: z.array(TypeMethodSchema).default([]),
+  /** Per-spec lint suppressions (see LintConfigSchema). */
+  lint: LintConfigSchema.optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });

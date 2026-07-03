@@ -288,6 +288,82 @@ describe('type shape rules', () => {
   });
 });
 
+describe('per-spec lint allows (#[allow] for the conformance gate)', () => {
+  it('a reasoned allow silences a warning on that spec only, and counts as used', () => {
+    const proj = createTempProject();
+    proj.writeSpec('type', 'marker', `kind: value-object
+id: marker
+name: Marker
+description: intentionally opaque
+fields: []
+methods: []
+lint:
+  allow:
+    - code: HOLLOW_TYPE
+      reason: opaque marker type — shape is deliberately unspecified`);
+    proj.writeSpec('type', 'other-hollow', 'kind: value-object\nid: other-hollow\nname: OtherHollow\ndescription: d\nfields: []\nmethods: []');
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      const hollow = res.issues.filter(i => i.code === 'HOLLOW_TYPE');
+      expect(hollow).toHaveLength(1); // only the spec WITHOUT the allow
+      expect(hollow[0].specId).toBe('other-hollow');
+      expect(res.issues.filter(i => i.code === 'UNUSED_LINT_ALLOW')).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('never suppresses error-severity findings, but the matching allow is not flagged stale', () => {
+    const proj = createTempProject();
+    proj.writeSpec('type', 'broken', `kind: value-object
+id: broken
+name: Broken
+description: d
+fields:
+  - name: ref
+    type: NoSuchType
+methods: []
+lint:
+  allow:
+    - code: UNDEFINED_TYPE_REFERENCE
+      reason: trying to silence an architecture error`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.issues.filter(i => i.code === 'UNDEFINED_TYPE_REFERENCE')).toHaveLength(1); // error survives
+      expect(res.issues.filter(i => i.code === 'UNUSED_LINT_ALLOW')).toHaveLength(0); // but the allow matched
+      expect(res.valid).toBe(false);
+    } finally { proj.cleanup(); }
+  });
+
+  it('flags unknown codes and stale allows', () => {
+    const proj = createTempProject();
+    proj.writeSpec('type', 'tidy', `kind: value-object
+id: tidy
+name: Tidy
+description: d
+fields:
+  - name: label
+    type: string
+methods: []
+lint:
+  allow:
+    - code: TOTALLY_MADE_UP
+      reason: typo
+    - code: HOLLOW_TYPE
+      reason: it used to be hollow but is filled now`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      const unknown = res.issues.filter(i => i.code === 'UNKNOWN_LINT_ALLOW_CODE');
+      const stale = res.issues.filter(i => i.code === 'UNUSED_LINT_ALLOW');
+      expect(unknown).toHaveLength(1);
+      expect(unknown[0].specId).toBe('tidy');
+      expect(stale).toHaveLength(1);
+      expect(stale[0].message).toContain('HOLLOW_TYPE');
+    } finally { proj.cleanup(); }
+  });
+});
+
 describe('language-aware flow constraints', () => {
   it('flags try/throw/do-while in a Rust subsystem, and stays silent without a targetLanguage', () => {
     const proj = createTempProject();
