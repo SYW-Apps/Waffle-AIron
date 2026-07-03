@@ -514,7 +514,7 @@ export function createMcpServer(): McpServer {
   type NarrativeStepIn = z.infer<typeof narrativeStepInput>;
   const detailEnum = z.enum(['full', 'calls-only', 'intent']);
 
-  reg<{ id: string; name: string; description: string; contract: string; sourcePath?: string; detail?: 'full' | 'calls-only' | 'intent'; methods?: { name: string; detail?: 'full' | 'calls-only' | 'intent'; intent?: string; narrative?: NarrativeStepIn[] }[] }>(server,
+  reg<{ id: string; name: string; description: string; contract: string; sourcePath?: string; technologies?: string[]; detail?: 'full' | 'calls-only' | 'intent'; methods?: { name: string; detail?: 'full' | 'calls-only' | 'intent'; intent?: string; narrative?: NarrativeStepIn[] }[] }>(server,
     'sdd_write_narrative',
     {
       description: 'Write L4 Concrete Implementation spec containing L5 method narratives. Narratives are a FLAT ordered step list; flow steps (branch/switch/loop/try/jump/return/throw) jump by step number — blocks are just skipped regions. Detail dial per method: full (narrative required) | calls-only (call choreography suffices) | intent (prose instead of steps); omitted = stereotype default (Portal/Observer/Adapter: calls-only, Store/Index/Registry: intent, else full).',
@@ -524,6 +524,7 @@ export function createMcpServer(): McpServer {
         description: z.string().describe('Implementation details'),
         contract: z.string().describe('The L3 Interface contract ID this implements'),
         sourcePath: z.string().optional().describe('Optional: target source code file path relative to project root'),
+        technologies: z.array(z.string()).optional().describe('External technologies this implementation binds to (e.g. ["mysql"]) — declares this component\'s ownership tree as the technology\'s home; references outside it are flagged (TECH_LEAKAGE) and contract identifiers must stay intent-language. Only for Adapter/Store/Registry/Index components.'),
         detail: detailEnum.optional().describe('Spec-level narrative detail default for all methods'),
         methods: z.array(z.object({
           name: z.string(),
@@ -533,7 +534,7 @@ export function createMcpServer(): McpServer {
         })).optional().describe('Method implementations containing L5 narratives'),
       },
     },
-    ({ id, name, description, contract, sourcePath, detail, methods }) => {
+    ({ id, name, description, contract, sourcePath, technologies, detail, methods }) => {
       try {
         const { loadInterfaceSpec, saveImplementationSpec } = requireSpecs();
         const intf = loadInterfaceSpec(contract);
@@ -545,6 +546,7 @@ export function createMcpServer(): McpServer {
           description,
           contract,
           sourcePath,
+          technologies,
           detail,
           methods: (methods ?? []).map(m => ({
             ...m,

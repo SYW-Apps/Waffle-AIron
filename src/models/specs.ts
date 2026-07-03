@@ -358,6 +358,15 @@ export const ImplementationSpecSchema = z.object({
   description: z.string(),
   contract: z.string(), // References L3 Interface id
   sourcePath: z.string().optional(), // Path to the concrete source code file (e.g. "src/storage/vfs.ts")
+  /**
+   * External technologies (vendor, engine, SDK, service) this implementation
+   * binds to — e.g. ["mysql"], ["sendgrid"]. Declaring one makes this
+   * component's ownership tree the technology's home: references anywhere
+   * outside it are flagged (TECH_LEAKAGE), contract identifiers must stay
+   * intent-language (VENDOR_NAME_IN_CONTRACT), and only data-layer
+   * stereotypes should bind tech directly (TECH_ON_LOGIC_COMPONENT).
+   */
+  technologies: z.array(z.string()).optional(),
   methods: z.array(MethodImplementationSchema).default([]),
   /** Spec-level narrative detail default for all methods (each may override). */
   detail: NarrativeDetailSchema.optional(),
