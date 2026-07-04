@@ -220,9 +220,10 @@ migration*).
   sprawling) and only centres a *lone* most-referenced node, spreading a tied top
   tier into a ring rather than a central pile. The choice persists, is remembered
   per view, and a manual **Rearrange** still wins on top for fine-tuning.
-  External (ghost) nodes are placed just outside the *actual* node bounds rather
-  than at fixed offsets, so a centred layout never drops one in the middle of the
-  graph; and **Internals** now lay each box's children out with the same chosen
+  External (ghost) nodes are placed just outside the node bounds **toward the
+  in-scope node they connect to** (not a fixed corner), so their line is short
+  instead of crossing the whole diagram — and overlapping externals are nudged
+  apart; and **Internals** now lay each box's children out with the same chosen
   layout (Grid/Concentric) instead of always the layered columns. Concentric is
   stretched into a **landscape ellipse** (screens are horizontal) rather than a
   tall circle, and **Force** seeds from a diagonal cascade so it relaxes toward an

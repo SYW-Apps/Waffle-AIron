@@ -1525,38 +1525,66 @@ var MODEL = __MODEL_JSON__;
       }
     });
 
-    // Externals placed by dependency DIRECTION: parties entering this scope
-    // (they depend on us) sit on the LEFT, our outgoing dependencies on the
-    // RIGHT — but OUTSIDE the actual node bounds, so a centred layout
-    // (concentric/force) never has a ghost land in the middle of the graph.
-    var ghostDir = {};
+    // Externals are placed TOWARD the in-scope node(s) they connect to — on the
+    // perimeter of the graph bounds in that direction — so the connecting line is
+    // short and doesn't cut across the diagram. Falls back to left(incoming) /
+    // right(outgoing) when the connection is dead-centre or unknown.
+    var ghostDir = {}, ghostConn = {};
     Object.keys(ve.agg).forEach(function (k) {
       var e = ve.agg[k];
-      if (ve.ghosts[e.src]) ghostDir[e.src] = (ghostDir[e.src] || 0) | 1; // incoming
-      if (ve.ghosts[e.tgt]) ghostDir[e.tgt] = (ghostDir[e.tgt] || 0) | 2; // outgoing
+      var conn = function (gid, other) {
+        var p = posByAnchor[other];
+        if (!p) return;
+        var gc = ghostConn[gid] = ghostConn[gid] || { sx: 0, sy: 0, n: 0 };
+        gc.sx += p.x; gc.sy += p.y; gc.n++;
+      };
+      if (ve.ghosts[e.src]) { ghostDir[e.src] = (ghostDir[e.src] || 0) | 1; conn(e.src, e.tgt); }
+      if (ve.ghosts[e.tgt]) { ghostDir[e.tgt] = (ghostDir[e.tgt] || 0) | 2; conn(e.tgt, e.src); }
     });
-    var bMinX = Infinity, bMaxX = -Infinity, bMinY = Infinity;
+    var bMinX = Infinity, bMaxX = -Infinity, bMinY = Infinity, bMaxY = -Infinity;
     Object.keys(posByAnchor).forEach(function (aid) {
       var p = posByAnchor[aid];
       if (p.x - p.w / 2 < bMinX) bMinX = p.x - p.w / 2;
       if (p.x + p.w / 2 > bMaxX) bMaxX = p.x + p.w / 2;
       if (p.y - p.h / 2 < bMinY) bMinY = p.y - p.h / 2;
+      if (p.y + p.h / 2 > bMaxY) bMaxY = p.y + p.h / 2;
     });
-    if (bMinX === Infinity) { bMinX = 0; bMaxX = 0; bMinY = 0; }
-    var GHW = 170, GHH = 46, GH_GAP = 90, GH_VGAP = 18;
-    var leftX = bMinX - GH_GAP - GHW / 2, rightX = bMaxX + GH_GAP + GHW / 2;
-    var gyL = bMinY, gyR = bMinY;
+    if (bMinX === Infinity) { bMinX = 0; bMaxX = 0; bMinY = 0; bMaxY = 0; }
+    var GHW = 170, GHH = 46, GH_GAP = 90;
+    var ccx = (bMinX + bMaxX) / 2, ccy = (bMinY + bMaxY) / 2;
+    var halfW = (bMaxX - bMinX) / 2 + GHW / 2 + GH_GAP, halfH = (bMaxY - bMinY) / 2 + GHH / 2 + GH_GAP;
+    var placedGhosts = [];
     Object.keys(ve.ghosts).sort().forEach(function (gid) {
-      var g = ve.ghosts[gid];
-      var incoming = (ghostDir[gid] || 2) & 1;
-      var gx = incoming ? leftX : rightX;
-      var gy = incoming ? gyL : gyR;
+      var g = ve.ghosts[gid], incoming = (ghostDir[gid] || 2) & 1, gc = ghostConn[gid];
+      var dx = gc && gc.n ? gc.sx / gc.n - ccx : 0, dy = gc && gc.n ? gc.sy / gc.n - ccy : 0;
+      if (dx === 0 && dy === 0) { dx = incoming ? -1 : 1; dy = 0; } // fallback: in=left, out=right
+      var len = Math.sqrt(dx * dx + dy * dy) || 1, ux = dx / len, uy = dy / len;
+      var t = Math.min(ux !== 0 ? halfW / Math.abs(ux) : Infinity, uy !== 0 ? halfH / Math.abs(uy) : Infinity);
+      placedGhosts.push({ gid: gid, g: g, x: ccx + ux * t, y: ccy + uy * t });
+    });
+    // Separate any externals that landed on top of each other.
+    for (var gIter = 0; gIter < 40; gIter++) {
+      var gMoved = false;
+      for (var ga = 0; ga < placedGhosts.length; ga++) {
+        for (var gb = ga + 1; gb < placedGhosts.length; gb++) {
+          var pa = placedGhosts[ga], pb = placedGhosts[gb];
+          var ddx = pb.x - pa.x, ddy = pb.y - pa.y;
+          var ox = (GHW + 24) - Math.abs(ddx), oy = (GHH + 14) - Math.abs(ddy);
+          if (ox > 0 && oy > 0) {
+            if (ox <= oy) { var sx = (ddx === 0 ? (ga < gb ? -1 : 1) : (ddx > 0 ? 1 : -1)) * ox / 2; pa.x -= sx; pb.x += sx; }
+            else { var sy = (ddy === 0 ? -1 : (ddy > 0 ? 1 : -1)) * oy / 2; pa.y -= sy; pb.y += sy; }
+            gMoved = true;
+          }
+        }
+      }
+      if (!gMoved) break;
+    }
+    placedGhosts.forEach(function (pp) {
       eles.push({
-        data: { id: gid, label: g.label + '\\n(external)', w: GHW, h: GHH, tw: GHW - 14, extKind: g.kind, extId: g.id },
-        position: { x: gx, y: gy + GHH / 2 },
+        data: { id: pp.gid, label: pp.g.label + '\\n(external)', w: GHW, h: GHH, tw: GHW - 14, extKind: pp.g.kind, extId: pp.g.id },
+        position: { x: pp.x, y: pp.y },
         classes: 'ghost',
       });
-      if (incoming) gyL += GHH + GH_VGAP; else gyR += GHH + GH_VGAP;
     });
 
     var dimmedAnchors = {};

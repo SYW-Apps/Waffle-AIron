@@ -371,7 +371,10 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     saveSubsystemSpec({ id: 'shipping', name: 'Shipping', description: 'd', parentSystem: 'RtSys', publicInterfaces: [], trustedLinks: [], createdAt: now, updatedAt: now });
     const comp = (over: Record<string, unknown>) => ({ id: '', name: '', description: 'd', subsystem: 'billing', componentType: 'Orchestrator' as const, owns: [] as string[], dependsOn: [] as string[], createdAt: now, updatedAt: now, ...over });
     saveComponentSpec(comp({ id: 'billing-portal', name: 'Billing Portal', componentType: 'Portal', portalType: 'HTTP_API' }) as any);
-    ['b2', 'b3', 'b4', 'b5'].forEach(id => saveComponentSpec(comp({ id: id, name: id }) as any));
+    // b3 is the hub (b2/b4/b5 depend on it) so concentric puts it dead-centre and
+    // the portal on the periphery.
+    saveComponentSpec(comp({ id: 'b3', name: 'b3' }) as any);
+    ['b2', 'b4', 'b5'].forEach(id => saveComponentSpec(comp({ id: id, name: id, dependsOn: ['b3'] }) as any));
     // An out-of-billing component depends INTO billing → an incoming external.
     saveComponentSpec(comp({ id: 'shipping-core', name: 'Shipping Core', subsystem: 'shipping', componentType: 'Adapter', dependsOn: ['billing-portal'] }) as any);
 
@@ -400,5 +403,12 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     expect(ghost.position('x')).toBeLessThan(minLeft);
     // Concentric is stretched into a landscape ellipse (wider than tall).
     expect(maxX - minX).toBeGreaterThan(maxY - minY);
+
+    // The external is placed TOWARD the node it connects to (the peripheral
+    // portal), not near the central hub — so its line doesn't cross the diagram.
+    const gp = ghost.position(), portal = cy.getElementById('c~billing-portal').position(), hub = cy.getElementById('c~b3').position();
+    const dPortal = Math.sqrt((gp.x - portal.x) ** 2 + (gp.y - portal.y) ** 2);
+    const dHub = Math.sqrt((gp.x - hub.x) ** 2 + (gp.y - hub.y) ** 2);
+    expect(dPortal).toBeLessThan(dHub);
   });
 });
