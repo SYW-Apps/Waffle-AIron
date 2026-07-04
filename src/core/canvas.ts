@@ -1043,13 +1043,21 @@ var MODEL = __MODEL_JSON__;
       idx += cap; rn++;
     }
     var pos = {}, prevRadius = 0, prevMaxDim = 0;
+    var RING_GAP = 80, ARC_GAP = 70;
     rings.forEach(function (members, ri) {
-      var maxDim = 0, circ = 0;
-      members.forEach(function (id) { var s = sizeFn(id); var d = Math.max(s.w, s.h); if (d > maxDim) maxDim = d; circ += Math.max(s.w, s.h) + 70; });
-      var radius = (ri === 0 && members.length === 1)
-        ? 0
-        : Math.max(circ / (2 * Math.PI), prevRadius + prevMaxDim / 2 + maxDim / 2 + 60);
+      var maxDim = 0, maxW = 0;
+      members.forEach(function (id) { var s = sizeFn(id); if (Math.max(s.w, s.h) > maxDim) maxDim = Math.max(s.w, s.h); if (s.w > maxW) maxW = s.w; });
       var n = members.length;
+      var radius;
+      if (ri === 0 && n === 1) {
+        radius = 0;
+      } else {
+        // Chord constraint: adjacent nodes on the ring must clear each other's
+        // width, so the radius is derived from the actual node width — not an
+        // arc-length estimate (which under-sizes small rings and overlaps).
+        var chordR = n >= 2 ? (maxW + ARC_GAP) / (2 * Math.sin(Math.PI / n)) : 0;
+        radius = Math.max(chordR, prevRadius + prevMaxDim / 2 + maxDim / 2 + RING_GAP);
+      }
       members.forEach(function (id, i) {
         var ang = n === 1 ? -Math.PI / 2 : (i / n) * 2 * Math.PI - Math.PI / 2;
         pos[id] = { x: Math.cos(ang) * radius, y: Math.sin(ang) * radius };
@@ -1577,11 +1585,43 @@ var MODEL = __MODEL_JSON__;
       numIter: 1500, coolingFactor: 0.96, initialTemp: 240,
     };
   }
+  // Post-layout overlap removal: cose is isotropic, so wide-but-short boxes still
+  // overlap horizontally even when vertically clear. Separate every overlapping
+  // pair along its axis of LEAST overlap (horizontal overlaps resolve
+  // horizontally), honouring per-axis gaps — so wide nodes get real horizontal
+  // clearance without inflating the (already fine) vertical spacing.
+  function resolveOverlaps(gapX, gapY) {
+    var arr = cy.nodes().orphans().toArray();
+    for (var iter = 0; iter < 80; iter++) {
+      var moved = false;
+      for (var i = 0; i < arr.length; i++) {
+        for (var j = i + 1; j < arr.length; j++) {
+          var a = arr[i], b = arr[j];
+          var ba = a.boundingBox(), bb = b.boundingBox();
+          var dx = (bb.x1 + bb.x2) / 2 - (ba.x1 + ba.x2) / 2;
+          var dy = (bb.y1 + bb.y2) / 2 - (ba.y1 + ba.y2) / 2;
+          var ox = (ba.w + bb.w) / 2 + gapX - Math.abs(dx);
+          var oy = (ba.h + bb.h) / 2 + gapY - Math.abs(dy);
+          if (ox > 0 && oy > 0) {
+            if (ox <= oy) {
+              var sx = (dx === 0 ? (i < j ? -1 : 1) : (dx > 0 ? 1 : -1)) * ox / 2;
+              a.position('x', a.position('x') - sx); b.position('x', b.position('x') + sx);
+            } else {
+              var sy = (dy === 0 ? -1 : (dy > 0 ? 1 : -1)) * oy / 2;
+              a.position('y', a.position('y') - sy); b.position('y', b.position('y') + sy);
+            }
+            moved = true;
+          }
+        }
+      }
+      if (!moved) break;
+    }
+  }
   function runNativeLayout() {
     if (state.layout !== 'force') return; // concentric/grid are presets from buildElements
     var wasAuto = cy.autolock();
     if (wasAuto) cy.autolock(false);
-    try { cy.layout(nativeLayoutOptions()).run(); } catch (e) { /* layout unavailable */ }
+    try { cy.layout(nativeLayoutOptions()).run(); resolveOverlaps(56, 20); } catch (e) { /* layout unavailable */ }
     if (wasAuto) cy.autolock(true);
   }
   // Position the current view: run the chosen algorithm for a fresh component
