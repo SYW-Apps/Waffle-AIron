@@ -1,0 +1,62 @@
+id: pack_registry_impl
+name: Pack Registry Implementation
+description: >-
+  File-backed I/O for the container's extension-pack store: the server-global packs directory
+  (WAIRON_PACKS_DIR, defaulted onto the data volume) and a bound project's .wai/packs/ plus its
+  project.yaml registration. Reuses the core extension loader to probe and to enforce the
+  declarative-pack schema. Installs are declarative-only; code packs are refused here.
+contract: ipack_registry
+sourcePath: src/server/packs.ts
+methods:
+  - name: listGlobalPacks
+    narrative: []
+    detail: intent
+    intent: >-
+      Discovers every pack ref in the server-global packs directory (WAIRON_PACKS_DIR, or
+      <data-dir>/packs) and probes each in isolation via the core extension loader, returning a
+      descriptor per pack (name plus profile/language/rule counts, or the load error). Never throws
+      for a bad pack — the error rides on its descriptor so one broken pack cannot hide the rest.
+  - name: installGlobalPack
+    narrative: []
+    detail: intent
+    intent: >-
+      Rejects an unsafe pack name (anything outside [A-Za-z0-9._-], to prevent path traversal).
+      Parses the content as YAML and validates it against the declarative-pack schema (name +
+      profiles + language/platform tables); a programmatic/code pack — or any parse or shape failure
+      — is refused with guidance to install code packs via the trusted filesystem. On success writes
+      it atomically as <name>.yaml into the global packs directory (creating the directory if
+      needed) and returns its probe.
+  - name: removeGlobalPack
+    narrative: []
+    detail: intent
+    intent: >-
+      Resolves the named pack (by file stem or declared name) in the global packs directory and
+      deletes it; raises a clear error if no such pack is installed.
+  - name: listProjectPacks
+    narrative: []
+    detail: intent
+    intent: >-
+      Reads the bound project's extensions.packs from .wai/project.yaml and probes each registered
+      ref against the project root, returning a descriptor per pack (or its load error). Assumes a
+      project root is already bound in scope.
+  - name: installProjectPack
+    narrative: []
+    detail: intent
+    intent: >-
+      Rejects an unsafe pack name, then validates the content as a declarative pack exactly as the
+      global install does. On success vendors it into the bound project's .wai/packs/<name>.yaml and
+      registers that project-relative ref in .wai/project.yaml under extensions.packs (idempotent —
+      re-installing refreshes the file and leaves a single registration). Returns its probe. Because
+      it is committed with the project, every clone and CI then enforces it.
+  - name: removeProjectPack
+    narrative: []
+    detail: intent
+    intent: >-
+      Removes the named ref from the bound project's extensions.packs in .wai/project.yaml and
+      deletes the vendored file, guarded to never delete a path outside .wai/packs (a ref pointing
+      elsewhere is deregistered but its files are left in place). Raises a clear error if the
+      project has no such registered pack.
+detail: intent
+status: complete
+createdAt: '2026-07-04T18:42:57.340Z'
+updatedAt: '2026-07-04T18:47:59.218Z'

@@ -144,6 +144,48 @@ methods:
         type: call
         targetComponent: admin_orchestrator
         targetMethod: listSecrets
+  - name: listGlobalPacks
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: listGlobalPacks
+  - name: installGlobalPack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: installGlobalPack
+  - name: removeGlobalPack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: removeGlobalPack
+  - name: listProjectPacks
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: listProjectPacks
+  - name: installProjectPack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: installProjectPack
+  - name: removeProjectPack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: removeProjectPack
 status: complete
 createdAt: '2026-07-04T12:53:08.445Z'
-updatedAt: '2026-07-04T17:40:11.029Z'
+updatedAt: '2026-07-04T18:47:17.998Z'

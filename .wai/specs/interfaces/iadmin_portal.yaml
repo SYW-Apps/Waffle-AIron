@@ -169,6 +169,92 @@ methods:
       transport: HTTP
       method: GET
       path: /admin/secrets
+  - name: listGlobalPacks
+    description: List the server-global installed packs.
+    signature: 'listGlobalPacks(credential: string): PackDescriptor[]'
+    returns: PackDescriptor[]
+    params:
+      - name: credential
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /admin/packs
+  - name: installGlobalPack
+    description: Install a declarative pack server-wide (declarative-only; code packs are refused).
+    signature: 'installGlobalPack(credential: string, name: string, content: string): PackDescriptor'
+    returns: PackDescriptor
+    params:
+      - name: credential
+        type: string
+      - name: name
+        type: string
+      - name: content
+        type: string
+    endpoint:
+      transport: HTTP
+      method: PUT
+      path: /admin/packs/{name}
+  - name: removeGlobalPack
+    description: Remove a server-global pack.
+    signature: 'removeGlobalPack(credential: string, name: string): void'
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: name
+        type: string
+    endpoint:
+      transport: HTTP
+      method: DELETE
+      path: /admin/packs/{name}
+  - name: listProjectPacks
+    description: List a project's registered packs.
+    signature: 'listProjectPacks(credential: string, project: string): PackDescriptor[]'
+    returns: PackDescriptor[]
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /admin/projects/{id}/packs
+  - name: installProjectPack
+    description: Install a declarative pack into a project (declarative-only; code packs are refused).
+    signature: >-
+      installProjectPack(credential: string, project: string, name: string, content: string):
+      PackDescriptor
+    returns: PackDescriptor
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: name
+        type: string
+      - name: content
+        type: string
+    endpoint:
+      transport: HTTP
+      method: PUT
+      path: /admin/projects/{id}/packs/{name}
+  - name: removeProjectPack
+    description: Remove one of a project's registered packs.
+    signature: 'removeProjectPack(credential: string, project: string, name: string): void'
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: name
+        type: string
+    endpoint:
+      transport: HTTP
+      method: DELETE
+      path: /admin/projects/{id}/packs/{name}
 status: complete
 createdAt: '2026-07-04T12:50:05.545Z'
-updatedAt: '2026-07-04T17:38:17.046Z'
+updatedAt: '2026-07-04T18:43:24.290Z'

@@ -1,0 +1,65 @@
+id: ipack_registry
+name: Pack Registry Interface
+description: >-
+  Contract for the hosted extension-pack store: list, install (declarative-only), and remove packs
+  at server-global scope and at a bound project's scope. Installs validate the content as a
+  declarative pack (profiles + language/platform tables) and refuse programmatic/code packs; probing
+  never throws for a bad pack (the error rides on its descriptor).
+component: pack_registry
+methods:
+  - name: listGlobalPacks
+    description: Probe every pack in the server-global packs directory.
+    signature: 'listGlobalPacks(): PackDescriptor[]'
+    returns: PackDescriptor[]
+    params: []
+  - name: installGlobalPack
+    description: >-
+      Validate the content as a declarative pack and write it as <name>.yaml into the server-global
+      packs directory; reject programmatic/code content. Returns its probe.
+    signature: 'installGlobalPack(name: string, content: string): PackDescriptor'
+    returns: PackDescriptor
+    params:
+      - name: name
+        type: string
+        description: Pack file name stem (sanitized; [A-Za-z0-9._-])
+      - name: content
+        type: string
+        description: Declarative pack YAML text
+  - name: removeGlobalPack
+    description: Delete the named pack from the server-global packs directory.
+    signature: 'removeGlobalPack(name: string): void'
+    returns: void
+    params:
+      - name: name
+        type: string
+  - name: listProjectPacks
+    description: Probe the bound project's registered packs (.wai/project.yaml -> extensions.packs).
+    signature: 'listProjectPacks(): PackDescriptor[]'
+    returns: PackDescriptor[]
+    params: []
+  - name: installProjectPack
+    description: >-
+      Validate the content as a declarative pack, vendor it into the bound project's
+      .wai/packs/<name>.yaml, and register it in project.yaml; reject programmatic/code content.
+      Returns its probe.
+    signature: 'installProjectPack(name: string, content: string): PackDescriptor'
+    returns: PackDescriptor
+    params:
+      - name: name
+        type: string
+        description: Pack file name stem (sanitized)
+      - name: content
+        type: string
+        description: Declarative pack YAML text
+  - name: removeProjectPack
+    description: >-
+      Deregister the named pack from the bound project's project.yaml and delete its vendored
+      .wai/packs file.
+    signature: 'removeProjectPack(name: string): void'
+    returns: void
+    params:
+      - name: name
+        type: string
+status: complete
+createdAt: '2026-07-04T18:42:41.273Z'
+updatedAt: '2026-07-04T18:47:58.708Z'
