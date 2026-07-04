@@ -62,6 +62,21 @@ race and no changes to the ~20 `sdd_*` handlers.
 
 ---
 
+### Diagrams over the API
+
+The hosted server reuses the same diagram engine as `wairon diagram` (a
+first-class `diagram_specialist`), generated on demand and scoped to the project:
+
+- `POST /admin/projects/{id}/diagram` (body `{format}`) — generate; returns the
+  artifact (`canvas` HTML · `mermaid` · `drawio` · `excalidraw`). *[bearer]*
+- `GET  /admin/projects/{id}/diagram/{format}` — download (attachment). *[bearer]*
+- `GET  /admin/projects/{id}/canvas-link` — mint a short-lived **signed** view
+  link. *[bearer]*
+- `GET  /view/diagram?token=…` — open the canvas in a browser; the HMAC-signed,
+  expiring token *is* the capability, so **no bearer** is needed (browsers can't
+  attach one to a navigation). Signed with `WAIRON_SIGNING_SECRET` (else
+  `WAIRON_ADMIN_TOKEN`); TTL ~5 min.
+
 ## 3. Authentication & the bootstrap
 
 Auth is **on by default** and **toggleable** (`--no-auth`, for a trusted/VPN-only

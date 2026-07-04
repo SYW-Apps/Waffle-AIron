@@ -2,6 +2,7 @@ import { computeStateId } from '../core/statehash.js';
 import { readLockRecord, writeLockRecord } from '../core/lockfile.js';
 import { provisionProject, promoteAllComplete } from '../core/provision.js';
 import { validateAsComplete } from '../core/validation.js';
+import { renderDiagram } from '../core/diagram.js';
 import { loadProjectConfig } from '../config/loader.js';
 import { createMcpServer } from '../mcp/server.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -21,6 +22,7 @@ export const hostCore = {
   readLockRecord,
   writeLockRecord,
   promoteAllComplete,
+  renderDiagram,
 };
 
 // host_validator_adapter → sdd_validator (validator_portal)

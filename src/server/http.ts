@@ -1,7 +1,7 @@
 import * as http from 'http';
 import type { IncomingMessage, ServerResponse } from 'http';
 import * as fs from 'fs';
-import { handleMcpRequest, sendJson, bearerToken } from './request.js';
+import { handleMcpRequest, handleViewDiagram, sendJson, bearerToken } from './request.js';
 import * as admin from './admin.js';
 import { AdminAuthError, LockValidationError } from './admin.js';
 import type { HostConfig, Role } from './types.js';
@@ -27,6 +27,26 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
   }
 }
 
+function diagramContentType(format: string): string {
+  switch (format) {
+    case 'canvas': return 'text/html; charset=utf-8';
+    case 'mermaid': return 'text/markdown; charset=utf-8';
+    case 'drawio': return 'application/xml; charset=utf-8';
+    case 'excalidraw': return 'application/json; charset=utf-8';
+    default: return 'text/plain; charset=utf-8';
+  }
+}
+
+function diagramFileName(format: string): string {
+  switch (format) {
+    case 'canvas': return 'canvas.html';
+    case 'mermaid': return 'diagram.md';
+    case 'drawio': return 'architecture.drawio';
+    case 'excalidraw': return 'architecture.excalidraw';
+    default: return 'diagram.txt';
+  }
+}
+
 // ── Data plane ────────────────────────────────────────────────────────────
 
 function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResponse): void {
@@ -44,6 +64,10 @@ function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResponse): 
       /* not writable */
     }
     sendJson(res, ready ? 200 : 503, { ready });
+    return;
+  }
+  if (req.method === 'GET' && url.pathname === '/view/diagram') {
+    handleViewDiagram(cfg, req, res);
     return;
   }
   if (req.method === 'POST' && url.pathname === '/mcp') {
@@ -76,6 +100,26 @@ async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: ServerResp
       }
       if (req.method === 'POST' && parts.length === 4 && parts[3] === 'lock') return sendJson(res, 200, admin.lockProject(cfg, cred, parts[2]));
       if (req.method === 'POST' && parts.length === 4 && parts[3] === 'promote') return sendJson(res, 200, admin.promoteProject(cfg, cred, parts[2]));
+      if (req.method === 'GET' && parts.length === 4 && parts[3] === 'canvas-link') {
+        return sendJson(res, 200, { url: admin.diagramViewLink(cfg, cred, parts[2]) });
+      }
+      if (req.method === 'POST' && parts.length === 4 && parts[3] === 'diagram') {
+        const format = (body.format as string) ?? 'canvas';
+        const artifact = admin.generateDiagram(cfg, cred, parts[2], format);
+        res.writeHead(200, { 'content-type': diagramContentType(format) });
+        res.end(artifact);
+        return;
+      }
+      if (req.method === 'GET' && parts.length === 5 && parts[3] === 'diagram') {
+        const format = parts[4];
+        const artifact = admin.downloadDiagram(cfg, cred, parts[2], format);
+        res.writeHead(200, {
+          'content-type': diagramContentType(format),
+          'content-disposition': `attachment; filename="${diagramFileName(format)}"`,
+        });
+        res.end(artifact);
+        return;
+      }
     }
 
     if (parts[1] === 'keys') {

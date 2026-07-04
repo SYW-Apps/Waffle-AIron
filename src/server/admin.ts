@@ -3,7 +3,7 @@ import { runWithProjectRoot } from '../utils/fs.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import { stateIdEquals } from '../core/statehash.js';
 import type { LockRecord } from '../core/lockfile.js';
-import { authenticateMaster } from './auth.js';
+import { authenticateMaster, signViewToken } from './auth.js';
 import {
   hashToken,
   createCredential,
@@ -121,6 +121,28 @@ export function lockProject(cfg: HostConfig, credential: string | null, project:
     hostCore.writeLockRecord(record);
     return record;
   });
+}
+
+// ── Diagrams ──────────────────────────────────────────────────────────────
+
+/** Render a project's diagram artifact in the requested format. */
+export function generateDiagram(cfg: HostConfig, credential: string | null, project: string, format: string): string {
+  requireAdmin(credential);
+  const root = existingProjectRoot(cfg.dataDir, project);
+  if (!root) throw new Error(`Unknown project "${project}".`);
+  return runWithProjectRoot(root, () => hostCore.renderDiagram(format));
+}
+
+/** Same as generateDiagram; the HTTP layer sets a download disposition. */
+export function downloadDiagram(cfg: HostConfig, credential: string | null, project: string, format: string): string {
+  return generateDiagram(cfg, credential, project, format);
+}
+
+/** Mint a short-lived signed relative link to view the project's canvas in a browser. */
+export function diagramViewLink(cfg: HostConfig, credential: string | null, project: string): string {
+  requireAdmin(credential);
+  if (!existingProjectRoot(cfg.dataDir, project)) throw new Error(`Unknown project "${project}".`);
+  return `/view/diagram?token=${signViewToken(project, 'canvas')}`;
 }
 
 export function promoteProject(cfg: HostConfig, credential: string | null, project: string): PromoteResult {

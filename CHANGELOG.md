@@ -33,6 +33,11 @@ migration*).
 - New library surfaces: `validateAsComplete` (full-strictness gate, reused by the
   local `wairon lock` story) and a request-scoped project root
   (`runWithProjectRoot`) so one process serves concurrent projects safely.
+- **Diagrams over the admin API** — the diagram engine is now a first-class
+  `diagram_specialist`; the hosting server generates/downloads a project's canvas,
+  Mermaid, draw.io, or Excalidraw on demand, and serves the interactive canvas to
+  a browser via a short-lived HMAC-**signed** `/view/diagram` link (no bearer —
+  the capability is in the URL), with generate/download bearer-authed.
 
 ### Conformance gate (the architecture linter)
 

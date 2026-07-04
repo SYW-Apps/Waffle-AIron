@@ -12,6 +12,39 @@ import {
   ImplementationSpec,
   PATTERN_TYPES,
 } from '../models/index.js';
+import { buildCanvasModel, renderCanvasHtml } from './canvas.js';
+import { generateDrawioXml, generateExcalidrawScene } from './diagram-export.js';
+import { validateSddTree, type ValidationIssue } from './validation.js';
+import { loadProjectConfig } from '../config/loader.js';
+
+// ---------------------------------------------------------------------------
+// Diagram Specialist entrypoint (sdd_core diagram_specialist)
+//
+// Render the current (request-scoped) project's spec tree into a diagram
+// artifact STRING — the engine behind `wairon diagram`, reused by the hosting
+// server's diagram endpoints. The canvas embeds the validation-issue overlay;
+// all formats are self-contained.
+// ---------------------------------------------------------------------------
+
+export function renderDiagram(format: string): string {
+  switch (format) {
+    case 'canvas':     return renderCanvasHtml(buildCanvasModel(diagramIssues()));
+    case 'mermaid':    return generateComponentDiagram();
+    case 'drawio':     return generateDrawioXml(buildCanvasModel());
+    case 'excalidraw': return generateExcalidrawScene(buildCanvasModel());
+    default:
+      throw new Error(`Unsupported diagram format "${format}" (canvas | mermaid | drawio | excalidraw).`);
+  }
+}
+
+function diagramIssues(): ValidationIssue[] {
+  try {
+    const config = loadProjectConfig();
+    return validateSddTree({ rules: config.rules, projectType: config.projectType }).issues;
+  } catch {
+    return [];
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Diagram generation (Mermaid)
