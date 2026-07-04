@@ -1,0 +1,14 @@
+id: diagram_specialist
+name: Diagram Specialist
+description: >-
+  Renders architecture diagrams from the spec tree: the interactive canvas (self-contained HTML),
+  Mermaid, draw.io, and Excalidraw. Reads the spec tree via the loader and returns the artifact as a
+  string. The engine behind `wairon diagram`, now reused by the hosting server's diagram endpoints.
+subsystem: sdd_core
+componentType: Specialist
+owns: []
+dependsOn:
+  - spec_loader
+status: complete
+createdAt: '2026-07-04T15:59:06.200Z'
+updatedAt: '2026-07-04T16:04:17.827Z'

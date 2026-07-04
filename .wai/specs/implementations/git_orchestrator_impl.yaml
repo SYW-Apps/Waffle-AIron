@@ -1,0 +1,112 @@
+id: git_orchestrator_impl
+name: Git Orchestrator Implementation
+description: 'The git-backing workflows: enable/disable/sync/isEnabled/publish.'
+contract: igit_orchestrator
+sourcePath: src/git/orchestrator.ts
+methods:
+  - name: enable
+    narrative:
+      - stepNumber: 1
+        description: Clone the remote into the bound project directory
+        type: call
+        targetComponent: git_adapter
+        targetMethod: clone
+      - stepNumber: 2
+        description: Create/checkout the isolated working branch
+        type: call
+        targetComponent: git_adapter
+        targetMethod: ensureWorkingBranch
+      - stepNumber: 3
+        description: Build the GitConfig (enabled, remote, defaultBranch, workingBranch)
+        type: local
+      - stepNumber: 4
+        description: Persist the git config
+        type: call
+        targetComponent: git_config_registry
+        targetMethod: write
+      - stepNumber: 5
+        description: Return once enabled
+        type: return
+        outcome: enabled
+  - name: disable
+    narrative:
+      - stepNumber: 1
+        description: Clear the git-backing config
+        type: call
+        targetComponent: git_config_registry
+        targetMethod: clear
+      - stepNumber: 2
+        description: Return once disabled
+        type: return
+        outcome: disabled
+  - name: sync
+    narrative:
+      - stepNumber: 1
+        description: Read the git config
+        type: call
+        targetComponent: git_config_registry
+        targetMethod: read
+      - stepNumber: 2
+        description: If not git-backed, do nothing
+        type: branch
+        condition: config is null or not enabled
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return (no-op for native projects)
+        type: return
+        outcome: no-op
+      - stepNumber: 4
+        description: Fetch from the remote
+        type: call
+        targetComponent: git_adapter
+        targetMethod: fetch
+      - stepNumber: 5
+        description: Integrate the default branch into the working branch
+        type: call
+        targetComponent: git_adapter
+        targetMethod: integrateDefault
+      - stepNumber: 6
+        description: Return once synced
+        type: return
+        outcome: synced
+  - name: publish
+    narrative:
+      - stepNumber: 1
+        description: Read the git config
+        type: call
+        targetComponent: git_config_registry
+        targetMethod: read
+      - stepNumber: 2
+        description: If not git-backed, publish nothing
+        type: branch
+        condition: config is null or not enabled
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return a not-published result (native project)
+        type: return
+        outcome: not published
+      - stepNumber: 4
+        description: Commit the promoted working tree
+        type: call
+        targetComponent: git_adapter
+        targetMethod: commitAll
+      - stepNumber: 5
+        description: Push the working branch
+        type: call
+        targetComponent: git_adapter
+        targetMethod: push
+      - stepNumber: 6
+        description: Build the compare URL
+        type: call
+        targetComponent: git_adapter
+        targetMethod: compareUrl
+      - stepNumber: 7
+        description: Assemble the GitPublish (published, commitSha, compareUrl)
+        type: local
+      - stepNumber: 8
+        description: Return the publish result
+        type: return
+        outcome: GitPublish
+status: complete
+createdAt: '2026-07-04T16:33:44.730Z'
+updatedAt: '2026-07-04T16:37:37.331Z'

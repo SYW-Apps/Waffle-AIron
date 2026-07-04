@@ -1,0 +1,16 @@
+kind: value-object
+id: producer_config
+name: ProducerConfig
+description: A project's configuration for one producer target (persisted in .wai/producers.json).
+fields:
+  - name: target
+    type: string
+    description: Producer target id (e.g. "notion")
+    optional: false
+  - name: parentPageId
+    type: string
+    description: The external parent page/board the wairon subsection is written under
+    optional: false
+methods: []
+createdAt: '2026-07-04T17:29:12.484Z'
+updatedAt: '2026-07-04T17:29:12.498Z'

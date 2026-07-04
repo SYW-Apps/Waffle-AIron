@@ -3,7 +3,7 @@ import { runWithProjectRoot } from '../utils/fs.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import { stateIdEquals } from '../core/statehash.js';
 import type { LockRecord } from '../core/lockfile.js';
-import { authenticateMaster } from './auth.js';
+import { authenticateMaster, signViewToken } from './auth.js';
 import {
   hashToken,
   createCredential,
@@ -16,7 +16,9 @@ import {
   removeProjectRecord,
   existingProjectRoot,
 } from './projects.js';
-import { hostCore, validateProjectAsComplete } from './adapters.js';
+import { hostCore, hostGit, hostProducer, validateProjectAsComplete } from './adapters.js';
+import { setSecret as storeSecret, listSecretKeys } from '../utils/secrets.js';
+import type { ProducerConfig } from '../producers/index.js';
 import type {
   ApiKeyRecord,
   HostConfig,
@@ -100,14 +102,24 @@ export function lockProject(cfg: HostConfig, credential: string | null, project:
   const root = existingProjectRoot(cfg.dataDir, project);
   if (!root) throw new Error(`Unknown project "${project}".`);
   return runWithProjectRoot(root, () => {
+    // Git-backed: pull the default branch into the working branch first so the
+    // lock (and PR) is based on the latest. No-op for native projects.
+    hostGit.sync();
+
     const result = validateProjectAsComplete();
     const errors = result.issues.filter((i) => i.severity === 'error');
     if (errors.length) {
       throw new LockValidationError(errors.map((e) => ({ code: e.code, message: e.message, specId: e.specId })));
     }
     hostCore.promoteAllComplete();
+    const stateId = hostCore.computeStateId();
+
+    // Git-backed: commit the promoted working tree and push the working branch;
+    // returns the commit + compare URL a human opens the PR from. No-op if native.
+    const publish = hostGit.publish(`wairon lock: ${project}`);
+
     const record: LockRecord = {
-      stateId: hostCore.computeStateId(),
+      stateId,
       lockedAt: new Date().toISOString(),
       lockedBy: 'admin:master',
       validatorVersion: WAIRON_VERSION,
@@ -117,10 +129,105 @@ export function lockProject(cfg: HostConfig, credential: string | null, project:
         warnings: result.issues.filter((i) => i.severity === 'warning').length,
       },
       status: 'ready',
+      ...(publish.published ? { commitSha: publish.commitSha, compareUrl: publish.compareUrl } : {}),
     };
     hostCore.writeLockRecord(record);
     return record;
   });
+}
+
+// ── Git backing ─────────────────────────────────────────────────────────────
+
+/** Enable git backing on a fresh project (clones the remote onto a working branch). */
+export function enableGit(cfg: HostConfig, credential: string | null, project: string, remote: string, branch: string): HostedProjectRecord {
+  requireAdmin(credential);
+  if (existingProjectRoot(cfg.dataDir, project)) {
+    throw new Error(`Project "${project}" already exists; destroy it first to git-enable a fresh clone.`);
+  }
+  const rec = createProjectRecord(cfg.dataDir, project); // empty dir + record (no native provisioning)
+  runWithProjectRoot(rec.rootPath, () => hostGit.enable(remote, branch || 'main'));
+  return rec;
+}
+
+/** Disable git backing for a project (leaves the checkout in place). */
+export function disableGit(cfg: HostConfig, credential: string | null, project: string): void {
+  requireAdmin(credential);
+  const root = existingProjectRoot(cfg.dataDir, project);
+  if (!root) throw new Error(`Unknown project "${project}".`);
+  runWithProjectRoot(root, () => hostGit.disable());
+}
+
+/** Sync a project's default branch into its working branch. */
+export function syncGit(cfg: HostConfig, credential: string | null, project: string): void {
+  requireAdmin(credential);
+  const root = existingProjectRoot(cfg.dataDir, project);
+  if (!root) throw new Error(`Unknown project "${project}".`);
+  runWithProjectRoot(root, () => hostGit.sync());
+}
+
+// ── Producers ───────────────────────────────────────────────────────────────
+
+function boundProject(cfg: HostConfig, project: string): string {
+  const root = existingProjectRoot(cfg.dataDir, project);
+  if (!root) throw new Error(`Unknown project "${project}".`);
+  return root;
+}
+
+export function configureProducer(cfg: HostConfig, credential: string | null, project: string, target: string, parentPageId: string): void {
+  requireAdmin(credential);
+  runWithProjectRoot(boundProject(cfg, project), () => hostProducer.configure(target, parentPageId));
+}
+
+export async function produceProducer(cfg: HostConfig, credential: string | null, project: string, target: string): Promise<void> {
+  requireAdmin(credential);
+  const root = boundProject(cfg, project);
+  const base = process.env['WAIRON_PUBLIC_URL'] || `http://${cfg.host}:${cfg.port}`;
+  const diagramUrl = `${base}/view/diagram?token=${signViewToken(project, 'canvas')}`;
+  await runWithProjectRoot(root, () => hostProducer.produce(target, diagramUrl));
+}
+
+export function removeProducer(cfg: HostConfig, credential: string | null, project: string, target: string): void {
+  requireAdmin(credential);
+  runWithProjectRoot(boundProject(cfg, project), () => hostProducer.remove(target));
+}
+
+export function listProducers(cfg: HostConfig, credential: string | null, project: string): ProducerConfig[] {
+  requireAdmin(credential);
+  return runWithProjectRoot(boundProject(cfg, project), () => hostProducer.list());
+}
+
+// ── Secrets (runtime-configurable integration tokens) ─────────────────────────
+
+export function setSecret(_cfg: HostConfig, credential: string | null, key: string, value: string): void {
+  requireAdmin(credential);
+  storeSecret(key, value);
+}
+
+export function listSecrets(_cfg: HostConfig, credential: string | null): string[] {
+  requireAdmin(credential);
+  return listSecretKeys();
+}
+
+// ── Diagrams ──────────────────────────────────────────────────────────────
+
+/** Render a project's diagram artifact in the requested format. */
+export function generateDiagram(cfg: HostConfig, credential: string | null, project: string, format: string): string {
+  requireAdmin(credential);
+  const root = existingProjectRoot(cfg.dataDir, project);
+  if (!root) throw new Error(`Unknown project "${project}".`);
+  return runWithProjectRoot(root, () => hostCore.renderDiagram(format));
+}
+
+/** Same as generateDiagram; the HTTP layer sets a download disposition. */
+export function downloadDiagram(cfg: HostConfig, credential: string | null, project: string, format: string): string {
+  return generateDiagram(cfg, credential, project, format);
+}
+
+/** Mint a short-lived signed relative link to view the project's canvas in a browser. */
+export function diagramViewLink(cfg: HostConfig, credential: string | null, project: string): string {
+  requireAdmin(credential);
+  if (!existingProjectRoot(cfg.dataDir, project)) throw new Error(`Unknown project "${project}".`);
+  return `/view/diagram?token=${signViewToken(project, 'canvas')}`;
 }
 
 export function promoteProject(cfg: HostConfig, credential: string | null, project: string): PromoteResult {

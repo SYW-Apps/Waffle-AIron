@@ -1,0 +1,37 @@
+id: producer_portal_impl
+name: Producer Portal Implementation
+description: Forwards producer calls to the producer orchestrator.
+contract: iproducer_portal
+sourcePath: src/producers/index.ts
+methods:
+  - name: configure
+    narrative:
+      - stepNumber: 1
+        description: Forward to the producer orchestrator
+        type: call
+        targetComponent: producer_orchestrator
+        targetMethod: configure
+  - name: produce
+    narrative:
+      - stepNumber: 1
+        description: Forward to the producer orchestrator
+        type: call
+        targetComponent: producer_orchestrator
+        targetMethod: produce
+  - name: remove
+    narrative:
+      - stepNumber: 1
+        description: Forward to the producer orchestrator
+        type: call
+        targetComponent: producer_orchestrator
+        targetMethod: remove
+  - name: list
+    narrative:
+      - stepNumber: 1
+        description: Forward to the producer orchestrator
+        type: call
+        targetComponent: producer_orchestrator
+        targetMethod: list
+status: complete
+createdAt: '2026-07-04T17:39:28.093Z'
+updatedAt: '2026-07-04T17:42:04.285Z'

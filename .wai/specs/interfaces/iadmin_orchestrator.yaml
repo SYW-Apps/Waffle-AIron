@@ -41,6 +41,60 @@ methods:
       ready-for-promotion only when it still matches; reject stale locks.
     signature: 'promoteProject(credential: string, project: string): PromoteResult'
     returns: PromoteResult
+  - name: generateDiagram
+    description: Authenticate, bind the project scope, and return the rendered diagram artifact for the format.
+    signature: 'generateDiagram(credential: string, project: string, format: string): string'
+    returns: string
+  - name: downloadDiagram
+    description: Authenticate and return the diagram artifact for download (attachment).
+    signature: 'downloadDiagram(credential: string, project: string, format: string): string'
+    returns: string
+  - name: diagramViewLink
+    description: Authenticate and mint a short-lived signed link to view the project's canvas in a browser.
+    signature: 'diagramViewLink(credential: string, project: string): string'
+    returns: string
+  - name: enableGit
+    description: >-
+      Authenticate, ensure the project exists, and enable git backing (clone the remote into it on
+      an isolated working branch).
+    signature: >-
+      enableGit(credential: string, project: string, remote: string, branch: string):
+      HostedProjectRecord
+    returns: HostedProjectRecord
+  - name: disableGit
+    description: Authenticate and disable git backing for the project.
+    signature: 'disableGit(credential: string, project: string): void'
+    returns: void
+  - name: syncGit
+    description: Authenticate and sync the project's default branch into its working branch.
+    signature: 'syncGit(credential: string, project: string): void'
+    returns: void
+  - name: configureProducer
+    description: Authenticate and configure a producer target for a project.
+    signature: >-
+      configureProducer(credential: string, project: string, target: string, parentPageId: string):
+      void
+    returns: void
+  - name: produceProducer
+    description: Authenticate, mint a signed canvas link, and project the project to the target.
+    signature: 'produceProducer(credential: string, project: string, target: string): void'
+    returns: void
+  - name: removeProducer
+    description: Authenticate and remove a producer target.
+    signature: 'removeProducer(credential: string, project: string, target: string): void'
+    returns: void
+  - name: listProducers
+    description: Authenticate and list a project's configured producers.
+    signature: 'listProducers(credential: string, project: string): ProducerConfig[]'
+    returns: ProducerConfig[]
+  - name: setSecret
+    description: Authenticate and set an integration secret at runtime (no restart).
+    signature: 'setSecret(credential: string, key: string, value: string): void'
+    returns: void
+  - name: listSecrets
+    description: Authenticate and list configured secret keys (names only).
+    signature: 'listSecrets(credential: string): string[]'
+    returns: string[]
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-07-04T13:06:22.756Z'
+updatedAt: '2026-07-04T17:38:08.196Z'

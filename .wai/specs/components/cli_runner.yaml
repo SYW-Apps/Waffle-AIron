@@ -9,6 +9,7 @@ dependsOn:
   - cli_validator_adapter
   - cli_skills_adapter
   - cli_host_adapter
+  - cli_producer_adapter
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-07-04T12:45:24.451Z'
+updatedAt: '2026-07-04T17:37:15.953Z'

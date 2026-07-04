@@ -25,6 +25,10 @@ methods:
     description: Promote every spec to status complete.
     signature: 'promoteAllComplete(): void'
     returns: void
+  - name: renderDiagram
+    description: Render the bound project's spec tree into a diagram artifact string.
+    signature: 'renderDiagram(format: string): string'
+    returns: string
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-07-04T13:06:22.805Z'
+updatedAt: '2026-07-04T16:00:12.921Z'

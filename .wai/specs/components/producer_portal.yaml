@@ -1,0 +1,14 @@
+id: producer_portal
+name: Producer Portal
+description: >-
+  Inbound portal for the producers subsystem: configure a target, produce (project + push), remove a
+  target, and list configured producers. In-process; dispatches to the producer orchestrator.
+subsystem: sdd_producers
+componentType: Portal
+owns: []
+dependsOn:
+  - producer_orchestrator
+portalType: Custom
+status: complete
+createdAt: '2026-07-04T17:28:55.997Z'
+updatedAt: '2026-07-04T17:42:04.014Z'

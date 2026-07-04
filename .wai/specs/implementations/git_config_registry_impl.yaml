@@ -1,0 +1,22 @@
+id: git_config_registry_impl
+name: Git Config Registry Implementation
+description: File-backed I/O for a project's git-backing config (.wai/git.json).
+contract: igit_config_registry
+sourcePath: src/git/config.ts
+methods:
+  - name: read
+    narrative: []
+    intent: >-
+      Reads .wai/git.json for the bound project and returns the parsed GitConfig, or null when
+      absent/unreadable.
+  - name: write
+    narrative: []
+    intent: >-
+      Serializes the GitConfig and writes it atomically to .wai/git.json for the bound project,
+      overwriting any prior config.
+  - name: clear
+    narrative: []
+    intent: Removes .wai/git.json for the bound project. Idempotent when already absent.
+status: complete
+createdAt: '2026-07-04T16:33:31.726Z'
+updatedAt: '2026-07-04T16:37:37.316Z'

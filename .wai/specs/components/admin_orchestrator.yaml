@@ -15,6 +15,9 @@ dependsOn:
   - credential_registry
   - host_core_adapter
   - host_validator_adapter
+  - host_git_adapter
+  - host_producer_adapter
+  - secret_registry
 status: complete
 createdAt: '2026-07-04T12:33:51.178Z'
-updatedAt: '2026-07-04T13:06:22.447Z'
+updatedAt: '2026-07-04T17:37:14.452Z'

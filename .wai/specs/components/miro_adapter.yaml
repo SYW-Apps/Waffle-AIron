@@ -1,0 +1,14 @@
+id: miro_adapter
+name: Miro Client Adapter
+description: >-
+  The only block doing Miro I/O: projects the architecture GraphModel onto a Miro board as native
+  shapes (one per component, grid-laid-out and grouped by subsystem frame) and connectors (dependsOn
+  edges), via the Miro REST API. Idempotent — refreshes a 'wairon architecture' frame, leaving other
+  board content untouched. Authenticates with the resolved Miro token.
+subsystem: sdd_producers
+componentType: Adapter
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-07-04T18:03:51.034Z'
+updatedAt: '2026-07-04T18:06:52.396Z'

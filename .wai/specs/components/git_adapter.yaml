@@ -1,0 +1,14 @@
+id: git_adapter
+name: Git Client Adapter
+description: >-
+  The only block doing git I/O: clone, fetch, ensure/checkout the working branch, integrate the
+  default branch, commit the working tree, push, read the head commit, and compute the host-agnostic
+  compare URL. Runs git against the bound project's checkout using the container's bot identity
+  (WAIRON_GIT_TOKEN + committer name/email).
+subsystem: sdd_git
+componentType: Adapter
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-07-04T16:31:18.263Z'
+updatedAt: '2026-07-04T16:37:37.105Z'

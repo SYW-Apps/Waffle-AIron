@@ -1,0 +1,24 @@
+id: igit_orchestrator
+name: Git Orchestrator Interface
+description: Contract for the git-backing workflows.
+component: git_orchestrator
+methods:
+  - name: enable
+    description: Clone + set up the working branch + persist config.
+    signature: 'enable(remote: string, branch: string): void'
+    returns: void
+  - name: disable
+    description: Clear the git-backing config.
+    signature: 'disable(): void'
+    returns: void
+  - name: sync
+    description: Integrate the default branch into the working branch; no-op when not git-backed.
+    signature: 'sync(): void'
+    returns: void
+  - name: publish
+    description: Commit + push the working branch and produce the compare URL; no-op when not git-backed.
+    signature: 'publish(message: string): GitPublish'
+    returns: GitPublish
+status: complete
+createdAt: '2026-07-04T16:31:53.451Z'
+updatedAt: '2026-07-04T16:37:37.266Z'

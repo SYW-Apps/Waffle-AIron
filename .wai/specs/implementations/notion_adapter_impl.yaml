@@ -1,0 +1,27 @@
+id: notion_adapter_impl
+name: Notion Client Adapter Implementation
+description: Pushes a DocPage tree into a wairon-specs subsection under a Notion parent page via the REST API.
+contract: inotion_adapter
+sourcePath: src/producers/notion.ts
+methods:
+  - name: sync
+    narrative:
+      - stepNumber: 1
+        description: Resolve the Notion token (secret store, then env); reject if absent
+        type: local
+      - stepNumber: 2
+        description: Find or create the 'wairon specs' child page under the parent page
+        type: local
+      - stepNumber: 3
+        description: >-
+          Archive the wairon-specs page's existing children (so re-produce is idempotent and never
+          touches sibling content)
+        type: local
+      - stepNumber: 4
+        description: >-
+          Create the DocPage tree under it: each page's markdown body converted to Notion blocks,
+          child pages recursively
+        type: local
+status: complete
+createdAt: '2026-07-04T17:39:24.124Z'
+updatedAt: '2026-07-04T17:42:04.235Z'

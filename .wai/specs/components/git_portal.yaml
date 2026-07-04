@@ -1,0 +1,15 @@
+id: git_portal
+name: Git Portal
+description: >-
+  Inbound portal for the git-backing subsystem: exposes enable/disable/sync/isEnabled and the lock
+  hooks (publish) to the hosting server, dispatching to the git orchestrator. In-process (no network
+  transport).
+subsystem: sdd_git
+componentType: Portal
+owns: []
+dependsOn:
+  - git_orchestrator
+portalType: Custom
+status: complete
+createdAt: '2026-07-04T16:31:12.203Z'
+updatedAt: '2026-07-04T16:37:37.188Z'

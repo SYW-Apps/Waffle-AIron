@@ -14,12 +14,15 @@ You own and decide on everything within:
 .wai/specs/components/auth_specialist.yaml
 .wai/specs/components/credential_registry.yaml
 .wai/specs/components/host_core_adapter.yaml
+.wai/specs/components/host_git_adapter.yaml
 .wai/specs/components/host_http_portal.yaml
 .wai/specs/components/host_mcp_adapter.yaml
+.wai/specs/components/host_producer_adapter.yaml
 .wai/specs/components/host_request_orchestrator.yaml
 .wai/specs/components/host_server.yaml
 .wai/specs/components/host_validator_adapter.yaml
 .wai/specs/components/project_registry.yaml
+.wai/specs/components/secret_registry.yaml
 src/server/admin.ts
 src/server/auth.ts
 src/server/credentials.ts
@@ -27,6 +30,7 @@ src/server/adapters.ts
 src/server/http.ts
 src/server/request.ts
 src/server/projects.ts
+src/server/secrets.ts
 ```
 
 ## Responsibilities

@@ -83,6 +83,10 @@ methods:
     description: Promote every spec in the tree to status complete (the lock status write).
     signature: 'promoteAllComplete(): void'
     returns: void
+  - name: renderDiagram
+    description: Delegate diagram rendering to the diagram specialist.
+    signature: 'renderDiagram(format: string): string'
+    returns: string
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-04T12:48:16.091Z'
+updatedAt: '2026-07-04T15:59:11.710Z'

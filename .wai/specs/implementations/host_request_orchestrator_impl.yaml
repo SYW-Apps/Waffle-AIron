@@ -57,6 +57,31 @@ methods:
         description: Return the MCP response
         type: return
         outcome: MCP response
+  - name: viewDiagram
+    narrative:
+      - stepNumber: 1
+        description: Extract the signed view token from the request query
+        type: local
+      - stepNumber: 2
+        description: Verify the token (signature + expiry); rejects if invalid
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: verifyViewToken
+      - stepNumber: 3
+        description: Resolve the granted project's isolated root and bind it
+        type: local
+      - stepNumber: 4
+        description: Render the canvas in scope
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: renderDiagram
+      - stepNumber: 5
+        description: Wrap the canvas HTML in a text/html response
+        type: local
+      - stepNumber: 6
+        description: Return the canvas HTML response
+        type: return
+        outcome: canvas html response
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-07-04T13:06:22.980Z'
+updatedAt: '2026-07-04T16:01:28.525Z'

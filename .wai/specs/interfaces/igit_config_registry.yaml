@@ -1,0 +1,20 @@
+id: igit_config_registry
+name: Git Config Registry Interface
+description: Contract for reading/writing a project's git-backing config.
+component: git_config_registry
+methods:
+  - name: read
+    description: Read the project's GitConfig, or null when not git-backed.
+    signature: 'read(): GitConfig | null'
+    returns: GitConfig | null
+  - name: write
+    description: Persist the project's GitConfig.
+    signature: 'write(config: GitConfig): void'
+    returns: void
+  - name: clear
+    description: Remove the project's git-backing config.
+    signature: 'clear(): void'
+    returns: void
+status: complete
+createdAt: '2026-07-04T16:32:01.932Z'
+updatedAt: '2026-07-04T16:37:37.254Z'

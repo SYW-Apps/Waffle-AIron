@@ -12,6 +12,12 @@ methods:
       return the response.
     signature: 'handleRequest(request: HttpRequest): HttpResponse'
     returns: HttpResponse
+  - name: viewDiagram
+    description: >-
+      Verify the signed view token, bind the granted project's scope, render the canvas, and return
+      it as HTML.
+    signature: 'viewDiagram(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
 status: complete
 createdAt: '2026-07-04T12:49:34.974Z'
-updatedAt: '2026-07-04T13:06:22.830Z'
+updatedAt: '2026-07-04T16:00:25.426Z'

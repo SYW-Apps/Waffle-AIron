@@ -1,0 +1,14 @@
+id: host_git_adapter
+name: Host Git Client Adapter
+description: >-
+  Local client adapter crossing the subsystem boundary to sdd_git via its published portal: lets the
+  hosting control plane enable/disable/sync git backing and run the lock-time sync + publish for a
+  bound project.
+subsystem: sdd_host
+componentType: Adapter
+owns: []
+dependsOn:
+  - git_portal
+status: complete
+createdAt: '2026-07-04T16:31:22.262Z'
+updatedAt: '2026-07-04T16:37:37.214Z'

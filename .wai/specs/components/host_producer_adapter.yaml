@@ -1,0 +1,13 @@
+id: host_producer_adapter
+name: Host Producer Client Adapter
+description: >-
+  Local client adapter crossing the subsystem boundary to sdd_producers via its published portal:
+  lets the hosting control plane configure, produce, remove, and list producers for a bound project.
+subsystem: sdd_host
+componentType: Adapter
+owns: []
+dependsOn:
+  - producer_portal
+status: complete
+createdAt: '2026-07-04T17:29:09.996Z'
+updatedAt: '2026-07-04T17:42:03.874Z'

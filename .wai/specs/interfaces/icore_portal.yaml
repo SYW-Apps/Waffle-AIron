@@ -85,6 +85,12 @@ methods:
     description: Promote every spec in the tree to status complete (the lock status write).
     signature: 'promoteAllComplete(): void'
     returns: void
+  - name: renderDiagram
+    description: >-
+      Render the current project's spec tree into the requested diagram format and return the
+      artifact string.
+    signature: 'renderDiagram(format: string): string'
+    returns: string
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-04T12:48:19.609Z'
+updatedAt: '2026-07-04T15:59:15.717Z'

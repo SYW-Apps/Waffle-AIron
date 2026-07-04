@@ -1,0 +1,24 @@
+id: iproducer_orchestrator
+name: Producer Orchestrator Interface
+description: Contract for the producer workflows.
+component: producer_orchestrator
+methods:
+  - name: configure
+    description: Persist a target's config.
+    signature: 'configure(target: string, parentPageId: string): void'
+    returns: void
+  - name: produce
+    description: Project the spec tree and push it to the target.
+    signature: 'produce(target: string, diagramUrl: string): void'
+    returns: void
+  - name: remove
+    description: Remove a target's config.
+    signature: 'remove(target: string): void'
+    returns: void
+  - name: list
+    description: List configured producers.
+    signature: 'list(): ProducerConfig[]'
+    returns: ProducerConfig[]
+status: complete
+createdAt: '2026-07-04T17:37:33.877Z'
+updatedAt: '2026-07-04T17:42:04.158Z'

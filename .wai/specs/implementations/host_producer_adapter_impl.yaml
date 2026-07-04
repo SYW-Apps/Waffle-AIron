@@ -1,0 +1,37 @@
+id: host_producer_adapter_impl
+name: Host Producer Client Adapter Implementation
+description: Forwards the hosting server's producer calls to the producer portal.
+contract: ihost_producer_adapter
+sourcePath: src/server/adapters.ts
+methods:
+  - name: configure
+    narrative:
+      - stepNumber: 1
+        description: Forward to the producer portal
+        type: call
+        targetComponent: producer_portal
+        targetMethod: configure
+  - name: produce
+    narrative:
+      - stepNumber: 1
+        description: Forward to the producer portal
+        type: call
+        targetComponent: producer_portal
+        targetMethod: produce
+  - name: remove
+    narrative:
+      - stepNumber: 1
+        description: Forward to the producer portal
+        type: call
+        targetComponent: producer_portal
+        targetMethod: remove
+  - name: list
+    narrative:
+      - stepNumber: 1
+        description: Forward to the producer portal
+        type: call
+        targetComponent: producer_portal
+        targetMethod: list
+status: complete
+createdAt: '2026-07-04T17:39:32.151Z'
+updatedAt: '2026-07-04T17:42:04.223Z'

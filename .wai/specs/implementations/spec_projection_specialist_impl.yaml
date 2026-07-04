@@ -1,0 +1,76 @@
+id: spec_projection_specialist_impl
+name: Spec Projection Specialist Implementation
+description: Projects the spec tree into a target-agnostic DocPage tree.
+contract: ispec_projection_specialist
+sourcePath: src/producers/projection.ts
+methods:
+  - name: project
+    narrative:
+      - stepNumber: 1
+        description: Load the system spec
+        type: call
+        targetComponent: producer_core_adapter
+        targetMethod: loadSystemSpec
+      - stepNumber: 2
+        description: Load subsystem specs
+        type: call
+        targetComponent: producer_core_adapter
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 3
+        description: Load component specs
+        type: call
+        targetComponent: producer_core_adapter
+        targetMethod: loadComponentSpecs
+      - stepNumber: 4
+        description: Load interface specs
+        type: call
+        targetComponent: producer_core_adapter
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 5
+        description: Load implementation specs
+        type: call
+        targetComponent: producer_core_adapter
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 6
+        description: Render the Mermaid component diagram
+        type: call
+        targetComponent: producer_core_adapter
+        targetMethod: renderDiagram
+      - stepNumber: 7
+        description: >-
+          Build the root 'wairon specs' DocPage: system overview, the Mermaid code block, and the
+          optional canvas link
+        type: local
+      - stepNumber: 8
+        description: >-
+          Add a child DocPage per subsystem; under each, a page per component rendering its
+          interfaces and methods as tables
+        type: local
+      - stepNumber: 9
+        description: Return the DocPage tree
+        type: return
+        outcome: DocPage tree
+  - name: projectGraph
+    narrative:
+      - stepNumber: 1
+        description: Load subsystem specs
+        type: call
+        targetComponent: producer_core_adapter
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 2
+        description: Load component specs
+        type: call
+        targetComponent: producer_core_adapter
+        targetMethod: loadComponentSpecs
+      - stepNumber: 3
+        description: >-
+          Build GraphNodes from the components (id, label, subsystem, type) and GraphEdges from
+          their dependsOn
+        type: local
+      - stepNumber: 4
+        description: Return the GraphModel
+        type: return
+        outcome: GraphModel
+status: complete
+createdAt: '2026-07-04T17:39:59.030Z'
+updatedAt: '2026-07-04T18:04:22.511Z'

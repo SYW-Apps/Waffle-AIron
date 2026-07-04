@@ -12,6 +12,7 @@ dependsOn:
   - auth_specialist
   - project_registry
   - host_mcp_adapter
+  - host_core_adapter
 status: complete
 createdAt: '2026-07-04T12:33:41.786Z'
-updatedAt: '2026-07-04T13:06:22.631Z'
+updatedAt: '2026-07-04T16:00:25.967Z'

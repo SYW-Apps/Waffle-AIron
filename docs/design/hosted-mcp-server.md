@@ -62,6 +62,21 @@ race and no changes to the ~20 `sdd_*` handlers.
 
 ---
 
+### Diagrams over the API
+
+The hosted server reuses the same diagram engine as `wairon diagram` (a
+first-class `diagram_specialist`), generated on demand and scoped to the project:
+
+- `POST /admin/projects/{id}/diagram` (body `{format}`) — generate; returns the
+  artifact (`canvas` HTML · `mermaid` · `drawio` · `excalidraw`). *[bearer]*
+- `GET  /admin/projects/{id}/diagram/{format}` — download (attachment). *[bearer]*
+- `GET  /admin/projects/{id}/canvas-link` — mint a short-lived **signed** view
+  link. *[bearer]*
+- `GET  /view/diagram?token=…` — open the canvas in a browser; the HMAC-signed,
+  expiring token *is* the capability, so **no bearer** is needed (browsers can't
+  attach one to a navigation). Signed with `WAIRON_SIGNING_SECRET` (else
+  `WAIRON_ADMIN_TOKEN`); TTL ~5 min.
+
 ## 3. Authentication & the bootstrap
 
 Auth is **on by default** and **toggleable** (`--no-auth`, for a trusted/VPN-only
@@ -104,6 +119,64 @@ Closes the stale-approval (TOCTOU) gap from the feature request.
   Verified: editing a spec after lock flips promote to stale until you re-lock.
 
 ---
+
+### Git-backed projects
+
+A project can relocate its **source of truth to a git repo** — then people clone
+the repo and collaborate locally via their own AI tools, and the container is one
+participant:
+
+- `wairon host git enable --project <id> --remote <url> [--branch main]` (or
+  `POST /admin/projects/{id}/git`) clones the repo and checks out an **isolated
+  working branch** (`wairon/work`); the container never commits to the default
+  branch.
+- `wairon host git sync` (or `POST …/git/sync`) pulls the default branch into the
+  working branch.
+- **`lock` is git-aware:** it syncs, validates-as-complete, promotes, then
+  **commits + pushes the working branch** and records the commit SHA + a
+  **compare URL** — you open the PR (push-only, no forge API). `wairon validate`
+  is the natural PR status check.
+- **`promote`** is unchanged — the content `StateId` already refuses a stale
+  lock, and it never merges (the human merges the PR).
+
+Identity: a single bot token — `WAIRON_GIT_TOKEN` (+ `WAIRON_GIT_NAME` /
+`WAIRON_GIT_EMAIL`). `.wai/lock.json` and `.wai/git.json` stay container-local
+(never committed). The Docker image ships with `git` installed.
+
+### Producers — project specs to Notion / Miro
+
+Project a project's spec tree into an external target as a one-way, idempotent
+subsection (sibling content untouched), **hosted or locally**. Two producers ship:
+
+- **Notion** — a **"wairon specs"** page subtree; each page carries the component's
+  methods and a **Mermaid** diagram code block (the hosted path also embeds a signed
+  live-canvas link). `--page` is the parent Notion page id.
+- **Miro** — the architecture graph rendered onto a board as native shapes +
+  connectors inside a **`wairon architecture`** frame; re-running clears and rebuilds
+  just that frame. `--page` is the board id.
+
+Both are usable:
+
+- Hosted: `wairon host producer configure --project acme --target <notion|miro> --page <id>`,
+  then `wairon host producer produce --project acme` (or the admin API under
+  `/admin/projects/{id}/producers/{target}`).
+- Local: `wairon produce <notion|miro> --page <id>` against the project in your cwd —
+  the token comes from `--token`, else `WAIRON_NOTION_TOKEN` / `WAIRON_MIRO_TOKEN`,
+  else an interactive prompt (nothing stored).
+
+Both use raw REST (**no new dependency**). The projection is target-agnostic — Notion
+renders a `DocPage` tree, Miro renders a `GraphModel` — so further targets slot in
+against the same projection.
+
+### Runtime secrets — no restart
+
+Integration tokens resolve **data-dir store → env**, so an integration can be
+added to a *live* container without a restart:
+
+```sh
+docker compose exec wairon wairon host secret set --key notion-token --value secret_xxx
+# also miro-token / git-token / signing-secret; env still works as the default
+```
 
 ## 5. Self-hosting with Docker
 
@@ -182,6 +255,14 @@ Two equivalent paths to the same control-plane logic:
 | Data root | `--data-dir` | `WAIRON_DATA_DIR` | `~/.wairon/data` |
 | Data-plane auth | `--no-auth` (off) | — | on |
 | Master credential | — | `WAIRON_ADMIN_TOKEN` | *(required unless `--no-auth`)* |
+| Diagram view-link signing key | — | `WAIRON_SIGNING_SECRET` | falls back to `WAIRON_ADMIN_TOKEN` |
+| Git bot token | — | `WAIRON_GIT_TOKEN` | *(needed for `https://` git remotes)* |
+| Git committer name / email | — | `WAIRON_GIT_NAME` / `WAIRON_GIT_EMAIL` | `wairon-bot` / `wairon-bot@localhost` |
+| Notion integration token | — | `WAIRON_NOTION_TOKEN` | *(or set via `host secret set`)* |
+| Miro access token | — | `WAIRON_MIRO_TOKEN` | *(or set via `host secret set`)* |
+| Public base URL (for links) | — | `WAIRON_PUBLIC_URL` | data-plane `host:port` |
+
+All token secrets can also be set at runtime with `wairon host secret set --key <k> --value <v>` (data-dir store, read live).
 
 Data layout:
 

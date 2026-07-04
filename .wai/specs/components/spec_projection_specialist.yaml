@@ -1,0 +1,15 @@
+id: spec_projection_specialist
+name: Spec Projection Specialist
+description: >-
+  Projects the bound project's spec tree into a target-agnostic DocPage tree (a "wairon specs" root
+  with system/subsystem/component pages carrying readable prose, method tables, and a Mermaid
+  diagram code block, plus an optional live-canvas link). Pure transformation, reused by every
+  producer target.
+subsystem: sdd_producers
+componentType: Specialist
+owns: []
+dependsOn:
+  - producer_core_adapter
+status: complete
+createdAt: '2026-07-04T17:29:01.496Z'
+updatedAt: '2026-07-04T17:42:04.070Z'

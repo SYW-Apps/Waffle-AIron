@@ -27,6 +27,10 @@ export interface LockRecord {
   validationResult: { valid: boolean; errors: number; warnings: number };
   /** "ready" (locked, awaiting promotion) or "promoted". */
   status: 'ready' | 'promoted';
+  /** For git-backed projects: the pushed commit the PR is at. */
+  commitSha?: string;
+  /** For git-backed projects: the compare/PR URL a human opens to merge. */
+  compareUrl?: string;
 }
 
 function lockPath(): string {

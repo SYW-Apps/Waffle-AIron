@@ -1,0 +1,32 @@
+id: iproducer_core_adapter
+name: Producer Core Client Adapter Interface
+description: Contract for loading the spec tree and rendering diagrams, forwarded to the core portal.
+component: producer_core_adapter
+methods:
+  - name: loadSystemSpec
+    description: Load the L0 system spec.
+    signature: 'loadSystemSpec(): SystemSpec | null'
+    returns: SystemSpec | null
+  - name: loadSubsystemSpecs
+    description: Load subsystem specs.
+    signature: 'loadSubsystemSpecs(): SubsystemSpec[]'
+    returns: SubsystemSpec[]
+  - name: loadComponentSpecs
+    description: Load component specs.
+    signature: 'loadComponentSpecs(): ComponentSpec[]'
+    returns: ComponentSpec[]
+  - name: loadInterfaceSpecs
+    description: Load interface specs.
+    signature: 'loadInterfaceSpecs(): InterfaceSpec[]'
+    returns: InterfaceSpec[]
+  - name: loadImplementationSpecs
+    description: Load implementation specs.
+    signature: 'loadImplementationSpecs(): ImplementationSpec[]'
+    returns: ImplementationSpec[]
+  - name: renderDiagram
+    description: Render the project's diagram in the given format.
+    signature: 'renderDiagram(format: string): string'
+    returns: string
+status: complete
+createdAt: '2026-07-04T17:37:41.880Z'
+updatedAt: '2026-07-04T17:42:04.145Z'

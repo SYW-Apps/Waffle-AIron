@@ -1,9 +1,9 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { runWithProjectRoot } from '../utils/fs.js';
-import { authenticate } from './auth.js';
-import { resolveProjectRoot } from './projects.js';
-import { createScopedServer } from './adapters.js';
+import { authenticate, verifyViewToken } from './auth.js';
+import { resolveProjectRoot, existingProjectRoot } from './projects.js';
+import { createScopedServer, hostCore } from './adapters.js';
 import type { HostConfig, Principal } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -76,4 +76,28 @@ export async function handleMcpRequest(
     await server.connect(transport);
     await transport.handleRequest(req, res, body);
   });
+}
+
+/**
+ * Serve a project's canvas HTML to a browser, authorized by a signed view token
+ * in the URL (no bearer — the signature is the capability). Verifies signature +
+ * expiry, binds the granted project's scope, and renders in scope.
+ */
+export function handleViewDiagram(cfg: HostConfig, req: IncomingMessage, res: ServerResponse): void {
+  const token = new URL(req.url ?? '', 'http://localhost').searchParams.get('token');
+  let grant;
+  try {
+    grant = verifyViewToken(token ?? '');
+  } catch (e) {
+    sendJson(res, 403, { error: e instanceof Error ? e.message : String(e) });
+    return;
+  }
+  const root = existingProjectRoot(cfg.dataDir, grant.project);
+  if (!root) {
+    sendJson(res, 404, { error: 'project not found' });
+    return;
+  }
+  const html = runWithProjectRoot(root, () => hostCore.renderDiagram(grant.format));
+  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+  res.end(html);
 }

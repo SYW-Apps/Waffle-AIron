@@ -2,8 +2,11 @@ import { computeStateId } from '../core/statehash.js';
 import { readLockRecord, writeLockRecord } from '../core/lockfile.js';
 import { provisionProject, promoteAllComplete } from '../core/provision.js';
 import { validateAsComplete } from '../core/validation.js';
+import { renderDiagram } from '../core/diagram.js';
 import { loadProjectConfig } from '../config/loader.js';
 import { createMcpServer } from '../mcp/server.js';
+import * as gitPortal from '../git/index.js';
+import * as producerPortal from '../producers/index.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 // ---------------------------------------------------------------------------
@@ -21,6 +24,7 @@ export const hostCore = {
   readLockRecord,
   writeLockRecord,
   promoteAllComplete,
+  renderDiagram,
 };
 
 // host_validator_adapter → sdd_validator (validator_portal)
@@ -33,3 +37,19 @@ export function validateProjectAsComplete() {
 export function createScopedServer(): McpServer {
   return createMcpServer();
 }
+
+// host_git_adapter → sdd_git (git_portal)
+export const hostGit = {
+  enable: gitPortal.enable,
+  disable: gitPortal.disable,
+  sync: gitPortal.sync,
+  publish: gitPortal.publish,
+};
+
+// host_producer_adapter → sdd_producers (producer_portal)
+export const hostProducer = {
+  configure: producerPortal.configure,
+  produce: producerPortal.produce,
+  remove: producerPortal.remove,
+  list: producerPortal.list,
+};

@@ -39,6 +39,13 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: promoteAllComplete
+  - name: renderDiagram
+    narrative:
+      - stepNumber: 1
+        description: Forward diagram rendering to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: renderDiagram
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-07-04T13:06:22.947Z'
+updatedAt: '2026-07-04T16:01:05.796Z'

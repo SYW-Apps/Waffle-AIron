@@ -1,0 +1,22 @@
+kind: value-object
+id: git_publish
+name: GitPublish
+description: >-
+  Outcome of publishing a lock to git: whether anything was pushed (false for native projects), and
+  if so the pushed commit and the compare URL a human opens the PR from. Never performs the merge.
+fields:
+  - name: published
+    type: boolean
+    description: True when the working branch was committed and pushed (git-backed); false for native projects
+    optional: false
+  - name: commitSha
+    type: string
+    description: The pushed commit SHA
+    optional: true
+  - name: compareUrl
+    type: string
+    description: The host's compare/PR URL for workingBranch -> defaultBranch
+    optional: true
+methods: []
+createdAt: '2026-07-04T16:31:28.869Z'
+updatedAt: '2026-07-04T16:31:28.882Z'

@@ -1,8 +1,8 @@
 id: admin_orchestrator_impl
 name: Admin Orchestrator Implementation
 description: >-
-  Control-plane workflows: master-credential auth then project/key lifecycle and the state-scoped
-  lock/promote.
+  Control-plane workflows: master-credential auth then project/key lifecycle, git-aware
+  lock/promote, diagrams, and git backing.
 contract: iadmin_orchestrator
 sourcePath: src/server/admin.ts
 methods:
@@ -189,41 +189,53 @@ methods:
         description: Bind the project's isolated root
         type: local
       - stepNumber: 5
+        description: Sync the default branch into the working branch (no-op for native projects)
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: sync
+      - stepNumber: 6
         description: Validate the tree as-complete
         type: call
         targetComponent: host_validator_adapter
         targetMethod: validateAsComplete
-      - stepNumber: 6
+      - stepNumber: 7
         description: If validation reports errors, refuse to lock
         type: branch
         condition: result reports errors
-        onFalseStep: 8
-      - stepNumber: 7
+        onFalseStep: 9
+      - stepNumber: 8
         description: Return cannot-lock with the validation errors
         type: return
         outcome: cannot lock — validation failed
-      - stepNumber: 8
+      - stepNumber: 9
         description: Promote every spec to complete
         type: call
         targetComponent: host_core_adapter
         targetMethod: promoteAllComplete
-      - stepNumber: 9
+      - stepNumber: 10
         description: Compute the validated StateId
         type: call
         targetComponent: host_core_adapter
         targetMethod: computeStateId
-      - stepNumber: 10
+      - stepNumber: 11
+        description: >-
+          Publish to git: commit the promoted working tree and push, returning the commit + compare
+          URL (no-op for native projects)
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: publish
+      - stepNumber: 12
         description: >-
           Assemble a LockRecord (stateId, lockedAt, lockedBy, validatorVersion, validationResult,
-          status ready)
+          status ready, plus commitSha/compareUrl when git-backed)
         type: local
-      - stepNumber: 11
+      - stepNumber: 13
         description: Persist the lock record
         type: call
         targetComponent: host_core_adapter
         targetMethod: writeLockRecord
-      - stepNumber: 12
-        description: Return the lock record
+      - stepNumber: 14
+        description: Return the lock record (with the compare URL to open the PR when git-backed)
         type: return
         outcome: lock record
   - name: promoteProject
@@ -274,12 +286,354 @@ methods:
         type: return
         outcome: stale lock — re-lock required
       - stepNumber: 11
-        description: Mark the change-set ready for promotion (open or update a PR, or mirror); never merge here
+        description: >-
+          Mark the change-set ready for promotion (the human merges the PR when git-backed); never
+          merge here
         type: local
       - stepNumber: 12
         description: Return the promote result
         type: return
         outcome: promote result
+  - name: generateDiagram
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 5
+        description: Render the diagram in scope
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: renderDiagram
+      - stepNumber: 6
+        description: Return the diagram artifact
+        type: return
+        outcome: diagram artifact
+  - name: downloadDiagram
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 5
+        description: Render the diagram in scope
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: renderDiagram
+      - stepNumber: 6
+        description: Return the diagram artifact as an attachment
+        type: return
+        outcome: diagram artifact
+  - name: diagramViewLink
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: Mint a signed view token for the project's canvas
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: signViewToken
+      - stepNumber: 5
+        description: Compose the /view/diagram URL carrying the token
+        type: local
+      - stepNumber: 6
+        description: Return the signed view link
+        type: return
+        outcome: signed view link
+  - name: enableGit
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: >-
+          Ensure the project record and an empty directory exist (no native provisioning) and bind
+          the root
+        type: local
+      - stepNumber: 5
+        description: Enable git backing (clone the remote onto the working branch)
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: enable
+      - stepNumber: 6
+        description: Return the project record
+        type: return
+        outcome: project record
+  - name: disableGit
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 5
+        description: Disable git backing
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: disable
+      - stepNumber: 6
+        description: Return once disabled
+        type: return
+        outcome: disabled
+  - name: syncGit
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 5
+        description: Sync the default branch into the working branch
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: sync
+      - stepNumber: 6
+        description: Return once synced
+        type: return
+        outcome: synced
+  - name: configureProducer
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 5
+        description: Configure the producer target
+        type: call
+        targetComponent: host_producer_adapter
+        targetMethod: configure
+      - stepNumber: 6
+        description: Return once configured
+        type: return
+        outcome: configured
+  - name: produceProducer
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 5
+        description: Mint a signed view token for the project's canvas
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: signViewToken
+      - stepNumber: 6
+        description: Compose the canvas link from the public base URL and token
+        type: local
+      - stepNumber: 7
+        description: Project and push the project to the target
+        type: call
+        targetComponent: host_producer_adapter
+        targetMethod: produce
+      - stepNumber: 8
+        description: Return once produced
+        type: return
+        outcome: produced
+  - name: removeProducer
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 5
+        description: Remove the producer target
+        type: call
+        targetComponent: host_producer_adapter
+        targetMethod: remove
+      - stepNumber: 6
+        description: Return once removed
+        type: return
+        outcome: removed
+  - name: listProducers
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 5
+        description: List configured producers
+        type: call
+        targetComponent: host_producer_adapter
+        targetMethod: list
+      - stepNumber: 6
+        description: Return the producer list
+        type: return
+        outcome: producer list
+  - name: setSecret
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: Store the secret at runtime
+        type: call
+        targetComponent: secret_registry
+        targetMethod: write
+      - stepNumber: 5
+        description: Return once set
+        type: return
+        outcome: secret set
+  - name: listSecrets
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: List configured secret keys (names only)
+        type: call
+        targetComponent: secret_registry
+        targetMethod: list
+      - stepNumber: 5
+        description: Return the secret key names
+        type: return
+        outcome: secret keys
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-07-04T13:06:22.885Z'
+updatedAt: '2026-07-04T17:40:27.529Z'

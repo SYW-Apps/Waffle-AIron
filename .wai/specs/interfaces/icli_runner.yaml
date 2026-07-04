@@ -47,6 +47,12 @@ methods:
     description: Promote a locked project after re-checking that its current StateId still matches the lock.
     signature: 'runHostPromote(options: { project?: string }): Promise<void>'
     returns: Promise<void>
+  - name: runProduce
+    description: >-
+      Project the local project's specs to a producer target (e.g. notion), resolving the credential
+      from flag, env, or an interactive prompt.
+    signature: 'runProduce(target: string, options: { page?: string; token?: string }): Promise<void>'
+    returns: Promise<void>
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-04T12:49:18.462Z'
+updatedAt: '2026-07-04T17:38:14.196Z'

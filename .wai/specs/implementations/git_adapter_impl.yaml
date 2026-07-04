@@ -1,0 +1,46 @@
+id: git_adapter_impl
+name: Git Client Adapter Implementation
+description: git I/O against the bound project's checkout, using the container bot identity.
+contract: igit_adapter
+sourcePath: src/git/adapter.ts
+methods:
+  - name: clone
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Run git clone of the remote (at branch) into the bound project directory, using
+          WAIRON_GIT_TOKEN
+        type: local
+  - name: fetch
+    narrative:
+      - stepNumber: 1
+        description: Run git fetch from the remote
+        type: local
+  - name: ensureWorkingBranch
+    narrative:
+      - stepNumber: 1
+        description: Create or checkout the isolated working branch
+        type: local
+  - name: integrateDefault
+    narrative:
+      - stepNumber: 1
+        description: Integrate origin/<defaultBranch> into the working branch (fast-forward/merge)
+        type: local
+  - name: commitAll
+    narrative:
+      - stepNumber: 1
+        description: Stage all changes and commit with the bot committer identity; return the new commit SHA
+        type: local
+  - name: push
+    narrative:
+      - stepNumber: 1
+        description: Push the branch to the remote using WAIRON_GIT_TOKEN
+        type: local
+  - name: compareUrl
+    narrative:
+      - stepNumber: 1
+        description: Derive the host's compare/PR URL from the remote, default and working branches
+        type: local
+status: complete
+createdAt: '2026-07-04T16:33:28.728Z'
+updatedAt: '2026-07-04T16:37:37.302Z'

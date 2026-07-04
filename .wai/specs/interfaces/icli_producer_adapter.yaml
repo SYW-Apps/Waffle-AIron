@@ -1,0 +1,16 @@
+id: icli_producer_adapter
+name: CLI Producer Client Adapter Interface
+description: Contract for the CLI's use of producers against the local project.
+component: cli_producer_adapter
+methods:
+  - name: configure
+    description: Configure a producer target for the local project.
+    signature: 'configure(target: string, parentPageId: string): void'
+    returns: void
+  - name: produce
+    description: Produce the local project to a target.
+    signature: 'produce(target: string, diagramUrl: string): void'
+    returns: void
+status: complete
+createdAt: '2026-07-04T17:37:53.903Z'
+updatedAt: '2026-07-04T17:42:04.097Z'

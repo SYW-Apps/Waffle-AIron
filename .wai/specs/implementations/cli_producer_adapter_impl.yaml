@@ -1,0 +1,23 @@
+id: cli_producer_adapter_impl
+name: CLI Producer Client Adapter Implementation
+description: Forwards the CLI's producer calls to the producer portal.
+contract: icli_producer_adapter
+sourcePath: src/commands/produce.ts
+methods:
+  - name: configure
+    narrative:
+      - stepNumber: 1
+        description: Forward to the producer portal
+        type: call
+        targetComponent: producer_portal
+        targetMethod: configure
+  - name: produce
+    narrative:
+      - stepNumber: 1
+        description: Forward to the producer portal
+        type: call
+        targetComponent: producer_portal
+        targetMethod: produce
+status: complete
+createdAt: '2026-07-04T17:39:35.957Z'
+updatedAt: '2026-07-04T17:42:04.209Z'

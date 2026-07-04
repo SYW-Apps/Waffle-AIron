@@ -1,0 +1,37 @@
+id: host_git_adapter_impl
+name: Host Git Client Adapter Implementation
+description: Forwards the hosting server's git-backing calls to the git portal.
+contract: ihost_git_adapter
+sourcePath: src/server/adapters.ts
+methods:
+  - name: enable
+    narrative:
+      - stepNumber: 1
+        description: Forward to the git portal
+        type: call
+        targetComponent: git_portal
+        targetMethod: enable
+  - name: disable
+    narrative:
+      - stepNumber: 1
+        description: Forward to the git portal
+        type: call
+        targetComponent: git_portal
+        targetMethod: disable
+  - name: sync
+    narrative:
+      - stepNumber: 1
+        description: Forward to the git portal
+        type: call
+        targetComponent: git_portal
+        targetMethod: sync
+  - name: publish
+    narrative:
+      - stepNumber: 1
+        description: Forward to the git portal
+        type: call
+        targetComponent: git_portal
+        targetMethod: publish
+status: complete
+createdAt: '2026-07-04T16:33:53.912Z'
+updatedAt: '2026-07-04T16:37:37.358Z'

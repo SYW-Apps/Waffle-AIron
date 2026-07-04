@@ -55,3 +55,11 @@ export interface PromoteResult {
   stateId?: StateId;
   message: string;
 }
+
+/** A verified short-lived capability to view one project's diagram in a browser —
+ *  the decoded, signature-checked, unexpired payload of a signed view link. */
+export interface ViewGrant {
+  project: string;
+  format: string;
+  expiresAt: string;
+}

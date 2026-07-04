@@ -33,6 +33,34 @@ migration*).
 - New library surfaces: `validateAsComplete` (full-strictness gate, reused by the
   local `wairon lock` story) and a request-scoped project root
   (`runWithProjectRoot`) so one process serves concurrent projects safely.
+- **Diagrams over the admin API** — the diagram engine is now a first-class
+  `diagram_specialist`; the hosting server generates/downloads a project's canvas,
+  Mermaid, draw.io, or Excalidraw on demand, and serves the interactive canvas to
+  a browser via a short-lived HMAC-**signed** `/view/diagram` link (no bearer —
+  the capability is in the URL), with generate/download bearer-authed.
+- **Producers** (`sdd_producers`) — project a spec tree into an external target as
+  a one-way, idempotent subsection. Two producers ship, both raw REST with **no new
+  dependency**, and both usable **hosted** (`wairon host producer …`,
+  `/admin/projects/{id}/producers/*`) and **locally** (`wairon produce <target> --page <id>`,
+  credential from flag/env/prompt):
+  - **Notion** — a "wairon specs" page subtree whose pages carry each component's
+    methods + a Mermaid diagram (target-agnostic `DocPage` model).
+  - **Miro** — the architecture graph rendered onto a board as native shapes +
+    connectors inside a `wairon architecture` frame (target-agnostic `GraphModel`;
+    `--page` is the board id). Idempotent: the frame is cleared and rebuilt, the
+    rest of the board untouched.
+- **Runtime secret store** — integration tokens (git, Notion, Miro, signing)
+  resolve data-dir store → env, and `wairon host secret set` / `PUT /admin/secrets/{key}`
+  set them at runtime, so an integration can be added to a live container without a
+  restart.
+- **Git-backed projects** (`sdd_git`) — a hosted project can relocate its source
+  of truth to a git repo (`wairon host git enable --remote …`, or
+  `POST /admin/projects/{id}/git`): the container clones it, works on an isolated
+  `wairon/work` branch, and `lock` becomes git-aware — sync → validate-as-complete
+  → promote → **commit + push the working branch**, recording the commit SHA and a
+  compare URL for a human to open the PR (push-only, one `WAIRON_GIT_TOKEN` bot
+  identity, sync on-demand + auto-before-lock). `promote` still refuses a stale
+  lock and never merges. The Docker image now ships with `git`.
 
 ### Conformance gate (the architecture linter)
 
