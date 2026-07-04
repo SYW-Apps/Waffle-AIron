@@ -5,6 +5,7 @@ import { validateAsComplete } from '../core/validation.js';
 import { renderDiagram } from '../core/diagram.js';
 import { loadProjectConfig } from '../config/loader.js';
 import { createMcpServer } from '../mcp/server.js';
+import * as gitPortal from '../git/index.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 // ---------------------------------------------------------------------------
@@ -35,3 +36,11 @@ export function validateProjectAsComplete() {
 export function createScopedServer(): McpServer {
   return createMcpServer();
 }
+
+// host_git_adapter → sdd_git (git_portal)
+export const hostGit = {
+  enable: gitPortal.enable,
+  disable: gitPortal.disable,
+  sync: gitPortal.sync,
+  publish: gitPortal.publish,
+};

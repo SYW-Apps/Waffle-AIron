@@ -22,6 +22,10 @@ FROM node:20-bookworm-slim AS runtime
 ENV NODE_ENV=production \
     WAIRON_DATA_DIR=/data
 WORKDIR /app
+# git is required for git-backed projects (wairon host git …); ca-certificates for HTTPS remotes.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist

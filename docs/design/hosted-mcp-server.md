@@ -120,6 +120,29 @@ Closes the stale-approval (TOCTOU) gap from the feature request.
 
 ---
 
+### Git-backed projects
+
+A project can relocate its **source of truth to a git repo** — then people clone
+the repo and collaborate locally via their own AI tools, and the container is one
+participant:
+
+- `wairon host git enable --project <id> --remote <url> [--branch main]` (or
+  `POST /admin/projects/{id}/git`) clones the repo and checks out an **isolated
+  working branch** (`wairon/work`); the container never commits to the default
+  branch.
+- `wairon host git sync` (or `POST …/git/sync`) pulls the default branch into the
+  working branch.
+- **`lock` is git-aware:** it syncs, validates-as-complete, promotes, then
+  **commits + pushes the working branch** and records the commit SHA + a
+  **compare URL** — you open the PR (push-only, no forge API). `wairon validate`
+  is the natural PR status check.
+- **`promote`** is unchanged — the content `StateId` already refuses a stale
+  lock, and it never merges (the human merges the PR).
+
+Identity: a single bot token — `WAIRON_GIT_TOKEN` (+ `WAIRON_GIT_NAME` /
+`WAIRON_GIT_EMAIL`). `.wai/lock.json` and `.wai/git.json` stay container-local
+(never committed). The Docker image ships with `git` installed.
+
 ## 5. Self-hosting with Docker
 
 ### 5.1 Quickstart

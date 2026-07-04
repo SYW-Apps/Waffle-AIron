@@ -37,6 +37,7 @@ import {
   runHostKey,
   runHostLock,
   runHostPromote,
+  runHostGit,
 } from '../commands/index.js';
 
 // Clean up any .old binary left over from a previous Windows self-update
@@ -383,6 +384,17 @@ hostCmd
   .option('--data-dir <path>', 'data root')
   .action(async (opts) => {
     await runHostPromote({ project: opts.project, dataDir: opts.dataDir });
+  });
+
+hostCmd
+  .command('git <action>')
+  .description('enable | disable | sync git backing (repo becomes the source of truth; lock opens a PR)')
+  .option('--project <id>', 'project id')
+  .option('--remote <url>', 'git remote URL (for enable)')
+  .option('--branch <name>', 'default branch PRs target (for enable)', 'main')
+  .option('--data-dir <path>', 'data root')
+  .action(async (action: string, opts) => {
+    await runHostGit(action, { project: opts.project, remote: opts.remote, branch: opts.branch, dataDir: opts.dataDir });
   });
 
 // ---------------------------------------------------------------------------

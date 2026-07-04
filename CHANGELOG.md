@@ -38,6 +38,14 @@ migration*).
   Mermaid, draw.io, or Excalidraw on demand, and serves the interactive canvas to
   a browser via a short-lived HMAC-**signed** `/view/diagram` link (no bearer —
   the capability is in the URL), with generate/download bearer-authed.
+- **Git-backed projects** (`sdd_git`) — a hosted project can relocate its source
+  of truth to a git repo (`wairon host git enable --remote …`, or
+  `POST /admin/projects/{id}/git`): the container clones it, works on an isolated
+  `wairon/work` branch, and `lock` becomes git-aware — sync → validate-as-complete
+  → promote → **commit + push the working branch**, recording the commit SHA and a
+  compare URL for a human to open the PR (push-only, one `WAIRON_GIT_TOKEN` bot
+  identity, sync on-demand + auto-before-lock). `promote` still refuses a stale
+  lock and never merges. The Docker image now ships with `git`.
 
 ### Conformance gate (the architecture linter)
 

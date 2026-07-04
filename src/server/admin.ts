@@ -16,7 +16,7 @@ import {
   removeProjectRecord,
   existingProjectRoot,
 } from './projects.js';
-import { hostCore, validateProjectAsComplete } from './adapters.js';
+import { hostCore, hostGit, validateProjectAsComplete } from './adapters.js';
 import type {
   ApiKeyRecord,
   HostConfig,
@@ -100,14 +100,24 @@ export function lockProject(cfg: HostConfig, credential: string | null, project:
   const root = existingProjectRoot(cfg.dataDir, project);
   if (!root) throw new Error(`Unknown project "${project}".`);
   return runWithProjectRoot(root, () => {
+    // Git-backed: pull the default branch into the working branch first so the
+    // lock (and PR) is based on the latest. No-op for native projects.
+    hostGit.sync();
+
     const result = validateProjectAsComplete();
     const errors = result.issues.filter((i) => i.severity === 'error');
     if (errors.length) {
       throw new LockValidationError(errors.map((e) => ({ code: e.code, message: e.message, specId: e.specId })));
     }
     hostCore.promoteAllComplete();
+    const stateId = hostCore.computeStateId();
+
+    // Git-backed: commit the promoted working tree and push the working branch;
+    // returns the commit + compare URL a human opens the PR from. No-op if native.
+    const publish = hostGit.publish(`wairon lock: ${project}`);
+
     const record: LockRecord = {
-      stateId: hostCore.computeStateId(),
+      stateId,
       lockedAt: new Date().toISOString(),
       lockedBy: 'admin:master',
       validatorVersion: WAIRON_VERSION,
@@ -117,10 +127,40 @@ export function lockProject(cfg: HostConfig, credential: string | null, project:
         warnings: result.issues.filter((i) => i.severity === 'warning').length,
       },
       status: 'ready',
+      ...(publish.published ? { commitSha: publish.commitSha, compareUrl: publish.compareUrl } : {}),
     };
     hostCore.writeLockRecord(record);
     return record;
   });
+}
+
+// ── Git backing ─────────────────────────────────────────────────────────────
+
+/** Enable git backing on a fresh project (clones the remote onto a working branch). */
+export function enableGit(cfg: HostConfig, credential: string | null, project: string, remote: string, branch: string): HostedProjectRecord {
+  requireAdmin(credential);
+  if (existingProjectRoot(cfg.dataDir, project)) {
+    throw new Error(`Project "${project}" already exists; destroy it first to git-enable a fresh clone.`);
+  }
+  const rec = createProjectRecord(cfg.dataDir, project); // empty dir + record (no native provisioning)
+  runWithProjectRoot(rec.rootPath, () => hostGit.enable(remote, branch || 'main'));
+  return rec;
+}
+
+/** Disable git backing for a project (leaves the checkout in place). */
+export function disableGit(cfg: HostConfig, credential: string | null, project: string): void {
+  requireAdmin(credential);
+  const root = existingProjectRoot(cfg.dataDir, project);
+  if (!root) throw new Error(`Unknown project "${project}".`);
+  runWithProjectRoot(root, () => hostGit.disable());
+}
+
+/** Sync a project's default branch into its working branch. */
+export function syncGit(cfg: HostConfig, credential: string | null, project: string): void {
+  requireAdmin(credential);
+  const root = existingProjectRoot(cfg.dataDir, project);
+  if (!root) throw new Error(`Unknown project "${project}".`);
+  runWithProjectRoot(root, () => hostGit.sync());
 }
 
 // ── Diagrams ──────────────────────────────────────────────────────────────

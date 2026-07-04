@@ -28,6 +28,8 @@ export interface HostOptions {
   id?: string;
   project?: string;
   role?: string;
+  remote?: string;
+  branch?: string;
 }
 
 function resolveHostConfig(options: HostOptions): HostConfig {
@@ -182,6 +184,41 @@ export async function runHostPromote(options: HostOptions = {}): Promise<void> {
     const mark = result.status === 'ready' ? chalk.green('✓') : chalk.yellow('✗');
     logger.info(`${mark} ${result.message}`);
     if (result.status !== 'ready') process.exitCode = 1;
+  } catch (e) {
+    throw mapAdminError(e);
+  }
+}
+
+// ── wairon host git <action> ──────────────────────────────────────────────────
+
+export async function runHostGit(action: string, options: HostOptions = {}): Promise<void> {
+  const cfg = resolveHostConfig(options);
+  const cred = masterCredential();
+  try {
+    switch (action) {
+      case 'enable': {
+        if (!options.project || !options.remote) {
+          throw new WaironError('`--project <id>` and `--remote <url>` are required for `host git enable`.');
+        }
+        admin.enableGit(cfg, cred, options.project, options.remote, options.branch ?? 'main');
+        logger.success(`Git backing enabled for "${options.project}" (cloned ${options.remote}).`);
+        break;
+      }
+      case 'disable': {
+        if (!options.project) throw new WaironError('`--project <id>` is required for `host git disable`.');
+        admin.disableGit(cfg, cred, options.project);
+        logger.success(`Git backing disabled for "${options.project}".`);
+        break;
+      }
+      case 'sync': {
+        if (!options.project) throw new WaironError('`--project <id>` is required for `host git sync`.');
+        admin.syncGit(cfg, cred, options.project);
+        logger.success(`Synced "${options.project}" (default → working branch).`);
+        break;
+      }
+      default:
+        throw new WaironError(`Unknown git action "${action}" (enable | disable | sync).`);
+    }
   } catch (e) {
     throw mapAdminError(e);
   }
