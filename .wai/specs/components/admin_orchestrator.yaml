@@ -15,6 +15,7 @@ dependsOn:
   - credential_registry
   - host_core_adapter
   - host_validator_adapter
+  - host_git_adapter
 status: complete
 createdAt: '2026-07-04T12:33:51.178Z'
-updatedAt: '2026-07-04T13:06:22.447Z'
+updatedAt: '2026-07-04T16:31:45.499Z'

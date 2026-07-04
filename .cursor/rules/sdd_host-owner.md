@@ -14,6 +14,7 @@ You own and decide on everything within:
 .wai/specs/components/auth_specialist.yaml
 .wai/specs/components/credential_registry.yaml
 .wai/specs/components/host_core_adapter.yaml
+.wai/specs/components/host_git_adapter.yaml
 .wai/specs/components/host_http_portal.yaml
 .wai/specs/components/host_mcp_adapter.yaml
 .wai/specs/components/host_request_orchestrator.yaml

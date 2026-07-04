@@ -1,0 +1,36 @@
+id: igit_adapter
+name: Git Client Adapter Interface
+description: Contract for git I/O against the bound project's checkout.
+component: git_adapter
+methods:
+  - name: clone
+    description: Clone the remote (at branch) into the bound project directory.
+    signature: 'clone(remote: string, branch: string): void'
+    returns: void
+  - name: fetch
+    description: Fetch updates from the remote.
+    signature: 'fetch(): void'
+    returns: void
+  - name: ensureWorkingBranch
+    description: Create/checkout the isolated working branch.
+    signature: 'ensureWorkingBranch(name: string): void'
+    returns: void
+  - name: integrateDefault
+    description: Integrate the default branch into the current working branch.
+    signature: 'integrateDefault(defaultBranch: string): void'
+    returns: void
+  - name: commitAll
+    description: Stage and commit the working tree; return the new commit SHA.
+    signature: 'commitAll(message: string): string'
+    returns: string
+  - name: push
+    description: Push the given branch to the remote.
+    signature: 'push(branch: string): void'
+    returns: void
+  - name: compareUrl
+    description: Build the host-agnostic compare/PR URL for workingBranch -> defaultBranch.
+    signature: 'compareUrl(remote: string, defaultBranch: string, workingBranch: string): string'
+    returns: string
+status: complete
+createdAt: '2026-07-04T16:31:59.438Z'
+updatedAt: '2026-07-04T16:37:37.242Z'

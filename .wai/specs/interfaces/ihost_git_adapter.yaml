@@ -1,0 +1,24 @@
+id: ihost_git_adapter
+name: Host Git Client Adapter Interface
+description: Contract for the hosting server's use of git backing, forwarded to the git portal.
+component: host_git_adapter
+methods:
+  - name: enable
+    description: Enable git backing for the bound project.
+    signature: 'enable(remote: string, branch: string): void'
+    returns: void
+  - name: disable
+    description: Disable git backing.
+    signature: 'disable(): void'
+    returns: void
+  - name: sync
+    description: Sync the default branch into the working branch (no-op if native).
+    signature: 'sync(): void'
+    returns: void
+  - name: publish
+    description: Publish the locked working tree (commit + push) and return the result (no-op if native).
+    signature: 'publish(message: string): GitPublish'
+    returns: GitPublish
+status: complete
+createdAt: '2026-07-04T16:32:06.430Z'
+updatedAt: '2026-07-04T16:37:37.290Z'

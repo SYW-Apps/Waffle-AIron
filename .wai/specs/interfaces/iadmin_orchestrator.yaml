@@ -53,6 +53,22 @@ methods:
     description: Authenticate and mint a short-lived signed link to view the project's canvas in a browser.
     signature: 'diagramViewLink(credential: string, project: string): string'
     returns: string
+  - name: enableGit
+    description: >-
+      Authenticate, ensure the project exists, and enable git backing (clone the remote into it on
+      an isolated working branch).
+    signature: >-
+      enableGit(credential: string, project: string, remote: string, branch: string):
+      HostedProjectRecord
+    returns: HostedProjectRecord
+  - name: disableGit
+    description: Authenticate and disable git backing for the project.
+    signature: 'disableGit(credential: string, project: string): void'
+    returns: void
+  - name: syncGit
+    description: Authenticate and sync the project's default branch into its working branch.
+    signature: 'syncGit(credential: string, project: string): void'
+    returns: void
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-07-04T16:00:18.421Z'
+updatedAt: '2026-07-04T16:32:15.434Z'

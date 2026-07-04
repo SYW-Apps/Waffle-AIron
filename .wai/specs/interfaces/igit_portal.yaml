@@ -1,0 +1,28 @@
+id: igit_portal
+name: Git Portal Interface
+description: Inbound contract for the git-backing subsystem.
+component: git_portal
+methods:
+  - name: enable
+    description: >-
+      Clone the remote into the bound project and set up the isolated working branch; persist the
+      config.
+    signature: 'enable(remote: string, branch: string): void'
+    returns: void
+  - name: disable
+    description: Clear the project's git-backing config.
+    signature: 'disable(): void'
+    returns: void
+  - name: sync
+    description: Fetch and integrate the default branch into the working branch; no-op when not git-backed.
+    signature: 'sync(): void'
+    returns: void
+  - name: publish
+    description: >-
+      Commit the promoted working tree, push the working branch, and return the pushed commit +
+      compare URL; no-op (published=false) when not git-backed.
+    signature: 'publish(message: string): GitPublish'
+    returns: GitPublish
+status: complete
+createdAt: '2026-07-04T16:31:50.042Z'
+updatedAt: '2026-07-04T16:37:37.278Z'

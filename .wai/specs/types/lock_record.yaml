@@ -31,6 +31,14 @@ fields:
     type: string
     description: '"ready" (locked, awaiting promotion) or "promoted"'
     optional: false
+  - name: commitSha
+    type: string
+    description: 'For git-backed projects: the pushed commit the PR is at'
+    optional: true
+  - name: compareUrl
+    type: string
+    description: 'For git-backed projects: the compare/PR URL a human opens to merge'
+    optional: true
 methods: []
 createdAt: '2026-07-04T12:44:18.588Z'
-updatedAt: '2026-07-04T12:44:18.595Z'
+updatedAt: '2026-07-04T16:31:43.946Z'

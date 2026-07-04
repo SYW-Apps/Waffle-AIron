@@ -1,0 +1,20 @@
+id: sdd_git
+name: SDD Git Backing
+description: >-
+  Git-backed persistence for a hosted project: relocates the source of truth to a git repo. The
+  project's .wai/ becomes a working checkout on an isolated working branch; the container never
+  commits to the default branch directly. sync pulls the default branch into the working branch;
+  lock validates-as-complete then commits + pushes the working branch and returns a compare URL for
+  a human to open the PR (push-only, no forge API). One container bot identity (WAIRON_GIT_TOKEN);
+  host-agnostic.
+parentSystem: Waffle-AIron
+publicInterfaces:
+  - type: Custom
+    details: >-
+      In-process git-backing services (enable/disable/sync/isEnabled/publish) consumed by the
+      hosting server.
+    component: git_portal
+trustedLinks: []
+status: complete
+createdAt: '2026-07-04T16:31:09.691Z'
+updatedAt: '2026-07-04T16:37:37.088Z'

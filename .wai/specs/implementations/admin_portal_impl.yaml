@@ -81,6 +81,27 @@ methods:
         type: call
         targetComponent: admin_orchestrator
         targetMethod: diagramViewLink
+  - name: enableGit
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: enableGit
+  - name: disableGit
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: disableGit
+  - name: syncGit
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: syncGit
 status: complete
 createdAt: '2026-07-04T12:53:08.445Z'
-updatedAt: '2026-07-04T16:01:23.785Z'
+updatedAt: '2026-07-04T16:34:04.293Z'

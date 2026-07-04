@@ -1,0 +1,37 @@
+id: git_portal_impl
+name: Git Portal Implementation
+description: Forwards git-backing calls to the git orchestrator.
+contract: igit_portal
+sourcePath: src/git/index.ts
+methods:
+  - name: enable
+    narrative:
+      - stepNumber: 1
+        description: Forward to the git orchestrator
+        type: call
+        targetComponent: git_orchestrator
+        targetMethod: enable
+  - name: disable
+    narrative:
+      - stepNumber: 1
+        description: Forward to the git orchestrator
+        type: call
+        targetComponent: git_orchestrator
+        targetMethod: disable
+  - name: sync
+    narrative:
+      - stepNumber: 1
+        description: Forward to the git orchestrator
+        type: call
+        targetComponent: git_orchestrator
+        targetMethod: sync
+  - name: publish
+    narrative:
+      - stepNumber: 1
+        description: Forward to the git orchestrator
+        type: call
+        targetComponent: git_orchestrator
+        targetMethod: publish
+status: complete
+createdAt: '2026-07-04T16:33:49.226Z'
+updatedAt: '2026-07-04T16:37:37.344Z'

@@ -1,0 +1,13 @@
+id: git_config_registry
+name: Git Config Registry
+description: >-
+  I/O manager for a project's git-backing config (.wai/git.json): remote URL, default branch,
+  working branch, and enabled flag. Modeled as a single file-backed Registry, mirroring the
+  spec_loader convention.
+subsystem: sdd_git
+componentType: Registry
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-07-04T16:31:20.264Z'
+updatedAt: '2026-07-04T16:37:37.136Z'
