@@ -360,4 +360,40 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     expect(idPrefix(cy, 'T~').length).toBe(4);
     expect(elements['layoutBtn'].textContent).toContain('Grid');
   });
+
+  it('places externals outside the graph bounds, and internals follow the layout', () => {
+    proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-canvas-ext-'));
+    fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
+    setProjectRoot(proj);
+
+    saveSystemSpec({ schemaVersion: '1.0.0', name: 'RtSys', vision: 'v', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
+    saveSubsystemSpec({ id: 'billing', name: 'Billing', description: 'd', parentSystem: 'RtSys', publicInterfaces: [{ type: 'REST', details: 'api', component: 'billing-portal' }], trustedLinks: [], createdAt: now, updatedAt: now });
+    saveSubsystemSpec({ id: 'shipping', name: 'Shipping', description: 'd', parentSystem: 'RtSys', publicInterfaces: [], trustedLinks: [], createdAt: now, updatedAt: now });
+    const comp = (over: Record<string, unknown>) => ({ id: '', name: '', description: 'd', subsystem: 'billing', componentType: 'Orchestrator' as const, owns: [] as string[], dependsOn: [] as string[], createdAt: now, updatedAt: now, ...over });
+    saveComponentSpec(comp({ id: 'billing-portal', name: 'Billing Portal', componentType: 'Portal', portalType: 'HTTP_API' }) as any);
+    ['b2', 'b3', 'b4', 'b5'].forEach(id => saveComponentSpec(comp({ id: id, name: id }) as any));
+    // An out-of-billing component depends INTO billing → an incoming external.
+    saveComponentSpec(comp({ id: 'shipping-core', name: 'Shipping Core', subsystem: 'shipping', componentType: 'Adapter', dependsOn: ['billing-portal'] }) as any);
+
+    const { cy, fire } = bootCanvas(renderCanvasHtml(buildCanvasModel()));
+
+    // Internals + Grid: subsystem children render as inner tiles (the grid inner
+    // path runs without breaking the compound structure).
+    fire('internalsToggle', 'change', { target: { checked: true } });
+    fire('layoutGrid', 'click');
+    expect(cy.getElementById('i~component~billing-portal').length).toBe(1);
+    fire('internalsToggle', 'change', { target: { checked: false } });
+
+    // Concentric, drilled into billing: the incoming external is a ghost placed
+    // OUTSIDE the (centred) component bounds — never dropped in the middle.
+    fire('layoutConcentric', 'click');
+    cy.getElementById('s~billing').emit('dbltap');
+    const ghost = cy.getElementById('x~subsystem~shipping');
+    expect(ghost.length).toBe(1);
+    let minLeft = Infinity;
+    cy.nodes().filter((n: any) => n.id().indexOf('c~') === 0).forEach((n: any) => {
+      minLeft = Math.min(minLeft, n.position('x') - (n.data('w') || 0) / 2);
+    });
+    expect(ghost.position('x')).toBeLessThan(minLeft);
+  });
 });

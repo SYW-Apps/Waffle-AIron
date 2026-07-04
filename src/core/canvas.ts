@@ -896,17 +896,48 @@ var MODEL = __MODEL_JSON__;
     var inIds = Object.keys(extIn).sort(), outIds = Object.keys(extOut).sort();
     var hasIn = inIds.length > 0, hasOut = outIds.length > 0;
     var PROXY_W = 22, PROXY_H = 22, PROXY_GAP = 8;
-    var tiles = [], x = PADI + (hasIn ? PROXY_W + INNER_GAPX : 0), maxH = 0;
-    colKeys.forEach(function (ck) {
-      var col = cols[ck].sort(function (a, b) { return a.id < b.id ? -1 : 1; });
-      var y = HEAD_H;
-      col.forEach(function (k) {
-        tiles.push({ kid: k, x: x + INNER_W / 2, y: y + INNER_H / 2 });
-        y += INNER_H + INNER_GAPY;
+    // Inner tile placement mirrors the diagram's chosen layout (ports still flank
+    // the box on the left/right). Layered keeps the dependency columns; Grid and
+    // Concentric re-place the children; Force approximates with Concentric (a
+    // physics sim can't run inside a build-time sub-layout).
+    var leftPad = PADI + (hasIn ? PROXY_W + INNER_GAPX : 0);
+    var tiles = [], x, maxH;
+    var kidKey = function (k) { return IN(k.kind, k.id); };
+    if (state.layout === 'grid' || state.layout === 'concentric' || state.layout === 'force') {
+      var ids = kids.map(kidKey), byKey = {};
+      kids.forEach(function (k) { byKey[kidKey(k)] = k; });
+      var rel;
+      if (state.layout === 'grid') {
+        rel = {};
+        var per = Math.max(1, Math.ceil(Math.sqrt(ids.length)));
+        ids.slice().sort().forEach(function (id, idx) { rel[id] = { x: (idx % per) * (INNER_W + INNER_GAPX), y: Math.floor(idx / per) * (INNER_H + INNER_GAPY) }; });
+      } else {
+        var ideg = {};
+        ids.forEach(function (id) { ideg[id] = 0; });
+        Object.keys(edges).forEach(function (ek) { var e = edges[ek]; if (ideg[e.src] !== undefined) ideg[e.src]++; if (ideg[e.tgt] !== undefined) ideg[e.tgt]++; });
+        rel = concentricPositions(ids, function (id) { return ideg[id] || 0; }, function () { return { w: INNER_W, h: INNER_H }; });
+      }
+      var minX = Infinity, minY = Infinity;
+      ids.forEach(function (id) { var p = rel[id] || { x: 0, y: 0 }; if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; });
+      if (minX === Infinity) { minX = 0; minY = 0; }
+      tiles = ids.map(function (id) { var p = rel[id] || { x: 0, y: 0 }; return { kid: byKey[id], x: leftPad + (p.x - minX) + INNER_W / 2, y: HEAD_H + (p.y - minY) + INNER_H / 2 }; });
+      var maxRight = leftPad + INNER_W, maxBottom = HEAD_H + INNER_H;
+      tiles.forEach(function (t) { maxRight = Math.max(maxRight, t.x + INNER_W / 2); maxBottom = Math.max(maxBottom, t.y + INNER_H / 2); });
+      x = maxRight + INNER_GAPX;
+      maxH = maxBottom + INNER_GAPY;
+    } else {
+      x = leftPad; maxH = 0;
+      colKeys.forEach(function (ck) {
+        var col = cols[ck].sort(function (a, b) { return a.id < b.id ? -1 : 1; });
+        var y = HEAD_H;
+        col.forEach(function (k) {
+          tiles.push({ kid: k, x: x + INNER_W / 2, y: y + INNER_H / 2 });
+          y += INNER_H + INNER_GAPY;
+        });
+        maxH = Math.max(maxH, y);
+        x += INNER_W + INNER_GAPX;
       });
-      maxH = Math.max(maxH, y);
-      x += INNER_W + INNER_GAPX;
-    });
+    }
     var stackMax = Math.max(inIds.length, outIds.length);
     maxH = Math.max(maxH, HEAD_H + stackMax * PROXY_H + Math.max(0, stackMax - 1) * PROXY_GAP + INNER_GAPY);
     var midY = HEAD_H + Math.max(0, (maxH - HEAD_H - INNER_GAPY) / 2);
@@ -1487,26 +1518,37 @@ var MODEL = __MODEL_JSON__;
     });
 
     // Externals placed by dependency DIRECTION: parties entering this scope
-    // (they depend on us) sit on the LEFT, in front of the entry points;
-    // our outgoing dependencies sit on the RIGHT.
+    // (they depend on us) sit on the LEFT, our outgoing dependencies on the
+    // RIGHT — but OUTSIDE the actual node bounds, so a centred layout
+    // (concentric/force) never has a ghost land in the middle of the graph.
     var ghostDir = {};
     Object.keys(ve.agg).forEach(function (k) {
       var e = ve.agg[k];
       if (ve.ghosts[e.src]) ghostDir[e.src] = (ghostDir[e.src] || 0) | 1; // incoming
       if (ve.ghosts[e.tgt]) ghostDir[e.tgt] = (ghostDir[e.tgt] || 0) | 2; // outgoing
     });
-    var gyL = 0, gyR = 0;
+    var bMinX = Infinity, bMaxX = -Infinity, bMinY = Infinity;
+    Object.keys(posByAnchor).forEach(function (aid) {
+      var p = posByAnchor[aid];
+      if (p.x - p.w / 2 < bMinX) bMinX = p.x - p.w / 2;
+      if (p.x + p.w / 2 > bMaxX) bMaxX = p.x + p.w / 2;
+      if (p.y - p.h / 2 < bMinY) bMinY = p.y - p.h / 2;
+    });
+    if (bMinX === Infinity) { bMinX = 0; bMaxX = 0; bMinY = 0; }
+    var GHW = 170, GHH = 46, GH_GAP = 90, GH_VGAP = 18;
+    var leftX = bMinX - GH_GAP - GHW / 2, rightX = bMaxX + GH_GAP + GHW / 2;
+    var gyL = bMinY, gyR = bMinY;
     Object.keys(ve.ghosts).sort().forEach(function (gid) {
       var g = ve.ghosts[gid];
       var incoming = (ghostDir[gid] || 2) & 1;
-      var gx = incoming ? -(170 + 70) : x + 40;
+      var gx = incoming ? leftX : rightX;
       var gy = incoming ? gyL : gyR;
       eles.push({
-        data: { id: gid, label: g.label + '\\n(external)', w: 170, h: 46, tw: 156, extKind: g.kind, extId: g.id },
-        position: { x: gx + 85, y: gy + 23 },
+        data: { id: gid, label: g.label + '\\n(external)', w: GHW, h: GHH, tw: GHW - 14, extKind: g.kind, extId: g.id },
+        position: { x: gx, y: gy + GHH / 2 },
         classes: 'ghost',
       });
-      if (incoming) gyL += 46 + 18; else gyR += 46 + 18;
+      if (incoming) gyL += GHH + GH_VGAP; else gyR += GHH + GH_VGAP;
     });
 
     var dimmedAnchors = {};

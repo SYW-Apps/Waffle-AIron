@@ -220,6 +220,10 @@ migration*).
   sprawling) and only centres a *lone* most-referenced node, spreading a tied top
   tier into a ring rather than a central pile. The choice persists, is remembered
   per view, and a manual **Rearrange** still wins on top for fine-tuning.
+  External (ghost) nodes are placed just outside the *actual* node bounds rather
+  than at fixed offsets, so a centred layout never drops one in the middle of the
+  graph; and **Internals** now lay each box's children out with the same chosen
+  layout (Grid/Concentric) instead of always the layered columns.
 
 ### Technology boundaries (L4 `technologies`)
 
