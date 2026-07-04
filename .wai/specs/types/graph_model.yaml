@@ -1,0 +1,18 @@
+kind: value-object
+id: graph_model
+name: GraphModel
+description: >-
+  The architecture as a node/edge graph — the projection a visual producer (Miro) renders, parallel
+  to how DocPage is what a documentation producer (Notion) renders.
+fields:
+  - name: nodes
+    type: GraphNode[]
+    description: Component nodes
+    optional: false
+  - name: edges
+    type: GraphEdge[]
+    description: dependsOn edges
+    optional: false
+methods: []
+createdAt: '2026-07-04T18:03:58.004Z'
+updatedAt: '2026-07-04T18:03:58.029Z'

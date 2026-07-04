@@ -50,6 +50,27 @@ methods:
         description: Return the DocPage tree
         type: return
         outcome: DocPage tree
+  - name: projectGraph
+    narrative:
+      - stepNumber: 1
+        description: Load subsystem specs
+        type: call
+        targetComponent: producer_core_adapter
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 2
+        description: Load component specs
+        type: call
+        targetComponent: producer_core_adapter
+        targetMethod: loadComponentSpecs
+      - stepNumber: 3
+        description: >-
+          Build GraphNodes from the components (id, label, subsystem, type) and GraphEdges from
+          their dependsOn
+        type: local
+      - stepNumber: 4
+        description: Return the GraphModel
+        type: return
+        outcome: GraphModel
 status: complete
 createdAt: '2026-07-04T17:39:59.030Z'
-updatedAt: '2026-07-04T17:42:04.309Z'
+updatedAt: '2026-07-04T18:04:22.511Z'

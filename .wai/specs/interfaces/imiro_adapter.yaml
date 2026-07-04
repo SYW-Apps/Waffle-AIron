@@ -1,0 +1,14 @@
+id: imiro_adapter
+name: Miro Client Adapter Interface
+description: Contract for rendering the architecture graph onto a Miro board.
+component: miro_adapter
+methods:
+  - name: sync
+    description: >-
+      Idempotently render the GraphModel onto the board as shapes + connectors under a 'wairon
+      architecture' frame, authenticating with the resolved Miro token.
+    signature: 'sync(graph: GraphModel, boardId: string): void'
+    returns: void
+status: complete
+createdAt: '2026-07-04T18:04:00.542Z'
+updatedAt: '2026-07-04T18:06:52.451Z'

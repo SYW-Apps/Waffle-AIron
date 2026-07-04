@@ -1,6 +1,6 @@
 id: producer_orchestrator_impl
 name: Producer Orchestrator Implementation
-description: 'The producer workflows: configure/produce/remove/list.'
+description: 'The producer workflows: configure/produce (dispatched by target)/remove/list.'
 contract: iproducer_orchestrator
 sourcePath: src/producers/orchestrator.ts
 methods:
@@ -35,19 +35,47 @@ methods:
         type: throw
         error: producer target not configured
       - stepNumber: 4
+        description: Dispatch on the target
+        type: switch
+        'on': target
+        cases:
+          - value: notion
+            step: 5
+          - value: miro
+            step: 8
+        defaultStep: 11
+      - stepNumber: 5
         description: Project the spec tree into a DocPage tree
         type: call
         targetComponent: spec_projection_specialist
         targetMethod: project
-      - stepNumber: 5
-        description: Push the DocPage tree to Notion under the configured parent page
+      - stepNumber: 6
+        description: Push the DocPage tree to Notion
         type: call
         targetComponent: notion_adapter
         targetMethod: sync
-      - stepNumber: 6
-        description: Return once produced
+      - stepNumber: 7
+        description: Return once produced to Notion
         type: return
-        outcome: produced
+        outcome: produced (notion)
+      - stepNumber: 8
+        description: Project the architecture into a GraphModel
+        type: call
+        targetComponent: spec_projection_specialist
+        targetMethod: projectGraph
+      - stepNumber: 9
+        description: Render the graph onto the Miro board
+        type: call
+        targetComponent: miro_adapter
+        targetMethod: sync
+      - stepNumber: 10
+        description: Return once produced to Miro
+        type: return
+        outcome: produced (miro)
+      - stepNumber: 11
+        description: Reject an unknown target
+        type: throw
+        error: unknown producer target
   - name: remove
     narrative:
       - stepNumber: 1
@@ -68,4 +96,4 @@ methods:
         targetMethod: list
 status: complete
 createdAt: '2026-07-04T17:40:06.027Z'
-updatedAt: '2026-07-04T17:42:04.273Z'
+updatedAt: '2026-07-04T18:04:32.210Z'

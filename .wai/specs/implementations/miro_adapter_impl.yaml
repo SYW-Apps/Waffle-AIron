@@ -1,0 +1,27 @@
+id: miro_adapter_impl
+name: Miro Client Adapter Implementation
+description: Renders the architecture graph onto a Miro board as native shapes + connectors via the REST API.
+contract: imiro_adapter
+sourcePath: src/producers/miro.ts
+methods:
+  - name: sync
+    narrative:
+      - stepNumber: 1
+        description: Resolve the Miro token (secret store, then env); reject if absent
+        type: local
+      - stepNumber: 2
+        description: >-
+          Find or create the 'wairon architecture' frame on the board and clear its existing items
+          (idempotent; sibling content untouched)
+        type: local
+      - stepNumber: 3
+        description: >-
+          Create a shape per node inside the frame, grid-laid-out and grouped by subsystem, keeping
+          an id->shape map
+        type: local
+      - stepNumber: 4
+        description: Create a connector per edge between the mapped node shapes
+        type: local
+status: complete
+createdAt: '2026-07-04T18:04:20.025Z'
+updatedAt: '2026-07-04T18:06:52.474Z'

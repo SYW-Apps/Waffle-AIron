@@ -1,0 +1,24 @@
+kind: value-object
+id: graph_node
+name: GraphNode
+description: A component node in the architecture graph projected to a visual target.
+fields:
+  - name: id
+    type: string
+    description: Component id
+    optional: false
+  - name: label
+    type: string
+    description: Display label
+    optional: false
+  - name: subsystem
+    type: string
+    description: Owning subsystem id
+    optional: false
+  - name: componentType
+    type: string
+    description: Stereotype (Portal, Orchestrator, …)
+    optional: false
+methods: []
+createdAt: '2026-07-04T18:03:53.503Z'
+updatedAt: '2026-07-04T18:03:53.527Z'

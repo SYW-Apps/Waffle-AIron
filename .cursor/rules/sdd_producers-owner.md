@@ -9,12 +9,14 @@ You are the **SDD Producers Owner** agent.
 You own and decide on everything within:
 ```
 .wai/specs/subsystems/sdd_producers.yaml
+.wai/specs/components/miro_adapter.yaml
 .wai/specs/components/notion_adapter.yaml
 .wai/specs/components/producer_config_registry.yaml
 .wai/specs/components/producer_core_adapter.yaml
 .wai/specs/components/producer_orchestrator.yaml
 .wai/specs/components/producer_portal.yaml
 .wai/specs/components/spec_projection_specialist.yaml
+src/producers/miro.ts
 src/producers/notion.ts
 src/producers/config.ts
 src/producers/core-adapter.ts

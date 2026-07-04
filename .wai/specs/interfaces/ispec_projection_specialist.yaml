@@ -10,6 +10,12 @@ methods:
       optional canvas link).
     signature: 'project(diagramUrl: string): DocPage'
     returns: DocPage
+  - name: projectGraph
+    description: >-
+      Project the bound project's components and dependsOn edges into a GraphModel for a visual
+      target (Miro).
+    signature: 'projectGraph(): GraphModel'
+    returns: GraphModel
 status: complete
 createdAt: '2026-07-04T17:37:36.878Z'
-updatedAt: '2026-07-04T17:42:04.193Z'
+updatedAt: '2026-07-04T18:04:02.027Z'

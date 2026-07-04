@@ -1,0 +1,16 @@
+kind: value-object
+id: graph_edge
+name: GraphEdge
+description: A directed dependency between two component nodes.
+fields:
+  - name: from
+    type: string
+    description: Source component id
+    optional: false
+  - name: to
+    type: string
+    description: Target component id
+    optional: false
+methods: []
+createdAt: '2026-07-04T18:03:55.500Z'
+updatedAt: '2026-07-04T18:03:55.523Z'
