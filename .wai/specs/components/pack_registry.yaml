@@ -1,0 +1,19 @@
+id: pack_registry
+name: Pack Registry
+description: >-
+  I/O manager for the container's extension-pack store — the plugin surface that adds architectural
+  profiles, language/platform tables, and rules. Manages two scopes: the server-global packs
+  directory (WAIRON_PACKS_DIR, defaulted onto the data volume so installs persist across restarts)
+  and a bound project's .wai/packs/ plus its .wai/project.yaml registration (committed with the
+  project, so every clone and CI enforce it). Installs over this surface accept declarative packs
+  only (profiles + language/platform tables — pure data); programmatic rule/code packs are refused
+  and must be installed via the trusted filesystem (a mounted packs volume or `wairon packs add`).
+  Listing probes each pack for its name and profile/language/rule counts, or its load error. Modeled
+  as a single file-backed Registry.
+subsystem: sdd_host
+componentType: Registry
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-07-04T18:42:27.572Z'
+updatedAt: '2026-07-04T18:47:23.111Z'

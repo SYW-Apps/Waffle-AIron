@@ -1,0 +1,75 @@
+id: ipack_orchestrator
+name: Pack Orchestrator Interface
+description: >-
+  Contract for the control-plane pack-management workflows behind the admin portal: authenticate the
+  master credential, then list/install/remove packs at server-global or project scope. Installs are
+  declarative-only (profiles + language/platform tables); code packs are refused on this surface.
+component: pack_orchestrator
+methods:
+  - name: listGlobalPacks
+    description: Authenticate and list the server-global installed packs.
+    signature: 'listGlobalPacks(credential: string): PackDescriptor[]'
+    returns: PackDescriptor[]
+    params:
+      - name: credential
+        type: string
+  - name: installGlobalPack
+    description: Authenticate and install a declarative pack server-wide (rejecting code packs).
+    signature: 'installGlobalPack(credential: string, name: string, content: string): PackDescriptor'
+    returns: PackDescriptor
+    params:
+      - name: credential
+        type: string
+      - name: name
+        type: string
+      - name: content
+        type: string
+  - name: removeGlobalPack
+    description: Authenticate and remove a server-global pack.
+    signature: 'removeGlobalPack(credential: string, name: string): void'
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: name
+        type: string
+  - name: listProjectPacks
+    description: Authenticate, bind the project scope, and list its registered packs.
+    signature: 'listProjectPacks(credential: string, project: string): PackDescriptor[]'
+    returns: PackDescriptor[]
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+  - name: installProjectPack
+    description: >-
+      Authenticate, bind the project scope, and install a declarative pack into it (rejecting code
+      packs).
+    signature: >-
+      installProjectPack(credential: string, project: string, name: string, content: string):
+      PackDescriptor
+    returns: PackDescriptor
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: name
+        type: string
+      - name: content
+        type: string
+  - name: removeProjectPack
+    description: Authenticate, bind the project scope, and remove one of its registered packs.
+    signature: 'removeProjectPack(credential: string, project: string, name: string): void'
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: name
+        type: string
+status: complete
+createdAt: '2026-07-04T18:46:52.736Z'
+updatedAt: '2026-07-04T18:48:00.212Z'

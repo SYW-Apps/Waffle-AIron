@@ -63,3 +63,15 @@ export interface ViewGrant {
   format: string;
   expiresAt: string;
 }
+
+/** The result of probing one extension pack: its declared name, where it lives,
+ *  and how many profiles/languages/rules it contributes — or its load error. */
+export interface PackDescriptor {
+  name: string;
+  scope: 'global' | 'project';
+  ref: string;
+  profiles: number;
+  languages: number;
+  rules: number;
+  error?: string;
+}

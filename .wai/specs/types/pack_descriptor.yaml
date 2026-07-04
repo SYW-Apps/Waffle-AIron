@@ -1,0 +1,39 @@
+kind: value-object
+id: pack_descriptor
+name: PackDescriptor
+description: >-
+  The result of probing one extension pack: its declared name, where it lives, and how many
+  profiles/languages/rules it contributes — or the load error if it failed to load. Used by the
+  hosted pack-management surface to list and confirm installs without exposing pack internals.
+fields:
+  - name: name
+    type: string
+    description: The pack's declared name (or its ref basename if unnamed)
+    optional: false
+  - name: scope
+    type: string
+    description: '"global" (server-wide) | "project" (a hosted project''s committed packs)'
+    optional: false
+  - name: ref
+    type: string
+    description: The resolved pack ref (global file path, or the project-relative .wai/packs/... registration)
+    optional: false
+  - name: profiles
+    type: number
+    description: Count of architectural profiles the pack contributes
+    optional: false
+  - name: languages
+    type: number
+    description: Count of language/platform tables the pack contributes
+    optional: false
+  - name: rules
+    type: number
+    description: Count of programmatic rules the pack contributes (always 0 for declarative packs)
+    optional: false
+  - name: error
+    type: string
+    description: The load error if the pack failed to load, else absent
+    optional: true
+methods: []
+createdAt: '2026-07-04T18:42:23.978Z'
+updatedAt: '2026-07-04T18:42:23.980Z'

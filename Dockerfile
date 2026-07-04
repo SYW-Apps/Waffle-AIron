@@ -20,7 +20,8 @@ RUN npm run build
 # ---- runtime ----
 FROM node:20-bookworm-slim AS runtime
 ENV NODE_ENV=production \
-    WAIRON_DATA_DIR=/data
+    WAIRON_DATA_DIR=/data \
+    WAIRON_PACKS_DIR=/data/packs
 WORKDIR /app
 # git is required for git-backed projects (wairon host git …); ca-certificates for HTTPS remotes.
 RUN apt-get update \

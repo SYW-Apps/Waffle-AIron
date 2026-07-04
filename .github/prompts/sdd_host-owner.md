@@ -21,6 +21,8 @@ You own and decide on everything within:
 .wai/specs/components/host_request_orchestrator.yaml
 .wai/specs/components/host_server.yaml
 .wai/specs/components/host_validator_adapter.yaml
+.wai/specs/components/pack_orchestrator.yaml
+.wai/specs/components/pack_registry.yaml
 .wai/specs/components/project_registry.yaml
 .wai/specs/components/secret_registry.yaml
 src/server/admin.ts
@@ -29,8 +31,9 @@ src/server/credentials.ts
 src/server/adapters.ts
 src/server/http.ts
 src/server/request.ts
+src/server/packs.ts
 src/server/projects.ts
-src/server/secrets.ts
+src/utils/secrets.ts
 ```
 
 ## Responsibilities

@@ -11,7 +11,8 @@ owns: []
 dependsOn:
   - host_server
   - admin_orchestrator
+  - pack_orchestrator
 portalType: HTTP_API
 status: complete
 createdAt: '2026-07-04T12:33:47.174Z'
-updatedAt: '2026-07-04T13:06:22.472Z'
+updatedAt: '2026-07-04T18:46:44.850Z'

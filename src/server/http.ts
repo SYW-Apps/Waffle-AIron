@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import * as fs from 'fs';
 import { handleMcpRequest, handleViewDiagram, sendJson, bearerToken } from './request.js';
 import * as admin from './admin.js';
+import * as packs from './packs.js';
 import { AdminAuthError, LockValidationError } from './admin.js';
 import type { HostConfig, Role } from './types.js';
 
@@ -89,7 +90,7 @@ async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: ServerResp
   const parts = url.pathname.split('/').filter(Boolean); // ['admin', ...]
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const body: any = req.method === 'POST' ? (await readBody(req)) ?? {} : {};
+    const body: any = req.method === 'POST' || req.method === 'PUT' ? (await readBody(req)) ?? {} : {};
 
     if (parts[1] === 'projects') {
       if (req.method === 'GET' && parts.length === 2) return sendJson(res, 200, admin.listProjects(cfg, cred));
@@ -141,6 +142,21 @@ async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: ServerResp
         });
         res.end(artifact);
         return;
+      }
+      if (req.method === 'GET' && parts.length === 4 && parts[3] === 'packs') return sendJson(res, 200, packs.listProjectPacks(cfg, cred, parts[2]));
+      if (req.method === 'PUT' && parts.length === 5 && parts[3] === 'packs') return sendJson(res, 200, packs.installProjectPack(cfg, cred, parts[2], parts[4], body.content));
+      if (req.method === 'DELETE' && parts.length === 5 && parts[3] === 'packs') {
+        packs.removeProjectPack(cfg, cred, parts[2], parts[4]);
+        return sendJson(res, 200, { ok: true });
+      }
+    }
+
+    if (parts[1] === 'packs') {
+      if (req.method === 'GET' && parts.length === 2) return sendJson(res, 200, packs.listGlobalPacks(cfg, cred));
+      if (req.method === 'PUT' && parts.length === 3) return sendJson(res, 200, packs.installGlobalPack(cfg, cred, parts[2], body.content));
+      if (req.method === 'DELETE' && parts.length === 3) {
+        packs.removeGlobalPack(cfg, cred, parts[2]);
+        return sendJson(res, 200, { ok: true });
       }
     }
 
