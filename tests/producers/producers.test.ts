@@ -4,8 +4,9 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
-import { project } from '../../src/producers/projection.js';
+import { project, projectGraph } from '../../src/producers/projection.js';
 import { bodyToBlocks, sync } from '../../src/producers/notion.js';
+import * as miro from '../../src/producers/miro.js';
 import { resolveSecret, setSecret, listSecretKeys } from '../../src/utils/secrets.js';
 
 // ---------------------------------------------------------------------------
@@ -31,6 +32,83 @@ describe('spec projection', () => {
     const componentBodies = doc.children.flatMap((s) => s.children).map((c) => c.body);
     expect(componentBodies.some((b) => b.includes('## Methods'))).toBe(true);
     expect(componentBodies.some((b) => b.includes('**Type:**'))).toBe(true);
+  });
+});
+
+describe('graph projection', () => {
+  it('projects components into nodes and dependsOn into edges (edges reference real nodes)', () => {
+    invalidateSpecCache();
+    const graph = runWithProjectRoot(process.cwd(), () => projectGraph());
+    expect(graph.nodes.length).toBeGreaterThan(0);
+    const ids = new Set(graph.nodes.map((n) => n.id));
+    for (const n of graph.nodes) {
+      expect(n.label).toBeTruthy();
+      expect(n.subsystem).toBeTruthy();
+      expect(n.componentType).toBeTruthy();
+    }
+    expect(graph.edges.length).toBeGreaterThan(0);
+    for (const e of graph.edges) {
+      expect(ids.has(e.from)).toBe(true);
+      expect(ids.has(e.to)).toBe(true); // dangling deps are dropped
+    }
+  });
+
+  it('lays out subsystems as columns and components as rows', () => {
+    const pos = miro.layout([
+      { id: 'a', label: 'A', subsystem: 's1', componentType: 'Portal' },
+      { id: 'b', label: 'B', subsystem: 's1', componentType: 'Store' },
+      { id: 'c', label: 'C', subsystem: 's2', componentType: 'Portal' },
+    ]);
+    expect(pos.get('a')).toEqual({ x: 0, y: 0 });
+    expect(pos.get('b')).toEqual({ x: 0, y: 120 }); // same column, next row
+    expect(pos.get('c')).toEqual({ x: 320, y: 0 }); // next column
+  });
+});
+
+describe('miro client (mocked API)', () => {
+  it('clears the wairon frame, then creates a frame, shapes, and connectors', async () => {
+    process.env.WAIRON_MIRO_TOKEN = 'miro_test';
+    delete process.env.WAIRON_DATA_DIR;
+    const calls: { method: string; path: string; body?: any }[] = [];
+    const originalFetch = global.fetch;
+    const jsonRes = (obj: any) => ({ ok: true, status: 200, json: async () => obj, text: async () => JSON.stringify(obj) });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    global.fetch = (async (url: string, init: any) => {
+      const p = new URL(url).pathname;
+      calls.push({ method: init.method, path: p, body: init.body ? JSON.parse(init.body) : undefined });
+      if (init.method === 'GET') return jsonRes({ data: [], cursor: undefined }); // empty board
+      if (init.method === 'POST' && p.endsWith('/frames')) return jsonRes({ id: 'frame-1' });
+      if (init.method === 'POST' && p.endsWith('/shapes')) return jsonRes({ id: `shape-${calls.length}` });
+      return jsonRes({ id: `x-${calls.length}` });
+    }) as unknown as typeof fetch;
+
+    try {
+      await miro.sync(
+        {
+          nodes: [
+            { id: 'a', label: 'A', subsystem: 's1', componentType: 'Portal' },
+            { id: 'b', label: 'B', subsystem: 's1', componentType: 'Store' },
+          ],
+          edges: [{ from: 'a', to: 'b' }],
+        },
+        'board-1',
+      );
+      expect(calls.filter((c) => c.method === 'POST' && c.path.endsWith('/frames')).length).toBe(1);
+      expect(calls.filter((c) => c.method === 'POST' && c.path.endsWith('/shapes')).length).toBe(2);
+      const connectors = calls.filter((c) => c.method === 'POST' && c.path.endsWith('/connectors'));
+      expect(connectors.length).toBe(1);
+      // the connector links the two created shapes, parented to the frame
+      expect(connectors[0].body.startItem.id).toMatch(/^shape-/);
+      expect(connectors[0].body.endItem.id).toMatch(/^shape-/);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('rejects when no Miro token is configured', async () => {
+    delete process.env.WAIRON_MIRO_TOKEN;
+    delete process.env.WAIRON_DATA_DIR;
+    await expect(miro.sync({ nodes: [], edges: [] }, 'board-1')).rejects.toThrow(/Miro token/);
   });
 });
 

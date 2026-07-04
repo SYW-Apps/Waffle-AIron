@@ -18,29 +18,35 @@ export interface ProduceOptions {
   token?: string;
 }
 
+const TARGETS: Record<string, { envKey: string; label: string; noun: string }> = {
+  notion: { envKey: 'WAIRON_NOTION_TOKEN', label: 'Notion', noun: 'parent page' },
+  miro: { envKey: 'WAIRON_MIRO_TOKEN', label: 'Miro', noun: 'board' },
+};
+
 export async function runProduce(target: string, options: ProduceOptions = {}): Promise<void> {
   assertProjectInitialized();
-  if (target !== 'notion') throw new WaironError(`Unknown producer target "${target}" (supported: notion).`);
-  if (!options.page) throw new WaironError('`--page <id>` (the target parent page) is required.');
+  const t = TARGETS[target];
+  if (!t) throw new WaironError(`Unknown producer target "${target}" (supported: ${Object.keys(TARGETS).join(', ')}).`);
+  if (!options.page) throw new WaironError(`\`--page <id>\` (the target ${t.noun} id) is required.`);
 
   // Resolve the credential: --token -> env -> interactive prompt.
-  let token = options.token || process.env['WAIRON_NOTION_TOKEN'] || null;
+  let token = options.token || process.env[t.envKey] || null;
   if (!token) {
-    if (!process.stdin.isTTY) throw new WaironError('No Notion token — pass --token or set WAIRON_NOTION_TOKEN.');
+    if (!process.stdin.isTTY) throw new WaironError(`No ${t.label} token — pass --token or set ${t.envKey}.`);
     const ans = await inquirer.prompt<{ token: string }>([
-      { type: 'password', name: 'token', message: 'Notion integration token:', mask: '*' },
+      { type: 'password', name: 'token', message: `${t.label} token:`, mask: '*' },
     ]);
     token = ans.token;
   }
-  if (!token) throw new WaironError('A Notion token is required.');
-  process.env['WAIRON_NOTION_TOKEN'] = token; // read via resolveSecret during this run
+  if (!token) throw new WaironError(`A ${t.label} token is required.`);
+  process.env[t.envKey] = token; // read via resolveSecret during this run
 
   producerPortal.configure(target, options.page);
-  logger.info(`Projecting the spec tree to ${chalk.bold(target)}…`);
+  logger.info(`Projecting the spec tree to ${chalk.bold(t.label)}…`);
   try {
     await producerPortal.produce(target, '');
   } catch (e) {
     throw new WaironError(e instanceof Error ? e.message : String(e));
   }
-  logger.success('Projected the spec tree to Notion (under a "wairon specs" page).');
+  logger.success(`Projected the spec tree to ${t.label}.`);
 }

@@ -325,7 +325,7 @@ mcpCmd
 
 program
   .command('produce <target>')
-  .description('project the local project\'s specs to a producer target (e.g. notion)')
+  .description('project the local project\'s specs to a producer target (notion | miro)')
   .option('--page <id>', 'parent page/board id in the target')
   .option('--token <token>', 'integration token (else env, else interactive prompt)')
   .action(async (target: string, opts) => {
@@ -415,7 +415,7 @@ hostCmd
 
 hostCmd
   .command('producer <action>')
-  .description('configure | produce | remove | list producers (project a hosted project to Notion, etc.)')
+  .description('configure | produce | remove | list producers (project a hosted project to Notion / Miro)')
   .option('--project <id>', 'project id')
   .option('--target <t>', 'producer target', 'notion')
   .option('--page <id>', 'parent page/board id (for configure)')
@@ -426,7 +426,7 @@ hostCmd
 
 hostCmd
   .command('secret <action>')
-  .description('set | list integration secrets at runtime (git-token, notion-token, signing-secret) — no restart')
+  .description('set | list integration secrets at runtime (git-token, notion-token, miro-token, signing-secret) — no restart')
   .option('--key <name>', 'secret key')
   .option('--value <secret>', 'secret value (for set)')
   .option('--data-dir <path>', 'data root')

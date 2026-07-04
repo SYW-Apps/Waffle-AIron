@@ -1,5 +1,5 @@
 import * as core from './core-adapter.js';
-import type { DocPage } from './types.js';
+import type { DocPage, GraphModel, GraphEdge } from './types.js';
 import type {
   SystemSpec,
   SubsystemSpec,
@@ -44,6 +44,25 @@ export function project(diagramUrl: string): DocPage {
         })),
     })),
   };
+}
+
+/** Project the components + dependsOn edges into a GraphModel (for a visual target). */
+export function projectGraph(): GraphModel {
+  const components = core.loadComponentSpecs();
+  const ids = new Set(components.map((c) => c.id));
+  const nodes = components.map((c) => ({
+    id: c.id,
+    label: c.name || c.id,
+    subsystem: c.subsystem,
+    componentType: c.componentType,
+  }));
+  const edges: GraphEdge[] = [];
+  for (const c of components) {
+    for (const dep of c.dependsOn ?? []) {
+      if (ids.has(dep)) edges.push({ from: c.id, to: dep });
+    }
+  }
+  return { nodes, edges };
 }
 
 function systemBody(system: SystemSpec | null, mermaid: string, diagramUrl: string): string {

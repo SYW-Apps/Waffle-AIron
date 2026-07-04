@@ -39,13 +39,18 @@ migration*).
   a browser via a short-lived HMAC-**signed** `/view/diagram` link (no bearer —
   the capability is in the URL), with generate/download bearer-authed.
 - **Producers** (`sdd_producers`) — project a spec tree into an external target as
-  a one-way, idempotent "wairon specs" subsection. **Notion** is the first producer
-  (raw REST, no new dependency): pages carry each component's methods + a Mermaid
-  diagram. Usable **hosted** (`wairon host producer …`, `/admin/projects/{id}/producers/*`)
-  and **locally** (`wairon produce notion --page <id>`, credential from flag/env/prompt).
-  The `DocPage` model is target-agnostic so Miro/others slot in later.
-- **Runtime secret store** — integration tokens (git, Notion, signing) resolve
-  data-dir store → env, and `wairon host secret set` / `PUT /admin/secrets/{key}`
+  a one-way, idempotent subsection. Two producers ship, both raw REST with **no new
+  dependency**, and both usable **hosted** (`wairon host producer …`,
+  `/admin/projects/{id}/producers/*`) and **locally** (`wairon produce <target> --page <id>`,
+  credential from flag/env/prompt):
+  - **Notion** — a "wairon specs" page subtree whose pages carry each component's
+    methods + a Mermaid diagram (target-agnostic `DocPage` model).
+  - **Miro** — the architecture graph rendered onto a board as native shapes +
+    connectors inside a `wairon architecture` frame (target-agnostic `GraphModel`;
+    `--page` is the board id). Idempotent: the frame is cleared and rebuilt, the
+    rest of the board untouched.
+- **Runtime secret store** — integration tokens (git, Notion, Miro, signing)
+  resolve data-dir store → env, and `wairon host secret set` / `PUT /admin/secrets/{key}`
   set them at runtime, so an integration can be added to a live container without a
   restart.
 - **Git-backed projects** (`sdd_git`) — a hosted project can relocate its source

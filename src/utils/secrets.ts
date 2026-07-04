@@ -14,6 +14,7 @@ import * as path from 'path';
 const ENV_FALLBACK: Record<string, string[]> = {
   'git-token': ['WAIRON_GIT_TOKEN'],
   'notion-token': ['WAIRON_NOTION_TOKEN'],
+  'miro-token': ['WAIRON_MIRO_TOKEN'],
   'signing-secret': ['WAIRON_SIGNING_SECRET', 'WAIRON_ADMIN_TOKEN'],
 };
 

@@ -4,8 +4,9 @@ import {
   clearProducerConfig,
   listProducerConfigs,
 } from './config.js';
-import { project } from './projection.js';
+import { project, projectGraph } from './projection.js';
 import * as notion from './notion.js';
+import * as miro from './miro.js';
 import type { ProducerConfig } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -19,10 +20,12 @@ export function configure(target: string, parentPageId: string): void {
 export async function produce(target: string, diagramUrl: string): Promise<void> {
   const config = readProducerConfig(target);
   if (!config) throw new Error(`Producer "${target}" is not configured for this project.`);
-  const docTree = project(diagramUrl);
   switch (target) {
     case 'notion':
-      await notion.sync(docTree, config.parentPageId);
+      await notion.sync(project(diagramUrl), config.parentPageId);
+      return;
+    case 'miro':
+      await miro.sync(projectGraph(), config.parentPageId);
       return;
     default:
       throw new Error(`Unknown producer target "${target}".`);

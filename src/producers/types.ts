@@ -15,3 +15,24 @@ export interface DocPage {
   body: string;
   children: DocPage[];
 }
+
+/** A component node in the architecture graph (the visual projection). */
+export interface GraphNode {
+  id: string;
+  label: string;
+  subsystem: string;
+  componentType: string;
+}
+
+/** A directed dependency between component nodes. */
+export interface GraphEdge {
+  from: string;
+  to: string;
+}
+
+/** The architecture as a node/edge graph — what a visual producer (Miro) renders,
+ *  parallel to DocPage for a documentation producer (Notion). */
+export interface GraphModel {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}

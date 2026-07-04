@@ -143,22 +143,30 @@ Identity: a single bot token — `WAIRON_GIT_TOKEN` (+ `WAIRON_GIT_NAME` /
 `WAIRON_GIT_EMAIL`). `.wai/lock.json` and `.wai/git.json` stay container-local
 (never committed). The Docker image ships with `git` installed.
 
-### Producers — project specs to Notion
+### Producers — project specs to Notion / Miro
 
-Mirror a project's spec tree into a **"wairon specs" subsection** under a Notion
-page (idempotent — sibling content untouched), **hosted or locally**:
+Project a project's spec tree into an external target as a one-way, idempotent
+subsection (sibling content untouched), **hosted or locally**. Two producers ship:
 
-- Hosted: `wairon host producer configure --project acme --target notion --page <pageId>`,
+- **Notion** — a **"wairon specs"** page subtree; each page carries the component's
+  methods and a **Mermaid** diagram code block (the hosted path also embeds a signed
+  live-canvas link). `--page` is the parent Notion page id.
+- **Miro** — the architecture graph rendered onto a board as native shapes +
+  connectors inside a **`wairon architecture`** frame; re-running clears and rebuilds
+  just that frame. `--page` is the board id.
+
+Both are usable:
+
+- Hosted: `wairon host producer configure --project acme --target <notion|miro> --page <id>`,
   then `wairon host producer produce --project acme` (or the admin API under
   `/admin/projects/{id}/producers/{target}`).
-- Local: `wairon produce notion --page <pageId>` against the project in your cwd —
-  the token comes from `--token`, else `WAIRON_NOTION_TOKEN`, else an interactive
-  prompt (nothing stored).
+- Local: `wairon produce <notion|miro> --page <id>` against the project in your cwd —
+  the token comes from `--token`, else `WAIRON_NOTION_TOKEN` / `WAIRON_MIRO_TOKEN`,
+  else an interactive prompt (nothing stored).
 
-Each page carries the component's methods and a **Mermaid** diagram code block;
-the hosted path also embeds a signed live-canvas link. Notion uses raw REST (**no
-new dependency**); the `DocPage` model is target-agnostic, so a future Miro/other
-producer reuses the same projection.
+Both use raw REST (**no new dependency**). The projection is target-agnostic — Notion
+renders a `DocPage` tree, Miro renders a `GraphModel` — so further targets slot in
+against the same projection.
 
 ### Runtime secrets — no restart
 
@@ -167,7 +175,7 @@ added to a *live* container without a restart:
 
 ```sh
 docker compose exec wairon wairon host secret set --key notion-token --value secret_xxx
-# also git-token / signing-secret; env still works as the default
+# also miro-token / git-token / signing-secret; env still works as the default
 ```
 
 ## 5. Self-hosting with Docker
@@ -251,6 +259,7 @@ Two equivalent paths to the same control-plane logic:
 | Git bot token | — | `WAIRON_GIT_TOKEN` | *(needed for `https://` git remotes)* |
 | Git committer name / email | — | `WAIRON_GIT_NAME` / `WAIRON_GIT_EMAIL` | `wairon-bot` / `wairon-bot@localhost` |
 | Notion integration token | — | `WAIRON_NOTION_TOKEN` | *(or set via `host secret set`)* |
+| Miro access token | — | `WAIRON_MIRO_TOKEN` | *(or set via `host secret set`)* |
 | Public base URL (for links) | — | `WAIRON_PUBLIC_URL` | data-plane `host:port` |
 
 All token secrets can also be set at runtime with `wairon host secret set --key <k> --value <v>` (data-dir store, read live).
