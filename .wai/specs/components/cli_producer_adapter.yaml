@@ -1,0 +1,14 @@
+id: cli_producer_adapter
+name: CLI Producer Client Adapter
+description: >-
+  Local client adapter crossing the subsystem boundary to sdd_producers via its published portal:
+  lets the wairon CLI project a local project's specs to a producer target (e.g. `wairon produce
+  notion`), resolving the target credential from flag, env, or an interactive prompt.
+subsystem: sdd_cli
+componentType: Adapter
+owns: []
+dependsOn:
+  - producer_portal
+status: complete
+createdAt: '2026-07-04T17:37:12.964Z'
+updatedAt: '2026-07-04T17:42:03.841Z'

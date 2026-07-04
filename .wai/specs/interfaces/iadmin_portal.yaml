@@ -119,6 +119,56 @@ methods:
       transport: HTTP
       method: POST
       path: /admin/projects/{id}/git/sync
+  - name: configureProducer
+    description: Configure a producer target for a project.
+    signature: >-
+      configureProducer(credential: string, project: string, target: string, parentPageId: string):
+      void
+    returns: void
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /admin/projects/{id}/producers/{target}
+  - name: produceProducer
+    description: Project a project to a producer target.
+    signature: 'produceProducer(credential: string, project: string, target: string): void'
+    returns: void
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /admin/projects/{id}/producers/{target}/produce
+  - name: removeProducer
+    description: Remove a producer target.
+    signature: 'removeProducer(credential: string, project: string, target: string): void'
+    returns: void
+    endpoint:
+      transport: HTTP
+      method: DELETE
+      path: /admin/projects/{id}/producers/{target}
+  - name: listProducers
+    description: List a project's producers.
+    signature: 'listProducers(credential: string, project: string): ProducerConfig[]'
+    returns: ProducerConfig[]
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /admin/projects/{id}/producers
+  - name: setSecret
+    description: Set an integration secret at runtime.
+    signature: 'setSecret(credential: string, key: string, value: string): void'
+    returns: void
+    endpoint:
+      transport: HTTP
+      method: PUT
+      path: /admin/secrets/{key}
+  - name: listSecrets
+    description: List configured secret keys.
+    signature: 'listSecrets(credential: string): string[]'
+    returns: string[]
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /admin/secrets
 status: complete
 createdAt: '2026-07-04T12:50:05.545Z'
-updatedAt: '2026-07-04T16:32:19.363Z'
+updatedAt: '2026-07-04T17:38:17.046Z'

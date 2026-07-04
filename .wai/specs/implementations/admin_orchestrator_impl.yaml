@@ -464,6 +464,176 @@ methods:
         description: Return once synced
         type: return
         outcome: synced
+  - name: configureProducer
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 5
+        description: Configure the producer target
+        type: call
+        targetComponent: host_producer_adapter
+        targetMethod: configure
+      - stepNumber: 6
+        description: Return once configured
+        type: return
+        outcome: configured
+  - name: produceProducer
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 5
+        description: Mint a signed view token for the project's canvas
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: signViewToken
+      - stepNumber: 6
+        description: Compose the canvas link from the public base URL and token
+        type: local
+      - stepNumber: 7
+        description: Project and push the project to the target
+        type: call
+        targetComponent: host_producer_adapter
+        targetMethod: produce
+      - stepNumber: 8
+        description: Return once produced
+        type: return
+        outcome: produced
+  - name: removeProducer
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 5
+        description: Remove the producer target
+        type: call
+        targetComponent: host_producer_adapter
+        targetMethod: remove
+      - stepNumber: 6
+        description: Return once removed
+        type: return
+        outcome: removed
+  - name: listProducers
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 5
+        description: List configured producers
+        type: call
+        targetComponent: host_producer_adapter
+        targetMethod: list
+      - stepNumber: 6
+        description: Return the producer list
+        type: return
+        outcome: producer list
+  - name: setSecret
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: Store the secret at runtime
+        type: call
+        targetComponent: secret_registry
+        targetMethod: write
+      - stepNumber: 5
+        description: Return once set
+        type: return
+        outcome: secret set
+  - name: listSecrets
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: List configured secret keys (names only)
+        type: call
+        targetComponent: secret_registry
+        targetMethod: list
+      - stepNumber: 5
+        description: Return the secret key names
+        type: return
+        outcome: secret keys
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-07-04T16:34:48.980Z'
+updatedAt: '2026-07-04T17:40:27.529Z'

@@ -1,0 +1,24 @@
+id: ihost_producer_adapter
+name: Host Producer Client Adapter Interface
+description: Contract for the hosting server's use of producers, forwarded to the producer portal.
+component: host_producer_adapter
+methods:
+  - name: configure
+    description: Configure a producer target for the bound project.
+    signature: 'configure(target: string, parentPageId: string): void'
+    returns: void
+  - name: produce
+    description: Produce the bound project to a target.
+    signature: 'produce(target: string, diagramUrl: string): void'
+    returns: void
+  - name: remove
+    description: Remove a producer target.
+    signature: 'remove(target: string): void'
+    returns: void
+  - name: list
+    description: List configured producers.
+    signature: 'list(): ProducerConfig[]'
+    returns: ProducerConfig[]
+status: complete
+createdAt: '2026-07-04T17:37:50.419Z'
+updatedAt: '2026-07-04T17:42:04.109Z'

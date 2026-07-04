@@ -1,0 +1,20 @@
+id: sdd_producers
+name: SDD Producers
+description: >-
+  One-way projections of the spec tree (and diagram links) into external documentation/collaboration
+  targets, for readability outside the container. A producer renders the specs into a
+  target-agnostic DocPage tree, then an adapter pushes it to a target. Notion is the first producer
+  (mirrors a "wairon specs" subsection under a chosen parent page, respecting existing content);
+  Miro and others slot in later as more adapters. Auth: one integration token per target via env
+  (e.g. WAIRON_NOTION_TOKEN) plus a per-project parent page id.
+parentSystem: Waffle-AIron
+publicInterfaces:
+  - type: Custom
+    details: >-
+      In-process producer services (configure/produce/remove/list) consumed by the hosting server
+      and the CLI.
+    component: producer_portal
+trustedLinks: []
+status: complete
+createdAt: '2026-07-04T17:28:53.489Z'
+updatedAt: '2026-07-04T17:42:03.824Z'

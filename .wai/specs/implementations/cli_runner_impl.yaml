@@ -213,6 +213,27 @@ methods:
         description: Return after promote
         type: return
         outcome: promoted
+  - name: runProduce
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the target credential (--token, else env, else interactive prompt) and set it for
+          the operation
+        type: local
+      - stepNumber: 2
+        description: Configure the target for the local project (parent page from --page)
+        type: call
+        targetComponent: cli_producer_adapter
+        targetMethod: configure
+      - stepNumber: 3
+        description: Project the local project's specs to the target
+        type: call
+        targetComponent: cli_producer_adapter
+        targetMethod: produce
+      - stepNumber: 4
+        description: Return once produced
+        type: return
+        outcome: produced
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-04T12:56:21.859Z'
+updatedAt: '2026-07-04T17:40:30.182Z'

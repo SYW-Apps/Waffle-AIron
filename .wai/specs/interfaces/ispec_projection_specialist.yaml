@@ -1,0 +1,15 @@
+id: ispec_projection_specialist
+name: Spec Projection Specialist Interface
+description: Contract for projecting the spec tree into a target-agnostic DocPage tree.
+component: spec_projection_specialist
+methods:
+  - name: project
+    description: >-
+      Load the bound project's spec tree and Mermaid diagram and build the 'wairon specs' DocPage
+      tree (subsystem/component pages with prose, method tables, a Mermaid code block, and the
+      optional canvas link).
+    signature: 'project(diagramUrl: string): DocPage'
+    returns: DocPage
+status: complete
+createdAt: '2026-07-04T17:37:36.878Z'
+updatedAt: '2026-07-04T17:42:04.193Z'

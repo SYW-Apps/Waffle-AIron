@@ -1,0 +1,71 @@
+id: producer_orchestrator_impl
+name: Producer Orchestrator Implementation
+description: 'The producer workflows: configure/produce/remove/list.'
+contract: iproducer_orchestrator
+sourcePath: src/producers/orchestrator.ts
+methods:
+  - name: configure
+    narrative:
+      - stepNumber: 1
+        description: Build the ProducerConfig (target, parentPageId)
+        type: local
+      - stepNumber: 2
+        description: Persist the producer config
+        type: call
+        targetComponent: producer_config_registry
+        targetMethod: write
+      - stepNumber: 3
+        description: Return once configured
+        type: return
+        outcome: configured
+  - name: produce
+    narrative:
+      - stepNumber: 1
+        description: Read the target's config
+        type: call
+        targetComponent: producer_config_registry
+        targetMethod: read
+      - stepNumber: 2
+        description: If the target is not configured, reject
+        type: branch
+        condition: config is null
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject an unconfigured target
+        type: throw
+        error: producer target not configured
+      - stepNumber: 4
+        description: Project the spec tree into a DocPage tree
+        type: call
+        targetComponent: spec_projection_specialist
+        targetMethod: project
+      - stepNumber: 5
+        description: Push the DocPage tree to Notion under the configured parent page
+        type: call
+        targetComponent: notion_adapter
+        targetMethod: sync
+      - stepNumber: 6
+        description: Return once produced
+        type: return
+        outcome: produced
+  - name: remove
+    narrative:
+      - stepNumber: 1
+        description: Clear the target's config
+        type: call
+        targetComponent: producer_config_registry
+        targetMethod: clear
+      - stepNumber: 2
+        description: Return once removed
+        type: return
+        outcome: removed
+  - name: list
+    narrative:
+      - stepNumber: 1
+        description: List the configured producers
+        type: call
+        targetComponent: producer_config_registry
+        targetMethod: list
+status: complete
+createdAt: '2026-07-04T17:40:06.027Z'
+updatedAt: '2026-07-04T17:42:04.273Z'

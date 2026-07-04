@@ -1,0 +1,51 @@
+id: producer_core_adapter_impl
+name: Producer Core Client Adapter Implementation
+description: Forwards spec-tree loads and diagram rendering to the core portal.
+contract: iproducer_core_adapter
+sourcePath: src/producers/core-adapter.ts
+methods:
+  - name: loadSystemSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadSystemSpec
+  - name: loadSubsystemSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadSubsystemSpecs
+  - name: loadComponentSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadComponentSpecs
+  - name: loadInterfaceSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadInterfaceSpecs
+  - name: loadImplementationSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadImplementationSpecs
+  - name: renderDiagram
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: renderDiagram
+status: complete
+createdAt: '2026-07-04T17:39:19.585Z'
+updatedAt: '2026-07-04T17:42:04.261Z'

@@ -102,6 +102,48 @@ methods:
         type: call
         targetComponent: admin_orchestrator
         targetMethod: syncGit
+  - name: configureProducer
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: configureProducer
+  - name: produceProducer
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: produceProducer
+  - name: removeProducer
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: removeProducer
+  - name: listProducers
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: listProducers
+  - name: setSecret
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: setSecret
+  - name: listSecrets
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: listSecrets
 status: complete
 createdAt: '2026-07-04T12:53:08.445Z'
-updatedAt: '2026-07-04T16:34:04.293Z'
+updatedAt: '2026-07-04T17:40:11.029Z'

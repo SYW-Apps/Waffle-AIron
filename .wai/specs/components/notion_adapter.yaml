@@ -1,0 +1,13 @@
+id: notion_adapter
+name: Notion Client Adapter
+description: >-
+  The only block doing Notion I/O: idempotently mirrors a DocPage tree into a "wairon specs"
+  subsection under a parent page via the Notion REST API (find-or-create the subsection, refresh its
+  children, never touching sibling content). Authenticates with WAIRON_NOTION_TOKEN.
+subsystem: sdd_producers
+componentType: Adapter
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-07-04T17:29:06.002Z'
+updatedAt: '2026-07-04T17:42:03.902Z'

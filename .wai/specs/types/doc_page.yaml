@@ -1,0 +1,23 @@
+kind: value-object
+id: doc_page
+name: DocPage
+description: >-
+  A target-agnostic documentation node the projection produces and any producer renders: a titled
+  page with a markdown-ish body and nested child pages (mirroring the spec tree). Notion turns it
+  into pages + blocks; other targets translate the same model.
+fields:
+  - name: title
+    type: string
+    description: Page title
+    optional: false
+  - name: body
+    type: string
+    description: Markdown-ish page body (headings, tables, code fences, links)
+    optional: false
+  - name: children
+    type: DocPage[]
+    description: Nested child pages
+    optional: false
+methods: []
+createdAt: '2026-07-04T17:29:15.489Z'
+updatedAt: '2026-07-04T17:29:15.502Z'

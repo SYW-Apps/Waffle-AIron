@@ -1,0 +1,23 @@
+id: producer_config_registry_impl
+name: Producer Config Registry Implementation
+description: File-backed I/O for per-project producer configs (.wai/producers.json).
+contract: iproducer_config_registry
+sourcePath: src/producers/config.ts
+methods:
+  - name: read
+    narrative: []
+    intent: >-
+      Reads .wai/producers.json for the bound project and returns the config entry for the target,
+      or null when absent.
+  - name: write
+    narrative: []
+    intent: Upserts the ProducerConfig into .wai/producers.json (keyed by target) and writes atomically.
+  - name: clear
+    narrative: []
+    intent: Removes the target's entry from .wai/producers.json. Idempotent when absent.
+  - name: list
+    narrative: []
+    intent: Returns all ProducerConfig entries from .wai/producers.json.
+status: complete
+createdAt: '2026-07-04T17:39:10.593Z'
+updatedAt: '2026-07-04T17:42:04.249Z'

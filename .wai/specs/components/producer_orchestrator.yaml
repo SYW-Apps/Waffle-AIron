@@ -1,0 +1,16 @@
+id: producer_orchestrator
+name: Producer Orchestrator
+description: >-
+  Owns the producer workflows: persist a target's config, produce (project the spec tree via the
+  projection specialist then push it through the target's adapter), remove a target, and list
+  configured producers. Dispatches produce by target (notion today).
+subsystem: sdd_producers
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - producer_config_registry
+  - spec_projection_specialist
+  - notion_adapter
+status: complete
+createdAt: '2026-07-04T17:28:58.494Z'
+updatedAt: '2026-07-04T17:42:03.985Z'

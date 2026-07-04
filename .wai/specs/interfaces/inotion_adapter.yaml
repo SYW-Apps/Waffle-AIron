@@ -1,0 +1,14 @@
+id: inotion_adapter
+name: Notion Client Adapter Interface
+description: Contract for pushing a DocPage tree into Notion under a parent page.
+component: notion_adapter
+methods:
+  - name: sync
+    description: >-
+      Idempotently mirror the DocPage tree into a 'wairon specs' subsection under the parent page
+      (find-or-create, refresh children), authenticating with the resolved Notion token.
+    signature: 'sync(page: DocPage, parentPageId: string): void'
+    returns: void
+status: complete
+createdAt: '2026-07-04T17:37:44.631Z'
+updatedAt: '2026-07-04T17:42:04.121Z'

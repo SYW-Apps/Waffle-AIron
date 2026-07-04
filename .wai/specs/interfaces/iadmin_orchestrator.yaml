@@ -69,6 +69,32 @@ methods:
     description: Authenticate and sync the project's default branch into its working branch.
     signature: 'syncGit(credential: string, project: string): void'
     returns: void
+  - name: configureProducer
+    description: Authenticate and configure a producer target for a project.
+    signature: >-
+      configureProducer(credential: string, project: string, target: string, parentPageId: string):
+      void
+    returns: void
+  - name: produceProducer
+    description: Authenticate, mint a signed canvas link, and project the project to the target.
+    signature: 'produceProducer(credential: string, project: string, target: string): void'
+    returns: void
+  - name: removeProducer
+    description: Authenticate and remove a producer target.
+    signature: 'removeProducer(credential: string, project: string, target: string): void'
+    returns: void
+  - name: listProducers
+    description: Authenticate and list a project's configured producers.
+    signature: 'listProducers(credential: string, project: string): ProducerConfig[]'
+    returns: ProducerConfig[]
+  - name: setSecret
+    description: Authenticate and set an integration secret at runtime (no restart).
+    signature: 'setSecret(credential: string, key: string, value: string): void'
+    returns: void
+  - name: listSecrets
+    description: Authenticate and list configured secret keys (names only).
+    signature: 'listSecrets(credential: string): string[]'
+    returns: string[]
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-07-04T16:32:15.434Z'
+updatedAt: '2026-07-04T17:38:08.196Z'
