@@ -26,7 +26,8 @@
    inert. When enabled, the workflow is strict.
 
 6. **Observable, file-based state.** Everything lives under `.wai/` as
-   human-readable YAML/JSON — no database, no daemon, works offline.
+   human-readable YAML/JSON — no database, works offline, and no daemon for the
+   core workflow (`wairon serve` is an opt-in hosting daemon over the same files).
 
 ---
 
@@ -34,7 +35,9 @@
 
 - **Not a session orchestrator.** wairon does not spawn or drive AI sessions,
   run multi-model pipelines, or manage git worktrees. It relies on the host
-  tool's own native subagent mechanism.
+  tool's own native subagent mechanism. (`wairon serve` *hosts* the `sdd_*` tools
+  over HTTP for remote MCP clients, but still does not run or drive the AI
+  session.)
 - **Not a hand-maintained agent registry.** Agents are derived from specs, not
   authored in an `agents.json`.
 - **Not a runtime for application code.** wairon manages specs, conformance, and

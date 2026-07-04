@@ -29,6 +29,12 @@ reflects what is actually shipped in `src/` and what is planned.
   domain map and AI guide.
 - **Tooling** — `init`, `status`, self-update with release channels, command
   aliases, multi-target exporters (Claude, Gemini, custom).
+- **Hosted server** (`wairon serve` / `wairon host`) — the `sdd_host` subsystem
+  serves the `sdd_*` tools over streamable HTTP for many fully-isolated projects,
+  each scoped per-request to its authenticated project. Split data plane
+  (project-API-key auth) / admin control plane (project & key lifecycle plus a
+  commit-scoped `lock`/`promote` with a promote-time state re-check). Self-host
+  via Docker. See the [hosted server guide](design/hosted-mcp-server.md).
 
 ---
 
@@ -82,9 +88,9 @@ reflects what is actually shipped in `src/` and what is planned.
 | Invariant | Why |
 |-----------|-----|
 | **`.wai/` boundary** | All wairon state lives under `.wai/`; nothing is written elsewhere without explicit opt-in. |
-| **No hidden server** | Everything runs on-demand; the MCP server is a subprocess, not a daemon. |
+| **No hidden server (by default)** | The core workflow runs on-demand; the stdio MCP server is a subprocess, not a daemon. `wairon serve` is an explicit, opt-in hosting daemon. |
 | **No database** | All state is human-readable YAML/JSON. |
-| **Works offline** | No network requirement; update checks are opt-in. |
+| **Works offline (core)** | The core workflow has no network requirement; `wairon serve` and update checks are opt-in. |
 | **Specs are the source of truth** | Agents and conformance are derived from `.wai/specs/`; generated files are outputs. |
 | **wairon equips, not orchestrates** | wairon does not run AI sessions — it produces subagents, skills, and MCP tools the host tool consumes. |
 

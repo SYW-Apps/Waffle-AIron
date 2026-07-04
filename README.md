@@ -7,9 +7,10 @@
 > rule registry with narrative control-flow validation, technology
 > boundaries, and per-spec `lint.allow`), spec-derived agent topology,
 > skills, the MCP server, diagrams (Mermaid, interactive canvas + ERD,
-> draw.io/Excalidraw), and extension packs (injectable profiles, language
-> tables, and rules) are working. See the [roadmap](docs/roadmap.md) for
-> what's next.
+> draw.io/Excalidraw), extension packs (injectable profiles, language
+> tables, and rules), and a self-hostable HTTP **hosting server**
+> (`wairon serve` — HTTP MCP for many isolated projects) are working. See the
+> [roadmap](docs/roadmap.md) for what's next.
 
 ---
 
@@ -169,7 +170,10 @@ See [docs/cli.md](docs/cli.md). Summary:
 | `wairon packs add \| list \| remove [--global]` | Extension packs: injected profiles, language tables, and rules |
 | `wairon domains list \| scan \| add \| remove` | Domains (subsystem-derived + free-standing) |
 | `wairon skills list \| install` | Manage the SDD skills installed into your tools |
+| `wairon lock [-y]` | Validate the tree as-complete and freeze it (generates the implementer agents) |
 | `wairon mcp serve \| install \| status` | The wairon MCP server (`sdd_*` tools) |
+| `wairon serve [--port] [--data-dir] [--no-auth]` | Self-host: HTTP MCP for many isolated projects + admin plane |
+| `wairon host project \| key \| lock \| promote` | Administer the hosting server (projects, keys, state-scoped lock/promote) |
 | `wairon update` / `wairon aliases` | Self-update / command aliases |
 
 ---
@@ -181,6 +185,7 @@ See [docs/cli.md](docs/cli.md). Summary:
 - [Roadmap](docs/roadmap.md) — what's done and what's next
 - [Vision](docs/vision.md) — long-term direction
 - [CLI Reference](docs/cli.md) — all commands
+- [Hosted server](docs/design/hosted-mcp-server.md) — self-host wairon over HTTP (Docker, auth, sizing)
 - [Extending wairon](docs/extending-wairon.md) — extension packs & wrapper products (with a [working example](examples/wrapper/))
 - [Templates](docs/templates.md) — agent rendering templates
 - [Standards](docs/standards/INDEX.md) — the architecture standards the SDD model is built on

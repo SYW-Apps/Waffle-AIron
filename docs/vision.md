@@ -31,8 +31,9 @@ as a gate before code is written.
 - **Optional, then strict.** A project opts in by creating a spec tree. Once
   enabled, the workflow is enforced: design before code, spec is law,
   human-in-the-loop.
-- **`.wai/` boundary, file-based, offline.** All state is human-readable files
-  under `.wai/`; no database, no daemon, no network requirement.
+- **`.wai/` boundary, file-based, offline core.** All state is human-readable
+  files under `.wai/`; no database, and the core workflow needs no daemon or
+  network. Hosting (`wairon serve`) is an opt-in server over the same files.
 
 ---
 

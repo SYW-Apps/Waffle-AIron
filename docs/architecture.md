@@ -24,12 +24,13 @@ to the artifacts the host AI tool consumes:
 | Directory | Responsibility |
 |-----------|----------------|
 | `cli/` | Commander entrypoint; wires commands |
-| `commands/` | Command implementations (init, validate, status, generate, list, show, domains, skills, mcp, update, aliases) |
-| `core/` | The engine: `specs` (load/scan the tree), `validation` (conformance), `agent_resolver` (spec → agents), `domains` (resolve + free-standing CRUD), `skills` (export), `context`, `detection`, `templates` |
-| `config/` | `loader` (paths, project config, topology config, derived registry), defaults |
+| `commands/` | Command implementations (init, validate, status, generate, lock, doctor, diagram, rules, packs, list, show, domains, skills, mcp, update, aliases, and the hosting commands `serve` / `host`) |
+| `core/` | The engine: `specs` (load/scan the tree), `validation` (conformance + `validateAsComplete`), `agent_resolver` (spec → agents), `domains` (resolve + free-standing CRUD), `skills` (export), `statehash` (deterministic StateId), `lockfile` (commit-scoped lock record), `provision` (bootstrap a project + bulk promote), `context`, `detection`, `templates` |
+| `config/` | `loader` (paths, request-scoped project root, project config, topology config, derived registry), defaults |
 | `models/` | Zod schemas: `specs`, `agent`, `domain`/topology, `project`, `template`, `registry` |
 | `exporters/` | Render an agent into a tool-specific file (Claude, Gemini, custom) |
-| `mcp/` | The MCP server (topology + `sdd_*` tools) |
+| `mcp/` | The stdio MCP server (topology + `sdd_*` tools) |
+| `server/` | The hosting server (`sdd_host`): HTTP data plane (`/mcp`), admin control plane, per-request project scoping, auth, and the credential/project registries |
 | `templates/` | Built-in agent templates + the SDD skill files |
 | `utils/` | Logger, fs, yaml, errors, the AI guide |
 
@@ -48,7 +49,15 @@ to the artifacts the host AI tool consumes:
   output directory. wairon does not do per-directory or session-based rendering.
 - **Conformance is centralized** in `core/validation.ts` (`validateSddTree`),
   reused by both the `validate` command and the `sdd_validate_tree` MCP tool.
-- **Everything is file-based** under `.wai/` — no database, no daemon.
+  `validateAsComplete` runs the same gate at full strictness for `lock`.
+- **Optionally hosted.** `wairon serve` (the `sdd_host` subsystem, in `server/`)
+  serves the `sdd_*` tools over streamable HTTP for many fully-isolated projects,
+  binding each request to its authenticated project via `AsyncLocalStorage`
+  (`runWithProjectRoot`) — reusing the core, validation, and MCP layers unchanged.
+- **Everything is file-based** under `.wai/` — no database, and no daemon for the
+  core workflow. `wairon serve` is an **opt-in** hosting daemon (see the
+  [hosted server guide](design/hosted-mcp-server.md)) that serves the same
+  file-based tools over HTTP.
 
 ---
 

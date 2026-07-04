@@ -1,0 +1,125 @@
+import * as http from 'http';
+import type { IncomingMessage, ServerResponse } from 'http';
+import * as fs from 'fs';
+import { handleMcpRequest, sendJson, bearerToken } from './request.js';
+import * as admin from './admin.js';
+import { AdminAuthError, LockValidationError } from './admin.js';
+import type { HostConfig, Role } from './types.js';
+
+// ---------------------------------------------------------------------------
+// Host HTTP Portal + Host Server (sdd_host)
+//
+// Two separately-bound HTTP listeners: the public data plane (/mcp, /healthz,
+// /readyz) and the admin plane (/admin/*, bound to localhost by default). The
+// data plane routes to the request orchestrator; the admin plane routes to the
+// admin orchestrator. host_server owns the listener lifecycle.
+// ---------------------------------------------------------------------------
+
+async function readBody(req: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  for await (const c of req) chunks.push(c as Buffer);
+  const raw = Buffer.concat(chunks).toString('utf8');
+  if (!raw) return undefined;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+}
+
+// ── Data plane ────────────────────────────────────────────────────────────
+
+function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResponse): void {
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  if (req.method === 'GET' && url.pathname === '/healthz') {
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+  if (req.method === 'GET' && url.pathname === '/readyz') {
+    let ready = false;
+    try {
+      fs.accessSync(cfg.dataDir, fs.constants.W_OK);
+      ready = true;
+    } catch {
+      /* not writable */
+    }
+    sendJson(res, ready ? 200 : 503, { ready });
+    return;
+  }
+  if (req.method === 'POST' && url.pathname === '/mcp') {
+    readBody(req)
+      .then((body) => handleMcpRequest(cfg, req, res, body))
+      .catch((err) => {
+        if (!res.headersSent) sendJson(res, 500, { error: String(err) });
+      });
+    return;
+  }
+  sendJson(res, 404, { error: 'not found' });
+}
+
+// ── Admin plane ───────────────────────────────────────────────────────────
+
+async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const cred = bearerToken(req);
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  const parts = url.pathname.split('/').filter(Boolean); // ['admin', ...]
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const body: any = req.method === 'POST' ? (await readBody(req)) ?? {} : {};
+
+    if (parts[1] === 'projects') {
+      if (req.method === 'GET' && parts.length === 2) return sendJson(res, 200, admin.listProjects(cfg, cred));
+      if (req.method === 'POST' && parts.length === 2) return sendJson(res, 201, admin.createProject(cfg, cred, body.id));
+      if (req.method === 'DELETE' && parts.length === 3) {
+        admin.destroyProject(cfg, cred, parts[2]);
+        return sendJson(res, 200, { ok: true });
+      }
+      if (req.method === 'POST' && parts.length === 4 && parts[3] === 'lock') return sendJson(res, 200, admin.lockProject(cfg, cred, parts[2]));
+      if (req.method === 'POST' && parts.length === 4 && parts[3] === 'promote') return sendJson(res, 200, admin.promoteProject(cfg, cred, parts[2]));
+    }
+
+    if (parts[1] === 'keys') {
+      if (req.method === 'GET' && parts.length === 2) return sendJson(res, 200, admin.listKeys(cfg, cred, url.searchParams.get('project') ?? '*'));
+      if (req.method === 'POST' && parts.length === 2) return sendJson(res, 201, { key: admin.mintKey(cfg, cred, body.project, (body.role ?? 'editor') as Role) });
+      if (req.method === 'DELETE' && parts.length === 3) {
+        admin.revokeKey(cfg, cred, parts[2]);
+        return sendJson(res, 200, { ok: true });
+      }
+    }
+
+    sendJson(res, 404, { error: 'not found' });
+  } catch (err) {
+    if (err instanceof AdminAuthError) return sendJson(res, 403, { error: 'forbidden' });
+    if (err instanceof LockValidationError) return sendJson(res, 409, { error: err.message, errors: err.errors });
+    sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+// ── Lifecycle ───────────────────────────────────────────────────────────────
+
+export interface HostServerHandle {
+  close(): void;
+}
+
+/** Bind the data-plane and admin-plane listeners and begin accepting connections. */
+export function startHostServer(cfg: HostConfig): HostServerHandle {
+  if (cfg.authEnabled && !process.env['WAIRON_ADMIN_TOKEN']) {
+    throw new Error(
+      'Refusing to start: auth is enabled but WAIRON_ADMIN_TOKEN is not set, so the admin ' +
+        'API would be unreachable and no keys could be minted. Set WAIRON_ADMIN_TOKEN, or pass ' +
+        '--no-auth for a trusted network.',
+    );
+  }
+  const dataServer = http.createServer((req, res) => routeData(cfg, req, res));
+  const adminServer = http.createServer((req, res) => {
+    void routeAdmin(cfg, req, res);
+  });
+  dataServer.listen(cfg.port, cfg.host);
+  adminServer.listen(cfg.adminPort, cfg.adminHost);
+  return {
+    close() {
+      dataServer.close();
+      adminServer.close();
+    },
+  };
+}

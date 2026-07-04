@@ -30,6 +30,19 @@ Regenerate agent output files from the spec-derived topology and (re)install the
 SDD skills. Filters limit generation to a target type or to specific domains.
 `--dry-run` previews without writing.
 
+### `wairon lock [-y, --yes] [--subsystem <id>] [--no-recursive]`
+The final check before implementation: validate the spec tree **as if complete**
+(full strictness, no draft-status relaxation) and — only if it passes — freeze
+every spec to `complete` and regenerate the agent topology (the
+`<component>-implementer` agents). A failed or cancelled lock leaves every file
+byte-for-byte unchanged. `--yes` skips the confirmation (for CI); `--subsystem`
+limits the scope.
+
+### `wairon doctor [--fix]`
+Health check: flags stale generated guides/skills, an unregistered MCP server,
+and spec-tree issues. `--fix` regenerates stale in-project guides/context/skills
+and registers the MCP server.
+
 ### `wairon list` (alias `ls`) / `wairon show <id>`
 List, or show full details of, the agents resolved from the spec tree
 (`system-architect`, `<subsystem>-owner`, `<component>-implementer`, and owners
@@ -153,6 +166,40 @@ and author specs directly.
 `sdd_add_component`, `sdd_define_interface`, `sdd_set_endpoints`,
 `sdd_write_narrative`, `sdd_add_type`, `sdd_get_spec`, `sdd_update_spec`,
 `sdd_delete_spec`, `sdd_validate_tree`, `sdd_get_status`.
+
+---
+
+## Hosting (self-hosted server)
+
+`wairon serve` runs wairon as an HTTP server that hosts many **fully-isolated**
+projects behind one endpoint — a public **data plane** (the `sdd_*` tools over
+streamable HTTP, per-project API-key scoped) and an admin **control plane**
+(project & key lifecycle, state-scoped lock/promote). See the
+[hosted server guide](design/hosted-mcp-server.md) for the architecture, Docker
+self-hosting, auth, and sizing.
+
+### `wairon serve [--host <h>] [--port <p>] [--admin-host <h>] [--admin-port <p>] [--data-dir <path>] [--no-auth]`
+Start the hosting server. Data plane on `0.0.0.0:8080` (`POST /mcp`, `/healthz`,
+`/readyz`); admin plane on `127.0.0.1:8081` (`/admin/*`). Auth is **on by
+default** and requires `WAIRON_ADMIN_TOKEN` (the master credential) — the server
+refuses to start without it; `--no-auth` disables data-plane auth for a trusted
+network. `--data-dir` (or `WAIRON_DATA_DIR`, default `~/.wairon/data`) is the data
+root holding `projects/` and `auth/`.
+
+### `wairon host …` — control plane
+Runs **in-process** (no running server needed), so it works over SSH /
+`docker exec`. Reads the master credential from `WAIRON_ADMIN_TOKEN`.
+
+| Command | Description |
+|---------|-------------|
+| `wairon host project create --id <id>` | Provision a new isolated project (its own `.wai/` tree) |
+| `wairon host project list` | List hosted projects |
+| `wairon host project destroy --id <id>` | Remove a project and its tree |
+| `wairon host key mint --project <id\|*> [--role editor\|admin]` | Mint an API key (plaintext shown once) |
+| `wairon host key list [--project <id>]` | List API keys |
+| `wairon host key revoke --id <id>` | Revoke a key |
+| `wairon host lock --project <id>` | Validate-as-complete + write the state-scoped lock record |
+| `wairon host promote --project <id>` | Promote a locked project after re-checking its StateId (never merges) |
 
 ---
 
