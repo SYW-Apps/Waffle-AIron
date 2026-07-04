@@ -1671,7 +1671,17 @@ var MODEL = __MODEL_JSON__;
     if (state.layout !== 'force') return; // concentric/grid are presets from buildElements
     var wasAuto = cy.autolock();
     if (wasAuto) cy.autolock(false);
-    try { cy.layout(nativeLayoutOptions()).run(); resolveOverlaps(56, 20); } catch (e) { /* layout unavailable */ }
+    try {
+      cy.layout(nativeLayoutOptions()).run();
+      resolveOverlaps(56, 20);
+      // Widen the result into landscape (screens are horizontal). Stretching only
+      // x, around the centre, after overlap removal never re-introduces overlaps.
+      var ns = cy.nodes().orphans();
+      if (ns.length > 1) {
+        var bb = ns.boundingBox(), cx = (bb.x1 + bb.x2) / 2;
+        ns.forEach(function (n) { n.position('x', cx + (n.position('x') - cx) * 1.6); });
+      }
+    } catch (e) { /* layout unavailable */ }
     if (wasAuto) cy.autolock(true);
   }
   // Position the current view: run the chosen algorithm for a fresh component

@@ -226,7 +226,7 @@ migration*).
   layout (Grid/Concentric) instead of always the layered columns. Concentric is
   stretched into a **landscape ellipse** (screens are horizontal) rather than a
   tall circle, and **Force** seeds from a diagonal cascade so it relaxes toward an
-  entrypoints-top-left → leaves-bottom-right flow.
+  entrypoints-top-left → leaves-bottom-right flow, then widens into landscape.
 
 ### Technology boundaries (L4 `technologies`)
 
