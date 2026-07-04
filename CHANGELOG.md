@@ -61,6 +61,18 @@ migration*).
   compare URL for a human to open the PR (push-only, one `WAIRON_GIT_TOKEN` bot
   identity, sync on-demand + auto-before-lock). `promote` still refuses a stale
   lock and never merges. The Docker image now ships with `git`.
+- **Extension packs in a hosted container** (`sdd_host` → `pack_orchestrator` +
+  `pack_registry`) — install architectural profiles and language/platform tables
+  into a running container without shell access, at **server-global** scope
+  (`GET/PUT/DELETE /admin/packs/{name}`, or `wairon host packs …`) or into one
+  **project** (`GET/PUT/DELETE /admin/projects/{id}/packs/{name}`, committed with
+  the project so every clone and CI enforce it). Installs over the admin surface
+  are **declarative-only** (pure data — profiles + language tables); programmatic
+  **rule/code** packs are refused there and install via the trusted filesystem (a
+  mounted `WAIRON_PACKS_DIR` volume or `wairon packs add`), which the API still
+  *lists*. Server-global packs now live on the data volume (`WAIRON_PACKS_DIR`
+  defaults to `$WAIRON_DATA_DIR/packs`) so they **persist across container
+  recreation** — previously a machine-wide install landed in an ephemeral home dir.
 
 ### Conformance gate (the architecture linter)
 

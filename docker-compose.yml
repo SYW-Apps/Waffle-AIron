@@ -17,6 +17,10 @@ services:
       - "8080:8080"                            # data plane (MCP over streamable HTTP)
     environment:
       WAIRON_DATA_DIR: /data
+      # Server-global extension packs live on the data volume so they persist
+      # across container recreation (and so `docker compose exec … host packs`
+      # targets the same directory the server uses).
+      WAIRON_PACKS_DIR: /data/packs
       # Master admin credential — required (server refuses to start without it).
       # Read from your shell / .env; never commit the value.
       WAIRON_ADMIN_TOKEN: ${WAIRON_ADMIN_TOKEN:?set WAIRON_ADMIN_TOKEN (e.g. in a .env file)}

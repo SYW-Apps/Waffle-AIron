@@ -1,9 +1,11 @@
+import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
 import { WaironError } from '../utils/errors.js';
 import * as admin from '../server/admin.js';
+import * as packs from '../server/packs.js';
 import { AdminAuthError, LockValidationError } from '../server/admin.js';
 import { startHostServer } from '../server/http.js';
 import type { HostConfig, Role } from '../server/types.js';
@@ -34,10 +36,18 @@ export interface HostOptions {
   page?: string;
   key?: string;
   value?: string;
+  name?: string;
+  file?: string;
 }
 
 function resolveHostConfig(options: HostOptions): HostConfig {
   const dataDir = options.dataDir || process.env['WAIRON_DATA_DIR'] || path.join(os.homedir(), '.wairon', 'data');
+  // Server-global packs live on the data volume so installs persist across
+  // container recreation — and so the server, `docker exec`, and validation all
+  // resolve the same directory. An explicit WAIRON_PACKS_DIR still wins.
+  if (!process.env['WAIRON_PACKS_DIR']) {
+    process.env['WAIRON_PACKS_DIR'] = path.join(dataDir, 'packs');
+  }
   return {
     host: options.host || '0.0.0.0',
     port: options.port ? Number(options.port) : 8080,
@@ -257,6 +267,54 @@ export async function runHostSecret(action: string, options: HostOptions = {}): 
       }
       default:
         throw new WaironError(`Unknown secret action "${action}" (set | list).`);
+    }
+  } catch (e) {
+    throw mapAdminError(e);
+  }
+}
+
+// ── wairon host packs <action> ────────────────────────────────────────────────
+
+export async function runHostPacks(action: string, options: HostOptions = {}): Promise<void> {
+  const cfg = resolveHostConfig(options);
+  const cred = masterCredential();
+  const project = options.project;
+  const scope = project ? `project "${project}"` : 'server-global';
+  try {
+    switch (action) {
+      case 'list': {
+        const list = project ? packs.listProjectPacks(cfg, cred, project) : packs.listGlobalPacks(cfg, cred);
+        if (!list.length) {
+          logger.info(`No ${scope} packs.`);
+          break;
+        }
+        logger.info(`${scope} packs:`);
+        for (const p of list) {
+          if (p.error) console.log(`  ${chalk.red('✖')} ${chalk.bold(p.name)}  ${chalk.red(p.error)}`);
+          else console.log(`  ${chalk.green('●')} ${chalk.bold(p.name.padEnd(20))} ${chalk.gray(`${p.profiles} profile(s), ${p.languages} language(s), ${p.rules} rule(s)`)}`);
+        }
+        break;
+      }
+      case 'install': {
+        if (!options.file) throw new WaironError('`--file <path>` (a declarative pack YAML) is required for install.');
+        const name = options.name ?? path.basename(options.file).replace(/\.(ya?ml)$/i, '');
+        const content = fs.readFileSync(path.resolve(options.file), 'utf8');
+        const desc = project
+          ? packs.installProjectPack(cfg, cred, project, name, content)
+          : packs.installGlobalPack(cfg, cred, name, content);
+        logger.success(`Installed ${scope} pack "${desc.name}" (${desc.profiles} profile(s), ${desc.languages} language(s)).`);
+        if (project) logger.info('Committed with the project — every clone and CI will enforce it.');
+        break;
+      }
+      case 'remove': {
+        if (!options.name) throw new WaironError('`--name <name>` is required for `host packs remove`.');
+        if (project) packs.removeProjectPack(cfg, cred, project, options.name);
+        else packs.removeGlobalPack(cfg, cred, options.name);
+        logger.success(`Removed ${scope} pack "${options.name}".`);
+        break;
+      }
+      default:
+        throw new WaironError(`Unknown packs action "${action}" (list | install | remove).`);
     }
   } catch (e) {
     throw mapAdminError(e);

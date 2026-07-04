@@ -168,6 +168,37 @@ Both use raw REST (**no new dependency**). The projection is target-agnostic —
 renders a `DocPage` tree, Miro renders a `GraphModel` — so further targets slot in
 against the same projection.
 
+### Extension packs — extend the doctrine in a running container
+
+Install architectural **profiles** and **language/platform tables** into a hosted
+container without shell access, at two scopes:
+
+- **Server-global** (every project on the box): `wairon host packs install --file profiles.yaml`,
+  or `PUT /admin/packs/{name}`. `list` / `remove` mirror it. Stored on the data
+  volume (`WAIRON_PACKS_DIR` = `$WAIRON_DATA_DIR/packs`), so installs **persist
+  across container recreation**.
+- **Per project** (committed with the project, so every clone and CI enforce it):
+  `wairon host packs install --project acme --file profiles.yaml`, or
+  `PUT /admin/projects/{id}/packs/{name}` — vendored into the project's `.wai/packs/`
+  and registered in its `project.yaml`.
+
+Installs over the admin surface are **declarative-only** — profiles and language
+tables are pure data. Programmatic **rule packs** are executable code; requiring
+arbitrary JS over the network would be a remote-code-execution surface, so they are
+**refused on the API** and install via the trusted filesystem instead — mount them
+into `WAIRON_PACKS_DIR`, or `docker compose exec wairon wairon packs add <file> --global`.
+The admin API still **lists** every installed pack (including code packs), so nothing
+is invisible.
+
+```sh
+# declarative profiles/languages — safe over the admin surface
+docker compose exec wairon wairon host packs install --file ./acme-profiles.yaml
+docker compose exec wairon wairon host packs list
+
+# rule (code) packs — trusted filesystem only
+docker compose exec wairon wairon packs add /data/incoming/acme-rules.cjs --global
+```
+
 ### Runtime secrets — no restart
 
 Integration tokens resolve **data-dir store → env**, so an integration can be
@@ -253,6 +284,7 @@ Two equivalent paths to the same control-plane logic:
 | Admin-plane bind host | `--admin-host` | — | `127.0.0.1` |
 | Admin-plane port | `--admin-port` | — | `8081` |
 | Data root | `--data-dir` | `WAIRON_DATA_DIR` | `~/.wairon/data` |
+| Server-global packs dir | — | `WAIRON_PACKS_DIR` | `$WAIRON_DATA_DIR/packs` (persists on the volume) |
 | Data-plane auth | `--no-auth` (off) | — | on |
 | Master credential | — | `WAIRON_ADMIN_TOKEN` | *(required unless `--no-auth`)* |
 | Diagram view-link signing key | — | `WAIRON_SIGNING_SECRET` | falls back to `WAIRON_ADMIN_TOKEN` |

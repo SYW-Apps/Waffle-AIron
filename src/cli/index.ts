@@ -40,6 +40,7 @@ import {
   runHostGit,
   runHostProducer,
   runHostSecret,
+  runHostPacks,
   runProduce,
 } from '../commands/index.js';
 
@@ -422,6 +423,17 @@ hostCmd
   .option('--data-dir <path>', 'data root')
   .action(async (action: string, opts) => {
     await runHostProducer(action, { project: opts.project, target: opts.target, page: opts.page, dataDir: opts.dataDir });
+  });
+
+hostCmd
+  .command('packs <action>')
+  .description('list | install | remove extension packs for the server (global) or a hosted --project (declarative packs only; code packs install via the filesystem)')
+  .option('--project <id>', 'target a hosted project (omit for server-global)')
+  .option('--name <name>', 'pack name / file stem')
+  .option('--file <path>', 'declarative pack YAML file (for install)')
+  .option('--data-dir <path>', 'data root')
+  .action(async (action: string, opts) => {
+    await runHostPacks(action, { project: opts.project, name: opts.name, file: opts.file, dataDir: opts.dataDir });
   });
 
 hostCmd
