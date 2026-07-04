@@ -393,14 +393,15 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     cy.getElementById('s~billing').emit('dbltap');
     const ghost = cy.getElementById('x~subsystem~shipping');
     expect(ghost.length).toBe(1);
-    let minLeft = Infinity, minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     cy.nodes().filter((n: any) => n.id().indexOf('c~') === 0).forEach((n: any) => {
       const px = n.position('x'), py = n.position('y'), hw = (n.data('w') || 0) / 2, hh = (n.data('h') || 0) / 2;
-      minLeft = Math.min(minLeft, px - hw);
       minX = Math.min(minX, px - hw); maxX = Math.max(maxX, px + hw);
       minY = Math.min(minY, py - hh); maxY = Math.max(maxY, py + hh);
     });
-    expect(ghost.position('x')).toBeLessThan(minLeft);
+    // The external sits OUTSIDE the node cluster (never dropped in the middle).
+    const g = ghost.position();
+    expect(g.x > minX && g.x < maxX && g.y > minY && g.y < maxY).toBe(false);
     // Concentric is stretched into a landscape ellipse (wider than tall).
     expect(maxX - minX).toBeGreaterThan(maxY - minY);
 

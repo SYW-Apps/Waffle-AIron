@@ -1062,7 +1062,7 @@ var MODEL = __MODEL_JSON__;
   // only as spacious as needed, and dense rings grow), and a tied innermost tier
   // becomes a proper ring rather than a pile at the centre — only a lone top
   // node truly sits at (0,0). Returns { id: {x, y} } (centres).
-  function concentricPositions(ids, degFn, sizeFn, aspectX) {
+  function concentricPositions(ids, degFn, sizeFn, aspectX, rankFn) {
     aspectX = aspectX || 1; // >1 widens the rings into landscape ellipses
     if (!ids.length) return {};
     var sorted = ids.slice().sort(function (a, b) { return (degFn(b) - degFn(a)) || (a < b ? -1 : 1); });
@@ -1090,10 +1090,26 @@ var MODEL = __MODEL_JSON__;
         var chordR = n >= 2 ? (maxW + ARC_GAP) / (2 * Math.sin(Math.PI / n)) : 0;
         radius = Math.max(chordR, prevRadius + prevMaxDim / 2 + maxDim / 2 + RING_GAP);
       }
-      members.forEach(function (id, i) {
-        var ang = n === 1 ? -Math.PI / 2 : (i / n) * 2 * Math.PI - Math.PI / 2;
-        pos[id] = { x: Math.cos(ang) * radius * aspectX, y: Math.sin(ang) * radius };
-      });
+      if (radius === 0) {
+        members.forEach(function (id) { pos[id] = { x: 0, y: 0 }; });
+      } else if (rankFn) {
+        // Flow order: sort the ring by rank (entrypoints first) and lay it out
+        // from TOP to BOTTOM on both sides — so entrypoints sit at the top and
+        // leaves at the bottom, at the same density (no new overlap).
+        var ordered = members.slice().sort(function (a, b) { return (rankFn(a) - rankFn(b)) || (a < b ? -1 : 1); });
+        var mL = Math.ceil(n / 2), mR = n - mL;
+        ordered.forEach(function (id, i) {
+          var ang = (i % 2 === 0)
+            ? -Math.PI / 2 - ((i / 2) + 0.5) / mL * Math.PI          // left column, top → bottom
+            : -Math.PI / 2 + (((i - 1) / 2) + 0.5) / Math.max(1, mR) * Math.PI; // right column
+          pos[id] = { x: Math.cos(ang) * radius * aspectX, y: Math.sin(ang) * radius };
+        });
+      } else {
+        members.forEach(function (id, i) {
+          var ang = n === 1 ? -Math.PI / 2 : (i / n) * 2 * Math.PI - Math.PI / 2;
+          pos[id] = { x: Math.cos(ang) * radius * aspectX, y: Math.sin(ang) * radius };
+        });
+      }
       prevRadius = radius; prevMaxDim = maxDim;
     });
     return pos;
@@ -1294,7 +1310,8 @@ var MODEL = __MODEL_JSON__;
         list.map(function (t) { return t.id; }),
         function (id) { return deg[id] || 0; },
         function (id) { return sizeById[id]; },
-        1.7 // widen into a landscape ellipse — screens are horizontal
+        1.7, // widen into a landscape ellipse — screens are horizontal
+        function (id) { return layer[id] || 0; } // upstream types toward the top
       );
       list.forEach(function (t) {
         var s = sizeById[t.id], p = cpos[t.id] || { x: 0, y: 0 };
@@ -1426,11 +1443,13 @@ var MODEL = __MODEL_JSON__;
     // cytoscape's physics layout afterwards in positionView().
     var posByAnchor = {}, x = 0;
     if (state.layout === 'concentric') {
+      entries.forEach(function (e) { calcLayer(e, {}); }); // dependency depth → flow rank
       var cpos = concentricPositions(
         entries.map(function (e) { return anchorNodeId(e); }),
         function (id) { return degByAnchor[id] || 0; },
         function (id) { return sizeByAnchor[id]; },
-        1.7 // widen into a landscape ellipse — screens are horizontal
+        1.7, // widen into a landscape ellipse — screens are horizontal
+        function (id) { return layerOf[id] || 0; } // entrypoints (layer 0) toward the top
       );
       entries.forEach(function (e) {
         var aid = anchorNodeId(e), s = sizeByAnchor[aid], p = cpos[aid] || { x: 0, y: 0 };

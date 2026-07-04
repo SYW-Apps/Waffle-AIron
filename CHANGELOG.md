@@ -228,6 +228,8 @@ migration*).
   stretched into a **landscape ellipse** (screens are horizontal) rather than a
   tall circle, and **Force** seeds from a diagonal cascade so it relaxes toward an
   entrypoints-top-left → leaves-bottom-right flow, then widens into landscape.
+  Concentric also orders each ring by flow rank (entrypoints toward the top,
+  leaves toward the bottom) and places externals toward the node they connect to.
 
 ### Technology boundaries (L4 `technologies`)
 
