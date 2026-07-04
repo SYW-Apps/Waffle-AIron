@@ -191,6 +191,20 @@ migration*).
   canvas (the primary format); Mermaid moved behind `--format mermaid` /
   `--subsystem` and writes a file instead of printing to stdout (use a
   `.mmd` `--out` for raw Mermaid).
+- **Canvas readability fixes**: (a) with nothing selected, the sidebar now
+  describes the **current view scope** (the subsystem/component you drilled
+  into) instead of always the root system — the breadcrumb still walks up to
+  the parent; (b) **focus mode** — selecting any box lifts its own edges above
+  everything and recolours them while unrelated elements recede, so one block's
+  relations read clearly in a busy graph; (c) the **Types ERD degrades
+  gracefully on huge systems** — above ~400 in-scope types it renders a
+  subsystem-cluster overview (double-click a cluster to open it), above ~120 it
+  falls back to header-only boxes, with a banner and a "render full detail
+  anyway" override — so a 1000+-type system stays interactive yet fully
+  navigable; (d) **breadcrumbs preserve the active mode** — walking up from a
+  subsystem's ERD now lands on the *parent's types* (not its components), so you
+  can climb from a subsystem's types all the way to the system-wide ERD; the
+  Components/Types toggle stays the explicit way to switch mode.
 
 ### Technology boundaries (L4 `technologies`)
 

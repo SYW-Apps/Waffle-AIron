@@ -8,6 +8,7 @@ import {
   saveSystemSpec,
   saveSubsystemSpec,
   saveComponentSpec,
+  saveTypeSpec,
   invalidateSpecCache,
 } from '../../src/core/specs.js';
 import { buildCanvasModel, renderCanvasHtml } from '../../src/core/canvas.js';
@@ -79,6 +80,22 @@ function makeDomShim() {
   };
   return { document, elements, fire };
 }
+
+/** Extract and execute the generated canvas scripts against headless cytoscape. */
+function bootCanvas(html: string) {
+  const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
+  const { document, elements, fire } = makeDomShim();
+  const cyInstances: any[] = [];
+  const cytoscape = (opts: any) => {
+    const inst = realCytoscape({ ...opts, container: undefined, headless: true, styleEnabled: false });
+    cyInstances.push(inst);
+    return inst;
+  };
+  new Function('cytoscape', 'document', `${scripts[1]}\n${scripts[2]}`)(cytoscape, document);
+  return { cy: cyInstances[0], elements, fire };
+}
+
+const idPrefix = (cy: any, p: string) => cy.nodes().filter((n: any) => n.id().indexOf(p) === 0);
 
 describe('canvas runtime (headless execution of the generated scripts)', () => {
   let proj: string;
@@ -227,4 +244,75 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     // header issue counter was populated by the app script (0 errors / 1 warning)
     expect(elements['issueCount'].textContent).toBe('0e/1w');
   });
+
+  it('sidebar describes the current view scope when nothing is selected, and focus spotlights a selection', () => {
+    proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-canvas-scope-'));
+    fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
+    setProjectRoot(proj);
+
+    saveSystemSpec({ schemaVersion: '1.0.0', name: 'RtSys', vision: 'root vision', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
+    saveSubsystemSpec({ id: 'billing', name: 'Billing', description: 'the billing subsystem', parentSystem: 'RtSys', publicInterfaces: [{ type: 'REST', details: 'api', component: 'billing-portal' }], trustedLinks: [], createdAt: now, updatedAt: now });
+    saveSubsystemSpec({ id: 'shipping', name: 'Shipping', description: 'ships', parentSystem: 'RtSys', publicInterfaces: [], trustedLinks: [], createdAt: now, updatedAt: now });
+    const comp = (over: Record<string, unknown>) => ({ id: '', name: '', description: 'd', subsystem: 'billing', componentType: 'Orchestrator' as const, owns: [] as string[], dependsOn: [] as string[], createdAt: now, updatedAt: now, ...over });
+    saveComponentSpec(comp({ id: 'billing-portal', name: 'Billing Portal', componentType: 'Portal', portalType: 'HTTP_API' }) as any);
+    saveComponentSpec(comp({ id: 'shipping-client', name: 'Shipping Client', subsystem: 'shipping', componentType: 'Adapter', dependsOn: ['billing-portal'] }) as any);
+
+    const { cy, elements } = bootCanvas(renderCanvasHtml(buildCanvasModel()));
+
+    // System view, one cross edge. Tapping billing spotlights its edge...
+    cy.getElementById('s~billing').emit('tap');
+    expect(elements['panel'].innerHTML).toContain('Billing');
+    const edge = cy.edges()[0];
+    expect(edge.hasClass('edgeFocus')).toBe(true);
+    // ...and a background tap clears the spotlight (back to the system scope).
+    cy.emit('tap');
+    expect(edge.hasClass('edgeFocus')).toBe(false);
+    expect(elements['panel'].innerHTML).toContain('RtSys');
+
+    // Drill into the subsystem: with nothing selected, the sidebar now
+    // describes THAT scope (not the root system), tagged "current view".
+    cy.getElementById('s~billing').emit('dbltap');
+    expect(elements['panel'].innerHTML).toContain('Billing');
+    expect(elements['panel'].innerHTML).toContain('the billing subsystem');
+    expect(elements['panel'].innerHTML).toContain('current view');
+    expect(elements['panel'].innerHTML).not.toContain('root vision');
+  });
+
+  it('degrades a huge ERD to a subsystem overview, then drills back to full detail', () => {
+    proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-canvas-erd-'));
+    fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
+    setProjectRoot(proj);
+
+    saveSystemSpec({ schemaVersion: '1.0.0', name: 'BigSys', vision: 'v', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
+    const subs = ['alpha', 'beta', 'gamma'];
+    subs.forEach(sid => saveSubsystemSpec({ id: sid, name: sid.toUpperCase(), description: 'd', parentSystem: 'BigSys', publicInterfaces: [], trustedLinks: [], createdAt: now, updatedAt: now }));
+    // 3 × 140 = 420 types — above the cluster threshold (400).
+    subs.forEach(sid => {
+      for (let i = 0; i < 140; i++) {
+        saveTypeSpec({ id: sid + '_t' + i, name: sid + 'T' + i, kind: 'value-object', subsystem: sid, fields: [], methods: [], createdAt: now, updatedAt: now } as any);
+      }
+    });
+
+    const { cy, elements, fire } = bootCanvas(renderCanvasHtml(buildCanvasModel()));
+    fire('openTypesBtn', 'click', {});
+
+    // Overview: one node per subsystem cluster, no per-type tables, and a notice.
+    expect(idPrefix(cy, 'TC~').length).toBe(3);
+    expect(idPrefix(cy, 'T~').length).toBe(0);
+    expect(elements['typesWarn'].innerHTML).toContain('subsystem overview');
+
+    // Drill into a cluster → its 140 types render (still names-only for perf:
+    // header boxes, no field-row nodes) — everything is reachable.
+    cy.getElementById('TC~alpha').emit('dbltap');
+    expect(idPrefix(cy, 'TC~').length).toBe(0);
+    expect(idPrefix(cy, 'T~').length).toBe(140);
+    expect(idPrefix(cy, 'TF~').length).toBe(0);
+    expect(elements['typesWarn'].innerHTML).toContain('names only');
+
+    // Breadcrumbs stay in TYPES mode while scoped: every ancestor crumb
+    // navigates to the parent's types (data-ck="types"), never its components.
+    expect(elements['crumbs'].innerHTML).toContain('data-ck="types"');
+    expect(elements['crumbs'].innerHTML).not.toContain('data-ck="subsystem"');
+    expect(elements['crumbs'].innerHTML).toContain('Types (ERD)');
+  }, 30000); // 420 spec writes on Windows under parallel load are I/O-heavy
 });

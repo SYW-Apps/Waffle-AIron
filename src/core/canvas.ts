@@ -419,6 +419,8 @@ header input[type="search"]::placeholder { color:var(--dim); }
 .legend { position:absolute; left:12px; bottom:12px; background:var(--chrome); border:1px solid var(--chrome-border); border-radius:10px; padding:8px 12px; font-size:11px; color:var(--dim); z-index:5; pointer-events:none; }
 .legend .sw { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; vertical-align:-1px; border:1.5px solid; }
 .viewhint { position:absolute; top:10px; left:12px; color:var(--dim); font-size:11px; background:var(--chrome); border:1px solid var(--chrome-border); border-radius:9px; padding:5px 10px; z-index:5; pointer-events:none; }
+#typesWarn { position:absolute; top:10px; left:50%; transform:translateX(-50%); color:var(--ink); font-size:12px; background:var(--chrome); border:1px solid var(--warn); border-radius:9px; padding:6px 12px; z-index:6; max-width:72vw; box-shadow:var(--syw-deep-shadow); display:none; }
+#typesWarn button { margin-left:8px; }
 
 #panel { width:380px; border-left:1px solid var(--chrome-border); background:var(--chrome); overflow-y:auto; z-index:10; }
 #panel .head { padding:16px 18px 10px; border-bottom:1px solid var(--line); }
@@ -505,6 +507,7 @@ body.presentation #exitPresent { display:block; }
   <div id="stage">
     <div id="cy"></div>
     <div class="viewhint" id="viewHint"></div>
+    <div id="typesWarn"></div>
     <div class="legend" id="legend"></div>
   </div>
   <div id="panel"></div>
@@ -661,7 +664,11 @@ var MODEL = __MODEL_JSON__;
     selectedKind: null,
     theme: saved.theme === 'light' ? 'light' : 'syw',
     typesDetail: ['full', 'fields', 'keys', 'names'].indexOf(saved.typesDetail) >= 0 ? saved.typesDetail : 'full',
+    typesRenderAll: false,
   };
+  // Set by buildTypeElements when the ERD is degraded for performance (huge
+  // scopes); consumed by renderTypesNotice to explain the level-of-detail.
+  var typesNotice = '';
 
   function viewKey() {
     // 'types2' + detail level: table sizes differ per detail, and the prefix
@@ -767,6 +774,19 @@ var MODEL = __MODEL_JSON__;
       { selector: '.hasIssue', style: { 'border-color': t.issue, 'border-style': 'dashed', 'border-width': 3 } },
       { selector: '.sel', style: { 'overlay-color': t.selGlow, 'overlay-opacity': 0.2, 'overlay-padding': 5 } },
       { selector: '.hoverhl', style: { 'overlay-color': t.selGlow, 'overlay-opacity': 0.32, 'overlay-padding': 7 } },
+      // Focus mode: on selection, the picked element's edges are lifted above
+      // every box and recoloured, while unrelated elements recede — so a single
+      // block's relations read clearly even in a dense graph.
+      { selector: '.defocus', style: { opacity: 0.08 } },
+      { selector: 'edge.edgeFocus', style: {
+        'line-color': t.selGlow, 'target-arrow-color': t.selGlow, 'source-arrow-color': t.selGlow,
+        width: 3.6, opacity: 1, 'z-compound-depth': 'top', 'z-index': 9999,
+        'text-background-opacity': 1,
+      }},
+      { selector: 'node.typeCluster', style: {
+        'background-color': t.subFill, 'border-color': t.subStroke, color: t.subText,
+        'font-weight': 'bold', 'font-size': 12, 'border-width': 2, 'text-wrap': 'wrap',
+      }},
     ];
   }
 
@@ -976,10 +996,68 @@ var MODEL = __MODEL_JSON__;
   // per field (marker | name | type), so relation edges anchor at the exact
   // field they originate from. Detail levels: full (+methods), fields, keys
   // (PK/U/FK rows only), names (headers + aggregated dependency lines).
+  // Level-of-detail thresholds: a system can have 1000+ types, and a full
+  // compound table per type (header + a node per field) melts the renderer.
+  // Above CLUSTER_AT we draw a subsystem-cluster overview (a handful of nodes,
+  // drill in for detail); above NAMES_AT we force header-only boxes. The user
+  // can override to force full detail (accepting the cost) via the banner.
+  var TYPES_CLUSTER_AT = 400, TYPES_NAMES_AT = 120;
+
+  // Collapse the in-scope types into one node per child subsystem, with
+  // aggregated cross-cluster reference edges — the whole system as a small,
+  // fast, navigable map. Returns null if it wouldn't reduce to >1 cluster.
+  function buildTypeClusters(list) {
+    var scopeId = state.view.id;
+    function keyOf(t) {
+      var sub = t.subsystem || '';
+      if (!sub) return '\\u2014 shared \\u2014';
+      if (!scopeId) return sub.split('::')[0];
+      if (sub === scopeId) return scopeId;
+      if (sub.indexOf(scopeId + '::') === 0) return scopeId + '::' + sub.slice(scopeId.length + 2).split('::')[0];
+      return sub.split('::')[0];
+    }
+    var groups = {}, order = [], clusterOf = {};
+    list.forEach(function (t) {
+      var k = keyOf(t); clusterOf[t.id] = k;
+      if (!groups[k]) { groups[k] = 0; order.push(k); }
+      groups[k]++;
+    });
+    if (order.length < 2) return null;
+    var agg = {};
+    MODEL.typeEdges.forEach(function (e) {
+      var a = clusterOf[e.from], b = clusterOf[e.to];
+      if (a === undefined || b === undefined || a === b) return;
+      var key = a + '=>' + b; agg[key] = (agg[key] || 0) + 1;
+    });
+    var out = [], keys = order.slice().sort();
+    var per = Math.max(1, Math.ceil(Math.sqrt(keys.length)));
+    keys.forEach(function (k, i) {
+      var nm = subById[k] ? subById[k].name : k;
+      out.push({
+        data: { id: 'TC~' + k, label: nm + '\\n' + groups[k] + ' types', w: 210, h: 66, tw: 192, clusterKey: k },
+        position: { x: (i % per) * 300, y: Math.floor(i / per) * 150 }, classes: 'typeCluster',
+      });
+    });
+    var ei = 0;
+    Object.keys(agg).forEach(function (key) {
+      var pr = key.split('=>');
+      out.push({ data: { id: 'tc' + (ei++), source: 'TC~' + pr[0], target: 'TC~' + pr[1], lbl: agg[key] > 1 ? String(agg[key]) : '' }, classes: 'typeref' });
+    });
+    return out;
+  }
+
   function buildTypeElements() {
     var eles = [];
     var det = state.typesDetail;
     var list = typesInScope();
+    typesNotice = '';
+    if (!state.typesRenderAll) {
+      if (list.length > TYPES_CLUSTER_AT) {
+        var clustered = buildTypeClusters(list);
+        if (clustered) { typesNotice = 'cluster:' + list.length; return clustered; }
+      }
+      if (list.length > TYPES_NAMES_AT && det !== 'names') { det = 'names'; typesNotice = 'names:' + list.length; }
+    }
     var inList = {};
     list.forEach(function (t) { inList[t.id] = 1; });
 
@@ -1367,7 +1445,12 @@ var MODEL = __MODEL_JSON__;
     }
     renderCrumbs();
     renderViewHint();
+    renderTypesNotice();
     updateHeaderSegs();
+    if (state.selectedKind && state.selectedKind !== 'external') {
+      var rfn = nodeForRef(state.selectedKind, state.selected);
+      if (rfn.length) applyFocus(rfn);
+    }
   }
 
   function harvestLayout() {
@@ -1411,15 +1494,20 @@ var MODEL = __MODEL_JSON__;
     var path = [{ kind: 'system', id: null, label: MODEL.system.name }];
     var v = state.view;
     if (v.kind === 'types') {
+      // Breadcrumbs stay in TYPES mode when walking up — a subsystem's types
+      // lead to the PARENT'S types, not the parent's components. The header
+      // Components/Types toggle remains the explicit way to change mode.
+      var tpath = [{ kind: 'types', id: null, label: MODEL.system.name }];
       if (v.id) {
         var tsegs = v.id.split('::');
         for (var ti = 1; ti <= tsegs.length; ti++) {
           var tsid = tsegs.slice(0, ti).join('::');
-          path.push({ kind: 'subsystem', id: tsid, label: nameOf({ kind: 'subsystem', id: tsid }) });
+          tpath.push({ kind: 'types', id: tsid, label: nameOf({ kind: 'subsystem', id: tsid }) });
         }
       }
-      path.push({ kind: 'types', id: v.id || null, label: 'Types (ERD)' });
-      return path;
+      // Keep the ERD legible in the trail by tagging the current scope.
+      tpath[tpath.length - 1].label += ' \\u00B7 Types (ERD)';
+      return tpath;
     }
     if (v.kind === 'subsystem') {
       var segs = v.id.split('::');
@@ -1476,8 +1564,24 @@ var MODEL = __MODEL_JSON__;
     state.view = { kind: kind, id: id };
     state.selected = null;
     state.selectedKind = null;
+    state.typesRenderAll = false; // a fresh scope re-evaluates the LOD budget
     rebuild(true);
     renderPanel();
+  }
+  // Explain (and offer to override) a performance-degraded ERD.
+  function renderTypesNotice() {
+    var el = document.getElementById('typesWarn');
+    if (!el) return;
+    if (state.view.kind !== 'types' || !typesNotice) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    var cut = typesNotice.indexOf(':');
+    var mode = typesNotice.slice(0, cut), count = typesNotice.slice(cut + 1);
+    var msg = mode === 'cluster'
+      ? '\\u26A0 ' + count + ' types \\u2014 showing a subsystem overview so it stays fast. Double-click a group to open its types.'
+      : '\\u26A0 ' + count + ' types \\u2014 showing names only so it stays fast. Drill into a subsystem for fields, or';
+    el.innerHTML = msg + '<button class="tbtn" id="typesAllBtn">Render full detail anyway</button>';
+    el.style.display = 'block';
+    var b = document.getElementById('typesAllBtn');
+    if (b) b.addEventListener('click', function () { state.typesRenderAll = true; rebuild(true); });
   }
 
   // ---- interactions -----------------------------------------------------------
@@ -1485,6 +1589,7 @@ var MODEL = __MODEL_JSON__;
     var raw = node.id();
     if (raw.indexOf('p~') === 0) return { proxy: true, id: raw };
     if (raw.indexOf('x~') === 0) return { ghost: true, kind: node.data('extKind'), id: node.data('extId') };
+    if (raw.indexOf('TC~') === 0) return { cluster: true, id: raw.slice(3) };
     if (raw.indexOf('TG~') === 0) return { group: true, id: raw };
     if (raw.indexOf('TH~') === 0) return { kind: 'type', id: raw.slice(3) };
     if (raw.indexOf('TM~') === 0) return { kind: 'type', id: raw.slice(3, raw.lastIndexOf('~')) };
@@ -1541,6 +1646,7 @@ var MODEL = __MODEL_JSON__;
   cy.on('tap', 'node', function (ev) {
     var t = idOf(ev.target);
     if (t.group) return;
+    if (t.cluster) { select(null, null, false); return; }
     if (t.proxy) {
       // Ports are real nodes: selecting one pins its cross-boundary line and
       // shows the external counterpart's details in the sidebar.
@@ -1566,6 +1672,7 @@ var MODEL = __MODEL_JSON__;
   cy.on('dbltap', 'node', function (ev) {
     var t = idOf(ev.target);
     if (t.proxy || t.group) return;
+    if (t.cluster) { navigateTo('types', t.id); return; }
     if (t.kind === 'type') {
       // Double-clicking an FK field row jumps to the referenced type.
       if (t.field) {
@@ -2203,6 +2310,23 @@ var MODEL = __MODEL_JSON__;
     }).join('');
   }
 
+  // Focus mode: lift the selected element's own edges above everything and let
+  // the rest recede, so its relations read clearly in a busy graph.
+  function clearFocus() { cy.elements().removeClass('defocus edgeFocus'); }
+  function applyFocus(node) {
+    clearFocus();
+    if (!node || !node.length) return;
+    var core = node;
+    if (node.isParent && node.isParent()) core = core.union(node.descendants());
+    var edges = core.connectedEdges().not('.inneredge');
+    if (!edges.length) return; // isolated node — nothing to spotlight
+    var keep = core.union(edges).union(edges.connectedNodes());
+    keep = keep.union(keep.ancestors());
+    cy.elements().addClass('defocus');
+    keep.removeClass('defocus');
+    edges.addClass('edgeFocus').removeClass('defocus');
+  }
+
   function select(kind, id, focus) {
     // Selecting a type from a component view (param chip, "Used by" chip…)
     // switches into the ERD first, keeping the current subsystem scope.
@@ -2218,9 +2342,10 @@ var MODEL = __MODEL_JSON__;
       var node = nodeForRef(kind, id);
       if (node.length) {
         node.addClass('sel');
+        applyFocus(node);
         if (focus) cy.animate({ center: { eles: node }, duration: 250 });
-      }
-    }
+      } else { clearFocus(); }
+    } else { clearFocus(); }
     renderPanel();
   }
 
@@ -2231,14 +2356,25 @@ var MODEL = __MODEL_JSON__;
 
   function renderPanel() {
     var head = '', body = '';
-    if (state.selectedKind === 'component' && compById[state.selected]) {
-      var c = compById[state.selected];
+    // With nothing selected, describe the CURRENT VIEW SCOPE rather than the
+    // root system — so drilling into a subsystem/component shows that scope's
+    // details, and the breadcrumb still walks back up to the parent.
+    var focusKind = state.selectedKind, focusId = state.selected, scopeFocus = false;
+    if (!focusKind) {
+      scopeFocus = true;
+      if (state.view.kind === 'subsystem') { focusKind = 'subsystem'; focusId = state.view.id; }
+      else if (state.view.kind === 'component') { focusKind = 'component'; focusId = state.view.id; }
+      else if (state.view.kind === 'types' && state.view.id) { focusKind = 'subsystem'; focusId = state.view.id; }
+    }
+    if (focusKind === 'component' && compById[focusId]) {
+      var c = compById[focusId];
       head = '<h2>' + esc(c.name) + '</h2>'
         + staticChip('\\u00AB' + c.componentType + (c.portalType ? '/' + c.portalType : '') + '\\u00BB')
         + (c.public ? staticChip('published') : '')
         + (c.status ? staticChip(c.status) : '')
+        + (scopeFocus ? staticChip('current view') : '')
         + chip(c.subsystem, 'subsystem', c.subsystem)
-        + openViewButton('component', c.id, c.owns.length > 0);
+        + (scopeFocus ? '' : openViewButton('component', c.id, c.owns.length > 0));
       body += '<p class="desc">' + esc(c.description) + '</p>';
 
       var depInner = (c.dependsOn.length ? c.dependsOn.map(function (d) { return chip(d, 'component', d); }).join('') : '<span class="desc">none</span>')
@@ -2288,7 +2424,7 @@ var MODEL = __MODEL_JSON__;
 
       var iss = issuesBySpec[c.id];
       if (iss) body += section('Validation issues', iss.length, issueHtml(iss), true);
-    } else if (state.selectedKind === 'external') {
+    } else if (focusKind === 'external') {
       var pn2 = cy.getElementById(state.selected);
       var pd = pn2.length ? pn2.data() : null;
       if (pd) {
@@ -2310,9 +2446,9 @@ var MODEL = __MODEL_JSON__;
             via.map(function (v) { return chip(v.label, v.kind, v.id); }).join(''), true);
         }
       }
-    } else if (state.selectedKind === 'type') {
+    } else if (focusKind === 'type') {
       var ty = null;
-      MODEL.types.forEach(function (t2) { if (t2.id === state.selected) ty = t2; });
+      MODEL.types.forEach(function (t2) { if (t2.id === focusId) ty = t2; });
       if (ty) {
         head = '<h2>' + esc(ty.name) + '</h2>' + staticChip('\\u00AB' + ty.kind + '\\u00BB')
           + (ty.subsystem ? chip(ty.subsystem, 'subsystem', ty.subsystem) : staticChip('system-level shared'));
@@ -2349,13 +2485,14 @@ var MODEL = __MODEL_JSON__;
         var issT = issuesBySpec[ty.id];
         if (issT) body += section('Validation issues', issT.length, issueHtml(issT), true);
       }
-    } else if (state.selectedKind === 'subsystem' && subById[state.selected]) {
-      var s = subById[state.selected];
+    } else if (focusKind === 'subsystem' && subById[focusId]) {
+      var s = subById[focusId];
       var subKids = childSubsOf(s.id).length + childCompsOf(s.id).length;
       head = '<h2>' + esc(s.name) + '</h2>' + staticChip('subsystem')
         + (s.targetLanguage ? staticChip(s.targetLanguage) : '')
         + (s.status ? staticChip(s.status) : '')
-        + openViewButton('subsystem', s.id, subKids > 0);
+        + (scopeFocus ? staticChip('current view') : '')
+        + (scopeFocus ? '' : openViewButton('subsystem', s.id, subKids > 0));
       body += '<p class="desc">' + esc(s.description) + '</p>';
       if (s.trustedLinks.length) {
         body += section('Trusted links (fast lanes)', s.trustedLinks.length, s.trustedLinks.map(function (t2) {
