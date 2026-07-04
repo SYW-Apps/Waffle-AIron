@@ -220,6 +220,9 @@ Two equivalent paths to the same control-plane logic:
 | Data root | `--data-dir` | `WAIRON_DATA_DIR` | `~/.wairon/data` |
 | Data-plane auth | `--no-auth` (off) | — | on |
 | Master credential | — | `WAIRON_ADMIN_TOKEN` | *(required unless `--no-auth`)* |
+| Diagram view-link signing key | — | `WAIRON_SIGNING_SECRET` | falls back to `WAIRON_ADMIN_TOKEN` |
+| Git bot token | — | `WAIRON_GIT_TOKEN` | *(needed for `https://` git remotes)* |
+| Git committer name / email | — | `WAIRON_GIT_NAME` / `WAIRON_GIT_EMAIL` | `wairon-bot` / `wairon-bot@localhost` |
 
 Data layout:
 

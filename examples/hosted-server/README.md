@@ -54,6 +54,83 @@ wairon host lock --project acme
 wairon host promote --project acme
 ```
 
+## Git-backed projects — repo as the source of truth
+
+Instead of the container being canonical, point a project at a **git repo**: the
+repo becomes the source of truth, teammates clone it and edit locally via their
+own AI tools, and the container works on an isolated branch and opens PRs.
+
+### 1. Give the container a git identity (once)
+
+The container commits + pushes as a **bot**. Set these on the server (env / Docker
+secret):
+
+```sh
+WAIRON_GIT_TOKEN=<a token with push access>   # GitHub PAT (repo scope) / GitLab token / …
+WAIRON_GIT_NAME="wairon-bot"                   # committer name (optional)
+WAIRON_GIT_EMAIL="wairon-bot@your.org"         # committer email (optional)
+```
+
+The token is injected into the clone URL for `https://` remotes and lives only in
+the container-local `.git/config` — never in the repo. One identity serves all
+git-backed projects, so give it access to the repos you host.
+
+### 2. Enable git on a project (clones the repo)
+
+```sh
+# CLI (on the box / docker exec) — creates a fresh git-backed project by cloning
+wairon host git enable --project acme --remote https://github.com/acme/specs.git --branch main
+
+# …or the admin API
+curl -XPOST https://<host>/admin/projects/acme/git \
+  -H "Authorization: Bearer $WAIRON_ADMIN_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"remote":"https://github.com/acme/specs.git","branch":"main"}'
+```
+
+The container clones the repo and checks out an **isolated working branch**
+(`wairon/work`); it never commits to `main`.
+
+### 3. Edit → lock → PR
+
+Edit the specs over the data plane as usual (the `sdd_*` MCP tools). When ready:
+
+```sh
+wairon host lock --project acme
+#  → validates as-complete, promotes, commits + pushes wairon/work, prints a compare URL
+```
+
+Open the printed **compare URL** to raise the PR into `main` (push-only — wairon
+doesn't call the GitHub/GitLab API). Use `wairon validate --ci` as the PR status
+check. You merge it — wairon never merges.
+
+### 4. Pull collaborators' merged work
+
+```sh
+wairon host git sync --project acme      # integrates main into the working branch
+```
+
+(`lock` auto-syncs first, so a lock is always based on the latest `main`.)
+
+### 5. Collaborate locally
+
+Because the repo is canonical, teammates just clone and work locally:
+
+```sh
+git clone https://github.com/acme/specs.git && cd specs
+# edit specs with wairon locally (their AI tool + the sdd_* tools), commit, open a PR
+```
+
+The hosted container and every local clone are equal participants on the same repo.
+
+### Disable
+
+```sh
+wairon host git disable --project acme   # stops git backing (leaves the checkout in place)
+```
+
+`.wai/lock.json` and `.wai/git.json` stay container-local (excluded from commits);
+the Docker image already ships with `git`.
+
 ## Deploying for real (Docker)
 
 ```sh
