@@ -1,0 +1,18 @@
+id: ihost_server
+name: Host Server Interface
+description: Lifecycle contract for the HTTP listeners serving the data-plane and admin-plane portals.
+component: host_server
+methods:
+  - name: start
+    description: >-
+      Bind the data-plane and admin-plane listeners (honoring auth and bind configuration) and begin
+      accepting connections.
+    signature: 'start(config: HostConfig): void'
+    returns: void
+  - name: stop
+    description: Gracefully drain in-flight requests and shut the listeners down.
+    signature: 'stop(): void'
+    returns: void
+status: complete
+createdAt: '2026-07-04T12:49:31.392Z'
+updatedAt: '2026-07-04T13:06:22.840Z'

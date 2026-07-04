@@ -10,10 +10,12 @@ You own and decide on everything within:
 ```
 .wai/specs/subsystems/sdd_cli.yaml
 .wai/specs/components/cli_core_adapter.yaml
+.wai/specs/components/cli_host_adapter.yaml
 .wai/specs/components/cli_runner.yaml
 .wai/specs/components/cli_skills_adapter.yaml
 .wai/specs/components/cli_validator_adapter.yaml
 src/commands/index.ts
+src/commands/host.ts
 src/cli/index.ts
 src/commands/skills.ts
 src/commands/validate.ts

@@ -1,114 +1,149 @@
-schemaVersion: "1.0.0"
-id: "core_portal_impl"
-name: "Core Portal Implementation"
-description: "Concrete implementation forwarding portal requests to core orchestrators."
-contract: "icore_portal"
-sourcePath: "src/core/index.ts"
+id: core_portal_impl
+name: Core Portal Implementation
+description: Concrete implementation forwarding portal requests to core orchestrators.
+contract: icore_portal
+sourcePath: src/core/index.ts
 methods:
-  - name: "loadSystemSpec"
+  - name: loadSystemSpec
     narrative:
       - stepNumber: 1
-        description: "Forward loadSystemSpec call to core orchestrator"
-        type: "call"
-        targetComponent: "core_orchestrator"
-        targetMethod: "loadSystemSpec"
-  - name: "loadSubsystemSpecs"
+        description: Forward loadSystemSpec call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadSystemSpec
+  - name: loadSubsystemSpecs
     narrative:
       - stepNumber: 1
-        description: "Forward loadSubsystemSpecs call to core orchestrator"
-        type: "call"
-        targetComponent: "core_orchestrator"
-        targetMethod: "loadSubsystemSpecs"
-  - name: "loadComponentSpecs"
+        description: Forward loadSubsystemSpecs call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadSubsystemSpecs
+  - name: loadComponentSpecs
     narrative:
       - stepNumber: 1
-        description: "Forward loadComponentSpecs call to core orchestrator"
-        type: "call"
-        targetComponent: "core_orchestrator"
-        targetMethod: "loadComponentSpecs"
-  - name: "loadInterfaceSpecs"
+        description: Forward loadComponentSpecs call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadComponentSpecs
+  - name: loadInterfaceSpecs
     narrative:
       - stepNumber: 1
-        description: "Forward loadInterfaceSpecs call to core orchestrator"
-        type: "call"
-        targetComponent: "core_orchestrator"
-        targetMethod: "loadInterfaceSpecs"
-  - name: "loadImplementationSpecs"
+        description: Forward loadInterfaceSpecs call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadInterfaceSpecs
+  - name: loadImplementationSpecs
     narrative:
       - stepNumber: 1
-        description: "Forward loadImplementationSpecs call to core orchestrator"
-        type: "call"
-        targetComponent: "core_orchestrator"
-        targetMethod: "loadImplementationSpecs"
-  - name: "resolveAgentTopology"
+        description: Forward loadImplementationSpecs call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadImplementationSpecs
+  - name: resolveAgentTopology
     narrative:
       - stepNumber: 1
-        description: "Forward resolveAgentTopology call to agent resolver"
-        type: "call"
-        targetComponent: "agent_resolver"
-        targetMethod: "resolveAgentTopology"
-  - name: "loadSubsystemSpec"
+        description: Forward resolveAgentTopology call to agent resolver
+        type: call
+        targetComponent: agent_resolver
+        targetMethod: resolveAgentTopology
+  - name: loadSubsystemSpec
     narrative:
       - stepNumber: 1
-        description: "Forward loadSubsystemSpec call to core orchestrator"
-        type: "call"
-        targetComponent: "core_orchestrator"
-        targetMethod: "loadSubsystemSpec"
-  - name: "loadComponentSpec"
+        description: Forward loadSubsystemSpec call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadSubsystemSpec
+  - name: loadComponentSpec
     narrative:
       - stepNumber: 1
-        description: "Forward loadComponentSpec call to core orchestrator"
-        type: "call"
-        targetComponent: "core_orchestrator"
-        targetMethod: "loadComponentSpec"
-  - name: "loadInterfaceSpec"
+        description: Forward loadComponentSpec call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadComponentSpec
+  - name: loadInterfaceSpec
     narrative:
       - stepNumber: 1
-        description: "Forward loadInterfaceSpec call to core orchestrator"
-        type: "call"
-        targetComponent: "core_orchestrator"
-        targetMethod: "loadInterfaceSpec"
-  - name: "loadImplementationSpec"
+        description: Forward loadInterfaceSpec call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadInterfaceSpec
+  - name: loadImplementationSpec
     narrative:
       - stepNumber: 1
-        description: "Forward loadImplementationSpec call to core orchestrator"
-        type: "call"
-        targetComponent: "core_orchestrator"
-        targetMethod: "loadImplementationSpec"
-  - name: "saveSystemSpec"
+        description: Forward loadImplementationSpec call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadImplementationSpec
+  - name: saveSystemSpec
     narrative:
       - stepNumber: 1
-        description: "Forward saveSystemSpec call to core orchestrator"
-        type: "call"
-        targetComponent: "core_orchestrator"
-        targetMethod: "saveSystemSpec"
-  - name: "saveSubsystemSpec"
+        description: Forward saveSystemSpec call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: saveSystemSpec
+  - name: saveSubsystemSpec
     narrative:
       - stepNumber: 1
-        description: "Forward saveSubsystemSpec call to core orchestrator"
-        type: "call"
-        targetComponent: "core_orchestrator"
-        targetMethod: "saveSubsystemSpec"
-  - name: "saveComponentSpec"
+        description: Forward saveSubsystemSpec call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: saveSubsystemSpec
+  - name: saveComponentSpec
     narrative:
       - stepNumber: 1
-        description: "Forward saveComponentSpec call to core orchestrator"
-        type: "call"
-        targetComponent: "core_orchestrator"
-        targetMethod: "saveComponentSpec"
-  - name: "saveInterfaceSpec"
+        description: Forward saveComponentSpec call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: saveComponentSpec
+  - name: saveInterfaceSpec
     narrative:
       - stepNumber: 1
-        description: "Forward saveInterfaceSpec call to core orchestrator"
-        type: "call"
-        targetComponent: "core_orchestrator"
-        targetMethod: "saveInterfaceSpec"
-  - name: "saveImplementationSpec"
+        description: Forward saveInterfaceSpec call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: saveInterfaceSpec
+  - name: saveImplementationSpec
     narrative:
       - stepNumber: 1
-        description: "Forward saveImplementationSpec call to core orchestrator"
-        type: "call"
-        targetComponent: "core_orchestrator"
-        targetMethod: "saveImplementationSpec"
-createdAt: "2026-06-19T12:00:00Z"
-updatedAt: "2026-07-02T00:00:00Z"
+        description: Forward saveImplementationSpec call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: saveImplementationSpec
+  - name: provisionProject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: provisionProject
+  - name: computeStateId
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: computeStateId
+  - name: readLockRecord
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: readLockRecord
+  - name: writeLockRecord
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: writeLockRecord
+  - name: promoteAllComplete
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: promoteAllComplete
+status: complete
+createdAt: '2026-06-19T12:00:00Z'
+updatedAt: '2026-07-04T12:56:03.430Z'

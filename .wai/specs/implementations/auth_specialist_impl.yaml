@@ -1,0 +1,59 @@
+id: auth_specialist_impl
+name: Auth Specialist Implementation
+description: Credential verification into a Principal for both planes.
+contract: iauth_specialist
+sourcePath: src/server/auth.ts
+methods:
+  - name: authenticate
+    narrative:
+      - stepNumber: 1
+        description: Compute the salted hash of the presented token
+        type: local
+      - stepNumber: 2
+        description: Look up a credential record by token hash
+        type: call
+        targetComponent: credential_registry
+        targetMethod: findByToken
+      - stepNumber: 3
+        description: If no record matches, reject
+        type: branch
+        condition: no matching record
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Return an unauthenticated principal
+        type: return
+        outcome: unauthenticated
+      - stepNumber: 5
+        description: Assemble the Principal (tokenId, role, authorized projects) from the record
+        type: local
+      - stepNumber: 6
+        description: Return the authenticated principal
+        type: return
+        outcome: authenticated principal
+  - name: authenticateMaster
+    narrative:
+      - stepNumber: 1
+        description: Read the configured master-credential hash from the environment
+        type: local
+      - stepNumber: 2
+        description: Constant-time compare the presented credential's hash against it
+        type: local
+      - stepNumber: 3
+        description: If the comparison fails, reject
+        type: branch
+        condition: comparison fails
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Return an unauthenticated principal
+        type: return
+        outcome: unauthenticated
+      - stepNumber: 5
+        description: Assemble an admin Principal (role admin, all projects)
+        type: local
+      - stepNumber: 6
+        description: Return the admin principal
+        type: return
+        outcome: admin principal
+status: complete
+createdAt: '2026-07-04T12:54:26.477Z'
+updatedAt: '2026-07-04T13:06:22.914Z'

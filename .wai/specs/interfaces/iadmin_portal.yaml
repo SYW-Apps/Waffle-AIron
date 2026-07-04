@@ -1,0 +1,74 @@
+id: iadmin_portal
+name: Admin Portal Interface
+description: >-
+  Control-plane admin API contract: project and API-key lifecycle plus the privileged state-scoped
+  lock/promote. Every method carries the master credential, verified before any effect.
+component: admin_portal
+methods:
+  - name: createProject
+    description: Provision a new isolated project.
+    signature: 'createProject(credential: string, id: string): HostedProjectRecord'
+    returns: HostedProjectRecord
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /admin/projects
+  - name: destroyProject
+    description: Tear down a hosted project and its tree.
+    signature: 'destroyProject(credential: string, id: string): void'
+    returns: void
+    endpoint:
+      transport: HTTP
+      method: DELETE
+      path: /admin/projects/{id}
+  - name: listProjects
+    description: List hosted projects.
+    signature: 'listProjects(credential: string): HostedProjectRecord[]'
+    returns: HostedProjectRecord[]
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /admin/projects
+  - name: mintKey
+    description: Mint an API key bound to a project and role; the plaintext is returned once.
+    signature: 'mintKey(credential: string, project: string, role: string): string'
+    returns: string
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /admin/keys
+  - name: revokeKey
+    description: Revoke an API key by id.
+    signature: 'revokeKey(credential: string, id: string): void'
+    returns: void
+    endpoint:
+      transport: HTTP
+      method: DELETE
+      path: /admin/keys/{id}
+  - name: listKeys
+    description: List API keys authorized for a project.
+    signature: 'listKeys(credential: string, project: string): ApiKeyRecord[]'
+    returns: ApiKeyRecord[]
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /admin/keys
+  - name: lockProject
+    description: Validate-as-complete then write a StateId-scoped lock record for the project.
+    signature: 'lockProject(credential: string, project: string): LockRecord'
+    returns: LockRecord
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /admin/projects/{id}/lock
+  - name: promoteProject
+    description: Promote a locked project after re-checking its StateId; never merges to production itself.
+    signature: 'promoteProject(credential: string, project: string): PromoteResult'
+    returns: PromoteResult
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /admin/projects/{id}/promote
+status: complete
+createdAt: '2026-07-04T12:50:05.545Z'
+updatedAt: '2026-07-04T13:06:22.766Z'

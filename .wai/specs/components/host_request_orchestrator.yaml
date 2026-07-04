@@ -1,0 +1,17 @@
+id: host_request_orchestrator
+name: Host Request Orchestrator
+description: >-
+  Owns the per-request data-plane workflow: authenticate the bearer token to a principal, resolve
+  the authorized project (honoring an optional client selector only within the token's authorized
+  set), bind the request-scoped project root, then dispatch the sdd_* tool call into the reused MCP
+  tool surface within that scope. Rejects unknown tokens and cross-project access.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - auth_specialist
+  - project_registry
+  - host_mcp_adapter
+status: complete
+createdAt: '2026-07-04T12:33:41.786Z'
+updatedAt: '2026-07-04T13:06:22.631Z'

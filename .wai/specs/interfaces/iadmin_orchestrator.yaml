@@ -1,0 +1,46 @@
+id: iadmin_orchestrator
+name: Admin Orchestrator Interface
+description: >-
+  Contract for the control-plane workflows behind the admin portal: authenticate the master
+  credential, then perform the requested project/key/lock/promote action.
+component: admin_orchestrator
+methods:
+  - name: createProject
+    description: Authenticate, allocate the project, and bootstrap its isolated spec tree.
+    signature: 'createProject(credential: string, id: string): HostedProjectRecord'
+    returns: HostedProjectRecord
+  - name: destroyProject
+    description: Authenticate and deregister the project and its tree.
+    signature: 'destroyProject(credential: string, id: string): void'
+    returns: void
+  - name: listProjects
+    description: Authenticate and list hosted projects.
+    signature: 'listProjects(credential: string): HostedProjectRecord[]'
+    returns: HostedProjectRecord[]
+  - name: mintKey
+    description: Authenticate and mint a project-scoped API key.
+    signature: 'mintKey(credential: string, project: string, role: string): string'
+    returns: string
+  - name: revokeKey
+    description: Authenticate and revoke an API key.
+    signature: 'revokeKey(credential: string, id: string): void'
+    returns: void
+  - name: listKeys
+    description: Authenticate and list a project's API keys.
+    signature: 'listKeys(credential: string, project: string): ApiKeyRecord[]'
+    returns: ApiKeyRecord[]
+  - name: lockProject
+    description: >-
+      Authenticate, bind the project scope, validate-as-complete, and on success promote statuses
+      and write the StateId-scoped lock record.
+    signature: 'lockProject(credential: string, project: string): LockRecord'
+    returns: LockRecord
+  - name: promoteProject
+    description: >-
+      Authenticate, bind scope, read the lock, re-check the current StateId, and mark
+      ready-for-promotion only when it still matches; reject stale locks.
+    signature: 'promoteProject(credential: string, project: string): PromoteResult'
+    returns: PromoteResult
+status: complete
+createdAt: '2026-07-04T12:50:13.046Z'
+updatedAt: '2026-07-04T13:06:22.756Z'

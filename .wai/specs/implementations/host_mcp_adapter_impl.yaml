@@ -1,0 +1,16 @@
+id: host_mcp_adapter_impl
+name: Host MCP Client Adapter Implementation
+description: Reuses the sdd_* MCP server within the bound project scope.
+contract: ihost_mcp_adapter
+sourcePath: src/server/adapters.ts
+methods:
+  - name: createScopedServer
+    narrative:
+      - stepNumber: 1
+        description: Instantiate the reused sdd_* MCP server via the MCP portal
+        type: call
+        targetComponent: mcp_portal
+        targetMethod: createMcpServer
+status: complete
+createdAt: '2026-07-04T12:53:08.365Z'
+updatedAt: '2026-07-04T13:06:22.970Z'

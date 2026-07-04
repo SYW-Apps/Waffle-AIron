@@ -1,0 +1,41 @@
+id: host_server_impl
+name: Host Server Implementation
+description: HTTP listener lifecycle for the data-plane and admin-plane portals.
+contract: ihost_server
+sourcePath: src/server/http.ts
+methods:
+  - name: start
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve bind and auth configuration; refuse to start without an auth file unless --no-auth
+          is set
+        type: local
+      - stepNumber: 2
+        description: Bind the data-plane listener and route /mcp, /healthz, /readyz to the host HTTP portal
+        type: local
+      - stepNumber: 3
+        description: Bind the admin-plane listener (separate bind) and route /admin/* to the admin portal
+        type: local
+      - stepNumber: 4
+        description: Begin accepting connections on both listeners
+        type: local
+      - stepNumber: 5
+        description: Return the running server handle
+        type: return
+        outcome: running
+  - name: stop
+    narrative:
+      - stepNumber: 1
+        description: Stop accepting new connections and drain in-flight requests
+        type: local
+      - stepNumber: 2
+        description: Close the data-plane and admin-plane listeners
+        type: local
+      - stepNumber: 3
+        description: Return once stopped
+        type: return
+        outcome: stopped
+status: complete
+createdAt: '2026-07-04T12:54:36.977Z'
+updatedAt: '2026-07-04T13:06:22.991Z'

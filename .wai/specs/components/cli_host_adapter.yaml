@@ -1,0 +1,14 @@
+id: cli_host_adapter
+name: CLI Host Client Adapter
+description: >-
+  Local client adapter crossing the subsystem boundary to sdd_host's admin portal: lets the wairon
+  CLI drive the hosting control plane in-process — serve, project/key lifecycle, and the
+  state-scoped lock/promote — as a thin client of the same admin surface the HTTP admin API exposes.
+subsystem: sdd_cli
+componentType: Adapter
+owns: []
+dependsOn:
+  - admin_portal
+status: complete
+createdAt: '2026-07-04T12:44:51.486Z'
+updatedAt: '2026-07-04T13:06:22.521Z'

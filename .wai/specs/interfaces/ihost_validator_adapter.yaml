@@ -1,0 +1,16 @@
+id: ihost_validator_adapter
+name: Host Validator Client Adapter Interface
+description: >-
+  Contract for the as-complete conformance run the lock flow requires, forwarded to the validator
+  portal.
+component: host_validator_adapter
+methods:
+  - name: validateAsComplete
+    description: >-
+      Run the conformance gate at full strictness (treating all specs as complete) and return the
+      result.
+    signature: 'validateAsComplete(): ValidationResult'
+    returns: ValidationResult
+status: complete
+createdAt: '2026-07-04T12:50:19.428Z'
+updatedAt: '2026-07-04T13:06:22.848Z'

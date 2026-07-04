@@ -1,0 +1,34 @@
+kind: value-object
+id: host_config
+name: HostConfig
+description: >-
+  Resolved runtime configuration for the hosting server: bind addresses for the data and admin
+  planes, the data root, and the auth posture (default-on, toggleable).
+fields:
+  - name: host
+    type: string
+    description: Bind host for the data plane
+    optional: false
+  - name: port
+    type: number
+    description: Data-plane port
+    optional: false
+  - name: adminPort
+    type: number
+    description: Admin-plane port (separately bound)
+    optional: false
+  - name: dataDir
+    type: string
+    description: Data root holding projects/ and auth/
+    optional: false
+  - name: authEnabled
+    type: boolean
+    description: Whether data-plane auth is enforced (false only via explicit --no-auth)
+    optional: false
+  - name: authFile
+    type: string
+    description: Path to the API-key auth file
+    optional: true
+methods: []
+createdAt: '2026-07-04T12:58:10.758Z'
+updatedAt: '2026-07-04T12:58:10.770Z'

@@ -1,0 +1,44 @@
+id: host_core_adapter_impl
+name: Host Core Client Adapter Implementation
+description: Forwards spec-tree operations to the core portal for provisioning and lock/promote.
+contract: ihost_core_adapter
+sourcePath: src/server/adapters.ts
+methods:
+  - name: provisionProject
+    narrative:
+      - stepNumber: 1
+        description: Forward provisioning to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: provisionProject
+  - name: computeStateId
+    narrative:
+      - stepNumber: 1
+        description: Forward StateId computation to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: computeStateId
+  - name: readLockRecord
+    narrative:
+      - stepNumber: 1
+        description: Forward lock-record read to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: readLockRecord
+  - name: writeLockRecord
+    narrative:
+      - stepNumber: 1
+        description: Forward lock-record write to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: writeLockRecord
+  - name: promoteAllComplete
+    narrative:
+      - stepNumber: 1
+        description: Forward status promotion to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: promoteAllComplete
+status: complete
+createdAt: '2026-07-04T12:53:08.391Z'
+updatedAt: '2026-07-04T13:06:22.947Z'

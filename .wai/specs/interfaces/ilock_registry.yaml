@@ -1,0 +1,16 @@
+id: ilock_registry
+name: Lock Registry Interface
+description: Contract for reading and writing a project's commit-scoped lock record (.wai/lock.json).
+component: lock_registry
+methods:
+  - name: read
+    description: Read the current lock record for the bound project, or null when absent.
+    signature: 'read(): LockRecord | null'
+    returns: LockRecord | null
+  - name: write
+    description: Persist the lock record for the bound project (overwrites any prior record).
+    signature: 'write(record: LockRecord): void'
+    returns: void
+status: complete
+createdAt: '2026-07-04T12:48:43.336Z'
+updatedAt: '2026-07-04T13:06:22.858Z'

@@ -1,0 +1,15 @@
+id: host_mcp_adapter
+name: Host MCP Client Adapter
+description: >-
+  Local client adapter crossing the subsystem boundary to sdd_mcp: forwards an authenticated,
+  project-scoped tool call to the published MCP portal so the existing sdd_* authoring/validation
+  surface is reused verbatim, with the active project root already bound by the request
+  orchestrator.
+subsystem: sdd_host
+componentType: Adapter
+owns: []
+dependsOn:
+  - mcp_portal
+status: complete
+createdAt: '2026-07-04T12:33:41.815Z'
+updatedAt: '2026-07-04T13:06:22.610Z'

@@ -1,0 +1,43 @@
+id: icli_host_adapter
+name: CLI Host Client Adapter Interface
+description: >-
+  Contract for the CLI's in-process client of the hosting control plane. Pure 1:1 forwarding to the
+  admin portal; the credential is passed through from the caller (read from the environment by the
+  CLI runner).
+component: cli_host_adapter
+methods:
+  - name: createProject
+    description: Forward project provisioning to the admin portal.
+    signature: 'createProject(credential: string, id: string): HostedProjectRecord'
+    returns: HostedProjectRecord
+  - name: destroyProject
+    description: Forward project teardown to the admin portal.
+    signature: 'destroyProject(credential: string, id: string): void'
+    returns: void
+  - name: listProjects
+    description: Forward project listing to the admin portal.
+    signature: 'listProjects(credential: string): HostedProjectRecord[]'
+    returns: HostedProjectRecord[]
+  - name: mintKey
+    description: Forward API-key minting to the admin portal.
+    signature: 'mintKey(credential: string, project: string, role: string): string'
+    returns: string
+  - name: revokeKey
+    description: Forward API-key revocation to the admin portal.
+    signature: 'revokeKey(credential: string, id: string): void'
+    returns: void
+  - name: listKeys
+    description: Forward API-key listing to the admin portal.
+    signature: 'listKeys(credential: string, project: string): ApiKeyRecord[]'
+    returns: ApiKeyRecord[]
+  - name: lockProject
+    description: Forward the state-scoped lock to the admin portal.
+    signature: 'lockProject(credential: string, project: string): LockRecord'
+    returns: LockRecord
+  - name: promoteProject
+    description: Forward the gated promote to the admin portal.
+    signature: 'promoteProject(credential: string, project: string): PromoteResult'
+    returns: PromoteResult
+status: complete
+createdAt: '2026-07-04T12:49:25.392Z'
+updatedAt: '2026-07-04T13:06:22.786Z'

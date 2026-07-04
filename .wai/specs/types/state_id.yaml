@@ -1,0 +1,19 @@
+kind: value-object
+id: state_id
+name: StateId
+description: >-
+  Content-addressed identity of a spec-tree state: a deterministic hash over the canonicalized spec
+  files. Two trees with identical spec content produce the same StateId; any edit changes it. Backs
+  the commit-scoped lock record and the promote-time re-check.
+fields:
+  - name: algorithm
+    type: string
+    description: Hash algorithm identifier (e.g. "sha256")
+    optional: false
+  - name: digest
+    type: string
+    description: Hex digest over the canonicalized spec tree
+    optional: false
+methods: []
+createdAt: '2026-07-04T12:44:18.502Z'
+updatedAt: '2026-07-04T12:44:18.505Z'

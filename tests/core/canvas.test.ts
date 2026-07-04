@@ -163,4 +163,17 @@ describe('interactive canvas generation', () => {
     // script-injection safety: embedded JSON cannot close the script tag
     expect(html.split('var MODEL = ')[1].split('\n')[0]).not.toContain('</script>');
   });
+
+  it('flow modal lays branches out in lanes with orthogonal long edges (not a single column)', () => {
+    buildFixture();
+    const html = renderCanvasHtml(buildCanvasModel());
+
+    // Structured lane assignment: then-blocks / case blocks / loop bodies
+    // shift into their own lane…
+    expect(html).toContain('laneAdd');
+    expect(html).toContain('graph.lane[s.n]');
+    // …and long edges (false/case/jump/error) route orthogonally instead of
+    // cutting straight through the nodes stacked between source and target.
+    expect(html).toContain("'taxi-direction': 'downward'");
+  });
 });

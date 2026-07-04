@@ -1,107 +1,207 @@
-schemaVersion: "1.0.0"
-id: "core_orchestrator_impl"
-name: "Core Orchestrator Implementation"
-description: "Concrete implementation forwarding to registry loader."
-contract: "icore_orchestrator"
-sourcePath: "src/core/specs.ts"
+id: core_orchestrator_impl
+name: Core Orchestrator Implementation
+description: Concrete implementation forwarding to registry loader.
+contract: icore_orchestrator
+sourcePath: src/core/specs.ts
 methods:
-  - name: "loadSystemSpec"
+  - name: loadSystemSpec
     narrative:
       - stepNumber: 1
-        description: "Call loadSystemSpec on spec loader"
-        type: "call"
-        targetComponent: "spec_loader"
-        targetMethod: "loadSystemSpec"
-  - name: "loadSubsystemSpecs"
+        description: Call loadSystemSpec on spec loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSystemSpec
+  - name: loadSubsystemSpecs
     narrative:
       - stepNumber: 1
-        description: "Call loadSubsystemSpecs on spec loader"
-        type: "call"
-        targetComponent: "spec_loader"
-        targetMethod: "loadSubsystemSpecs"
-  - name: "loadComponentSpecs"
+        description: Call loadSubsystemSpecs on spec loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSubsystemSpecs
+  - name: loadComponentSpecs
     narrative:
       - stepNumber: 1
-        description: "Call loadComponentSpecs on spec loader"
-        type: "call"
-        targetComponent: "spec_loader"
-        targetMethod: "loadComponentSpecs"
-  - name: "loadInterfaceSpecs"
+        description: Call loadComponentSpecs on spec loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+  - name: loadInterfaceSpecs
     narrative:
       - stepNumber: 1
-        description: "Call loadInterfaceSpecs on spec loader"
-        type: "call"
-        targetComponent: "spec_loader"
-        targetMethod: "loadInterfaceSpecs"
-  - name: "loadImplementationSpecs"
+        description: Call loadInterfaceSpecs on spec loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+  - name: loadImplementationSpecs
     narrative:
       - stepNumber: 1
-        description: "Call loadImplementationSpecs on spec loader"
-        type: "call"
-        targetComponent: "spec_loader"
-        targetMethod: "loadImplementationSpecs"
-  - name: "loadSubsystemSpec"
+        description: Call loadImplementationSpecs on spec loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+  - name: loadSubsystemSpec
     narrative:
       - stepNumber: 1
-        description: "Call loadSubsystemSpec on spec loader"
-        type: "call"
-        targetComponent: "spec_loader"
-        targetMethod: "loadSubsystemSpec"
-  - name: "loadComponentSpec"
+        description: Call loadSubsystemSpec on spec loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSubsystemSpec
+  - name: loadComponentSpec
     narrative:
       - stepNumber: 1
-        description: "Call loadComponentSpec on spec loader"
-        type: "call"
-        targetComponent: "spec_loader"
-        targetMethod: "loadComponentSpec"
-  - name: "loadInterfaceSpec"
+        description: Call loadComponentSpec on spec loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpec
+  - name: loadInterfaceSpec
     narrative:
       - stepNumber: 1
-        description: "Call loadInterfaceSpec on spec loader"
-        type: "call"
-        targetComponent: "spec_loader"
-        targetMethod: "loadInterfaceSpec"
-  - name: "loadImplementationSpec"
+        description: Call loadInterfaceSpec on spec loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpec
+  - name: loadImplementationSpec
     narrative:
       - stepNumber: 1
-        description: "Call loadImplementationSpec on spec loader"
-        type: "call"
-        targetComponent: "spec_loader"
-        targetMethod: "loadImplementationSpec"
-  - name: "saveSystemSpec"
+        description: Call loadImplementationSpec on spec loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpec
+  - name: saveSystemSpec
     narrative:
       - stepNumber: 1
-        description: "Call saveSystemSpec on spec loader"
-        type: "call"
-        targetComponent: "spec_loader"
-        targetMethod: "saveSystemSpec"
-  - name: "saveSubsystemSpec"
+        description: Call saveSystemSpec on spec loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSystemSpec
+  - name: saveSubsystemSpec
     narrative:
       - stepNumber: 1
-        description: "Call saveSubsystemSpec on spec loader"
-        type: "call"
-        targetComponent: "spec_loader"
-        targetMethod: "saveSubsystemSpec"
-  - name: "saveComponentSpec"
+        description: Call saveSubsystemSpec on spec loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSubsystemSpec
+  - name: saveComponentSpec
     narrative:
       - stepNumber: 1
-        description: "Call saveComponentSpec on spec loader"
-        type: "call"
-        targetComponent: "spec_loader"
-        targetMethod: "saveComponentSpec"
-  - name: "saveInterfaceSpec"
+        description: Call saveComponentSpec on spec loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveComponentSpec
+  - name: saveInterfaceSpec
     narrative:
       - stepNumber: 1
-        description: "Call saveInterfaceSpec on spec loader"
-        type: "call"
-        targetComponent: "spec_loader"
-        targetMethod: "saveInterfaceSpec"
-  - name: "saveImplementationSpec"
+        description: Call saveInterfaceSpec on spec loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveInterfaceSpec
+  - name: saveImplementationSpec
     narrative:
       - stepNumber: 1
-        description: "Call saveImplementationSpec on spec loader"
-        type: "call"
-        targetComponent: "spec_loader"
-        targetMethod: "saveImplementationSpec"
-createdAt: "2026-06-19T12:00:00Z"
-updatedAt: "2026-07-02T00:00:00Z"
+        description: Call saveImplementationSpec on spec loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveImplementationSpec
+  - name: provisionProject
+    narrative:
+      - stepNumber: 1
+        description: Compose a default ProjectConfig and a bootstrap L0 SystemSpec named `name`
+        type: local
+      - stepNumber: 2
+        description: Persist the L0 system spec via the spec loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSystemSpec
+      - stepNumber: 3
+        description: Write the default project.yaml config at the bound project root
+        type: local
+  - name: computeStateId
+    narrative:
+      - stepNumber: 1
+        description: Delegate to the state hash specialist
+        type: call
+        targetComponent: state_hash_specialist
+        targetMethod: hashSpecTree
+  - name: readLockRecord
+    narrative:
+      - stepNumber: 1
+        description: Read the lock record via the lock registry
+        type: call
+        targetComponent: lock_registry
+        targetMethod: read
+  - name: writeLockRecord
+    narrative:
+      - stepNumber: 1
+        description: Write the lock record via the lock registry
+        type: call
+        targetComponent: lock_registry
+        targetMethod: write
+  - name: promoteAllComplete
+    narrative:
+      - stepNumber: 1
+        description: Load subsystem specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 2
+        description: For each subsystem
+        type: loop
+        loopKind: forEach
+        over: subsystems
+        endStep: 3
+      - stepNumber: 3
+        description: Re-save the subsystem with status complete
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSubsystemSpec
+      - stepNumber: 4
+        description: Load component specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 5
+        description: For each component
+        type: loop
+        loopKind: forEach
+        over: components
+        endStep: 6
+      - stepNumber: 6
+        description: Re-save the component with status complete
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveComponentSpec
+      - stepNumber: 7
+        description: Load interface specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 8
+        description: For each interface
+        type: loop
+        loopKind: forEach
+        over: interfaces
+        endStep: 9
+      - stepNumber: 9
+        description: Re-save the interface with status complete
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveInterfaceSpec
+      - stepNumber: 10
+        description: Load implementation specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 11
+        description: For each implementation
+        type: loop
+        loopKind: forEach
+        over: implementations
+        endStep: 12
+      - stepNumber: 12
+        description: Re-save the implementation with status complete
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveImplementationSpec
+status: complete
+createdAt: '2026-06-19T12:00:00Z'
+updatedAt: '2026-07-04T12:55:58.891Z'

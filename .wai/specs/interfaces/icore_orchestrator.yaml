@@ -1,64 +1,88 @@
-schemaVersion: "1.0.0"
-id: "icore_orchestrator"
-name: "Core Orchestrator Interface"
-description: "Orchestrator contract for coordinate loading specs."
-component: "core_orchestrator"
+id: icore_orchestrator
+name: Core Orchestrator Interface
+description: Orchestrator contract for coordinate loading specs.
+component: core_orchestrator
 methods:
-  - name: "loadSystemSpec"
-    description: "Delegate loading system spec to spec loader"
-    signature: "loadSystemSpec(): SystemSpec | null"
-    returns: "SystemSpec | null"
-  - name: "loadSubsystemSpecs"
-    description: "Delegate loading subsystem specs to spec loader"
-    signature: "loadSubsystemSpecs(): SubsystemSpec[]"
-    returns: "SubsystemSpec[]"
-  - name: "loadComponentSpecs"
-    description: "Delegate loading component specs to spec loader"
-    signature: "loadComponentSpecs(): ComponentSpec[]"
-    returns: "ComponentSpec[]"
-  - name: "loadInterfaceSpecs"
-    description: "Delegate loading interface specs to spec loader"
-    signature: "loadInterfaceSpecs(): InterfaceSpec[]"
-    returns: "InterfaceSpec[]"
-  - name: "loadImplementationSpecs"
-    description: "Delegate loading implementation specs to spec loader"
-    signature: "loadImplementationSpecs(): ImplementationSpec[]"
-    returns: "ImplementationSpec[]"
-  - name: "loadSubsystemSpec"
-    description: "Delegate loading a single subsystem spec to spec loader"
-    signature: "loadSubsystemSpec(id: string): SubsystemSpec | null"
-    returns: "SubsystemSpec | null"
-  - name: "loadComponentSpec"
-    description: "Delegate loading a single component spec to spec loader"
-    signature: "loadComponentSpec(id: string): ComponentSpec | null"
-    returns: "ComponentSpec | null"
-  - name: "loadInterfaceSpec"
-    description: "Delegate loading a single interface spec to spec loader"
-    signature: "loadInterfaceSpec(id: string): InterfaceSpec | null"
-    returns: "InterfaceSpec | null"
-  - name: "loadImplementationSpec"
-    description: "Delegate loading a single implementation spec to spec loader"
-    signature: "loadImplementationSpec(id: string): ImplementationSpec | null"
-    returns: "ImplementationSpec | null"
-  - name: "saveSystemSpec"
-    description: "Delegate persisting the L0 system spec to spec loader"
-    signature: "saveSystemSpec(spec: SystemSpec): void"
-    returns: "void"
-  - name: "saveSubsystemSpec"
-    description: "Delegate persisting an L1 subsystem spec to spec loader"
-    signature: "saveSubsystemSpec(spec: SubsystemSpec): void"
-    returns: "void"
-  - name: "saveComponentSpec"
-    description: "Delegate persisting an L2 component spec to spec loader"
-    signature: "saveComponentSpec(spec: ComponentSpec): void"
-    returns: "void"
-  - name: "saveInterfaceSpec"
-    description: "Delegate persisting an L3 interface spec to spec loader"
-    signature: "saveInterfaceSpec(spec: InterfaceSpec): void"
-    returns: "void"
-  - name: "saveImplementationSpec"
-    description: "Delegate persisting an L4 implementation spec to spec loader"
-    signature: "saveImplementationSpec(spec: ImplementationSpec): void"
-    returns: "void"
-createdAt: "2026-06-19T12:00:00Z"
-updatedAt: "2026-07-02T00:00:00Z"
+  - name: loadSystemSpec
+    description: Delegate loading system spec to spec loader
+    signature: 'loadSystemSpec(): SystemSpec | null'
+    returns: SystemSpec | null
+  - name: loadSubsystemSpecs
+    description: Delegate loading subsystem specs to spec loader
+    signature: 'loadSubsystemSpecs(): SubsystemSpec[]'
+    returns: SubsystemSpec[]
+  - name: loadComponentSpecs
+    description: Delegate loading component specs to spec loader
+    signature: 'loadComponentSpecs(): ComponentSpec[]'
+    returns: ComponentSpec[]
+  - name: loadInterfaceSpecs
+    description: Delegate loading interface specs to spec loader
+    signature: 'loadInterfaceSpecs(): InterfaceSpec[]'
+    returns: InterfaceSpec[]
+  - name: loadImplementationSpecs
+    description: Delegate loading implementation specs to spec loader
+    signature: 'loadImplementationSpecs(): ImplementationSpec[]'
+    returns: ImplementationSpec[]
+  - name: loadSubsystemSpec
+    description: Delegate loading a single subsystem spec to spec loader
+    signature: 'loadSubsystemSpec(id: string): SubsystemSpec | null'
+    returns: SubsystemSpec | null
+  - name: loadComponentSpec
+    description: Delegate loading a single component spec to spec loader
+    signature: 'loadComponentSpec(id: string): ComponentSpec | null'
+    returns: ComponentSpec | null
+  - name: loadInterfaceSpec
+    description: Delegate loading a single interface spec to spec loader
+    signature: 'loadInterfaceSpec(id: string): InterfaceSpec | null'
+    returns: InterfaceSpec | null
+  - name: loadImplementationSpec
+    description: Delegate loading a single implementation spec to spec loader
+    signature: 'loadImplementationSpec(id: string): ImplementationSpec | null'
+    returns: ImplementationSpec | null
+  - name: saveSystemSpec
+    description: Delegate persisting the L0 system spec to spec loader
+    signature: 'saveSystemSpec(spec: SystemSpec): void'
+    returns: void
+  - name: saveSubsystemSpec
+    description: Delegate persisting an L1 subsystem spec to spec loader
+    signature: 'saveSubsystemSpec(spec: SubsystemSpec): void'
+    returns: void
+  - name: saveComponentSpec
+    description: Delegate persisting an L2 component spec to spec loader
+    signature: 'saveComponentSpec(spec: ComponentSpec): void'
+    returns: void
+  - name: saveInterfaceSpec
+    description: Delegate persisting an L3 interface spec to spec loader
+    signature: 'saveInterfaceSpec(spec: InterfaceSpec): void'
+    returns: void
+  - name: saveImplementationSpec
+    description: Delegate persisting an L4 implementation spec to spec loader
+    signature: 'saveImplementationSpec(spec: ImplementationSpec): void'
+    returns: void
+  - name: provisionProject
+    description: >-
+      Bootstrap a fresh isolated project at the bound root: default project.yaml plus an L0 system
+      spec named `name`.
+    signature: 'provisionProject(name: string): void'
+    returns: void
+  - name: computeStateId
+    description: >-
+      Compute the deterministic content hash (StateId) of the current spec tree via the state hash
+      specialist.
+    signature: 'computeStateId(): StateId'
+    returns: StateId
+  - name: readLockRecord
+    description: Read the current commit-scoped lock record, or null if the project is unlocked.
+    signature: 'readLockRecord(): LockRecord | null'
+    returns: LockRecord | null
+  - name: writeLockRecord
+    description: Persist a commit-scoped lock record.
+    signature: 'writeLockRecord(record: LockRecord): void'
+    returns: void
+  - name: promoteAllComplete
+    description: Promote every spec in the tree to status complete (the lock status write).
+    signature: 'promoteAllComplete(): void'
+    returns: void
+status: complete
+createdAt: '2026-06-19T12:00:00Z'
+updatedAt: '2026-07-04T12:48:16.091Z'

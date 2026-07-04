@@ -1,0 +1,28 @@
+id: sdd_host
+name: SDD Hosting Server
+description: >-
+  Hosts wairon over streamable HTTP for many fully-isolated, independent wairon projects, scoping
+  every request to its authenticated project. Splits a public data plane (project-key-scoped MCP
+  over HTTP, reusing the sdd_* tool surface unchanged) from an admin control plane
+  (master-credential API + CLI) that owns project and API-key lifecycle plus the privileged,
+  state-scoped lock/promote flow. Each hosted project is a wholly separate .wai/ tree under the data
+  root; this is NOT subsystem/projectPath chaining. Auth is default-on and toggleable for trusted
+  networks.
+parentSystem: Waffle-AIron
+publicInterfaces:
+  - type: REST
+    details: >-
+      Streamable HTTP MCP endpoint (POST /mcp) exposing the sdd_* tool surface, request-scoped to
+      the authenticated project; plus /healthz and /readyz. The data-plane front door for remote MCP
+      clients.
+    component: host_http_portal
+  - type: REST
+    details: >-
+      Control-plane admin API (separately bound, master-credential gated): project create/destroy,
+      API-key mint/rotate/revoke, and the privileged lock/promote actions. Reached by operators and
+      by the wairon CLI.
+    component: admin_portal
+trustedLinks: []
+status: complete
+createdAt: '2026-07-04T12:33:06.563Z'
+updatedAt: '2026-07-04T13:06:22.432Z'

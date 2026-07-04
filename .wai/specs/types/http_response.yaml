@@ -1,0 +1,20 @@
+kind: value-object
+id: http_response
+name: HttpResponse
+description: 'An outbound HTTP response at the hosting boundary: status code, headers, and body.'
+fields:
+  - name: status
+    type: number
+    description: HTTP status code
+    optional: false
+  - name: headers
+    type: string[]
+    description: Raw response header lines
+    optional: false
+  - name: body
+    type: string
+    description: Response body
+    optional: true
+methods: []
+createdAt: '2026-07-04T12:58:06.691Z'
+updatedAt: '2026-07-04T12:58:06.704Z'

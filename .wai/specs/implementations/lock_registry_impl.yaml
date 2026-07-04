@@ -1,0 +1,19 @@
+id: lock_registry_impl
+name: Lock Registry Implementation
+description: File-backed I/O for the commit-scoped lock record (.wai/lock.json).
+contract: ilock_registry
+sourcePath: src/core/lockfile.ts
+methods:
+  - name: read
+    narrative: []
+    intent: >-
+      Reads .wai/lock.json for the bound project and returns the parsed LockRecord, or null when the
+      file is absent or unreadable.
+  - name: write
+    narrative: []
+    intent: >-
+      Serializes the LockRecord and writes it atomically to .wai/lock.json for the bound project,
+      overwriting any prior record.
+status: complete
+createdAt: '2026-07-04T12:53:38.524Z'
+updatedAt: '2026-07-04T13:06:23.012Z'

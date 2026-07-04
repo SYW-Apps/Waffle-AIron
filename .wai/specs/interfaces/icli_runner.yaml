@@ -1,32 +1,52 @@
-schemaVersion: "1.0.0"
-id: "icli_runner"
-name: "CLI Runner Interface"
-description: "Interface contract for handling command line inputs and executing CLI actions."
-component: "cli_runner"
+id: icli_runner
+name: CLI Runner Interface
+description: Interface contract for handling command line inputs and executing CLI actions.
+component: cli_runner
 methods:
-  - name: "runInit"
-    description: "Initializes a new wairon workspace and exports static skills"
-    signature: "runInit(options: { yes?: boolean }): Promise<void>"
-    returns: "Promise<void>"
-  - name: "runGenerate"
-    description: "Generates output configs/agents based on spec topology"
-    signature: "runGenerate(options: { target?: string; domain?: string; domains?: string; root?: boolean; dryRun?: boolean }): Promise<void>"
-    returns: "Promise<void>"
-  - name: "runValidate"
-    description: "Runs architectural validations on project configs and spec trees"
-    signature: "runValidate(options: { ci?: boolean }): Promise<void>"
-    returns: "Promise<void>"
-  - name: "runList"
-    description: "Lists all dynamically resolved agents"
-    signature: "runList(): Promise<void>"
-    returns: "Promise<void>"
-  - name: "runShow"
-    description: "Shows details for a single dynamically resolved agent"
-    signature: "runShow(id: string): Promise<void>"
-    returns: "Promise<void>"
-  - name: "runUpdate"
-    description: "Checks for updates or performs self-updates"
-    signature: "runUpdate(options: { check?: boolean; channel?: string }): Promise<void>"
-    returns: "Promise<void>"
-createdAt: "2026-06-11T14:50:00Z"
-updatedAt: "2026-06-11T14:50:00Z"
+  - name: runInit
+    description: Initializes a new wairon workspace and exports static skills
+    signature: 'runInit(options: { yes?: boolean }): Promise<void>'
+    returns: Promise<void>
+  - name: runGenerate
+    description: Generates output configs/agents based on spec topology
+    signature: >-
+      runGenerate(options: { target?: string; domain?: string; domains?: string; root?: boolean;
+      dryRun?: boolean }): Promise<void>
+    returns: Promise<void>
+  - name: runValidate
+    description: Runs architectural validations on project configs and spec trees
+    signature: 'runValidate(options: { ci?: boolean }): Promise<void>'
+    returns: Promise<void>
+  - name: runList
+    description: Lists all dynamically resolved agents
+    signature: 'runList(): Promise<void>'
+    returns: Promise<void>
+  - name: runShow
+    description: Shows details for a single dynamically resolved agent
+    signature: 'runShow(id: string): Promise<void>'
+    returns: Promise<void>
+  - name: runUpdate
+    description: Checks for updates or performs self-updates
+    signature: 'runUpdate(options: { check?: boolean; channel?: string }): Promise<void>'
+    returns: Promise<void>
+  - name: runHostProject
+    description: >-
+      Admin project lifecycle against the hosting control plane (create | list | destroy), reading
+      the master credential from the environment.
+    signature: 'runHostProject(action: string, options: object): Promise<void>'
+    returns: Promise<void>
+  - name: runHostKey
+    description: Admin API-key lifecycle against the hosting control plane (mint | revoke | list).
+    signature: 'runHostKey(action: string, options: object): Promise<void>'
+    returns: Promise<void>
+  - name: runHostLock
+    description: Validate-as-complete and write the commit-scoped lock record for a hosted project.
+    signature: 'runHostLock(options: { project?: string }): Promise<void>'
+    returns: Promise<void>
+  - name: runHostPromote
+    description: Promote a locked project after re-checking that its current StateId still matches the lock.
+    signature: 'runHostPromote(options: { project?: string }): Promise<void>'
+    returns: Promise<void>
+status: complete
+createdAt: '2026-06-11T14:50:00Z'
+updatedAt: '2026-07-04T12:49:18.462Z'

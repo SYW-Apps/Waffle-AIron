@@ -1832,6 +1832,47 @@ var MODEL = __MODEL_JSON__;
       if (s.kind === 'loop' && s.end !== undefined) loopEnd[s.end] = s.n;
     });
 
+    // Lanes: structured-flowchart X assignment. Loop/try bodies, branch
+    // then-blocks, and switch case blocks shift into their own lane, so the
+    // alternate path (false / default / loop-exit) continues straight down
+    // an EMPTY main lane instead of cutting through the block's nodes.
+    // Nested structures shift additively.
+    var laneAdd = nums.map(function () { return 0; });
+    function prevOf(n) { var i = idx[n]; return i !== undefined && i > 0 ? nums[i - 1] : null; }
+    function shiftSpan(a, b, amt) {
+      if (a === null || a === undefined || b === null || b === undefined) return;
+      var i = idx[a], j = idx[b];
+      if (i === undefined || j === undefined || j < i) return;
+      for (var k = i; k <= j; k++) laneAdd[k] += amt;
+    }
+    steps.forEach(function (s) {
+      if ((s.kind === 'loop' || s.kind === 'try') && s.end !== undefined) {
+        shiftSpan(nextOf(s.n), s.end, 1);
+      }
+      if (s.kind === 'branch' && s.onFalse !== undefined && s.onFalse > s.n) {
+        var thenStart = s.onTrue !== undefined ? s.onTrue : nextOf(s.n);
+        if (thenStart !== null && thenStart > s.n && thenStart < s.onFalse) {
+          shiftSpan(thenStart, prevOf(s.onFalse), 1);
+        }
+      }
+      if (s.kind === 'switch') {
+        var starts = (s.cases || []).map(function (cse) { return cse.step; })
+          .filter(function (n2) { return n2 > s.n && byN[n2]; })
+          .sort(function (a, b) { return a - b; });
+        // Each case block gets its own lane (a staircase); a block ends
+        // where the next case (or the default target) starts. The default
+        // path stays in the main lane — the straight-down continuation.
+        var bound = s.defaultStep !== undefined && s.defaultStep > s.n ? s.defaultStep : null;
+        starts.forEach(function (cs, ci) {
+          var endN = ci + 1 < starts.length ? prevOf(starts[ci + 1])
+            : (bound !== null && bound > cs ? prevOf(bound) : null);
+          if (endN !== null && endN >= cs) shiftSpan(cs, endN, ci + 1);
+        });
+      }
+    });
+    var lane = {};
+    nums.forEach(function (n, i) { lane[n] = laneAdd[i]; });
+
     var edges = [];
     function E(a, b, kind, label) { if (b !== null && b !== undefined && byN[b]) edges.push({ from: a, to: b, kind: kind, label: label || '' }); }
     steps.forEach(function (s) {
@@ -1867,7 +1908,7 @@ var MODEL = __MODEL_JSON__;
           if (loopEnd[n] === undefined) E(n, nextOf(n), 'seq');
       }
     });
-    return { steps: steps, edges: edges, depth: depth, first: nums.length ? nums[0] : null };
+    return { steps: steps, edges: edges, depth: depth, lane: lane, first: nums.length ? nums[0] : null };
   }
 
   // "Hide error paths": drop everything only reachable through error edges —
@@ -1890,6 +1931,7 @@ var MODEL = __MODEL_JSON__;
       steps: graph.steps.filter(function (s) { return keep[s.n]; }),
       edges: graph.edges.filter(function (e) { return e.kind !== 'error' && keep[e.from] && keep[e.to]; }),
       depth: graph.depth,
+      lane: graph.lane,
       first: graph.first,
     };
   }
@@ -1937,7 +1979,9 @@ var MODEL = __MODEL_JSON__;
           w: isCond ? 320 : 300, h: isCall ? 58 : isCond ? 64 : 46, tw: isCond ? 210 : 280,
           callComp: isCall ? s.call.component : '', callMethod: isCall ? s.call.method : '',
         },
-        position: { x: (graph.depth[s.n] || 0) * 56, y: (i + 1) * 92 },
+        // Rows keep code order (Y); lanes give branches/cases their own
+        // column (X), wide enough that side-by-side nodes never overlap.
+        position: { x: (graph.lane[s.n] || 0) * 344, y: (i + 1) * 92 },
         classes: cls + (callable ? ' drill' : ''),
       });
     });
@@ -1965,10 +2009,15 @@ var MODEL = __MODEL_JSON__;
       { selector: '.flowjumpn', style: { 'background-color': t.ghostFill, 'border-color': t.ghostStroke, 'border-style': 'dotted', color: t.ghostText } },
       { selector: '.drill', style: { 'border-width': 2.5 } },
       { selector: 'edge', style: { 'curve-style': 'bezier', width: 1.6, 'line-color': t.pageEdge, 'target-arrow-shape': 'triangle', 'target-arrow-color': t.pageEdge, label: 'data(lbl)', 'font-size': 9.5, color: t.edgeText, 'text-background-color': t.bgLabel, 'text-background-opacity': 0.85, 'text-rotation': 'autorotate' } },
-      { selector: 'edge.fAlt', style: { 'line-style': 'dashed' } },
+      // Long edges (false/case/exit, jumps, error paths) route orthogonally:
+      // down the source's lane, one horizontal turn just above the target
+      // row (where the corridor between rows is guaranteed free), then into
+      // the target — instead of a straight line cutting through the nodes
+      // stacked in between.
+      { selector: 'edge.fAlt', style: { 'line-style': 'dashed', 'curve-style': 'taxi', 'taxi-direction': 'downward', 'taxi-turn': -34, 'taxi-turn-min-distance': 10 } },
       { selector: 'edge.fBack', style: { 'line-style': 'dashed', 'curve-style': 'unbundled-bezier', 'control-point-distances': [-70], 'control-point-weights': [0.5] } },
-      { selector: 'edge.fErr', style: { 'line-style': 'dashed', 'line-color': t.issue, 'target-arrow-color': t.issue, color: t.issue } },
-      { selector: 'edge.fJump', style: { 'line-style': 'dotted' } },
+      { selector: 'edge.fErr', style: { 'line-style': 'dashed', 'curve-style': 'taxi', 'taxi-direction': 'downward', 'taxi-turn': -34, 'taxi-turn-min-distance': 10, 'line-color': t.issue, 'target-arrow-color': t.issue, color: t.issue } },
+      { selector: 'edge.fJump', style: { 'line-style': 'dotted', 'curve-style': 'taxi', 'taxi-direction': 'downward', 'taxi-turn': -34, 'taxi-turn-min-distance': 10 } },
     ];
 
     if (!flowCy) {

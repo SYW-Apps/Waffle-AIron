@@ -1,0 +1,12 @@
+id: ihost_mcp_adapter
+name: Host MCP Client Adapter Interface
+description: Contract for reusing the sdd_* MCP tool surface within a bound project scope.
+component: host_mcp_adapter
+methods:
+  - name: createScopedServer
+    description: Instantiate the reused sdd_* MCP server for the current request's already-bound project scope.
+    signature: 'createScopedServer(): McpServer'
+    returns: McpServer
+status: complete
+createdAt: '2026-07-04T12:49:36.270Z'
+updatedAt: '2026-07-04T13:06:22.823Z'
