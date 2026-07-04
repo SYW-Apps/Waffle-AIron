@@ -21,6 +21,13 @@ methods:
       - stepNumber: 1
         description: Report ready (200) when the data directory is writable, else 503
         type: local
+  - name: viewDiagram
+    narrative:
+      - stepNumber: 1
+        description: Delegate the signed view request to the request orchestrator
+        type: call
+        targetComponent: host_request_orchestrator
+        targetMethod: viewDiagram
 status: complete
 createdAt: '2026-07-04T12:53:08.334Z'
-updatedAt: '2026-07-04T13:06:22.958Z'
+updatedAt: '2026-07-04T16:01:25.293Z'

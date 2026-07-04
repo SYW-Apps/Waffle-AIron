@@ -1,0 +1,15 @@
+id: idiagram_specialist
+name: Diagram Specialist Interface
+description: Contract for rendering a spec-derived diagram artifact as a string.
+component: diagram_specialist
+methods:
+  - name: renderDiagram
+    description: >-
+      Render the current project's spec tree into the requested format (canvas | mermaid | drawio |
+      excalidraw) and return the artifact as a string. Self-contained (the canvas embeds everything,
+      offline).
+    signature: 'renderDiagram(format: string): string'
+    returns: string
+status: complete
+createdAt: '2026-07-04T15:59:08.698Z'
+updatedAt: '2026-07-04T16:04:17.856Z'

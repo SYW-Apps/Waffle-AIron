@@ -69,6 +69,30 @@ methods:
       transport: HTTP
       method: POST
       path: /admin/projects/{id}/promote
+  - name: generateDiagram
+    description: Generate and return a project's diagram artifact.
+    signature: 'generateDiagram(credential: string, project: string, format: string): string'
+    returns: string
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /admin/projects/{id}/diagram
+  - name: downloadDiagram
+    description: Return a project's diagram artifact as a download.
+    signature: 'downloadDiagram(credential: string, project: string, format: string): string'
+    returns: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /admin/projects/{id}/diagram/{format}
+  - name: diagramViewLink
+    description: Mint a short-lived signed canvas view link.
+    signature: 'diagramViewLink(credential: string, project: string): string'
+    returns: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /admin/projects/{id}/canvas-link
 status: complete
 createdAt: '2026-07-04T12:50:05.545Z'
-updatedAt: '2026-07-04T13:06:22.766Z'
+updatedAt: '2026-07-04T16:00:34.093Z'

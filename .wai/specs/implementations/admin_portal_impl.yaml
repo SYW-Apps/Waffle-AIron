@@ -60,6 +60,27 @@ methods:
         type: call
         targetComponent: admin_orchestrator
         targetMethod: promoteProject
+  - name: generateDiagram
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: generateDiagram
+  - name: downloadDiagram
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: downloadDiagram
+  - name: diagramViewLink
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: diagramViewLink
 status: complete
 createdAt: '2026-07-04T12:53:08.445Z'
-updatedAt: '2026-07-04T13:06:22.900Z'
+updatedAt: '2026-07-04T16:01:23.785Z'

@@ -41,6 +41,18 @@ methods:
       ready-for-promotion only when it still matches; reject stale locks.
     signature: 'promoteProject(credential: string, project: string): PromoteResult'
     returns: PromoteResult
+  - name: generateDiagram
+    description: Authenticate, bind the project scope, and return the rendered diagram artifact for the format.
+    signature: 'generateDiagram(credential: string, project: string, format: string): string'
+    returns: string
+  - name: downloadDiagram
+    description: Authenticate and return the diagram artifact for download (attachment).
+    signature: 'downloadDiagram(credential: string, project: string, format: string): string'
+    returns: string
+  - name: diagramViewLink
+    description: Authenticate and mint a short-lived signed link to view the project's canvas in a browser.
+    signature: 'diagramViewLink(credential: string, project: string): string'
+    returns: string
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-07-04T13:06:22.756Z'
+updatedAt: '2026-07-04T16:00:18.421Z'

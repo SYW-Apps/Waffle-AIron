@@ -12,12 +12,14 @@ You own and decide on everything within:
 .wai/specs/components/agent_resolver.yaml
 .wai/specs/components/core_orchestrator.yaml
 .wai/specs/components/core_portal.yaml
+.wai/specs/components/diagram_specialist.yaml
 .wai/specs/components/lock_registry.yaml
 .wai/specs/components/spec_loader.yaml
 .wai/specs/components/state_hash_specialist.yaml
 src/core/agent_resolver.ts
 src/core/specs.ts
 src/core/index.ts
+src/core/diagram.ts
 src/core/lockfile.ts
 src/core/statehash.ts
 ```

@@ -17,6 +17,18 @@ methods:
       Principal or reject.
     signature: 'authenticateMaster(credential: string): Principal'
     returns: Principal
+  - name: signViewToken
+    description: >-
+      Mint a short-lived HMAC-signed capability token for viewing one project's diagram in a browser
+      (no bearer). Encodes project, format, and an expiry.
+    signature: 'signViewToken(project: string, format: string): string'
+    returns: string
+  - name: verifyViewToken
+    description: >-
+      Verify a view token's signature and expiry (constant-time), returning the ViewGrant or
+      rejecting.
+    signature: 'verifyViewToken(token: string): ViewGrant'
+    returns: ViewGrant
 status: complete
 createdAt: '2026-07-04T12:49:50.542Z'
-updatedAt: '2026-07-04T13:06:22.777Z'
+updatedAt: '2026-07-04T16:00:15.418Z'

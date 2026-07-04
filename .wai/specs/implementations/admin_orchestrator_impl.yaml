@@ -280,6 +280,90 @@ methods:
         description: Return the promote result
         type: return
         outcome: promote result
+  - name: generateDiagram
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 5
+        description: Render the diagram in scope
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: renderDiagram
+      - stepNumber: 6
+        description: Return the diagram artifact
+        type: return
+        outcome: diagram artifact
+  - name: downloadDiagram
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 5
+        description: Render the diagram in scope
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: renderDiagram
+      - stepNumber: 6
+        description: Return the diagram artifact as an attachment
+        type: return
+        outcome: diagram artifact
+  - name: diagramViewLink
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: Mint a signed view token for the project's canvas
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: signViewToken
+      - stepNumber: 5
+        description: Compose the /view/diagram URL carrying the token
+        type: local
+      - stepNumber: 6
+        description: Return the signed view link
+        type: return
+        outcome: signed view link
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-07-04T13:06:22.885Z'
+updatedAt: '2026-07-04T16:01:20.784Z'

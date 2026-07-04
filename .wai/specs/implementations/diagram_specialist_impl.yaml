@@ -1,0 +1,82 @@
+id: diagram_specialist_impl
+name: Diagram Specialist Implementation
+description: Renders the spec tree into the requested diagram format as a string.
+contract: idiagram_specialist
+sourcePath: src/core/diagram.ts
+methods:
+  - name: renderDiagram
+    narrative:
+      - stepNumber: 1
+        description: Load subsystem specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 2
+        description: Load component specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 3
+        description: Load interface specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 4
+        description: Load implementation specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 5
+        description: >-
+          Build the architecture graph (subsystems, components, dependencies, owns, public surface)
+          from the loaded specs
+        type: local
+      - stepNumber: 6
+        description: Dispatch on the requested format
+        type: switch
+        'on': format
+        cases:
+          - value: canvas
+            step: 7
+          - value: mermaid
+            step: 9
+          - value: drawio
+            step: 11
+          - value: excalidraw
+            step: 13
+        defaultStep: 15
+      - stepNumber: 7
+        description: Render the self-contained interactive canvas HTML
+        type: local
+      - stepNumber: 8
+        description: Return the canvas HTML
+        type: return
+        outcome: canvas html
+      - stepNumber: 9
+        description: Render the Mermaid component diagram
+        type: local
+      - stepNumber: 10
+        description: Return the Mermaid markdown
+        type: return
+        outcome: mermaid
+      - stepNumber: 11
+        description: Render the draw.io / diagrams.net XML
+        type: local
+      - stepNumber: 12
+        description: Return the draw.io XML
+        type: return
+        outcome: drawio
+      - stepNumber: 13
+        description: Render the Excalidraw scene JSON
+        type: local
+      - stepNumber: 14
+        description: Return the Excalidraw scene
+        type: return
+        outcome: excalidraw
+      - stepNumber: 15
+        description: Reject an unsupported format
+        type: throw
+        error: unsupported diagram format
+status: complete
+createdAt: '2026-07-04T15:59:34.318Z'
+updatedAt: '2026-07-04T16:04:17.867Z'

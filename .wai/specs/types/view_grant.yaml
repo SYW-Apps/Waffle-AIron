@@ -1,0 +1,23 @@
+kind: value-object
+id: view_grant
+name: ViewGrant
+description: >-
+  A verified short-lived capability to view one project's diagram in a browser: the decoded,
+  signature-checked, unexpired payload of a signed view link. Grants read of exactly one project's
+  diagram until it expires — no bearer credential involved.
+fields:
+  - name: project
+    type: string
+    description: The project id the link grants view of
+    optional: false
+  - name: format
+    type: string
+    description: The diagram format (e.g. "canvas")
+    optional: false
+  - name: expiresAt
+    type: string
+    description: ISO-8601 expiry; the link is rejected past this
+    optional: false
+methods: []
+createdAt: '2026-07-04T15:59:03.723Z'
+updatedAt: '2026-07-04T15:59:04.238Z'
