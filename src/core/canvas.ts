@@ -781,6 +781,7 @@ var MODEL = __MODEL_JSON__;
       { selector: 'edge.bundle', style: { width: 4.5, opacity: 0.7 } },
       { selector: 'edge.toghost', style: { 'line-style': 'dashed', opacity: 0.75 } },
       { selector: 'edge.inneredge', style: { width: 1.1, 'arrow-scale': 0.6, opacity: 0.8 } },
+      { selector: 'edge.stubHover', style: { 'line-color': t.selGlow, 'target-arrow-color': t.selGlow, width: 2.6, opacity: 1, 'z-compound-depth': 'top' } },
       { selector: '.dimmed', style: { opacity: 0.13 } },
       { selector: '.hasIssue', style: { 'border-color': t.issue, 'border-style': 'dashed', 'border-width': 3 } },
       { selector: '.sel', style: { 'overlay-color': t.selGlow, 'overlay-opacity': 0.2, 'overlay-padding': 5 } },
@@ -1965,8 +1966,10 @@ var MODEL = __MODEL_JSON__;
   cy.on('mouseover', 'node.proxyExt', function (ev) {
     cy.remove('.revealHover');
     if (ev.target.id() !== pinnedProxy) revealEdgesFor(ev.target, 'revealHover');
+    // Also light up the stub edges from this port to the inner tiles it serves.
+    ev.target.connectedEdges('.inneredge').addClass('stubHover');
   });
-  cy.on('mouseout', 'node.proxyExt', function () { cy.remove('.revealHover'); });
+  cy.on('mouseout', 'node.proxyExt', function () { cy.remove('.revealHover'); cy.edges().removeClass('stubHover'); });
 
   cy.on('tap', 'node', function (ev) {
     var t = idOf(ev.target);
@@ -2667,18 +2670,24 @@ var MODEL = __MODEL_JSON__;
     if (!node || !node.length) return;
     var core = node;
     if (node.isParent && node.isParent()) core = core.union(node.descendants());
-    var edges = core.connectedEdges().not('.inneredge');
+    var edges = core.connectedEdges();
+    // A top-level box focuses its EXTERNAL relations (not its own internal
+    // wiring); an inner tile or a port focuses the edges WITHIN its boundary too.
+    if (!(node.isChild && node.isChild())) edges = edges.not('.inneredge');
     if (!edges.length) return; // isolated node — nothing to spotlight
+    var reveal = edges.filter('.revealEdge');   // keep visible, keep its own style
+    var colorable = edges.not('.revealEdge');
     var keep = core.union(edges).union(edges.connectedNodes());
     keep = keep.union(keep.ancestors());
     cy.elements().addClass('defocus');
     keep.removeClass('defocus');
     // Colour by direction: outgoing (this → dependency) vs incoming (← dependent).
-    var outE = edges.filter(function (e) { return core.contains(e.source()) && !core.contains(e.target()); });
-    var inE = edges.filter(function (e) { return core.contains(e.target()) && !core.contains(e.source()); });
+    var outE = colorable.filter(function (e) { return core.contains(e.source()) && !core.contains(e.target()); });
+    var inE = colorable.filter(function (e) { return core.contains(e.target()) && !core.contains(e.source()); });
     outE.addClass('edgeOut').removeClass('defocus');
     inE.addClass('edgeIn').removeClass('defocus');
-    edges.not(outE).not(inE).addClass('edgeFocus').removeClass('defocus');
+    colorable.not(outE).not(inE).addClass('edgeFocus').removeClass('defocus');
+    reveal.removeClass('defocus');
   }
 
   function select(kind, id, focus) {

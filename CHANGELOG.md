@@ -197,7 +197,9 @@ migration*).
   the parent; (b) **focus mode** — selecting any box lifts its own edges above
   everything and recolours them **by direction** (outgoing "depends on →" vs
   incoming "← used by") while unrelated elements recede, so one block's relations
-  and their direction read clearly in a busy graph; (c) the **Types ERD degrades
+  and their direction read clearly in a busy graph (focusing an inner tile or an
+  in/out port now highlights the wiring within its box too, not only top-level
+  boxes — and hovering a port lights the stub edges to the tiles it serves); (c) the **Types ERD degrades
   gracefully on huge systems** — above ~400 in-scope types it renders a
   subsystem-cluster overview (double-click a cluster to open it), above ~120 it
   falls back to header-only boxes, with a banner and a "render full detail

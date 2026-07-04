@@ -203,7 +203,11 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     expect(reveals.length).toBe(1);
     expect(reveals[0].source().id()).toBe(outProxy.id());
     expect(reveals[0].target().id()).toBe(inProxy.id());
+    // Hovering a port also lights up the stub edge to the tile it serves.
+    const outStub = cy.edges().filter((e: any) => e.source().id() === 'i~component~shipping-client' && e.target().id() === outProxy.id());
+    expect(outStub.hasClass('stubHover')).toBe(true);
     outProxy.emit('mouseout');
+    expect(outStub.hasClass('stubHover')).toBe(false);
     reveals = cy.edges().filter((e: any) => e.hasClass('revealEdge'));
     expect(reveals.length).toBe(0);
 
@@ -222,6 +226,8 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     expect(outProxy.hasClass('sel')).toBe(true);
     expect(elements['panel'].innerHTML).toContain('Billing Portal');
     expect(elements['panel'].innerHTML).toContain('external dependency');
+    // Selecting the port highlights its inner stub (the port is the target → incoming).
+    expect(outStub.hasClass('edgeIn')).toBe(true);
     outProxy.emit('mouseout');
     reveals = cy.edges().filter((e: any) => e.hasClass('revealEdge'));
     expect(reveals.length).toBe(1); // pinned while selected
@@ -240,6 +246,13 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     expect(outProxy.hasClass('sel')).toBe(false);
     reveals = cy.edges().filter((e: any) => e.hasClass('revealEdge'));
     expect(reveals.length).toBe(0);
+
+    // Focusing an INNER tile highlights the wiring within its box: billing-portal
+    // → billing-repo is a pure inner edge, and the portal is its source (outgoing).
+    cy.getElementById('i~component~billing-portal').emit('tap');
+    const innerEdge = cy.edges().filter((e: any) => e.source().id() === 'i~component~billing-portal' && e.target().id() === 'i~component~billing-repo');
+    expect(innerEdge.hasClass('edgeOut')).toBe(true);
+    cy.emit('tap');
 
     // header issue counter was populated by the app script (0 errors / 1 warning)
     expect(elements['issueCount'].textContent).toBe('0e/1w');
