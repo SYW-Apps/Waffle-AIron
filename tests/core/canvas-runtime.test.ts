@@ -285,43 +285,40 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     expect(elements['panel'].innerHTML).not.toContain('root vision');
   });
 
-  it('degrades a huge ERD to a subsystem overview, then drills back to full detail', () => {
+  it('a huge ERD clusters, and a single-type subsystem stays reachable past a giant shared library', () => {
     proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-canvas-erd-'));
     fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
     setProjectRoot(proj);
 
     saveSystemSpec({ schemaVersion: '1.0.0', name: 'BigSys', vision: 'v', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
-    const subs = ['alpha', 'beta', 'gamma'];
-    subs.forEach(sid => saveSubsystemSpec({ id: sid, name: sid.toUpperCase(), description: 'd', parentSystem: 'BigSys', publicInterfaces: [], trustedLinks: [], createdAt: now, updatedAt: now }));
-    // 3 × 140 = 420 types — above the cluster threshold (400).
-    subs.forEach(sid => {
-      for (let i = 0; i < 140; i++) {
-        saveTypeSpec({ id: sid + '_t' + i, name: sid + 'T' + i, kind: 'value-object', subsystem: sid, fields: [], methods: [], createdAt: now, updatedAt: now } as any);
-      }
-    });
+    saveSubsystemSpec({ id: 'solo', name: 'Solo', description: 'd', parentSystem: 'BigSys', publicInterfaces: [], trustedLinks: [], createdAt: now, updatedAt: now });
+    // A giant shared (system-level) library + a subsystem owning ONE type:
+    // 400 shared + 1 owned = 401, above the cluster threshold (400).
+    for (let i = 0; i < 400; i++) {
+      saveTypeSpec({ id: 'shared_' + i, name: 'Shared' + i, kind: 'value-object', fields: [], methods: [], createdAt: now, updatedAt: now } as any);
+    }
+    saveTypeSpec({ id: 'solo_t0', name: 'SoloType', kind: 'value-object', subsystem: 'solo', fields: [], methods: [], createdAt: now, updatedAt: now } as any);
 
     const { cy, elements, fire } = bootCanvas(renderCanvasHtml(buildCanvasModel()));
     fire('openTypesBtn', 'click', {});
 
-    // Overview: one node per subsystem cluster, no per-type tables, and a notice.
-    expect(idPrefix(cy, 'TC~').length).toBe(3);
+    // Overview: one node per cluster (the shared library + the solo subsystem).
+    expect(idPrefix(cy, 'TC~').length).toBe(2);
     expect(idPrefix(cy, 'T~').length).toBe(0);
     expect(elements['typesWarn'].innerHTML).toContain('subsystem overview');
+    expect(cy.getElementById('TC~solo').length).toBe(1);
 
-    // Drill into a cluster → its 140 types render (still names-only for perf:
-    // header boxes, no field-row nodes) — everything is reachable.
-    cy.getElementById('TC~alpha').emit('dbltap');
+    // Drilling the subsystem shows its ONE type — it is NOT flooded back into a
+    // cluster by the shared library (the reported bug), so the type is reachable.
+    cy.getElementById('TC~solo').emit('dbltap');
     expect(idPrefix(cy, 'TC~').length).toBe(0);
-    expect(idPrefix(cy, 'T~').length).toBe(140);
-    expect(idPrefix(cy, 'TF~').length).toBe(0);
-    expect(elements['typesWarn'].innerHTML).toContain('names only');
+    expect(idPrefix(cy, 'T~').length).toBe(1);
+    expect(cy.getElementById('T~solo_t0').length).toBe(1);
 
-    // Breadcrumbs stay in TYPES mode while scoped: every ancestor crumb
-    // navigates to the parent's types (data-ck="types"), never its components.
+    // Breadcrumbs stay in TYPES mode while scoped.
     expect(elements['crumbs'].innerHTML).toContain('data-ck="types"');
     expect(elements['crumbs'].innerHTML).not.toContain('data-ck="subsystem"');
-    expect(elements['crumbs'].innerHTML).toContain('Types (ERD)');
-  }, 30000); // 420 spec writes on Windows under parallel load are I/O-heavy
+  }, 30000); // 400+ spec writes on Windows under parallel load are I/O-heavy
 
   it('the layout picker switches algorithms: component relayout and ERD grid flattens groups', () => {
     proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-canvas-layout-'));

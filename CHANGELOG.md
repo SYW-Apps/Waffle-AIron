@@ -202,7 +202,10 @@ migration*).
   subsystem-cluster overview (double-click a cluster to open it), above ~120 it
   falls back to header-only boxes, with a banner and a "render full detail
   anyway" override — so a 1000+-type system stays interactive yet fully
-  navigable; (d) **breadcrumbs preserve the active mode** — walking up from a
+  navigable — and drilling a subsystem's ERD now shows its own types plus only
+  the shared types they *reference*, not the entire shared library (previously a
+  subsystem owning a single type was unreachable because the whole shared model
+  flooded its scope and re-clustered it); (d) **breadcrumbs preserve the active mode** — walking up from a
   subsystem's ERD now lands on the *parent's types* (not its components), so you
   can climb from a subsystem's types all the way to the system-wide ERD; the
   Components/Types toggle stays the explicit way to switch mode.

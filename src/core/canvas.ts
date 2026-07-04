@@ -1034,14 +1034,28 @@ var MODEL = __MODEL_JSON__;
     var q = state.query.toLowerCase();
     return t.id.toLowerCase().indexOf(q) >= 0 || t.name.toLowerCase().indexOf(q) >= 0;
   }
-  // Types visible in the current ERD scope: the focused subsystem's own
-  // (and nested) types, plus system-level shared ones. Unscoped = all.
+  // Types visible in the current ERD scope: the focused subsystem's own (and
+  // nested) types, plus only the system-level SHARED types those own types
+  // actually reference — NOT the entire shared library. (Including all shared
+  // types flooded a small subsystem's scope so it re-clustered and its single
+  // own type was unreachable.) Unscoped = all.
+  var SHARED_KEY = '\\u2014 shared \\u2014';
   function typesInScope() {
     var sid = state.view.id;
+    if (!sid) return MODEL.types;
+    // The shared-library cluster scopes to the system-level (unowned) types.
+    if (sid === SHARED_KEY) return MODEL.types.filter(function (t) { return !t.subsystem; });
+    var own = {};
+    MODEL.types.forEach(function (t) {
+      if (t.subsystem === sid || (t.subsystem && t.subsystem.indexOf(sid + '::') === 0)) own[t.id] = 1;
+    });
+    var sharedRef = {};
+    MODEL.typeEdges.forEach(function (e) {
+      if (own[e.from] && !own[e.to]) sharedRef[e.to] = 1;
+      if (own[e.to] && !own[e.from]) sharedRef[e.from] = 1;
+    });
     return MODEL.types.filter(function (t) {
-      if (!sid) return true;
-      if (!t.subsystem) return true;
-      return t.subsystem === sid || t.subsystem.indexOf(sid + '::') === 0;
+      return own[t.id] || (!t.subsystem && sharedRef[t.id]);
     });
   }
 
