@@ -308,5 +308,11 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     expect(idPrefix(cy, 'T~').length).toBe(140);
     expect(idPrefix(cy, 'TF~').length).toBe(0);
     expect(elements['typesWarn'].innerHTML).toContain('names only');
+
+    // Breadcrumbs stay in TYPES mode while scoped: every ancestor crumb
+    // navigates to the parent's types (data-ck="types"), never its components.
+    expect(elements['crumbs'].innerHTML).toContain('data-ck="types"');
+    expect(elements['crumbs'].innerHTML).not.toContain('data-ck="subsystem"');
+    expect(elements['crumbs'].innerHTML).toContain('Types (ERD)');
   }, 30000); // 420 spec writes on Windows under parallel load are I/O-heavy
 });

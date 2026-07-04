@@ -1494,15 +1494,20 @@ var MODEL = __MODEL_JSON__;
     var path = [{ kind: 'system', id: null, label: MODEL.system.name }];
     var v = state.view;
     if (v.kind === 'types') {
+      // Breadcrumbs stay in TYPES mode when walking up — a subsystem's types
+      // lead to the PARENT'S types, not the parent's components. The header
+      // Components/Types toggle remains the explicit way to change mode.
+      var tpath = [{ kind: 'types', id: null, label: MODEL.system.name }];
       if (v.id) {
         var tsegs = v.id.split('::');
         for (var ti = 1; ti <= tsegs.length; ti++) {
           var tsid = tsegs.slice(0, ti).join('::');
-          path.push({ kind: 'subsystem', id: tsid, label: nameOf({ kind: 'subsystem', id: tsid }) });
+          tpath.push({ kind: 'types', id: tsid, label: nameOf({ kind: 'subsystem', id: tsid }) });
         }
       }
-      path.push({ kind: 'types', id: v.id || null, label: 'Types (ERD)' });
-      return path;
+      // Keep the ERD legible in the trail by tagging the current scope.
+      tpath[tpath.length - 1].label += ' \\u00B7 Types (ERD)';
+      return tpath;
     }
     if (v.kind === 'subsystem') {
       var segs = v.id.split('::');
