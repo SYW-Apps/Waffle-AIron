@@ -315,4 +315,38 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     expect(elements['crumbs'].innerHTML).not.toContain('data-ck="subsystem"');
     expect(elements['crumbs'].innerHTML).toContain('Types (ERD)');
   }, 30000); // 420 spec writes on Windows under parallel load are I/O-heavy
+
+  it('the layout picker switches algorithms: component relayout and ERD grid flattens groups', () => {
+    proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-canvas-layout-'));
+    fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
+    setProjectRoot(proj);
+
+    saveSystemSpec({ schemaVersion: '1.0.0', name: 'RtSys', vision: 'v', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
+    saveSubsystemSpec({ id: 'billing', name: 'Billing', description: 'd', parentSystem: 'RtSys', publicInterfaces: [{ type: 'REST', details: 'api', component: 'billing-portal' }], trustedLinks: [], createdAt: now, updatedAt: now });
+    saveSubsystemSpec({ id: 'shipping', name: 'Shipping', description: 'd', parentSystem: 'RtSys', publicInterfaces: [], trustedLinks: [], createdAt: now, updatedAt: now });
+    const comp = (over: Record<string, unknown>) => ({ id: '', name: '', description: 'd', subsystem: 'billing', componentType: 'Orchestrator' as const, owns: [] as string[], dependsOn: [] as string[], createdAt: now, updatedAt: now, ...over });
+    saveComponentSpec(comp({ id: 'billing-portal', name: 'Billing Portal', componentType: 'Portal', portalType: 'HTTP_API' }) as any);
+    saveComponentSpec(comp({ id: 'shipping-client', name: 'Shipping Client', subsystem: 'shipping', componentType: 'Adapter', dependsOn: ['billing-portal'] }) as any);
+    ['billing', 'billing', 'shipping', 'shipping'].forEach((sid, i) => saveTypeSpec({ id: sid + '_t' + i, name: sid + 'T' + i, kind: 'value-object', subsystem: sid, fields: [], methods: [], createdAt: now, updatedAt: now } as any));
+
+    const { cy, elements, fire } = bootCanvas(renderCanvasHtml(buildCanvasModel()));
+
+    // Component view: switching to Force relayouts in place (no nodes lost) and
+    // the header reflects the active layout.
+    expect(cy.nodes().length).toBe(2);
+    fire('layoutForce', 'click');
+    expect(cy.nodes().length).toBe(2);
+    expect(elements['layoutBtn'].textContent).toContain('Force');
+    fire('layoutLayered', 'click');
+
+    // ERD: layered groups the two subsystems (group boxes present)...
+    fire('openTypesBtn', 'click');
+    expect(idPrefix(cy, 'TG~').length).toBeGreaterThan(0);
+    expect(idPrefix(cy, 'T~').length).toBe(4);
+    // ...Grid places the tables flat (no subsystem group boxes), same tables.
+    fire('layoutGrid', 'click');
+    expect(idPrefix(cy, 'TG~').length).toBe(0);
+    expect(idPrefix(cy, 'T~').length).toBe(4);
+    expect(elements['layoutBtn'].textContent).toContain('Grid');
+  });
 });

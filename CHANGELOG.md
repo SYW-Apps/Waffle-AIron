@@ -205,6 +205,17 @@ migration*).
   subsystem's ERD now lands on the *parent's types* (not its components), so you
   can climb from a subsystem's types all the way to the system-wide ERD; the
   Components/Types toggle stays the explicit way to switch mode.
+- **Layout picker** — a **Layout ▾** menu lets you switch the auto-layout instead
+  of being stuck with the dependency-column heuristic (which stacked leaves under
+  unrelated components and turned the ERD into one giant vertical ladder):
+  **Layered** (the original columns), **Force** (physics relaxation seeded from
+  the layered positions — untangles crossings, places nodes near their
+  connections), **Concentric** (most-referenced in the centre, rings outward),
+  and **Grid** (compact wrapped rows). The component view uses cytoscape's native
+  layouts; the ERD maps them onto table-anchor strategies (Grid wraps tables into
+  rows instead of a single column; Concentric rings the most-referenced types).
+  The choice persists, is remembered per view, and a manual **Rearrange** still
+  wins on top for fine-tuning.
 
 ### Technology boundaries (L4 `technologies`)
 

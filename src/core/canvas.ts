@@ -492,6 +492,15 @@ body.presentation #exitPresent { display:block; }
   <span class="spacer"></span>
   <button class="tbtn" id="fitBtn" title="Fit graph to view">Fit</button>
   <button class="tbtn" id="resetBtn" title="Discard this view's saved rearrangement">Reset layout</button>
+  <div class="dropdown" id="layoutDd">
+    <button class="tbtn" id="layoutBtn" title="Choose the auto-layout algorithm">Layout: Layered ▾</button>
+    <div class="menu">
+      <button id="layoutLayered">Layered <span class="hint">dependency columns (default)</span></button>
+      <button id="layoutForce">Force <span class="hint">physics relaxation — untangles crossings</span></button>
+      <button id="layoutConcentric">Concentric <span class="hint">most-referenced in the centre, rings outward</span></button>
+      <button id="layoutGrid">Grid <span class="hint">compact wrapped rows</span></button>
+    </div>
+  </div>
   <div class="dropdown" id="exportDd">
     <button class="tbtn" id="exportBtn">Export ▾</button>
     <div class="menu">
@@ -665,6 +674,7 @@ var MODEL = __MODEL_JSON__;
     theme: saved.theme === 'light' ? 'light' : 'syw',
     typesDetail: ['full', 'fields', 'keys', 'names'].indexOf(saved.typesDetail) >= 0 ? saved.typesDetail : 'full',
     typesRenderAll: false,
+    layout: ['layered', 'force', 'concentric', 'grid'].indexOf(saved.layout) >= 0 ? saved.layout : 'layered',
   };
   // Set by buildTypeElements when the ERD is degraded for performance (huge
   // scopes); consumed by renderTypesNotice to explain the level-of-detail.
@@ -672,13 +682,14 @@ var MODEL = __MODEL_JSON__;
 
   function viewKey() {
     // 'types2' + detail level: table sizes differ per detail, and the prefix
-    // bump invalidates layouts saved for the old compact type boxes.
-    if (state.view.kind === 'types') return 'types2:' + (state.view.id || 'root') + ':' + state.typesDetail;
-    return state.view.kind + ':' + (state.view.id || 'root') + (state.internals ? '+i' : '');
+    // bump invalidates layouts saved for the old compact type boxes. The layout
+    // strategy is part of the key so a manual rearrange is remembered per layout.
+    if (state.view.kind === 'types') return 'types2:' + (state.view.id || 'root') + ':' + state.typesDetail + ':' + state.layout;
+    return state.view.kind + ':' + (state.view.id || 'root') + (state.internals ? '+i' : '') + ':' + state.layout;
   }
   function persist() {
     if (!store) return;
-    try { store.setItem(STORE_KEY, JSON.stringify({ positionsByView: saved.positionsByView || {}, theme: state.theme, typesDetail: state.typesDetail })); } catch (e) { /* non-fatal */ }
+    try { store.setItem(STORE_KEY, JSON.stringify({ positionsByView: saved.positionsByView || {}, theme: state.theme, typesDetail: state.typesDetail, layout: state.layout })); } catch (e) { /* non-fatal */ }
   }
 
   function matches(entry) {
@@ -1115,78 +1126,119 @@ var MODEL = __MODEL_JSON__;
 
     var ROW_H = 20, TH_H = 26, X_GAP = 170, Y_GAP = 60, GROUP_GAP = 130;
     var rowIds = {};
-    var groupY = 0;
-    groupIds.forEach(function (g) {
-      var gid = 'TG~' + g;
-      if (multi) eles.push({ data: { id: gid, label: g }, classes: 'subsysBox' });
-      var cols = {};
-      groups[g].forEach(function (t) { var l = layer[t.id] || 0; (cols[l] = cols[l] || []).push(t); });
-      var colKeys = Object.keys(cols).map(Number).sort(function (a, b) { return a - b; });
-      var x = 0, groupH = 0;
-      colKeys.forEach(function (ck) {
-        var col = cols[ck].sort(function (a, b) { return a.id < b.id ? -1 : 1; });
-        var y = groupY, colW = 230;
-        col.forEach(function (t) {
-          var fields = visibleFields(t);
-          var meths = det === 'full' ? t.methods : [];
-          var head = t.name + '  \\u00AB' + t.kind + '\\u00BB';
-          var rows = fields.map(function (f) { return rowText(t, f); })
-            .concat(meths.map(function (m) { return '\\u0192 ' + m.name + '(): ' + m.returns; }));
-          var longest = head.length + 4;
-          rows.forEach(function (r) { if (r.length > longest) longest = r.length; });
-          var W = Math.max(210, Math.min(400, longest * 6.6 + 30));
-          var kindCls = t.kind === 'entity' ? 'typeEntity' : 'typeValue';
-          var dim = !typeMatches(t);
-          var extra = (dim ? ' dimmed' : '')
-            + (state.showIssues && issuesBySpec[t.id] ? ' hasIssue' : '')
-            + (state.selectedKind === 'type' && state.selected === t.id ? ' sel' : '');
-          if (!rows.length) {
-            var pw = Math.max(170, head.length * 6.8 + 26);
-            eles.push({
-              data: { id: 'T~' + t.id, parent: multi ? gid : undefined, label: head, w: pw, h: 40, tw: pw - 12 },
-              position: { x: x + pw / 2, y: y + 20 },
-              classes: 'typePlain ' + kindCls + extra,
-            });
-            y += 40 + Y_GAP;
-            if (pw > colW) colW = pw;
-          } else {
-            eles.push({ data: { id: 'T~' + t.id, parent: multi ? gid : undefined, label: '' }, classes: 'typeBox ' + kindCls + extra });
-            eles.push({
-              data: { id: 'TH~' + t.id, parent: 'T~' + t.id, label: head, w: W, h: TH_H, tw: W - 12 },
-              position: { x: x + W / 2, y: y + TH_H / 2 },
-              classes: 'typeHead ' + kindCls + (dim ? ' dimmed' : ''),
-              grabbable: false,
-            });
-            var ry = y + TH_H;
-            fields.forEach(function (f) {
-              var rid = 'TF~' + t.id + '~' + f.name;
-              rowIds[rid] = 1;
-              eles.push({
-                data: { id: rid, parent: 'T~' + t.id, label: rowText(t, f), w: W, h: ROW_H, tw: W - 14 },
-                position: { x: x + W / 2, y: ry + ROW_H / 2 },
-                classes: 'typeRow' + (fkBy[t.id] && fkBy[t.id][f.name] ? ' fkRow' : '') + (dim ? ' dimmed' : ''),
-                grabbable: false,
-              });
-              ry += ROW_H;
-            });
-            meths.forEach(function (m, mi) {
-              eles.push({
-                data: { id: 'TM~' + t.id + '~' + mi, parent: 'T~' + t.id, label: '\\u0192 ' + m.name + '(): ' + m.returns, w: W, h: ROW_H, tw: W - 14 },
-                position: { x: x + W / 2, y: ry + ROW_H / 2 },
-                classes: 'typeRow methRow' + (dim ? ' dimmed' : ''),
-                grabbable: false,
-              });
-              ry += ROW_H;
-            });
-            y = ry + Y_GAP;
-            if (W > colW) colW = W;
-          }
+
+    // Table geometry, independent of placement — so a layout strategy can size
+    // tables before choosing anchors.
+    function tableShape(t) {
+      var fields = visibleFields(t);
+      var meths = det === 'full' ? t.methods : [];
+      var head = t.name + '  \\u00AB' + t.kind + '\\u00BB';
+      var rows = fields.map(function (f) { return rowText(t, f); })
+        .concat(meths.map(function (m) { return '\\u0192 ' + m.name + '(): ' + m.returns; }));
+      var longest = head.length + 4;
+      rows.forEach(function (r) { if (r.length > longest) longest = r.length; });
+      var plain = rows.length === 0;
+      var pw = Math.max(170, head.length * 6.8 + 26);
+      var W = Math.max(210, Math.min(400, longest * 6.6 + 30));
+      return { fields: fields, meths: meths, head: head, plain: plain, w: plain ? pw : W, h: plain ? 40 : TH_H + fields.length * ROW_H + meths.length * ROW_H };
+    }
+
+    // Emit one type table with its top-left at (ax, ay); returns its size.
+    function emitTable(t, ax, ay, parentId) {
+      var sh = tableShape(t);
+      var kindCls = t.kind === 'entity' ? 'typeEntity' : 'typeValue';
+      var dim = !typeMatches(t);
+      var extra = (dim ? ' dimmed' : '')
+        + (state.showIssues && issuesBySpec[t.id] ? ' hasIssue' : '')
+        + (state.selectedKind === 'type' && state.selected === t.id ? ' sel' : '');
+      if (sh.plain) {
+        eles.push({
+          data: { id: 'T~' + t.id, parent: parentId, label: sh.head, w: sh.w, h: 40, tw: sh.w - 12 },
+          position: { x: ax + sh.w / 2, y: ay + 20 }, classes: 'typePlain ' + kindCls + extra,
         });
-        groupH = Math.max(groupH, y - groupY);
-        x += colW + X_GAP;
+        return sh;
+      }
+      eles.push({ data: { id: 'T~' + t.id, parent: parentId, label: '' }, classes: 'typeBox ' + kindCls + extra });
+      eles.push({
+        data: { id: 'TH~' + t.id, parent: 'T~' + t.id, label: sh.head, w: sh.w, h: TH_H, tw: sh.w - 12 },
+        position: { x: ax + sh.w / 2, y: ay + TH_H / 2 }, classes: 'typeHead ' + kindCls + (dim ? ' dimmed' : ''), grabbable: false,
       });
-      groupY += groupH + GROUP_GAP;
-    });
+      var ry = ay + TH_H;
+      sh.fields.forEach(function (f) {
+        var rid = 'TF~' + t.id + '~' + f.name;
+        rowIds[rid] = 1;
+        eles.push({
+          data: { id: rid, parent: 'T~' + t.id, label: rowText(t, f), w: sh.w, h: ROW_H, tw: sh.w - 14 },
+          position: { x: ax + sh.w / 2, y: ry + ROW_H / 2 }, classes: 'typeRow' + (fkBy[t.id] && fkBy[t.id][f.name] ? ' fkRow' : '') + (dim ? ' dimmed' : ''), grabbable: false,
+        });
+        ry += ROW_H;
+      });
+      sh.meths.forEach(function (m, mi) {
+        eles.push({
+          data: { id: 'TM~' + t.id + '~' + mi, parent: 'T~' + t.id, label: '\\u0192 ' + m.name + '(): ' + m.returns, w: sh.w, h: ROW_H, tw: sh.w - 14 },
+          position: { x: ax + sh.w / 2, y: ry + ROW_H / 2 }, classes: 'typeRow methRow' + (dim ? ' dimmed' : ''), grabbable: false,
+        });
+        ry += ROW_H;
+      });
+      return sh;
+    }
+
+    // ERD placement follows the layout picker: Layered keeps the grouped
+    // dependency columns; Grid wraps tables into rows (no single giant column);
+    // Concentric rings the most-referenced types toward the centre.
+    var deg = {};
+    list.forEach(function (t) { deg[t.id] = 0; });
+    Object.keys(aggRefs).forEach(function (k) { var r = aggRefs[k]; if (deg[r.from] !== undefined) deg[r.from]++; if (deg[r.to] !== undefined) deg[r.to]++; });
+    var byDegree = function (a, b) { return (deg[b.id] - deg[a.id]) || (a.id < b.id ? -1 : 1); };
+    var erdLayout = state.layout === 'grid' ? 'grid' : (state.layout === 'concentric' || state.layout === 'force') ? 'concentric' : 'layered';
+
+    if (erdLayout === 'grid') {
+      var target = Math.max(1000, Math.ceil(Math.sqrt(list.length)) * 300);
+      var gx = 0, gy = 0, rowH = 0;
+      list.slice().sort(byDegree).forEach(function (t) {
+        var s = tableShape(t);
+        if (gx > 0 && gx + s.w > target) { gx = 0; gy += rowH + Y_GAP; rowH = 0; }
+        emitTable(t, gx, gy, undefined);
+        gx += s.w + X_GAP;
+        if (s.h > rowH) rowH = s.h;
+      });
+    } else if (erdLayout === 'concentric') {
+      var csorted = list.slice().sort(byDegree);
+      var idx = 0, ring = 0;
+      while (idx < csorted.length) {
+        var cap = ring === 0 ? 1 : ring * 6;
+        var members = csorted.slice(idx, idx + cap);
+        var radius = ring * 320, n = members.length;
+        members.forEach(function (t, i) {
+          var ang = (i / Math.max(1, n)) * 2 * Math.PI - Math.PI / 2;
+          var s = tableShape(t);
+          emitTable(t, Math.cos(ang) * radius - s.w / 2, Math.sin(ang) * radius - s.h / 2, undefined);
+        });
+        idx += cap; ring++;
+      }
+    } else {
+      var groupY = 0;
+      groupIds.forEach(function (g) {
+        var gid = 'TG~' + g;
+        if (multi) eles.push({ data: { id: gid, label: g }, classes: 'subsysBox' });
+        var cols = {};
+        groups[g].forEach(function (t) { var l = layer[t.id] || 0; (cols[l] = cols[l] || []).push(t); });
+        var colKeys = Object.keys(cols).map(Number).sort(function (a, b) { return a - b; });
+        var x = 0, groupH = 0;
+        colKeys.forEach(function (ck) {
+          var col = cols[ck].sort(function (a, b) { return a.id < b.id ? -1 : 1; });
+          var y = groupY, colW = 230;
+          col.forEach(function (t) {
+            var s = emitTable(t, x, y, multi ? gid : undefined);
+            y += s.h + Y_GAP;
+            if (s.w > colW) colW = s.w;
+          });
+          groupH = Math.max(groupH, y - groupY);
+          x += colW + X_GAP;
+        });
+        groupY += groupH + GROUP_GAP;
+      });
+    }
 
     var i = 0;
     var typeById = {};
@@ -1403,8 +1455,7 @@ var MODEL = __MODEL_JSON__;
   });
   cy.autolock(true);
   var pinnedProxy = null;
-  applySavedPositions();
-  cy.fit(undefined, 60);
+  positionView(true);
   renderCrumbs();
   renderViewHint();
 
@@ -1429,14 +1480,38 @@ var MODEL = __MODEL_JSON__;
     saved.positionsByView = all;
     persist();
   }
+  // Cytoscape's built-in layouts for the component view (self-contained — no
+  // layout extension). Force is seeded from the layered positions so it
+  // untangles crossings deterministically instead of reshuffling each rebuild.
+  function nativeLayoutOptions() {
+    var pad = 40;
+    if (state.layout === 'grid') return { name: 'grid', avoidOverlap: true, avoidOverlapPadding: 24, condense: false, padding: pad };
+    if (state.layout === 'concentric') return { name: 'concentric', concentric: function (n) { return n.degree(false); }, levelWidth: function () { return 1; }, minNodeSpacing: 46, avoidOverlap: true, padding: pad };
+    return { name: 'cose', animate: false, randomize: false, padding: pad, nodeOverlap: 24, idealEdgeLength: 95, nestingFactor: 1.1, gravity: 0.7, componentSpacing: 100, nodeRepulsion: 5000 };
+  }
+  function runNativeLayout() {
+    var wasAuto = cy.autolock();
+    if (wasAuto) cy.autolock(false);
+    try { cy.layout(nativeLayoutOptions()).run(); } catch (e) { /* layout name unavailable */ }
+    if (wasAuto) cy.autolock(true);
+  }
+  // Position the current view: run the chosen algorithm for a fresh component
+  // view (the ERD is pre-anchored by buildElements per strategy), then let any
+  // saved manual rearrangement win on top.
+  function positionView(fit) {
+    var sv = (saved.positionsByView || {})[viewKey()];
+    var hasSaved = sv && Object.keys(sv).length > 0;
+    if (state.view.kind !== 'types' && state.layout !== 'layered' && !hasSaved) runNativeLayout();
+    applySavedPositions();
+    if (fit) cy.fit(undefined, 60);
+  }
   function rebuild(fit) {
     pinnedProxy = null;
     cy.batch(function () {
       cy.elements().remove();
       cy.add(buildElements());
     });
-    applySavedPositions();
-    if (fit) cy.fit(undefined, 60);
+    positionView(fit);
     // A selected port survives a rebuild (e.g. issue toggle) if it still
     // exists; otherwise (Internals off) drop the selection cleanly.
     if (state.selectedKind === 'external') {
@@ -1802,10 +1877,34 @@ var MODEL = __MODEL_JSON__;
   }
   var dd = wireDropdown('exportDd', 'exportBtn');
   var fdd = wireDropdown('flowExportDd', 'flowExportBtn');
+  var ldd = wireDropdown('layoutDd', 'layoutBtn');
+
+  // Layout picker: choose the auto-layout algorithm. Components use cytoscape's
+  // native layouts; the ERD maps them onto its table-anchor strategies.
+  var LAYOUT_LABEL = { layered: 'Layered', force: 'Force', concentric: 'Concentric', grid: 'Grid' };
+  function updateLayoutBtn() {
+    var b = document.getElementById('layoutBtn');
+    if (b) b.textContent = 'Layout: ' + (LAYOUT_LABEL[state.layout] || 'Layered') + ' \\u25BE';
+  }
+  function setLayout(name) {
+    if (!LAYOUT_LABEL[name] || state.layout === name) { if (ldd.classList) ldd.classList.remove('open'); return; }
+    state.layout = name;
+    persist();
+    updateLayoutBtn();
+    if (ldd.classList) ldd.classList.remove('open');
+    rebuild(true);
+  }
+  Object.keys(LAYOUT_LABEL).forEach(function (name) {
+    var b = document.getElementById('layout' + name.charAt(0).toUpperCase() + name.slice(1));
+    if (b && b.addEventListener) b.addEventListener('click', function () { setLayout(name); });
+  });
+  updateLayoutBtn();
+
   if (document.addEventListener) {
     document.addEventListener('click', function () {
       if (dd.classList) dd.classList.remove('open');
       if (fdd.classList) fdd.classList.remove('open');
+      if (ldd.classList) ldd.classList.remove('open');
     });
     document.addEventListener('keydown', function (ev) {
       if (ev.key === 'Escape') {
