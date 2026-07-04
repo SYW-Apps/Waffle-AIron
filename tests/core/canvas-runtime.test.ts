@@ -259,15 +259,22 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
 
     const { cy, elements } = bootCanvas(renderCanvasHtml(buildCanvasModel()));
 
-    // System view, one cross edge. Tapping billing spotlights its edge...
+    // System view, one cross edge (shipping → billing). Tapping billing (the
+    // TARGET) spotlights the edge as INCOMING ("used by")...
     cy.getElementById('s~billing').emit('tap');
     expect(elements['panel'].innerHTML).toContain('Billing');
     const edge = cy.edges()[0];
-    expect(edge.hasClass('edgeFocus')).toBe(true);
-    // ...and a background tap clears the spotlight (back to the system scope).
+    expect(edge.hasClass('edgeIn')).toBe(true);
+    expect(edge.hasClass('edgeOut')).toBe(false);
+    // ...a background tap clears the spotlight (back to the system scope)...
     cy.emit('tap');
-    expect(edge.hasClass('edgeFocus')).toBe(false);
+    expect(edge.hasClass('edgeIn')).toBe(false);
     expect(elements['panel'].innerHTML).toContain('RtSys');
+    // ...and tapping shipping (the SOURCE) colours the same edge as OUTGOING.
+    cy.getElementById('s~shipping').emit('tap');
+    expect(edge.hasClass('edgeOut')).toBe(true);
+    expect(edge.hasClass('edgeIn')).toBe(false);
+    cy.emit('tap');
 
     // Drill into the subsystem: with nothing selected, the sidebar now
     // describes THAT scope (not the root system), tagged "current view".
@@ -337,6 +344,10 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     fire('layoutForce', 'click');
     expect(cy.nodes().length).toBe(2);
     expect(elements['layoutBtn'].textContent).toContain('Force');
+    // Concentric is a size-aware preset (no crash, nodes retained).
+    fire('layoutConcentric', 'click');
+    expect(cy.nodes().length).toBe(2);
+    expect(elements['layoutBtn'].textContent).toContain('Concentric');
     fire('layoutLayered', 'click');
 
     // ERD: layered groups the two subsystems (group boxes present)...

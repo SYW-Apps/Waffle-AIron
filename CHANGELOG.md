@@ -195,8 +195,9 @@ migration*).
   describes the **current view scope** (the subsystem/component you drilled
   into) instead of always the root system — the breadcrumb still walks up to
   the parent; (b) **focus mode** — selecting any box lifts its own edges above
-  everything and recolours them while unrelated elements recede, so one block's
-  relations read clearly in a busy graph; (c) the **Types ERD degrades
+  everything and recolours them **by direction** (outgoing "depends on →" vs
+  incoming "← used by") while unrelated elements recede, so one block's relations
+  and their direction read clearly in a busy graph; (c) the **Types ERD degrades
   gracefully on huge systems** — above ~400 in-scope types it renders a
   subsystem-cluster overview (double-click a cluster to open it), above ~120 it
   falls back to header-only boxes, with a banner and a "render full detail
@@ -211,11 +212,14 @@ migration*).
   **Layered** (the original columns), **Force** (physics relaxation seeded from
   the layered positions — untangles crossings, places nodes near their
   connections), **Concentric** (most-referenced in the centre, rings outward),
-  and **Grid** (compact wrapped rows). The component view uses cytoscape's native
-  layouts; the ERD maps them onto table-anchor strategies (Grid wraps tables into
-  rows instead of a single column; Concentric rings the most-referenced types).
-  The choice persists, is remembered per view, and a manual **Rearrange** still
-  wins on top for fine-tuning.
+  and **Grid** (compact wrapped rows). Force uses cytoscape's built-in `cose`
+  tuned for the large box sizes (accounts for node dimensions, high repulsion /
+  long ideal edges) so nodes spread instead of overlapping; Concentric and Grid
+  are size-aware presets computed for both the component view and the ERD —
+  Concentric derives each ring's radius from the nodes it holds (compact, not
+  sprawling) and only centres a *lone* most-referenced node, spreading a tied top
+  tier into a ring rather than a central pile. The choice persists, is remembered
+  per view, and a manual **Rearrange** still wins on top for fine-tuning.
 
 ### Technology boundaries (L4 `technologies`)
 
