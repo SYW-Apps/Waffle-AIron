@@ -1062,7 +1062,8 @@ var MODEL = __MODEL_JSON__;
   // only as spacious as needed, and dense rings grow), and a tied innermost tier
   // becomes a proper ring rather than a pile at the centre — only a lone top
   // node truly sits at (0,0). Returns { id: {x, y} } (centres).
-  function concentricPositions(ids, degFn, sizeFn) {
+  function concentricPositions(ids, degFn, sizeFn, aspectX) {
+    aspectX = aspectX || 1; // >1 widens the rings into landscape ellipses
     if (!ids.length) return {};
     var sorted = ids.slice().sort(function (a, b) { return (degFn(b) - degFn(a)) || (a < b ? -1 : 1); });
     var rings = [], idx = 0;
@@ -1091,7 +1092,7 @@ var MODEL = __MODEL_JSON__;
       }
       members.forEach(function (id, i) {
         var ang = n === 1 ? -Math.PI / 2 : (i / n) * 2 * Math.PI - Math.PI / 2;
-        pos[id] = { x: Math.cos(ang) * radius, y: Math.sin(ang) * radius };
+        pos[id] = { x: Math.cos(ang) * radius * aspectX, y: Math.sin(ang) * radius };
       });
       prevRadius = radius; prevMaxDim = maxDim;
     });
@@ -1292,7 +1293,8 @@ var MODEL = __MODEL_JSON__;
       var cpos = concentricPositions(
         list.map(function (t) { return t.id; }),
         function (id) { return deg[id] || 0; },
-        function (id) { return sizeById[id]; }
+        function (id) { return sizeById[id]; },
+        1.7 // widen into a landscape ellipse — screens are horizontal
       );
       list.forEach(function (t) {
         var s = sizeById[t.id], p = cpos[t.id] || { x: 0, y: 0 };
@@ -1427,7 +1429,8 @@ var MODEL = __MODEL_JSON__;
       var cpos = concentricPositions(
         entries.map(function (e) { return anchorNodeId(e); }),
         function (id) { return degByAnchor[id] || 0; },
-        function (id) { return sizeByAnchor[id]; }
+        function (id) { return sizeByAnchor[id]; },
+        1.7 // widen into a landscape ellipse — screens are horizontal
       );
       entries.forEach(function (e) {
         var aid = anchorNodeId(e), s = sizeByAnchor[aid], p = cpos[aid] || { x: 0, y: 0 };
@@ -1450,9 +1453,13 @@ var MODEL = __MODEL_JSON__;
       var cols = {};
       entries.forEach(function (e) { var l = layerOf[anchorNodeId(e)] || 0; (cols[l] = cols[l] || []).push(e); });
       var colKeys = Object.keys(cols).map(Number).sort(function (a, b) { return a - b; });
+      // Force seeds from a DIAGONAL cascade — each dependency layer starts lower,
+      // so cose relaxes from an entrypoints-top-left → leaves-bottom-right flow.
+      // Layered stays a pure left-to-right grid (cascade 0), unchanged.
+      var cascade = state.layout === 'force' ? 130 : 0, colIdx = 0;
       colKeys.forEach(function (ck) {
         var col = cols[ck].sort(function (a, b) { return a.id < b.id ? -1 : 1; });
-        var colW = 0, y = 0;
+        var colW = 0, y = colIdx * cascade;
         col.forEach(function (e) { colW = Math.max(colW, sizeByAnchor[anchorNodeId(e)].w); });
         col.forEach(function (e) {
           var aid = anchorNodeId(e), s = sizeByAnchor[aid];
@@ -1460,6 +1467,7 @@ var MODEL = __MODEL_JSON__;
           y += s.h + GAP_Y;
         });
         x += colW + GAP_X;
+        colIdx++;
       });
     }
 

@@ -390,10 +390,15 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     cy.getElementById('s~billing').emit('dbltap');
     const ghost = cy.getElementById('x~subsystem~shipping');
     expect(ghost.length).toBe(1);
-    let minLeft = Infinity;
+    let minLeft = Infinity, minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     cy.nodes().filter((n: any) => n.id().indexOf('c~') === 0).forEach((n: any) => {
-      minLeft = Math.min(minLeft, n.position('x') - (n.data('w') || 0) / 2);
+      const px = n.position('x'), py = n.position('y'), hw = (n.data('w') || 0) / 2, hh = (n.data('h') || 0) / 2;
+      minLeft = Math.min(minLeft, px - hw);
+      minX = Math.min(minX, px - hw); maxX = Math.max(maxX, px + hw);
+      minY = Math.min(minY, py - hh); maxY = Math.max(maxY, py + hh);
     });
     expect(ghost.position('x')).toBeLessThan(minLeft);
+    // Concentric is stretched into a landscape ellipse (wider than tall).
+    expect(maxX - minX).toBeGreaterThan(maxY - minY);
   });
 });
