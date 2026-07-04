@@ -1,0 +1,16 @@
+id: host_validator_adapter_impl
+name: Host Validator Client Adapter Implementation
+description: Forwards the as-complete conformance run to the validator portal.
+contract: ihost_validator_adapter
+sourcePath: src/server/adapters.ts
+methods:
+  - name: validateAsComplete
+    narrative:
+      - stepNumber: 1
+        description: Forward the as-complete validation to the validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: validateAsComplete
+status: complete
+createdAt: '2026-07-04T12:53:08.409Z'
+updatedAt: '2026-07-04T13:06:23.002Z'

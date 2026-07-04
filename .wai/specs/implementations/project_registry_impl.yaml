@@ -1,0 +1,30 @@
+id: project_registry_impl
+name: Project Registry Implementation
+description: File-backed I/O for hosted-project records and their isolated roots under the data root.
+contract: iproject_registry
+sourcePath: src/server/projects.ts
+methods:
+  - name: resolveRoot
+    narrative: []
+    intent: >-
+      Given an authenticated principal and an optional selector, returns the isolated root path of
+      the target project: the sole authorized project when the token scopes exactly one, or the
+      selector only when it lies within the principal's authorized set. Returns empty for any
+      project outside that set — the selector can never widen scope.
+  - name: create
+    narrative: []
+    intent: >-
+      Validates the id against path traversal, allocates <dataDir>/projects/<id>, creates the
+      directory, and persists a HostedProjectRecord with status active. Fails if the id already
+      exists.
+  - name: list
+    narrative: []
+    intent: Returns all HostedProjectRecords registered under the data root.
+  - name: remove
+    narrative: []
+    intent: >-
+      Deletes the project record and recursively removes its isolated tree. Idempotent for a missing
+      id.
+status: complete
+createdAt: '2026-07-04T12:53:36.287Z'
+updatedAt: '2026-07-04T13:06:23.021Z'

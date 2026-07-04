@@ -1,0 +1,30 @@
+id: ihost_core_adapter
+name: Host Core Client Adapter Interface
+description: >-
+  Contract for the spec-tree operations the hosting control plane composes, forwarded to the core
+  portal.
+component: host_core_adapter
+methods:
+  - name: provisionProject
+    description: Bootstrap a fresh isolated spec tree at the bound root.
+    signature: 'provisionProject(name: string): void'
+    returns: void
+  - name: computeStateId
+    description: Compute the current spec-tree StateId.
+    signature: 'computeStateId(): StateId'
+    returns: StateId
+  - name: readLockRecord
+    description: Read the current lock record, or null.
+    signature: 'readLockRecord(): LockRecord | null'
+    returns: LockRecord | null
+  - name: writeLockRecord
+    description: Persist a lock record.
+    signature: 'writeLockRecord(record: LockRecord): void'
+    returns: void
+  - name: promoteAllComplete
+    description: Promote every spec to status complete.
+    signature: 'promoteAllComplete(): void'
+    returns: void
+status: complete
+createdAt: '2026-07-04T12:50:17.546Z'
+updatedAt: '2026-07-04T13:06:22.805Z'

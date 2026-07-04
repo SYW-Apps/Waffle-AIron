@@ -1,0 +1,26 @@
+id: host_http_portal_impl
+name: Host HTTP Portal Implementation
+description: 'Data-plane HTTP boundary: routes /mcp to the request orchestrator and answers the health probes.'
+contract: ihost_http_portal
+sourcePath: src/server/http.ts
+methods:
+  - name: handleMcpRequest
+    narrative:
+      - stepNumber: 1
+        description: Delegate the MCP request to the host request orchestrator
+        type: call
+        targetComponent: host_request_orchestrator
+        targetMethod: handleRequest
+  - name: healthz
+    narrative:
+      - stepNumber: 1
+        description: Return a 200 liveness response
+        type: local
+  - name: readyz
+    narrative:
+      - stepNumber: 1
+        description: Report ready (200) when the data directory is writable, else 503
+        type: local
+status: complete
+createdAt: '2026-07-04T12:53:08.334Z'
+updatedAt: '2026-07-04T13:06:22.958Z'

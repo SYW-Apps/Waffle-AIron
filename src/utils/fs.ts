@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { AsyncLocalStorage } from 'node:async_hooks';
 
 // ---------------------------------------------------------------------------
 // File system helpers
@@ -87,6 +88,27 @@ export function listFilesRecursive(dirPath: string, ext: string): string[] {
 // MCP server, which a host (e.g. Antigravity) may launch with an unrelated cwd.
 let projectRootOverride: string | null = null;
 
+// Request-scoped project root for the hosting server (sdd_host). A single
+// process serves many fully-isolated projects concurrently, so the active root
+// must live per async context, not in the process-global override above (which
+// concurrent requests would race). getProjectRoot() consults this FIRST, so the
+// entire existing flat spec/config API becomes request-scoped with no changes to
+// its call sites. Stdio/CLI paths set no scope and fall through to the override.
+const requestRootStore = new AsyncLocalStorage<string>();
+
+/** Run `fn` with `dir` as the active project root for the current async context
+ *  (and everything it awaits). The hosting server wraps each request in this so
+ *  its sdd_* handlers resolve to the authenticated project's .wai/ tree without a
+ *  mutable global. */
+export function runWithProjectRoot<T>(dir: string, fn: () => T): T {
+  return requestRootStore.run(path.resolve(dir), fn);
+}
+
+/** The request-scoped root if one is bound, else null. */
+export function getRequestProjectRoot(): string | null {
+  return requestRootStore.getStore() ?? null;
+}
+
 /** Override the project root. Pass an absolute path to the dir containing .wai/,
  *  or null to clear the override and fall back to process.cwd(). */
 export function setProjectRoot(dir: string | null): void {
@@ -120,8 +142,11 @@ export function findSystemRoot(startDir: string): string | null {
   }
 }
 
-/** The resolved project root: the explicit override if set, else the resolved system root, else process.cwd(). */
+/** The resolved project root: the request-scoped root if bound (hosting server),
+ *  else the explicit override if set, else the resolved system root, else cwd. */
 export function getProjectRoot(): string {
+  const scoped = requestRootStore.getStore();
+  if (scoped) return scoped;
   if (projectRootOverride) return projectRootOverride;
   const systemRoot = findSystemRoot(process.cwd());
   return systemRoot ?? process.cwd();

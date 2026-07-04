@@ -1,0 +1,36 @@
+kind: entity
+id: lock_record
+name: LockRecord
+description: >-
+  A commit-scoped lock: proof that the spec tree validated as-complete at one exact state. Scoped to
+  the StateId it validated, so any later edit makes it stale automatically. Promotion re-checks the
+  current StateId against this record and refuses on drift. Never itself performs a merge.
+subsystem: sdd_core
+fields:
+  - name: stateId
+    type: StateId
+    description: The exact spec-tree state this lock validated
+    optional: false
+  - name: lockedAt
+    type: string
+    description: ISO-8601 lock timestamp
+    optional: false
+  - name: lockedBy
+    type: string
+    description: Audit id of the principal that locked
+    optional: false
+  - name: validatorVersion
+    type: string
+    description: wairon version that produced the validation
+    optional: false
+  - name: validationResult
+    type: ValidationResult
+    description: The as-complete validation outcome captured at lock time
+    optional: false
+  - name: status
+    type: string
+    description: '"ready" (locked, awaiting promotion) or "promoted"'
+    optional: false
+methods: []
+createdAt: '2026-07-04T12:44:18.588Z'
+updatedAt: '2026-07-04T12:44:18.595Z'

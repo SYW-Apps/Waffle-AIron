@@ -1,0 +1,31 @@
+kind: entity
+id: api_key_record
+name: ApiKeyRecord
+description: >-
+  A persisted API-key credential: the hashed bearer token bound server-side to a role and an
+  authorized project set. The plaintext key is shown once at mint time and never stored.
+subsystem: sdd_host
+fields:
+  - name: id
+    type: string
+    description: Stable credential id (audit handle)
+    optional: false
+  - name: keyHash
+    type: string
+    description: Salted hash of the bearer token; compared in constant time
+    optional: false
+  - name: role
+    type: string
+    description: '"editor" or "admin"'
+    optional: false
+  - name: projects
+    type: string[]
+    description: Authorized project ids, or "*"
+    optional: false
+  - name: createdAt
+    type: string
+    description: ISO-8601 mint timestamp
+    optional: false
+methods: []
+createdAt: '2026-07-04T12:44:18.552Z'
+updatedAt: '2026-07-04T12:44:18.561Z'

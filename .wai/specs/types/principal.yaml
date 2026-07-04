@@ -1,0 +1,23 @@
+kind: value-object
+id: principal
+name: Principal
+description: >-
+  The authenticated caller identity and authorized scope produced by verifying a credential.
+  Transient (never persisted). Its project set and role are server-side bindings derived from the
+  token, never from client-supplied parameters.
+fields:
+  - name: tokenId
+    type: string
+    description: Stable id of the credential that authenticated (for audit); never the raw key
+    optional: false
+  - name: role
+    type: string
+    description: 'Authorization role: "editor" (data-plane sdd_* only) or "admin" (control plane)'
+    optional: false
+  - name: projects
+    type: string[]
+    description: Project ids this principal may act on; "*" denotes all projects
+    optional: false
+methods: []
+createdAt: '2026-07-04T12:44:18.529Z'
+updatedAt: '2026-07-04T12:44:18.539Z'

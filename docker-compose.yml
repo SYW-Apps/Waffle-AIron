@@ -1,0 +1,28 @@
+# wairon hosting server — self-hosting starting point.
+#
+#   1. echo "WAIRON_ADMIN_TOKEN=$(openssl rand -hex 32)" > .env
+#   2. docker compose up -d --build
+#   3. docker compose exec wairon wairon host project create --id acme
+#   4. docker compose exec wairon wairon host key mint --project acme --role editor
+#
+# The data plane (:8080/mcp) is published; put a TLS-terminating reverse proxy in
+# front of it in production. The admin plane stays on 127.0.0.1 inside the
+# container — administer via `docker compose exec` (safest), never exposed.
+
+services:
+  wairon:
+    build: .
+    # image: ghcr.io/syw-apps/wairon:latest   # or pull a published image instead of build
+    ports:
+      - "8080:8080"                            # data plane (MCP over streamable HTTP)
+    environment:
+      WAIRON_DATA_DIR: /data
+      # Master admin credential — required (server refuses to start without it).
+      # Read from your shell / .env; never commit the value.
+      WAIRON_ADMIN_TOKEN: ${WAIRON_ADMIN_TOKEN:?set WAIRON_ADMIN_TOKEN (e.g. in a .env file)}
+    volumes:
+      - wairon-data:/data
+    restart: unless-stopped
+
+volumes:
+  wairon-data:

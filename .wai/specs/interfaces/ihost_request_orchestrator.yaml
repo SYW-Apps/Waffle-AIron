@@ -1,0 +1,17 @@
+id: ihost_request_orchestrator
+name: Host Request Orchestrator Interface
+description: >-
+  Contract for the per-request data-plane workflow: authenticate, resolve and scope the authorized
+  project, dispatch the sdd_* call.
+component: host_request_orchestrator
+methods:
+  - name: handleRequest
+    description: >-
+      Authenticate the bearer token, resolve the authorized project root (rejecting cross-project
+      access), bind the request-scoped root, dispatch the sdd_* tool call within that scope, and
+      return the response.
+    signature: 'handleRequest(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+status: complete
+createdAt: '2026-07-04T12:49:34.974Z'
+updatedAt: '2026-07-04T13:06:22.830Z'

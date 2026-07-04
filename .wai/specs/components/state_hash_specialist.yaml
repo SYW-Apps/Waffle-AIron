@@ -1,0 +1,15 @@
+id: state_hash_specialist
+name: State Hash Specialist
+description: >-
+  Computes the deterministic content hash (StateId) of the spec tree: loads every spec via the
+  loader, canonicalizes it (stable key ordering, normalized serialization), and digests it. Pure and
+  side-effect-free — identical spec content always yields the same StateId, so any edit after a lock
+  invalidates that lock automatically.
+subsystem: sdd_core
+componentType: Specialist
+owns: []
+dependsOn:
+  - spec_loader
+status: complete
+createdAt: '2026-07-04T12:44:46.997Z'
+updatedAt: '2026-07-04T13:06:22.736Z'

@@ -1,20 +1,26 @@
-schemaVersion: "1.0.0"
-id: "ispec_validator"
-name: "Spec Validator Interface"
-description: "Interface contract for validating spec tree hierarchies, registry ownerships, and project configs."
-component: "spec_validator"
+id: ispec_validator
+name: Spec Validator Interface
+description: Interface contract for validating spec tree hierarchies, registry ownerships, and project configs.
+component: spec_validator
 methods:
-  - name: "validateSddTree"
-    description: "Performs full SDD spec tree structural validation and returns results"
-    signature: "validateSddTree(): ValidationResult"
-    returns: "ValidationResult"
-  - name: "validateRegistry"
-    description: "Validates legacy/resolved Agent registry constraints"
-    signature: "validateRegistry(registry: Registry, rules: RulesConfig): ValidationResult"
-    returns: "ValidationResult"
-  - name: "validateProjectConfig"
-    description: "Validates project.yaml configuration file structure"
-    signature: "validateProjectConfig(config: ProjectConfig): ValidationResult"
-    returns: "ValidationResult"
-createdAt: "2026-06-11T14:50:00Z"
-updatedAt: "2026-06-11T14:50:00Z"
+  - name: validateSddTree
+    description: Performs full SDD spec tree structural validation and returns results
+    signature: 'validateSddTree(): ValidationResult'
+    returns: ValidationResult
+  - name: validateRegistry
+    description: Validates legacy/resolved Agent registry constraints
+    signature: 'validateRegistry(registry: Registry, rules: RulesConfig): ValidationResult'
+    returns: ValidationResult
+  - name: validateProjectConfig
+    description: Validates project.yaml configuration file structure
+    signature: 'validateProjectConfig(config: ProjectConfig): ValidationResult'
+    returns: ValidationResult
+  - name: validateAsComplete
+    description: >-
+      Run full SDD tree validation at full strictness, treating every spec as complete (no draft
+      severity relaxation) and mutating nothing. Returns the as-complete results.
+    signature: 'validateAsComplete(): ValidationResult'
+    returns: ValidationResult
+status: complete
+createdAt: '2026-06-11T14:50:00Z'
+updatedAt: '2026-07-04T12:48:23.630Z'

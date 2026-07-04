@@ -1,0 +1,17 @@
+id: admin_portal
+name: Admin Portal
+description: >-
+  Control-plane entrypoint: an authenticated HTTP admin API (separately bound from the data plane,
+  master-credential gated, no shipped UI) for project create/destroy, API-key mint/rotate/revoke,
+  and the privileged lock/promote actions. Dispatches to the admin orchestrator; the CLI reaches the
+  same orchestrator through this portal. Never exposed on the public data-plane surface.
+subsystem: sdd_host
+componentType: Portal
+owns: []
+dependsOn:
+  - host_server
+  - admin_orchestrator
+portalType: HTTP_API
+status: complete
+createdAt: '2026-07-04T12:33:47.174Z'
+updatedAt: '2026-07-04T13:06:22.472Z'

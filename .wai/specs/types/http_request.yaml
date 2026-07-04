@@ -1,0 +1,26 @@
+kind: value-object
+id: http_request
+name: HttpRequest
+description: >-
+  An inbound HTTP request at the hosting boundary: method, path, headers, and body. The transport
+  shape the portals receive.
+fields:
+  - name: method
+    type: string
+    description: HTTP verb
+    optional: false
+  - name: path
+    type: string
+    description: Request path
+    optional: false
+  - name: headers
+    type: string[]
+    description: Raw header lines (includes Authorization)
+    optional: false
+  - name: body
+    type: string
+    description: Raw request body
+    optional: true
+methods: []
+createdAt: '2026-07-04T12:58:04.741Z'
+updatedAt: '2026-07-04T12:58:04.744Z'

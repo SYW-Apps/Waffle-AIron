@@ -1,0 +1,14 @@
+id: project_registry
+name: Project Registry
+description: >-
+  I/O manager for hosted-project records under the data root (project id, isolated .wai/ root path,
+  status, timestamps). Maps an authorized project id to its filesystem root for request scoping, and
+  backs control-plane project lifecycle. Modeled as a single file-backed Registry, mirroring the
+  core spec_loader convention.
+subsystem: sdd_host
+componentType: Registry
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-07-04T12:33:43.673Z'
+updatedAt: '2026-07-04T13:06:22.715Z'

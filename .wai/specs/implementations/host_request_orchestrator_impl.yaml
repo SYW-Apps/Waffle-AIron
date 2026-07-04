@@ -1,0 +1,62 @@
+id: host_request_orchestrator_impl
+name: Host Request Orchestrator Implementation
+description: >-
+  Per-request data-plane workflow: authenticate, resolve and bind the authorized project scope,
+  dispatch the sdd_* call.
+contract: ihost_request_orchestrator
+sourcePath: src/server/request.ts
+methods:
+  - name: handleRequest
+    narrative:
+      - stepNumber: 1
+        description: Extract the bearer token from the request Authorization header
+        type: local
+      - stepNumber: 2
+        description: Authenticate the token to a principal
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticate
+      - stepNumber: 3
+        description: If the principal is unauthenticated, reject
+        type: branch
+        condition: principal is unauthenticated
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Return 401 Unauthorized
+        type: return
+        outcome: 401 Unauthorized
+      - stepNumber: 5
+        description: Read the optional project selector from the request
+        type: local
+      - stepNumber: 6
+        description: Resolve the authorized project's isolated root
+        type: call
+        targetComponent: project_registry
+        targetMethod: resolveRoot
+      - stepNumber: 7
+        description: If no authorized root resolved, reject cross-project access
+        type: branch
+        condition: resolved root is empty (project not authorized)
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 9
+        description: Bind the request-scoped project root
+        type: local
+      - stepNumber: 10
+        description: Instantiate the scoped sdd_* MCP server
+        type: call
+        targetComponent: host_mcp_adapter
+        targetMethod: createScopedServer
+      - stepNumber: 11
+        description: Connect the scoped server to the request transport and process the JSON-RPC message
+        type: local
+      - stepNumber: 12
+        description: Return the MCP response
+        type: return
+        outcome: MCP response
+status: complete
+createdAt: '2026-07-04T12:54:20.000Z'
+updatedAt: '2026-07-04T13:06:22.980Z'

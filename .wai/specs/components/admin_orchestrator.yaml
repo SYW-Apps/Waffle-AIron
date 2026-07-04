@@ -1,0 +1,20 @@
+id: admin_orchestrator
+name: Admin Orchestrator
+description: >-
+  Owns the control-plane workflows: provision a new isolated project (initialize a fresh .wai/ tree
+  under the data root via the core adapter, register it), mint/rotate/revoke API keys, and the
+  state-scoped lock and gated promote. Lock validates the tree as-complete via the validator
+  adapter, then records a lock scoped to the exact validated state id; promote re-checks the current
+  state id against the lock and refuses on any drift. Never merges to production itself.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - auth_specialist
+  - project_registry
+  - credential_registry
+  - host_core_adapter
+  - host_validator_adapter
+status: complete
+createdAt: '2026-07-04T12:33:51.178Z'
+updatedAt: '2026-07-04T13:06:22.447Z'

@@ -253,3 +253,31 @@ export function validateSddTree(
     issues,
   };
 }
+
+/**
+ * Validate the tree at FULL strictness — treating every spec as `complete`, so
+ * the completeness rules that relax to warnings while draft/design apply as
+ * errors — WITHOUT mutating anything on disk. This is the as-complete gate that
+ * `wairon lock` and the hosting lock require: a draft tree can "pass" a normal
+ * validate yet break the moment it is frozen, so lock must gate on this.
+ *
+ * validateSddTree is fully synchronous, so the mutate → validate → restore below
+ * runs atomically within one event-loop turn (no await in between), and the
+ * in-memory status flips are never observable outside this call.
+ */
+export function validateAsComplete(options?: ValidationOptions): ValidationResult {
+  scanAllSpecs({ recursive: options?.recursive ?? true });
+  const specs: { status?: 'draft' | 'design' | 'complete' }[] = [
+    ...loadSubsystemSpecs(),
+    ...loadComponentSpecs(),
+    ...loadInterfaceSpecs(),
+    ...loadImplementationSpecs(),
+  ];
+  const snapshot = specs.map((s) => s.status);
+  for (const s of specs) s.status = 'complete';
+  try {
+    return validateSddTree(options);
+  } finally {
+    specs.forEach((s, i) => { s.status = snapshot[i]; });
+  }
+}

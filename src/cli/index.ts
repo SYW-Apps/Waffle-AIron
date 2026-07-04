@@ -32,6 +32,11 @@ import {
   runPacksAdd,
   runPacksList,
   runPacksRemove,
+  runServe,
+  runHostProject,
+  runHostKey,
+  runHostLock,
+  runHostPromote,
 } from '../commands/index.js';
 
 // Clean up any .old binary left over from a previous Windows self-update
@@ -308,6 +313,76 @@ mcpCmd
   .description('Show whether the wairon MCP server is registered in Claude Code and Antigravity settings')
   .action(async () => {
     await runMcpStatus();
+  });
+
+// ---------------------------------------------------------------------------
+// serve  — run the hosting server (sdd_host)
+// ---------------------------------------------------------------------------
+
+program
+  .command('serve')
+  .description('Run the wairon hosting server: HTTP MCP for many isolated projects + admin API')
+  .option('--host <host>', 'data-plane bind host (default 0.0.0.0)')
+  .option('--port <port>', 'data-plane port (default 8080)')
+  .option('--admin-host <host>', 'admin-plane bind host (default 127.0.0.1)')
+  .option('--admin-port <port>', 'admin-plane port (default 8081)')
+  .option('--data-dir <path>', 'data root holding projects/ and auth/ (default WAIRON_DATA_DIR or ~/.wairon/data)')
+  .option('--no-auth', 'disable data-plane auth (trusted networks only)')
+  .action(async (opts) => {
+    await runServe({
+      host: opts.host,
+      port: opts.port,
+      adminHost: opts.adminHost,
+      adminPort: opts.adminPort,
+      dataDir: opts.dataDir,
+      noAuth: !opts.auth,
+    });
+  });
+
+// ---------------------------------------------------------------------------
+// host  — administer the hosting server (sdd_host control plane)
+// ---------------------------------------------------------------------------
+
+const hostCmd = program
+  .command('host')
+  .description('Administer the hosting server: projects, API keys, and state-scoped lock/promote');
+
+hostCmd
+  .command('project <action>')
+  .description('create | list | destroy a hosted project')
+  .option('--id <id>', 'project id (for create/destroy)')
+  .option('--data-dir <path>', 'data root (default WAIRON_DATA_DIR or ~/.wairon/data)')
+  .action(async (action: string, opts) => {
+    await runHostProject(action, { id: opts.id, dataDir: opts.dataDir });
+  });
+
+hostCmd
+  .command('key <action>')
+  .description('mint | list | revoke an API key')
+  .option('--project <id>', 'project id or * (for mint/list)')
+  .option('--role <role>', 'editor | admin (for mint)', 'editor')
+  .option('--id <id>', 'key id (for revoke)')
+  .option('--data-dir <path>', 'data root')
+  .action(async (action: string, opts) => {
+    await runHostKey(action, { project: opts.project, role: opts.role, id: opts.id, dataDir: opts.dataDir });
+  });
+
+hostCmd
+  .command('lock')
+  .description('validate-as-complete and write the state-scoped lock record for a hosted project')
+  .requiredOption('--project <id>', 'project id')
+  .option('--data-dir <path>', 'data root')
+  .action(async (opts) => {
+    await runHostLock({ project: opts.project, dataDir: opts.dataDir });
+  });
+
+hostCmd
+  .command('promote')
+  .description('promote a locked project after re-checking its StateId (never merges to production)')
+  .requiredOption('--project <id>', 'project id')
+  .option('--data-dir <path>', 'data root')
+  .action(async (opts) => {
+    await runHostPromote({ project: opts.project, dataDir: opts.dataDir });
   });
 
 // ---------------------------------------------------------------------------

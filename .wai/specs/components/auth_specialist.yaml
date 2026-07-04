@@ -1,0 +1,15 @@
+id: auth_specialist
+name: Auth Specialist
+description: >-
+  Verifies an inbound credential to a principal: constant-time hash comparison of a data-plane
+  bearer token against stored API-key records, or of the control-plane master credential, yielding
+  the authorized project set and role (editor | admin). The single authority for authentication;
+  performs no authorization routing itself.
+subsystem: sdd_host
+componentType: Specialist
+owns: []
+dependsOn:
+  - credential_registry
+status: complete
+createdAt: '2026-07-04T12:33:41.835Z'
+updatedAt: '2026-07-04T13:06:22.497Z'

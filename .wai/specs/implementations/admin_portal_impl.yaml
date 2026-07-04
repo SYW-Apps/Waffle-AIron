@@ -1,0 +1,65 @@
+id: admin_portal_impl
+name: Admin Portal Implementation
+description: 'Control-plane HTTP boundary: forwards each admin operation to the admin orchestrator.'
+contract: iadmin_portal
+sourcePath: src/server/admin.ts
+methods:
+  - name: createProject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: createProject
+  - name: destroyProject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: destroyProject
+  - name: listProjects
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: listProjects
+  - name: mintKey
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: mintKey
+  - name: revokeKey
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: revokeKey
+  - name: listKeys
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: listKeys
+  - name: lockProject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: lockProject
+  - name: promoteProject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: promoteProject
+status: complete
+createdAt: '2026-07-04T12:53:08.445Z'
+updatedAt: '2026-07-04T13:06:22.900Z'

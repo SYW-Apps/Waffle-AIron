@@ -1,9 +1,13 @@
-id: "core_orchestrator"
-name: "Core Orchestrator"
-description: "Orchestrates spec loading and manipulation in the core subsystem."
-subsystem: "sdd_core"
-componentType: "Orchestrator"
+id: core_orchestrator
+name: Core Orchestrator
+description: Orchestrates spec loading and manipulation in the core subsystem.
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
 dependsOn:
-  - "spec_loader"
-createdAt: "2026-06-19T12:00:00Z"
-updatedAt: "2026-06-19T12:00:00Z"
+  - spec_loader
+  - state_hash_specialist
+  - lock_registry
+status: complete
+createdAt: '2026-06-19T12:00:00Z'
+updatedAt: '2026-07-04T12:45:24.415Z'

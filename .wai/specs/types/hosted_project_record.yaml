@@ -1,0 +1,28 @@
+kind: entity
+id: hosted_project_record
+name: HostedProjectRecord
+description: >-
+  A registered hosted project: maps a project id to its fully-isolated .wai/ root under the data
+  directory. This is the isolation unit for request scoping — wholly separate from
+  subsystem/projectPath chaining.
+subsystem: sdd_host
+fields:
+  - name: id
+    type: string
+    description: URL-safe project id (validated against path traversal)
+    optional: false
+  - name: rootPath
+    type: string
+    description: Absolute filesystem root of the project's isolated .wai/ tree
+    optional: false
+  - name: status
+    type: string
+    description: 'Lifecycle status: "active" or "disabled"'
+    optional: false
+  - name: createdAt
+    type: string
+    description: ISO-8601 provisioning timestamp
+    optional: false
+methods: []
+createdAt: '2026-07-04T12:44:18.571Z'
+updatedAt: '2026-07-04T12:44:18.579Z'

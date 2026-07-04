@@ -1,0 +1,285 @@
+id: admin_orchestrator_impl
+name: Admin Orchestrator Implementation
+description: >-
+  Control-plane workflows: master-credential auth then project/key lifecycle and the state-scoped
+  lock/promote.
+contract: iadmin_orchestrator
+sourcePath: src/server/admin.ts
+methods:
+  - name: createProject
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: Allocate and register the project
+        type: call
+        targetComponent: project_registry
+        targetMethod: create
+      - stepNumber: 5
+        description: Bind the new project's isolated root
+        type: local
+      - stepNumber: 6
+        description: Bootstrap the isolated spec tree
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: provisionProject
+      - stepNumber: 7
+        description: Return the created project record
+        type: return
+        outcome: created project record
+  - name: destroyProject
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: Deregister the project and remove its tree
+        type: call
+        targetComponent: project_registry
+        targetMethod: remove
+      - stepNumber: 5
+        description: Return once destroyed
+        type: return
+        outcome: destroyed
+  - name: listProjects
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: List hosted projects
+        type: call
+        targetComponent: project_registry
+        targetMethod: list
+      - stepNumber: 5
+        description: Return the project list
+        type: return
+        outcome: project list
+  - name: mintKey
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: >-
+          Generate a random API key and its salted hash; assemble an ApiKeyRecord bound to the
+          project and role
+        type: local
+      - stepNumber: 5
+        description: Persist the credential
+        type: call
+        targetComponent: credential_registry
+        targetMethod: create
+      - stepNumber: 6
+        description: Return the plaintext key (shown once)
+        type: return
+        outcome: plaintext key
+  - name: revokeKey
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: Revoke the credential by id
+        type: call
+        targetComponent: credential_registry
+        targetMethod: revoke
+      - stepNumber: 5
+        description: Return once revoked
+        type: return
+        outcome: revoked
+  - name: listKeys
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: List the project's credentials
+        type: call
+        targetComponent: credential_registry
+        targetMethod: list
+      - stepNumber: 5
+        description: Return the key list
+        type: return
+        outcome: key list
+  - name: lockProject
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 5
+        description: Validate the tree as-complete
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: validateAsComplete
+      - stepNumber: 6
+        description: If validation reports errors, refuse to lock
+        type: branch
+        condition: result reports errors
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Return cannot-lock with the validation errors
+        type: return
+        outcome: cannot lock — validation failed
+      - stepNumber: 8
+        description: Promote every spec to complete
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: promoteAllComplete
+      - stepNumber: 9
+        description: Compute the validated StateId
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: computeStateId
+      - stepNumber: 10
+        description: >-
+          Assemble a LockRecord (stateId, lockedAt, lockedBy, validatorVersion, validationResult,
+          status ready)
+        type: local
+      - stepNumber: 11
+        description: Persist the lock record
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: writeLockRecord
+      - stepNumber: 12
+        description: Return the lock record
+        type: return
+        outcome: lock record
+  - name: promoteProject
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the master credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateMaster
+      - stepNumber: 2
+        description: If not an admin principal, reject
+        type: branch
+        condition: not an admin principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 4
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 5
+        description: Read the current lock record
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: readLockRecord
+      - stepNumber: 6
+        description: If no lock record exists, refuse
+        type: branch
+        condition: no lock record exists
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Return not-locked
+        type: return
+        outcome: not locked — lock first
+      - stepNumber: 8
+        description: Recompute the current StateId
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: computeStateId
+      - stepNumber: 9
+        description: If the current StateId differs from the lock's StateId, refuse as stale
+        type: branch
+        condition: current StateId differs from the lock's StateId
+        onFalseStep: 11
+      - stepNumber: 10
+        description: Return stale-lock
+        type: return
+        outcome: stale lock — re-lock required
+      - stepNumber: 11
+        description: Mark the change-set ready for promotion (open or update a PR, or mirror); never merge here
+        type: local
+      - stepNumber: 12
+        description: Return the promote result
+        type: return
+        outcome: promote result
+status: complete
+createdAt: '2026-07-04T12:55:04.866Z'
+updatedAt: '2026-07-04T13:06:22.885Z'

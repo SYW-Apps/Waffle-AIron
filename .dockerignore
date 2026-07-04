@@ -1,0 +1,16 @@
+# Build context hygiene — everything the image rebuilds or doesn't need.
+node_modules
+dist
+bin
+coverage
+.git
+.gitignore
+.wai
+.claude
+.gemini
+.vscode
+docs
+examples
+*.log
+npm-debug.log*
+.DS_Store

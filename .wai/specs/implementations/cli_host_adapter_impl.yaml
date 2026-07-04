@@ -1,0 +1,65 @@
+id: cli_host_adapter_impl
+name: CLI Host Client Adapter Implementation
+description: In-process CLI client of the admin portal; pure 1:1 forwarding.
+contract: icli_host_adapter
+sourcePath: src/commands/host.ts
+methods:
+  - name: createProject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin portal
+        type: call
+        targetComponent: admin_portal
+        targetMethod: createProject
+  - name: destroyProject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin portal
+        type: call
+        targetComponent: admin_portal
+        targetMethod: destroyProject
+  - name: listProjects
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin portal
+        type: call
+        targetComponent: admin_portal
+        targetMethod: listProjects
+  - name: mintKey
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin portal
+        type: call
+        targetComponent: admin_portal
+        targetMethod: mintKey
+  - name: revokeKey
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin portal
+        type: call
+        targetComponent: admin_portal
+        targetMethod: revokeKey
+  - name: listKeys
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin portal
+        type: call
+        targetComponent: admin_portal
+        targetMethod: listKeys
+  - name: lockProject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin portal
+        type: call
+        targetComponent: admin_portal
+        targetMethod: lockProject
+  - name: promoteProject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin portal
+        type: call
+        targetComponent: admin_portal
+        targetMethod: promoteProject
+status: complete
+createdAt: '2026-07-04T12:53:10.615Z'
+updatedAt: '2026-07-04T13:06:22.926Z'

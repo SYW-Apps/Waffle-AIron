@@ -8,6 +8,32 @@ additive or a bug fix. The one compatibility surface to review before
 upgrading a CI pipeline is the conformance gate (see *Compatibility &
 migration*).
 
+### Hosting server (self-hosted)
+
+- **`wairon serve`** — run wairon as an HTTP server that hosts many
+  **fully-isolated** projects behind one endpoint (the new `sdd_host` subsystem):
+  a public **data plane** (`POST /mcp` — the `sdd_*` tools over streamable HTTP,
+  scoped per request to the authenticated project) and an admin **control
+  plane**, plus `/healthz` + `/readyz`. Each request binds its project root via
+  `AsyncLocalStorage`, reusing the core/validation/MCP layers unchanged. `sdd_mcp`
+  is untouched.
+- **Auth** (default-on; `--no-auth` for trusted networks): a master credential
+  (`WAIRON_ADMIN_TOKEN`) gates the control plane; project API keys are minted per
+  project/role and stored hashed. Scope is derived from the token, never from a
+  client-supplied parameter.
+- **`wairon host …`** (in-process, no running server needed — works over SSH /
+  `docker exec`): `project create|list|destroy`, `key mint|list|revoke`, and the
+  commit-scoped **`lock`** / **`promote`**.
+- **State-scoped lock/promote:** `lock` validates the tree as-complete and writes
+  `.wai/lock.json` scoped to a deterministic `StateId`; `promote` recomputes the
+  `StateId` and refuses on any drift — never merges to production.
+- **Docker:** `Dockerfile` + `docker-compose.yml` at the repo root; state on a
+  `/data` volume. See
+  [docs/design/hosted-mcp-server.md](docs/design/hosted-mcp-server.md).
+- New library surfaces: `validateAsComplete` (full-strictness gate, reused by the
+  local `wairon lock` story) and a request-scoped project root
+  (`runWithProjectRoot`) so one process serves concurrent projects safely.
+
 ### Conformance gate (the architecture linter)
 
 - The validator is now a **rule registry**: 16 documented rule modules under

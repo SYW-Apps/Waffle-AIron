@@ -1,0 +1,34 @@
+id: ihost_http_portal
+name: Host HTTP Portal Interface
+description: 'Public data-plane HTTP contract: the streamable MCP endpoint plus liveness/readiness probes.'
+component: host_http_portal
+methods:
+  - name: handleMcpRequest
+    description: >-
+      Receive an MCP JSON-RPC request on the data plane and return the response, delegating auth,
+      scoping, and dispatch to the request orchestrator.
+    signature: 'handleMcpRequest(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /mcp
+  - name: healthz
+    description: Liveness probe.
+    signature: 'healthz(): HttpResponse'
+    returns: HttpResponse
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /healthz
+  - name: readyz
+    description: 'Readiness probe: ready when the data directory is writable.'
+    signature: 'readyz(): HttpResponse'
+    returns: HttpResponse
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /readyz
+status: complete
+createdAt: '2026-07-04T12:49:28.895Z'
+updatedAt: '2026-07-04T13:06:22.814Z'

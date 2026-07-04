@@ -1,86 +1,218 @@
-schemaVersion: "1.0.0"
-id: "cli_runner_impl"
-name: "CLI Runner Implementation"
-description: "Concrete implementation of the CLI Runner Interface mapping commander subcommands to core engine logic."
-contract: "icli_runner"
-sourcePath: "src/cli/index.ts"
+id: cli_runner_impl
+name: CLI Runner Implementation
+description: >-
+  Concrete implementation of the CLI Runner Interface mapping commander subcommands to core engine
+  logic.
+contract: icli_runner
+sourcePath: src/cli/index.ts
 methods:
-  - name: "runInit"
+  - name: runInit
     narrative:
       - stepNumber: 1
-        description: "Verify if workspace is already initialized"
-        type: "local"
+        description: Verify if workspace is already initialized
+        type: local
       - stepNumber: 2
-        description: "Bootstrap standard .wai directory structure"
-        type: "local"
+        description: Bootstrap standard .wai directory structure
+        type: local
       - stepNumber: 3
-        description: "Export SDD skills templates"
-        type: "call"
-        targetComponent: "cli_skills_adapter"
-        targetMethod: "exportSddSkills"
+        description: Export SDD skills templates
+        type: call
+        targetComponent: cli_skills_adapter
+        targetMethod: exportSddSkills
       - stepNumber: 4
-        description: "Generate default L0/L1/L2 spec files if empty"
-        type: "local"
-  - name: "runValidate"
+        description: Generate default L0/L1/L2 spec files if empty
+        type: local
+  - name: runValidate
     narrative:
       - stepNumber: 1
-        description: "Load project configuration file"
-        type: "local"
+        description: Load project configuration file
+        type: local
       - stepNumber: 2
-        description: "Validate registry rules"
-        type: "call"
-        targetComponent: "cli_validator_adapter"
-        targetMethod: "validateRegistry"
+        description: Validate registry rules
+        type: call
+        targetComponent: cli_validator_adapter
+        targetMethod: validateRegistry
       - stepNumber: 3
-        description: "Validate project configuration"
-        type: "call"
-        targetComponent: "cli_validator_adapter"
-        targetMethod: "validateProjectConfig"
+        description: Validate project configuration
+        type: call
+        targetComponent: cli_validator_adapter
+        targetMethod: validateProjectConfig
       - stepNumber: 4
-        description: "Validate SDD specification tree"
-        type: "call"
-        targetComponent: "cli_validator_adapter"
-        targetMethod: "validateSddTree"
+        description: Validate SDD specification tree
+        type: call
+        targetComponent: cli_validator_adapter
+        targetMethod: validateSddTree
       - stepNumber: 5
-        description: "Print validation errors/warnings and exit process if invalid"
-        type: "local"
-  - name: "runGenerate"
+        description: Print validation errors/warnings and exit process if invalid
+        type: local
+  - name: runGenerate
     narrative:
       - stepNumber: 1
-        description: "Load spec system"
-        type: "call"
-        targetComponent: "cli_core_adapter"
-        targetMethod: "loadSystemSpec"
+        description: Load spec system
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadSystemSpec
       - stepNumber: 2
-        description: "Generate Dynamic Agent outputs matching configured target engines"
-        type: "local"
-  - name: "runList"
+        description: Generate Dynamic Agent outputs matching configured target engines
+        type: local
+  - name: runList
     narrative:
       - stepNumber: 1
-        description: "Load specs using spec loader"
-        type: "call"
-        targetComponent: "cli_core_adapter"
-        targetMethod: "loadSystemSpec"
+        description: Load specs using spec loader
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadSystemSpec
       - stepNumber: 2
-        description: "Format and print resolved dynamic agent list to stdout"
-        type: "local"
-  - name: "runShow"
+        description: Format and print resolved dynamic agent list to stdout
+        type: local
+  - name: runShow
     narrative:
       - stepNumber: 1
-        description: "Load spec system"
-        type: "call"
-        targetComponent: "cli_core_adapter"
-        targetMethod: "loadSystemSpec"
+        description: Load spec system
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadSystemSpec
       - stepNumber: 2
-        description: "Format and display details for specified dynamic agent"
-        type: "local"
-  - name: "runUpdate"
+        description: Format and display details for specified dynamic agent
+        type: local
+  - name: runUpdate
     narrative:
       - stepNumber: 1
-        description: "Check remote github release page for new releases"
-        type: "local"
+        description: Check remote github release page for new releases
+        type: local
       - stepNumber: 2
-        description: "If new release is found and not in check-only mode, pull and apply updates"
-        type: "local"
-createdAt: "2026-06-11T14:50:00Z"
-updatedAt: "2026-06-19T12:00:00Z"
+        description: If new release is found and not in check-only mode, pull and apply updates
+        type: local
+  - name: runHostProject
+    narrative:
+      - stepNumber: 1
+        description: Read the master credential from the environment
+        type: local
+      - stepNumber: 2
+        description: Dispatch on the action
+        type: switch
+        'on': action
+        cases:
+          - value: create
+            step: 3
+          - value: list
+            step: 5
+          - value: destroy
+            step: 7
+        defaultStep: 9
+      - stepNumber: 3
+        description: Create the project via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: createProject
+      - stepNumber: 4
+        description: Return after create
+        type: return
+        outcome: created
+      - stepNumber: 5
+        description: List projects via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: listProjects
+      - stepNumber: 6
+        description: Return after list
+        type: return
+        outcome: listed
+      - stepNumber: 7
+        description: Destroy the project via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: destroyProject
+      - stepNumber: 8
+        description: Return after destroy
+        type: return
+        outcome: destroyed
+      - stepNumber: 9
+        description: Return on unknown action
+        type: return
+        outcome: unknown action
+  - name: runHostKey
+    narrative:
+      - stepNumber: 1
+        description: Read the master credential from the environment
+        type: local
+      - stepNumber: 2
+        description: Dispatch on the action
+        type: switch
+        'on': action
+        cases:
+          - value: mint
+            step: 3
+          - value: revoke
+            step: 5
+          - value: list
+            step: 7
+        defaultStep: 9
+      - stepNumber: 3
+        description: Mint a key via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: mintKey
+      - stepNumber: 4
+        description: Return after mint
+        type: return
+        outcome: minted
+      - stepNumber: 5
+        description: Revoke a key via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: revokeKey
+      - stepNumber: 6
+        description: Return after revoke
+        type: return
+        outcome: revoked
+      - stepNumber: 7
+        description: List keys via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: listKeys
+      - stepNumber: 8
+        description: Return after list
+        type: return
+        outcome: listed
+      - stepNumber: 9
+        description: Return on unknown action
+        type: return
+        outcome: unknown action
+  - name: runHostLock
+    narrative:
+      - stepNumber: 1
+        description: Read the master credential from the environment
+        type: local
+      - stepNumber: 2
+        description: Lock the project via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: lockProject
+      - stepNumber: 3
+        description: Print the lock record (stateId and status)
+        type: local
+      - stepNumber: 4
+        description: Return after lock
+        type: return
+        outcome: locked
+  - name: runHostPromote
+    narrative:
+      - stepNumber: 1
+        description: Read the master credential from the environment
+        type: local
+      - stepNumber: 2
+        description: Promote the project via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: promoteProject
+      - stepNumber: 3
+        description: Print the promote result
+        type: local
+      - stepNumber: 4
+        description: Return after promote
+        type: return
+        outcome: promoted
+status: complete
+createdAt: '2026-06-11T14:50:00Z'
+updatedAt: '2026-07-04T12:56:21.859Z'

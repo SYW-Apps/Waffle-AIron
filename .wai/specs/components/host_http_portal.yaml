@@ -1,0 +1,17 @@
+id: host_http_portal
+name: Host HTTP Portal
+description: >-
+  Public data-plane entrypoint: the streamable HTTP MCP endpoint (POST /mcp) plus liveness/readiness
+  (/healthz, /readyz). Receives MCP JSON-RPC from remote clients and dispatches to the host request
+  orchestrator; HTTP listener lifecycle is delegated to the host server supervisor. Never touches
+  persistence or the tool surface directly.
+subsystem: sdd_host
+componentType: Portal
+owns: []
+dependsOn:
+  - host_server
+  - host_request_orchestrator
+portalType: HTTP_API
+status: complete
+createdAt: '2026-07-04T12:33:41.703Z'
+updatedAt: '2026-07-04T13:06:22.588Z'

@@ -1,0 +1,22 @@
+id: iauth_specialist
+name: Auth Specialist Interface
+description: >-
+  Contract for credential verification into a Principal. The single authentication authority;
+  performs no routing.
+component: auth_specialist
+methods:
+  - name: authenticate
+    description: >-
+      Verify a data-plane bearer token by constant-time comparison of its hash against stored
+      records; return the resolved Principal or reject as unauthenticated.
+    signature: 'authenticate(token: string): Principal'
+    returns: Principal
+  - name: authenticateMaster
+    description: >-
+      Verify the control-plane master credential by constant-time comparison; return an admin
+      Principal or reject.
+    signature: 'authenticateMaster(credential: string): Principal'
+    returns: Principal
+status: complete
+createdAt: '2026-07-04T12:49:50.542Z'
+updatedAt: '2026-07-04T13:06:22.777Z'
