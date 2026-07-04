@@ -30,6 +30,10 @@ export interface HostOptions {
   role?: string;
   remote?: string;
   branch?: string;
+  target?: string;
+  page?: string;
+  key?: string;
+  value?: string;
 }
 
 function resolveHostConfig(options: HostOptions): HostConfig {
@@ -190,6 +194,74 @@ export async function runHostPromote(options: HostOptions = {}): Promise<void> {
 }
 
 // ── wairon host git <action> ──────────────────────────────────────────────────
+
+// ── wairon host producer <action> ─────────────────────────────────────────────
+
+export async function runHostProducer(action: string, options: HostOptions = {}): Promise<void> {
+  const cfg = resolveHostConfig(options);
+  const cred = masterCredential();
+  const target = options.target ?? 'notion';
+  try {
+    switch (action) {
+      case 'configure': {
+        if (!options.project || !options.page) throw new WaironError('`--project <id>` and `--page <id>` are required.');
+        admin.configureProducer(cfg, cred, options.project, target, options.page);
+        logger.success(`Configured "${target}" for project "${options.project}".`);
+        break;
+      }
+      case 'produce': {
+        if (!options.project) throw new WaironError('`--project <id>` is required.');
+        await admin.produceProducer(cfg, cred, options.project, target);
+        logger.success(`Produced "${options.project}" to "${target}".`);
+        break;
+      }
+      case 'remove': {
+        if (!options.project) throw new WaironError('`--project <id>` is required.');
+        admin.removeProducer(cfg, cred, options.project, target);
+        logger.success(`Removed "${target}" from project "${options.project}".`);
+        break;
+      }
+      case 'list': {
+        if (!options.project) throw new WaironError('`--project <id>` is required.');
+        const list = admin.listProducers(cfg, cred, options.project);
+        if (!list.length) logger.info('No producers configured.');
+        else for (const p of list) logger.info(`  ${p.target.padEnd(10)} → ${p.parentPageId}`);
+        break;
+      }
+      default:
+        throw new WaironError(`Unknown producer action "${action}" (configure | produce | remove | list).`);
+    }
+  } catch (e) {
+    throw mapAdminError(e);
+  }
+}
+
+// ── wairon host secret <action> ───────────────────────────────────────────────
+
+export async function runHostSecret(action: string, options: HostOptions = {}): Promise<void> {
+  const cfg = resolveHostConfig(options);
+  const cred = masterCredential();
+  try {
+    switch (action) {
+      case 'set': {
+        if (!options.key || options.value === undefined) throw new WaironError('`--key <name>` and `--value <secret>` are required.');
+        admin.setSecret(cfg, cred, options.key, options.value);
+        logger.success(`Secret "${options.key}" set (read live — no restart needed).`);
+        break;
+      }
+      case 'list': {
+        const keys = admin.listSecrets(cfg, cred);
+        if (!keys.length) logger.info('No secrets set.');
+        else for (const k of keys) logger.info(`  ${k}`);
+        break;
+      }
+      default:
+        throw new WaironError(`Unknown secret action "${action}" (set | list).`);
+    }
+  } catch (e) {
+    throw mapAdminError(e);
+  }
+}
 
 export async function runHostGit(action: string, options: HostOptions = {}): Promise<void> {
   const cfg = resolveHostConfig(options);

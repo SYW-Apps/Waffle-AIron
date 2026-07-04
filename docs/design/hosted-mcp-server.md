@@ -143,6 +143,33 @@ Identity: a single bot token — `WAIRON_GIT_TOKEN` (+ `WAIRON_GIT_NAME` /
 `WAIRON_GIT_EMAIL`). `.wai/lock.json` and `.wai/git.json` stay container-local
 (never committed). The Docker image ships with `git` installed.
 
+### Producers — project specs to Notion
+
+Mirror a project's spec tree into a **"wairon specs" subsection** under a Notion
+page (idempotent — sibling content untouched), **hosted or locally**:
+
+- Hosted: `wairon host producer configure --project acme --target notion --page <pageId>`,
+  then `wairon host producer produce --project acme` (or the admin API under
+  `/admin/projects/{id}/producers/{target}`).
+- Local: `wairon produce notion --page <pageId>` against the project in your cwd —
+  the token comes from `--token`, else `WAIRON_NOTION_TOKEN`, else an interactive
+  prompt (nothing stored).
+
+Each page carries the component's methods and a **Mermaid** diagram code block;
+the hosted path also embeds a signed live-canvas link. Notion uses raw REST (**no
+new dependency**); the `DocPage` model is target-agnostic, so a future Miro/other
+producer reuses the same projection.
+
+### Runtime secrets — no restart
+
+Integration tokens resolve **data-dir store → env**, so an integration can be
+added to a *live* container without a restart:
+
+```sh
+docker compose exec wairon wairon host secret set --key notion-token --value secret_xxx
+# also git-token / signing-secret; env still works as the default
+```
+
 ## 5. Self-hosting with Docker
 
 ### 5.1 Quickstart
@@ -223,6 +250,10 @@ Two equivalent paths to the same control-plane logic:
 | Diagram view-link signing key | — | `WAIRON_SIGNING_SECRET` | falls back to `WAIRON_ADMIN_TOKEN` |
 | Git bot token | — | `WAIRON_GIT_TOKEN` | *(needed for `https://` git remotes)* |
 | Git committer name / email | — | `WAIRON_GIT_NAME` / `WAIRON_GIT_EMAIL` | `wairon-bot` / `wairon-bot@localhost` |
+| Notion integration token | — | `WAIRON_NOTION_TOKEN` | *(or set via `host secret set`)* |
+| Public base URL (for links) | — | `WAIRON_PUBLIC_URL` | data-plane `host:port` |
+
+All token secrets can also be set at runtime with `wairon host secret set --key <k> --value <v>` (data-dir store, read live).
 
 Data layout:
 

@@ -2,6 +2,7 @@ import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getProjectRoot } from '../utils/fs.js';
+import { resolveSecret } from '../utils/secrets.js';
 
 // ---------------------------------------------------------------------------
 // Git Client Adapter (sdd_git)
@@ -30,7 +31,7 @@ function gitEmail(): string {
 
 /** Inject the bot token into an https remote so fetch/push authenticate. */
 function authRemote(remote: string): string {
-  const token = process.env['WAIRON_GIT_TOKEN'];
+  const token = resolveSecret('git-token');
   if (!token || !/^https:\/\//.test(remote)) return remote;
   return remote.replace(/^https:\/\//, `https://x-access-token:${token}@`);
 }

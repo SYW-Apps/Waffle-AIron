@@ -1,6 +1,7 @@
 import * as crypto from 'crypto';
 import { type Principal, type ViewGrant, UNAUTHENTICATED } from './types.js';
 import { findByTokenHash, hashToken } from './credentials.js';
+import { resolveSecret } from '../utils/secrets.js';
 
 // ---------------------------------------------------------------------------
 // Auth Specialist (sdd_host)
@@ -40,7 +41,7 @@ export function authenticateMaster(token: string | null): Principal {
 const VIEW_TTL_MS = 5 * 60 * 1000;
 
 function signingKey(): string {
-  return process.env['WAIRON_SIGNING_SECRET'] || process.env['WAIRON_ADMIN_TOKEN'] || '';
+  return resolveSecret('signing-secret') || '';
 }
 
 /** Mint a short-lived HMAC-signed view token for one project's diagram. */

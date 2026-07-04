@@ -38,6 +38,9 @@ import {
   runHostLock,
   runHostPromote,
   runHostGit,
+  runHostProducer,
+  runHostSecret,
+  runProduce,
 } from '../commands/index.js';
 
 // Clean up any .old binary left over from a previous Windows self-update
@@ -317,6 +320,19 @@ mcpCmd
   });
 
 // ---------------------------------------------------------------------------
+// produce  — project the local project to a producer target (sdd_producers)
+// ---------------------------------------------------------------------------
+
+program
+  .command('produce <target>')
+  .description('project the local project\'s specs to a producer target (e.g. notion)')
+  .option('--page <id>', 'parent page/board id in the target')
+  .option('--token <token>', 'integration token (else env, else interactive prompt)')
+  .action(async (target: string, opts) => {
+    await runProduce(target, { page: opts.page, token: opts.token });
+  });
+
+// ---------------------------------------------------------------------------
 // serve  — run the hosting server (sdd_host)
 // ---------------------------------------------------------------------------
 
@@ -395,6 +411,27 @@ hostCmd
   .option('--data-dir <path>', 'data root')
   .action(async (action: string, opts) => {
     await runHostGit(action, { project: opts.project, remote: opts.remote, branch: opts.branch, dataDir: opts.dataDir });
+  });
+
+hostCmd
+  .command('producer <action>')
+  .description('configure | produce | remove | list producers (project a hosted project to Notion, etc.)')
+  .option('--project <id>', 'project id')
+  .option('--target <t>', 'producer target', 'notion')
+  .option('--page <id>', 'parent page/board id (for configure)')
+  .option('--data-dir <path>', 'data root')
+  .action(async (action: string, opts) => {
+    await runHostProducer(action, { project: opts.project, target: opts.target, page: opts.page, dataDir: opts.dataDir });
+  });
+
+hostCmd
+  .command('secret <action>')
+  .description('set | list integration secrets at runtime (git-token, notion-token, signing-secret) — no restart')
+  .option('--key <name>', 'secret key')
+  .option('--value <secret>', 'secret value (for set)')
+  .option('--data-dir <path>', 'data root')
+  .action(async (action: string, opts) => {
+    await runHostSecret(action, { key: opts.key, value: opts.value, dataDir: opts.dataDir });
   });
 
 // ---------------------------------------------------------------------------

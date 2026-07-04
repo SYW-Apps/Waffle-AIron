@@ -109,6 +109,19 @@ async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: ServerResp
         admin.syncGit(cfg, cred, parts[2]);
         return sendJson(res, 200, { ok: true });
       }
+      if (req.method === 'GET' && parts.length === 4 && parts[3] === 'producers') return sendJson(res, 200, admin.listProducers(cfg, cred, parts[2]));
+      if (req.method === 'POST' && parts.length === 5 && parts[3] === 'producers') {
+        admin.configureProducer(cfg, cred, parts[2], parts[4], body.parentPageId);
+        return sendJson(res, 201, { ok: true });
+      }
+      if (req.method === 'DELETE' && parts.length === 5 && parts[3] === 'producers') {
+        admin.removeProducer(cfg, cred, parts[2], parts[4]);
+        return sendJson(res, 200, { ok: true });
+      }
+      if (req.method === 'POST' && parts.length === 6 && parts[3] === 'producers' && parts[5] === 'produce') {
+        await admin.produceProducer(cfg, cred, parts[2], parts[4]);
+        return sendJson(res, 200, { ok: true });
+      }
       if (req.method === 'GET' && parts.length === 4 && parts[3] === 'canvas-link') {
         return sendJson(res, 200, { url: admin.diagramViewLink(cfg, cred, parts[2]) });
       }
@@ -136,6 +149,14 @@ async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: ServerResp
       if (req.method === 'POST' && parts.length === 2) return sendJson(res, 201, { key: admin.mintKey(cfg, cred, body.project, (body.role ?? 'editor') as Role) });
       if (req.method === 'DELETE' && parts.length === 3) {
         admin.revokeKey(cfg, cred, parts[2]);
+        return sendJson(res, 200, { ok: true });
+      }
+    }
+
+    if (parts[1] === 'secrets') {
+      if (req.method === 'GET' && parts.length === 2) return sendJson(res, 200, { keys: admin.listSecrets(cfg, cred) });
+      if (req.method === 'PUT' && parts.length === 3) {
+        admin.setSecret(cfg, cred, parts[2], body.value);
         return sendJson(res, 200, { ok: true });
       }
     }

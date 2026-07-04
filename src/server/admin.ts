@@ -16,7 +16,9 @@ import {
   removeProjectRecord,
   existingProjectRoot,
 } from './projects.js';
-import { hostCore, hostGit, validateProjectAsComplete } from './adapters.js';
+import { hostCore, hostGit, hostProducer, validateProjectAsComplete } from './adapters.js';
+import { setSecret as storeSecret, listSecretKeys } from '../utils/secrets.js';
+import type { ProducerConfig } from '../producers/index.js';
 import type {
   ApiKeyRecord,
   HostConfig,
@@ -161,6 +163,49 @@ export function syncGit(cfg: HostConfig, credential: string | null, project: str
   const root = existingProjectRoot(cfg.dataDir, project);
   if (!root) throw new Error(`Unknown project "${project}".`);
   runWithProjectRoot(root, () => hostGit.sync());
+}
+
+// ── Producers ───────────────────────────────────────────────────────────────
+
+function boundProject(cfg: HostConfig, project: string): string {
+  const root = existingProjectRoot(cfg.dataDir, project);
+  if (!root) throw new Error(`Unknown project "${project}".`);
+  return root;
+}
+
+export function configureProducer(cfg: HostConfig, credential: string | null, project: string, target: string, parentPageId: string): void {
+  requireAdmin(credential);
+  runWithProjectRoot(boundProject(cfg, project), () => hostProducer.configure(target, parentPageId));
+}
+
+export async function produceProducer(cfg: HostConfig, credential: string | null, project: string, target: string): Promise<void> {
+  requireAdmin(credential);
+  const root = boundProject(cfg, project);
+  const base = process.env['WAIRON_PUBLIC_URL'] || `http://${cfg.host}:${cfg.port}`;
+  const diagramUrl = `${base}/view/diagram?token=${signViewToken(project, 'canvas')}`;
+  await runWithProjectRoot(root, () => hostProducer.produce(target, diagramUrl));
+}
+
+export function removeProducer(cfg: HostConfig, credential: string | null, project: string, target: string): void {
+  requireAdmin(credential);
+  runWithProjectRoot(boundProject(cfg, project), () => hostProducer.remove(target));
+}
+
+export function listProducers(cfg: HostConfig, credential: string | null, project: string): ProducerConfig[] {
+  requireAdmin(credential);
+  return runWithProjectRoot(boundProject(cfg, project), () => hostProducer.list());
+}
+
+// ── Secrets (runtime-configurable integration tokens) ─────────────────────────
+
+export function setSecret(_cfg: HostConfig, credential: string | null, key: string, value: string): void {
+  requireAdmin(credential);
+  storeSecret(key, value);
+}
+
+export function listSecrets(_cfg: HostConfig, credential: string | null): string[] {
+  requireAdmin(credential);
+  return listSecretKeys();
 }
 
 // ── Diagrams ──────────────────────────────────────────────────────────────

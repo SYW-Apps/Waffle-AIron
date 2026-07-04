@@ -38,6 +38,16 @@ migration*).
   Mermaid, draw.io, or Excalidraw on demand, and serves the interactive canvas to
   a browser via a short-lived HMAC-**signed** `/view/diagram` link (no bearer —
   the capability is in the URL), with generate/download bearer-authed.
+- **Producers** (`sdd_producers`) — project a spec tree into an external target as
+  a one-way, idempotent "wairon specs" subsection. **Notion** is the first producer
+  (raw REST, no new dependency): pages carry each component's methods + a Mermaid
+  diagram. Usable **hosted** (`wairon host producer …`, `/admin/projects/{id}/producers/*`)
+  and **locally** (`wairon produce notion --page <id>`, credential from flag/env/prompt).
+  The `DocPage` model is target-agnostic so Miro/others slot in later.
+- **Runtime secret store** — integration tokens (git, Notion, signing) resolve
+  data-dir store → env, and `wairon host secret set` / `PUT /admin/secrets/{key}`
+  set them at runtime, so an integration can be added to a live container without a
+  restart.
 - **Git-backed projects** (`sdd_git`) — a hosted project can relocate its source
   of truth to a git repo (`wairon host git enable --remote …`, or
   `POST /admin/projects/{id}/git`): the container clones it, works on an isolated

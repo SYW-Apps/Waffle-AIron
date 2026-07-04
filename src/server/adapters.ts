@@ -6,6 +6,7 @@ import { renderDiagram } from '../core/diagram.js';
 import { loadProjectConfig } from '../config/loader.js';
 import { createMcpServer } from '../mcp/server.js';
 import * as gitPortal from '../git/index.js';
+import * as producerPortal from '../producers/index.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 // ---------------------------------------------------------------------------
@@ -43,4 +44,12 @@ export const hostGit = {
   disable: gitPortal.disable,
   sync: gitPortal.sync,
   publish: gitPortal.publish,
+};
+
+// host_producer_adapter → sdd_producers (producer_portal)
+export const hostProducer = {
+  configure: producerPortal.configure,
+  produce: producerPortal.produce,
+  remove: producerPortal.remove,
+  list: producerPortal.list,
 };
