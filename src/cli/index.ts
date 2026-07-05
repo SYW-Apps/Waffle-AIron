@@ -42,6 +42,8 @@ import {
   runHostSecret,
   runHostPacks,
   runProduce,
+  runSubsystemAdd,
+  runSubsystemMove,
 } from '../commands/index.js';
 
 // Clean up any .old binary left over from a previous Windows self-update
@@ -444,6 +446,31 @@ hostCmd
   .option('--data-dir <path>', 'data root')
   .action(async (action: string, opts) => {
     await runHostSecret(action, { key: opts.key, value: opts.value, dataDir: opts.dataDir });
+  });
+
+// ---------------------------------------------------------------------------
+// subsystem — create/relocate external (chained) subprojects
+// ---------------------------------------------------------------------------
+
+const subsystemCmd = program
+  .command('subsystem')
+  .description('Manage subsystems — create and relocate external (chained) subprojects');
+
+subsystemCmd
+  .command('add <id>')
+  .description('Add an external subsystem: scaffold a child wairon project at --project-path and wire it into this project')
+  .requiredOption('--project-path <dir>', 'relative path where the child subproject lives / will be created')
+  .option('--name <name>', 'human-readable display name (defaults to id)')
+  .action(async (id: string, opts) => {
+    await runSubsystemAdd(id, { projectPath: opts.projectPath, name: opts.name });
+  });
+
+subsystemCmd
+  .command('move <id>')
+  .description('Relocate an external subsystem: move its subproject directory and update its projectPath link')
+  .requiredOption('--project-path <dir>', 'the new relative path for the subproject directory')
+  .action(async (id: string, opts) => {
+    await runSubsystemMove(id, { projectPath: opts.projectPath });
   });
 
 // ---------------------------------------------------------------------------

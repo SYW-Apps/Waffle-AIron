@@ -2,7 +2,18 @@ import * as path from 'path';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { logger } from '../utils/logger.js';
-import { ensureDir, writeFile, fromProjectRoot } from '../utils/fs.js';
+import { WaironError } from '../utils/errors.js';
+import {
+  ensureDir,
+  writeFile,
+  fromProjectRoot,
+  findSystemRoot,
+  getProjectRootOverride,
+  setProjectRoot,
+} from '../utils/fs.js';
+import { loadSystemSpec } from '../core/specs.js';
+import { createChainedSubsystem } from '../core/provision.js';
+import type { SubsystemSpec } from '../models/index.js';
 import {
   globalGuideFilePath,
   localGuideFilePath,
@@ -10,7 +21,7 @@ import {
   writeRootGuideDelegator,
 } from '../utils/ai-guide.js';
 import { writeYamlFile } from '../utils/yaml.js';
-import { isProjectInitialized, AI_PATHS } from '../config/loader.js';
+import { AI_PATHS } from '../config/loader.js';
 import {
   defaultTargetConfig,
   ARCHITECT_AGENT_ID,
@@ -40,19 +51,106 @@ interface AiGuidePlan {
 export async function runInit(options: InitOptions = {}): Promise<void> {
   logger.header('wairon init');
 
-  // Already initialized → nothing to bootstrap; agents derive from the spec tree
-  if (isProjectInitialized()) {
+  const cwd = process.cwd();
+  const ancestorRoot = findSystemRoot(cwd);
+
+  // Case (b): this very directory is already an initialized wairon project.
+  if (ancestorRoot && path.resolve(ancestorRoot) === path.resolve(cwd)) {
     logger.info('Project already initialized.');
     logger.info('Design your spec tree with the SDD architect skill, then run `wairon generate`.');
     return;
   }
 
+  // Case (c): cwd sits inside a parent wairon project → offer to make this
+  // directory an external subsystem of that parent instead of dead-ending.
+  if (ancestorRoot) {
+    await runInitAsExternalSubsystem(ancestorRoot, cwd, options);
+    return;
+  }
+
+  // Case (a): no ancestor project → bootstrap a fresh standalone project.
   if (options.yes) {
     await runInitNonInteractive();
     return;
   }
 
   await runInitInteractive();
+}
+
+// ---------------------------------------------------------------------------
+// External-subsystem branch: cwd is a subdirectory of an existing project
+// ---------------------------------------------------------------------------
+
+async function runInitAsExternalSubsystem(
+  parentRoot: string,
+  cwd: string,
+  options: InitOptions,
+): Promise<void> {
+  const relPath = path.relative(parentRoot, cwd) || '.';
+  const defaultId = path.basename(cwd);
+
+  logger.info(`Detected a parent wairon project at ${parentRoot}`);
+  logger.info(`This directory ("${relPath}") is not yet a wairon project.`);
+
+  if (!options.yes) {
+    const { proceed } = await inquirer.prompt<{ proceed: boolean }>([
+      {
+        type: 'confirm',
+        name: 'proceed',
+        message: `Create "${relPath}" as an external subsystem of the parent project?`,
+        default: true,
+      },
+    ]);
+    if (!proceed) {
+      logger.info('Cancelled — no changes made.');
+      logger.info('To design this subproject, add it from the parent with `wairon subsystem add` or the SDD tools.');
+      return;
+    }
+  }
+
+  let subsystemId = defaultId;
+  if (!options.yes) {
+    const { id } = await inquirer.prompt<{ id: string }>([
+      {
+        type: 'input',
+        name: 'id',
+        message: 'Subsystem id:',
+        default: defaultId,
+      },
+    ]);
+    subsystemId = id?.trim() || defaultId;
+  }
+
+  // Resolve the parent system name and wire the subsystem against the PARENT
+  // root, while createChainedSubsystem provisions this directory as the child.
+  const prevOverride = getProjectRootOverride();
+  setProjectRoot(parentRoot);
+  try {
+    const system = loadSystemSpec();
+    if (!system) {
+      throw new WaironError(`Parent project at ${parentRoot} has no system spec.`);
+    }
+    const now = new Date().toISOString();
+    const subsystem: SubsystemSpec = {
+      id: subsystemId,
+      name: subsystemId,
+      description: `External subsystem ${subsystemId}`,
+      parentSystem: system.name,
+      publicInterfaces: [],
+      projectPath: relPath,
+      trustedLinks: [],
+      status: 'draft',
+      createdAt: now,
+      updatedAt: now,
+    };
+    createChainedSubsystem(subsystem, subsystemId);
+  } finally {
+    setProjectRoot(prevOverride);
+  }
+
+  logger.success(`Created "${subsystemId}" as an external subsystem of the parent project.`);
+  logger.info(`Wired the parent (projectPath: ${relPath}) and scaffolded this directory as a child wairon project.`);
+  logger.info(`Design its spec tree from the parent using namespaced ids (e.g. ${subsystemId}::<component>).`);
 }
 
 // ---------------------------------------------------------------------------
