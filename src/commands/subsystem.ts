@@ -4,7 +4,12 @@ import { WaironError } from '../utils/errors.js';
 import { getProjectRoot } from '../utils/fs.js';
 import { isProjectInitialized } from '../config/loader.js';
 import { loadSystemSpec } from '../core/specs.js';
-import { createChainedSubsystem, moveSubsystemProject } from '../core/provision.js';
+import {
+  createChainedSubsystem,
+  moveSubsystemProject,
+  externalizeSubsystem,
+  internalizeSubsystem,
+} from '../core/provision.js';
 import type { SubsystemSpec } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -78,4 +83,34 @@ export async function runSubsystemMove(id: string, options: SubsystemMoveOptions
 
   moveSubsystemProject(id, options.projectPath);
   logger.success(`Moved subsystem "${id}" → ${options.projectPath}`);
+}
+
+export async function runSubsystemExternalize(id: string, options: SubsystemAddOptions = {}): Promise<void> {
+  logger.header('wairon subsystem externalize');
+
+  if (!isProjectInitialized()) {
+    throw new WaironError('Not inside an initialized wairon project.');
+  }
+  if (!options.projectPath) {
+    throw new WaironError('--project-path (the subproject destination) is required.');
+  }
+
+  externalizeSubsystem(id, options.projectPath);
+
+  const childDir = path.resolve(getProjectRoot(), options.projectPath);
+  logger.success(`Externalized subsystem "${id}" → ${options.projectPath}`);
+  logger.info(`Moved its specs into ${path.relative(process.cwd(), childDir) || '.'} (now a standalone subproject).`);
+  logger.info('Move the source code there yourself, then run `wairon validate` to confirm the tree.');
+}
+
+export async function runSubsystemInternalize(id: string): Promise<void> {
+  logger.header('wairon subsystem internalize');
+
+  if (!isProjectInitialized()) {
+    throw new WaironError('Not inside an initialized wairon project.');
+  }
+
+  internalizeSubsystem(id);
+  logger.success(`Internalized subsystem "${id}" back into this project.`);
+  logger.info('Its child .wai project was removed. Run `wairon validate` to confirm the tree.');
 }

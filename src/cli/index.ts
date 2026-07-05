@@ -44,6 +44,8 @@ import {
   runProduce,
   runSubsystemAdd,
   runSubsystemMove,
+  runSubsystemExternalize,
+  runSubsystemInternalize,
 } from '../commands/index.js';
 
 // Clean up any .old binary left over from a previous Windows self-update
@@ -471,6 +473,21 @@ subsystemCmd
   .requiredOption('--project-path <dir>', 'the new relative path for the subproject directory')
   .action(async (id: string, opts) => {
     await runSubsystemMove(id, { projectPath: opts.projectPath });
+  });
+
+subsystemCmd
+  .command('externalize <id>')
+  .description('Migrate an internal subsystem out into a standalone subproject at --project-path (moves specs, rewrites references; you move the source code)')
+  .requiredOption('--project-path <dir>', 'destination directory for the subproject')
+  .action(async (id: string, opts) => {
+    await runSubsystemExternalize(id, { projectPath: opts.projectPath });
+  });
+
+subsystemCmd
+  .command('internalize <id>')
+  .description('Migrate an external subsystem back into this project (moves specs back, deletes its child .wai project)')
+  .action(async (id: string) => {
+    await runSubsystemInternalize(id);
   });
 
 // ---------------------------------------------------------------------------

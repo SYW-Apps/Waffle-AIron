@@ -363,6 +363,45 @@ export function createMcpServer(): McpServer {
     },
   );
 
+  reg<{ subsystem: string; projectPath: string }>(server,
+    'sdd_externalize_subsystem',
+    {
+      description: 'Migrate an internal subsystem into a standalone subproject at projectPath: move its spec subtree out, mount it via projectPath, and rewrite cross-subsystem references to the new namespaced ids. Source code is not moved. Errors if the subsystem is missing or already external.',
+      inputSchema: {
+        subsystem: z.string().describe('The internal L1 subsystem id to externalize'),
+        projectPath: z.string().describe('Relative destination directory for the new subproject'),
+      },
+    },
+    ({ subsystem, projectPath }) => {
+      try {
+        const { externalizeSubsystem } = requireProvision();
+        externalizeSubsystem(subsystem, projectPath);
+        return text(`Externalized subsystem "${subsystem}" into subproject: ${projectPath}. Move its source code there and re-validate.`);
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  reg<{ subsystem: string }>(server,
+    'sdd_internalize_subsystem',
+    {
+      description: 'Migrate an external subsystem back into the parent tree: move its subproject spec subtree back under the parent, drop projectPath, delete the child .wai project, and rewrite references back to bare ids. Errors if the subsystem is not external or its subproject is not a single flat subsystem.',
+      inputSchema: {
+        subsystem: z.string().describe('The external L1 subsystem id to internalize'),
+      },
+    },
+    ({ subsystem }) => {
+      try {
+        const { internalizeSubsystem } = requireProvision();
+        internalizeSubsystem(subsystem);
+        return text(`Internalized subsystem "${subsystem}" back into this project (child .wai removed).`);
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
   reg<{ id: string; name: string; description: string; subsystem: string; componentType: 'Portal' | 'Orchestrator' | 'Supervisor' | 'Actor' | 'Store' | 'Index' | 'Registry' | 'Adapter' | 'Observer' | 'Specialist' | 'Repository' | 'Gateway'; owns?: string[]; dependsOn?: string[]; portalType?: 'HTTP_API' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'CLI' | 'NamedPipe' | 'IPC' | 'Custom' }>(server,
     'sdd_add_component',
     {
