@@ -784,8 +784,8 @@ var MODEL = __MODEL_JSON__;
       { selector: 'edge.stubHover', style: { 'line-color': t.selGlow, 'target-arrow-color': t.selGlow, width: 2.6, opacity: 1, 'z-compound-depth': 'top' } },
       { selector: '.dimmed', style: { opacity: 0.13 } },
       { selector: '.hasIssue', style: { 'border-color': t.issue, 'border-style': 'dashed', 'border-width': 3 } },
-      { selector: '.sel', style: { 'overlay-color': t.selGlow, 'overlay-opacity': 0.2, 'overlay-padding': 5 } },
-      { selector: '.hoverhl', style: { 'overlay-color': t.selGlow, 'overlay-opacity': 0.32, 'overlay-padding': 7 } },
+      { selector: '.sel', style: { 'overlay-color': t.selGlow, 'overlay-opacity': 0.22, 'overlay-padding': 6, 'border-color': t.selGlow, 'border-width': 3.5 } },
+      { selector: '.hoverhl', style: { 'overlay-color': t.selGlow, 'overlay-opacity': 0.3, 'overlay-padding': 7, 'border-color': t.selGlow, 'border-width': 2.5 } },
       // Focus mode: on selection, the picked element's edges are lifted above
       // every box and recoloured, while unrelated elements recede — so a single
       // block's relations read clearly even in a dense graph.
@@ -1970,6 +1970,19 @@ var MODEL = __MODEL_JSON__;
     ev.target.connectedEdges('.inneredge').addClass('stubHover');
   });
   cy.on('mouseout', 'node.proxyExt', function () { cy.remove('.revealHover'); cy.edges().removeClass('stubHover'); });
+
+  // Hover-highlight the SPECIFIC node under the cursor (inner tiles included) —
+  // not its parent box. Container boxes themselves aren't hover-highlighted; you
+  // hover their children.
+  cy.on('mouseover', 'node', function (ev) {
+    var n = ev.target;
+    if (n.isParent()) return;
+    var t = idOf(n);
+    if (t.group || t.cluster) return;
+    n.addClass('hoverhl');
+    n.connectedEdges('.inneredge').addClass('stubHover');
+  });
+  cy.on('mouseout', 'node', function (ev) { ev.target.removeClass('hoverhl'); ev.target.connectedEdges('.inneredge').removeClass('stubHover'); });
 
   cy.on('tap', 'node', function (ev) {
     var t = idOf(ev.target);

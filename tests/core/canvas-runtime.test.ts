@@ -254,6 +254,14 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     expect(innerEdge.hasClass('edgeOut')).toBe(true);
     cy.emit('tap');
 
+    // Hovering an inner tile highlights THAT tile, not its parent box.
+    const repoTile = cy.getElementById('i~component~billing-repo');
+    repoTile.emit('mouseover');
+    expect(repoTile.hasClass('hoverhl')).toBe(true);
+    expect(cy.getElementById('s~billing').hasClass('hoverhl')).toBe(false);
+    repoTile.emit('mouseout');
+    expect(repoTile.hasClass('hoverhl')).toBe(false);
+
     // header issue counter was populated by the app script (0 errors / 1 warning)
     expect(elements['issueCount'].textContent).toBe('0e/1w');
   });
