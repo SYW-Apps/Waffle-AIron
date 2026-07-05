@@ -179,6 +179,18 @@ migration*).
   flowchart modal (call drill-down with back navigation, PNG export), and an
   Export menu (PNG / draw.io / Excalidraw) that uses the CURRENT — possibly
   rearranged — positions. `--format <fmt>` flag added.
+- **Data-coupling overlay**: a **"Data coupling"** toggle overlays dashed edges
+  showing where a component/subsystem depends on **another subsystem's types**
+  (its data/model shape) even when there's no logical `dependsOn` — derived from
+  the same `usedBy`/type-reference data as the ERD, pointed at the owner
+  subsystem's published portal, and drawn only where a logical dependency doesn't
+  already exist. Off by default; the architecture view stays "logical
+  dependencies only" until asked. So a shared model library that everyone imports
+  no longer looks like an unconnected island.
+- **View-options panel**: the view toggles (Internals, Externals, Data coupling,
+  Issues, Rearrange) moved out of the crowded header bar into a **"⚙ View"**
+  dropdown, rendered as labelled on/off **switches** (with one-line descriptions)
+  instead of inline checkboxes; the panel stays open while you flip several.
 - **Scoped C4-style navigation**: every canvas view renders exactly one
   scope's direct children — System → top-level subsystems → a subsystem's
   children (nested subsystems + components) → a pattern's members,

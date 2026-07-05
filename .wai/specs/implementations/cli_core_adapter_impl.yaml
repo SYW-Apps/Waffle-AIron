@@ -1,16 +1,44 @@
-schemaVersion: "1.0.0"
-id: "cli_core_adapter_impl"
-name: "CLI Core Adapter Implementation"
-description: "Concrete implementation forwarding spec loading requests to the core portal."
-contract: "icli_core_adapter"
-sourcePath: "src/commands/index.ts"
+id: cli_core_adapter_impl
+name: CLI Core Adapter Implementation
+description: Concrete implementation forwarding spec loading requests to the core portal.
+contract: icli_core_adapter
+sourcePath: src/commands/index.ts
 methods:
-  - name: "loadSystemSpec"
+  - name: loadSystemSpec
     narrative:
       - stepNumber: 1
-        description: "Call loadSystemSpec on the core portal"
-        type: "call"
-        targetComponent: "core_portal"
-        targetMethod: "loadSystemSpec"
-createdAt: "2026-06-19T12:00:00Z"
-updatedAt: "2026-06-19T12:00:00Z"
+        description: Call loadSystemSpec on the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadSystemSpec
+  - name: createChainedSubsystem
+    narrative:
+      - stepNumber: 1
+        description: Forward chained-subsystem creation to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: createChainedSubsystem
+  - name: moveSubsystemProject
+    narrative:
+      - stepNumber: 1
+        description: Forward subproject relocation to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: moveSubsystemProject
+  - name: externalizeSubsystem
+    narrative:
+      - stepNumber: 1
+        description: Forward subsystem externalization to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: externalizeSubsystem
+  - name: internalizeSubsystem
+    narrative:
+      - stepNumber: 1
+        description: Forward subsystem internalization to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: internalizeSubsystem
+status: complete
+createdAt: '2026-06-19T12:00:00Z'
+updatedAt: '2026-07-05T18:45:21.947Z'

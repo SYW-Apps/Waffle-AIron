@@ -87,6 +87,38 @@ methods:
     description: Delegate diagram rendering to the diagram specialist.
     signature: 'renderDiagram(format: string): string'
     returns: string
+  - name: createChainedSubsystem
+    description: >-
+      Create a chained subproject subsystem: persist the parent L1 subsystem spec (with projectPath)
+      at the bound root, and scaffold an isolated child wairon project at that path when one does
+      not already exist (idempotent wire-only when the child is already initialized). Throws if
+      projectPath is empty.
+    signature: 'createChainedSubsystem(subsystem: SubsystemSpec, projectName: string): void'
+    returns: void
+  - name: moveSubsystemProject
+    description: >-
+      Relocate an external subsystem's subproject: move its directory on disk from the current
+      projectPath to newProjectPath and persist the updated link. Throws if the subsystem has no
+      projectPath (not an external subproject).
+    signature: 'moveSubsystemProject(subsystemId: string, newProjectPath: string): void'
+    returns: void
+  - name: externalizeSubsystem
+    description: >-
+      Externalize an internal subsystem into a standalone subproject: provision a child wairon
+      project at projectPath, move the subsystem's spec subtree (L1-L4 + types) there, reduce the
+      parent entry to a projectPath mount, and rewrite cross-subsystem references to the new
+      namespaced ids. Throws if the subsystem is missing or already external. Source code is not
+      moved.
+    signature: 'externalizeSubsystem(subsystemId: string, projectPath: string): void'
+    returns: void
+  - name: internalizeSubsystem
+    description: >-
+      Internalize an external subsystem back into the parent tree: move the subproject's spec
+      subtree back under the parent subsystem, drop projectPath, delete the child .wai project, and
+      rewrite references back to bare ids. Throws if the subsystem is not external or its subproject
+      is not a single flat subsystem.
+    signature: 'internalizeSubsystem(subsystemId: string): void'
+    returns: void
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-04T15:59:11.710Z'
+updatedAt: '2026-07-05T18:44:38.567Z'

@@ -6,22 +6,6 @@ description: >-
 contract: icli_runner
 sourcePath: src/cli/index.ts
 methods:
-  - name: runInit
-    narrative:
-      - stepNumber: 1
-        description: Verify if workspace is already initialized
-        type: local
-      - stepNumber: 2
-        description: Bootstrap standard .wai directory structure
-        type: local
-      - stepNumber: 3
-        description: Export SDD skills templates
-        type: call
-        targetComponent: cli_skills_adapter
-        targetMethod: exportSddSkills
-      - stepNumber: 4
-        description: Generate default L0/L1/L2 spec files if empty
-        type: local
   - name: runValidate
     narrative:
       - stepNumber: 1
@@ -234,6 +218,163 @@ methods:
         description: Return once produced
         type: return
         outcome: produced
+  - name: runSubsystemAdd
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the parent project root by walking up from cwd; error if cwd is not inside an
+          initialized wairon project
+        type: local
+      - stepNumber: 2
+        description: Require an explicit projectPath for an external (chained) subsystem
+        type: branch
+        condition: options.projectPath is not provided
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Reject: plain in-tree subsystems are authored via the SDD tools; this command creates
+          external subsystems
+        type: throw
+        error: '--project-path is required (use the sdd_add_subsystem tool for in-tree subsystems)'
+      - stepNumber: 4
+        description: >-
+          Compose the SubsystemSpec (id, display name from --name or id, description placeholder,
+          projectPath from options)
+        type: local
+      - stepNumber: 5
+        description: >-
+          Create the chained subsystem: wire the parent subsystem spec and scaffold the child
+          project
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: createChainedSubsystem
+      - stepNumber: 6
+        description: Print confirmation (parent subsystem id + child project path) and next steps
+        type: local
+  - name: runInit
+    narrative:
+      - stepNumber: 1
+        description: Resolve the nearest ancestor wairon project root by walking up from cwd
+        type: local
+      - stepNumber: 2
+        description: Detect whether cwd is itself an already-initialized wairon project root
+        type: branch
+        condition: the resolved root equals cwd (already initialized here)
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Report that the workspace is already initialized and stop
+        type: return
+        outcome: already initialized
+      - stepNumber: 4
+        description: Detect whether cwd sits inside a parent wairon project (subdirectory case)
+        type: branch
+        condition: a parent project root was found above cwd (root differs from cwd)
+        onTrueStep: 5
+        onFalseStep: 11
+      - stepNumber: 5
+        description: >-
+          Prompt the user to create this subdirectory as an external subsystem of the detected
+          parent project
+        type: local
+      - stepNumber: 6
+        description: Honor the user's choice
+        type: branch
+        condition: the user declined the prompt
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Print guidance and stop without changes
+        type: return
+        outcome: declined
+      - stepNumber: 8
+        description: >-
+          Compose the SubsystemSpec (id from --name or directory name, projectPath = relative path
+          from the parent root to cwd)
+        type: local
+      - stepNumber: 9
+        description: Wire the parent subsystem and scaffold this directory's child project
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: createChainedSubsystem
+      - stepNumber: 10
+        description: Report the external subsystem was created and stop
+        type: return
+        outcome: external subsystem created
+      - stepNumber: 11
+        description: Bootstrap the standard .wai directory structure
+        type: local
+      - stepNumber: 12
+        description: Export SDD skills templates
+        type: call
+        targetComponent: cli_skills_adapter
+        targetMethod: exportSddSkills
+      - stepNumber: 13
+        description: Generate default L0/L1/L2 spec files if empty
+        type: local
+  - name: runSubsystemMove
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the parent project root by walking up from cwd; error if cwd is not inside an
+          initialized wairon project
+        type: local
+      - stepNumber: 2
+        description: Require the new location
+        type: branch
+        condition: options.projectPath is not provided
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Reject: the new location is required'
+        type: throw
+        error: '--project-path (the new location) is required'
+      - stepNumber: 4
+        description: Move the subproject directory and update its projectPath link
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: moveSubsystemProject
+      - stepNumber: 5
+        description: Print confirmation (old path to new path)
+        type: local
+  - name: runSubsystemExternalize
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the parent project root by walking up from cwd; error if cwd is not inside an
+          initialized wairon project
+        type: local
+      - stepNumber: 2
+        description: Require the destination path
+        type: branch
+        condition: options.projectPath is not provided
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Reject: the destination is required'
+        type: throw
+        error: '--project-path (the subproject destination) is required'
+      - stepNumber: 4
+        description: Externalize the subsystem into a standalone subproject
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: externalizeSubsystem
+      - stepNumber: 5
+        description: >-
+          Print confirmation, the new subproject path, and a reminder to move the source code and
+          re-validate
+        type: local
+  - name: runSubsystemInternalize
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the parent project root by walking up from cwd; error if cwd is not inside an
+          initialized wairon project
+        type: local
+      - stepNumber: 2
+        description: Internalize the external subsystem back into the parent tree
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: internalizeSubsystem
+      - stepNumber: 3
+        description: Print confirmation and a reminder to re-validate
+        type: local
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-04T17:40:30.182Z'
+updatedAt: '2026-07-05T18:45:30.626Z'

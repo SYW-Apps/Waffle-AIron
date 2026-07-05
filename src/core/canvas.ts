@@ -109,6 +109,9 @@ export interface CanvasModel {
   }[];
   /** Type → type references derived from field type strings (ERD edges). */
   typeEdges: { from: string; to: string; field: string; card: '1' | '0..1' | '*' }[];
+  /** Data-coupling edges: a component depends on another subsystem's data
+   *  (uses a type it owns), pointed at that subsystem's published portal. */
+  dataEdges: { from: string; to: string }[];
   issues: { severity: string; code: string; message: string; specId?: string }[];
 }
 
@@ -267,6 +270,42 @@ export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
     }
   }
 
+  // Data-coupling edges: a component that USES a type owned by another subsystem
+  // depends on that subsystem's data — represented as a dependency on the owner
+  // subsystem's published portal (its front door). Shared (system-level) types
+  // have no owner, so imply no directional coupling. Rendered only under the toggle.
+  const portalOf = new Map<string, string>();
+  for (const sub of subsystems) {
+    for (const pi of sub.publicInterfaces) {
+      if (pi.component && !portalOf.has(sub.id)) portalOf.set(sub.id, pi.component);
+    }
+  }
+  const dataEdges: { from: string; to: string }[] = [];
+  const dataSeen = new Set<string>();
+  const addData = (from: string, ownerSub?: string): void => {
+    if (!from || !ownerSub) return;
+    const fromSub = componentSub.get(from);
+    if (!fromSub || fromSub === ownerSub) return; // same subsystem — not coupling
+    const target = portalOf.get(ownerSub);
+    if (!target || target === from) return;
+    const key = `${from}=>${target}`;
+    if (dataSeen.has(key)) return;
+    dataSeen.add(key);
+    dataEdges.push({ from, to: target });
+  };
+  const typeSubOf = new Map<string, string | undefined>(typeSpecs.map(t => [t.id, t.subsystem]));
+  for (const mt of modelTypes) {
+    if (!mt.subsystem) continue;
+    for (const u of mt.usedBy) addData(u.component, mt.subsystem);
+  }
+  for (const te of typeEdges) {
+    const fromSub = typeSubOf.get(te.from), toSub = typeSubOf.get(te.to);
+    if (fromSub && toSub && fromSub !== toSub) {
+      const src = portalOf.get(fromSub);
+      if (src) addData(src, toSub);
+    }
+  }
+
   return {
     system: {
       name: system?.name ?? 'System',
@@ -286,6 +325,7 @@ export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
     edges,
     types: modelTypes,
     typeEdges,
+    dataEdges,
     issues: issues.map(i => ({
       severity: i.severity,
       code: i.code,
@@ -413,6 +453,19 @@ header input[type="search"]::placeholder { color:var(--dim); }
 .dropdown .menu button:hover { background:var(--hover-bg); }
 .dropdown .menu .hint { display:block; color:var(--dim); font-size:10.5px; }
 
+/* Settings panel — toggle switches */
+.settings-menu { min-width:266px; }
+.swrow { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:7px 9px; border-radius:8px; cursor:pointer; user-select:none; }
+.swrow:hover { background:var(--hover-bg); }
+.swrow .lbl { font-size:12.5px; color:var(--ink); line-height:1.3; }
+.swrow .lbl .sub { display:block; color:var(--dim); font-size:10.5px; font-weight:400; }
+.toggle { position:relative; display:inline-block; width:36px; height:20px; flex:0 0 auto; }
+.toggle input { position:absolute; opacity:0; width:0; height:0; margin:0; }
+.toggle .track { position:absolute; inset:0; background:var(--input-bg); border:1px solid var(--chrome-border); border-radius:20px; transition:background .15s, border-color .15s; }
+.toggle .track::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; background:var(--dim); border-radius:50%; transition:transform .15s, background .15s; }
+.toggle input:checked + .track { background:var(--accent); border-color:var(--accent); }
+.toggle input:checked + .track::after { transform:translateX(16px); background:#fff; }
+
 #wrap { display:flex; height:calc(100vh - 52px); }
 #stage { flex:1; position:relative; }
 #cy { position:absolute; inset:0; }
@@ -479,10 +532,6 @@ body.presentation #exitPresent { display:block; }
   <nav id="crumbs"></nav>
   <span class="divider"></span>
   <input id="search" type="search" placeholder="Search this view…">
-  <label class="switch" title="Preview each child's own children and their relations inside its box"><input type="checkbox" id="internalsToggle"><span>Internals</span></label>
-  <label class="switch" title="Show out-of-scope dependencies as ghost references"><input type="checkbox" id="externalsToggle" checked><span>Externals</span></label>
-  <label class="switch"><input type="checkbox" id="issuesToggle"><span>Issues (<span id="issueCount"></span>)</span></label>
-  <label class="switch"><input type="checkbox" id="dragToggle"><span>Rearrange</span></label>
   <div class="seg" id="typesDetailSeg" style="display:none" title="ERD detail level">
     <button data-td="full">Full</button>
     <button data-td="fields">Fields</button>
@@ -490,6 +539,31 @@ body.presentation #exitPresent { display:block; }
     <button data-td="names">Names</button>
   </div>
   <span class="spacer"></span>
+  <div class="dropdown" id="settingsDd">
+    <button class="tbtn" id="settingsBtn" title="View options">⚙ View ▾</button>
+    <div class="menu settings-menu" id="settingsMenu">
+      <label class="swrow">
+        <span class="lbl">Internals<span class="sub">preview each box's children + relations</span></span>
+        <span class="toggle"><input type="checkbox" id="internalsToggle"><span class="track"></span></span>
+      </label>
+      <label class="swrow">
+        <span class="lbl">Externals<span class="sub">out-of-scope dependencies as ghosts</span></span>
+        <span class="toggle"><input type="checkbox" id="externalsToggle" checked><span class="track"></span></span>
+      </label>
+      <label class="swrow">
+        <span class="lbl">Data coupling<span class="sub">who uses another subsystem's types (dashed)</span></span>
+        <span class="toggle"><input type="checkbox" id="dataCouplingToggle"><span class="track"></span></span>
+      </label>
+      <label class="swrow">
+        <span class="lbl">Issues (<span id="issueCount"></span>)<span class="sub">overlay validation findings</span></span>
+        <span class="toggle"><input type="checkbox" id="issuesToggle"><span class="track"></span></span>
+      </label>
+      <label class="swrow">
+        <span class="lbl">Rearrange<span class="sub">drag boxes to fine-tune the layout</span></span>
+        <span class="toggle"><input type="checkbox" id="dragToggle"><span class="track"></span></span>
+      </label>
+    </div>
+  </div>
   <button class="tbtn" id="fitBtn" title="Fit graph to view">Fit</button>
   <button class="tbtn" id="resetBtn" title="Discard this view's saved rearrangement">Reset layout</button>
   <div class="dropdown" id="layoutDd">
@@ -667,6 +741,7 @@ var MODEL = __MODEL_JSON__;
     view: { kind: 'system', id: null },
     internals: false,
     externals: true,
+    dataCoupling: false,
     showIssues: false,
     query: '',
     selected: null,
@@ -778,14 +853,21 @@ var MODEL = __MODEL_JSON__;
         'text-background-color': t.bgLabel, 'text-background-opacity': 0.85, 'text-rotation': 'autorotate',
       }},
       { selector: 'edge.cross', style: { 'line-color': t.cross, 'target-arrow-color': t.cross, width: 2.6 } },
+      { selector: 'edge.datacoupling', style: {
+        'line-color': t.typeV.stroke, 'target-arrow-color': t.typeV.stroke, 'line-style': 'dashed',
+        width: 1.8, 'arrow-scale': 0.85, label: 'data(lbl)', 'font-size': 9, color: t.typeV.stroke,
+        'text-background-color': t.bgLabel, 'text-background-opacity': 0.85, 'text-rotation': 'autorotate',
+      }},
       { selector: 'edge.bundle', style: { width: 4.5, opacity: 0.7 } },
       { selector: 'edge.toghost', style: { 'line-style': 'dashed', opacity: 0.75 } },
       { selector: 'edge.inneredge', style: { width: 1.1, 'arrow-scale': 0.6, opacity: 0.8 } },
       { selector: 'edge.stubHover', style: { 'line-color': t.selGlow, 'target-arrow-color': t.selGlow, width: 2.6, opacity: 1, 'z-compound-depth': 'top' } },
       { selector: '.dimmed', style: { opacity: 0.13 } },
       { selector: '.hasIssue', style: { 'border-color': t.issue, 'border-style': 'dashed', 'border-width': 3 } },
-      { selector: '.sel', style: { 'overlay-color': t.selGlow, 'overlay-opacity': 0.2, 'overlay-padding': 5 } },
-      { selector: '.hoverhl', style: { 'overlay-color': t.selGlow, 'overlay-opacity': 0.32, 'overlay-padding': 7 } },
+      // Overlay only (no border) — a border changes node geometry, which nudges
+      // the compound parent and makes hover flicker; overlay never affects layout.
+      { selector: '.sel', style: { 'overlay-color': t.selGlow, 'overlay-opacity': 0.34, 'overlay-padding': 6 } },
+      { selector: '.hoverhl', style: { 'overlay-color': t.selGlow, 'overlay-opacity': 0.2, 'overlay-padding': 6 } },
       // Focus mode: on selection, the picked element's edges are lifted above
       // every box and recoloured, while unrelated elements recede — so a single
       // block's relations read clearly even in a dense graph.
@@ -823,7 +905,8 @@ var MODEL = __MODEL_JSON__;
       sw({ fill: t.ghostFill, stroke: t.ghostStroke }) + 'External&nbsp; ' +
       sw(t.proxyIn) + '\\u21E0 in-port&nbsp; ' + sw(t.proxyOut) + '\\u21E2 out-port&nbsp; — bold border = published · ' +
       '<span style="color:' + t.cross + '">red</span> = boundary hop · double-click = open<br>' +
-      'on select: <span style="color:' + t.selGlow + '">\\u2192 depends on</span>&nbsp; <span style="color:' + t.warn + '">\\u2190 used by</span>';
+      'on select: <span style="color:' + t.selGlow + '">\\u2192 depends on</span>&nbsp; <span style="color:' + t.warn + '">\\u2190 used by</span>' +
+      (state.dataCoupling ? '&nbsp; · &nbsp;<span style="color:' + t.typeV.stroke + '">- - \\u25B8 uses models</span>' : '');
   }
 
   // ---- view layout ---------------------------------------------------------------
@@ -968,11 +1051,12 @@ var MODEL = __MODEL_JSON__;
     return entry.kind === 'subsystem' ? { w: SUBBOX_W, h: SUBBOX_H } : { w: BOX_W, h: BOX_H };
   }
 
-  function viewEdges(scope, entries) {
+  function viewEdges(scope, entries, edgeList) {
+    edgeList = edgeList || MODEL.edges;
     var entryByAnchor = {};
     entries.forEach(function (e) { entryByAnchor[e.kind + ':' + e.id] = e; });
     var agg = {}, ghosts = {};
-    MODEL.edges.forEach(function (edge) {
+    edgeList.forEach(function (edge) {
       var a = childOfScopeContaining(edge.from, scope);
       var b = childOfScopeContaining(edge.to, scope);
       var aIn = a && entryByAnchor[a.kind + ':' + a.id];
@@ -1392,6 +1476,9 @@ var MODEL = __MODEL_JSON__;
     var entries = childrenOf(scope);
     var eles = [];
     var ve = viewEdges(scope, entries);
+    // Data-coupling overlay: same scoping pipeline, a different edge source.
+    var vd = state.dataCoupling ? viewEdges(scope, entries, MODEL.dataEdges) : { agg: {}, ghosts: {} };
+    Object.keys(vd.ghosts).forEach(function (g) { if (!ve.ghosts[g]) ve.ghosts[g] = vd.ghosts[g]; });
     var inners = {};
     entries.forEach(function (e) { inners[anchorNodeId(e)] = innerLayout(e); });
 
@@ -1564,16 +1651,18 @@ var MODEL = __MODEL_JSON__;
     // short and doesn't cut across the diagram. Falls back to left(incoming) /
     // right(outgoing) when the connection is dead-centre or unknown.
     var ghostDir = {}, ghostConn = {};
-    Object.keys(ve.agg).forEach(function (k) {
-      var e = ve.agg[k];
-      var conn = function (gid, other) {
-        var p = posByAnchor[other];
-        if (!p) return;
-        var gc = ghostConn[gid] = ghostConn[gid] || { sx: 0, sy: 0, n: 0 };
-        gc.sx += p.x; gc.sy += p.y; gc.n++;
-      };
-      if (ve.ghosts[e.src]) { ghostDir[e.src] = (ghostDir[e.src] || 0) | 1; conn(e.src, e.tgt); }
-      if (ve.ghosts[e.tgt]) { ghostDir[e.tgt] = (ghostDir[e.tgt] || 0) | 2; conn(e.tgt, e.src); }
+    var conn = function (gid, other) {
+      var p = posByAnchor[other];
+      if (!p) return;
+      var gc = ghostConn[gid] = ghostConn[gid] || { sx: 0, sy: 0, n: 0 };
+      gc.sx += p.x; gc.sy += p.y; gc.n++;
+    };
+    [ve.agg, vd.agg].forEach(function (aggMap) {
+      Object.keys(aggMap).forEach(function (k) {
+        var e = aggMap[k];
+        if (ve.ghosts[e.src]) { ghostDir[e.src] = (ghostDir[e.src] || 0) | 1; conn(e.src, e.tgt); }
+        if (ve.ghosts[e.tgt]) { ghostDir[e.tgt] = (ghostDir[e.tgt] || 0) | 2; conn(e.tgt, e.src); }
+      });
     });
     var bMinX = Infinity, bMaxX = -Infinity, bMinY = Infinity, bMaxY = -Infinity;
     Object.keys(posByAnchor).forEach(function (aid) {
@@ -1633,6 +1722,21 @@ var MODEL = __MODEL_JSON__;
         classes: (e.cross ? 'cross ' : '') + (bundle ? 'bundle ' : '') + (e.ghost ? 'toghost ' : '') + (dim ? 'dimmed' : ''),
       });
     });
+
+    // Data-coupling overlay edges (dashed, distinct) — only where there is NO
+    // logical dependency already, so it reveals the otherwise-hidden coupling.
+    if (state.dataCoupling) {
+      var di = 0;
+      Object.keys(vd.agg).forEach(function (key) {
+        if (ve.agg[key]) return;
+        var e = vd.agg[key];
+        var dim = state.query && (dimmedAnchors[e.src] || dimmedAnchors[e.tgt]);
+        eles.push({
+          data: { id: 'de' + (di++), source: e.src, target: e.tgt, lbl: e.n > 1 ? e.n + ' \\u00d7 models' : 'models' },
+          classes: 'datacoupling' + (e.ghost ? ' toghost' : '') + (dim ? ' dimmed' : ''),
+        });
+      });
+    }
 
     return eles;
   }
@@ -1963,13 +2067,35 @@ var MODEL = __MODEL_JSON__;
   function clearReveal() {
     cy.remove('.revealEdge');
   }
+  // Port hover reveals the cross-boundary line; the general node-hover below
+  // handles the per-node highlight and stub edges.
   cy.on('mouseover', 'node.proxyExt', function (ev) {
     cy.remove('.revealHover');
     if (ev.target.id() !== pinnedProxy) revealEdgesFor(ev.target, 'revealHover');
-    // Also light up the stub edges from this port to the inner tiles it serves.
-    ev.target.connectedEdges('.inneredge').addClass('stubHover');
   });
-  cy.on('mouseout', 'node.proxyExt', function () { cy.remove('.revealHover'); cy.edges().removeClass('stubHover'); });
+  cy.on('mouseout', 'node.proxyExt', function () { cy.remove('.revealHover'); });
+
+  // Hover-highlight the SPECIFIC node under the cursor (inner tiles/ports
+  // included), GUARDED so a stationary/oscillating pointer over the same node
+  // doesn't re-thrash classes (which flickered). Container boxes are skipped —
+  // you hover their children, not the box — and it never touches the selection.
+  var hoveredNode = null;
+  function setHover(n) {
+    var nid = n && n.length ? n.id() : null;
+    if ((hoveredNode ? hoveredNode.id() : null) === nid) return; // unchanged — no churn
+    if (hoveredNode && hoveredNode.length) { hoveredNode.removeClass('hoverhl'); hoveredNode.connectedEdges('.inneredge').removeClass('stubHover'); }
+    hoveredNode = null;
+    if (n && n.length && !n.isParent()) {
+      var t = idOf(n);
+      if (!(t.group || t.cluster)) {
+        n.addClass('hoverhl');
+        n.connectedEdges('.inneredge').addClass('stubHover');
+        hoveredNode = n;
+      }
+    }
+  }
+  cy.on('mouseover', 'node', function (ev) { setHover(ev.target); });
+  cy.on('mouseout', 'node', function (ev) { if (hoveredNode && hoveredNode.id() === ev.target.id()) setHover(null); });
 
   cy.on('tap', 'node', function (ev) {
     var t = idOf(ev.target);
@@ -2036,6 +2162,7 @@ var MODEL = __MODEL_JSON__;
   document.getElementById('search').addEventListener('input', function (ev) { state.query = ev.target.value.trim(); rebuild(false); });
   document.getElementById('internalsToggle').addEventListener('change', function (ev) { state.internals = ev.target.checked; rebuild(true); });
   document.getElementById('externalsToggle').addEventListener('change', function (ev) { state.externals = ev.target.checked; rebuild(true); });
+  document.getElementById('dataCouplingToggle').addEventListener('change', function (ev) { state.dataCoupling = ev.target.checked; renderLegend(); rebuild(true); });
   document.getElementById('issuesToggle').addEventListener('change', function (ev) { state.showIssues = ev.target.checked; rebuild(false); renderPanel(); });
   document.getElementById('dragToggle').addEventListener('change', function (ev) { cy.autolock(!ev.target.checked); });
   // Mode seg: Components ⇄ Types. Entering Types keeps the current subsystem
@@ -2131,6 +2258,13 @@ var MODEL = __MODEL_JSON__;
   var dd = wireDropdown('exportDd', 'exportBtn');
   var fdd = wireDropdown('flowExportDd', 'flowExportBtn');
   var ldd = wireDropdown('layoutDd', 'layoutBtn');
+  var sdd = wireDropdown('settingsDd', 'settingsBtn');
+  // Keep the settings panel open while flipping switches (clicks inside it don't
+  // bubble to the document-level close handler).
+  (function () {
+    var m = document.getElementById('settingsMenu');
+    if (m && m.addEventListener) m.addEventListener('click', function (ev) { if (ev && ev.stopPropagation) ev.stopPropagation(); });
+  })();
 
   // Layout picker: choose the auto-layout algorithm. Components use cytoscape's
   // native layouts; the ERD maps them onto its table-anchor strategies.
@@ -2158,6 +2292,7 @@ var MODEL = __MODEL_JSON__;
       if (dd.classList) dd.classList.remove('open');
       if (fdd.classList) fdd.classList.remove('open');
       if (ldd.classList) ldd.classList.remove('open');
+      if (sdd.classList) sdd.classList.remove('open');
     });
     document.addEventListener('keydown', function (ev) {
       if (ev.key === 'Escape') {

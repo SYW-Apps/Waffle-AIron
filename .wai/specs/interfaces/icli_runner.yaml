@@ -53,6 +53,33 @@ methods:
       from flag, env, or an interactive prompt.
     signature: 'runProduce(target: string, options: { page?: string; token?: string }): Promise<void>'
     returns: Promise<void>
+  - name: runSubsystemAdd
+    description: >-
+      Add an L1 subsystem to the current project. With --project-path it creates an external
+      (chained) subproject: wires the parent subsystem spec and scaffolds an isolated child wairon
+      project at that path.
+    signature: >-
+      runSubsystemAdd(id: string, options: { projectPath?: string; name?: string; yes?: boolean }):
+      Promise<void>
+    returns: Promise<void>
+  - name: runSubsystemMove
+    description: >-
+      Relocate an external subsystem to a new directory: moves the subproject folder and updates its
+      projectPath link in one step (wairon subsystem move).
+    signature: 'runSubsystemMove(id: string, options: { projectPath?: string }): Promise<void>'
+    returns: Promise<void>
+  - name: runSubsystemExternalize
+    description: >-
+      Migrate an internal subsystem out into a standalone subproject at --project-path (moves specs,
+      mounts via projectPath, rewrites references). Source code is moved by the user.
+    signature: 'runSubsystemExternalize(id: string, options: { projectPath?: string }): Promise<void>'
+    returns: Promise<void>
+  - name: runSubsystemInternalize
+    description: >-
+      Migrate an external subsystem's specs back into the parent tree and delete its child .wai
+      project.
+    signature: 'runSubsystemInternalize(id: string): Promise<void>'
+    returns: Promise<void>
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-04T17:38:14.196Z'
+updatedAt: '2026-07-05T18:44:47.073Z'

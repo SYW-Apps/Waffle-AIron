@@ -1,64 +1,91 @@
-schemaVersion: "1.0.0"
-id: "imcp_portal"
-name: "MCP Portal Interface"
-description: "Inbound Portal contract for the MCP subsystem: server bootstrap plus the sdd_* tool surface exposed over MCP stdio (JSON-RPC)."
-component: "mcp_portal"
+id: imcp_portal
+name: MCP Portal Interface
+description: >-
+  Inbound Portal contract for the MCP subsystem: server bootstrap plus the sdd_* tool surface
+  exposed over MCP stdio (JSON-RPC).
+component: mcp_portal
 methods:
-  - name: "createMcpServer"
-    description: "Initializes and registers the MCP server (tool registration + stdio transport)"
-    signature: "createMcpServer(): McpServer"
-    returns: "McpServer"
+  - name: createMcpServer
+    description: Initializes and registers the MCP server (tool registration + stdio transport)
+    signature: 'createMcpServer(): McpServer'
+    returns: McpServer
     endpoint:
-      transport: "Custom"
-      address: "stdio json-rpc: server bootstrap (wairon mcp serve)"
-  - name: "sdd_initialize_system"
-    description: "Tool: initialize the L0 system specification"
-    signature: "sdd_initialize_system(spec: SystemSpec): void"
-    returns: "void"
+      transport: Custom
+      address: 'stdio json-rpc: server bootstrap (wairon mcp serve)'
+  - name: sdd_initialize_system
+    description: 'Tool: initialize the L0 system specification'
+    signature: 'sdd_initialize_system(spec: SystemSpec): void'
+    returns: void
     endpoint:
-      transport: "Custom"
-      address: "mcp tools/call sdd_initialize_system"
-  - name: "sdd_add_subsystem"
-    description: "Tool: add an L1 subsystem under the system boundary"
-    signature: "sdd_add_subsystem(spec: SubsystemSpec): void"
-    returns: "void"
+      transport: Custom
+      address: mcp tools/call sdd_initialize_system
+  - name: sdd_add_subsystem
+    description: 'Tool: add an L1 subsystem under the system boundary'
+    signature: 'sdd_add_subsystem(spec: SubsystemSpec): void'
+    returns: void
     endpoint:
-      transport: "Custom"
-      address: "mcp tools/call sdd_add_subsystem"
-  - name: "sdd_add_component"
-    description: "Tool: add an L2 component under a subsystem"
-    signature: "sdd_add_component(spec: ComponentSpec): void"
-    returns: "void"
+      transport: Custom
+      address: mcp tools/call sdd_add_subsystem
+  - name: sdd_add_component
+    description: 'Tool: add an L2 component under a subsystem'
+    signature: 'sdd_add_component(spec: ComponentSpec): void'
+    returns: void
     endpoint:
-      transport: "Custom"
-      address: "mcp tools/call sdd_add_component"
-  - name: "sdd_define_interface"
-    description: "Tool: define an L3 interface contract for a component"
-    signature: "sdd_define_interface(spec: InterfaceSpec): void"
-    returns: "void"
+      transport: Custom
+      address: mcp tools/call sdd_add_component
+  - name: sdd_define_interface
+    description: 'Tool: define an L3 interface contract for a component'
+    signature: 'sdd_define_interface(spec: InterfaceSpec): void'
+    returns: void
     endpoint:
-      transport: "Custom"
-      address: "mcp tools/call sdd_define_interface"
-  - name: "sdd_write_narrative"
-    description: "Tool: write an L4 implementation spec with L5 method narratives"
-    signature: "sdd_write_narrative(spec: ImplementationSpec): void"
-    returns: "void"
+      transport: Custom
+      address: mcp tools/call sdd_define_interface
+  - name: sdd_write_narrative
+    description: 'Tool: write an L4 implementation spec with L5 method narratives'
+    signature: 'sdd_write_narrative(spec: ImplementationSpec): void'
+    returns: void
     endpoint:
-      transport: "Custom"
-      address: "mcp tools/call sdd_write_narrative"
-  - name: "sdd_validate_tree"
-    description: "Tool: run the architecture-conformance gate over the spec tree"
-    signature: "sdd_validate_tree(): ValidationResult"
-    returns: "ValidationResult"
+      transport: Custom
+      address: mcp tools/call sdd_write_narrative
+  - name: sdd_validate_tree
+    description: 'Tool: run the architecture-conformance gate over the spec tree'
+    signature: 'sdd_validate_tree(): ValidationResult'
+    returns: ValidationResult
     endpoint:
-      transport: "Custom"
-      address: "mcp tools/call sdd_validate_tree"
-  - name: "sdd_get_status"
-    description: "Tool: completeness status dashboard of the spec tree"
-    signature: "sdd_get_status(): string"
-    returns: "string"
+      transport: Custom
+      address: mcp tools/call sdd_validate_tree
+  - name: sdd_get_status
+    description: 'Tool: completeness status dashboard of the spec tree'
+    signature: 'sdd_get_status(): string'
+    returns: string
     endpoint:
-      transport: "Custom"
-      address: "mcp tools/call sdd_get_status"
-createdAt: "2026-06-19T12:00:00Z"
-updatedAt: "2026-07-02T00:00:00Z"
+      transport: Custom
+      address: mcp tools/call sdd_get_status
+  - name: sdd_move_subsystem_project
+    description: 'Tool: relocate an external subsystem''s subproject directory and update its projectPath link'
+    signature: 'sdd_move_subsystem_project(subsystemId: string, newProjectPath: string): void'
+    returns: void
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_move_subsystem_project
+  - name: sdd_externalize_subsystem
+    description: >-
+      Tool: migrate an internal subsystem into a standalone subproject at projectPath (moves specs,
+      mounts via projectPath, rewrites references)
+    signature: 'sdd_externalize_subsystem(subsystem: string, projectPath: string): void'
+    returns: void
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_externalize_subsystem
+  - name: sdd_internalize_subsystem
+    description: >-
+      Tool: migrate an external subsystem's specs back into the parent tree and delete its child
+      .wai project
+    signature: 'sdd_internalize_subsystem(subsystem: string): void'
+    returns: void
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_internalize_subsystem
+status: complete
+createdAt: '2026-06-19T12:00:00Z'
+updatedAt: '2026-07-05T18:45:01.286Z'

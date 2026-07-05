@@ -9,7 +9,7 @@ import { fileURLToPath } from 'url';
 import { setProjectRoot } from '../utils/fs.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import type { ValidationIssue } from '../core/validation.js';
-import { EndpointSchema, type Endpoint } from '../models/specs.js';
+import { EndpointSchema, type Endpoint, type SubsystemSpec } from '../models/specs.js';
 
 // ---------------------------------------------------------------------------
 // wairon MCP Server
@@ -35,6 +35,11 @@ function requireValidation() {
 function requireSpecs() {
   /* eslint-disable @typescript-eslint/no-require-imports */
   return require('../core/specs.js') as typeof import('../core/specs.js');
+}
+
+function requireProvision() {
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  return require('../core/provision.js') as typeof import('../core/provision.js');
 }
 
 
@@ -253,7 +258,7 @@ export function createMcpServer(): McpServer {
         const system = loadSystemSpec();
         if (!system) return errText('System spec must be initialized (sdd_initialize_system) first.');
         const now = new Date().toISOString();
-        saveSubsystemSpec({
+        const spec: SubsystemSpec = {
           id,
           name,
           description,
@@ -265,7 +270,15 @@ export function createMcpServer(): McpServer {
           status: 'draft',
           createdAt: now,
           updatedAt: now,
-        });
+        };
+        // External (chained) subsystem: also scaffold the child project so the
+        // projectPath never points at an empty directory.
+        if (projectPath && projectPath.trim() !== '') {
+          const { createChainedSubsystem } = requireProvision();
+          createChainedSubsystem(spec, name);
+          return text(`Successfully added external subsystem "${name}" (${id}) and scaffolded its child project at ${projectPath}.`);
+        }
+        saveSubsystemSpec(spec);
         return text(`Successfully added L1 Subsystem Spec "${name}" (${id}).`);
       } catch (e) {
         return errText(String(e));
@@ -324,6 +337,65 @@ export function createMcpServer(): McpServer {
           updatedAt: new Date().toISOString(),
         });
         return text(`Updated projectPath for subsystem "${subsystem}" to: ${projectPath || 'none (cleared)'}`);
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  reg<{ subsystem: string; newProjectPath: string }>(server,
+    'sdd_move_subsystem_project',
+    {
+      description: 'Relocate an external subsystem: move its subproject directory on disk to newProjectPath and update its projectPath link in one step. Errors if the subsystem has no projectPath (not an external subproject).',
+      inputSchema: {
+        subsystem: z.string().describe('The external L1 subsystem id to relocate'),
+        newProjectPath: z.string().describe('The new relative path for the subproject directory'),
+      },
+    },
+    ({ subsystem, newProjectPath }) => {
+      try {
+        const { moveSubsystemProject } = requireProvision();
+        moveSubsystemProject(subsystem, newProjectPath);
+        return text(`Moved subsystem "${subsystem}" to: ${newProjectPath}`);
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  reg<{ subsystem: string; projectPath: string }>(server,
+    'sdd_externalize_subsystem',
+    {
+      description: 'Migrate an internal subsystem into a standalone subproject at projectPath: move its spec subtree out, mount it via projectPath, and rewrite cross-subsystem references to the new namespaced ids. Source code is not moved. Errors if the subsystem is missing or already external.',
+      inputSchema: {
+        subsystem: z.string().describe('The internal L1 subsystem id to externalize'),
+        projectPath: z.string().describe('Relative destination directory for the new subproject'),
+      },
+    },
+    ({ subsystem, projectPath }) => {
+      try {
+        const { externalizeSubsystem } = requireProvision();
+        externalizeSubsystem(subsystem, projectPath);
+        return text(`Externalized subsystem "${subsystem}" into subproject: ${projectPath}. Move its source code there and re-validate.`);
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  reg<{ subsystem: string }>(server,
+    'sdd_internalize_subsystem',
+    {
+      description: 'Migrate an external subsystem back into the parent tree: move its subproject spec subtree back under the parent, drop projectPath, delete the child .wai project, and rewrite references back to bare ids. Errors if the subsystem is not external or its subproject is not a single flat subsystem.',
+      inputSchema: {
+        subsystem: z.string().describe('The external L1 subsystem id to internalize'),
+      },
+    },
+    ({ subsystem }) => {
+      try {
+        const { internalizeSubsystem } = requireProvision();
+        internalizeSubsystem(subsystem);
+        return text(`Internalized subsystem "${subsystem}" back into this project (child .wai removed).`);
       } catch (e) {
         return errText(String(e));
       }

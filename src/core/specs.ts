@@ -123,6 +123,43 @@ function stripNamespacePrefixes(id: string, prefix: string): string {
   return local;
 }
 
+/** True when `file` is the same as, or nested under, directory `dir`. */
+function isWithin(dir: string, file: string): boolean {
+  const d = path.resolve(dir);
+  const f = path.resolve(file);
+  return f === d || f.startsWith(d + path.sep);
+}
+
+/**
+ * Collapse a mount subsystem (has projectPath) and its same-id child realization
+ * into a single flat external subsystem: the child provides the content, the
+ * mount contributes projectPath. Genuine duplicates (both internal or both
+ * external) are left intact for the validator to flag.
+ */
+function mergeMountRealizations(subs: SubsystemSpec[]): SubsystemSpec[] {
+  const result: SubsystemSpec[] = [];
+  const indexById = new Map<string, number>();
+  for (const sub of subs) {
+    const at = indexById.get(sub.id);
+    if (at === undefined) {
+      indexById.set(sub.id, result.length);
+      result.push(sub);
+      continue;
+    }
+    const prev = result[at];
+    const prevExternal = !!prev.projectPath;
+    const subExternal = !!sub.projectPath;
+    if (prevExternal !== subExternal) {
+      const mount = prevExternal ? prev : sub;
+      const child = prevExternal ? sub : prev;
+      result[at] = { ...child, projectPath: mount.projectPath };
+    } else {
+      result.push(sub);
+    }
+  }
+  return result;
+}
+
 function stripNamespaceFromSubsystem(spec: SubsystemSpec, prefix: string): SubsystemSpec {
   return {
     ...spec,
@@ -591,6 +628,12 @@ export class SpecWorkspace {
       }
     }
 
+    // Collapse a mount and its same-id child realization into one flat external
+    // subsystem (child content + mount projectPath). index.paths.subsystem already
+    // resolves the id to the child file (child scan Object.assign wins), so content
+    // saves route to the child; saveSubsystemSpec strips projectPath there.
+    index.subsystems = mergeMountRealizations(index.subsystems);
+
     return index;
   }
 
@@ -958,6 +1001,14 @@ export class SpecWorkspace {
           };
         }
       }
+    }
+
+    // A flat external subsystem carries projectPath ONLY in its parent mount.
+    // getSubsystemPath routes a bare id whose realization lives in a subproject to
+    // the child file; never write projectPath there or the child becomes a mount
+    // that recurses into itself (e.g. lock's promote re-saving every subsystem).
+    if (!spec.id.includes('::') && specToWrite.projectPath && !isWithin(this.paths.specsDir(), p)) {
+      specToWrite = { ...specToWrite, projectPath: undefined };
     }
 
     const existing = this.loadSubsystemSpec(spec.id);

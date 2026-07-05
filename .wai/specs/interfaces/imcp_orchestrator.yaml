@@ -1,36 +1,52 @@
-schemaVersion: "1.0.0"
-id: "imcp_orchestrator"
-name: "MCP Orchestrator Interface"
-description: "Workflow contract for the sdd_* tools: each method owns one authoring/validation workflow behind the portal."
-component: "mcp_orchestrator"
+id: imcp_orchestrator
+name: MCP Orchestrator Interface
+description: >-
+  Workflow contract for the sdd_* tools: each method owns one authoring/validation workflow behind
+  the portal.
+component: mcp_orchestrator
 methods:
-  - name: "initializeSystem"
-    description: "Persist the L0 system specification"
-    signature: "initializeSystem(spec: SystemSpec): void"
-    returns: "void"
-  - name: "addSubsystem"
-    description: "Persist an L1 subsystem specification"
-    signature: "addSubsystem(spec: SubsystemSpec): void"
-    returns: "void"
-  - name: "addComponent"
-    description: "Verify the parent subsystem exists, then persist an L2 component specification"
-    signature: "addComponent(spec: ComponentSpec): void"
-    returns: "void"
-  - name: "defineInterface"
-    description: "Verify the owning component exists, then persist an L3 interface specification"
-    signature: "defineInterface(spec: InterfaceSpec): void"
-    returns: "void"
-  - name: "writeNarrative"
-    description: "Verify the contract interface exists, then persist an L4 implementation specification"
-    signature: "writeNarrative(spec: ImplementationSpec): void"
-    returns: "void"
-  - name: "validateTree"
-    description: "Run the architecture-conformance gate and return the result"
-    signature: "validateTree(): ValidationResult"
-    returns: "ValidationResult"
-  - name: "getStatus"
-    description: "Compose the spec-tree completeness dashboard"
-    signature: "getStatus(): string"
-    returns: "string"
-createdAt: "2026-07-02T00:00:00Z"
-updatedAt: "2026-07-02T00:00:00Z"
+  - name: initializeSystem
+    description: Persist the L0 system specification
+    signature: 'initializeSystem(spec: SystemSpec): void'
+    returns: void
+  - name: addSubsystem
+    description: Persist an L1 subsystem specification
+    signature: 'addSubsystem(spec: SubsystemSpec): void'
+    returns: void
+  - name: addComponent
+    description: Verify the parent subsystem exists, then persist an L2 component specification
+    signature: 'addComponent(spec: ComponentSpec): void'
+    returns: void
+  - name: defineInterface
+    description: Verify the owning component exists, then persist an L3 interface specification
+    signature: 'defineInterface(spec: InterfaceSpec): void'
+    returns: void
+  - name: writeNarrative
+    description: Verify the contract interface exists, then persist an L4 implementation specification
+    signature: 'writeNarrative(spec: ImplementationSpec): void'
+    returns: void
+  - name: validateTree
+    description: Run the architecture-conformance gate and return the result
+    signature: 'validateTree(): ValidationResult'
+    returns: ValidationResult
+  - name: getStatus
+    description: Compose the spec-tree completeness dashboard
+    signature: 'getStatus(): string'
+    returns: string
+  - name: moveSubsystemProject
+    description: >-
+      Relocate an external subsystem: verify it exists, then move its subproject directory and
+      update its projectPath link.
+    signature: 'moveSubsystemProject(subsystemId: string, newProjectPath: string): void'
+    returns: void
+  - name: externalizeSubsystem
+    description: Verify the subsystem exists and is internal, then externalize it into a standalone subproject.
+    signature: 'externalizeSubsystem(subsystemId: string, projectPath: string): void'
+    returns: void
+  - name: internalizeSubsystem
+    description: Verify the subsystem exists and is external, then internalize it back into the parent tree.
+    signature: 'internalizeSubsystem(subsystemId: string): void'
+    returns: void
+status: complete
+createdAt: '2026-07-02T00:00:00Z'
+updatedAt: '2026-07-05T18:44:51.295Z'
