@@ -430,4 +430,37 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     const dHub = Math.sqrt((gp.x - hub.x) ** 2 + (gp.y - hub.y) ** 2);
     expect(dPortal).toBeLessThan(dHub);
   });
+
+  it('the data-coupling overlay reveals cross-subsystem type usage with no logical dependency', () => {
+    proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-canvas-dc-'));
+    fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
+    setProjectRoot(proj);
+
+    saveSystemSpec({ schemaVersion: '1.0.0', name: 'RtSys', vision: 'v', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
+    saveSubsystemSpec({ id: 'billing', name: 'Billing', description: 'd', parentSystem: 'RtSys', publicInterfaces: [{ type: 'REST', details: 'api', component: 'billing-portal' }], trustedLinks: [], createdAt: now, updatedAt: now });
+    saveSubsystemSpec({ id: 'shipping', name: 'Shipping', description: 'd', parentSystem: 'RtSys', publicInterfaces: [{ type: 'REST', details: 'api', component: 'shipping-portal' }], trustedLinks: [], createdAt: now, updatedAt: now });
+    const comp = (over: Record<string, unknown>) => ({ id: '', name: '', description: 'd', subsystem: 'billing', componentType: 'Portal' as const, portalType: 'HTTP_API', owns: [] as string[], dependsOn: [] as string[], createdAt: now, updatedAt: now, ...over });
+    saveComponentSpec(comp({ id: 'billing-portal', name: 'Billing Portal' }) as any);
+    saveComponentSpec(comp({ id: 'shipping-portal', name: 'Shipping Portal', subsystem: 'shipping' }) as any);
+    // Billing's model references Shipping's model — a data/type dependency, but
+    // there is NO component dependsOn between the two subsystems.
+    saveTypeSpec({ id: 'bmodel', name: 'BModel', kind: 'entity', subsystem: 'shipping', fields: [], methods: [], createdAt: now, updatedAt: now } as any);
+    saveTypeSpec({ id: 'amodel', name: 'AModel', kind: 'entity', subsystem: 'billing', fields: [{ name: 'ship', type: 'BModel' }], methods: [], createdAt: now, updatedAt: now } as any);
+
+    const { cy, fire } = bootCanvas(renderCanvasHtml(buildCanvasModel()));
+
+    // No logical dependency → the two subsystems have no edge between them.
+    expect(cy.edges().length).toBe(0);
+
+    // Enable Data coupling → a dashed edge appears: billing uses shipping's models.
+    fire('dataCouplingToggle', 'change', { target: { checked: true } });
+    const dc = cy.edges().filter((e: any) => e.hasClass('datacoupling'));
+    expect(dc.length).toBe(1);
+    expect(dc[0].source().id()).toBe('s~billing');
+    expect(dc[0].target().id()).toBe('s~shipping');
+
+    // Toggling off removes it again.
+    fire('dataCouplingToggle', 'change', { target: { checked: false } });
+    expect(cy.edges().filter((e: any) => e.hasClass('datacoupling')).length).toBe(0);
+  });
 });
