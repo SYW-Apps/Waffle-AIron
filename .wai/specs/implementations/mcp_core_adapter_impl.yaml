@@ -1,107 +1,123 @@
-schemaVersion: "1.0.0"
-id: "mcp_core_adapter_impl"
-name: "MCP Core Adapter Implementation"
-description: "Pure 1:1 forwarding into sdd_core's front door (core portal). In-process require() seam today inside src/mcp/server.ts; swappable for a remote transport without changing callers."
-contract: "imcp_core_adapter"
-sourcePath: "src/mcp/server.ts"
+id: mcp_core_adapter_impl
+name: MCP Core Adapter Implementation
+description: >-
+  Pure 1:1 forwarding into sdd_core's front door (core portal). In-process require() seam today
+  inside src/mcp/server.ts; swappable for a remote transport without changing callers.
+contract: imcp_core_adapter
+sourcePath: src/mcp/server.ts
 methods:
-  - name: "loadSystemSpec"
+  - name: loadSystemSpec
     narrative:
       - stepNumber: 1
-        description: "Call loadSystemSpec on core portal"
-        type: "call"
-        targetComponent: "core_portal"
-        targetMethod: "loadSystemSpec"
-  - name: "resolveAgentTopology"
+        description: Call loadSystemSpec on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadSystemSpec
+  - name: resolveAgentTopology
     narrative:
       - stepNumber: 1
-        description: "Call resolveAgentTopology on core portal"
-        type: "call"
-        targetComponent: "core_portal"
-        targetMethod: "resolveAgentTopology"
-  - name: "saveSystemSpec"
+        description: Call resolveAgentTopology on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: resolveAgentTopology
+  - name: saveSystemSpec
     narrative:
       - stepNumber: 1
-        description: "Call saveSystemSpec on core portal"
-        type: "call"
-        targetComponent: "core_portal"
-        targetMethod: "saveSystemSpec"
-  - name: "saveSubsystemSpec"
+        description: Call saveSystemSpec on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: saveSystemSpec
+  - name: saveSubsystemSpec
     narrative:
       - stepNumber: 1
-        description: "Call saveSubsystemSpec on core portal"
-        type: "call"
-        targetComponent: "core_portal"
-        targetMethod: "saveSubsystemSpec"
-  - name: "loadSubsystemSpec"
+        description: Call saveSubsystemSpec on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: saveSubsystemSpec
+  - name: loadSubsystemSpec
     narrative:
       - stepNumber: 1
-        description: "Call loadSubsystemSpec on core portal"
-        type: "call"
-        targetComponent: "core_portal"
-        targetMethod: "loadSubsystemSpec"
-  - name: "loadSubsystemSpecs"
+        description: Call loadSubsystemSpec on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadSubsystemSpec
+  - name: loadSubsystemSpecs
     narrative:
       - stepNumber: 1
-        description: "Call loadSubsystemSpecs on core portal"
-        type: "call"
-        targetComponent: "core_portal"
-        targetMethod: "loadSubsystemSpecs"
-  - name: "saveComponentSpec"
+        description: Call loadSubsystemSpecs on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadSubsystemSpecs
+  - name: saveComponentSpec
     narrative:
       - stepNumber: 1
-        description: "Call saveComponentSpec on core portal"
-        type: "call"
-        targetComponent: "core_portal"
-        targetMethod: "saveComponentSpec"
-  - name: "loadComponentSpec"
+        description: Call saveComponentSpec on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: saveComponentSpec
+  - name: loadComponentSpec
     narrative:
       - stepNumber: 1
-        description: "Call loadComponentSpec on core portal"
-        type: "call"
-        targetComponent: "core_portal"
-        targetMethod: "loadComponentSpec"
-  - name: "loadComponentSpecs"
+        description: Call loadComponentSpec on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadComponentSpec
+  - name: loadComponentSpecs
     narrative:
       - stepNumber: 1
-        description: "Call loadComponentSpecs on core portal"
-        type: "call"
-        targetComponent: "core_portal"
-        targetMethod: "loadComponentSpecs"
-  - name: "saveInterfaceSpec"
+        description: Call loadComponentSpecs on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadComponentSpecs
+  - name: saveInterfaceSpec
     narrative:
       - stepNumber: 1
-        description: "Call saveInterfaceSpec on core portal"
-        type: "call"
-        targetComponent: "core_portal"
-        targetMethod: "saveInterfaceSpec"
-  - name: "loadInterfaceSpec"
+        description: Call saveInterfaceSpec on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: saveInterfaceSpec
+  - name: loadInterfaceSpec
     narrative:
       - stepNumber: 1
-        description: "Call loadInterfaceSpec on core portal"
-        type: "call"
-        targetComponent: "core_portal"
-        targetMethod: "loadInterfaceSpec"
-  - name: "loadInterfaceSpecs"
+        description: Call loadInterfaceSpec on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadInterfaceSpec
+  - name: loadInterfaceSpecs
     narrative:
       - stepNumber: 1
-        description: "Call loadInterfaceSpecs on core portal"
-        type: "call"
-        targetComponent: "core_portal"
-        targetMethod: "loadInterfaceSpecs"
-  - name: "saveImplementationSpec"
+        description: Call loadInterfaceSpecs on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadInterfaceSpecs
+  - name: saveImplementationSpec
     narrative:
       - stepNumber: 1
-        description: "Call saveImplementationSpec on core portal"
-        type: "call"
-        targetComponent: "core_portal"
-        targetMethod: "saveImplementationSpec"
-  - name: "loadImplementationSpecs"
+        description: Call saveImplementationSpec on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: saveImplementationSpec
+  - name: loadImplementationSpecs
     narrative:
       - stepNumber: 1
-        description: "Call loadImplementationSpecs on core portal"
-        type: "call"
-        targetComponent: "core_portal"
-        targetMethod: "loadImplementationSpecs"
-createdAt: "2026-06-19T12:00:00Z"
-updatedAt: "2026-07-02T00:00:00Z"
+        description: Call loadImplementationSpecs on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadImplementationSpecs
+  - name: createChainedSubsystem
+    narrative:
+      - stepNumber: 1
+        description: Call createChainedSubsystem on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: createChainedSubsystem
+  - name: moveSubsystemProject
+    narrative:
+      - stepNumber: 1
+        description: Call moveSubsystemProject on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: moveSubsystemProject
+status: complete
+createdAt: '2026-06-19T12:00:00Z'
+updatedAt: '2026-07-05T18:00:46.257Z'

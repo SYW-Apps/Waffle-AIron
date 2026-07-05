@@ -1,12 +1,24 @@
-schemaVersion: "1.0.0"
-id: "icli_core_adapter"
-name: "CLI Core Adapter Interface"
-description: "Adapter contract for the CLI to load specifications from the core subsystem."
-component: "cli_core_adapter"
+id: icli_core_adapter
+name: CLI Core Adapter Interface
+description: Adapter contract for the CLI to load specifications from the core subsystem.
+component: cli_core_adapter
 methods:
-  - name: "loadSystemSpec"
-    description: "Calls loadSystemSpec on the core portal"
-    signature: "loadSystemSpec(): SystemSpec | null"
-    returns: "SystemSpec | null"
-createdAt: "2026-06-19T12:00:00Z"
-updatedAt: "2026-06-19T12:00:00Z"
+  - name: loadSystemSpec
+    description: Calls loadSystemSpec on the core portal
+    signature: 'loadSystemSpec(): SystemSpec | null'
+    returns: SystemSpec | null
+  - name: createChainedSubsystem
+    description: >-
+      Calls createChainedSubsystem on the core portal to wire a chained subsystem in the parent and
+      scaffold its child project.
+    signature: 'createChainedSubsystem(subsystem: SubsystemSpec, projectName: string): void'
+    returns: void
+  - name: moveSubsystemProject
+    description: >-
+      Calls moveSubsystemProject on the core portal to move an external subsystem's directory and
+      update its projectPath link.
+    signature: 'moveSubsystemProject(subsystemId: string, newProjectPath: string): void'
+    returns: void
+status: complete
+createdAt: '2026-06-19T12:00:00Z'
+updatedAt: '2026-07-05T18:00:26.623Z'

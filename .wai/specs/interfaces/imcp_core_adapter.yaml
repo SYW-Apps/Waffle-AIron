@@ -1,64 +1,78 @@
-schemaVersion: "1.0.0"
-id: "imcp_core_adapter"
-name: "MCP Core Adapter Interface"
-description: "Client adapter contract for the MCP subsystem's hop into sdd_core: spec reads/writes and topology resolution via the core portal (in-process today; swappable for a remote transport)."
-component: "mcp_core_adapter"
+id: imcp_core_adapter
+name: MCP Core Adapter Interface
+description: >-
+  Client adapter contract for the MCP subsystem's hop into sdd_core: spec reads/writes and topology
+  resolution via the core portal (in-process today; swappable for a remote transport).
+component: mcp_core_adapter
 methods:
-  - name: "loadSystemSpec"
-    description: "Calls loadSystemSpec on core portal"
-    signature: "loadSystemSpec(): SystemSpec | null"
-    returns: "SystemSpec | null"
-  - name: "resolveAgentTopology"
-    description: "Calls resolveAgentTopology on core portal"
-    signature: "resolveAgentTopology(): AgentRecord[]"
-    returns: "AgentRecord[]"
-  - name: "saveSystemSpec"
-    description: "Calls saveSystemSpec on core portal"
-    signature: "saveSystemSpec(spec: SystemSpec): void"
-    returns: "void"
-  - name: "saveSubsystemSpec"
-    description: "Calls saveSubsystemSpec on core portal"
-    signature: "saveSubsystemSpec(spec: SubsystemSpec): void"
-    returns: "void"
-  - name: "loadSubsystemSpec"
-    description: "Calls loadSubsystemSpec on core portal"
-    signature: "loadSubsystemSpec(id: string): SubsystemSpec | null"
-    returns: "SubsystemSpec | null"
-  - name: "loadSubsystemSpecs"
-    description: "Calls loadSubsystemSpecs on core portal"
-    signature: "loadSubsystemSpecs(): SubsystemSpec[]"
-    returns: "SubsystemSpec[]"
-  - name: "saveComponentSpec"
-    description: "Calls saveComponentSpec on core portal"
-    signature: "saveComponentSpec(spec: ComponentSpec): void"
-    returns: "void"
-  - name: "loadComponentSpec"
-    description: "Calls loadComponentSpec on core portal"
-    signature: "loadComponentSpec(id: string): ComponentSpec | null"
-    returns: "ComponentSpec | null"
-  - name: "loadComponentSpecs"
-    description: "Calls loadComponentSpecs on core portal"
-    signature: "loadComponentSpecs(): ComponentSpec[]"
-    returns: "ComponentSpec[]"
-  - name: "saveInterfaceSpec"
-    description: "Calls saveInterfaceSpec on core portal"
-    signature: "saveInterfaceSpec(spec: InterfaceSpec): void"
-    returns: "void"
-  - name: "loadInterfaceSpec"
-    description: "Calls loadInterfaceSpec on core portal"
-    signature: "loadInterfaceSpec(id: string): InterfaceSpec | null"
-    returns: "InterfaceSpec | null"
-  - name: "loadInterfaceSpecs"
-    description: "Calls loadInterfaceSpecs on core portal"
-    signature: "loadInterfaceSpecs(): InterfaceSpec[]"
-    returns: "InterfaceSpec[]"
-  - name: "saveImplementationSpec"
-    description: "Calls saveImplementationSpec on core portal"
-    signature: "saveImplementationSpec(spec: ImplementationSpec): void"
-    returns: "void"
-  - name: "loadImplementationSpecs"
-    description: "Calls loadImplementationSpecs on core portal"
-    signature: "loadImplementationSpecs(): ImplementationSpec[]"
-    returns: "ImplementationSpec[]"
-createdAt: "2026-06-19T12:00:00Z"
-updatedAt: "2026-07-02T00:00:00Z"
+  - name: loadSystemSpec
+    description: Calls loadSystemSpec on core portal
+    signature: 'loadSystemSpec(): SystemSpec | null'
+    returns: SystemSpec | null
+  - name: resolveAgentTopology
+    description: Calls resolveAgentTopology on core portal
+    signature: 'resolveAgentTopology(): AgentRecord[]'
+    returns: AgentRecord[]
+  - name: saveSystemSpec
+    description: Calls saveSystemSpec on core portal
+    signature: 'saveSystemSpec(spec: SystemSpec): void'
+    returns: void
+  - name: saveSubsystemSpec
+    description: Calls saveSubsystemSpec on core portal
+    signature: 'saveSubsystemSpec(spec: SubsystemSpec): void'
+    returns: void
+  - name: loadSubsystemSpec
+    description: Calls loadSubsystemSpec on core portal
+    signature: 'loadSubsystemSpec(id: string): SubsystemSpec | null'
+    returns: SubsystemSpec | null
+  - name: loadSubsystemSpecs
+    description: Calls loadSubsystemSpecs on core portal
+    signature: 'loadSubsystemSpecs(): SubsystemSpec[]'
+    returns: SubsystemSpec[]
+  - name: saveComponentSpec
+    description: Calls saveComponentSpec on core portal
+    signature: 'saveComponentSpec(spec: ComponentSpec): void'
+    returns: void
+  - name: loadComponentSpec
+    description: Calls loadComponentSpec on core portal
+    signature: 'loadComponentSpec(id: string): ComponentSpec | null'
+    returns: ComponentSpec | null
+  - name: loadComponentSpecs
+    description: Calls loadComponentSpecs on core portal
+    signature: 'loadComponentSpecs(): ComponentSpec[]'
+    returns: ComponentSpec[]
+  - name: saveInterfaceSpec
+    description: Calls saveInterfaceSpec on core portal
+    signature: 'saveInterfaceSpec(spec: InterfaceSpec): void'
+    returns: void
+  - name: loadInterfaceSpec
+    description: Calls loadInterfaceSpec on core portal
+    signature: 'loadInterfaceSpec(id: string): InterfaceSpec | null'
+    returns: InterfaceSpec | null
+  - name: loadInterfaceSpecs
+    description: Calls loadInterfaceSpecs on core portal
+    signature: 'loadInterfaceSpecs(): InterfaceSpec[]'
+    returns: InterfaceSpec[]
+  - name: saveImplementationSpec
+    description: Calls saveImplementationSpec on core portal
+    signature: 'saveImplementationSpec(spec: ImplementationSpec): void'
+    returns: void
+  - name: loadImplementationSpecs
+    description: Calls loadImplementationSpecs on core portal
+    signature: 'loadImplementationSpecs(): ImplementationSpec[]'
+    returns: ImplementationSpec[]
+  - name: createChainedSubsystem
+    description: >-
+      Calls createChainedSubsystem on core portal to scaffold the child subproject and wire the
+      parent subsystem with its projectPath.
+    signature: 'createChainedSubsystem(subsystem: SubsystemSpec, projectName: string): void'
+    returns: void
+  - name: moveSubsystemProject
+    description: >-
+      Calls moveSubsystemProject on core portal to relocate an external subsystem's directory and
+      update its link.
+    signature: 'moveSubsystemProject(subsystemId: string, newProjectPath: string): void'
+    returns: void
+status: complete
+createdAt: '2026-06-19T12:00:00Z'
+updatedAt: '2026-07-05T18:00:30.374Z'

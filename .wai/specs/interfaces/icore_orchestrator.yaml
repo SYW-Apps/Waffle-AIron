@@ -87,6 +87,21 @@ methods:
     description: Delegate diagram rendering to the diagram specialist.
     signature: 'renderDiagram(format: string): string'
     returns: string
+  - name: createChainedSubsystem
+    description: >-
+      Create a chained subproject subsystem: persist the parent L1 subsystem spec (with projectPath)
+      at the bound root, and scaffold an isolated child wairon project at that path when one does
+      not already exist (idempotent wire-only when the child is already initialized). Throws if
+      projectPath is empty.
+    signature: 'createChainedSubsystem(subsystem: SubsystemSpec, projectName: string): void'
+    returns: void
+  - name: moveSubsystemProject
+    description: >-
+      Relocate an external subsystem's subproject: move its directory on disk from the current
+      projectPath to newProjectPath and persist the updated link. Throws if the subsystem has no
+      projectPath (not an external subproject).
+    signature: 'moveSubsystemProject(subsystemId: string, newProjectPath: string): void'
+    returns: void
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-04T15:59:11.710Z'
+updatedAt: '2026-07-05T18:00:23.113Z'

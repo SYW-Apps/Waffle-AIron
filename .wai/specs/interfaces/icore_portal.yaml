@@ -91,6 +91,19 @@ methods:
       artifact string.
     signature: 'renderDiagram(format: string): string'
     returns: string
+  - name: createChainedSubsystem
+    description: >-
+      Write path for chained-subsystem creation (wairon subsystem add / init external-subsystem
+      branch): wire the parent L1 subsystem with a projectPath and scaffold the child project at
+      that path.
+    signature: 'createChainedSubsystem(subsystem: SubsystemSpec, projectName: string): void'
+    returns: void
+  - name: moveSubsystemProject
+    description: >-
+      Write path for relocating an external subsystem (wairon subsystem move /
+      sdd_move_subsystem_project): move the subproject directory and update its projectPath link.
+    signature: 'moveSubsystemProject(subsystemId: string, newProjectPath: string): void'
+    returns: void
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-04T15:59:15.717Z'
+updatedAt: '2026-07-05T18:00:24.630Z'

@@ -209,6 +209,70 @@ methods:
         type: call
         targetComponent: diagram_specialist
         targetMethod: renderDiagram
+  - name: createChainedSubsystem
+    narrative:
+      - stepNumber: 1
+        description: Guard that the subsystem carries a projectPath
+        type: branch
+        condition: subsystem.projectPath is missing or empty
+        onFalseStep: 3
+      - stepNumber: 2
+        description: 'Reject: a chained subsystem requires a projectPath'
+        type: throw
+        error: projectPath is required to create a chained subsystem
+      - stepNumber: 3
+        description: Persist the parent L1 subsystem spec (with projectPath) at the bound project root
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSubsystemSpec
+      - stepNumber: 4
+        description: >-
+          Resolve the child project directory by joining the bound project root with
+          subsystem.projectPath
+        type: local
+      - stepNumber: 5
+        description: Skip scaffolding when the child directory is already an initialized wairon project
+        type: branch
+        condition: the child directory already contains an initialized wairon project
+        onTrueStep: 7
+        onFalseStep: 6
+      - stepNumber: 6
+        description: >-
+          Scope the project root to the child directory, provision an isolated child project named
+          projectName (default project.yaml + bootstrap L0 system spec), then restore the parent
+          root scope
+        type: local
+      - stepNumber: 7
+        description: Chained subsystem wired and child project ensured
+        type: return
+        outcome: chained subsystem created
+  - name: moveSubsystemProject
+    narrative:
+      - stepNumber: 1
+        description: Load the target subsystem spec
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSubsystemSpec
+      - stepNumber: 2
+        description: Guard that the subsystem is an external subproject
+        type: branch
+        condition: the subsystem has no existing projectPath
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Reject: the subsystem is not an external subproject'
+        type: throw
+        error: subsystem has no projectPath to move (not an external subproject)
+      - stepNumber: 4
+        description: >-
+          Resolve the old and new child directories from the bound project root; reject if the
+          target already exists; relocate the subproject directory on disk and set the subsystem's
+          projectPath to the new path
+        type: local
+      - stepNumber: 5
+        description: Persist the subsystem spec with its updated projectPath
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSubsystemSpec
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-04T15:59:35.814Z'
+updatedAt: '2026-07-05T18:00:37.629Z'
