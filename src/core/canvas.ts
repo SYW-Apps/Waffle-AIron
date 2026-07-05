@@ -781,6 +781,7 @@ var MODEL = __MODEL_JSON__;
       { selector: 'edge.bundle', style: { width: 4.5, opacity: 0.7 } },
       { selector: 'edge.toghost', style: { 'line-style': 'dashed', opacity: 0.75 } },
       { selector: 'edge.inneredge', style: { width: 1.1, 'arrow-scale': 0.6, opacity: 0.8 } },
+      { selector: 'edge.stubHover', style: { 'line-color': t.selGlow, 'target-arrow-color': t.selGlow, width: 2.6, opacity: 1, 'z-compound-depth': 'top' } },
       { selector: '.dimmed', style: { opacity: 0.13 } },
       { selector: '.hasIssue', style: { 'border-color': t.issue, 'border-style': 'dashed', 'border-width': 3 } },
       { selector: '.sel', style: { 'overlay-color': t.selGlow, 'overlay-opacity': 0.2, 'overlay-padding': 5 } },
@@ -1034,14 +1035,28 @@ var MODEL = __MODEL_JSON__;
     var q = state.query.toLowerCase();
     return t.id.toLowerCase().indexOf(q) >= 0 || t.name.toLowerCase().indexOf(q) >= 0;
   }
-  // Types visible in the current ERD scope: the focused subsystem's own
-  // (and nested) types, plus system-level shared ones. Unscoped = all.
+  // Types visible in the current ERD scope: the focused subsystem's own (and
+  // nested) types, plus only the system-level SHARED types those own types
+  // actually reference — NOT the entire shared library. (Including all shared
+  // types flooded a small subsystem's scope so it re-clustered and its single
+  // own type was unreachable.) Unscoped = all.
+  var SHARED_KEY = '\\u2014 shared \\u2014';
   function typesInScope() {
     var sid = state.view.id;
+    if (!sid) return MODEL.types;
+    // The shared-library cluster scopes to the system-level (unowned) types.
+    if (sid === SHARED_KEY) return MODEL.types.filter(function (t) { return !t.subsystem; });
+    var own = {};
+    MODEL.types.forEach(function (t) {
+      if (t.subsystem === sid || (t.subsystem && t.subsystem.indexOf(sid + '::') === 0)) own[t.id] = 1;
+    });
+    var sharedRef = {};
+    MODEL.typeEdges.forEach(function (e) {
+      if (own[e.from] && !own[e.to]) sharedRef[e.to] = 1;
+      if (own[e.to] && !own[e.from]) sharedRef[e.from] = 1;
+    });
     return MODEL.types.filter(function (t) {
-      if (!sid) return true;
-      if (!t.subsystem) return true;
-      return t.subsystem === sid || t.subsystem.indexOf(sid + '::') === 0;
+      return own[t.id] || (!t.subsystem && sharedRef[t.id]);
     });
   }
 
@@ -1062,7 +1077,7 @@ var MODEL = __MODEL_JSON__;
   // only as spacious as needed, and dense rings grow), and a tied innermost tier
   // becomes a proper ring rather than a pile at the centre — only a lone top
   // node truly sits at (0,0). Returns { id: {x, y} } (centres).
-  function concentricPositions(ids, degFn, sizeFn, aspectX) {
+  function concentricPositions(ids, degFn, sizeFn, aspectX, rankFn) {
     aspectX = aspectX || 1; // >1 widens the rings into landscape ellipses
     if (!ids.length) return {};
     var sorted = ids.slice().sort(function (a, b) { return (degFn(b) - degFn(a)) || (a < b ? -1 : 1); });
@@ -1090,10 +1105,26 @@ var MODEL = __MODEL_JSON__;
         var chordR = n >= 2 ? (maxW + ARC_GAP) / (2 * Math.sin(Math.PI / n)) : 0;
         radius = Math.max(chordR, prevRadius + prevMaxDim / 2 + maxDim / 2 + RING_GAP);
       }
-      members.forEach(function (id, i) {
-        var ang = n === 1 ? -Math.PI / 2 : (i / n) * 2 * Math.PI - Math.PI / 2;
-        pos[id] = { x: Math.cos(ang) * radius * aspectX, y: Math.sin(ang) * radius };
-      });
+      if (radius === 0) {
+        members.forEach(function (id) { pos[id] = { x: 0, y: 0 }; });
+      } else if (rankFn) {
+        // Flow order: sort the ring by rank (entrypoints first) and lay it out
+        // from TOP to BOTTOM on both sides — so entrypoints sit at the top and
+        // leaves at the bottom, at the same density (no new overlap).
+        var ordered = members.slice().sort(function (a, b) { return (rankFn(a) - rankFn(b)) || (a < b ? -1 : 1); });
+        var mL = Math.ceil(n / 2), mR = n - mL;
+        ordered.forEach(function (id, i) {
+          var ang = (i % 2 === 0)
+            ? -Math.PI / 2 - ((i / 2) + 0.5) / mL * Math.PI          // left column, top → bottom
+            : -Math.PI / 2 + (((i - 1) / 2) + 0.5) / Math.max(1, mR) * Math.PI; // right column
+          pos[id] = { x: Math.cos(ang) * radius * aspectX, y: Math.sin(ang) * radius };
+        });
+      } else {
+        members.forEach(function (id, i) {
+          var ang = n === 1 ? -Math.PI / 2 : (i / n) * 2 * Math.PI - Math.PI / 2;
+          pos[id] = { x: Math.cos(ang) * radius * aspectX, y: Math.sin(ang) * radius };
+        });
+      }
       prevRadius = radius; prevMaxDim = maxDim;
     });
     return pos;
@@ -1294,7 +1325,8 @@ var MODEL = __MODEL_JSON__;
         list.map(function (t) { return t.id; }),
         function (id) { return deg[id] || 0; },
         function (id) { return sizeById[id]; },
-        1.7 // widen into a landscape ellipse — screens are horizontal
+        1.7, // widen into a landscape ellipse — screens are horizontal
+        function (id) { return layer[id] || 0; } // upstream types toward the top
       );
       list.forEach(function (t) {
         var s = sizeById[t.id], p = cpos[t.id] || { x: 0, y: 0 };
@@ -1426,11 +1458,13 @@ var MODEL = __MODEL_JSON__;
     // cytoscape's physics layout afterwards in positionView().
     var posByAnchor = {}, x = 0;
     if (state.layout === 'concentric') {
+      entries.forEach(function (e) { calcLayer(e, {}); }); // dependency depth → flow rank
       var cpos = concentricPositions(
         entries.map(function (e) { return anchorNodeId(e); }),
         function (id) { return degByAnchor[id] || 0; },
         function (id) { return sizeByAnchor[id]; },
-        1.7 // widen into a landscape ellipse — screens are horizontal
+        1.7, // widen into a landscape ellipse — screens are horizontal
+        function (id) { return layerOf[id] || 0; } // entrypoints (layer 0) toward the top
       );
       entries.forEach(function (e) {
         var aid = anchorNodeId(e), s = sizeByAnchor[aid], p = cpos[aid] || { x: 0, y: 0 };
@@ -1932,8 +1966,10 @@ var MODEL = __MODEL_JSON__;
   cy.on('mouseover', 'node.proxyExt', function (ev) {
     cy.remove('.revealHover');
     if (ev.target.id() !== pinnedProxy) revealEdgesFor(ev.target, 'revealHover');
+    // Also light up the stub edges from this port to the inner tiles it serves.
+    ev.target.connectedEdges('.inneredge').addClass('stubHover');
   });
-  cy.on('mouseout', 'node.proxyExt', function () { cy.remove('.revealHover'); });
+  cy.on('mouseout', 'node.proxyExt', function () { cy.remove('.revealHover'); cy.edges().removeClass('stubHover'); });
 
   cy.on('tap', 'node', function (ev) {
     var t = idOf(ev.target);
@@ -2634,18 +2670,24 @@ var MODEL = __MODEL_JSON__;
     if (!node || !node.length) return;
     var core = node;
     if (node.isParent && node.isParent()) core = core.union(node.descendants());
-    var edges = core.connectedEdges().not('.inneredge');
+    var edges = core.connectedEdges();
+    // A top-level box focuses its EXTERNAL relations (not its own internal
+    // wiring); an inner tile or a port focuses the edges WITHIN its boundary too.
+    if (!(node.isChild && node.isChild())) edges = edges.not('.inneredge');
     if (!edges.length) return; // isolated node — nothing to spotlight
+    var reveal = edges.filter('.revealEdge');   // keep visible, keep its own style
+    var colorable = edges.not('.revealEdge');
     var keep = core.union(edges).union(edges.connectedNodes());
     keep = keep.union(keep.ancestors());
     cy.elements().addClass('defocus');
     keep.removeClass('defocus');
     // Colour by direction: outgoing (this → dependency) vs incoming (← dependent).
-    var outE = edges.filter(function (e) { return core.contains(e.source()) && !core.contains(e.target()); });
-    var inE = edges.filter(function (e) { return core.contains(e.target()) && !core.contains(e.source()); });
+    var outE = colorable.filter(function (e) { return core.contains(e.source()) && !core.contains(e.target()); });
+    var inE = colorable.filter(function (e) { return core.contains(e.target()) && !core.contains(e.source()); });
     outE.addClass('edgeOut').removeClass('defocus');
     inE.addClass('edgeIn').removeClass('defocus');
-    edges.not(outE).not(inE).addClass('edgeFocus').removeClass('defocus');
+    colorable.not(outE).not(inE).addClass('edgeFocus').removeClass('defocus');
+    reveal.removeClass('defocus');
   }
 
   function select(kind, id, focus) {

@@ -203,7 +203,11 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     expect(reveals.length).toBe(1);
     expect(reveals[0].source().id()).toBe(outProxy.id());
     expect(reveals[0].target().id()).toBe(inProxy.id());
+    // Hovering a port also lights up the stub edge to the tile it serves.
+    const outStub = cy.edges().filter((e: any) => e.source().id() === 'i~component~shipping-client' && e.target().id() === outProxy.id());
+    expect(outStub.hasClass('stubHover')).toBe(true);
     outProxy.emit('mouseout');
+    expect(outStub.hasClass('stubHover')).toBe(false);
     reveals = cy.edges().filter((e: any) => e.hasClass('revealEdge'));
     expect(reveals.length).toBe(0);
 
@@ -222,6 +226,8 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     expect(outProxy.hasClass('sel')).toBe(true);
     expect(elements['panel'].innerHTML).toContain('Billing Portal');
     expect(elements['panel'].innerHTML).toContain('external dependency');
+    // Selecting the port highlights its inner stub (the port is the target → incoming).
+    expect(outStub.hasClass('edgeIn')).toBe(true);
     outProxy.emit('mouseout');
     reveals = cy.edges().filter((e: any) => e.hasClass('revealEdge'));
     expect(reveals.length).toBe(1); // pinned while selected
@@ -240,6 +246,13 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     expect(outProxy.hasClass('sel')).toBe(false);
     reveals = cy.edges().filter((e: any) => e.hasClass('revealEdge'));
     expect(reveals.length).toBe(0);
+
+    // Focusing an INNER tile highlights the wiring within its box: billing-portal
+    // → billing-repo is a pure inner edge, and the portal is its source (outgoing).
+    cy.getElementById('i~component~billing-portal').emit('tap');
+    const innerEdge = cy.edges().filter((e: any) => e.source().id() === 'i~component~billing-portal' && e.target().id() === 'i~component~billing-repo');
+    expect(innerEdge.hasClass('edgeOut')).toBe(true);
+    cy.emit('tap');
 
     // header issue counter was populated by the app script (0 errors / 1 warning)
     expect(elements['issueCount'].textContent).toBe('0e/1w');
@@ -285,43 +298,40 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     expect(elements['panel'].innerHTML).not.toContain('root vision');
   });
 
-  it('degrades a huge ERD to a subsystem overview, then drills back to full detail', () => {
+  it('a huge ERD clusters, and a single-type subsystem stays reachable past a giant shared library', () => {
     proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-canvas-erd-'));
     fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
     setProjectRoot(proj);
 
     saveSystemSpec({ schemaVersion: '1.0.0', name: 'BigSys', vision: 'v', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
-    const subs = ['alpha', 'beta', 'gamma'];
-    subs.forEach(sid => saveSubsystemSpec({ id: sid, name: sid.toUpperCase(), description: 'd', parentSystem: 'BigSys', publicInterfaces: [], trustedLinks: [], createdAt: now, updatedAt: now }));
-    // 3 × 140 = 420 types — above the cluster threshold (400).
-    subs.forEach(sid => {
-      for (let i = 0; i < 140; i++) {
-        saveTypeSpec({ id: sid + '_t' + i, name: sid + 'T' + i, kind: 'value-object', subsystem: sid, fields: [], methods: [], createdAt: now, updatedAt: now } as any);
-      }
-    });
+    saveSubsystemSpec({ id: 'solo', name: 'Solo', description: 'd', parentSystem: 'BigSys', publicInterfaces: [], trustedLinks: [], createdAt: now, updatedAt: now });
+    // A giant shared (system-level) library + a subsystem owning ONE type:
+    // 400 shared + 1 owned = 401, above the cluster threshold (400).
+    for (let i = 0; i < 400; i++) {
+      saveTypeSpec({ id: 'shared_' + i, name: 'Shared' + i, kind: 'value-object', fields: [], methods: [], createdAt: now, updatedAt: now } as any);
+    }
+    saveTypeSpec({ id: 'solo_t0', name: 'SoloType', kind: 'value-object', subsystem: 'solo', fields: [], methods: [], createdAt: now, updatedAt: now } as any);
 
     const { cy, elements, fire } = bootCanvas(renderCanvasHtml(buildCanvasModel()));
     fire('openTypesBtn', 'click', {});
 
-    // Overview: one node per subsystem cluster, no per-type tables, and a notice.
-    expect(idPrefix(cy, 'TC~').length).toBe(3);
+    // Overview: one node per cluster (the shared library + the solo subsystem).
+    expect(idPrefix(cy, 'TC~').length).toBe(2);
     expect(idPrefix(cy, 'T~').length).toBe(0);
     expect(elements['typesWarn'].innerHTML).toContain('subsystem overview');
+    expect(cy.getElementById('TC~solo').length).toBe(1);
 
-    // Drill into a cluster → its 140 types render (still names-only for perf:
-    // header boxes, no field-row nodes) — everything is reachable.
-    cy.getElementById('TC~alpha').emit('dbltap');
+    // Drilling the subsystem shows its ONE type — it is NOT flooded back into a
+    // cluster by the shared library (the reported bug), so the type is reachable.
+    cy.getElementById('TC~solo').emit('dbltap');
     expect(idPrefix(cy, 'TC~').length).toBe(0);
-    expect(idPrefix(cy, 'T~').length).toBe(140);
-    expect(idPrefix(cy, 'TF~').length).toBe(0);
-    expect(elements['typesWarn'].innerHTML).toContain('names only');
+    expect(idPrefix(cy, 'T~').length).toBe(1);
+    expect(cy.getElementById('T~solo_t0').length).toBe(1);
 
-    // Breadcrumbs stay in TYPES mode while scoped: every ancestor crumb
-    // navigates to the parent's types (data-ck="types"), never its components.
+    // Breadcrumbs stay in TYPES mode while scoped.
     expect(elements['crumbs'].innerHTML).toContain('data-ck="types"');
     expect(elements['crumbs'].innerHTML).not.toContain('data-ck="subsystem"');
-    expect(elements['crumbs'].innerHTML).toContain('Types (ERD)');
-  }, 30000); // 420 spec writes on Windows under parallel load are I/O-heavy
+  }, 30000); // 400+ spec writes on Windows under parallel load are I/O-heavy
 
   it('the layout picker switches algorithms: component relayout and ERD grid flattens groups', () => {
     proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-canvas-layout-'));
@@ -393,14 +403,15 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     cy.getElementById('s~billing').emit('dbltap');
     const ghost = cy.getElementById('x~subsystem~shipping');
     expect(ghost.length).toBe(1);
-    let minLeft = Infinity, minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     cy.nodes().filter((n: any) => n.id().indexOf('c~') === 0).forEach((n: any) => {
       const px = n.position('x'), py = n.position('y'), hw = (n.data('w') || 0) / 2, hh = (n.data('h') || 0) / 2;
-      minLeft = Math.min(minLeft, px - hw);
       minX = Math.min(minX, px - hw); maxX = Math.max(maxX, px + hw);
       minY = Math.min(minY, py - hh); maxY = Math.max(maxY, py + hh);
     });
-    expect(ghost.position('x')).toBeLessThan(minLeft);
+    // The external sits OUTSIDE the node cluster (never dropped in the middle).
+    const g = ghost.position();
+    expect(g.x > minX && g.x < maxX && g.y > minY && g.y < maxY).toBe(false);
     // Concentric is stretched into a landscape ellipse (wider than tall).
     expect(maxX - minX).toBeGreaterThan(maxY - minY);
 

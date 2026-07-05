@@ -197,12 +197,17 @@ migration*).
   the parent; (b) **focus mode** — selecting any box lifts its own edges above
   everything and recolours them **by direction** (outgoing "depends on →" vs
   incoming "← used by") while unrelated elements recede, so one block's relations
-  and their direction read clearly in a busy graph; (c) the **Types ERD degrades
+  and their direction read clearly in a busy graph (focusing an inner tile or an
+  in/out port now highlights the wiring within its box too, not only top-level
+  boxes — and hovering a port lights the stub edges to the tiles it serves); (c) the **Types ERD degrades
   gracefully on huge systems** — above ~400 in-scope types it renders a
   subsystem-cluster overview (double-click a cluster to open it), above ~120 it
   falls back to header-only boxes, with a banner and a "render full detail
   anyway" override — so a 1000+-type system stays interactive yet fully
-  navigable; (d) **breadcrumbs preserve the active mode** — walking up from a
+  navigable — and drilling a subsystem's ERD now shows its own types plus only
+  the shared types they *reference*, not the entire shared library (previously a
+  subsystem owning a single type was unreachable because the whole shared model
+  flooded its scope and re-clustered it); (d) **breadcrumbs preserve the active mode** — walking up from a
   subsystem's ERD now lands on the *parent's types* (not its components), so you
   can climb from a subsystem's types all the way to the system-wide ERD; the
   Components/Types toggle stays the explicit way to switch mode.
@@ -228,6 +233,8 @@ migration*).
   stretched into a **landscape ellipse** (screens are horizontal) rather than a
   tall circle, and **Force** seeds from a diagonal cascade so it relaxes toward an
   entrypoints-top-left → leaves-bottom-right flow, then widens into landscape.
+  Concentric also orders each ring by flow rank (entrypoints toward the top,
+  leaves toward the bottom) and places externals toward the node they connect to.
 
 ### Technology boundaries (L4 `technologies`)
 
