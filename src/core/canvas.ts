@@ -453,6 +453,19 @@ header input[type="search"]::placeholder { color:var(--dim); }
 .dropdown .menu button:hover { background:var(--hover-bg); }
 .dropdown .menu .hint { display:block; color:var(--dim); font-size:10.5px; }
 
+/* Settings panel — toggle switches */
+.settings-menu { min-width:266px; }
+.swrow { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:7px 9px; border-radius:8px; cursor:pointer; user-select:none; }
+.swrow:hover { background:var(--hover-bg); }
+.swrow .lbl { font-size:12.5px; color:var(--ink); line-height:1.3; }
+.swrow .lbl .sub { display:block; color:var(--dim); font-size:10.5px; font-weight:400; }
+.toggle { position:relative; display:inline-block; width:36px; height:20px; flex:0 0 auto; }
+.toggle input { position:absolute; opacity:0; width:0; height:0; margin:0; }
+.toggle .track { position:absolute; inset:0; background:var(--input-bg); border:1px solid var(--chrome-border); border-radius:20px; transition:background .15s, border-color .15s; }
+.toggle .track::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; background:var(--dim); border-radius:50%; transition:transform .15s, background .15s; }
+.toggle input:checked + .track { background:var(--accent); border-color:var(--accent); }
+.toggle input:checked + .track::after { transform:translateX(16px); background:#fff; }
+
 #wrap { display:flex; height:calc(100vh - 52px); }
 #stage { flex:1; position:relative; }
 #cy { position:absolute; inset:0; }
@@ -519,11 +532,6 @@ body.presentation #exitPresent { display:block; }
   <nav id="crumbs"></nav>
   <span class="divider"></span>
   <input id="search" type="search" placeholder="Search this view…">
-  <label class="switch" title="Preview each child's own children and their relations inside its box"><input type="checkbox" id="internalsToggle"><span>Internals</span></label>
-  <label class="switch" title="Show out-of-scope dependencies as ghost references"><input type="checkbox" id="externalsToggle" checked><span>Externals</span></label>
-  <label class="switch" title="Overlay data/model coupling: who uses another subsystem's types (dashed)"><input type="checkbox" id="dataCouplingToggle"><span>Data coupling</span></label>
-  <label class="switch"><input type="checkbox" id="issuesToggle"><span>Issues (<span id="issueCount"></span>)</span></label>
-  <label class="switch"><input type="checkbox" id="dragToggle"><span>Rearrange</span></label>
   <div class="seg" id="typesDetailSeg" style="display:none" title="ERD detail level">
     <button data-td="full">Full</button>
     <button data-td="fields">Fields</button>
@@ -531,6 +539,31 @@ body.presentation #exitPresent { display:block; }
     <button data-td="names">Names</button>
   </div>
   <span class="spacer"></span>
+  <div class="dropdown" id="settingsDd">
+    <button class="tbtn" id="settingsBtn" title="View options">⚙ View ▾</button>
+    <div class="menu settings-menu" id="settingsMenu">
+      <label class="swrow">
+        <span class="lbl">Internals<span class="sub">preview each box's children + relations</span></span>
+        <span class="toggle"><input type="checkbox" id="internalsToggle"><span class="track"></span></span>
+      </label>
+      <label class="swrow">
+        <span class="lbl">Externals<span class="sub">out-of-scope dependencies as ghosts</span></span>
+        <span class="toggle"><input type="checkbox" id="externalsToggle" checked><span class="track"></span></span>
+      </label>
+      <label class="swrow">
+        <span class="lbl">Data coupling<span class="sub">who uses another subsystem's types (dashed)</span></span>
+        <span class="toggle"><input type="checkbox" id="dataCouplingToggle"><span class="track"></span></span>
+      </label>
+      <label class="swrow">
+        <span class="lbl">Issues (<span id="issueCount"></span>)<span class="sub">overlay validation findings</span></span>
+        <span class="toggle"><input type="checkbox" id="issuesToggle"><span class="track"></span></span>
+      </label>
+      <label class="swrow">
+        <span class="lbl">Rearrange<span class="sub">drag boxes to fine-tune the layout</span></span>
+        <span class="toggle"><input type="checkbox" id="dragToggle"><span class="track"></span></span>
+      </label>
+    </div>
+  </div>
   <button class="tbtn" id="fitBtn" title="Fit graph to view">Fit</button>
   <button class="tbtn" id="resetBtn" title="Discard this view's saved rearrangement">Reset layout</button>
   <div class="dropdown" id="layoutDd">
@@ -2214,6 +2247,13 @@ var MODEL = __MODEL_JSON__;
   var dd = wireDropdown('exportDd', 'exportBtn');
   var fdd = wireDropdown('flowExportDd', 'flowExportBtn');
   var ldd = wireDropdown('layoutDd', 'layoutBtn');
+  var sdd = wireDropdown('settingsDd', 'settingsBtn');
+  // Keep the settings panel open while flipping switches (clicks inside it don't
+  // bubble to the document-level close handler).
+  (function () {
+    var m = document.getElementById('settingsMenu');
+    if (m && m.addEventListener) m.addEventListener('click', function (ev) { if (ev && ev.stopPropagation) ev.stopPropagation(); });
+  })();
 
   // Layout picker: choose the auto-layout algorithm. Components use cytoscape's
   // native layouts; the ERD maps them onto its table-anchor strategies.
@@ -2241,6 +2281,7 @@ var MODEL = __MODEL_JSON__;
       if (dd.classList) dd.classList.remove('open');
       if (fdd.classList) fdd.classList.remove('open');
       if (ldd.classList) ldd.classList.remove('open');
+      if (sdd.classList) sdd.classList.remove('open');
     });
     document.addEventListener('keydown', function (ev) {
       if (ev.key === 'Escape') {

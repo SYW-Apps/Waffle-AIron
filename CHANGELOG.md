@@ -187,6 +187,10 @@ migration*).
   already exist. Off by default; the architecture view stays "logical
   dependencies only" until asked. So a shared model library that everyone imports
   no longer looks like an unconnected island.
+- **View-options panel**: the view toggles (Internals, Externals, Data coupling,
+  Issues, Rearrange) moved out of the crowded header bar into a **"⚙ View"**
+  dropdown, rendered as labelled on/off **switches** (with one-line descriptions)
+  instead of inline checkboxes; the panel stays open while you flip several.
 - **Scoped C4-style navigation**: every canvas view renders exactly one
   scope's direct children — System → top-level subsystems → a subsystem's
   children (nested subsystems + components) → a pattern's members,
