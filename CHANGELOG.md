@@ -195,8 +195,9 @@ migration*).
   describes the **current view scope** (the subsystem/component you drilled
   into) instead of always the root system — the breadcrumb still walks up to
   the parent; (b) **focus mode** — selecting any box lifts its own edges above
-  everything and recolours them while unrelated elements recede, so one block's
-  relations read clearly in a busy graph; (c) the **Types ERD degrades
+  everything and recolours them **by direction** (outgoing "depends on →" vs
+  incoming "← used by") while unrelated elements recede, so one block's relations
+  and their direction read clearly in a busy graph; (c) the **Types ERD degrades
   gracefully on huge systems** — above ~400 in-scope types it renders a
   subsystem-cluster overview (double-click a cluster to open it), above ~120 it
   falls back to header-only boxes, with a banner and a "render full detail
@@ -205,6 +206,28 @@ migration*).
   subsystem's ERD now lands on the *parent's types* (not its components), so you
   can climb from a subsystem's types all the way to the system-wide ERD; the
   Components/Types toggle stays the explicit way to switch mode.
+- **Layout picker** — a **Layout ▾** menu lets you switch the auto-layout instead
+  of being stuck with the dependency-column heuristic (which stacked leaves under
+  unrelated components and turned the ERD into one giant vertical ladder):
+  **Layered** (the original columns), **Force** (physics relaxation seeded from
+  the layered positions — untangles crossings, places nodes near their
+  connections), **Concentric** (most-referenced in the centre, rings outward),
+  and **Grid** (compact wrapped rows). Force uses cytoscape's built-in `cose`
+  tuned for the large box sizes (accounts for node dimensions, high repulsion /
+  long ideal edges) so nodes spread instead of overlapping; Concentric and Grid
+  are size-aware presets computed for both the component view and the ERD —
+  Concentric derives each ring's radius from the nodes it holds (compact, not
+  sprawling) and only centres a *lone* most-referenced node, spreading a tied top
+  tier into a ring rather than a central pile. The choice persists, is remembered
+  per view, and a manual **Rearrange** still wins on top for fine-tuning.
+  External (ghost) nodes are placed just outside the node bounds **toward the
+  in-scope node they connect to** (not a fixed corner), so their line is short
+  instead of crossing the whole diagram — and overlapping externals are nudged
+  apart; and **Internals** now lay each box's children out with the same chosen
+  layout (Grid/Concentric) instead of always the layered columns. Concentric is
+  stretched into a **landscape ellipse** (screens are horizontal) rather than a
+  tall circle, and **Force** seeds from a diagonal cascade so it relaxes toward an
+  entrypoints-top-left → leaves-bottom-right flow, then widens into landscape.
 
 ### Technology boundaries (L4 `technologies`)
 

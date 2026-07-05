@@ -259,15 +259,22 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
 
     const { cy, elements } = bootCanvas(renderCanvasHtml(buildCanvasModel()));
 
-    // System view, one cross edge. Tapping billing spotlights its edge...
+    // System view, one cross edge (shipping → billing). Tapping billing (the
+    // TARGET) spotlights the edge as INCOMING ("used by")...
     cy.getElementById('s~billing').emit('tap');
     expect(elements['panel'].innerHTML).toContain('Billing');
     const edge = cy.edges()[0];
-    expect(edge.hasClass('edgeFocus')).toBe(true);
-    // ...and a background tap clears the spotlight (back to the system scope).
+    expect(edge.hasClass('edgeIn')).toBe(true);
+    expect(edge.hasClass('edgeOut')).toBe(false);
+    // ...a background tap clears the spotlight (back to the system scope)...
     cy.emit('tap');
-    expect(edge.hasClass('edgeFocus')).toBe(false);
+    expect(edge.hasClass('edgeIn')).toBe(false);
     expect(elements['panel'].innerHTML).toContain('RtSys');
+    // ...and tapping shipping (the SOURCE) colours the same edge as OUTGOING.
+    cy.getElementById('s~shipping').emit('tap');
+    expect(edge.hasClass('edgeOut')).toBe(true);
+    expect(edge.hasClass('edgeIn')).toBe(false);
+    cy.emit('tap');
 
     // Drill into the subsystem: with nothing selected, the sidebar now
     // describes THAT scope (not the root system), tagged "current view".
@@ -315,4 +322,93 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     expect(elements['crumbs'].innerHTML).not.toContain('data-ck="subsystem"');
     expect(elements['crumbs'].innerHTML).toContain('Types (ERD)');
   }, 30000); // 420 spec writes on Windows under parallel load are I/O-heavy
+
+  it('the layout picker switches algorithms: component relayout and ERD grid flattens groups', () => {
+    proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-canvas-layout-'));
+    fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
+    setProjectRoot(proj);
+
+    saveSystemSpec({ schemaVersion: '1.0.0', name: 'RtSys', vision: 'v', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
+    saveSubsystemSpec({ id: 'billing', name: 'Billing', description: 'd', parentSystem: 'RtSys', publicInterfaces: [{ type: 'REST', details: 'api', component: 'billing-portal' }], trustedLinks: [], createdAt: now, updatedAt: now });
+    saveSubsystemSpec({ id: 'shipping', name: 'Shipping', description: 'd', parentSystem: 'RtSys', publicInterfaces: [], trustedLinks: [], createdAt: now, updatedAt: now });
+    const comp = (over: Record<string, unknown>) => ({ id: '', name: '', description: 'd', subsystem: 'billing', componentType: 'Orchestrator' as const, owns: [] as string[], dependsOn: [] as string[], createdAt: now, updatedAt: now, ...over });
+    saveComponentSpec(comp({ id: 'billing-portal', name: 'Billing Portal', componentType: 'Portal', portalType: 'HTTP_API' }) as any);
+    saveComponentSpec(comp({ id: 'shipping-client', name: 'Shipping Client', subsystem: 'shipping', componentType: 'Adapter', dependsOn: ['billing-portal'] }) as any);
+    ['billing', 'billing', 'shipping', 'shipping'].forEach((sid, i) => saveTypeSpec({ id: sid + '_t' + i, name: sid + 'T' + i, kind: 'value-object', subsystem: sid, fields: [], methods: [], createdAt: now, updatedAt: now } as any));
+
+    const { cy, elements, fire } = bootCanvas(renderCanvasHtml(buildCanvasModel()));
+
+    // Component view: switching to Force relayouts in place (no nodes lost) and
+    // the header reflects the active layout.
+    expect(cy.nodes().length).toBe(2);
+    fire('layoutForce', 'click');
+    expect(cy.nodes().length).toBe(2);
+    expect(elements['layoutBtn'].textContent).toContain('Force');
+    // Concentric is a size-aware preset (no crash, nodes retained).
+    fire('layoutConcentric', 'click');
+    expect(cy.nodes().length).toBe(2);
+    expect(elements['layoutBtn'].textContent).toContain('Concentric');
+    fire('layoutLayered', 'click');
+
+    // ERD: layered groups the two subsystems (group boxes present)...
+    fire('openTypesBtn', 'click');
+    expect(idPrefix(cy, 'TG~').length).toBeGreaterThan(0);
+    expect(idPrefix(cy, 'T~').length).toBe(4);
+    // ...Grid places the tables flat (no subsystem group boxes), same tables.
+    fire('layoutGrid', 'click');
+    expect(idPrefix(cy, 'TG~').length).toBe(0);
+    expect(idPrefix(cy, 'T~').length).toBe(4);
+    expect(elements['layoutBtn'].textContent).toContain('Grid');
+  });
+
+  it('places externals outside the graph bounds, and internals follow the layout', () => {
+    proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-canvas-ext-'));
+    fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
+    setProjectRoot(proj);
+
+    saveSystemSpec({ schemaVersion: '1.0.0', name: 'RtSys', vision: 'v', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
+    saveSubsystemSpec({ id: 'billing', name: 'Billing', description: 'd', parentSystem: 'RtSys', publicInterfaces: [{ type: 'REST', details: 'api', component: 'billing-portal' }], trustedLinks: [], createdAt: now, updatedAt: now });
+    saveSubsystemSpec({ id: 'shipping', name: 'Shipping', description: 'd', parentSystem: 'RtSys', publicInterfaces: [], trustedLinks: [], createdAt: now, updatedAt: now });
+    const comp = (over: Record<string, unknown>) => ({ id: '', name: '', description: 'd', subsystem: 'billing', componentType: 'Orchestrator' as const, owns: [] as string[], dependsOn: [] as string[], createdAt: now, updatedAt: now, ...over });
+    saveComponentSpec(comp({ id: 'billing-portal', name: 'Billing Portal', componentType: 'Portal', portalType: 'HTTP_API' }) as any);
+    // b3 is the hub (b2/b4/b5 depend on it) so concentric puts it dead-centre and
+    // the portal on the periphery.
+    saveComponentSpec(comp({ id: 'b3', name: 'b3' }) as any);
+    ['b2', 'b4', 'b5'].forEach(id => saveComponentSpec(comp({ id: id, name: id, dependsOn: ['b3'] }) as any));
+    // An out-of-billing component depends INTO billing → an incoming external.
+    saveComponentSpec(comp({ id: 'shipping-core', name: 'Shipping Core', subsystem: 'shipping', componentType: 'Adapter', dependsOn: ['billing-portal'] }) as any);
+
+    const { cy, fire } = bootCanvas(renderCanvasHtml(buildCanvasModel()));
+
+    // Internals + Grid: subsystem children render as inner tiles (the grid inner
+    // path runs without breaking the compound structure).
+    fire('internalsToggle', 'change', { target: { checked: true } });
+    fire('layoutGrid', 'click');
+    expect(cy.getElementById('i~component~billing-portal').length).toBe(1);
+    fire('internalsToggle', 'change', { target: { checked: false } });
+
+    // Concentric, drilled into billing: the incoming external is a ghost placed
+    // OUTSIDE the (centred) component bounds — never dropped in the middle.
+    fire('layoutConcentric', 'click');
+    cy.getElementById('s~billing').emit('dbltap');
+    const ghost = cy.getElementById('x~subsystem~shipping');
+    expect(ghost.length).toBe(1);
+    let minLeft = Infinity, minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    cy.nodes().filter((n: any) => n.id().indexOf('c~') === 0).forEach((n: any) => {
+      const px = n.position('x'), py = n.position('y'), hw = (n.data('w') || 0) / 2, hh = (n.data('h') || 0) / 2;
+      minLeft = Math.min(minLeft, px - hw);
+      minX = Math.min(minX, px - hw); maxX = Math.max(maxX, px + hw);
+      minY = Math.min(minY, py - hh); maxY = Math.max(maxY, py + hh);
+    });
+    expect(ghost.position('x')).toBeLessThan(minLeft);
+    // Concentric is stretched into a landscape ellipse (wider than tall).
+    expect(maxX - minX).toBeGreaterThan(maxY - minY);
+
+    // The external is placed TOWARD the node it connects to (the peripheral
+    // portal), not near the central hub — so its line doesn't cross the diagram.
+    const gp = ghost.position(), portal = cy.getElementById('c~billing-portal').position(), hub = cy.getElementById('c~b3').position();
+    const dPortal = Math.sqrt((gp.x - portal.x) ** 2 + (gp.y - portal.y) ** 2);
+    const dHub = Math.sqrt((gp.x - hub.x) ** 2 + (gp.y - hub.y) ** 2);
+    expect(dPortal).toBeLessThan(dHub);
+  });
 });
