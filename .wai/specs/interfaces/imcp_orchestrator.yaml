@@ -39,6 +39,14 @@ methods:
       update its projectPath link.
     signature: 'moveSubsystemProject(subsystemId: string, newProjectPath: string): void'
     returns: void
+  - name: externalizeSubsystem
+    description: Verify the subsystem exists and is internal, then externalize it into a standalone subproject.
+    signature: 'externalizeSubsystem(subsystemId: string, projectPath: string): void'
+    returns: void
+  - name: internalizeSubsystem
+    description: Verify the subsystem exists and is external, then internalize it back into the parent tree.
+    signature: 'internalizeSubsystem(subsystemId: string): void'
+    returns: void
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-07-05T18:00:31.234Z'
+updatedAt: '2026-07-05T18:44:51.295Z'

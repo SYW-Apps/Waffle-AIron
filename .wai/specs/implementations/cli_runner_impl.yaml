@@ -334,6 +334,47 @@ methods:
       - stepNumber: 5
         description: Print confirmation (old path to new path)
         type: local
+  - name: runSubsystemExternalize
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the parent project root by walking up from cwd; error if cwd is not inside an
+          initialized wairon project
+        type: local
+      - stepNumber: 2
+        description: Require the destination path
+        type: branch
+        condition: options.projectPath is not provided
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Reject: the destination is required'
+        type: throw
+        error: '--project-path (the subproject destination) is required'
+      - stepNumber: 4
+        description: Externalize the subsystem into a standalone subproject
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: externalizeSubsystem
+      - stepNumber: 5
+        description: >-
+          Print confirmation, the new subproject path, and a reminder to move the source code and
+          re-validate
+        type: local
+  - name: runSubsystemInternalize
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the parent project root by walking up from cwd; error if cwd is not inside an
+          initialized wairon project
+        type: local
+      - stepNumber: 2
+        description: Internalize the external subsystem back into the parent tree
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: internalizeSubsystem
+      - stepNumber: 3
+        description: Print confirmation and a reminder to re-validate
+        type: local
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-05T18:00:44.133Z'
+updatedAt: '2026-07-05T18:45:30.626Z'

@@ -118,6 +118,20 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: moveSubsystemProject
+  - name: externalizeSubsystem
+    narrative:
+      - stepNumber: 1
+        description: Call externalizeSubsystem on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: externalizeSubsystem
+  - name: internalizeSubsystem
+    narrative:
+      - stepNumber: 1
+        description: Call internalizeSubsystem on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: internalizeSubsystem
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-05T18:00:46.257Z'
+updatedAt: '2026-07-05T18:45:33.123Z'

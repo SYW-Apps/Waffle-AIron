@@ -19,6 +19,18 @@ methods:
       update its projectPath link.
     signature: 'moveSubsystemProject(subsystemId: string, newProjectPath: string): void'
     returns: void
+  - name: externalizeSubsystem
+    description: >-
+      Calls externalizeSubsystem on the core portal to migrate an internal subsystem into a
+      standalone subproject.
+    signature: 'externalizeSubsystem(subsystemId: string, projectPath: string): void'
+    returns: void
+  - name: internalizeSubsystem
+    description: >-
+      Calls internalizeSubsystem on the core portal to migrate an external subsystem back into the
+      parent tree.
+    signature: 'internalizeSubsystem(subsystemId: string): void'
+    returns: void
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-05T18:00:26.623Z'
+updatedAt: '2026-07-05T18:44:44.075Z'

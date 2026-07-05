@@ -165,6 +165,20 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: moveSubsystemProject
+  - name: externalizeSubsystem
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: externalizeSubsystem
+  - name: internalizeSubsystem
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: internalizeSubsystem
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-05T18:00:39.130Z'
+updatedAt: '2026-07-05T18:45:20.207Z'

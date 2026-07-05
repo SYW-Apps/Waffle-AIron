@@ -70,6 +70,20 @@ methods:
         type: call
         targetComponent: mcp_orchestrator
         targetMethod: moveSubsystemProject
+  - name: sdd_externalize_subsystem
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the externalizeSubsystem workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: externalizeSubsystem
+  - name: sdd_internalize_subsystem
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the internalizeSubsystem workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: internalizeSubsystem
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-05T18:02:06.860Z'
+updatedAt: '2026-07-05T18:45:38.858Z'

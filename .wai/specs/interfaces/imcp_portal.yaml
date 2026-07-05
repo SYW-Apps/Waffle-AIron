@@ -68,6 +68,24 @@ methods:
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_move_subsystem_project
+  - name: sdd_externalize_subsystem
+    description: >-
+      Tool: migrate an internal subsystem into a standalone subproject at projectPath (moves specs,
+      mounts via projectPath, rewrites references)
+    signature: 'sdd_externalize_subsystem(subsystem: string, projectPath: string): void'
+    returns: void
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_externalize_subsystem
+  - name: sdd_internalize_subsystem
+    description: >-
+      Tool: migrate an external subsystem's specs back into the parent tree and delete its child
+      .wai project
+    signature: 'sdd_internalize_subsystem(subsystem: string): void'
+    returns: void
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_internalize_subsystem
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-05T18:02:05.363Z'
+updatedAt: '2026-07-05T18:45:01.286Z'

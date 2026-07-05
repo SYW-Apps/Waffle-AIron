@@ -273,6 +273,105 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: saveSubsystemSpec
+  - name: externalizeSubsystem
+    narrative:
+      - stepNumber: 1
+        description: Load the target subsystem
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSubsystemSpec
+      - stepNumber: 2
+        description: Guard the subsystem exists and is currently internal
+        type: branch
+        condition: the subsystem is missing or already has a projectPath (already external)
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Reject: cannot externalize a missing or already-external subsystem'
+        type: throw
+        error: 'cannot externalize: subsystem is missing or already external'
+      - stepNumber: 4
+        description: >-
+          Provision an isolated child project at projectPath (project.yaml + L0), scoped to the
+          child root
+        type: local
+      - stepNumber: 5
+        description: >-
+          Move the subsystem's spec subtree (its .index.yaml, components, interfaces,
+          implementations, and types) from the parent specs dir into the child specs dir
+        type: local
+      - stepNumber: 6
+        description: >-
+          Compose a minimal parent mount for the subsystem: id + parentSystem + projectPath with an
+          empty public surface
+        type: local
+      - stepNumber: 7
+        description: Persist the parent mount
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSubsystemSpec
+      - stepNumber: 8
+        description: >-
+          Rewrite cross-subsystem references across the remaining parent specs (dependsOn, narrative
+          call targets, type refs) from bare ids to the subsystem-namespaced ids
+        type: local
+      - stepNumber: 9
+        description: Invalidate the spec cache
+        type: local
+      - stepNumber: 10
+        description: Subsystem externalized into a standalone subproject
+        type: return
+        outcome: externalized
+  - name: internalizeSubsystem
+    narrative:
+      - stepNumber: 1
+        description: Load the target subsystem
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSubsystemSpec
+      - stepNumber: 2
+        description: Guard the subsystem exists and is currently external
+        type: branch
+        condition: the subsystem is missing or has no projectPath (not external)
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Reject: cannot internalize a missing or non-external subsystem'
+        type: throw
+        error: 'cannot internalize: subsystem is missing or not external'
+      - stepNumber: 4
+        description: Guard the subproject is a single flat subsystem matching the mount id
+        type: branch
+        condition: the subproject declares subsystems other than the mount id (a multi-subsystem system)
+        onFalseStep: 6
+      - stepNumber: 5
+        description: 'Reject: the subproject is not a flat subsystem'
+        type: throw
+        error: 'cannot internalize: subproject is a multi-subsystem system, not a flat subsystem'
+      - stepNumber: 6
+        description: >-
+          Move the subproject's spec subtree back under the parent subsystem folder, stripping the
+          namespace
+        type: local
+      - stepNumber: 7
+        description: Restore the parent subsystem spec from the child's realization, dropping projectPath
+        type: local
+      - stepNumber: 8
+        description: Persist the internalized subsystem
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSubsystemSpec
+      - stepNumber: 9
+        description: Delete the child .wai project (project.yaml + specs)
+        type: local
+      - stepNumber: 10
+        description: Rewrite references across the parent specs from the namespaced ids back to bare ids
+        type: local
+      - stepNumber: 11
+        description: Invalidate the spec cache
+        type: local
+      - stepNumber: 12
+        description: Subsystem internalized back into the parent tree
+        type: return
+        outcome: internalized
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-05T18:00:37.629Z'
+updatedAt: '2026-07-05T18:45:17.703Z'
