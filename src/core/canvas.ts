@@ -864,8 +864,10 @@ var MODEL = __MODEL_JSON__;
       { selector: 'edge.stubHover', style: { 'line-color': t.selGlow, 'target-arrow-color': t.selGlow, width: 2.6, opacity: 1, 'z-compound-depth': 'top' } },
       { selector: '.dimmed', style: { opacity: 0.13 } },
       { selector: '.hasIssue', style: { 'border-color': t.issue, 'border-style': 'dashed', 'border-width': 3 } },
-      { selector: '.sel', style: { 'overlay-color': t.selGlow, 'overlay-opacity': 0.22, 'overlay-padding': 6, 'border-color': t.selGlow, 'border-width': 3.5 } },
-      { selector: '.hoverhl', style: { 'overlay-color': t.selGlow, 'overlay-opacity': 0.3, 'overlay-padding': 7, 'border-color': t.selGlow, 'border-width': 2.5 } },
+      // Overlay only (no border) — a border changes node geometry, which nudges
+      // the compound parent and makes hover flicker; overlay never affects layout.
+      { selector: '.sel', style: { 'overlay-color': t.selGlow, 'overlay-opacity': 0.34, 'overlay-padding': 6 } },
+      { selector: '.hoverhl', style: { 'overlay-color': t.selGlow, 'overlay-opacity': 0.2, 'overlay-padding': 6 } },
       // Focus mode: on selection, the picked element's edges are lifted above
       // every box and recoloured, while unrelated elements recede — so a single
       // block's relations read clearly even in a dense graph.
@@ -2065,26 +2067,35 @@ var MODEL = __MODEL_JSON__;
   function clearReveal() {
     cy.remove('.revealEdge');
   }
+  // Port hover reveals the cross-boundary line; the general node-hover below
+  // handles the per-node highlight and stub edges.
   cy.on('mouseover', 'node.proxyExt', function (ev) {
     cy.remove('.revealHover');
     if (ev.target.id() !== pinnedProxy) revealEdgesFor(ev.target, 'revealHover');
-    // Also light up the stub edges from this port to the inner tiles it serves.
-    ev.target.connectedEdges('.inneredge').addClass('stubHover');
   });
-  cy.on('mouseout', 'node.proxyExt', function () { cy.remove('.revealHover'); cy.edges().removeClass('stubHover'); });
+  cy.on('mouseout', 'node.proxyExt', function () { cy.remove('.revealHover'); });
 
-  // Hover-highlight the SPECIFIC node under the cursor (inner tiles included) —
-  // not its parent box. Container boxes themselves aren't hover-highlighted; you
-  // hover their children.
-  cy.on('mouseover', 'node', function (ev) {
-    var n = ev.target;
-    if (n.isParent()) return;
-    var t = idOf(n);
-    if (t.group || t.cluster) return;
-    n.addClass('hoverhl');
-    n.connectedEdges('.inneredge').addClass('stubHover');
-  });
-  cy.on('mouseout', 'node', function (ev) { ev.target.removeClass('hoverhl'); ev.target.connectedEdges('.inneredge').removeClass('stubHover'); });
+  // Hover-highlight the SPECIFIC node under the cursor (inner tiles/ports
+  // included), GUARDED so a stationary/oscillating pointer over the same node
+  // doesn't re-thrash classes (which flickered). Container boxes are skipped —
+  // you hover their children, not the box — and it never touches the selection.
+  var hoveredNode = null;
+  function setHover(n) {
+    var nid = n && n.length ? n.id() : null;
+    if ((hoveredNode ? hoveredNode.id() : null) === nid) return; // unchanged — no churn
+    if (hoveredNode && hoveredNode.length) { hoveredNode.removeClass('hoverhl'); hoveredNode.connectedEdges('.inneredge').removeClass('stubHover'); }
+    hoveredNode = null;
+    if (n && n.length && !n.isParent()) {
+      var t = idOf(n);
+      if (!(t.group || t.cluster)) {
+        n.addClass('hoverhl');
+        n.connectedEdges('.inneredge').addClass('stubHover');
+        hoveredNode = n;
+      }
+    }
+  }
+  cy.on('mouseover', 'node', function (ev) { setHover(ev.target); });
+  cy.on('mouseout', 'node', function (ev) { if (hoveredNode && hoveredNode.id() === ev.target.id()) setHover(null); });
 
   cy.on('tap', 'node', function (ev) {
     var t = idOf(ev.target);
