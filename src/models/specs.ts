@@ -26,12 +26,35 @@ export const RequirementItemSchema = z.union([
 ]);
 export type RequirementItem = z.infer<typeof RequirementItemSchema>;
 
+export const DatabaseSpecSchema = z.object({
+  id: SpecIdSchema,
+  name: z.string(),
+  engine: z.string(), // e.g. "postgresql", "mysql", "sqlite", "redis"
+  description: z.string().optional(),
+  tables: z.array(SpecIdSchema).optional(),
+});
+export type DatabaseSpec = z.infer<typeof DatabaseSpecSchema>;
+
+export const DiagramConfigSchema = z.object({
+  lineStyle: z.enum(['bezier', 'straight', 'taxi']).optional(),
+  defaultView: z.enum(['architecture', 'types', 'databases']).optional(),
+  showDatabases: z.boolean().optional(),
+});
+export type DiagramConfig = z.infer<typeof DiagramConfigSchema>;
+
 export const SystemSpecSchema = z.object({
   schemaVersion: z.string().default('1.0.0'),
   name: z.string(),
   vision: z.string(),
   boundaries: z.array(BoundaryItemSchema).default([]),
   globalRequirements: z.array(RequirementItemSchema).default([]),
+  /**
+   * System-level databases. Enables database table mapping, PK/FK views,
+   * and isolated ERD schemas.
+   */
+  databases: z.array(DatabaseSpecSchema).default([]),
+  /** Optional defaults for the interactive diagram canvas. */
+  diagram: DiagramConfigSchema.optional(),
   /**
    * Default implementation language for the whole system (e.g. "typescript",
    * "rust", "python"). Subsystems may override. Drives language-aware
@@ -398,13 +421,17 @@ export const TypeFieldSchema = z.object({
   description: z.string().optional(),
   optional: z.boolean().default(false),
   /**
-   * Identity marker for ERD / later schema derivation: 'primary' (PK) or
-   * 'unique'. Foreign-key markers are NOT declared — they are derived from
-   * the field's type referencing another defined type. These are logical
-   * system types, not a flattened database schema; storage mapping stays
-   * downstream (EF-style).
+   * Identity marker for ERD / database schema derivation:
+   * - 'primary' (PK)
+   * - 'unique' (UK)
+   * - 'foreign' (FK)
    */
-  key: z.enum(['primary', 'unique']).optional(),
+  key: z.enum(['primary', 'unique', 'foreign']).optional(),
+  /**
+   * For foreign keys, the referenced type/table ID (e.g. "billing.Invoice")
+   * and optionally field (e.g. "billing.Invoice.id").
+   */
+  references: z.string().optional(),
 });
 export type TypeField = z.infer<typeof TypeFieldSchema>;
 
@@ -429,6 +456,24 @@ export const TypeSpecSchema = z.object({
   fields: z.array(TypeFieldSchema).default([]),
   /** Pure intrinsic behaviour only — anything needing a collaborator belongs on a component. */
   methods: z.array(TypeMethodSchema).default([]),
+  /**
+   * Linked Component ID if this system entity is implemented as a class Component
+   * (e.g., a Store or Registry that owns this entity's lifecycle and methods).
+   */
+  componentClass: z.string().optional(),
+  /**
+   * The database ID this schema belongs to (marks it as a database table schema).
+   */
+  database: z.string().optional(),
+  /**
+   * The database table name for this schema (e.g., "users").
+   */
+  table: z.string().optional(),
+  /**
+   * If this type is a database table schema, the ID of the corresponding
+   * logical system entity type it maps to.
+   */
+  linkedEntity: z.string().optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
   createdAt: z.string().datetime(),
@@ -445,4 +490,3 @@ export const GroupSpecSchema = z.object({
   updatedAt: z.string().datetime(),
 });
 export type GroupSpec = z.infer<typeof GroupSpecSchema>;
-

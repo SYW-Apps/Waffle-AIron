@@ -179,6 +179,13 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: internalizeSubsystem
+  - name: loadTypeSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward loadTypeSpecs call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadTypeSpecs
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-05T18:45:20.207Z'
+updatedAt: '2026-07-06T21:22:45.590Z'

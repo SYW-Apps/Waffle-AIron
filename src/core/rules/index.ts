@@ -26,6 +26,8 @@ import { cyclesRule, reachabilityRule } from './graph.js';
 import { couplingRule } from './coupling.js';
 import { languageRule } from './language.js';
 import { technologyRule } from './technology.js';
+import { namingRule } from './naming.js';
+import { complexityRule } from './complexity.js';
 import { lintAllowsRule } from './lint-allows.js';
 
 export * from './types.js';
@@ -52,6 +54,8 @@ export const SDD_RULES: SddRule[] = [
   couplingRule,
   languageRule,
   technologyRule,
+  namingRule,
+  complexityRule,
   // MUST run last: it audits which lint.allow entries the earlier rules
   // actually consumed (stale/unknown allows).
   lintAllowsRule,

@@ -35,23 +35,25 @@ methods:
         targetComponent: validator_core_adapter
         targetMethod: loadImplementationSpecs
       - stepNumber: 7
+        description: Load type specs
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadTypeSpecs
+      - stepNumber: 8
         description: Integrate Zod schema loader errors
         type: local
-      - stepNumber: 8
-        description: Validate spec hierarchy and entity references
-        type: local
       - stepNumber: 9
-        description: Validate method implementation signatures against contracts
+        description: Load project extensions and compose the active validation rule sequence
         type: local
       - stepNumber: 10
-        description: Validate narrative call steps target declared dependencies
+        description: >-
+          Run hierarchy, type-reference, contract, narrative, boundary, graph, naming,
+          documentation, and complexity rules
         type: local
       - stepNumber: 11
-        description: Enforce architectural component type interaction boundaries
-        type: local
-      - stepNumber: 12
-        description: Run DFS circular dependency cycle detection
-        type: local
+        description: Return the aggregated validation result
+        type: return
+        outcome: ValidationResult
   - name: validateRegistry
     narrative:
       - stepNumber: 1
@@ -102,17 +104,22 @@ methods:
         targetComponent: validator_core_adapter
         targetMethod: loadImplementationSpecs
       - stepNumber: 7
+        description: Load type specs
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadTypeSpecs
+      - stepNumber: 8
         description: Treat every spec as complete (suppress the draft severity relaxation), mutating nothing
         type: local
-      - stepNumber: 8
-        description: >-
-          Run hierarchy, reference, contract-symmetry, narrative, boundary, and cycle rules at full
-          strictness
-        type: local
       - stepNumber: 9
+        description: >-
+          Run the same active rule sequence as validateSddTree at full strictness, including naming,
+          documentation, and complexity rules
+        type: local
+      - stepNumber: 10
         description: Return the as-complete validation result
         type: return
         outcome: as-complete ValidationResult
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-04T12:56:10.354Z'
+updatedAt: '2026-07-06T21:22:50.205Z'

@@ -118,6 +118,10 @@ methods:
       the child project, and rewrite references.
     signature: 'internalizeSubsystem(subsystemId: string): void'
     returns: void
+  - name: loadTypeSpecs
+    description: Loads type specs
+    signature: 'loadTypeSpecs(): TypeSpec[]'
+    returns: TypeSpec[]
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-05T18:44:41.590Z'
+updatedAt: '2026-07-06T21:22:36.638Z'

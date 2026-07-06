@@ -372,6 +372,13 @@ methods:
         description: Subsystem internalized back into the parent tree
         type: return
         outcome: internalized
+  - name: loadTypeSpecs
+    narrative:
+      - stepNumber: 1
+        description: Call loadTypeSpecs on spec loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpecs
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-05T18:45:17.703Z'
+updatedAt: '2026-07-06T21:22:45.545Z'

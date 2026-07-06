@@ -60,6 +60,7 @@ export function provisionProject(name: string): void {
     vision: `Core vision for ${name}`,
     boundaries: [],
     globalRequirements: [],
+    databases: [],
     createdAt: now,
     updatedAt: now,
   });

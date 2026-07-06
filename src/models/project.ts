@@ -25,6 +25,63 @@ export type CustomTargetConfig = z.infer<typeof CustomTargetConfigSchema>;
 export const TargetConfigSchema = z.union([BuiltinTargetConfigSchema, CustomTargetConfigSchema]);
 export type TargetConfig = z.infer<typeof TargetConfigSchema>;
 
+export const NamingRuleConfigSchema = z.object({
+  /** Casing style or regular expression for subsystem names/IDs */
+  subsystems: z.string().optional(),
+  /** Casing style or regular expression for component names/IDs */
+  components: z.string().optional(),
+  /** Casing style or regular expression for interface names/IDs */
+  interfaces: z.string().optional(),
+  /** Casing style or regular expression for general type names/IDs */
+  types: z.string().optional(),
+  /** Casing style or regular expression for entity type names/IDs */
+  entities: z.string().optional(),
+  /** Casing style or regular expression for value-object type names/IDs */
+  valueObjects: z.string().optional(),
+  /** Casing style or regular expression for interface/implementation/type method names */
+  methods: z.string().optional(),
+  /** Casing style or regular expression for general type fields */
+  fields: z.string().optional(),
+  /** Casing style or regular expression for constants/enum variants */
+  constants: z.string().optional(),
+  /** Casing style or regular expression for parameters/variables */
+  variables: z.string().optional(),
+  /** Stereotype-specific naming rules (prefixes, suffixes, regexes) */
+  stereotypes: z.record(z.object({
+    match: z.enum(['id', 'name', 'both']).default('both'),
+    prefix: z.string().optional(),
+    suffix: z.string().optional(),
+    regex: z.string().optional(),
+  })).optional(),
+});
+export type NamingRuleConfig = z.infer<typeof NamingRuleConfigSchema>;
+
+export const DocumentationRuleConfigSchema = z.object({
+  /** Minimum character length for description fields */
+  minDescriptionLength: z.number().int().nonnegative().optional(),
+  /** Force subsystem, component, interface, and type specs to have non-empty descriptions */
+  requireDescriptions: z.boolean().optional(),
+  /** Force interface and type methods to have non-empty descriptions */
+  requireMethodDescriptions: z.boolean().optional(),
+  /** Force type fields to have non-empty descriptions */
+  requireFieldDescriptions: z.boolean().optional(),
+});
+export type DocumentationRuleConfig = z.infer<typeof DocumentationRuleConfigSchema>;
+
+export const ComplexityRuleConfigSchema = z.object({
+  /** Maximum number of parameters allowed on a single interface method */
+  maxMethodParams: z.number().int().nonnegative().optional(),
+  /** Maximum number of methods allowed on a single interface contract */
+  maxInterfaceMethods: z.number().int().nonnegative().optional(),
+  /** Maximum number of dependencies allowed on a single component */
+  maxComponentDependencies: z.number().int().nonnegative().optional(),
+  /** Maximum number of narrative steps allowed in a single method implementation */
+  maxNarrativeSteps: z.number().int().nonnegative().optional(),
+  /** Maximum number of direct components allowed in a single subsystem */
+  maxSubsystemComponents: z.number().int().nonnegative().optional(),
+});
+export type ComplexityRuleConfig = z.infer<typeof ComplexityRuleConfigSchema>;
+
 export const RulesConfigSchema = z.object({
   /**
    * Prevent two agents from declaring overlapping ownedPaths.
@@ -60,6 +117,15 @@ export const RulesConfigSchema = z.object({
    * Key: rule code (e.g. CIRCULAR_DEPENDENCY), Value: error | warning | off
    */
   sddRuleSeverity: z.record(z.enum(['error', 'warning', 'off'])).default({}),
+
+  /** Dynamic naming conventions and stereotype suffix rules */
+  naming: NamingRuleConfigSchema.optional(),
+
+  /** Dynamic metadata documentation constraints */
+  documentation: DocumentationRuleConfigSchema.optional(),
+
+  /** Dynamic structural complexity caps (method limit, step limit, dependency limit) */
+  complexity: ComplexityRuleConfigSchema.optional(),
 });
 
 export type RulesConfig = z.infer<typeof RulesConfigSchema>;

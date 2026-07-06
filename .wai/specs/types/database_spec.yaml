@@ -1,0 +1,30 @@
+kind: value-object
+id: database_spec
+name: DatabaseSpec
+description: >-
+  A database definition at the L0 system level. Groups type specs that represent table schemas for a
+  specific database engine, enabling the diagram specialist to render database-specific ERD views.
+fields:
+  - name: id
+    type: string
+    description: Unique database identifier
+    optional: false
+  - name: name
+    type: string
+    description: Human-readable database name
+    optional: false
+  - name: engine
+    type: string
+    description: Database engine (e.g. postgresql, sqlite, mysql)
+    optional: false
+  - name: description
+    type: string
+    description: Purpose and scope of this database
+    optional: true
+  - name: tables
+    type: string[]
+    description: List of type IDs that are table schemas belonging to this database
+    optional: true
+methods: []
+createdAt: '2026-07-06T20:47:22.939Z'
+updatedAt: '2026-07-06T20:47:22.971Z'

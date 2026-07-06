@@ -29,11 +29,16 @@ import { buildDrawioXml, buildExcalidrawScene } from './diagram-export.js';
 // (micro-layered). "Externals" shows ghost references to out-of-scope
 // dependencies. Per-view layout rearrangements persist in localStorage.
 //
-// All theme fills are solid and chosen for WCAG AA (≥4.5:1) text contrast.
 // ---------------------------------------------------------------------------
 
 export interface CanvasModel {
-  system: { name: string; vision?: string; targetLanguage?: string };
+  system: {
+    name: string;
+    vision?: string;
+    targetLanguage?: string;
+    databases?: { id: string; name: string; engine: string; description?: string; tables?: string[] }[];
+    diagram?: { lineStyle?: 'bezier' | 'straight' | 'taxi'; defaultView?: 'architecture' | 'types' | 'databases'; showDatabases?: boolean };
+  };
   generatedAt: string;
   subsystems: {
     id: string;
@@ -102,10 +107,14 @@ export interface CanvasModel {
     name: string;
     kind: string;
     subsystem?: string;
-    fields: { name: string; type: string; optional?: boolean; key?: string }[];
+    fields: { name: string; type: string; optional?: boolean; key?: string; references?: string }[];
     methods: { name: string; signature: string; returns: string; description?: string }[];
     /** Interface methods whose params/returns reference this type (usage trace). */
     usedBy: { component: string; method: string }[];
+    componentClass?: string;
+    database?: string;
+    table?: string;
+    linkedEntity?: string;
   }[];
   /** Type → type references derived from field type strings (ERD edges). */
   typeEdges: { from: string; to: string; field: string; card: '1' | '0..1' | '*' }[];
@@ -245,9 +254,19 @@ export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
     name: t.name,
     kind: t.kind,
     ...(t.subsystem ? { subsystem: t.subsystem } : {}),
-    fields: t.fields.map(f => ({ name: f.name, type: f.type, ...(f.optional ? { optional: true } : {}), ...(f.key ? { key: f.key } : {}) })),
+    fields: t.fields.map(f => ({
+      name: f.name,
+      type: f.type,
+      ...(f.optional ? { optional: true } : {}),
+      ...(f.key ? { key: f.key } : {}),
+      ...(f.references ? { references: f.references } : {}),
+    })),
     methods: t.methods.map(m => ({ name: m.name, signature: m.signature, returns: m.returns, ...(m.description ? { description: m.description } : {}) })),
     usedBy: usedByFor(t),
+    ...(t.componentClass ? { componentClass: t.componentClass } : {}),
+    ...(t.database ? { database: t.database } : {}),
+    ...(t.table ? { table: t.table } : {}),
+    ...(t.linkedEntity ? { linkedEntity: t.linkedEntity } : {}),
   }));
   // Cardinality is derivable from the field's type string: collection shapes
   // mean "many", the optional flag means 0..1 — real ERD multiplicity for free.
@@ -255,7 +274,18 @@ export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
   const typeEdges: CanvasModel['typeEdges'] = [];
   for (const t of typeSpecs) {
     for (const field of t.fields) {
-      for (const ref of extractTypeIdentifiers(field.type)) {
+      const refs = new Set<string>(extractTypeIdentifiers(field.type));
+      if (field.references) {
+        const refStr = field.references;
+        refs.add(refStr);
+        if (refStr.includes('.')) {
+          const parts = refStr.split('.');
+          parts.pop(); // remove field/column name if present
+          refs.add(parts.join('.'));
+        }
+      }
+
+      for (const ref of refs) {
         const target = typeSpecs.find(other => {
           const qualified = other.subsystem && !other.id.startsWith(`${other.subsystem}::`)
             ? `${other.subsystem}::${other.id}`
@@ -264,7 +294,9 @@ export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
         });
         if (target && target.id !== t.id) {
           const card = MANY_SHAPE.test(field.type) ? '*' : field.optional ? '0..1' : '1';
-          typeEdges.push({ from: t.id, to: target.id, field: field.name, card });
+          if (!typeEdges.some(e => e.from === t.id && e.to === target.id && e.field === field.name)) {
+            typeEdges.push({ from: t.id, to: target.id, field: field.name, card });
+          }
         }
       }
     }
@@ -311,6 +343,8 @@ export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
       name: system?.name ?? 'System',
       ...(system?.vision ? { vision: system.vision } : {}),
       ...(system?.targetLanguage ? { targetLanguage: system.targetLanguage } : {}),
+      ...(system?.databases ? { databases: system.databases } : {}),
+      ...(system?.diagram ? { diagram: system.diagram } : {}),
     },
     generatedAt: new Date().toISOString(),
     subsystems: subsystems.map(s => ({
@@ -525,9 +559,10 @@ body.presentation #exitPresent { display:block; }
 <body data-theme="syw">
 <header>
   <span class="brand syw-gradient-text">wairon</span>
-  <div class="seg" id="modeSeg" title="Switch between the component architecture and the type ERD">
+  <div class="seg" id="modeSeg" title="Switch between the component architecture, the type ERD, or the database schemas">
     <button data-vm="components" class="active">Components</button>
     <button data-vm="types">Types</button>
+    <button data-vm="databases">Databases</button>
   </div>
   <nav id="crumbs"></nav>
   <span class="divider"></span>
@@ -562,6 +597,14 @@ body.presentation #exitPresent { display:block; }
         <span class="lbl">Rearrange<span class="sub">drag boxes to fine-tune the layout</span></span>
         <span class="toggle"><input type="checkbox" id="dragToggle"><span class="track"></span></span>
       </label>
+      <div class="swrow" style="flex-direction:column;align-items:flex-start;gap:6px;padding:8px 12px 10px;border-top:1px solid var(--line);">
+        <span class="lbl" style="padding:0">Line Style<span class="sub" style="margin-top:2px">Choose how relationship lines are routed</span></span>
+        <select id="lineStyleSelect" style="width:100%;background:var(--input-bg);color:var(--ink);border:1px solid var(--chrome-border);border-radius:6px;padding:4px 8px;font-size:11.5px;font-family:inherit;outline:none;">
+          <option value="bezier">Bezier Curves</option>
+          <option value="straight">Straight Lines</option>
+          <option value="taxi">Orthogonal Corners</option>
+        </select>
+      </div>
     </div>
   </div>
   <button class="tbtn" id="fitBtn" title="Fit graph to view">Fit</button>
@@ -737,8 +780,13 @@ var MODEL = __MODEL_JSON__;
   var saved = { positionsByView: {}, theme: 'syw' };
   try { if (store && store.getItem(STORE_KEY)) saved = JSON.parse(store.getItem(STORE_KEY)) || saved; } catch (e) { /* ignore */ }
 
+  var diagramConfig = MODEL.system.diagram || {};
+  var showDatabaseTab = diagramConfig.showDatabases !== false;
+  var configuredLineStyle = ['bezier', 'straight', 'taxi'].indexOf(diagramConfig.lineStyle) >= 0 ? diagramConfig.lineStyle : 'bezier';
+  var defaultViewKind = diagramConfig.defaultView === 'types' ? 'types' : (diagramConfig.defaultView === 'databases' && showDatabaseTab ? 'databases' : 'system');
+
   var state = {
-    view: { kind: 'system', id: null },
+    view: { kind: defaultViewKind, id: null },
     internals: false,
     externals: true,
     dataCoupling: false,
@@ -750,6 +798,7 @@ var MODEL = __MODEL_JSON__;
     typesDetail: ['full', 'fields', 'keys', 'names'].indexOf(saved.typesDetail) >= 0 ? saved.typesDetail : 'full',
     typesRenderAll: false,
     layout: ['layered', 'force', 'concentric', 'grid'].indexOf(saved.layout) >= 0 ? saved.layout : 'layered',
+    lineStyle: ['bezier', 'straight', 'taxi'].indexOf(saved.lineStyle) >= 0 ? saved.lineStyle : configuredLineStyle,
   };
   // Set by buildTypeElements when the ERD is degraded for performance (huge
   // scopes); consumed by renderTypesNotice to explain the level-of-detail.
@@ -759,12 +808,12 @@ var MODEL = __MODEL_JSON__;
     // 'types2' + detail level: table sizes differ per detail, and the prefix
     // bump invalidates layouts saved for the old compact type boxes. The layout
     // strategy is part of the key so a manual rearrange is remembered per layout.
-    if (state.view.kind === 'types') return 'types2:' + (state.view.id || 'root') + ':' + state.typesDetail + ':' + state.layout;
+    if (state.view.kind === 'types' || state.view.kind === 'databases') return 'types2:' + (state.view.id || 'root') + ':' + state.typesDetail + ':' + state.layout;
     return state.view.kind + ':' + (state.view.id || 'root') + (state.internals ? '+i' : '') + ':' + state.layout;
   }
   function persist() {
     if (!store) return;
-    try { store.setItem(STORE_KEY, JSON.stringify({ positionsByView: saved.positionsByView || {}, theme: state.theme, typesDetail: state.typesDetail, layout: state.layout })); } catch (e) { /* non-fatal */ }
+    try { store.setItem(STORE_KEY, JSON.stringify({ positionsByView: saved.positionsByView || {}, theme: state.theme, typesDetail: state.typesDetail, layout: state.layout, lineStyle: state.lineStyle })); } catch (e) { /* non-fatal */ }
   }
 
   function matches(entry) {
@@ -847,7 +896,10 @@ var MODEL = __MODEL_JSON__;
       { selector: '.proxyOut', style: { 'background-color': t.proxyOut.fill, 'border-color': t.proxyOut.stroke, color: t.proxyOut.stroke } },
       { selector: 'edge.revealEdge', style: { 'line-color': t.selGlow, 'target-arrow-color': t.selGlow, 'line-style': 'dashed', width: 2.4, opacity: 0.95 } },
       { selector: 'edge', style: {
-        'curve-style': 'bezier', width: 1.8, 'line-color': t.pageEdge,
+        'curve-style': state.lineStyle === 'taxi' ? 'taxi' : (state.lineStyle === 'straight' ? 'straight' : 'bezier'),
+        'taxi-direction': 'horizontal',
+        'taxi-turn': 20,
+        width: 1.8, 'line-color': t.pageEdge,
         'target-arrow-shape': 'triangle', 'target-arrow-color': t.pageEdge, 'arrow-scale': 0.9,
         label: 'data(lbl)', 'font-size': 10, color: t.edgeText,
         'text-background-color': t.bgLabel, 'text-background-opacity': 0.85, 'text-rotation': 'autorotate',
@@ -1125,8 +1177,24 @@ var MODEL = __MODEL_JSON__;
   // types flooded a small subsystem's scope so it re-clustered and its single
   // own type was unreachable.) Unscoped = all.
   var SHARED_KEY = '\\u2014 shared \\u2014';
+  function databaseAllowsType(t) {
+    if (!t.database) return false;
+    if (!MODEL.system.databases || !MODEL.system.databases.length) return true;
+    var db = MODEL.system.databases.find(function (d) { return d.id === t.database; });
+    if (!db || !db.tables || !db.tables.length) return true;
+    return db.tables.indexOf(t.id) >= 0 || db.tables.indexOf(t.table || t.id) >= 0;
+  }
   function typesInScope() {
     var sid = state.view.id;
+    if (state.view.kind === 'databases') {
+      return MODEL.types.filter(function (t) {
+        if (!databaseAllowsType(t)) return false;
+        if (sid) {
+          return t.database === sid || t.subsystem === sid || (t.subsystem && t.subsystem.indexOf(sid + '::') === 0);
+        }
+        return true;
+      });
+    }
     if (!sid) return MODEL.types;
     // The shared-library cluster scopes to the system-level (unowned) types.
     if (sid === SHARED_KEY) return MODEL.types.filter(function (t) { return !t.subsystem; });
@@ -1472,7 +1540,7 @@ var MODEL = __MODEL_JSON__;
 
   function buildElements() {
     var scope = state.view;
-    if (scope.kind === 'types') return buildTypeElements();
+    if (scope.kind === 'types' || scope.kind === 'databases') return buildTypeElements();
     var entries = childrenOf(scope);
     var eles = [];
     var ve = viewEdges(scope, entries);
@@ -1923,6 +1991,18 @@ var MODEL = __MODEL_JSON__;
   function crumbPath() {
     var path = [{ kind: 'system', id: null, label: MODEL.system.name }];
     var v = state.view;
+    if (v.kind === 'databases') {
+      var dpath = [{ kind: 'databases', id: null, label: MODEL.system.name }];
+      if (v.id) {
+        var dsegs = v.id.split('::');
+        for (var di = 1; di <= dsegs.length; di++) {
+          var dsid = dsegs.slice(0, di).join('::');
+          dpath.push({ kind: 'databases', id: dsid, label: nameOf({ kind: 'subsystem', id: dsid }) });
+        }
+      }
+      dpath[dpath.length - 1].label += ' \\u00B7 Databases';
+      return dpath;
+    }
     if (v.kind === 'types') {
       // Breadcrumbs stay in TYPES mode when walking up — a subsystem's types
       // lead to the PARENT'S types, not the parent's components. The header
@@ -1977,10 +2057,11 @@ var MODEL = __MODEL_JSON__;
     }
   }
   function renderViewHint() {
-    if (state.view.kind === 'types') {
+    if (state.view.kind === 'types' || state.view.kind === 'databases') {
       var scoped = typesInScope().length;
-      document.getElementById('viewHint').textContent = 'View: ' + scoped + ' types (ERD'
-        + (state.view.id ? ', ' + state.view.id + ' + shared' : '') + ') \\u00B7 '
+      var label = state.view.kind === 'databases' ? 'database tables' : 'types (ERD';
+      document.getElementById('viewHint').textContent = 'View: ' + scoped + ' ' + label
+        + (state.view.id ? ', ' + state.view.id + ' + shared' : '') + (state.view.kind === 'databases' ? '' : ')') + ' \\u00B7 '
         + (state.typesDetail === 'names' ? 'dependency lines' : 'relation lines anchor at their field \\u00B7 double-click an FK row to jump to its type');
       return;
     }
@@ -2002,7 +2083,7 @@ var MODEL = __MODEL_JSON__;
   function renderTypesNotice() {
     var el = document.getElementById('typesWarn');
     if (!el) return;
-    if (state.view.kind !== 'types' || !typesNotice) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    if ((state.view.kind !== 'types' && state.view.kind !== 'databases') || !typesNotice) { el.style.display = 'none'; el.innerHTML = ''; return; }
     var cut = typesNotice.indexOf(':');
     var mode = typesNotice.slice(0, cut), count = typesNotice.slice(cut + 1);
     var msg = mode === 'cluster'
@@ -2173,7 +2254,7 @@ var MODEL = __MODEL_JSON__;
       var c = compById[state.view.id];
       return c ? c.subsystem : null;
     }
-    if (state.view.kind === 'types') return state.view.id;
+    if (state.view.kind === 'types' || state.view.kind === 'databases') return state.view.id;
     return null;
   }
   (function () {
@@ -2181,10 +2262,14 @@ var MODEL = __MODEL_JSON__;
     var btns = seg.querySelectorAll('button');
     for (var i = 0; i < btns.length; i++) {
       (function (b) {
+        if (b.getAttribute('data-vm') === 'databases' && !showDatabaseTab) {
+          b.style.display = 'none';
+        }
         b.addEventListener('click', function () {
           var vm = b.getAttribute('data-vm');
-          if (vm === 'types' && state.view.kind !== 'types') navigateTo('types', typesScopeFromView());
-          else if (vm === 'components' && state.view.kind === 'types') navigateTo(state.view.id ? 'subsystem' : 'system', state.view.id || null);
+          if (vm === 'databases' && showDatabaseTab) navigateTo('databases', typesScopeFromView());
+          else if (vm === 'types') navigateTo('types', typesScopeFromView());
+          else if (vm === 'components') navigateTo(state.view.id ? 'subsystem' : 'system', state.view.id || null);
         });
       })(btns[i]);
     }
@@ -2197,7 +2282,7 @@ var MODEL = __MODEL_JSON__;
         b.addEventListener('click', function () {
           state.typesDetail = b.getAttribute('data-td');
           persist();
-          if (state.view.kind === 'types') rebuild(true);
+          if (state.view.kind === 'types' || state.view.kind === 'databases') rebuild(true);
           else updateHeaderSegs();
         });
       })(btns[i]);
@@ -2207,16 +2292,30 @@ var MODEL = __MODEL_JSON__;
     var seg = document.getElementById('modeSeg');
     var btns = seg.querySelectorAll('button');
     for (var i = 0; i < btns.length; i++) {
-      var active = (btns[i].getAttribute('data-vm') === 'types') === (state.view.kind === 'types');
+      var vm = btns[i].getAttribute('data-vm');
+      var active = vm === 'components'
+        ? (state.view.kind !== 'types' && state.view.kind !== 'databases')
+        : vm === state.view.kind;
       if (btns[i].classList) btns[i].classList[active ? 'add' : 'remove']('active');
     }
     var td = document.getElementById('typesDetailSeg');
-    td.style.display = state.view.kind === 'types' ? '' : 'none';
+    td.style.display = (state.view.kind === 'types' || state.view.kind === 'databases') ? '' : 'none';
     var tbs = td.querySelectorAll('button');
     for (var j = 0; j < tbs.length; j++) {
       if (tbs[j].classList) tbs[j].classList[tbs[j].getAttribute('data-td') === state.typesDetail ? 'add' : 'remove']('active');
     }
   }
+  (function () {
+    var lSelect = document.getElementById('lineStyleSelect');
+    if (lSelect) {
+      lSelect.value = state.lineStyle;
+      lSelect.addEventListener('change', function (ev) {
+        state.lineStyle = ev.target.value;
+        persist();
+        cy.style(buildStyle(THEMES[state.theme]));
+      });
+    }
+  })();
   document.getElementById('fitBtn').addEventListener('click', function () { cy.fit(undefined, 60); });
   document.getElementById('resetBtn').addEventListener('click', function () {
     var all = saved.positionsByView || {};
@@ -2828,8 +2927,12 @@ var MODEL = __MODEL_JSON__;
   function select(kind, id, focus) {
     // Selecting a type from a component view (param chip, "Used by" chip…)
     // switches into the ERD first, keeping the current subsystem scope.
-    if (kind === 'type' && state.view.kind !== 'types') {
+    if (kind === 'type' && state.view.kind !== 'types' && state.view.kind !== 'databases') {
       state.view = { kind: 'types', id: typesScopeFromView() };
+      rebuild(true);
+    } else if (kind === 'component' && (state.view.kind === 'types' || state.view.kind === 'databases')) {
+      var c = compById[id];
+      state.view = { kind: 'subsystem', id: c ? c.subsystem : null };
       rebuild(true);
     }
     state.selectedKind = kind;
@@ -2873,6 +2976,13 @@ var MODEL = __MODEL_JSON__;
         + (scopeFocus ? staticChip('current view') : '')
         + chip(c.subsystem, 'subsystem', c.subsystem)
         + (scopeFocus ? '' : openViewButton('component', c.id, c.owns.length > 0));
+      
+      var linkedTypes = MODEL.types.filter(function (t) { return t.componentClass === c.id; });
+      if (linkedTypes.length) {
+        head += '<div style="margin-top:6px"><b style="font-size:11px">Linked System Entity:</b> '
+          + linkedTypes.map(function (t) { return chip(t.id, 'type', t.id); }).join(' ')
+          + '</div>';
+      }
       body += '<p class="desc">' + esc(c.description) + '</p>';
 
       var depInner = (c.dependsOn.length ? c.dependsOn.map(function (d) { return chip(d, 'component', d); }).join('') : '<span class="desc">none</span>')
@@ -2950,15 +3060,49 @@ var MODEL = __MODEL_JSON__;
       if (ty) {
         head = '<h2>' + esc(ty.name) + '</h2>' + staticChip('\\u00AB' + ty.kind + '\\u00BB')
           + (ty.subsystem ? chip(ty.subsystem, 'subsystem', ty.subsystem) : staticChip('system-level shared'));
+        
+        if (ty.componentClass) {
+          head += '<div style="margin-top:6px"><b style="font-size:11px">Class Component:</b> ' + chip(ty.componentClass, 'component', ty.componentClass) + '</div>';
+        }
+        if (ty.database) {
+          var dbName = ty.database;
+          if (MODEL.system.databases) {
+            var dbSpec = MODEL.system.databases.find(function(d) { return d.id === ty.database; });
+            if (dbSpec) dbName = dbSpec.name;
+          }
+          head += '<div style="margin-top:6px"><b style="font-size:11px">Database Table:</b> ' + staticChip(dbName + '.' + (ty.table || ty.id)) + '</div>';
+        }
+        if (ty.linkedEntity) {
+          head += '<div style="margin-top:6px"><b style="font-size:11px">Linked System Entity:</b> ' + chip(ty.linkedEntity, 'type', ty.linkedEntity) + '</div>';
+        }
+        var mappingTables = MODEL.types.filter(function (t) { return t.linkedEntity === ty.id; });
+        if (mappingTables.length) {
+          head += '<div style="margin-top:6px"><b style="font-size:11px">Database Table Mapping:</b> '
+            + mappingTables.map(function (t) { return chip(t.id, 'type', t.id); }).join(' ')
+            + '</div>';
+        }
+
         var fieldsInner = ty.fields.length
           ? ty.fields.map(function (f) {
               var fk = null;
               MODEL.typeEdges.forEach(function (e2) { if (!fk && e2.from === ty.id && e2.field === f.name) fk = e2; });
+              var keyLabel = f.key === 'primary' ? 'PK' : f.key === 'unique' ? 'unique' : f.key === 'foreign' ? 'FK' : '';
+              if (!keyLabel && f.references) keyLabel = 'FK';
+              
+              var refHtml = '';
+              if (f.references) {
+                var targetTypeId = f.references.split('.')[0];
+                var targetExists = MODEL.types.some(function(t) { return t.id === targetTypeId; });
+                refHtml = '<div class="mdesc">References: ' + (targetExists ? chip(f.references, 'type', targetTypeId) : esc(f.references)) + '</div>';
+              } else if (fk) {
+                refHtml = '<div class="mdesc">FK \\u2192 ' + chip(fk.to + ' [' + (fk.card || '1') + ']', 'type', fk.to) + '</div>';
+              }
+
               return '<div class="method"><div class="mname">' + esc(f.name)
-                + (f.key === 'primary' ? ' <span class="chip">PK</span>' : f.key === 'unique' ? ' <span class="chip">unique</span>' : '')
+                + (keyLabel ? ' <span class="chip">' + keyLabel + '</span>' : '')
                 + (f.optional ? ' <span class="chip" style="opacity:.7">optional</span>' : '')
                 + '</div><code>' + esc(f.type) + '</code>'
-                + (fk ? '<div class="mdesc">FK \\u2192 ' + chip(fk.to + ' [' + (fk.card || '1') + ']', 'type', fk.to) + '</div>' : '')
+                + refHtml
                 + '</div>';
             }).join('')
           : '<span class="desc">no fields</span>';

@@ -1,0 +1,30 @@
+kind: value-object
+id: complexity_rule_config
+name: ComplexityRuleConfig
+description: >-
+  Complexity thresholds enforced by the SDD linter. Each field is an optional ceiling; when set,
+  violations are reported as warnings or errors depending on sddRuleSeverity overrides.
+fields:
+  - name: maxMethodParams
+    type: i32
+    description: Non-negative integer maximum number of parameters per interface method
+    optional: true
+  - name: maxInterfaceMethods
+    type: i32
+    description: Non-negative integer maximum number of methods per interface
+    optional: true
+  - name: maxNarrativeSteps
+    type: i32
+    description: Non-negative integer maximum number of narrative steps per method
+    optional: true
+  - name: maxComponentDependencies
+    type: i32
+    description: Non-negative integer maximum number of dependsOn entries per component
+    optional: true
+  - name: maxSubsystemComponents
+    type: i32
+    description: Non-negative integer maximum number of components per subsystem
+    optional: true
+methods: []
+createdAt: '2026-07-06T20:47:08.558Z'
+updatedAt: '2026-07-06T21:48:41.354Z'

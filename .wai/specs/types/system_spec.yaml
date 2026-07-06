@@ -6,10 +6,12 @@ fields:
   - name: name
     type: string
     description: System name — the root identity of the spec tree
+    optional: false
     key: primary
   - name: vision
     type: string
     description: One-paragraph statement of what the system is for
+    optional: false
   - name: targetLanguage
     type: string
     description: Default implementation language for language-aware validation
@@ -17,9 +19,19 @@ fields:
   - name: boundaries
     type: string[]
     description: Declared system boundaries
+    optional: false
   - name: globalRequirements
     type: string[]
     description: System-wide requirements every subsystem must honour
+    optional: false
+  - name: databases
+    type: DatabaseSpec[]
+    description: Database definitions at the system level, grouping type specs that serve as table schemas
+    optional: true
+  - name: diagram
+    type: DiagramConfig
+    description: Diagram rendering configuration for the interactive canvas
+    optional: true
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-03T00:00:00.000Z'
+updatedAt: '2026-07-06T20:47:42.346Z'
