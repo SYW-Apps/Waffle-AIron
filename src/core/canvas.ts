@@ -493,6 +493,13 @@ header input[type="search"]::placeholder { color:var(--dim); }
 .swrow:hover { background:var(--hover-bg); }
 .swrow .lbl { font-size:12.5px; color:var(--ink); line-height:1.3; }
 .swrow .lbl .sub { display:block; color:var(--dim); font-size:10.5px; font-weight:400; }
+.selectWrap { position:relative; width:100%; }
+.selectWrap::after { content:'\\25BE'; position:absolute; right:10px; top:50%; transform:translateY(-50%); color:var(--dim); pointer-events:none; font-size:10px; }
+.selectControl { width:100%; appearance:none; -webkit-appearance:none; background:var(--input-bg); color:var(--ink); border:1px solid var(--chrome-border); border-radius:7px; padding:6px 30px 6px 9px; font-size:11.5px; font-family:inherit; outline:none; color-scheme:dark; }
+.selectControl:hover { border-color:var(--accent); background:var(--hover-bg); }
+.selectControl:focus { border-color:var(--accent); box-shadow:0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent); }
+.selectControl option { background:var(--chrome); color:var(--ink); }
+body[data-theme="light"] .selectControl { color-scheme:light; }
 .toggle { position:relative; display:inline-block; width:36px; height:20px; flex:0 0 auto; }
 .toggle input { position:absolute; opacity:0; width:0; height:0; margin:0; }
 .toggle .track { position:absolute; inset:0; background:var(--input-bg); border:1px solid var(--chrome-border); border-radius:20px; transition:background .15s, border-color .15s; }
@@ -501,7 +508,7 @@ header input[type="search"]::placeholder { color:var(--dim); }
 .toggle input:checked + .track::after { transform:translateX(16px); background:#fff; }
 
 #wrap { display:flex; height:calc(100vh - 52px); }
-#stage { flex:1; position:relative; }
+#stage { flex:1; min-width:0; position:relative; }
 #cy { position:absolute; inset:0; }
 .legend { position:absolute; left:12px; bottom:12px; background:var(--chrome); border:1px solid var(--chrome-border); border-radius:10px; padding:8px 12px; font-size:11px; color:var(--dim); z-index:5; pointer-events:none; }
 .legend .sw { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; vertical-align:-1px; border:1.5px solid; }
@@ -509,7 +516,14 @@ header input[type="search"]::placeholder { color:var(--dim); }
 #typesWarn { position:absolute; top:10px; left:50%; transform:translateX(-50%); color:var(--ink); font-size:12px; background:var(--chrome); border:1px solid var(--warn); border-radius:9px; padding:6px 12px; z-index:6; max-width:72vw; box-shadow:var(--syw-deep-shadow); display:none; }
 #typesWarn button { margin-left:8px; }
 
-#panel { width:380px; border-left:1px solid var(--chrome-border); background:var(--chrome); overflow-y:auto; z-index:10; }
+#panelResizer { flex:0 0 7px; cursor:col-resize; background:var(--chrome); border-left:1px solid var(--chrome-border); border-right:1px solid var(--line); z-index:11; position:relative; }
+#panelResizer::after { content:''; position:absolute; top:50%; left:50%; width:2px; height:48px; transform:translate(-50%, -50%); border-radius:2px; background:var(--dim); opacity:.45; }
+#panelResizer:hover::after, body.resizing-panel #panelResizer::after { background:var(--accent); opacity:1; }
+#panel { width:var(--panel-width, 380px); flex:0 0 var(--panel-width, 380px); border-left:1px solid var(--chrome-border); background:var(--chrome); overflow-y:auto; z-index:10; }
+body.panel-closed #panel, body.panel-closed #panelResizer { display:none; }
+body.resizing-panel { cursor:col-resize; user-select:none; }
+body.resizing-panel #cy { pointer-events:none; }
+body:not(.panel-closed) #panelToggle { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:700; }
 #panel .head { padding:16px 18px 10px; border-bottom:1px solid var(--line); }
 #panel .head h2 { font-size:16px; margin:0 0 6px; }
 #panel .body { padding:12px 18px 30px; }
@@ -535,10 +549,17 @@ header input[type="search"]::placeholder { color:var(--dim); }
 #panel .issue code { font-size:10.5px; color:var(--dim); }
 
 body.presentation header, body.presentation #panel, body.presentation .legend { display:none; }
+body.presentation #panelResizer { display:none; }
 body.presentation #wrap { height:100vh; }
 #exitPresent { display:none; position:fixed; top:10px; right:10px; z-index:100; border:1px solid var(--chrome-border); background:var(--chrome); color:var(--ink); border-radius:9px; padding:7px 13px; cursor:pointer; opacity:0.06; transition:opacity .15s ease; font:inherit; }
 #exitPresent:hover { opacity:1; box-shadow:var(--syw-glow); }
 body.presentation #exitPresent { display:block; }
+
+@media (max-width: 860px) {
+  #wrap { position:relative; }
+  #panel { position:absolute; top:0; right:0; bottom:0; width:min(var(--panel-width, 360px), calc(100vw - 44px)); flex-basis:auto; box-shadow:var(--syw-deep-shadow); }
+  #panelResizer { position:absolute; top:0; bottom:0; right:min(var(--panel-width, 360px), calc(100vw - 44px)); width:7px; flex-basis:auto; box-shadow:-3px 0 10px rgba(0,0,0,.18); }
+}
 
 #flowModal { display:none; position:fixed; inset:0; background:rgba(4,6,12,0.6); backdrop-filter:blur(3px); z-index:80; align-items:center; justify-content:center; }
 #flowModal.open { display:flex; }
@@ -599,16 +620,19 @@ body.presentation #exitPresent { display:block; }
       </label>
       <div class="swrow" style="flex-direction:column;align-items:flex-start;gap:6px;padding:8px 12px 10px;border-top:1px solid var(--line);">
         <span class="lbl" style="padding:0">Line Style<span class="sub" style="margin-top:2px">Choose how relationship lines are routed</span></span>
-        <select id="lineStyleSelect" style="width:100%;background:var(--input-bg);color:var(--ink);border:1px solid var(--chrome-border);border-radius:6px;padding:4px 8px;font-size:11.5px;font-family:inherit;outline:none;">
-          <option value="bezier">Bezier Curves</option>
+        <span class="selectWrap">
+        <select id="lineStyleSelect" class="selectControl">
+          <option value="bezier">Curved Bezier</option>
           <option value="straight">Straight Lines</option>
           <option value="taxi">Orthogonal Corners</option>
         </select>
+        </span>
       </div>
     </div>
   </div>
   <button class="tbtn" id="fitBtn" title="Fit graph to view">Fit</button>
   <button class="tbtn" id="resetBtn" title="Discard this view's saved rearrangement">Reset layout</button>
+  <button class="tbtn" id="panelToggle" title="Show or hide the details sidebar">Details</button>
   <div class="dropdown" id="layoutDd">
     <button class="tbtn" id="layoutBtn" title="Choose the auto-layout algorithm">Layout: Layered ▾</button>
     <div class="menu">
@@ -636,6 +660,7 @@ body.presentation #exitPresent { display:block; }
     <div id="typesWarn"></div>
     <div class="legend" id="legend"></div>
   </div>
+  <div id="panelResizer" title="Drag to resize details sidebar"></div>
   <div id="panel"></div>
 </div>
 <button id="exitPresent">✕ Exit presentation</button>
@@ -799,6 +824,8 @@ var MODEL = __MODEL_JSON__;
     typesRenderAll: false,
     layout: ['layered', 'force', 'concentric', 'grid'].indexOf(saved.layout) >= 0 ? saved.layout : 'layered',
     lineStyle: ['bezier', 'straight', 'taxi'].indexOf(saved.lineStyle) >= 0 ? saved.lineStyle : configuredLineStyle,
+    panelOpen: typeof saved.panelOpen === 'boolean' ? saved.panelOpen : !(inBrowser && window.innerWidth < 900),
+    panelWidth: typeof saved.panelWidth === 'number' ? saved.panelWidth : 380,
   };
   // Set by buildTypeElements when the ERD is degraded for performance (huge
   // scopes); consumed by renderTypesNotice to explain the level-of-detail.
@@ -813,7 +840,84 @@ var MODEL = __MODEL_JSON__;
   }
   function persist() {
     if (!store) return;
-    try { store.setItem(STORE_KEY, JSON.stringify({ positionsByView: saved.positionsByView || {}, theme: state.theme, typesDetail: state.typesDetail, layout: state.layout, lineStyle: state.lineStyle })); } catch (e) { /* non-fatal */ }
+    try {
+      store.setItem(STORE_KEY, JSON.stringify({
+        positionsByView: saved.positionsByView || {},
+        theme: state.theme,
+        typesDetail: state.typesDetail,
+        layout: state.layout,
+        lineStyle: state.lineStyle,
+        panelOpen: state.panelOpen,
+        panelWidth: state.panelWidth,
+      }));
+    } catch (e) { /* non-fatal */ }
+  }
+
+  // ---- details panel sizing -------------------------------------------------
+  var PANEL_MIN = 260;
+  var PANEL_MAX = 620;
+  var panelToggle = document.getElementById('panelToggle');
+  var panelResizer = document.getElementById('panelResizer');
+
+  function panelMaxWidth() {
+    if (!inBrowser) return PANEL_MAX;
+    var room = window.innerWidth <= 860 ? window.innerWidth - 44 : window.innerWidth - 320;
+    return Math.max(PANEL_MIN, Math.min(PANEL_MAX, room));
+  }
+  function clampPanelWidth(width) {
+    return Math.max(PANEL_MIN, Math.min(panelMaxWidth(), Math.round(width || 380)));
+  }
+  function resizeCanvasSoon() {
+    setTimeout(function () {
+      if (typeof cy !== 'undefined' && cy && cy.resize) cy.resize();
+    }, 60);
+  }
+  function applyPanelState(skipPersist) {
+    state.panelWidth = clampPanelWidth(state.panelWidth);
+    if (document.documentElement && document.documentElement.style) {
+      document.documentElement.style.setProperty('--panel-width', state.panelWidth + 'px');
+    }
+    if (document.body.classList) document.body.classList[state.panelOpen ? 'remove' : 'add']('panel-closed');
+    if (panelToggle) {
+      if (panelToggle.setAttribute) panelToggle.setAttribute('aria-expanded', state.panelOpen ? 'true' : 'false');
+      panelToggle.title = state.panelOpen ? 'Hide the details sidebar' : 'Show the details sidebar';
+    }
+    if (!skipPersist) persist();
+    resizeCanvasSoon();
+  }
+  applyPanelState(true);
+  if (panelToggle && panelToggle.addEventListener) {
+    panelToggle.addEventListener('click', function () {
+      state.panelOpen = !state.panelOpen;
+      applyPanelState(false);
+    });
+  }
+  if (panelResizer && panelResizer.addEventListener) {
+    panelResizer.addEventListener('mousedown', function (ev) {
+      if (ev && ev.preventDefault) ev.preventDefault();
+      state.panelOpen = true;
+      applyPanelState(false);
+      if (document.body.classList) document.body.classList.add('resizing-panel');
+      function move(mev) {
+        var next = inBrowser ? window.innerWidth - mev.clientX : state.panelWidth;
+        state.panelWidth = clampPanelWidth(next);
+        if (document.documentElement && document.documentElement.style) {
+          document.documentElement.style.setProperty('--panel-width', state.panelWidth + 'px');
+        }
+        resizeCanvasSoon();
+      }
+      function done() {
+        if (document.body.classList) document.body.classList.remove('resizing-panel');
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', done);
+        persist();
+      }
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', done);
+    });
+  }
+  if (inBrowser && window.addEventListener) {
+    window.addEventListener('resize', function () { applyPanelState(false); });
   }
 
   function matches(entry) {
@@ -865,6 +969,16 @@ var MODEL = __MODEL_JSON__;
   };
 
   function buildStyle(t) {
+    var routingStyle = state.lineStyle === 'taxi'
+      ? { 'curve-style': 'taxi', 'taxi-direction': 'horizontal', 'taxi-turn': 54, 'taxi-turn-min-distance': 34 }
+      : state.lineStyle === 'straight'
+        ? { 'curve-style': 'straight' }
+        : { 'curve-style': 'unbundled-bezier', 'control-point-distances': [78], 'control-point-weights': [0.48] };
+    var routedStyle = state.lineStyle === 'bezier'
+      ? { 'control-point-distances': 'data(cpDist)', 'control-point-weights': 'data(cpWeight)' }
+      : state.lineStyle === 'taxi'
+        ? { 'taxi-turn': 'data(taxiTurn)' }
+        : {};
     return [
       { selector: 'node', style: {
         shape: 'round-rectangle', width: 'data(w)', height: 'data(h)',
@@ -895,15 +1009,13 @@ var MODEL = __MODEL_JSON__;
       { selector: '.proxyIn', style: { 'background-color': t.proxyIn.fill, 'border-color': t.proxyIn.stroke, color: t.proxyIn.stroke } },
       { selector: '.proxyOut', style: { 'background-color': t.proxyOut.fill, 'border-color': t.proxyOut.stroke, color: t.proxyOut.stroke } },
       { selector: 'edge.revealEdge', style: { 'line-color': t.selGlow, 'target-arrow-color': t.selGlow, 'line-style': 'dashed', width: 2.4, opacity: 0.95 } },
-      { selector: 'edge', style: {
-        'curve-style': state.lineStyle === 'taxi' ? 'taxi' : (state.lineStyle === 'straight' ? 'straight' : 'bezier'),
-        'taxi-direction': 'horizontal',
-        'taxi-turn': 20,
+      { selector: 'edge', style: Object.assign({}, routingStyle, {
         width: 1.8, 'line-color': t.pageEdge,
         'target-arrow-shape': 'triangle', 'target-arrow-color': t.pageEdge, 'arrow-scale': 0.9,
         label: 'data(lbl)', 'font-size': 10, color: t.edgeText,
         'text-background-color': t.bgLabel, 'text-background-opacity': 0.85, 'text-rotation': 'autorotate',
-      }},
+      })},
+      { selector: 'edge.routed', style: routedStyle },
       { selector: 'edge.cross', style: { 'line-color': t.cross, 'target-arrow-color': t.cross, width: 2.6 } },
       { selector: 'edge.datacoupling', style: {
         'line-color': t.typeV.stroke, 'target-arrow-color': t.typeV.stroke, 'line-style': 'dashed',
@@ -1771,12 +1883,75 @@ var MODEL = __MODEL_JSON__;
       if (!gMoved) break;
     }
     placedGhosts.forEach(function (pp) {
+      posByAnchor[pp.gid] = { x: pp.x, y: pp.y, w: GHW, h: GHH };
       eles.push({
         data: { id: pp.gid, label: pp.g.label + '\\n(external)', w: GHW, h: GHH, tw: GHW - 14, extKind: pp.g.kind, extId: pp.g.id },
         position: { x: pp.x, y: pp.y },
         classes: 'ghost',
       });
     });
+
+    function pointInRect(p, r) {
+      return p.x >= r.l && p.x <= r.r && p.y >= r.t && p.y <= r.b;
+    }
+    function orient(a, b, c) {
+      var v = (b.y - a.y) * (c.x - b.x) - (b.x - a.x) * (c.y - b.y);
+      return Math.abs(v) < 0.0001 ? 0 : (v > 0 ? 1 : 2);
+    }
+    function onSeg(a, b, c) {
+      return b.x <= Math.max(a.x, c.x) && b.x >= Math.min(a.x, c.x)
+        && b.y <= Math.max(a.y, c.y) && b.y >= Math.min(a.y, c.y);
+    }
+    function segsCross(a, b, c, d) {
+      var o1 = orient(a, b, c), o2 = orient(a, b, d), o3 = orient(c, d, a), o4 = orient(c, d, b);
+      if (o1 !== o2 && o3 !== o4) return true;
+      return (o1 === 0 && onSeg(a, c, b)) || (o2 === 0 && onSeg(a, d, b))
+        || (o3 === 0 && onSeg(c, a, d)) || (o4 === 0 && onSeg(c, b, d));
+    }
+    function segmentHitsRect(a, b, rect) {
+      if (pointInRect(a, rect) || pointInRect(b, rect)) return true;
+      var tl = { x: rect.l, y: rect.t }, tr = { x: rect.r, y: rect.t };
+      var br = { x: rect.r, y: rect.b }, bl = { x: rect.l, y: rect.b };
+      return segsCross(a, b, tl, tr) || segsCross(a, b, tr, br)
+        || segsCross(a, b, br, bl) || segsCross(a, b, bl, tl);
+    }
+    function routeHash(s) {
+      var h = 0;
+      for (var hi = 0; hi < s.length; hi++) h = ((h << 5) - h + s.charCodeAt(hi)) | 0;
+      return Math.abs(h);
+    }
+    function routeData(src, tgt, routeKey) {
+      var a = posByAnchor[src], b = posByAnchor[tgt];
+      var hash = routeHash(routeKey || (src + '>' + tgt));
+      var laneStep = hash % 4;
+      var laneSign = (hash % 8) < 4 ? 1 : -1;
+      if (!a || !b) {
+        return { cpDist: laneSign * (78 + laneStep * 8), cpWeight: 0.48, taxiTurn: laneSign * (54 + laneStep * 20) };
+      }
+      var dx = b.x - a.x, dy = b.y - a.y;
+      var len = Math.sqrt(dx * dx + dy * dy) || 1;
+      var nx = -dy / len, ny = dx / len;
+      var mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      var hits = 0, side = 0, margin = 54;
+      Object.keys(posByAnchor).forEach(function (id) {
+        if (id === src || id === tgt) return;
+        var p = posByAnchor[id];
+        var rect = { l: p.x - p.w / 2 - margin, r: p.x + p.w / 2 + margin, t: p.y - p.h / 2 - margin, b: p.y + p.h / 2 + margin };
+        if (!segmentHitsRect({ x: a.x, y: a.y }, { x: b.x, y: b.y }, rect)) return;
+        hits++;
+        var obstacleSide = ((p.x - mid.x) * nx + (p.y - mid.y) * ny) >= 0 ? -1 : 1;
+        side += obstacleSide;
+      });
+      if (!hits) {
+        return { cpDist: laneSign * (78 + laneStep * 8), cpWeight: 0.48, taxiTurn: laneSign * (54 + laneStep * 20) };
+      }
+      var sign = side === 0 ? laneSign : (side > 0 ? 1 : -1);
+      return {
+        cpDist: sign * Math.min(280, 132 + hits * 44 + laneStep * 10),
+        cpWeight: 0.5,
+        taxiTurn: sign * Math.min(170, 74 + hits * 22 + laneStep * 20),
+      };
+    }
 
     var dimmedAnchors = {};
     entries.forEach(function (e) { if (state.query && !matches(e)) dimmedAnchors[anchorNodeId(e)] = true; });
@@ -1785,9 +1960,10 @@ var MODEL = __MODEL_JSON__;
       var e = ve.agg[key];
       var bundle = e.n > 1;
       var dim = state.query && (dimmedAnchors[e.src] || dimmedAnchors[e.tgt]);
+      var route = routeData(e.src, e.tgt, key);
       eles.push({
-        data: { id: 'e' + (i++), source: e.src, target: e.tgt, lbl: bundle ? e.n + ' links' : '' },
-        classes: (e.cross ? 'cross ' : '') + (bundle ? 'bundle ' : '') + (e.ghost ? 'toghost ' : '') + (dim ? 'dimmed' : ''),
+        data: { id: 'e' + (i++), source: e.src, target: e.tgt, lbl: bundle ? e.n + ' links' : '', cpDist: route.cpDist, cpWeight: route.cpWeight, taxiTurn: route.taxiTurn },
+        classes: 'routed ' + (e.cross ? 'cross ' : '') + (bundle ? 'bundle ' : '') + (e.ghost ? 'toghost ' : '') + (dim ? 'dimmed' : ''),
       });
     });
 
@@ -1799,9 +1975,10 @@ var MODEL = __MODEL_JSON__;
         if (ve.agg[key]) return;
         var e = vd.agg[key];
         var dim = state.query && (dimmedAnchors[e.src] || dimmedAnchors[e.tgt]);
+        var route = routeData(e.src, e.tgt, key);
         eles.push({
-          data: { id: 'de' + (di++), source: e.src, target: e.tgt, lbl: e.n > 1 ? e.n + ' \\u00d7 models' : 'models' },
-          classes: 'datacoupling' + (e.ghost ? ' toghost' : '') + (dim ? ' dimmed' : ''),
+          data: { id: 'de' + (di++), source: e.src, target: e.tgt, lbl: e.n > 1 ? e.n + ' \\u00d7 models' : 'models', cpDist: route.cpDist, cpWeight: route.cpWeight, taxiTurn: route.taxiTurn },
+          classes: 'routed datacoupling' + (e.ghost ? ' toghost' : '') + (dim ? ' dimmed' : ''),
         });
       });
     }

@@ -37,8 +37,7 @@ methods:
         targetComponent: spec_loader
         targetMethod: loadTypeSpecs
       - stepNumber: 7
-        description: >-
-          Build the architecture, type ERD, and database canvas model from the loaded specs
+        description: Build the architecture, type ERD, and database canvas model from the loaded specs
         type: local
       - stepNumber: 8
         description: Dispatch on the requested format
@@ -55,7 +54,10 @@ methods:
             step: 15
         defaultStep: 17
       - stepNumber: 9
-        description: Render the self-contained interactive canvas HTML
+        description: >-
+          Render the self-contained interactive canvas HTML, including styled line-routing controls,
+          padded obstacle-aware curved edge routing, per-edge orthogonal lanes, and the
+          resizable/collapsible details sidebar
         type: local
       - stepNumber: 10
         description: Return the canvas HTML
@@ -88,4 +90,4 @@ methods:
         error: unsupported diagram format
 status: complete
 createdAt: '2026-07-04T15:59:34.318Z'
-updatedAt: '2026-07-06T20:48:48.756Z'
+updatedAt: '2026-07-07T20:39:19.754Z'

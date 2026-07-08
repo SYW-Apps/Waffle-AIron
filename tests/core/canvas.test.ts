@@ -164,6 +164,20 @@ describe('interactive canvas generation', () => {
     expect(html.split('var MODEL = ')[1].split('\n')[0]).not.toContain('</script>');
   });
 
+  it('renders themed line-style controls with distinct curved edge routing', () => {
+    buildFixture();
+    const html = renderCanvasHtml(buildCanvasModel());
+
+    expect(html).toContain('class="selectControl"');
+    expect(html).toContain('Curved Bezier');
+    expect(html).toContain("'curve-style': 'unbundled-bezier'");
+    expect(html).toContain("'control-point-distances': [78]");
+    expect(html).toContain("'control-point-distances': 'data(cpDist)'");
+    expect(html).toContain("'curve-style': 'straight'");
+    expect(html).toContain("'curve-style': 'taxi'");
+    expect(html).toContain("'taxi-turn': 'data(taxiTurn)'");
+  });
+
   it('flow modal lays branches out in lanes with orthogonal long edges (not a single column)', () => {
     buildFixture();
     const html = renderCanvasHtml(buildCanvasModel());
