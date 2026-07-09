@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
 import { assertProjectInitialized, loadProjectConfig, loadRegistry } from '../config/loader.js';
-import { validateRegistry, validateProjectConfig } from '../core/validation.js';
+import { validateRegistry, validateProjectConfig, ValidationIssue } from '../core/validation.js';
 
 // ---------------------------------------------------------------------------
 // validate command
@@ -14,6 +14,28 @@ export interface ValidateOptions {
   ci?: boolean; // treat warnings as errors (for CI pipelines)
   subsystem?: string; // validate only a specific subsystem
   recursive?: boolean | number; // whether to recursively validate subprojects
+}
+
+// ---------------------------------------------------------------------------
+// --ci draft tolerance
+//
+// SDD has an explicit draft → design → complete lifecycle, so the CI gate must
+// enforce completeness of finished work, not punish the existence of declared
+// drafts. A warning is waived from the --ci failure decision only when it
+// merely reflects a draft/design spec:
+//   • DRAFT_COMPONENT_WARNING — always, it exists solely to surface a draft.
+//   • UNUSED_COMPONENT — only when the referenced component is itself draft/
+//     design (carried on the issue as draftContext by the rule that raised it);
+//     an unused *complete* component is a real gap and stays fatal.
+// Every other warning remains fatal in --ci mode. The warnings are still
+// printed — this classifies the failure decision, it does not silence rules.
+// ---------------------------------------------------------------------------
+
+export function isCiDraftWaivable(issue: ValidationIssue): boolean {
+  if (issue.severity !== 'warning') return false;
+  if (issue.code === 'DRAFT_COMPONENT_WARNING') return true;
+  if (issue.code === 'UNUSED_COMPONENT') return issue.draftContext === true;
+  return false;
 }
 
 export async function runValidate(options: ValidateOptions = {}): Promise<void> {
@@ -29,7 +51,10 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
   }
 
   let hasErrors = false;
-  let hasWarnings = false;
+  // Warnings that count toward the --ci failure decision (everything except
+  // draft-waivable ones). `waivedWarnings` are printed but excluded from it.
+  let hasFatalWarnings = false;
+  let waivedWarnings = 0;
 
   // --- Legacy spec filenames check ---
   const { findLegacySpecFiles } = require('../core/specs.js') as typeof import('../core/specs.js');
@@ -51,7 +76,7 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
         hasErrors = true;
       } else {
         logger.warn(`[${issue.code}] ${issue.message}`);
-        hasWarnings = true;
+        hasFatalWarnings = true;
       }
     }
   }
@@ -71,7 +96,7 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
         hasErrors = true;
       } else {
         logger.warn(`${prefix}[${issue.code}] ${issue.message}`);
-        hasWarnings = true;
+        hasFatalWarnings = true;
       }
     }
   }
@@ -108,7 +133,11 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
             skippedErrors++;
           }
         } else {
-          hasWarnings = true;
+          if (isCiDraftWaivable(issue)) {
+            waivedWarnings++;
+          } else {
+            hasFatalWarnings = true;
+          }
           if (warningCount < MAX_PRINT) {
             logger.warn(`${prefix}[${issue.code}] ${issue.message}`);
             warningCount++;
@@ -129,7 +158,14 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
 
   logger.blank();
 
-  const failOnWarnings = options.ci && hasWarnings;
+  // Draft-related warnings are surfaced above but excluded from the --ci
+  // failure decision (they reflect declared drafts, not incomplete finished
+  // work). Make that explicit in the summary.
+  if (options.ci && waivedWarnings > 0) {
+    logger.info(chalk.gray(`${waivedWarnings} draft-related warning(s) (non-fatal in --ci): excluded from the failure decision because the referenced specs are in draft/design status.`));
+  }
+
+  const failOnWarnings = !!options.ci && hasFatalWarnings;
 
   if (hasErrors || failOnWarnings) {
     if (options.ci && failOnWarnings && !hasErrors) {
@@ -141,7 +177,7 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
     process.exit(1);
   } else {
     if (options.ci) {
-      logger.success('All checks passed (CI mode — warnings treated as errors).');
+      logger.success('All checks passed (CI mode — warnings treated as errors, draft-related warnings excepted).');
     } else {
       logger.success('All checks passed.');
     }

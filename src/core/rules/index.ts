@@ -271,7 +271,10 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
         if (severity === 'warning') return;
       }
     }
-    issues.push({ severity, code, message, specId });
+    // Carry the draft/design provenance onto the issue (only when true, to keep
+    // issues clean) so command-level policy can classify draft-related warnings
+    // without re-deriving spec status. The rule stays fully emitted/visible.
+    issues.push({ severity, code, message, specId, ...(isDraftContext ? { draftContext: true } : {}) });
   };
 
   return {
