@@ -9,7 +9,8 @@ import {
 } from './approvals.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import { UnauthenticatedError, ForbiddenError } from './identity.js';
-import { executeApprovedCreate, executeApprovedLock, executeApprovedPromote } from './admin.js';
+import { executeApprovedLock, executeApprovedPromote } from './admin.js';
+import { evaluateInitRequest, executeApprovedInit } from './policy.js';
 import { isValidProjectId, listProjectRecords, existingProjectRoot } from './projects.js';
 import type {
   ApprovalRequest,
@@ -30,15 +31,19 @@ import type {
 // credential (via the auth specialist) and authorizes by grants; a privileged
 // action never runs directly — a request only ever creates/inspects/decides an
 // ApprovalRequest, and execution runs solely after an authorized decision,
-// through the admin plane's pre-authorized entry points (executeApprovedCreate /
-// executeApprovedLock / executeApprovedPromote in admin.ts).
+// through the pre-authorized entry points: project:init flows through the policy
+// orchestrator (evaluateInitRequest / executeApprovedInit in policy.ts), and
+// project:lock / project:promote through the admin plane (executeApprovedLock /
+// executeApprovedPromote in admin.ts).
 //
 // Exported as plain functions in the same house shape as identity.ts
 // (cfg, credential, …) so both the eventual HTTP self-service portal and any
 // in-process caller reach the same logic. Every audit append is best-effort: an
 // append failure is recorded as a server diagnostic and never fails the primary
-// action. Policy/profile evaluation is deferred to Phase 3 — requests are
-// validated structurally only.
+// action. Phase 3 retargets init to the pack/profile policy plane: a request is
+// validated structurally and then evaluated against the active instance policy —
+// an enforcing ('block') policy rejects a non-compliant request at request time,
+// while warn/auto_reconcile findings ride the approval summary to the approver.
 // ---------------------------------------------------------------------------
 
 /** Approval requests default to a 7-day pending window: long enough for an
@@ -191,11 +196,15 @@ function buildPendingRequest(
 
 /**
  * Authenticate the caller (any authenticated principal may request), validate the
- * ProjectInitRequest STRUCTURALLY ONLY (id shape per the project-id rules
- * createProject enforces, and the project must not already exist — policy/profile
- * evaluation is Phase 3), create a pending project:init ApprovalRequest carrying a
- * redacted summary and the request as its payload, audit the creation
- * (best-effort), and return the pending request. Does not create the project.
+ * ProjectInitRequest structurally (id shape per the project-id rules createProject
+ * enforces, and the project must not already exist), then evaluate it against the
+ * active instance pack policy via the policy orchestrator's pre-authorized
+ * evaluation: an enforcing ('block') policy rejects a non-compliant request
+ * immediately with actionable findings, while warn/auto_reconcile findings are
+ * appended to the request's summary so the human approver sees them. Create a
+ * pending project:init ApprovalRequest carrying a redacted summary and the request
+ * as its payload, audit the creation (best-effort), and return the pending
+ * request. Does not create the project.
  */
 export function requestProjectInitialization(
   cfg: HostConfig,
@@ -204,7 +213,7 @@ export function requestProjectInitialization(
 ): ApprovalRequest {
   const principal = requirePrincipal(cfg, credential);
 
-  // Structural validation only (Phase 2): id shape and non-collision.
+  // Structural validation: id shape and non-collision.
   if (!isValidProjectId(request.id)) {
     throw new Error(
       `Invalid project id "${request.id}" (allowed: lowercase letters, digits, hyphen).`,
@@ -214,12 +223,25 @@ export function requestProjectInitialization(
     throw new Error(`Project "${request.id}" already exists.`);
   }
 
-  const summary =
+  // Phase 3: evaluate the request against the active instance pack policy through
+  // the policy orchestrator's pre-authorized entry (the caller is already
+  // authenticated). An enforcing policy rejects a non-compliant request at request
+  // time; findings are surfaced so the agent learns WHY.
+  const evaluation = evaluateInitRequest(cfg, request);
+  if (evaluation.mode === 'block' && !evaluation.compliant) {
+    throw new ForbiddenError(`Policy violation: ${evaluation.messages.join(' ')}`);
+  }
+
+  let summary =
     `Initialize project ${request.id}` +
     (request.displayName ? ` (${request.displayName})` : '');
+  // Warn/auto_reconcile findings ride the approval summary to the human approver.
+  if (!evaluation.compliant && evaluation.messages.length > 0) {
+    summary += ` [policy findings: ${evaluation.messages.join(' ')}]`;
+  }
 
   // Payload is the request itself — a ProjectInitRequest carries no secrets by
-  // construction (Phase 3 profileSelection is opaque config, not credentials).
+  // construction (profileSelection is opaque config, not credentials).
   const pending = buildPendingRequest(principal, 'project:init', summary, request.id, {
     payloadType: 'ProjectInitRequest',
     payload: JSON.stringify(request),
@@ -393,8 +415,11 @@ export function decideRequest(
  * Authenticate the caller, look up the approved request (not-found when absent),
  * authorize the original requester or an instance-admin, require the request to be
  * in approved status (error naming the actual status) and unexpired, dispatch by
- * kind to the admin plane's pre-authorized execution entry point, mark the approval
+ * kind to the pre-authorized execution entry point (project:init to the policy
+ * orchestrator's executeApprovedInit, which re-evaluates the active policy and may
+ * reject; project:lock / project:promote to the admin plane), mark the approval
  * completed, audit at security level (best-effort), and return an outcome summary.
+ * A re-evaluation failure at execution leaves the approval approved, not completed.
  * Rejects pending, denied, expired, completed, or unauthorized requests.
  */
 export function executeApprovedRequest(
@@ -423,9 +448,15 @@ export function executeApprovedRequest(
       if (!req.payload) {
         throw new Error(`Approved project:init request "${req.id}" is missing its payload.`);
       }
+      // Execute through the policy orchestrator's pre-authorized entry (the request
+      // was already authorized by the approval decision). executeApprovedInit
+      // RE-EVALUATES the active policy at execution time (it may have changed since
+      // the request) and applies the policy's required/default packs plus the
+      // request's own profile selection — so an init approved under a permissive
+      // policy still fails here if the policy has since flipped to enforcing.
       const init = JSON.parse(req.payload) as ProjectInitRequest;
-      const rec = executeApprovedCreate(cfg, init.id);
-      outcome = `Initialized project "${rec.id}".`;
+      const rec = executeApprovedInit(cfg, init);
+      outcome = `Initialized project "${rec.id}" under the active pack policy.`;
       break;
     }
     case 'project:lock': {

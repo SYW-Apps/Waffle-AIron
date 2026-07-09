@@ -13,14 +13,19 @@ import {
   executeApprovedRequest,
 } from '../../src/server/selfservice.js';
 import { createProject } from '../../src/server/admin.js';
+import { setPackPolicyRecord } from '../../src/server/policy.js';
+import { listProjectPacks } from '../../src/server/packs.js';
 import { UnauthenticatedError, ForbiddenError } from '../../src/server/identity.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
 import { createProjectRecord, existingProjectRoot } from '../../src/server/projects.js';
+import { listApprovalRequests } from '../../src/server/approvals.js';
 import { queryAuditEvents } from '../../src/server/audit.js';
+import { readYamlFile } from '../../src/utils/yaml.js';
 import type {
   ApiKeyRecord,
   ApprovalRequest,
   HostConfig,
+  InstancePackPolicy,
   PrincipalSubject,
   ProjectGrant,
 } from '../../src/server/types.js';
@@ -40,6 +45,22 @@ const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 function subject(over: Partial<PrincipalSubject> = {}): PrincipalSubject {
   return { userId: 'u-x', kind: 'human', issuer: 'local', ...over };
+}
+
+/** A full InstancePackPolicy with permissive defaults, overridable per test. */
+function samplePolicy(over: Partial<InstancePackPolicy> = {}): InstancePackPolicy {
+  return {
+    id: 'inst-policy',
+    requiredGlobalPacks: [],
+    defaultProjectPacks: [],
+    allowedProfileIds: [],
+    requiredProfileIds: [],
+    blockedPackNames: [],
+    requireProfileSelection: false,
+    enforcementMode: 'warn',
+    updatedAt: '',
+    ...over,
+  };
 }
 
 describe('self-service orchestrator (sdd_host)', () => {
@@ -137,6 +158,55 @@ describe('self-service orchestrator (sdd_host)', () => {
   it('init request: rejects a structurally invalid project id', () => {
     const requester = mintToken({ id: 'iv', grants: [], subject: subject() });
     expect(() => requestProjectInitialization(cfg, requester, { id: 'Bad Id!' })).toThrow(/invalid project id/i);
+  });
+
+  // ── requestProjectInitialization × pack policy (Phase 3) ────────────────────
+
+  it('init request: an enforcing (block) policy rejects a non-compliant request at REQUEST time with the findings, creating no approval', () => {
+    // Block mode + requireProfileSelection with no selection provided → non-compliant.
+    setPackPolicyRecord(dataDir, samplePolicy({ enforcementMode: 'block', requireProfileSelection: true }));
+    const requester = mintToken({ id: 'bp', grants: [], subject: subject({ userId: 'u-bp' }) });
+
+    let caught: unknown;
+    try {
+      requestProjectInitialization(cfg, requester, { id: 'blocked-init' });
+    } catch (e) {
+      caught = e;
+    }
+    // Rejected with an actionable, findings-bearing message so the agent learns WHY.
+    expect(caught).toBeInstanceOf(ForbiddenError);
+    expect((caught as Error).message).toMatch(/policy violation/i);
+    expect((caught as Error).message).toMatch(/profile selection is required/i);
+
+    // No approval was created and the project is untouched.
+    expect(listApprovalRequests(dataDir)).toHaveLength(0);
+    expect(existingProjectRoot(dataDir, 'blocked-init')).toBeNull();
+  });
+
+  it('init request: a warn-mode non-compliant request is still accepted, with the findings appended to the approval summary', () => {
+    // Warn mode: findings surface but the request proceeds to an approval.
+    setPackPolicyRecord(dataDir, samplePolicy({ enforcementMode: 'warn', requireProfileSelection: true }));
+    const requester = mintToken({ id: 'wp', grants: [], subject: subject({ userId: 'u-wp' }) });
+
+    const req = requestProjectInitialization(cfg, requester, { id: 'warned-init', displayName: 'Warned' });
+    expect(req.status).toBe('pending');
+    expect(req.kind).toBe('project:init');
+    // The base summary is preserved and the policy findings are appended for the approver.
+    expect(req.summary).toContain('Initialize project warned-init (Warned)');
+    expect(req.summary).toMatch(/policy findings:/i);
+    expect(req.summary).toMatch(/profile selection is required/i);
+    expect(listApprovalRequests(dataDir)).toHaveLength(1);
+  });
+
+  it('init request: a compliant request under a block policy is unaffected — a clean summary, no findings', () => {
+    // Block mode but nothing to violate → compliant → identical to the no-policy path.
+    setPackPolicyRecord(dataDir, samplePolicy({ enforcementMode: 'block', blockedPackNames: ['danger'] }));
+    const requester = mintToken({ id: 'cp', grants: [], subject: subject({ userId: 'u-cp' }) });
+
+    const req = requestProjectInitialization(cfg, requester, { id: 'clean-init', displayName: 'Clean' });
+    expect(req.status).toBe('pending');
+    expect(req.summary).toBe('Initialize project clean-init (Clean)');
+    expect(req.summary).not.toMatch(/policy findings/i);
   });
 
   // ── requestProjectLock / requestProjectPromotion authorization ──────────────
@@ -314,6 +384,56 @@ describe('self-service orchestrator (sdd_host)', () => {
 
     // A completed request cannot be re-executed.
     expect(() => executeApprovedRequest(cfg, requester, pending.id)).toThrow(/not approved/i);
+  });
+
+  it('executeApprovedRequest: project:init applies the policy default packs and records the profile selection on the created project', () => {
+    // Isolate the server-global pack set and seed one declarative pack.
+    const packsDir = path.join(dataDir, 'global-packs');
+    fs.mkdirSync(packsDir, { recursive: true });
+    fs.writeFileSync(path.join(packsDir, 'bar.yaml'), 'name: bar\nprofiles: {}\nlanguages: {}\n');
+    process.env.WAIRON_PACKS_DIR = packsDir;
+
+    // A warn policy whose default pack the init must vendor (missing default packs
+    // are not a request-time violation, so the request stays compliant).
+    setPackPolicyRecord(dataDir, samplePolicy({ defaultProjectPacks: ['bar'] }));
+    const requester = mintToken({ id: 'pir', grants: [], subject: subject({ userId: 'u-pir' }) });
+    const decider = deciderToken('pid', 'u-pid');
+
+    const pending = requestProjectInitialization(cfg, requester, { id: 'policy-init' });
+    decideRequest(cfg, decider, { requestId: pending.id, approved: true, decidedBy: subject(), decidedAt: new Date().toISOString() });
+
+    const outcome = executeApprovedRequest(cfg, requester, pending.id);
+    expect(outcome).toContain('Initialized project "policy-init"');
+
+    // The policy's default pack was vendored into the new project (assert via listing).
+    expect(listProjectPacks(cfg, MASTER, 'policy-init').map((d) => d.name)).toContain('bar');
+
+    // The resolved profile selection was recorded into the project's config.
+    const root = existingProjectRoot(dataDir, 'policy-init');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raw = readYamlFile(path.join(root!, '.wai', 'project.yaml')) as any;
+    expect(raw.profileSelection.defaultPackNames).toContain('bar');
+
+    expect(getRequestStatus(cfg, MASTER, pending.id).status).toBe('completed');
+  });
+
+  it('executeApprovedRequest: project:init re-evaluates policy at execution time — a policy flip to block fails execution and leaves the approval approved (not completed)', () => {
+    // Request created under the permissive default (no policy) → compliant.
+    const requester = mintToken({ id: 'flr', grants: [], subject: subject({ userId: 'u-flr' }) });
+    const decider = deciderToken('fld', 'u-fld');
+
+    const pending = requestProjectInitialization(cfg, requester, { id: 'flip-init' });
+    decideRequest(cfg, decider, { requestId: pending.id, approved: true, decidedBy: subject(), decidedAt: new Date().toISOString() });
+
+    // Policy flips to enforcing with a rule the request now violates.
+    setPackPolicyRecord(dataDir, samplePolicy({ enforcementMode: 'block', requireProfileSelection: true }));
+
+    // Execution re-evaluates and rejects; nothing is provisioned.
+    expect(() => executeApprovedRequest(cfg, requester, pending.id)).toThrow(/policy violation/i);
+    expect(existingProjectRoot(dataDir, 'flip-init')).toBeNull();
+
+    // The approval remains APPROVED — it was not marked completed by a failed execution.
+    expect(getRequestStatus(cfg, MASTER, pending.id).status).toBe('approved');
   });
 
   it('executeApprovedRequest: project:lock dispatches to the admin lock and locks the provisioned project', () => {
