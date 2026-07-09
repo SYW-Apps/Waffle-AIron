@@ -38,7 +38,10 @@ Phase 3 COMPLETE. Tech debt: ProjectConfigSchema doesn't model profileSelection 
 
 ### Phase 4 — Landscape / organization (ACTIVE)
 Approved design: credential-based discovery methods (uniform with Phases 1–3); directional relations-only reachability (placements = visual grouping, no access); upsertRelation validates targetPublicInterface against the target's snapshot (refresh required first); refreshPublicSurface reads L0 publicInterfaces leniently via raw YAML (core SystemSpecSchema gap stays in the validation-extensions batch, like profileSelection); private-by-default (no L0 surface = empty snapshot); vocab += landscape:manage, landscape:read. Source layout: organization.ts / relations.ts / surfaces.ts (triads), landscape.ts (orchestrator+portal+specialist).
-- [ ] Spec finalization (9 member interfaces + narratives + host_request discovery dispatch delta) → validation → human lock → implementation
+- [x] Spec finalization (9 member interfaces, removeRelation + getUnit wirings, host_core_adapter spec-read forwarders, organization_state type); all gates green; human locked (draft-freeze reverted)
+- [x] Implementation: 3 parallel triads (organization/relations/surfaces, 39 tests) → landscape.ts (18 tests; adapters.ts spec-read forwarders) → request.ts discovery dispatch (6 tests). 440 tests green; live e2e: beta published an L0 surface → redacted snapshot → snapshot-validated relation alpha→beta → alpha's agent discovered exactly [beta] + its redacted interfaces; gamma denied with no existence leak.
+
+Phase 4 COMPLETE. Type-spec fix pending: organization_unit_record.parentId required-vs-"when set" mismatch (typed optional in code).
 
 ### Phase 5 — Operations, Admin UI (SSO), local control
 - [ ] Not started (identity_provider_adapter narratives land here)
