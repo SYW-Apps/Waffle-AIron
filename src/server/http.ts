@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import { handleMcpRequest, handleViewDiagram, sendJson, bearerToken } from './request.js';
 import * as admin from './admin.js';
 import * as packs from './packs.js';
+import * as identity from './identity.js';
 import { AdminAuthError, LockValidationError } from './admin.js';
 import type { HostConfig, Role } from './types.js';
 
@@ -91,6 +92,13 @@ async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: ServerResp
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const body: any = req.method === 'POST' || req.method === 'PUT' ? (await readBody(req)) ?? {} : {};
+
+    // Identity control plane rides the admin listener in Phase 1 (see identity.ts).
+    // It owns its own error → status mapping, so it returns before the admin catch.
+    if (parts[0] === 'identity') {
+      identity.handleIdentityRequest(cfg, cred, req, res, body, url);
+      return;
+    }
 
     if (parts[1] === 'projects') {
       if (req.method === 'GET' && parts.length === 2) return sendJson(res, 200, admin.listProjects(cfg, cred));
