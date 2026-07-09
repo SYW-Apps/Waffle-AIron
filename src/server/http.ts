@@ -192,13 +192,31 @@ export interface HostServerHandle {
 }
 
 /** Bind the data-plane and admin-plane listeners and begin accepting connections. */
+/** The literal placeholder shipped in .env.example — never a real credential. */
+export const PLACEHOLDER_ADMIN_TOKEN = 'replace-with-a-random-64-hex-character-token';
+/** Shortest admin token we accept; anything below this is trivially guessable. */
+export const MIN_ADMIN_TOKEN_LENGTH = 16;
+
 export function startHostServer(cfg: HostConfig): HostServerHandle {
-  if (cfg.authEnabled && !process.env['WAIRON_ADMIN_TOKEN']) {
-    throw new Error(
-      'Refusing to start: auth is enabled but WAIRON_ADMIN_TOKEN is not set, so the admin ' +
-        'API would be unreachable and no keys could be minted. Set WAIRON_ADMIN_TOKEN, or pass ' +
-        '--no-auth for a trusted network.',
-    );
+  if (cfg.authEnabled) {
+    const adminToken = process.env['WAIRON_ADMIN_TOKEN'];
+    if (!adminToken) {
+      throw new Error(
+        'Refusing to start: auth is enabled but WAIRON_ADMIN_TOKEN is not set, so the admin ' +
+          'API would be unreachable and no keys could be minted. Set WAIRON_ADMIN_TOKEN, or pass ' +
+          '--no-auth for a trusted network.',
+      );
+    }
+    // Reject the shipped placeholder and trivially-short tokens: copying
+    // .env.example without editing it would otherwise run the admin API with a
+    // publicly known master credential.
+    if (adminToken === PLACEHOLDER_ADMIN_TOKEN || adminToken.length < MIN_ADMIN_TOKEN_LENGTH) {
+      throw new Error(
+        'Refusing to start: WAIRON_ADMIN_TOKEN is the example placeholder or too weak ' +
+          `(must be at least ${MIN_ADMIN_TOKEN_LENGTH} characters and not the shipped default). ` +
+          'Generate a strong one with `openssl rand -hex 32`.',
+      );
+    }
   }
   const dataServer = http.createServer((req, res) => routeData(cfg, req, res));
   const adminServer = http.createServer((req, res) => {
