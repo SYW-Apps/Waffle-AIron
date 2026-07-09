@@ -1,0 +1,13 @@
+id: project_relation_store
+name: Project Relation Store
+description: >-
+  Authoritative in-memory representation of cross-project relation records loaded from the hosted
+  data root. Relations describe visibility and dependency between isolated hosted projects without
+  merging their spec trees.
+subsystem: sdd_host
+componentType: Store
+owns: []
+dependsOn: []
+status: draft
+createdAt: '2026-07-08T21:12:18.352Z'
+updatedAt: '2026-07-08T21:12:18.354Z'

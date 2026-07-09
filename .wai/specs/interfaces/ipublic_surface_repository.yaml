@@ -1,0 +1,37 @@
+id: ipublic_surface_repository
+name: Public Surface Repository Interface
+description: >-
+  Facade contract for redacted project public-surface snapshots. This is the only hosted read model
+  other projects may use to understand a target project's public contract.
+component: public_surface_repository
+methods:
+  - name: replaceSnapshot
+    description: >-
+      Replace one project's public-surface snapshot after the caller validated that every exported
+      interface maps to an L1 public surface.
+    signature: 'replaceSnapshot(snapshot: ProjectPublicSurfaceSnapshot): ProjectPublicSurfaceSnapshot'
+    returns: ProjectPublicSurfaceSnapshot
+    params:
+      - name: snapshot
+        type: ProjectPublicSurfaceSnapshot
+    guarantees:
+      - atomic
+  - name: getSnapshot
+    description: Return the latest public-surface snapshot for a project, or null if none exists.
+    signature: 'getSnapshot(projectId: string): ProjectPublicSurfaceSnapshot | null'
+    returns: ProjectPublicSurfaceSnapshot | null
+    params:
+      - name: projectId
+        type: string
+  - name: findInterface
+    description: Return one public interface summary from a project's snapshot, or null if absent.
+    signature: 'findInterface(projectId: string, systemInterfaceId: string): PublicInterfaceSummary | null'
+    returns: PublicInterfaceSummary | null
+    params:
+      - name: projectId
+        type: string
+      - name: systemInterfaceId
+        type: string
+status: draft
+createdAt: '2026-07-08T21:13:24.102Z'
+updatedAt: '2026-07-08T21:13:24.104Z'

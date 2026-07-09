@@ -1,0 +1,15 @@
+id: project_relation_repository
+name: Project Relation Repository
+description: >-
+  Facade for durable hosted cross-project relation state. It exposes relation reads and writes
+  without allowing callers to inspect or couple to private project specs.
+subsystem: sdd_host
+componentType: Repository
+owns:
+  - project_relation_store
+  - project_relation_registry
+  - project_relation_index
+dependsOn: []
+status: draft
+createdAt: '2026-07-08T21:12:32.773Z'
+updatedAt: '2026-07-08T21:12:32.774Z'

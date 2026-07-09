@@ -1,0 +1,38 @@
+kind: value-object
+id: landscape_node
+name: LandscapeNode
+description: >-
+  Node in a hosted-instance landscape graph. Unlike GraphNode, this can represent organization
+  units, hosted projects, and public interfaces rather than only local components.
+fields:
+  - name: id
+    type: string
+    description: Stable graph node id.
+    optional: false
+  - name: label
+    type: string
+    description: Display label.
+    optional: false
+  - name: nodeKind
+    type: string
+    description: 'Node kind: "orgUnit", "project", or "publicInterface".'
+    optional: false
+  - name: projectId
+    type: string
+    description: Hosted project id when this node represents a project or one of its public interfaces.
+    optional: true
+  - name: unitId
+    type: string
+    description: Organization unit id when this node represents an organization unit.
+    optional: true
+  - name: publicInterfaceId
+    type: string
+    description: System public interface id when this node represents a public interface.
+    optional: true
+  - name: status
+    type: string
+    description: Optional lifecycle/status label for filtering and styling.
+    optional: true
+methods: []
+createdAt: '2026-07-08T21:11:32.757Z'
+updatedAt: '2026-07-08T21:11:32.791Z'

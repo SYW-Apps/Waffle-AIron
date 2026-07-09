@@ -1,0 +1,116 @@
+id: ilandscape_orchestrator
+name: Landscape Orchestrator Interface
+description: >-
+  Contract for hosted-instance landscape workflows: organization hierarchy, project placement,
+  public-surface snapshots, cross-project relations, and landscape graph generation.
+component: landscape_orchestrator
+methods:
+  - name: upsertUnit
+    description: >-
+      Authenticate and authorize organization administration, then create or update one organization
+      unit and audit the change.
+    signature: 'upsertUnit(credential: string, unit: OrganizationUnitRecord): OrganizationUnitRecord'
+    returns: OrganizationUnitRecord
+    params:
+      - name: credential
+        type: string
+      - name: unit
+        type: OrganizationUnitRecord
+    guarantees:
+      - atomic
+  - name: placeProject
+    description: >-
+      Authenticate and authorize project placement, then place a hosted project in an organization
+      unit and audit the change.
+    signature: 'placeProject(credential: string, placement: ProjectPlacement): ProjectPlacement'
+    returns: ProjectPlacement
+    params:
+      - name: credential
+        type: string
+      - name: placement
+        type: ProjectPlacement
+    guarantees:
+      - atomic
+  - name: refreshPublicSurface
+    description: >-
+      Authenticate and authorize snapshot refresh, read only the selected project's public L0
+      surfaces, validate that they map to L1 public interfaces, store the redacted snapshot, and
+      audit the refresh.
+    signature: 'refreshPublicSurface(credential: string, projectId: string): ProjectPublicSurfaceSnapshot'
+    returns: ProjectPublicSurfaceSnapshot
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+  - name: upsertRelation
+    description: >-
+      Authenticate and authorize relation management, validate source/target projects and target
+      public interface snapshot, then create or update the cross-project relation and audit the
+      change.
+    signature: 'upsertRelation(credential: string, relation: ProjectRelationRecord): ProjectRelationRecord'
+    returns: ProjectRelationRecord
+    params:
+      - name: credential
+        type: string
+      - name: relation
+        type: ProjectRelationRecord
+    guarantees:
+      - atomic
+  - name: listRelations
+    description: Authenticate and list cross-project relations visible to the caller.
+    signature: 'listRelations(credential: string, projectId: string): ProjectRelationRecord[]'
+    returns: ProjectRelationRecord[]
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+        optional: true
+  - name: generateLandscape
+    description: >-
+      Authenticate, gather authorized hosted organization/project/snapshot/relation records, and
+      return a landscape graph built only from hosted metadata and redacted public-surface
+      snapshots.
+    signature: 'generateLandscape(credential: string, scope: string): LandscapeGraphModel'
+    returns: LandscapeGraphModel
+    params:
+      - name: credential
+        type: string
+      - name: scope
+        type: string
+        optional: true
+  - name: listReachableProjectsForMcp
+    description: >-
+      MCP tool workflow `sdd_landscape_list_reachable_projects`: authenticate current-project
+      context and return only project ids reachable from the current project through active
+      relations and exported public-surface snapshots. Hidden or isolated projects are omitted.
+    signature: >-
+      listReachableProjectsForMcp(principal: Principal, currentProjectId: string):
+      ReachableProjectRef[]
+    returns: ReachableProjectRef[]
+    params:
+      - name: principal
+        type: Principal
+      - name: currentProjectId
+        type: string
+  - name: listReachableProjectInterfacesForMcp
+    description: >-
+      MCP tool workflow `sdd_landscape_list_reachable_project_interfaces`: return redacted public
+      interface summaries for one reachable target project. Rejects targets outside the caller's
+      reachable relation set and never returns private components, narratives, implementations, root
+      paths, secrets, or non-public types.
+    signature: >-
+      listReachableProjectInterfacesForMcp(principal: Principal, currentProjectId: string,
+      targetProjectId: string): PublicInterfaceSummary[]
+    returns: PublicInterfaceSummary[]
+    params:
+      - name: principal
+        type: Principal
+      - name: currentProjectId
+        type: string
+      - name: targetProjectId
+        type: string
+status: draft
+createdAt: '2026-07-08T21:13:44.021Z'
+updatedAt: '2026-07-08T21:56:51.385Z'

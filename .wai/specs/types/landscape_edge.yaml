@@ -1,0 +1,32 @@
+kind: value-object
+id: landscape_edge
+name: LandscapeEdge
+description: >-
+  Edge in a hosted-instance landscape graph, representing administrative hierarchy, project
+  placement, public-surface publication, or cross-project consumption.
+fields:
+  - name: from
+    type: string
+    description: Source landscape node id.
+    optional: false
+  - name: to
+    type: string
+    description: Target landscape node id.
+    optional: false
+  - name: edgeKind
+    type: string
+    description: >-
+      Edge kind: "contains", "owns", "shared_with", "publishes", "consumes", "depends_on", or
+      "mirrors".
+    optional: false
+  - name: relationId
+    type: string
+    description: ProjectRelationRecord id when the edge represents a cross-project relation.
+    optional: true
+  - name: label
+    type: string
+    description: Optional display label.
+    optional: true
+methods: []
+createdAt: '2026-07-08T21:11:38.806Z'
+updatedAt: '2026-07-08T21:11:38.839Z'

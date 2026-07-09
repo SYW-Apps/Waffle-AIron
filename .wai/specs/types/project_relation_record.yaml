@@ -1,0 +1,56 @@
+kind: entity
+id: project_relation_record
+name: ProjectRelationRecord
+description: >-
+  Hosted-instance relationship between two isolated projects. Relations may only target the
+  destination project's exported system public interface snapshot; they never authorize reading
+  private specs from the target project.
+subsystem: sdd_host
+fields:
+  - name: id
+    type: string
+    description: Stable relation id.
+    optional: false
+  - name: sourceProjectId
+    type: string
+    description: Hosted project id that consumes or depends on another project.
+    optional: false
+  - name: targetProjectId
+    type: string
+    description: Hosted project id that publishes the consumed public interface.
+    optional: false
+  - name: kind
+    type: string
+    description: Relation kind such as "consumes", "publishes_to", "depends_on", "mirrors", or "documents".
+    optional: false
+  - name: sourceAdapter
+    type: string
+    description: >-
+      Optional source project adapter component id responsible for consuming the remote public
+      surface.
+    optional: true
+  - name: targetPublicInterface
+    type: RemotePublicInterfaceRef
+    description: >-
+      Target project public interface reference. This must resolve against the target project's
+      public-surface snapshot.
+    optional: false
+  - name: reason
+    type: string
+    description: Human-readable reason for the cross-project relation.
+    optional: false
+  - name: status
+    type: string
+    description: 'Lifecycle status: "draft", "active", "deprecated", or "removed".'
+    optional: false
+  - name: createdAt
+    type: string
+    description: ISO-8601 creation timestamp.
+    optional: false
+  - name: createdBy
+    type: PrincipalSubject
+    description: Identity that created the relation.
+    optional: true
+methods: []
+createdAt: '2026-07-08T21:11:25.097Z'
+updatedAt: '2026-07-08T21:11:25.134Z'

@@ -1,0 +1,13 @@
+id: project_relation_index
+name: Project Relation Index
+description: >-
+  Read-path projection over cross-project relations, supporting lookup by source project, target
+  project, public interface, status, and relation kind.
+subsystem: sdd_host
+componentType: Index
+owns: []
+dependsOn:
+  - project_relation_store
+status: draft
+createdAt: '2026-07-08T21:12:29.270Z'
+updatedAt: '2026-07-08T21:12:29.273Z'

@@ -1,0 +1,14 @@
+id: project_relation_registry
+name: Project Relation Registry
+description: >-
+  Write-path component for creating, updating, deprecating, and removing cross-project relations. It
+  validates that relations target explicit public-interface references rather than private project
+  internals.
+subsystem: sdd_host
+componentType: Registry
+owns: []
+dependsOn:
+  - project_relation_store
+status: draft
+createdAt: '2026-07-08T21:12:22.826Z'
+updatedAt: '2026-07-08T21:12:22.828Z'
