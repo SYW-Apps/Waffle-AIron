@@ -15,8 +15,10 @@ Design doc: `docs/design/hosted-professional-use.md`. Phases run: design-finaliz
 - [x] Status promotion to complete (identity_provider_adapter stays draft until Phase 5/SSO)
 - [x] User-provisioning gap closed: admin upsertUser + setUserStatus on identity portal/orchestrator; allows narrowed to 4 (findByExternalSubject ×2 → Phase 5 SSO, audit count ×2 → Phase 5 pagination)
 - [x] sdd_validate_tree zero errors; validate --ci exit 0; as-complete gate zero errors
-- [ ] Human runs `wairon lock`
-- [ ] Implementation
+- [x] Human ran `wairon lock` (2026-07-09; blanket draft→complete freeze on Phase 2–5 planes reverted — product gap: lock needs phase awareness)
+- [x] Implementation: auth foundation (grants/expiry/authenticateCredential), audit plane (audit.ts), user plane (users.ts), identity API (identity.ts, /identity/* on admin listener), data-plane mcp.tool.call audit append (request.ts). 293 tests green; live e2e verified (mint → scoped MCP call → audit provenance).
+
+Phase 1 COMPLETE. Vocabulary follow-ups for the Phase 2 spec pass: canonicalize the 'user:admin' permission string; decide whether mintToken should resolve ownerSubject from the user repository (currently synthesized from ownerUserId).
 
 ### Phase 2 — Approvals + Self-service
 - [ ] Not started
