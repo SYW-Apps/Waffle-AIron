@@ -1,5 +1,6 @@
 import { computeStateId } from '../core/statehash.js';
 import { readLockRecord, writeLockRecord } from '../core/lockfile.js';
+import { loadSystemSpec, loadSubsystemSpecs } from '../core/specs.js';
 import { provisionProject, promoteAllComplete } from '../core/provision.js';
 import { validateAsComplete } from '../core/validation.js';
 import { renderDiagram } from '../core/diagram.js';
@@ -25,6 +26,10 @@ export const hostCore = {
   writeLockRecord,
   promoteAllComplete,
   renderDiagram,
+  // L0/L1 reads used by the landscape plane to project a redacted public-surface
+  // snapshot; thin forwarders to the core spec reads (request-scoped root).
+  loadSystemSpec,
+  loadSubsystemSpecs,
 };
 
 // host_validator_adapter → sdd_validator (validator_portal)

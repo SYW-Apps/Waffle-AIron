@@ -7,6 +7,7 @@ import * as packs from './packs.js';
 import * as identity from './identity.js';
 import * as selfservice from './selfservice.js';
 import * as policy from './policy.js';
+import * as landscape from './landscape.js';
 import { AdminAuthError, LockValidationError } from './admin.js';
 import type { ApprovalDecision, HostConfig, Role } from './types.js';
 
@@ -110,6 +111,15 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
     // the admin catch.
     if (parts[0] === 'projects' || parts[0] === 'instance') {
       policy.handlePolicyRequest(cfg, cred, req, res, body, url);
+      return;
+    }
+
+    // Landscape control plane (Phase 4) rides the admin listener like /identity
+    // and the policy mount. It owns its own error → status mapping, returning
+    // before the admin catch. parts[0] here is 'landscape', never 'admin', so the
+    // admin blocks below are never shadowed.
+    if (parts[0] === 'landscape') {
+      landscape.handleLandscapeRequest(cfg, cred, req, res, body, url);
       return;
     }
 

@@ -1,0 +1,584 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import * as http from 'node:http';
+import type { AddressInfo } from 'node:net';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import * as crypto from 'node:crypto';
+import {
+  upsertUnit,
+  placeProject,
+  refreshPublicSurface,
+  upsertRelation,
+  listRelations,
+  removeRelation,
+  generateLandscape,
+  listReachableProjectsForMcp,
+  listReachableProjectInterfacesForMcp,
+  buildLandscapeGraph,
+} from '../../src/server/landscape.js';
+import { routeAdmin } from '../../src/server/http.js';
+import { createProject } from '../../src/server/admin.js';
+import { createCredential, hashToken } from '../../src/server/credentials.js';
+import { upsertProjectRelation } from '../../src/server/relations.js';
+import { getPublicSurfaceSnapshot } from '../../src/server/surfaces.js';
+import { queryAuditEvents } from '../../src/server/audit.js';
+import { ForbiddenError } from '../../src/server/identity.js';
+import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
+import type {
+  ApiKeyRecord,
+  HostConfig,
+  HostedProjectRecord,
+  OrganizationUnitRecord,
+  PrincipalSubject,
+  ProjectGrant,
+  ProjectPlacement,
+  ProjectRelationRecord,
+} from '../../src/server/types.js';
+
+// ---------------------------------------------------------------------------
+// Landscape orchestrator + diagram specialist + portal (sdd_host) — Phase 4.
+// Exercised through the exported orchestrator functions, the pure specialist,
+// and the HTTP portal (routeAdmin) over a real <dataDir> with real minted
+// credentials, mirroring policy.test.ts. Covers landscape:manage-gated writes +
+// audit, redacted public-surface refresh (with and without L0 surfaces), the
+// relation snapshot-validation gate, directional relations-only reachability,
+// landscape graph generation, and the seven portal endpoints.
+// ---------------------------------------------------------------------------
+
+const MASTER = 'master-credential-secret-value';
+const SUBJECT: PrincipalSubject = { userId: 'u-test', kind: 'human', issuer: 'local' };
+
+function unitRec(over: Partial<OrganizationUnitRecord> = {}): OrganizationUnitRecord {
+  return { id: '', name: 'Unit', kind: 'team', status: 'active', createdAt: '', createdBy: SUBJECT, ...over };
+}
+
+function placementRec(over: Partial<ProjectPlacement> = {}): ProjectPlacement {
+  return { id: '', projectId: 'p', unitId: 'u', role: 'owner', createdAt: '', createdBy: SUBJECT, ...over };
+}
+
+function relationRec(over: Partial<ProjectRelationRecord> = {}): ProjectRelationRecord {
+  return {
+    id: '',
+    sourceProjectId: 'src',
+    targetProjectId: 'dst',
+    kind: 'consumes',
+    sourceAdapter: 'src_client_adapter',
+    targetPublicInterface: { projectId: 'dst', systemInterfaceId: 'dst-api', reason: 'needs it' },
+    reason: 'declared dependency',
+    status: 'active',
+    createdAt: '',
+    createdBy: SUBJECT,
+    ...over,
+  };
+}
+
+describe('landscape orchestrator (sdd_host)', () => {
+  let dataDir: string;
+  let cfg: HostConfig;
+  const savedEnv = { ...process.env };
+
+  beforeEach(() => {
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-landscape-'));
+    process.env.WAIRON_ADMIN_TOKEN = MASTER;
+    cfg = { host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: true };
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    process.env = { ...savedEnv };
+    try {
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    } catch {
+      /* windows file locks */
+    }
+  });
+
+  /** Mint a stored token with a unique id and the given grants. */
+  let tokenSeq = 0;
+  function mintToken(grants: ProjectGrant[]): string {
+    const token = 'wk_' + crypto.randomBytes(8).toString('hex');
+    const record: ApiKeyRecord = {
+      id: `tok-${tokenSeq++}`,
+      keyHash: hashToken(token),
+      role: 'editor',
+      projects: grants.map((g) => g.projectId),
+      grants,
+      createdAt: new Date().toISOString(),
+      ownerSubject: SUBJECT,
+    };
+    createCredential(dataDir, record);
+    return token;
+  }
+
+  const manageToken = () => mintToken([{ projectId: '*', permissions: ['landscape:manage'] }]);
+  const readToken = () => mintToken([{ projectId: '*', permissions: ['landscape:read'] }]);
+  const plainToken = () => mintToken([{ projectId: '*', permissions: ['mcp:write'] }]);
+
+  /** Seed L0 publicInterfaces into a provisioned project's raw system spec. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function seedSurface(root: string, ifaces: any[]): void {
+    const p = path.join(root, '.wai', 'specs', '.index.yaml');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raw = readYamlFile(p) as any;
+    raw.publicInterfaces = ifaces;
+    writeYamlFile(p, raw);
+  }
+
+  /** Create a hosted project and return its record. */
+  function project(id: string): HostedProjectRecord {
+    return createProject(cfg, MASTER, id);
+  }
+
+  // ── organization-unit / placement admin gating + audit ────────────────────
+
+  it('upsertUnit: a landscape:manage grant creates the unit and audits unit.upsert; a plain token is 403', () => {
+    expect(() => upsertUnit(cfg, plainToken(), unitRec({ name: 'Team A' }))).toThrow(ForbiddenError);
+
+    const stored = upsertUnit(cfg, manageToken(), unitRec({ name: 'Team A', kind: 'team' }));
+    expect(stored.id).toBeTruthy();
+    expect(stored.name).toBe('Team A');
+    expect(stored.status).toBe('active');
+
+    const audit = queryAuditEvents(dataDir, { action: 'unit.upsert' });
+    expect(audit.length).toBeGreaterThanOrEqual(1);
+    expect(audit[0].level).toBe('info');
+  });
+
+  it('placeProject: gated by landscape:manage, rejects a missing unit, and audits project.place', () => {
+    const unit = upsertUnit(cfg, MASTER, unitRec({ name: 'Team B' }));
+
+    expect(() =>
+      placeProject(cfg, plainToken(), placementRec({ projectId: 'proj-x', unitId: unit.id })),
+    ).toThrow(ForbiddenError);
+
+    expect(() =>
+      placeProject(cfg, manageToken(), placementRec({ projectId: 'proj-x', unitId: 'ghost-unit' })),
+    ).toThrow(/does not exist/i);
+
+    const stored = placeProject(cfg, manageToken(), placementRec({ projectId: 'proj-x', unitId: unit.id, role: 'owner' }));
+    expect(stored.id).toBeTruthy();
+    expect(stored.unitId).toBe(unit.id);
+
+    expect(queryAuditEvents(dataDir, { action: 'project.place' }).length).toBeGreaterThanOrEqual(1);
+  });
+
+  // ── public-surface refresh (redaction) ────────────────────────────────────
+
+  it('refreshPublicSurface: a project WITH L0 publicInterfaces yields a snapshot of redacted summaries', () => {
+    const rec = project('surf-proj');
+    seedSurface(rec.rootPath, [
+      {
+        id: 'pub-api',
+        name: 'Public API',
+        type: 'REST',
+        audience: 'partners',
+        version: 'v1',
+        stability: 'stable',
+        // References that MUST NOT leak into the redacted summary:
+        subsystem: 'billing',
+        interface: 'ibilling_portal',
+        component: 'billing_portal',
+        // Method given as an object carrying a full signature + narrative — only
+        // the NAME may survive redaction:
+        methods: [
+          { name: 'createInvoice', signature: 'createInvoice(x): y', narrative: 'secret private steps' },
+          'listInvoices',
+        ],
+        endpoints: ['/invoices', '/invoices/{id}'],
+        publicTypes: ['Invoice', { name: 'LineItem' }],
+        details: 'Billing public surface',
+      },
+    ]);
+
+    const snap = refreshPublicSurface(cfg, MASTER, 'surf-proj');
+    expect(snap.projectId).toBe('surf-proj');
+    expect(snap.systemName).toBe('surf-proj');
+    expect(snap.stateId).toMatch(/^sha256:/);
+    expect(snap.interfaces).toHaveLength(1);
+
+    const iface = snap.interfaces[0];
+    expect(iface.id).toBe('pub-api');
+    expect(iface.name).toBe('Public API');
+    expect(iface.type).toBe('REST');
+    expect(iface.audience).toBe('partners');
+    expect(iface.version).toBe('v1');
+    expect(iface.stability).toBe('stable');
+    expect(iface.methods).toEqual(['createInvoice', 'listInvoices']);
+    expect(iface.endpoints).toEqual(['/invoices', '/invoices/{id}']);
+    expect(iface.publicTypes).toEqual(['Invoice', 'LineItem']);
+    expect(iface.details).toBe('Billing public surface');
+
+    // Redaction: private references / narratives / signatures never leak.
+    const serialized = JSON.stringify(iface);
+    expect(serialized).not.toMatch(/signature/);
+    expect(serialized).not.toMatch(/narrative/);
+    expect(serialized).not.toMatch(/billing_portal/);
+    expect(serialized).not.toMatch(/ibilling_portal/);
+
+    // Persisted + audited.
+    expect(getPublicSurfaceSnapshot(dataDir, 'surf-proj')?.interfaces).toHaveLength(1);
+    expect(queryAuditEvents(dataDir, { action: 'surface.refresh' }).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('refreshPublicSurface: a project WITHOUT L0 surfaces yields an empty snapshot (private by default)', () => {
+    project('bare-proj');
+    const snap = refreshPublicSurface(cfg, MASTER, 'bare-proj');
+    expect(snap.interfaces).toEqual([]);
+  });
+
+  it('refreshPublicSurface: resolves type/details from the referenced subsystem public interface', () => {
+    const rec = project('resolve-proj');
+    const subDir = path.join(rec.rootPath, '.wai', 'specs', 'subsystems');
+    fs.mkdirSync(subDir, { recursive: true });
+    writeYamlFile(path.join(subDir, 'sub1.yaml'), {
+      id: 'sub1',
+      name: 'Sub One',
+      description: 'a subsystem',
+      parentSystem: 'resolve-proj',
+      publicInterfaces: [{ type: 'GraphQL', details: 'from subsystem', interface: 'igql_portal', component: 'gql_portal' }],
+      status: 'complete',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+    seedSurface(rec.rootPath, [{ id: 'gql', name: 'GraphQL API', subsystem: 'sub1', interface: 'igql_portal' }]);
+
+    const snap = refreshPublicSurface(cfg, MASTER, 'resolve-proj');
+    expect(snap.interfaces).toHaveLength(1);
+    expect(snap.interfaces[0].type).toBe('GraphQL');
+    expect(snap.interfaces[0].details).toBe('from subsystem');
+  });
+
+  it('refreshPublicSurface: requires a landscape:manage grant (403 for a plain token)', () => {
+    project('guard-proj');
+    expect(() => refreshPublicSurface(cfg, plainToken(), 'guard-proj')).toThrow(ForbiddenError);
+  });
+
+  // ── relation snapshot-validation gate ─────────────────────────────────────
+
+  it('upsertRelation: rejects a target with no snapshot with refresh guidance', () => {
+    project('rel-src');
+    project('rel-dst');
+    expect(() =>
+      upsertRelation(
+        cfg,
+        MASTER,
+        relationRec({ sourceProjectId: 'rel-src', targetProjectId: 'rel-dst', targetPublicInterface: { projectId: 'rel-dst', systemInterfaceId: 'x', reason: 'r' } }),
+      ),
+    ).toThrow(/refresh/i);
+  });
+
+  it('upsertRelation: rejects an unknown target interface even when a snapshot exists', () => {
+    const dst = project('u-dst');
+    project('u-src');
+    seedSurface(dst.rootPath, [{ id: 'real-api', name: 'Real', type: 'REST', details: 'd' }]);
+    refreshPublicSurface(cfg, MASTER, 'u-dst');
+
+    expect(() =>
+      upsertRelation(
+        cfg,
+        MASTER,
+        relationRec({ sourceProjectId: 'u-src', targetProjectId: 'u-dst', targetPublicInterface: { projectId: 'u-dst', systemInterfaceId: 'ghost-api', reason: 'r' } }),
+      ),
+    ).toThrow(/unknown target public interface/i);
+  });
+
+  it('upsertRelation: happy path persists the relation and audits relation.upsert; removeRelation audits relation.remove', () => {
+    const dst = project('h-dst');
+    project('h-src');
+    seedSurface(dst.rootPath, [{ id: 'dst-api', name: 'DST', type: 'REST', details: 'd' }]);
+    refreshPublicSurface(cfg, MASTER, 'h-dst');
+
+    const stored = upsertRelation(
+      cfg,
+      MASTER,
+      relationRec({
+        sourceProjectId: 'h-src',
+        targetProjectId: 'h-dst',
+        targetPublicInterface: { projectId: 'h-dst', systemInterfaceId: 'dst-api', reason: 'r' },
+      }),
+    );
+    expect(stored.id).toBeTruthy();
+    expect(stored.status).toBe('active');
+    expect(listRelations(cfg, MASTER, 'h-src').map((r) => r.id)).toContain(stored.id);
+    expect(queryAuditEvents(dataDir, { action: 'relation.upsert' }).length).toBeGreaterThanOrEqual(1);
+
+    removeRelation(cfg, MASTER, stored.id);
+    expect(listRelations(cfg, MASTER, 'h-src')).toHaveLength(0);
+    expect(queryAuditEvents(dataDir, { action: 'relation.remove' }).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('listRelations / removeRelation: gated by landscape grants', () => {
+    expect(() => listRelations(cfg, plainToken())).toThrow(ForbiddenError);
+    expect(listRelations(cfg, readToken())).toEqual([]);
+    expect(() => removeRelation(cfg, plainToken(), 'whatever')).toThrow(ForbiddenError);
+  });
+
+  // ── directional, relations-only reachability ──────────────────────────────
+
+  it('reachability is directional: A→B lets A discover B (with relation ids/kinds); B and C discover nothing', () => {
+    const b = project('reach-b');
+    project('reach-a');
+    project('reach-c');
+    seedSurface(b.rootPath, [{ id: 'b-api', name: 'B API', type: 'REST', details: 'd' }]);
+    refreshPublicSurface(cfg, MASTER, 'reach-b');
+
+    const rel = upsertRelation(
+      cfg,
+      MASTER,
+      relationRec({
+        sourceProjectId: 'reach-a',
+        targetProjectId: 'reach-b',
+        kind: 'consumes',
+        targetPublicInterface: { projectId: 'reach-b', systemInterfaceId: 'b-api', reason: 'r' },
+      }),
+    );
+
+    const fromA = listReachableProjectsForMcp(cfg, MASTER, 'reach-a');
+    expect(fromA).toHaveLength(1);
+    expect(fromA[0].projectId).toBe('reach-b');
+    expect(fromA[0].relationIds).toContain(rel.id);
+    expect(fromA[0].relationKinds).toContain('consumes');
+    expect(fromA[0].publicInterfaceIds).toContain('b-api');
+
+    // Directional: B does not reach A; C reaches nothing.
+    expect(listReachableProjectsForMcp(cfg, MASTER, 'reach-b')).toEqual([]);
+    expect(listReachableProjectsForMcp(cfg, MASTER, 'reach-c')).toEqual([]);
+  });
+
+  it('reachability ignores non-active relations', () => {
+    upsertProjectRelation(
+      dataDir,
+      relationRec({ sourceProjectId: 'x', targetProjectId: 'y', status: 'retired', targetPublicInterface: { projectId: 'y', systemInterfaceId: 'y-api', reason: 'r' } }),
+    );
+    expect(listReachableProjectsForMcp(cfg, MASTER, 'x')).toEqual([]);
+  });
+
+  it('interface discovery: reachable+snapshot → summaries, reachable+no-snapshot → empty, unreachable → Forbidden', () => {
+    const b = project('id-b');
+    project('id-a');
+    seedSurface(b.rootPath, [{ id: 'b-api', name: 'B API', type: 'REST', details: 'd' }]);
+    refreshPublicSurface(cfg, MASTER, 'id-b');
+    upsertRelation(
+      cfg,
+      MASTER,
+      relationRec({ sourceProjectId: 'id-a', targetProjectId: 'id-b', targetPublicInterface: { projectId: 'id-b', systemInterfaceId: 'b-api', reason: 'r' } }),
+    );
+
+    // Reachable + snapshot → redacted summaries.
+    const ifaces = listReachableProjectInterfacesForMcp(cfg, MASTER, 'id-a', 'id-b');
+    expect(ifaces.map((i) => i.id)).toEqual(['b-api']);
+
+    // Reachable + no snapshot → empty (seed the relation directly, target has no snapshot).
+    upsertProjectRelation(
+      dataDir,
+      relationRec({ sourceProjectId: 'id-a', targetProjectId: 'id-nosnap', status: 'active', targetPublicInterface: { projectId: 'id-nosnap', systemInterfaceId: 'n', reason: 'r' } }),
+    );
+    expect(listReachableProjectInterfacesForMcp(cfg, MASTER, 'id-a', 'id-nosnap')).toEqual([]);
+
+    // Unreachable → Forbidden (no existence leak; even though id-a has a snapshot).
+    expect(() => listReachableProjectInterfacesForMcp(cfg, MASTER, 'id-b', 'id-a')).toThrow(ForbiddenError);
+  });
+
+  // ── landscape graph generation ────────────────────────────────────────────
+
+  it('generateLandscape: returns nodes and edges covering units, placements, and relations', () => {
+    const b = project('g-b');
+    project('g-a');
+    seedSurface(b.rootPath, [{ id: 'b-api', name: 'B API', type: 'REST', details: 'd' }]);
+    refreshPublicSurface(cfg, MASTER, 'g-b');
+
+    const unit = upsertUnit(cfg, MASTER, unitRec({ name: 'Portfolio' }));
+    placeProject(cfg, MASTER, placementRec({ projectId: 'g-a', unitId: unit.id, role: 'owner' }));
+    const rel = upsertRelation(
+      cfg,
+      MASTER,
+      relationRec({ sourceProjectId: 'g-a', targetProjectId: 'g-b', targetPublicInterface: { projectId: 'g-b', systemInterfaceId: 'b-api', reason: 'r' } }),
+    );
+
+    const graph = generateLandscape(cfg, MASTER, 'instance');
+    expect(graph.scope).toBe('instance');
+
+    expect(graph.nodes.some((n) => n.nodeKind === 'orgUnit' && n.unitId === unit.id)).toBe(true);
+    expect(graph.nodes.some((n) => n.nodeKind === 'project' && n.projectId === 'g-a')).toBe(true);
+    expect(graph.nodes.some((n) => n.nodeKind === 'project' && n.projectId === 'g-b')).toBe(true);
+    expect(graph.nodes.some((n) => n.nodeKind === 'publicInterface' && n.publicInterfaceId === 'b-api')).toBe(true);
+
+    expect(graph.edges.some((e) => e.edgeKind === 'owns' && e.label === 'owner')).toBe(true);
+    expect(graph.edges.some((e) => e.relationId === rel.id)).toBe(true);
+  });
+
+  it('generateLandscape / listRelations: control-plane reads accept a landscape:read grant, reject a plain token', () => {
+    expect(() => generateLandscape(cfg, plainToken())).toThrow(ForbiddenError);
+    const graph = generateLandscape(cfg, readToken());
+    expect(Array.isArray(graph.nodes)).toBe(true);
+    expect(Array.isArray(graph.edges)).toBe(true);
+  });
+});
+
+// ── Landscape Diagram Specialist (pure buildGraph) ───────────────────────────
+
+describe('landscape diagram specialist (pure buildGraph)', () => {
+  const subject: PrincipalSubject = { userId: 'u', kind: 'human', issuer: 'local' };
+
+  it('projects units (hierarchy), projects, placements, snapshots, and relations into a graph', () => {
+    const graph = buildLandscapeGraph(
+      [
+        { id: 'root', name: 'Root', kind: 'org', status: 'active', createdAt: '', createdBy: subject },
+        { id: 'child', name: 'Child', kind: 'team', status: 'active', createdAt: '', createdBy: subject, parentId: 'root' },
+      ],
+      [
+        { id: 'p1', rootPath: '/x/p1', status: 'active', createdAt: '' },
+        { id: 'p2', rootPath: '/x/p2', status: 'active', createdAt: '' },
+      ],
+      [{ id: 'pl1', projectId: 'p1', unitId: 'child', role: 'owner', createdAt: '', createdBy: subject }],
+      [{ projectId: 'p2', stateId: 's', systemName: 'P2', interfaces: [{ id: 'p2-api', name: 'P2 API', type: 'REST', audience: 'public', methods: [], details: '' }], exportedAt: '' }],
+      [
+        // Relation to a KNOWN interface node.
+        { id: 'r1', sourceProjectId: 'p1', targetProjectId: 'p2', kind: 'consumes', sourceAdapter: 'a', targetPublicInterface: { projectId: 'p2', systemInterfaceId: 'p2-api', reason: 'r' }, reason: 'r', status: 'active', createdAt: '', createdBy: subject },
+        // Relation whose target interface node is ABSENT → falls back to the project node.
+        { id: 'r2', sourceProjectId: 'p1', targetProjectId: 'p2', kind: 'depends_on', sourceAdapter: 'a', targetPublicInterface: { projectId: 'p2', systemInterfaceId: 'missing', reason: 'r' }, reason: 'r', status: 'active', createdAt: '', createdBy: subject },
+      ],
+    );
+
+    // Hierarchy edge parent → child.
+    expect(graph.edges.some((e) => e.edgeKind === 'contains' && e.from === 'unit:root' && e.to === 'unit:child')).toBe(true);
+    // Placement edge (owner → 'owns').
+    expect(graph.edges.some((e) => e.edgeKind === 'owns' && e.from === 'unit:child' && e.to === 'project:p1')).toBe(true);
+    // Publishes edge + interface node.
+    expect(graph.nodes.some((n) => n.nodeKind === 'publicInterface' && n.id === 'iface:p2:p2-api')).toBe(true);
+    expect(graph.edges.some((e) => e.edgeKind === 'publishes' && e.to === 'iface:p2:p2-api')).toBe(true);
+    // Relation to a known interface node targets that node.
+    expect(graph.edges.some((e) => e.relationId === 'r1' && e.to === 'iface:p2:p2-api')).toBe(true);
+    // Relation to an absent interface node falls back to the project node.
+    expect(graph.edges.some((e) => e.relationId === 'r2' && e.to === 'project:p2' && e.edgeKind === 'depends_on')).toBe(true);
+    expect(graph.scope).toBe('instance');
+    expect(Date.parse(graph.generatedAt)).toBeGreaterThan(0);
+  });
+});
+
+// ── HTTP portal (routeAdmin) ─────────────────────────────────────────────────
+
+describe('landscape portal (sdd_host http)', () => {
+  let dataDir: string;
+  let cfg: HostConfig;
+  let server: http.Server;
+  let baseUrl: string;
+  const savedEnv = { ...process.env };
+
+  beforeEach(async () => {
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-landscape-http-'));
+    process.env.WAIRON_ADMIN_TOKEN = MASTER;
+    cfg = { host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: true };
+
+    server = http.createServer((req, res) => {
+      void routeAdmin(cfg, req, res);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    process.env = { ...savedEnv };
+    try {
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    } catch {
+      /* windows file locks */
+    }
+  });
+
+  async function api(
+    method: string,
+    pathname: string,
+    opts: { cred?: string; body?: unknown } = {},
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ): Promise<{ status: number; json: any }> {
+    const headers: Record<string, string> = {};
+    if (opts.cred) headers['Authorization'] = `Bearer ${opts.cred}`;
+    const init: RequestInit = { method, headers };
+    if (opts.body !== undefined) {
+      headers['content-type'] = 'application/json';
+      init.body = JSON.stringify(opts.body);
+    }
+    const res = await fetch(baseUrl + pathname, init);
+    const text = await res.text();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let json: any;
+    try {
+      json = text ? JSON.parse(text) : undefined;
+    } catch {
+      json = text;
+    }
+    return { status: res.status, json };
+  }
+
+  function seedSurface(root: string, id: string): void {
+    const p = path.join(root, '.wai', 'specs', '.index.yaml');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raw = readYamlFile(p) as any;
+    raw.publicInterfaces = [{ id, name: id, type: 'REST', details: 'd' }];
+    writeYamlFile(p, raw);
+  }
+
+  it('the seven landscape endpoints respond with the correct statuses through routeAdmin', async () => {
+    // PUT /landscape/units/{id} → 200.
+    const unit = await api('PUT', '/landscape/units/team-1', { cred: MASTER, body: { name: 'Team 1', kind: 'team' } });
+    expect(unit.status).toBe(200);
+    expect(unit.json.id).toBe('team-1');
+
+    // PUT /landscape/projects/{id}/placements/{unitId} → 200.
+    const place = await api('PUT', '/landscape/projects/proj-1/placements/team-1', { cred: MASTER, body: { role: 'owner' } });
+    expect(place.status).toBe(200);
+    expect(place.json.projectId).toBe('proj-1');
+    expect(place.json.unitId).toBe('team-1');
+
+    // Provision a real target project + surface for the relation.
+    const dst = createProject(cfg, MASTER, 'dst-proj');
+    seedSurface(dst.rootPath, 'dst-api');
+
+    // POST /landscape/projects/{id}/public-surface/refresh → 200.
+    const refresh = await api('POST', '/landscape/projects/dst-proj/public-surface/refresh', { cred: MASTER });
+    expect(refresh.status).toBe(200);
+    expect(refresh.json.interfaces).toHaveLength(1);
+
+    // PUT /landscape/relations/{id} → 200.
+    const rel = await api('PUT', '/landscape/relations/rel-1', {
+      cred: MASTER,
+      body: {
+        sourceProjectId: 'src-proj',
+        targetProjectId: 'dst-proj',
+        kind: 'consumes',
+        sourceAdapter: 'src_client_adapter',
+        targetPublicInterface: { projectId: 'dst-proj', systemInterfaceId: 'dst-api', reason: 'r' },
+        reason: 'r',
+        status: 'active',
+      },
+    });
+    expect(rel.status).toBe(200);
+    expect(rel.json.id).toBe('rel-1');
+
+    // GET /landscape/relations → 200.
+    const list = await api('GET', '/landscape/relations', { cred: MASTER });
+    expect(list.status).toBe(200);
+    expect(Array.isArray(list.json)).toBe(true);
+    expect(list.json.some((r: { id: string }) => r.id === 'rel-1')).toBe(true);
+
+    // GET /landscape/graph → 200; unauthenticated → 401.
+    const graph = await api('GET', '/landscape/graph', { cred: MASTER });
+    expect(graph.status).toBe(200);
+    expect(Array.isArray(graph.json.nodes)).toBe(true);
+    expect((await api('GET', '/landscape/graph')).status).toBe(401);
+
+    // DELETE /landscape/relations/{id} → 200.
+    const del = await api('DELETE', '/landscape/relations/rel-1', { cred: MASTER });
+    expect(del.status).toBe(200);
+  });
+
+  it('does not shadow the /admin/projects surface (a bare /admin/projects list still works)', async () => {
+    const res = await api('GET', '/admin/projects', { cred: MASTER });
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.json)).toBe(true);
+  });
+});
