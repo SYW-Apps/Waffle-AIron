@@ -5,8 +5,9 @@ import { handleMcpRequest, handleViewDiagram, sendJson, bearerToken } from './re
 import * as admin from './admin.js';
 import * as packs from './packs.js';
 import * as identity from './identity.js';
+import * as selfservice from './selfservice.js';
 import { AdminAuthError, LockValidationError } from './admin.js';
-import type { HostConfig, Role } from './types.js';
+import type { ApprovalDecision, HostConfig, Role } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Host HTTP Portal + Host Server (sdd_host)
@@ -85,7 +86,7 @@ function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResponse): 
 
 // ── Admin plane ───────────────────────────────────────────────────────────
 
-async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: ServerResponse): Promise<void> {
+export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: ServerResponse): Promise<void> {
   const cred = bearerToken(req);
   const url = new URL(req.url ?? '/', 'http://localhost');
   const parts = url.pathname.split('/').filter(Boolean); // ['admin', ...]
@@ -182,6 +183,61 @@ async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: ServerResp
       if (req.method === 'PUT' && parts.length === 3) {
         admin.setSecret(cfg, cred, parts[2], body.value);
         return sendJson(res, 200, { ok: true });
+      }
+    }
+
+    // ── Approval decision surface (Phase 2) ────────────────────────────────
+    // The human decision surface for approval-backed self-service until the admin
+    // UI lands: iadmin_portal.listApprovals/decideApproval/executeApproval forward
+    // 1:1 to the self-service orchestrator (admin_portal_impl → listPendingRequests
+    // / decideRequest / executeApprovedRequest). Owns its own error → status mapping
+    // (401/403/404/400), mirroring the identity mount, so approval faults never fall
+    // through to the admin catch (which maps only AdminAuthError/LockValidationError).
+    if (parts[1] === 'approvals') {
+      try {
+        // GET /admin/approvals?status=&project=
+        if (req.method === 'GET' && parts.length === 2) {
+          // L3 (iadmin_portal.listApprovals) advertises a `status` filter, but the
+          // self_service_orchestrator contract only lists PENDING requests this
+          // phase (admin_portal_impl → listPendingRequests). Accept status=pending
+          // explicitly and pass `project` through; reject any other status until
+          // broader listing lands rather than silently returning pending-only.
+          const status = url.searchParams.get('status');
+          if (status !== null && status !== 'pending') {
+            return sendJson(res, 400, {
+              error: `unsupported status "${status}": only pending approvals can be listed in this phase`,
+            });
+          }
+          return sendJson(res, 200, selfservice.listPendingRequests(cfg, cred, url.searchParams.get('project') ?? undefined));
+        }
+        // POST /admin/approvals/{id}/decision  { approved: boolean, reason?: string }
+        if (req.method === 'POST' && parts.length === 4 && parts[3] === 'decision') {
+          if (typeof body.approved !== 'boolean') {
+            return sendJson(res, 400, { error: '`approved` must be a boolean' });
+          }
+          // decidedBy/decidedAt are server-authoritative: decideRequest overwrites
+          // both from the authenticated caller (the client value is never trusted),
+          // so these are ignored placeholders the ApprovalDecision type requires.
+          const decision: ApprovalDecision = {
+            requestId: parts[2],
+            approved: body.approved,
+            decidedBy: { userId: '', kind: 'service', issuer: 'local' },
+            decidedAt: '',
+          };
+          if (typeof body.reason === 'string') decision.reason = body.reason;
+          return sendJson(res, 200, selfservice.decideRequest(cfg, cred, decision));
+        }
+        // POST /admin/approvals/{id}/execute
+        if (req.method === 'POST' && parts.length === 4 && parts[3] === 'execute') {
+          return sendJson(res, 200, { outcome: selfservice.executeApprovedRequest(cfg, cred, parts[2]) });
+        }
+        return sendJson(res, 404, { error: 'not found' });
+      } catch (err) {
+        if (err instanceof identity.UnauthenticatedError) return sendJson(res, 401, { error: 'unauthorized' });
+        if (err instanceof identity.ForbiddenError) return sendJson(res, 403, { error: 'forbidden' });
+        const msg = err instanceof Error ? err.message : String(err);
+        if (/not found/i.test(msg)) return sendJson(res, 404, { error: msg });
+        return sendJson(res, 400, { error: msg });
       }
     }
 
