@@ -12,6 +12,10 @@ import {
   requestProjectPromotion,
   getRequestStatus,
 } from './selfservice.js';
+import {
+  listReachableProjectsForMcp,
+  listReachableProjectInterfacesForMcp,
+} from './landscape.js';
 import type {
   AuditEvent,
   HostConfig,
@@ -129,7 +133,7 @@ export function auditToolCall(
   }
 }
 
-// ── Data-plane self-service dispatch (steps 10–19 of handleRequest) ──────────
+// ── Data-plane self-service + landscape discovery dispatch (steps 10–24) ─────
 
 /** The four approval-backed self-service tools the data plane handles directly,
  *  bypassing the scoped sdd_* MCP server. Every other tool falls through to it. */
@@ -138,6 +142,14 @@ const SELF_SERVICE_TOOLS = new Set<string>([
   'sdd_host_request_project_lock',
   'sdd_host_request_project_promotion',
   'sdd_host_get_approval_status',
+]);
+
+/** The two hosted landscape discovery tools the data plane handles directly,
+ *  routing them to the landscape orchestrator with currentProjectId = the BOUND
+ *  project (never a project id taken from the tool arguments). */
+const LANDSCAPE_DISCOVERY_TOOLS = new Set<string>([
+  'sdd_landscape_list_reachable_projects',
+  'sdd_landscape_list_reachable_project_interfaces',
 ]);
 
 /** The MCP tool-result envelope — the exact shape the scoped sdd_* server returns:
@@ -174,17 +186,20 @@ function toolErrorResult(err: unknown): McpToolResult {
 }
 
 /**
- * Steps 10–19: when the message is a `tools/call` for one of the four approval-backed
- * self-service tools, dispatch it to the self-service orchestrator — re-authenticating
- * the RAW bearer credential (the orchestrator is the single auth authority) — and shape
- * the outcome into the standard JSON-RPC tool-result envelope. Returns the full JSON-RPC
- * response to send, or undefined when the call is not a self-service tool (the caller
- * then falls through to the scoped sdd_* MCP server — step 21).
+ * Steps 10–24: when the message is a `tools/call` for one of the four approval-backed
+ * self-service tools or one of the two hosted landscape discovery tools, dispatch it to
+ * the matching orchestrator — re-authenticating the RAW bearer credential (the
+ * orchestrators are the single auth authority) — and shape the outcome into the standard
+ * JSON-RPC tool-result envelope. Returns the full JSON-RPC response to send, or undefined
+ * when the call is neither (the caller then falls through to the scoped sdd_* MCP server —
+ * step 25).
  *
- * Project lock and promotion are ALWAYS scoped to the already-bound project id; a
- * project id supplied in the tool arguments is deliberately IGNORED, so a caller can
- * never request an action against a project it is not scoped to. Initialization instead
- * carries the (new) project as its decoded ProjectInitRequest arguments.
+ * Project lock and promotion, and BOTH landscape discovery workflows, are ALWAYS scoped to
+ * the already-bound project id as their current project; a project id supplied in the tool
+ * arguments is deliberately IGNORED for those, so a caller can never act as, or read the
+ * neighbourhood of, a project it is not scoped to. Initialization carries the (new) project
+ * as its decoded ProjectInitRequest arguments, and interface discovery reads its TARGET
+ * project (the neighbour to inspect, still gated by reachability) from arguments.projectId.
  */
 export function dispatchSelfServiceTool(
   cfg: HostConfig,
@@ -195,7 +210,9 @@ export function dispatchSelfServiceTool(
   const msg = jsonRpcRequest(body);
   if (!msg || msg.method !== 'tools/call') return undefined;
   const name = msg.params?.name;
-  if (typeof name !== 'string' || !SELF_SERVICE_TOOLS.has(name)) return undefined;
+  if (typeof name !== 'string' || !(SELF_SERVICE_TOOLS.has(name) || LANDSCAPE_DISCOVERY_TOOLS.has(name))) {
+    return undefined;
+  }
 
   const args = (msg.params?.arguments ?? {}) as Record<string, unknown>;
   const id = msg.id ?? null;
@@ -211,6 +228,19 @@ export function dispatchSelfServiceTool(
         break;
       case 'sdd_host_request_project_promotion':
         value = requestProjectPromotion(cfg, credential, projectId); // bound project; args ignored
+        break;
+      case 'sdd_landscape_list_reachable_projects':
+        // currentProjectId = the BOUND project; never taken from arguments.
+        value = listReachableProjectsForMcp(cfg, credential, projectId);
+        break;
+      case 'sdd_landscape_list_reachable_project_interfaces':
+        // currentProjectId = the BOUND project; targetProjectId from arguments.projectId.
+        value = listReachableProjectInterfacesForMcp(
+          cfg,
+          credential,
+          projectId,
+          String(args.projectId ?? ''),
+        );
         break;
       default: // 'sdd_host_get_approval_status'
         value = getRequestStatus(cfg, credential, String(args.requestId ?? ''));
@@ -253,17 +283,18 @@ export async function handleMcpRequest(
     // The project id is the basename of its isolated root (<dataDir>/projects/<id>).
     const projectId = path.basename(root);
 
-    // Steps 10–20: the four approval-backed self-service tools are handled here,
-    // bypassing the scoped sdd_* MCP server. The response still flows through the
-    // SAME best-effort audit path (auditToolCall) the scoped dispatch uses.
-    const selfServiceResponse = dispatchSelfServiceTool(cfg, credential, projectId, body);
-    if (selfServiceResponse !== undefined) {
-      sendJson(res, 200, selfServiceResponse);
-      auditToolCall(cfg.dataDir, principal, projectId, body, deriveMcpOutcome(selfServiceResponse));
+    // Steps 10–24: the four approval-backed self-service tools and the two hosted
+    // landscape discovery tools are handled here, bypassing the scoped sdd_* MCP
+    // server. The response still flows through the SAME best-effort audit path
+    // (auditToolCall) the scoped dispatch uses.
+    const dispatchedResponse = dispatchSelfServiceTool(cfg, credential, projectId, body);
+    if (dispatchedResponse !== undefined) {
+      sendJson(res, 200, dispatchedResponse);
+      auditToolCall(cfg.dataDir, principal, projectId, body, deriveMcpOutcome(dispatchedResponse));
       return;
     }
 
-    // Steps 21–22: every other tool dispatches into a fresh scoped MCP server.
+    // Steps 25–26: every other tool dispatches into a fresh scoped MCP server.
     const server = createScopedServer();
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
