@@ -29,6 +29,20 @@ methods:
     description: Render the bound project's spec tree into a diagram artifact string.
     signature: 'renderDiagram(format: string): string'
     returns: string
+  - name: loadSystemSpec
+    description: >-
+      Read the bound project's L0 system spec, or null when absent. Forwarded to the core portal;
+      used to project a redacted public-surface snapshot.
+    signature: 'loadSystemSpec(): SystemSpec | null'
+    returns: SystemSpec | null
+    params: []
+  - name: loadSubsystemSpecs
+    description: >-
+      Read the bound project's L1 subsystem specs. Forwarded to the core portal; used to resolve the
+      subsystem public interfaces backing the L0 public surfaces.
+    signature: 'loadSubsystemSpecs(): SubsystemSpec[]'
+    returns: SubsystemSpec[]
+    params: []
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-07-04T16:00:12.921Z'
+updatedAt: '2026-07-09T22:06:39.865Z'

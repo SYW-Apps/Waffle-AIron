@@ -9,6 +9,6 @@ componentType: Registry
 owns: []
 dependsOn:
   - project_relation_store
-status: draft
+status: complete
 createdAt: '2026-07-08T21:12:22.826Z'
-updatedAt: '2026-07-08T21:12:22.828Z'
+updatedAt: '2026-07-09T22:13:04.498Z'

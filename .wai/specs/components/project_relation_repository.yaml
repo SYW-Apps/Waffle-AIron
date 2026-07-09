@@ -10,6 +10,6 @@ owns:
   - project_relation_registry
   - project_relation_index
 dependsOn: []
-status: draft
+status: complete
 createdAt: '2026-07-08T21:12:32.773Z'
-updatedAt: '2026-07-08T21:12:32.774Z'
+updatedAt: '2026-07-09T22:13:06.488Z'

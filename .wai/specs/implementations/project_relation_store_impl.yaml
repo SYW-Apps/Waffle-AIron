@@ -1,0 +1,27 @@
+id: project_relation_store_impl
+name: Project Relation Store Implementation
+description: >-
+  Authoritative in-memory holder of the cross-project relation set, file-backed under the server
+  data root (relations.json).
+contract: iproject_relation_store
+sourcePath: src/server/relations.ts
+methods:
+  - name: load
+    narrative: []
+    intent: >-
+      Read the persisted cross-project relation set from the relations.json file under the hosted
+      data root and hold it as the authoritative in-memory representation, returning it. A missing
+      file yields an empty set; an unreadable file or structurally invalid JSON fails with a storage
+      error naming the path, so a lost relation never silently drops a declared cross-project
+      dependency.
+  - name: replaceAll
+    narrative: []
+    intent: >-
+      Swap the authoritative in-memory relation set to the supplied complete set in one assignment,
+      only ever called by the owned registry after durable persistence has succeeded. Never
+      partially applies, so concurrent relation queries through the index always observe a
+      consistent set.
+detail: intent
+status: complete
+createdAt: '2026-07-09T22:07:58.775Z'
+updatedAt: '2026-07-09T22:13:36.183Z'

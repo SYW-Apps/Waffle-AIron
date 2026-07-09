@@ -1,0 +1,23 @@
+id: public_surface_index_impl
+name: Public Surface Index Implementation
+description: >-
+  Read-path projection over the public-surface store's snapshot set. Shares the store's references;
+  never mutates, never goes stale.
+contract: ipublic_surface_index
+sourcePath: src/server/surfaces.ts
+methods:
+  - name: getSnapshot
+    narrative: []
+    intent: >-
+      Return the store's public-surface snapshot for the given project id, or null when none exists.
+      Read-only over the store's current references; absence is a null result, not an error.
+  - name: findInterface
+    narrative: []
+    intent: >-
+      Return the redacted public interface summary from the project's snapshot whose id matches
+      systemInterfaceId, or null when the project has no snapshot or no such interface. Read-only
+      over the store's current references; absence is a null result, not an error.
+detail: intent
+status: complete
+createdAt: '2026-07-09T22:08:21.272Z'
+updatedAt: '2026-07-09T22:13:41.684Z'

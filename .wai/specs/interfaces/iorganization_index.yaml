@@ -1,0 +1,40 @@
+id: iorganization_index
+name: Organization Index Interface
+description: >-
+  Private read-path contract over the hosted organization units and project placements: hierarchy
+  listing, membership listing, and single-unit lookup.
+component: organization_index
+methods:
+  - name: listUnits
+    description: >-
+      List organization units, narrowed to the direct children of parentId when supplied, otherwise
+      all units.
+    signature: 'listUnits(parentId: string): OrganizationUnitRecord[]'
+    returns: OrganizationUnitRecord[]
+    params:
+      - name: parentId
+        type: string
+        optional: true
+  - name: listPlacements
+    description: >-
+      List project placements narrowed by project id and/or organization unit id, otherwise all
+      placements.
+    signature: 'listPlacements(projectId: string, unitId: string): ProjectPlacement[]'
+    returns: ProjectPlacement[]
+    params:
+      - name: projectId
+        type: string
+        optional: true
+      - name: unitId
+        type: string
+        optional: true
+  - name: getUnit
+    description: Return one organization unit by id, or null when absent.
+    signature: 'getUnit(id: string): OrganizationUnitRecord | null'
+    returns: OrganizationUnitRecord | null
+    params:
+      - name: id
+        type: string
+status: complete
+createdAt: '2026-07-09T22:05:48.954Z'
+updatedAt: '2026-07-09T22:13:18.775Z'

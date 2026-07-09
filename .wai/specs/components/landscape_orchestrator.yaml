@@ -3,11 +3,13 @@ name: Landscape Orchestrator
 description: >-
   Owns hosted-instance landscape workflows: organization-unit administration, project placement,
   public-surface snapshot refresh, cross-project relation management, and landscape graph
-  generation. It authorizes by Principal grants, reads target projects only to produce redacted
-  public-surface snapshots, and records audit events for landscape changes. In a future revision of
-  the host_request_orchestrator, the hosted landscape discovery MCP tools
-  (sdd_landscape_list_reachable_projects and sdd_landscape_list_reachable_project_interfaces) will
-  be dispatched to this orchestrator; that integration is planned here and not yet wired.
+  generation, plus the two data-plane MCP discovery workflows
+  (sdd_landscape_list_reachable_projects, sdd_landscape_list_reachable_project_interfaces) that the
+  host_request_orchestrator dispatches to it with the bound project as the current project. It
+  authenticates credentials through the single auth authority, authorizes by Principal grants
+  (landscape:manage or instance-admin for writes; landscape:read or higher for control-plane reads),
+  reads a target project's specs only to produce its redacted public-surface snapshot and otherwise
+  consumes only stored redacted snapshots, and records audit events for landscape changes.
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
@@ -20,6 +22,6 @@ dependsOn:
   - landscape_diagram_specialist
   - audit_repository
   - host_core_adapter
-status: draft
+status: complete
 createdAt: '2026-07-08T21:12:56.113Z'
-updatedAt: '2026-07-09T15:42:11.167Z'
+updatedAt: '2026-07-09T22:13:11.990Z'

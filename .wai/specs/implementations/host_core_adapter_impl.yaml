@@ -46,6 +46,20 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: renderDiagram
+  - name: loadSystemSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward the L0 system spec read to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadSystemSpec
+  - name: loadSubsystemSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward the subsystem specs read to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadSubsystemSpecs
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-07-04T16:01:05.796Z'
+updatedAt: '2026-07-09T22:06:42.370Z'

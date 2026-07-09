@@ -87,6 +87,19 @@ methods:
       transport: HTTP
       method: GET
       path: /landscape/graph
-status: draft
+  - name: removeRelation
+    description: Remove one cross-project relation by id.
+    signature: 'removeRelation(credential: string, id: string): void'
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: id
+        type: string
+    endpoint:
+      transport: HTTP
+      method: DELETE
+      path: /landscape/relations/{id}
+status: complete
 createdAt: '2026-07-08T21:13:58.131Z'
-updatedAt: '2026-07-08T21:14:04.999Z'
+updatedAt: '2026-07-09T22:17:26.576Z'

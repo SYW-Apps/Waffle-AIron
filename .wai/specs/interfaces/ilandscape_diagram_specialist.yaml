@@ -25,6 +25,6 @@ methods:
         type: ProjectPublicSurfaceSnapshot[]
       - name: relations
         type: ProjectRelationRecord[]
-status: draft
+status: complete
 createdAt: '2026-07-08T21:13:30.746Z'
-updatedAt: '2026-07-08T21:13:30.749Z'
+updatedAt: '2026-07-09T22:13:28.046Z'

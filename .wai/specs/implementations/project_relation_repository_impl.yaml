@@ -1,0 +1,33 @@
+id: project_relation_repository_impl
+name: Project Relation Repository Implementation
+description: >-
+  Facade over the owned project relation store, registry, and index. Pure 1:1 forwarding —
+  upsert/remove go to the registry, list goes to the index; no logic lives here.
+contract: iproject_relation_repository
+sourcePath: src/server/relations.ts
+methods:
+  - name: upsert
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project relation registry
+        type: call
+        targetComponent: project_relation_registry
+        targetMethod: upsert
+  - name: remove
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project relation registry
+        type: call
+        targetComponent: project_relation_registry
+        targetMethod: remove
+  - name: list
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project relation index
+        type: call
+        targetComponent: project_relation_index
+        targetMethod: list
+detail: calls-only
+status: complete
+createdAt: '2026-07-09T22:08:09.780Z'
+updatedAt: '2026-07-09T22:13:39.182Z'

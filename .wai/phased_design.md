@@ -36,8 +36,9 @@ Approved design: IdP methods on ipolicy_repository deferred to Phase 5; policy-a
 
 Phase 3 COMPLETE. Tech debt: ProjectConfigSchema doesn't model profileSelection (raw-YAML workaround in policy.ts) — fold into the core-model pass. UX watch-item (Robbe): warn/block surfacing needs an end-user pass with the Phase 5 UI.
 
-### Phase 4 — Landscape / organization
-- [ ] Not started
+### Phase 4 — Landscape / organization (ACTIVE)
+Approved design: credential-based discovery methods (uniform with Phases 1–3); directional relations-only reachability (placements = visual grouping, no access); upsertRelation validates targetPublicInterface against the target's snapshot (refresh required first); refreshPublicSurface reads L0 publicInterfaces leniently via raw YAML (core SystemSpecSchema gap stays in the validation-extensions batch, like profileSelection); private-by-default (no L0 surface = empty snapshot); vocab += landscape:manage, landscape:read. Source layout: organization.ts / relations.ts / surfaces.ts (triads), landscape.ts (orchestrator+portal+specialist).
+- [ ] Spec finalization (9 member interfaces + narratives + host_request discovery dispatch delta) → validation → human lock → implementation
 
 ### Phase 5 — Operations, Admin UI (SSO), local control
 - [ ] Not started (identity_provider_adapter narratives land here)

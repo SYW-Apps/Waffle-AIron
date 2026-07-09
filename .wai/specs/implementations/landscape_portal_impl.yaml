@@ -1,0 +1,61 @@
+id: landscape_portal_impl
+name: Landscape Portal Implementation
+description: >-
+  Control-plane HTTP boundary for hosted landscape: forwards each organization, placement,
+  public-surface, relation, and graph operation to the landscape orchestrator.
+contract: ilandscape_portal
+sourcePath: src/server/landscape.ts
+methods:
+  - name: upsertUnit
+    narrative:
+      - stepNumber: 1
+        description: Forward to the landscape orchestrator
+        type: call
+        targetComponent: landscape_orchestrator
+        targetMethod: upsertUnit
+  - name: placeProject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the landscape orchestrator
+        type: call
+        targetComponent: landscape_orchestrator
+        targetMethod: placeProject
+  - name: refreshPublicSurface
+    narrative:
+      - stepNumber: 1
+        description: Forward to the landscape orchestrator
+        type: call
+        targetComponent: landscape_orchestrator
+        targetMethod: refreshPublicSurface
+  - name: upsertRelation
+    narrative:
+      - stepNumber: 1
+        description: Forward to the landscape orchestrator
+        type: call
+        targetComponent: landscape_orchestrator
+        targetMethod: upsertRelation
+  - name: listRelations
+    narrative:
+      - stepNumber: 1
+        description: Forward to the landscape orchestrator
+        type: call
+        targetComponent: landscape_orchestrator
+        targetMethod: listRelations
+  - name: generateLandscape
+    narrative:
+      - stepNumber: 1
+        description: Forward to the landscape orchestrator
+        type: call
+        targetComponent: landscape_orchestrator
+        targetMethod: generateLandscape
+  - name: removeRelation
+    narrative:
+      - stepNumber: 1
+        description: Forward to the landscape orchestrator
+        type: call
+        targetComponent: landscape_orchestrator
+        targetMethod: removeRelation
+detail: calls-only
+status: complete
+createdAt: '2026-07-09T22:08:59.746Z'
+updatedAt: '2026-07-09T22:17:28.078Z'

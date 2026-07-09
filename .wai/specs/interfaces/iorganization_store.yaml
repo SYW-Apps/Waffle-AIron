@@ -1,0 +1,30 @@
+id: iorganization_store
+name: Organization Store Interface
+description: >-
+  Private contract for the authoritative in-memory hosted organization state — units and placements
+  — loaded from and swapped as two collections held in one backing file (organization.json under the
+  hosted data root).
+component: organization_store
+methods:
+  - name: load
+    description: >-
+      Load both persisted collections (organization units and project placements) from the
+      organization.json file under the hosted data root and hold them as the authoritative in-memory
+      representation, returning them together.
+    signature: 'load(): OrganizationState'
+    returns: OrganizationState
+    params: []
+  - name: replaceAll
+    description: >-
+      Atomically swap both in-memory collections to the supplied complete unit and placement sets
+      after the registry has persisted them.
+    signature: 'replaceAll(units: OrganizationUnitRecord[], placements: ProjectPlacement[]): void'
+    returns: void
+    params:
+      - name: units
+        type: OrganizationUnitRecord[]
+      - name: placements
+        type: ProjectPlacement[]
+status: complete
+createdAt: '2026-07-09T22:05:39.438Z'
+updatedAt: '2026-07-09T22:13:16.564Z'

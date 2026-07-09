@@ -1,0 +1,28 @@
+id: ipublic_surface_store
+name: Public Surface Store Interface
+description: >-
+  Private contract for the authoritative in-memory set of redacted public-surface snapshots (one per
+  project), loaded from and swapped as one backing file (public-surfaces.json under the hosted data
+  root).
+component: public_surface_store
+methods:
+  - name: load
+    description: >-
+      Load the persisted public-surface snapshot set, keyed by project id, from the
+      public-surfaces.json file under the hosted data root and hold it as the authoritative
+      in-memory representation, returning it.
+    signature: 'load(): ProjectPublicSurfaceSnapshot[]'
+    returns: ProjectPublicSurfaceSnapshot[]
+    params: []
+  - name: replaceAll
+    description: >-
+      Atomically swap the in-memory snapshot set to the supplied complete set after the registry has
+      persisted it.
+    signature: 'replaceAll(snapshots: ProjectPublicSurfaceSnapshot[]): void'
+    returns: void
+    params:
+      - name: snapshots
+        type: ProjectPublicSurfaceSnapshot[]
+status: complete
+createdAt: '2026-07-09T22:06:03.875Z'
+updatedAt: '2026-07-09T22:13:24.037Z'

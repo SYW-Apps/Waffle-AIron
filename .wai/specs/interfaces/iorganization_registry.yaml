@@ -1,0 +1,36 @@
+id: iorganization_registry
+name: Organization Registry Interface
+description: >-
+  Private write-path contract for hosted organization units and project placements. Owns
+  id/timestamp stamping, referential validation (parent/unit existence), and unit-tree cycle
+  rejection; performs no authorization.
+component: organization_registry
+methods:
+  - name: upsertUnit
+    description: >-
+      Create or update one organization unit: stamp id and createdAt on create and default status to
+      active, validate that parentId (when set) resolves to an existing unit, and reject any change
+      that would introduce a cycle in the unit tree. Persist the full unit collection durably and
+      refresh the store.
+    signature: 'upsertUnit(unit: OrganizationUnitRecord): OrganizationUnitRecord'
+    returns: OrganizationUnitRecord
+    params:
+      - name: unit
+        type: OrganizationUnitRecord
+    guarantees:
+      - atomic
+  - name: placeProject
+    description: >-
+      Create or update one project placement: stamp id and createdAt on create and validate that the
+      target unitId resolves to an existing organization unit. Persist the full placement collection
+      durably and refresh the store.
+    signature: 'placeProject(placement: ProjectPlacement): ProjectPlacement'
+    returns: ProjectPlacement
+    params:
+      - name: placement
+        type: ProjectPlacement
+    guarantees:
+      - atomic
+status: complete
+createdAt: '2026-07-09T22:05:44.376Z'
+updatedAt: '2026-07-09T22:13:17.527Z'

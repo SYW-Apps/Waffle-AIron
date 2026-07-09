@@ -12,9 +12,12 @@ methods:
       return the response. The approval-backed self-service MCP tools
       (sdd_host_request_project_initialization, sdd_host_request_project_lock,
       sdd_host_request_project_promotion, sdd_host_get_approval_status) are dispatched to the
-      self-service orchestrator instead of the scoped MCP tool surface. Appends a redacted audit
-      event for every handled data-plane tool call; append failures are recorded as server
-      diagnostics and never fail the request.
+      self-service orchestrator, and the hosted landscape discovery MCP tools
+      (sdd_landscape_list_reachable_projects, sdd_landscape_list_reachable_project_interfaces) are
+      dispatched to the landscape orchestrator with currentProjectId bound to the request-scoped
+      project, instead of the scoped MCP tool surface. Appends a redacted audit event for every
+      handled data-plane tool call; append failures are recorded as server diagnostics and never
+      fail the request.
     signature: 'handleRequest(request: HttpRequest): HttpResponse'
     returns: HttpResponse
     params:
@@ -28,4 +31,4 @@ methods:
     returns: HttpResponse
 status: complete
 createdAt: '2026-07-04T12:49:34.974Z'
-updatedAt: '2026-07-09T19:26:43.350Z'
+updatedAt: '2026-07-09T22:11:12.284Z'

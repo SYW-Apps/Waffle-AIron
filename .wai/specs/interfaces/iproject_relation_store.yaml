@@ -1,0 +1,26 @@
+id: iproject_relation_store
+name: Project Relation Store Interface
+description: >-
+  Private contract for the authoritative in-memory cross-project relation set, loaded from and
+  swapped as one backing file (relations.json under the hosted data root).
+component: project_relation_store
+methods:
+  - name: load
+    description: >-
+      Load the persisted cross-project relation set from the relations.json file under the hosted
+      data root and hold it as the authoritative in-memory representation, returning it.
+    signature: 'load(): ProjectRelationRecord[]'
+    returns: ProjectRelationRecord[]
+    params: []
+  - name: replaceAll
+    description: >-
+      Atomically swap the in-memory relation set to the supplied complete set after the registry has
+      persisted it.
+    signature: 'replaceAll(records: ProjectRelationRecord[]): void'
+    returns: void
+    params:
+      - name: records
+        type: ProjectRelationRecord[]
+status: complete
+createdAt: '2026-07-09T22:05:52.453Z'
+updatedAt: '2026-07-09T22:13:20.528Z'

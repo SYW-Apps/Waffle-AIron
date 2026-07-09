@@ -1,0 +1,23 @@
+id: ipublic_surface_registry
+name: Public Surface Registry Interface
+description: >-
+  Private write-path contract for redacted public-surface snapshots. Owns server-side timestamp
+  stamping and durable single-per-project replacement; preserves the orchestrator-redacted
+  interfaces verbatim and performs no redaction or authorization.
+component: public_surface_registry
+methods:
+  - name: replaceSnapshot
+    description: >-
+      Replace one project's public-surface snapshot (one snapshot per projectId): stamp exportedAt
+      server-side, preserve the orchestrator-supplied redacted interfaces, systemName, stateId, and
+      exportedBy verbatim. Persist the full snapshot set durably and refresh the store.
+    signature: 'replaceSnapshot(snapshot: ProjectPublicSurfaceSnapshot): ProjectPublicSurfaceSnapshot'
+    returns: ProjectPublicSurfaceSnapshot
+    params:
+      - name: snapshot
+        type: ProjectPublicSurfaceSnapshot
+    guarantees:
+      - atomic
+status: complete
+createdAt: '2026-07-09T22:06:07.873Z'
+updatedAt: '2026-07-09T22:13:25.039Z'

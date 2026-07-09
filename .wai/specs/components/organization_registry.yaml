@@ -8,6 +8,6 @@ componentType: Registry
 owns: []
 dependsOn:
   - organization_store
-status: draft
+status: complete
 createdAt: '2026-07-08T21:12:05.617Z'
-updatedAt: '2026-07-08T21:12:05.619Z'
+updatedAt: '2026-07-09T22:13:01.019Z'

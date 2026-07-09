@@ -10,6 +10,6 @@ dependsOn:
   - host_server
   - landscape_orchestrator
 portalType: HTTP_API
-status: draft
+status: complete
 createdAt: '2026-07-08T21:13:01.910Z'
-updatedAt: '2026-07-08T21:13:01.912Z'
+updatedAt: '2026-07-09T22:13:12.351Z'

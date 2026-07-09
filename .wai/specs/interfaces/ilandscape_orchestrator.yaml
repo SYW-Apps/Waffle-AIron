@@ -7,8 +7,9 @@ component: landscape_orchestrator
 methods:
   - name: upsertUnit
     description: >-
-      Authenticate and authorize organization administration, then create or update one organization
-      unit and audit the change.
+      Authenticate the credential via the single auth authority and require a landscape:manage grant
+      or an instance-admin grant, then create or update one organization unit and append a redacted
+      audit event (action unit.upsert, info).
     signature: 'upsertUnit(credential: string, unit: OrganizationUnitRecord): OrganizationUnitRecord'
     returns: OrganizationUnitRecord
     params:
@@ -20,8 +21,9 @@ methods:
       - atomic
   - name: placeProject
     description: >-
-      Authenticate and authorize project placement, then place a hosted project in an organization
-      unit and audit the change.
+      Authenticate the credential via the single auth authority and require a landscape:manage grant
+      or an instance-admin grant, then place a hosted project in an organization unit and append a
+      redacted audit event (action project.place, info).
     signature: 'placeProject(credential: string, placement: ProjectPlacement): ProjectPlacement'
     returns: ProjectPlacement
     params:
@@ -33,9 +35,12 @@ methods:
       - atomic
   - name: refreshPublicSurface
     description: >-
-      Authenticate and authorize snapshot refresh, read only the selected project's public L0
-      surfaces, validate that they map to L1 public interfaces, store the redacted snapshot, and
-      audit the refresh.
+      Authenticate the credential via the single auth authority and require a landscape:manage grant
+      or an instance-admin grant. Resolve and bind the target project root, read its L0
+      publicInterfaces (leniently — the field is optional and may be absent) plus the referenced
+      subsystem public interfaces through the host core adapter, build the redacted public-surface
+      snapshot, replace it in the public-surface repository, and append a redacted audit event
+      (action surface.refresh, info).
     signature: 'refreshPublicSurface(credential: string, projectId: string): ProjectPublicSurfaceSnapshot'
     returns: ProjectPublicSurfaceSnapshot
     params:
@@ -45,9 +50,12 @@ methods:
         type: string
   - name: upsertRelation
     description: >-
-      Authenticate and authorize relation management, validate source/target projects and target
-      public interface snapshot, then create or update the cross-project relation and audit the
-      change.
+      Authenticate the credential via the single auth authority and require a landscape:manage grant
+      or an instance-admin grant. Validate targetPublicInterface against the target project's stored
+      public-surface snapshot via the public-surface repository — reject an unknown interface ref,
+      and when the target has no snapshot reject with guidance to run refreshPublicSurface first —
+      then create or update the cross-project relation and append a redacted audit event (action
+      relation.upsert, info).
     signature: 'upsertRelation(credential: string, relation: ProjectRelationRecord): ProjectRelationRecord'
     returns: ProjectRelationRecord
     params:
@@ -58,7 +66,10 @@ methods:
     guarantees:
       - atomic
   - name: listRelations
-    description: Authenticate and list cross-project relations visible to the caller.
+    description: >-
+      Authenticate the credential via the single auth authority and require a landscape:read grant
+      (a landscape:manage or instance-admin grant also satisfies it), then list cross-project
+      relations visible to the caller. Reads are not audited.
     signature: 'listRelations(credential: string, projectId: string): ProjectRelationRecord[]'
     returns: ProjectRelationRecord[]
     params:
@@ -69,9 +80,10 @@ methods:
         optional: true
   - name: generateLandscape
     description: >-
-      Authenticate, gather authorized hosted organization/project/snapshot/relation records, and
-      return a landscape graph built only from hosted metadata and redacted public-surface
-      snapshots.
+      Authenticate the credential via the single auth authority and require a landscape:read grant
+      (a landscape:manage or instance-admin grant also satisfies it), gather authorized organization
+      units, placements, projects, relations, and per-project public-surface snapshots, and return a
+      landscape graph built only from hosted metadata and redacted snapshots. Reads are not audited.
     signature: 'generateLandscape(credential: string, scope: string): LandscapeGraphModel'
     returns: LandscapeGraphModel
     params:
@@ -82,35 +94,55 @@ methods:
         optional: true
   - name: listReachableProjectsForMcp
     description: >-
-      MCP tool workflow `sdd_landscape_list_reachable_projects`: authenticate current-project
-      context and return only project ids reachable from the current project through active
-      relations and exported public-surface snapshots. Hidden or isolated projects are omitted.
+      MCP tool workflow `sdd_landscape_list_reachable_projects`: authenticate the caller through the
+      single auth authority, then return only the projects reachable from currentProjectId.
+      Reachability is DIRECTIONAL and RELATIONS-ONLY: the reachable targets are exactly the projects
+      that have an ACTIVE cross-project relation whose sourceProjectId is currentProjectId.
+      Organization placements confer no reachability and there is no transitive closure. Each result
+      is a ReachableProjectRef carrying the target project id with the relation ids, relation kinds,
+      and target public interface ids that make it reachable.
     signature: >-
-      listReachableProjectsForMcp(principal: Principal, currentProjectId: string):
+      listReachableProjectsForMcp(credential: string, currentProjectId: string):
       ReachableProjectRef[]
     returns: ReachableProjectRef[]
     params:
-      - name: principal
-        type: Principal
+      - name: credential
+        type: string
       - name: currentProjectId
         type: string
   - name: listReachableProjectInterfacesForMcp
     description: >-
-      MCP tool workflow `sdd_landscape_list_reachable_project_interfaces`: return redacted public
-      interface summaries for one reachable target project. Rejects targets outside the caller's
-      reachable relation set and never returns private components, narratives, implementations, root
-      paths, secrets, or non-public types.
+      MCP tool workflow `sdd_landscape_list_reachable_project_interfaces`: authenticate the caller
+      through the single auth authority, then return redacted public interface summaries for one
+      target project. Reject any target outside the caller's reachable set (a target with no ACTIVE
+      relation whose sourceProjectId is currentProjectId is Forbidden). Return only redacted
+      PublicInterfaceSummary entries from the target's stored public-surface snapshot — never
+      private components, narratives, implementations, root paths, secrets, or non-public types. A
+      target with no snapshot or no declared L0 public surfaces yields an empty list (private by
+      default).
     signature: >-
-      listReachableProjectInterfacesForMcp(principal: Principal, currentProjectId: string,
+      listReachableProjectInterfacesForMcp(credential: string, currentProjectId: string,
       targetProjectId: string): PublicInterfaceSummary[]
     returns: PublicInterfaceSummary[]
     params:
-      - name: principal
-        type: Principal
+      - name: credential
+        type: string
       - name: currentProjectId
         type: string
       - name: targetProjectId
         type: string
-status: draft
+  - name: removeRelation
+    description: >-
+      Authenticate the credential via the single auth authority and require a landscape:manage grant
+      or an instance-admin grant, then remove one cross-project relation by id and append a redacted
+      audit event (action relation.remove, info).
+    signature: 'removeRelation(credential: string, id: string): void'
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: id
+        type: string
+status: complete
 createdAt: '2026-07-08T21:13:44.021Z'
-updatedAt: '2026-07-08T21:56:51.385Z'
+updatedAt: '2026-07-09T22:17:24.077Z'

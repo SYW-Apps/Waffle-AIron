@@ -1,0 +1,18 @@
+id: project_relation_index_impl
+name: Project Relation Index Implementation
+description: >-
+  Read-path projection over the project relation store's set. Shares the store's references; never
+  mutates, never goes stale.
+contract: iproject_relation_index
+sourcePath: src/server/relations.ts
+methods:
+  - name: list
+    narrative: []
+    intent: >-
+      Return the store's relations matching every populated filter — source project id, target
+      project id, and status — otherwise all relations. Read-only over the store's current
+      references; an empty result is normal, never an error.
+detail: intent
+status: complete
+createdAt: '2026-07-09T22:08:05.769Z'
+updatedAt: '2026-07-09T22:13:38.180Z'

@@ -1,0 +1,28 @@
+id: iproject_relation_index
+name: Project Relation Index Interface
+description: >-
+  Private read-path contract over the cross-project relation set, matching the repository facade's
+  list filters.
+component: project_relation_index
+methods:
+  - name: list
+    description: >-
+      List cross-project relations matching every populated filter — source project id, target
+      project id, and status — otherwise all relations.
+    signature: >-
+      list(sourceProjectId: string, targetProjectId: string, status: string):
+      ProjectRelationRecord[]
+    returns: ProjectRelationRecord[]
+    params:
+      - name: sourceProjectId
+        type: string
+        optional: true
+      - name: targetProjectId
+        type: string
+        optional: true
+      - name: status
+        type: string
+        optional: true
+status: complete
+createdAt: '2026-07-09T22:05:59.895Z'
+updatedAt: '2026-07-09T22:13:22.027Z'

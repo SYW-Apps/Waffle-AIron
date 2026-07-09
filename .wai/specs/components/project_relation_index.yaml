@@ -8,6 +8,6 @@ componentType: Index
 owns: []
 dependsOn:
   - project_relation_store
-status: draft
+status: complete
 createdAt: '2026-07-08T21:12:29.270Z'
-updatedAt: '2026-07-08T21:12:29.273Z'
+updatedAt: '2026-07-09T22:13:05.498Z'

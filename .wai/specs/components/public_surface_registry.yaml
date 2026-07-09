@@ -8,6 +8,6 @@ componentType: Registry
 owns: []
 dependsOn:
   - public_surface_store
-status: draft
+status: complete
 createdAt: '2026-07-08T21:12:40.169Z'
-updatedAt: '2026-07-08T21:12:40.171Z'
+updatedAt: '2026-07-09T22:13:08.492Z'

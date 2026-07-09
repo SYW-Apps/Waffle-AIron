@@ -8,6 +8,6 @@ componentType: Index
 owns: []
 dependsOn:
   - organization_store
-status: draft
+status: complete
 createdAt: '2026-07-08T21:12:09.873Z'
-updatedAt: '2026-07-08T21:12:09.874Z'
+updatedAt: '2026-07-09T22:13:02.003Z'

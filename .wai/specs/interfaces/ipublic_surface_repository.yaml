@@ -32,6 +32,6 @@ methods:
         type: string
       - name: systemInterfaceId
         type: string
-status: draft
+status: complete
 createdAt: '2026-07-08T21:13:24.102Z'
-updatedAt: '2026-07-08T21:13:24.104Z'
+updatedAt: '2026-07-09T22:13:27.135Z'

@@ -10,6 +10,6 @@ owns:
   - organization_registry
   - organization_index
 dependsOn: []
-status: draft
+status: complete
 createdAt: '2026-07-08T21:12:14.473Z'
-updatedAt: '2026-07-08T21:12:14.474Z'
+updatedAt: '2026-07-09T22:13:02.994Z'

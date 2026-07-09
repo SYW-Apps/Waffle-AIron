@@ -6,10 +6,13 @@ description: >-
   set), bind the request-scoped project root, then dispatch the sdd_* tool call into the reused MCP
   tool surface within that scope. It also dispatches the approval-backed self-service MCP tools
   (sdd_host_request_project_initialization, sdd_host_request_project_lock,
-  sdd_host_request_project_promotion, sdd_host_get_approval_status) to the self-service orchestrator
-  instead of the scoped MCP tool surface. Rejects unknown tokens and cross-project access. Appends a
-  redacted audit event for every handled data-plane tool call; append failures are recorded as
-  server diagnostics and never fail the request.
+  sdd_host_request_project_promotion, sdd_host_get_approval_status) to the self-service
+  orchestrator, and the hosted landscape discovery MCP tools (sdd_landscape_list_reachable_projects,
+  sdd_landscape_list_reachable_project_interfaces) to the landscape orchestrator with
+  currentProjectId bound to the request-scoped project, instead of the scoped MCP tool surface.
+  Rejects unknown tokens and cross-project access. Appends a redacted audit event for every handled
+  data-plane tool call; append failures are recorded as server diagnostics and never fail the
+  request.
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
@@ -20,6 +23,7 @@ dependsOn:
   - host_core_adapter
   - audit_repository
   - self_service_orchestrator
+  - landscape_orchestrator
 status: complete
 createdAt: '2026-07-04T12:33:41.786Z'
-updatedAt: '2026-07-09T19:26:40.897Z'
+updatedAt: '2026-07-09T22:11:08.773Z'
