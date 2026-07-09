@@ -147,6 +147,56 @@ export interface AuditRetentionPolicy {
   metadataMode: string;
 }
 
+/** A durable request for a privileged hosted action, awaiting an authorized decision.
+ *  The payload is redacted — never raw secrets or bearer tokens. */
+export interface ApprovalRequest {
+  id: string;
+  /** Requested action kind: 'project:init' | 'project:lock' | 'project:promote' (more later). */
+  kind: string;
+  /** 'pending' | 'approved' | 'denied' | 'expired' | 'completed' | 'cancelled' */
+  status: string;
+  /** Identity that requested the action. */
+  requestedBy: PrincipalSubject;
+  /** Credential id the request came through, when via MCP/HTTP auth. */
+  requestedTokenId?: string;
+  /** Hosted project affected, when project-scoped. */
+  projectId?: string;
+  /** Human-readable redacted summary for approval UI/CLI. */
+  summary: string;
+  /** Redacted payload type identifier, e.g. 'ProjectInitRequest'. */
+  payloadType?: string;
+  /** Small redacted serialized payload needed to execute the approved action. */
+  payload?: string;
+  createdAt: string;
+  /** After this instant a pending approval is invalid. */
+  expiresAt?: string;
+  decidedAt?: string;
+  decidedBy?: PrincipalSubject;
+  decisionReason?: string;
+}
+
+/** A decision supplied by an authorized user/admin for a pending approval request. */
+export interface ApprovalDecision {
+  requestId: string;
+  /** False means denied. */
+  approved: boolean;
+  reason?: string;
+  /** Identity making the decision — MUST differ from the request's requestedBy. */
+  decidedBy: PrincipalSubject;
+  decidedAt: string;
+}
+
+/** A self-service request to initialize a new hosted project. */
+export interface ProjectInitRequest {
+  id: string;
+  displayName?: string;
+  description?: string;
+  ownerUnitId?: string;
+  environment?: string;
+  /** Phase 3: ProjectProfileSelection — carried opaquely until the policy plane lands. */
+  profileSelection?: unknown;
+}
+
 /** A registered hosted project mapped to its isolated .wai/ root. */
 export interface HostedProjectRecord {
   id: string;
