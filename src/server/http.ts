@@ -6,6 +6,7 @@ import * as admin from './admin.js';
 import * as packs from './packs.js';
 import * as identity from './identity.js';
 import * as selfservice from './selfservice.js';
+import * as policy from './policy.js';
 import { AdminAuthError, LockValidationError } from './admin.js';
 import type { ApprovalDecision, HostConfig, Role } from './types.js';
 
@@ -98,6 +99,17 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
     // It owns its own error → status mapping, so it returns before the admin catch.
     if (parts[0] === 'identity') {
       identity.handleIdentityRequest(cfg, cred, req, res, body, url);
+      return;
+    }
+
+    // Project policy control plane (Phase 3) rides the admin listener like
+    // /identity. It handles the bare /projects/init + /projects/{id}/policy/*
+    // and /instance/pack-policy routes only — NOT /admin/projects (parts[0]
+    // here is 'projects', never 'admin', so the admin project block below is
+    // never shadowed). Owns its own error → status mapping, returning before
+    // the admin catch.
+    if (parts[0] === 'projects' || parts[0] === 'instance') {
+      policy.handlePolicyRequest(cfg, cred, req, res, body, url);
       return;
     }
 

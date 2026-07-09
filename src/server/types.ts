@@ -216,7 +216,8 @@ export interface InstancePackPolicy {
   requiredProfileIds?: string[];
   blockedPackNames?: string[];
   requireProfileSelection: boolean;
-  /** 'warn' (findings surface, actions proceed) | 'block' (violations reject). */
+  /** 'warn' (findings surface, actions proceed) | 'block' (violations reject) |
+   *  'auto_reconcile' (like warn, and reconcileProjectPolicy may install missing packs). */
   enforcementMode: string;
   updatedAt: string;
   updatedBy?: PrincipalSubject;

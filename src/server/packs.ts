@@ -184,11 +184,22 @@ export function removeGlobalPack(_cfg: HostConfig, credential: string | null, na
 
 export function listProjectPacks(cfg: HostConfig, credential: string | null, project: string): PackDescriptor[] {
   requireAdmin(credential);
-  return runWithProjectRoot(boundProject(cfg, project), () => storeListProjectPacks());
+  return executeApprovedListProjectPacks(cfg, project);
 }
 
 export function installProjectPack(cfg: HostConfig, credential: string | null, project: string, name: string, content: string): PackDescriptor {
   requireAdmin(credential);
+  return executeApprovedInstallProjectPack(cfg, project, name, content);
+}
+
+/** Pre-authorized entries for the policy plane's init/reconcile workflows: same work as the
+ *  gated variants but WITHOUT credential authentication — the caller (project_policy_orchestrator)
+ *  has already enforced approval- or grant-based authorization. Never exposed on a portal. */
+export function executeApprovedListProjectPacks(cfg: HostConfig, project: string): PackDescriptor[] {
+  return runWithProjectRoot(boundProject(cfg, project), () => storeListProjectPacks());
+}
+
+export function executeApprovedInstallProjectPack(cfg: HostConfig, project: string, name: string, content: string): PackDescriptor {
   return runWithProjectRoot(boundProject(cfg, project), () => storeInstallProjectPack(name, content));
 }
 
