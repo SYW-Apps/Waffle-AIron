@@ -11,6 +11,6 @@ owns:
   - approval_registry
   - approval_index
 dependsOn: []
-status: draft
+status: complete
 createdAt: '2026-07-09T07:19:21.678Z'
-updatedAt: '2026-07-09T07:19:21.679Z'
+updatedAt: '2026-07-09T19:32:55.744Z'

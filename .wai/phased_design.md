@@ -20,8 +20,12 @@ Design doc: `docs/design/hosted-professional-use.md`. Phases run: design-finaliz
 
 Phase 1 COMPLETE. Vocabulary follow-ups for the Phase 2 spec pass: canonicalize the 'user:admin' permission string; decide whether mintToken should resolve ownerSubject from the user repository (currently synthesized from ownerUserId).
 
-### Phase 2 — Approvals + Self-service
-- [ ] Not started
+### Phase 2 — Approvals + Self-service (ACTIVE)
+Approved design: credential-based iself_service contract (house pattern); policy + identity deps deferred (Phase 3+); decision surface = admin_portal → self_service directly (avoids the admin_orchestrator cycle); admin plane gains pre-authorized executeApproved* entry points (approval IS the authorization — master-gated methods can't serve execution); host_request dispatches the four sdd_host_* MCP tools; lazy expiry wires expirePending; self-approval invariant on decideRequest; new grant vocab: approval:decide.
+- [x] L3 rework (credential pattern) + member interfaces (iapproval_store/registry/index) + narratives (approval triad intent, facade forwarding, 7 full self-service methods) + deltas (host_request four-tool switch dispatch; admin_portal /admin/approvals endpoints; admin_orchestrator executeApproved* entries) + promotion; index/facade filter param aligned (requestedByUserId)
+- [x] Validation green: sdd_validate_tree + validate --ci exit 0, zero warnings on promoted specs; as-complete gate zero errors
+- [ ] Human runs `wairon lock` (expect the blanket draft-freeze again — revert status-only changes on remaining draft planes, as in Phase 1)
+- [ ] Implementation: approvals storage (approvals.ts) → self-service orchestrator (selfservice.ts) → admin endpoints + MCP dispatch (admin/http/request)
 
 ### Phase 3 — Project policy / profiles
 - [ ] Not started

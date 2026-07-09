@@ -1,26 +1,21 @@
 id: self_service_orchestrator
 name: Self-Service Orchestrator
 description: >-
-  Draft workflow owner for approval-backed self-service operations initiated through MCP, UI, or
-  CLI: request project initialization, request project lock/promote, request token creation, inspect
-  request status, and execute approved requests through the appropriate privileged workflow. It
-  records audit events and never lets an MCP-connected agent directly perform privileged actions
-  without policy/approval. A decision's decidedBy MUST differ from the originating request's
-  requestedBy and deciding requires an approval-capable grant; the workflow rejects any attempt at
-  self-approval. In a future revision of the host_request_orchestrator, the approval-backed
-  self-service MCP tools (sdd_host_request_project_initialization, sdd_host_request_project_lock,
-  sdd_host_request_project_promotion, and sdd_host_get_approval_status) will be dispatched to this
-  orchestrator; that integration is planned here and not yet wired.
+  Approval-backed self-service for project initialization, lock, and promotion requested over MCP or
+  CLI. Any authenticated principal may request initialization; lock/promote require a grant covering
+  the project. Policy/profile evaluation is deferred to Phase 3; every request creates a pending
+  ApprovalRequest and decisions surface through the admin portal until the admin UI lands. It
+  records audit events and never lets an MCP-connected agent execute a privileged action without an
+  approval. A decision's decidedBy MUST differ from the originating request's requestedBy and
+  deciding requires an approval-capable grant; self-approval is rejected.
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
 dependsOn:
   - auth_specialist
   - approval_repository
-  - project_policy_orchestrator
   - admin_orchestrator
-  - identity_orchestrator
   - audit_repository
-status: draft
+status: complete
 createdAt: '2026-07-09T07:19:31.526Z'
-updatedAt: '2026-07-09T15:42:14.913Z'
+updatedAt: '2026-07-09T19:32:56.755Z'

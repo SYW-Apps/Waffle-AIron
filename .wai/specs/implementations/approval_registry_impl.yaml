@@ -1,0 +1,45 @@
+id: approval_registry_impl
+name: Approval Registry Implementation
+description: >-
+  Write path for hosted approval requests: create pending, record decisions, mark completed, and
+  expire overdue. Owns the pending-and-unexpired state invariants and the decision stamping;
+  performs no authorization.
+contract: iapproval_registry
+sourcePath: src/server/approvals.ts
+methods:
+  - name: create
+    narrative: []
+    intent: >-
+      Stamp the new request's id, createdAt, and status pending — preserving the caller-supplied
+      redacted summary and payload, and rejecting a payload that smells like a raw secret or bearer
+      token — then append it to the persisted request set via write-temp-then-rename, refresh the
+      store with replaceAll, and return the stored request. Persistence failures leave the previous
+      set intact and surface as storage errors.
+  - name: decide
+    narrative: []
+    intent: >-
+      Locate the request by the decision's requestId — failing with a not-found error when absent —
+      and reject with a validation error any request that is not currently pending or whose
+      expiresAt has already passed. Stamp decidedBy, decidedAt, and decisionReason from the decision
+      and set status to approved or denied accordingly, then persist via write-temp-then-rename and
+      refresh the store. Authorization — including the self-approval check that decidedBy differ
+      from requestedBy — is enforced by the orchestrator, not here; the registry owns only the
+      pending-and-unexpired state invariant and the decision stamping.
+  - name: markCompleted
+    narrative: []
+    intent: >-
+      Locate the request by id — failing with a not-found error when absent — and transition it to
+      completed only from an approved status (any other status is a validation error), then persist
+      via write-temp-then-rename and refresh the store. Records that the approved privileged action
+      has executed exactly once.
+  - name: expirePending
+    narrative: []
+    intent: >-
+      Flip every pending request whose expiresAt is at or before the supplied now-timestamp to
+      expired, rewrite the persisted set via write-temp-then-rename, refresh the store, and return
+      the count flipped. A set with no overdue pending requests changes nothing and returns zero;
+      persistence failures leave the previous set fully intact.
+detail: intent
+status: complete
+createdAt: '2026-07-09T19:31:03.633Z'
+updatedAt: '2026-07-09T19:33:04.745Z'

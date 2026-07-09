@@ -1,100 +1,117 @@
 id: iself_service_orchestrator
 name: Self-Service Orchestrator Interface
 description: >-
-  Draft contract for approval-backed self-service workflows, including MCP-safe request tools for
-  cloud agents.
+  Approval-backed self-service contract for project init/lock/promote requested over MCP, CLI, or
+  UI. Every method authenticates the caller credential and authorizes by grants; privileged actions
+  execute only after an authorized decision. Decisions ride the admin portal until the admin UI
+  lands.
 component: self_service_orchestrator
 methods:
   - name: requestProjectInitialization
     description: >-
-      MCP/UI/CLI workflow `sdd_host_request_project_initialization`: authenticate the requester,
-      validate the ProjectInitRequest against policy enough to produce a redacted summary, create a
-      pending approval request, and audit the request. Does not create the project until approved.
-    signature: >-
-      requestProjectInitialization(principal: Principal, request: ProjectInitRequest):
-      ApprovalRequest
+      MCP/UI/CLI workflow `sdd_host_request_project_initialization`: authenticate the caller
+      credential, authorize by grants (any authenticated principal may request — no special grant
+      required), validate the ProjectInitRequest structurally only in this phase (policy/profile
+      evaluation is a Phase 3 integration and is not performed here), create a pending
+      ApprovalRequest of kind project:init carrying a redacted summary and payload, audit the
+      request, and return the pending request. Does not create the project until an authorized
+      decision approves and it is executed.
+    signature: 'requestProjectInitialization(credential: string, request: ProjectInitRequest): ApprovalRequest'
     returns: ApprovalRequest
     params:
-      - name: principal
-        type: Principal
+      - name: credential
+        type: string
       - name: request
         type: ProjectInitRequest
     guarantees:
       - atomic
   - name: requestProjectLock
     description: >-
-      MCP/UI/CLI workflow `sdd_host_request_project_lock`: authenticate the requester, create a
-      pending approval request for validating and locking the current project, and audit the
-      request. Does not lock until approved unless policy grants direct lock permission.
-    signature: 'requestProjectLock(principal: Principal, projectId: string): ApprovalRequest'
+      MCP/UI/CLI workflow `sdd_host_request_project_lock`: authenticate the caller credential,
+      authorize by grants (the requester must hold a grant covering the project — mcp:write or an
+      instance-wide wildcard), create a pending ApprovalRequest of kind project:lock, audit the
+      request, and return it. Does not lock until an authorized decision approves and it is
+      executed.
+    signature: 'requestProjectLock(credential: string, projectId: string): ApprovalRequest'
     returns: ApprovalRequest
     params:
-      - name: principal
-        type: Principal
+      - name: credential
+        type: string
       - name: projectId
         type: string
     guarantees:
       - atomic
   - name: requestProjectPromotion
     description: >-
-      MCP/UI/CLI workflow `sdd_host_request_project_promotion`: create a pending approval request
-      for promoting a locked project after state re-check. Does not promote until approved unless
-      policy grants direct promote permission.
-    signature: 'requestProjectPromotion(principal: Principal, projectId: string): ApprovalRequest'
+      MCP/UI/CLI workflow `sdd_host_request_project_promotion`: authenticate the caller credential,
+      authorize by grants (the requester must hold a grant covering the project — mcp:write or an
+      instance-wide wildcard), create a pending ApprovalRequest of kind project:promote, audit the
+      request, and return it. Does not promote until an authorized decision approves and it is
+      executed.
+    signature: 'requestProjectPromotion(credential: string, projectId: string): ApprovalRequest'
     returns: ApprovalRequest
     params:
-      - name: principal
-        type: Principal
+      - name: credential
+        type: string
       - name: projectId
         type: string
     guarantees:
       - atomic
   - name: getRequestStatus
     description: >-
-      MCP-safe workflow `sdd_host_get_approval_status`: return one approval request visible to the
-      authenticated requester without exposing unrelated requests.
-    signature: 'getRequestStatus(principal: Principal, requestId: string): ApprovalRequest'
+      MCP-safe workflow `sdd_host_get_approval_status`: authenticate the caller credential, lazily
+      expire overdue pending requests first, then return one approval request visible only to its
+      original requester (matching subject or requesting tokenId) or to holders of approval:decide
+      or an instance-admin grant; never exposes unrelated requests.
+    signature: 'getRequestStatus(credential: string, requestId: string): ApprovalRequest'
     returns: ApprovalRequest
     params:
-      - name: principal
-        type: Principal
+      - name: credential
+        type: string
       - name: requestId
         type: string
   - name: listPendingRequests
-    description: UI/CLI workflow for authorized approvers to list pending approval requests they may decide.
-    signature: 'listPendingRequests(principal: Principal, projectId: string): ApprovalRequest[]'
+    description: >-
+      UI/CLI workflow: authenticate the caller credential, authorize by grants (approval:decide or
+      instance-admin only), lazily expire overdue pending requests first, then list the pending
+      approval requests the caller may decide, optionally narrowed to one project.
+    signature: 'listPendingRequests(credential: string, projectId: string): ApprovalRequest[]'
     returns: ApprovalRequest[]
     params:
-      - name: principal
-        type: Principal
+      - name: credential
+        type: string
       - name: projectId
         type: string
         optional: true
   - name: decideRequest
     description: >-
-      UI/CLI workflow for an authorized user/admin to approve or deny a pending request and audit
-      the decision.
-    signature: 'decideRequest(principal: Principal, decision: ApprovalDecision): ApprovalRequest'
+      UI/CLI workflow: authenticate the caller credential, authorize by grants (approval:decide or
+      instance-admin) and reject self-approval — the decision's decidedBy MUST differ from the
+      request's requestedBy — then approve or deny the pending request and audit the decision at
+      security level.
+    signature: 'decideRequest(credential: string, decision: ApprovalDecision): ApprovalRequest'
     returns: ApprovalRequest
     params:
-      - name: principal
-        type: Principal
+      - name: credential
+        type: string
       - name: decision
         type: ApprovalDecision
     guarantees:
       - atomic
   - name: executeApprovedRequest
     description: >-
-      Execute one approved request by delegating to project policy, admin, or identity workflows,
-      then mark the approval completed and audit the outcome. Rejects pending, denied, expired, or
-      unauthorized requests.
-    signature: 'executeApprovedRequest(principal: Principal, requestId: string): string'
+      Authenticate the caller credential, authorize the original requester or an instance-admin,
+      require the request to be approved and unexpired, then dispatch by kind to the admin plane's
+      pre-authorized execution entry points (executeApprovedCreate / executeApprovedLock /
+      executeApprovedPromote), mark the approval completed, and audit the execution at security
+      level. Rejects pending, denied, expired, completed, or unauthorized requests.
+    signature: 'executeApprovedRequest(credential: string, requestId: string): string'
     returns: string
     params:
-      - name: principal
-        type: Principal
+      - name: credential
+        type: string
       - name: requestId
         type: string
-status: draft
+status: complete
 createdAt: '2026-07-09T07:19:58.825Z'
-updatedAt: '2026-07-09T07:19:58.827Z'
+updatedAt: '2026-07-09T19:33:00.737Z'

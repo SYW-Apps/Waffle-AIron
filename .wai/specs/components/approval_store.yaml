@@ -7,6 +7,6 @@ subsystem: sdd_host
 componentType: Store
 owns: []
 dependsOn: []
-status: draft
+status: complete
 createdAt: '2026-07-09T07:19:05.554Z'
-updatedAt: '2026-07-09T07:19:05.556Z'
+updatedAt: '2026-07-09T19:32:53.245Z'

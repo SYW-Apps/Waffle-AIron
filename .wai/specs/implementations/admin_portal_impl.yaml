@@ -186,6 +186,27 @@ methods:
         type: call
         targetComponent: pack_orchestrator
         targetMethod: removeProjectPack
+  - name: listApprovals
+    narrative:
+      - stepNumber: 1
+        description: Forward to the self-service orchestrator
+        type: call
+        targetComponent: self_service_orchestrator
+        targetMethod: listPendingRequests
+  - name: decideApproval
+    narrative:
+      - stepNumber: 1
+        description: Forward to the self-service orchestrator
+        type: call
+        targetComponent: self_service_orchestrator
+        targetMethod: decideRequest
+  - name: executeApproval
+    narrative:
+      - stepNumber: 1
+        description: Forward to the self-service orchestrator
+        type: call
+        targetComponent: self_service_orchestrator
+        targetMethod: executeApprovedRequest
 status: complete
 createdAt: '2026-07-04T12:53:08.445Z'
-updatedAt: '2026-07-04T18:47:17.998Z'
+updatedAt: '2026-07-09T19:24:49.212Z'

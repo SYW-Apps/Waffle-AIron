@@ -1,0 +1,23 @@
+id: approval_index_impl
+name: Approval Index Implementation
+description: >-
+  Read-path projection over the approval store's request set. Shares the store's references; never
+  mutates, never goes stale.
+contract: iapproval_index
+sourcePath: src/server/approvals.ts
+methods:
+  - name: getById
+    narrative: []
+    intent: >-
+      Return the store's request whose id matches exactly, or null when absent. Read-only over the
+      store's current references; never fails on lookups — absence is a null result, not an error.
+  - name: list
+    narrative: []
+    intent: >-
+      Return the approval requests matching every populated filter — status, project id, requester
+      subject, and action kind — sorted newest-first by createdAt for stable pagination. Unpopulated
+      filters match everything; an empty result is a normal outcome, never an error.
+detail: intent
+status: complete
+createdAt: '2026-07-09T19:31:07.128Z'
+updatedAt: '2026-07-09T19:33:05.736Z'

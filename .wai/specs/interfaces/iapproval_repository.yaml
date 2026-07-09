@@ -68,6 +68,6 @@ methods:
     params:
       - name: now
         type: string
-status: draft
+status: complete
 createdAt: '2026-07-09T07:19:42.563Z'
-updatedAt: '2026-07-09T15:43:10.017Z'
+updatedAt: '2026-07-09T19:33:00.248Z'

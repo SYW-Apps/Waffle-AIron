@@ -1,0 +1,56 @@
+id: iapproval_registry
+name: Approval Registry Interface
+description: >-
+  Private write-path contract for creating, deciding, completing, and expiring hosted approval
+  requests. The registry owns the pending-and-unexpired state invariants and the
+  decidedBy/decidedAt/decisionReason stamping; it performs no authorization (the self-approval check
+  is the orchestrator's job).
+component: approval_registry
+methods:
+  - name: create
+    description: >-
+      Persist a new approval request with status pending, stamping its id, createdAt, and pending
+      status via write-temp-then-rename.
+    signature: 'create(request: ApprovalRequest): ApprovalRequest'
+    returns: ApprovalRequest
+    params:
+      - name: request
+        type: ApprovalRequest
+    guarantees:
+      - atomic
+  - name: decide
+    description: >-
+      Record an approval or denial decision on a pending, unexpired request, stamping decidedBy,
+      decidedAt, and decisionReason and setting the approved or denied status. Rejects a request
+      that is not pending or already expired. Authorization, including the self-approval check, is
+      enforced by the orchestrator, not here.
+    signature: 'decide(decision: ApprovalDecision): ApprovalRequest'
+    returns: ApprovalRequest
+    params:
+      - name: decision
+        type: ApprovalDecision
+    guarantees:
+      - atomic
+  - name: markCompleted
+    description: >-
+      Transition an approved request to completed after its privileged workflow has executed
+      successfully; only an approved request may become completed.
+    signature: 'markCompleted(id: string): ApprovalRequest'
+    returns: ApprovalRequest
+    params:
+      - name: id
+        type: string
+    guarantees:
+      - atomic
+  - name: expirePending
+    description: >-
+      Flip every pending request whose expiresAt is at or before the supplied now-timestamp to
+      expired and return the number expired.
+    signature: 'expirePending(now: string): number'
+    returns: number
+    params:
+      - name: now
+        type: string
+status: complete
+createdAt: '2026-07-09T19:30:39.410Z'
+updatedAt: '2026-07-09T19:32:58.248Z'

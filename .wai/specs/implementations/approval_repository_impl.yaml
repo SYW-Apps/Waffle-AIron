@@ -1,0 +1,55 @@
+id: approval_repository_impl
+name: Approval Repository Implementation
+description: >-
+  Facade over the owned approval store, registry, and index. Pure 1:1 forwarding —
+  create/decide/markCompleted/expirePending go to the registry, getById/list go to the index; no
+  logic lives here.
+contract: iapproval_repository
+sourcePath: src/server/approvals.ts
+methods:
+  - name: create
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval registry
+        type: call
+        targetComponent: approval_registry
+        targetMethod: create
+  - name: decide
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval registry
+        type: call
+        targetComponent: approval_registry
+        targetMethod: decide
+  - name: markCompleted
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval registry
+        type: call
+        targetComponent: approval_registry
+        targetMethod: markCompleted
+  - name: expirePending
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval registry
+        type: call
+        targetComponent: approval_registry
+        targetMethod: expirePending
+  - name: getById
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval index
+        type: call
+        targetComponent: approval_index
+        targetMethod: getById
+  - name: list
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval index
+        type: call
+        targetComponent: approval_index
+        targetMethod: list
+detail: calls-only
+status: complete
+createdAt: '2026-07-09T19:31:12.411Z'
+updatedAt: '2026-07-09T19:33:06.778Z'

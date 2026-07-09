@@ -1,8 +1,9 @@
 id: host_request_orchestrator_impl
 name: Host Request Orchestrator Implementation
 description: >-
-  Per-request data-plane workflow: authenticate, resolve and bind the authorized project scope,
-  dispatch the sdd_* call.
+  Per-request data-plane workflow: authenticate, resolve and bind the authorized project scope, then
+  dispatch the sdd_* call — routing the approval-backed self-service tools to the self-service
+  orchestrator and every other tool to the scoped MCP server.
 contract: ihost_request_orchestrator
 sourcePath: src/server/request.ts
 methods:
@@ -46,38 +47,102 @@ methods:
         description: Bind the request-scoped project root
         type: local
       - stepNumber: 10
+        description: >-
+          If the called tool is one of the approval-backed self-service tools
+          (sdd_host_request_project_initialization, sdd_host_request_project_lock,
+          sdd_host_request_project_promotion, sdd_host_get_approval_status), dispatch it to the
+          self-service orchestrator instead of the scoped MCP server
+        type: branch
+        condition: the called tool is one of the sdd_host_* self-service tools
+        onFalseStep: 21
+      - stepNumber: 11
+        description: Dispatch by tool name to the matching self-service method
+        type: switch
+        'on': the called self-service tool name
+        cases:
+          - value: sdd_host_request_project_initialization
+            step: 12
+          - value: sdd_host_request_project_lock
+            step: 14
+          - value: sdd_host_request_project_promotion
+            step: 16
+          - value: sdd_host_get_approval_status
+            step: 18
+        defaultStep: 12
+      - stepNumber: 12
+        description: >-
+          Request project initialization, passing the authenticated credential and decoded tool
+          arguments
+        type: call
+        targetComponent: self_service_orchestrator
+        targetMethod: requestProjectInitialization
+      - stepNumber: 13
+        description: Continue to shape the response
+        type: jump
+        toStep: 19
+      - stepNumber: 14
+        description: Request a project lock, passing the authenticated credential and project id
+        type: call
+        targetComponent: self_service_orchestrator
+        targetMethod: requestProjectLock
+      - stepNumber: 15
+        description: Continue to shape the response
+        type: jump
+        toStep: 19
+      - stepNumber: 16
+        description: Request a project promotion, passing the authenticated credential and project id
+        type: call
+        targetComponent: self_service_orchestrator
+        targetMethod: requestProjectPromotion
+      - stepNumber: 17
+        description: Continue to shape the response
+        type: jump
+        toStep: 19
+      - stepNumber: 18
+        description: Get the approval-request status, passing the authenticated credential and request id
+        type: call
+        targetComponent: self_service_orchestrator
+        targetMethod: getRequestStatus
+      - stepNumber: 19
+        description: Shape the self-service result into the JSON-RPC tool response envelope
+        type: local
+      - stepNumber: 20
+        description: Continue to the shared audit-event build step, skipping the scoped MCP server dispatch
+        type: jump
+        toStep: 23
+      - stepNumber: 21
         description: Instantiate the scoped sdd_* MCP server
         type: call
         targetComponent: host_mcp_adapter
         targetMethod: createScopedServer
-      - stepNumber: 11
+      - stepNumber: 22
         description: Connect the scoped server to the request transport and process the JSON-RPC message
         type: local
-      - stepNumber: 12
+      - stepNumber: 23
         description: >-
           Build the redacted AuditEvent (action mcp.tool.call, actor and tokenId from the principal,
           project id, tool name as target, outcome)
         type: local
-      - stepNumber: 13
+      - stepNumber: 24
         description: Append the audit event without letting a failure fail the request
         type: try
-        endStep: 15
+        endStep: 26
         catches:
           - error: audit append failure
-            step: 16
-      - stepNumber: 14
+            step: 27
+      - stepNumber: 25
         description: Append the redacted mcp.tool.call audit event under the active retention policy
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 15
+      - stepNumber: 26
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 17
-      - stepNumber: 16
+        toStep: 28
+      - stepNumber: 27
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 17
+      - stepNumber: 28
         description: Return the MCP response
         type: return
         outcome: MCP response
@@ -106,6 +171,7 @@ methods:
         description: Return the canvas HTML response
         type: return
         outcome: canvas html response
+detail: full
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-07-09T17:47:40.530Z'
+updatedAt: '2026-07-09T19:34:47.009Z'

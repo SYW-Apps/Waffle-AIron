@@ -634,6 +634,122 @@ methods:
         description: Return the secret key names
         type: return
         outcome: secret keys
+  - name: executeApprovedCreate
+    narrative:
+      - stepNumber: 1
+        description: Allocate and register the project
+        type: call
+        targetComponent: project_registry
+        targetMethod: create
+      - stepNumber: 2
+        description: Bind the new project's isolated root
+        type: local
+      - stepNumber: 3
+        description: Bootstrap the isolated spec tree
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: provisionProject
+      - stepNumber: 4
+        description: Return the created project record
+        type: return
+        outcome: created project record
+  - name: executeApprovedLock
+    narrative:
+      - stepNumber: 1
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 2
+        description: Sync the default branch into the working branch (no-op for native projects)
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: sync
+      - stepNumber: 3
+        description: Validate the tree as-complete
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: validateAsComplete
+      - stepNumber: 4
+        description: If validation reports errors, refuse to lock
+        type: branch
+        condition: result reports errors
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Return cannot-lock with the validation errors
+        type: return
+        outcome: cannot lock — validation failed
+      - stepNumber: 6
+        description: Promote every spec to complete
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: promoteAllComplete
+      - stepNumber: 7
+        description: Compute the validated StateId
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: computeStateId
+      - stepNumber: 8
+        description: >-
+          Publish to git: commit the promoted working tree and push, returning the commit + compare
+          URL (no-op for native projects)
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: publish
+      - stepNumber: 9
+        description: >-
+          Assemble a LockRecord (stateId, lockedAt, lockedBy, validatorVersion, validationResult,
+          status ready, plus commitSha/compareUrl when git-backed)
+        type: local
+      - stepNumber: 10
+        description: Persist the lock record
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: writeLockRecord
+      - stepNumber: 11
+        description: Return the lock record (with the compare URL to open the PR when git-backed)
+        type: return
+        outcome: lock record
+  - name: executeApprovedPromote
+    narrative:
+      - stepNumber: 1
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 2
+        description: Read the current lock record
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: readLockRecord
+      - stepNumber: 3
+        description: If no lock record exists, refuse
+        type: branch
+        condition: no lock record exists
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Return not-locked
+        type: return
+        outcome: not locked — lock first
+      - stepNumber: 5
+        description: Recompute the current StateId
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: computeStateId
+      - stepNumber: 6
+        description: If the current StateId differs from the lock's StateId, refuse as stale
+        type: branch
+        condition: current StateId differs from the lock's StateId
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Return stale-lock
+        type: return
+        outcome: stale lock — re-lock required
+      - stepNumber: 8
+        description: >-
+          Mark the change-set ready for promotion (the human merges the PR when git-backed); never
+          merge here
+        type: local
+      - stepNumber: 9
+        description: Return the promote result
+        type: return
+        outcome: promote result
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-07-04T18:46:28.079Z'
+updatedAt: '2026-07-09T19:24:14.542Z'

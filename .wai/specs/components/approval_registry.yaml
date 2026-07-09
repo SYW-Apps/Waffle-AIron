@@ -8,6 +8,6 @@ componentType: Registry
 owns: []
 dependsOn:
   - approval_store
-status: draft
+status: complete
 createdAt: '2026-07-09T07:19:10.775Z'
-updatedAt: '2026-07-09T07:19:10.777Z'
+updatedAt: '2026-07-09T19:32:53.747Z'

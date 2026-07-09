@@ -96,6 +96,36 @@ methods:
     description: Authenticate and list configured secret keys (names only).
     signature: 'listSecrets(credential: string): string[]'
     returns: string[]
+  - name: executeApprovedCreate
+    description: >-
+      Pre-authorized entry for the approval workflow: performs the same privileged action as
+      createProject but WITHOUT credential authentication — the caller (self_service_orchestrator)
+      has already enforced approval-based authorization. Never exposed on any portal.
+    signature: 'executeApprovedCreate(id: string): HostedProjectRecord'
+    returns: HostedProjectRecord
+    params:
+      - name: id
+        type: string
+  - name: executeApprovedLock
+    description: >-
+      Pre-authorized entry for the approval workflow: performs the same privileged action as
+      lockProject but WITHOUT credential authentication — the caller (self_service_orchestrator) has
+      already enforced approval-based authorization. Never exposed on any portal.
+    signature: 'executeApprovedLock(projectId: string): LockRecord'
+    returns: LockRecord
+    params:
+      - name: projectId
+        type: string
+  - name: executeApprovedPromote
+    description: >-
+      Pre-authorized entry for the approval workflow: performs the same privileged action as
+      promoteProject but WITHOUT credential authentication — the caller (self_service_orchestrator)
+      has already enforced approval-based authorization. Never exposed on any portal.
+    signature: 'executeApprovedPromote(projectId: string): PromoteResult'
+    returns: PromoteResult
+    params:
+      - name: projectId
+        type: string
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-07-09T15:42:56.756Z'
+updatedAt: '2026-07-09T19:23:46.588Z'

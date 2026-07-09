@@ -256,6 +256,62 @@ methods:
       transport: HTTP
       method: DELETE
       path: /admin/projects/{id}/packs/{name}
+  - name: listApprovals
+    description: >-
+      List approval requests for the human decision surface, optionally filtered by status and
+      project. Human decision surface for approval-backed self-service until the admin UI lands.
+    signature: 'listApprovals(credential: string, status: string, project: string): ApprovalRequest[]'
+    returns: ApprovalRequest[]
+    params:
+      - name: credential
+        type: string
+      - name: status
+        type: string
+        optional: true
+      - name: project
+        type: string
+        optional: true
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /admin/approvals
+  - name: decideApproval
+    description: >-
+      Approve or deny a pending approval request. Human decision surface for approval-backed
+      self-service until the admin UI lands.
+    signature: >-
+      decideApproval(credential: string, requestId: string, approved: boolean, reason: string):
+      ApprovalRequest
+    returns: ApprovalRequest
+    params:
+      - name: credential
+        type: string
+      - name: requestId
+        type: string
+      - name: approved
+        type: boolean
+      - name: reason
+        type: string
+        optional: true
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /admin/approvals/{id}/decision
+  - name: executeApproval
+    description: >-
+      Execute an approved request's privileged action. Human decision surface for approval-backed
+      self-service until the admin UI lands.
+    signature: 'executeApproval(credential: string, requestId: string): string'
+    returns: string
+    params:
+      - name: credential
+        type: string
+      - name: requestId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /admin/approvals/{id}/execute
 status: complete
 createdAt: '2026-07-04T12:50:05.545Z'
-updatedAt: '2026-07-09T15:42:55.332Z'
+updatedAt: '2026-07-09T19:24:34.648Z'

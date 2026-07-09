@@ -1,0 +1,442 @@
+id: self_service_orchestrator_impl
+name: Self-Service Orchestrator Implementation
+description: >-
+  Approval-backed self-service workflows: authenticate the caller credential, authorize by grants,
+  create/inspect/decide/execute approval requests for project init, lock, and promotion. Requests
+  never perform the privileged action directly — execution runs only after an authorized decision,
+  through the admin plane's pre-authorized entry points. Audit appends are best-effort and never
+  fail the primary action; policy/profile evaluation is deferred to Phase 3.
+contract: iself_service_orchestrator
+sourcePath: src/server/selfservice.ts
+methods:
+  - name: requestProjectInitialization
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Authenticate the caller credential (bootstrap or user-bound token); any authenticated
+          principal may request initialization
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          Validate the ProjectInitRequest structurally only (id shape and required fields); policy
+          and profile evaluation are deferred to Phase 3 and are not performed here
+        type: local
+      - stepNumber: 3
+        description: >-
+          Build a pending ApprovalRequest of kind project:init with a redacted human-readable
+          summary and a redacted payload derived from the request (never raw secrets), recording the
+          requester subject and token id
+        type: local
+      - stepNumber: 4
+        description: Create the pending approval request
+        type: call
+        targetComponent: approval_repository
+        targetMethod: create
+      - stepNumber: 5
+        description: Append a redacted audit event without letting a failure fail the request creation
+        type: try
+        endStep: 7
+        catches:
+          - error: audit append failure
+            step: 8
+      - stepNumber: 6
+        description: >-
+          Append the redacted approval.request.created audit event (info level) under the active
+          retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 7
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 9
+      - stepNumber: 8
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 9
+        description: Return the pending approval request
+        type: return
+        outcome: pending approval request
+  - name: requestProjectLock
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          If the caller holds no grant covering the project (neither mcp:write for the project nor
+          an instance-wide wildcard), deny
+        type: branch
+        condition: >-
+          the caller holds no grant covering the project (neither mcp:write for the project nor an
+          instance-wide wildcard)
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the lock request
+        type: throw
+        error: Forbidden — caller may not request a lock for this project
+      - stepNumber: 4
+        description: >-
+          Build a pending ApprovalRequest of kind project:lock for the project with a redacted
+          summary, recording the requester subject and token id
+        type: local
+      - stepNumber: 5
+        description: Create the pending approval request
+        type: call
+        targetComponent: approval_repository
+        targetMethod: create
+      - stepNumber: 6
+        description: Append a redacted audit event without letting a failure fail the request creation
+        type: try
+        endStep: 8
+        catches:
+          - error: audit append failure
+            step: 9
+      - stepNumber: 7
+        description: >-
+          Append the redacted approval.request.created audit event (info level) under the active
+          retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 8
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 10
+      - stepNumber: 9
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 10
+        description: Return the pending approval request
+        type: return
+        outcome: pending approval request
+  - name: requestProjectPromotion
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          If the caller holds no grant covering the project (neither mcp:write for the project nor
+          an instance-wide wildcard), deny
+        type: branch
+        condition: >-
+          the caller holds no grant covering the project (neither mcp:write for the project nor an
+          instance-wide wildcard)
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the promotion request
+        type: throw
+        error: Forbidden — caller may not request a promotion for this project
+      - stepNumber: 4
+        description: >-
+          Build a pending ApprovalRequest of kind project:promote for the project with a redacted
+          summary, recording the requester subject and token id
+        type: local
+      - stepNumber: 5
+        description: Create the pending approval request
+        type: call
+        targetComponent: approval_repository
+        targetMethod: create
+      - stepNumber: 6
+        description: Append a redacted audit event without letting a failure fail the request creation
+        type: try
+        endStep: 8
+        catches:
+          - error: audit append failure
+            step: 9
+      - stepNumber: 7
+        description: >-
+          Append the redacted approval.request.created audit event (info level) under the active
+          retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 8
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 10
+      - stepNumber: 9
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 10
+        description: Return the pending approval request
+        type: return
+        outcome: pending approval request
+  - name: getRequestStatus
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Lazily expire overdue pending requests before reading (pass the current timestamp)
+        type: call
+        targetComponent: approval_repository
+        targetMethod: expirePending
+      - stepNumber: 3
+        description: Look up the approval request by id
+        type: call
+        targetComponent: approval_repository
+        targetMethod: getById
+      - stepNumber: 4
+        description: If no request matches the id, reject as not found
+        type: branch
+        condition: no request matches the id
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Reject as not found
+        type: throw
+        error: not found
+      - stepNumber: 6
+        description: >-
+          If the caller is neither the original requester (matching subject or requesting token id)
+          nor a holder of approval:decide or an instance-admin grant, deny
+        type: branch
+        condition: >-
+          the caller is neither the original requester (matching subject or requesting token id) nor
+          a holder of approval:decide or an instance-admin grant
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Reject the status read
+        type: throw
+        error: Forbidden — caller may not view this approval request
+      - stepNumber: 8
+        description: Return the approval request
+        type: return
+        outcome: the approval request
+  - name: listPendingRequests
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: If the caller lacks both approval:decide and an instance-admin grant, deny
+        type: branch
+        condition: the caller lacks both approval:decide and an instance-admin grant
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the listing
+        type: throw
+        error: Forbidden — deciding approvals requires approval:decide or an instance-admin grant
+      - stepNumber: 4
+        description: Lazily expire overdue pending requests before listing (pass the current timestamp)
+        type: call
+        targetComponent: approval_repository
+        targetMethod: expirePending
+      - stepNumber: 5
+        description: >-
+          List the pending approval requests the caller may decide, optionally narrowed to one
+          project
+        type: call
+        targetComponent: approval_repository
+        targetMethod: list
+      - stepNumber: 6
+        description: Return the pending approval requests
+        type: return
+        outcome: pending approval requests
+  - name: decideRequest
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: If the caller lacks both approval:decide and an instance-admin grant, deny
+        type: branch
+        condition: the caller lacks both approval:decide and an instance-admin grant
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the decision
+        type: throw
+        error: Forbidden — deciding approvals requires approval:decide or an instance-admin grant
+      - stepNumber: 4
+        description: Look up the request being decided by decision.requestId
+        type: call
+        targetComponent: approval_repository
+        targetMethod: getById
+      - stepNumber: 5
+        description: If no request matches the id, reject as not found
+        type: branch
+        condition: no request matches the id
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Reject as not found
+        type: throw
+        error: not found
+      - stepNumber: 7
+        description: If the decision's decidedBy equals the request's requestedBy, reject the self-approval
+        type: branch
+        condition: the decision's decidedBy equals the request's requestedBy
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Reject the self-approval
+        type: throw
+        error: Forbidden — self-approval is not permitted
+      - stepNumber: 9
+        description: >-
+          Record the approval or denial decision (stamps decidedBy, decidedAt, and reason, and sets
+          the approved or denied status)
+        type: call
+        targetComponent: approval_repository
+        targetMethod: decide
+      - stepNumber: 10
+        description: Append a redacted audit event without letting a failure fail the decision
+        type: try
+        endStep: 12
+        catches:
+          - error: audit append failure
+            step: 13
+      - stepNumber: 11
+        description: >-
+          Append the redacted approval.decided audit event (security level) under the active
+          retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 12
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 14
+      - stepNumber: 13
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 14
+        description: Return the decided approval request
+        type: return
+        outcome: the decided approval request
+  - name: executeApprovedRequest
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Look up the approved request by id
+        type: call
+        targetComponent: approval_repository
+        targetMethod: getById
+      - stepNumber: 3
+        description: If no request matches the id, reject as not found
+        type: branch
+        condition: no request matches the id
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject as not found
+        type: throw
+        error: not found
+      - stepNumber: 5
+        description: If the caller is neither the original requester nor an instance-admin, deny
+        type: branch
+        condition: the caller is neither the original requester nor an instance-admin
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Reject the execution
+        type: throw
+        error: Forbidden — caller may not execute this approval request
+      - stepNumber: 7
+        description: If the request is not in approved status, reject
+        type: branch
+        condition: the request is not in approved status
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Reject the non-approved request
+        type: throw
+        error: the request is not approved
+      - stepNumber: 9
+        description: If the request's expiresAt has already passed, reject as expired
+        type: branch
+        condition: the request's expiresAt has already passed
+        onFalseStep: 11
+      - stepNumber: 10
+        description: Reject the expired approval
+        type: throw
+        error: the approval has expired
+      - stepNumber: 11
+        description: Dispatch to the admin plane's pre-authorized execution entry point by the request's kind
+        type: switch
+        'on': request.kind
+        cases:
+          - value: project:init
+            step: 12
+          - value: project:lock
+            step: 14
+          - value: project:promote
+            step: 16
+        defaultStep: 18
+      - stepNumber: 12
+        description: Execute the approved project initialization
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: executeApprovedCreate
+      - stepNumber: 13
+        description: Continue to mark the approval completed
+        type: jump
+        toStep: 19
+      - stepNumber: 14
+        description: Execute the approved project lock
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: executeApprovedLock
+      - stepNumber: 15
+        description: Continue to mark the approval completed
+        type: jump
+        toStep: 19
+      - stepNumber: 16
+        description: Execute the approved project promotion
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: executeApprovedPromote
+      - stepNumber: 17
+        description: Continue to mark the approval completed
+        type: jump
+        toStep: 19
+      - stepNumber: 18
+        description: Reject an unsupported approval kind
+        type: throw
+        error: unsupported approval kind
+      - stepNumber: 19
+        description: Mark the approval completed once the privileged action has executed successfully
+        type: call
+        targetComponent: approval_repository
+        targetMethod: markCompleted
+      - stepNumber: 20
+        description: Append a redacted audit event without letting a failure fail the execution
+        type: try
+        endStep: 22
+        catches:
+          - error: audit append failure
+            step: 23
+      - stepNumber: 21
+        description: >-
+          Append the redacted approval.executed audit event (security level) under the active
+          retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 22
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 24
+      - stepNumber: 23
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 24
+        description: Return the execution outcome summary
+        type: return
+        outcome: execution outcome summary
+detail: full
+status: complete
+createdAt: '2026-07-09T19:32:43.183Z'
+updatedAt: '2026-07-09T19:33:07.163Z'
