@@ -12,6 +12,8 @@ You own and decide on everything within:
 .wai/specs/components/skills_exporter.yaml
 .wai/specs/components/skills_orchestrator.yaml
 .wai/specs/components/skills_portal.yaml
+.wai/specs/components/skills_resource_orchestrator.yaml
+.wai/specs/components/skills_resource_specialist.yaml
 src/core/skills.ts
 ```
 
