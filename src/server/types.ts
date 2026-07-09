@@ -186,6 +186,15 @@ export interface ApprovalDecision {
   decidedAt: string;
 }
 
+/** The profile selection applied to a hosted project at initialization or reconciliation. */
+export interface ProjectProfileSelection {
+  profileIds: string[];
+  requiredPackNames: string[];
+  defaultPackNames?: string[];
+  selectedBy?: PrincipalSubject;
+  selectedAt: string;
+}
+
 /** A self-service request to initialize a new hosted project. */
 export interface ProjectInitRequest {
   id: string;
@@ -193,8 +202,36 @@ export interface ProjectInitRequest {
   description?: string;
   ownerUnitId?: string;
   environment?: string;
-  /** Phase 3: ProjectProfileSelection — carried opaquely until the policy plane lands. */
-  profileSelection?: unknown;
+  profileSelection?: ProjectProfileSelection;
+}
+
+/** The hosted instance's pack/profile policy governing project initialization. */
+export interface InstancePackPolicy {
+  id: string;
+  /** Packs every project must carry. */
+  requiredGlobalPacks: string[];
+  /** Packs applied to new projects unless explicitly overridden. */
+  defaultProjectPacks: string[];
+  allowedProfileIds?: string[];
+  requiredProfileIds?: string[];
+  blockedPackNames?: string[];
+  requireProfileSelection: boolean;
+  /** 'warn' (findings surface, actions proceed) | 'block' (violations reject). */
+  enforcementMode: string;
+  updatedAt: string;
+  updatedBy?: PrincipalSubject;
+}
+
+/** Outcome of evaluating a project (or init request) against the active pack policy. */
+export interface PolicyEvaluationResult {
+  compliant: boolean;
+  /** The enforcement mode the evaluation ran under. */
+  mode: string;
+  missingPackNames: string[];
+  blockedPackNames: string[];
+  missingProfileIds: string[];
+  /** Human-readable findings for summaries and UI. */
+  messages: string[];
 }
 
 /** A registered hosted project mapped to its isolated .wai/ root. */
