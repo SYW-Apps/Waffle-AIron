@@ -9,56 +9,6 @@ description: >-
 contract: iself_service_orchestrator
 sourcePath: src/server/selfservice.ts
 methods:
-  - name: requestProjectInitialization
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Authenticate the caller credential (bootstrap or user-bound token); any authenticated
-          principal may request initialization
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateCredential
-      - stepNumber: 2
-        description: >-
-          Validate the ProjectInitRequest structurally only (id shape and required fields); policy
-          and profile evaluation are deferred to Phase 3 and are not performed here
-        type: local
-      - stepNumber: 3
-        description: >-
-          Build a pending ApprovalRequest of kind project:init with a redacted human-readable
-          summary and a redacted payload derived from the request (never raw secrets), recording the
-          requester subject and token id
-        type: local
-      - stepNumber: 4
-        description: Create the pending approval request
-        type: call
-        targetComponent: approval_repository
-        targetMethod: create
-      - stepNumber: 5
-        description: Append a redacted audit event without letting a failure fail the request creation
-        type: try
-        endStep: 7
-        catches:
-          - error: audit append failure
-            step: 8
-      - stepNumber: 6
-        description: >-
-          Append the redacted approval.request.created audit event (info level) under the active
-          retention policy
-        type: call
-        targetComponent: audit_repository
-        targetMethod: append
-      - stepNumber: 7
-        description: On a successful append, continue to the return and skip the audit-failure handler
-        type: jump
-        toStep: 9
-      - stepNumber: 8
-        description: Record the audit append failure as a server diagnostic and continue
-        type: local
-      - stepNumber: 9
-        description: Return the pending approval request
-        type: return
-        outcome: pending approval request
   - name: requestProjectLock
     narrative:
       - stepNumber: 1
@@ -315,6 +265,77 @@ methods:
         description: Return the decided approval request
         type: return
         outcome: the decided approval request
+  - name: requestProjectInitialization
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Authenticate the caller credential (bootstrap or user-bound token); any authenticated
+          principal may request initialization
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Validate the ProjectInitRequest structurally (id shape and required fields)
+        type: local
+      - stepNumber: 3
+        description: >-
+          Evaluate the request against the active instance pack policy via the policy orchestrator's
+          pre-authorized evaluation (the caller is already authenticated)
+        type: call
+        targetComponent: project_policy_orchestrator
+        targetMethod: evaluateInitRequest
+      - stepNumber: 4
+        description: >-
+          If an enforcing policy (enforcementMode 'block') reports the request non-compliant, reject
+          the request immediately
+        type: branch
+        condition: the active policy enforces (enforcementMode 'block') and the evaluation is non-compliant
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Reject the non-compliant request
+        type: throw
+        error: policy violation — project initialization request rejected under the active pack policy
+      - stepNumber: 6
+        description: >-
+          Attach any warn-mode policy findings (the evaluation messages) to the request's redacted
+          human-readable summary
+        type: local
+      - stepNumber: 7
+        description: >-
+          Build a pending ApprovalRequest of kind project:init with the redacted summary and a
+          redacted payload derived from the request (never raw secrets), recording the requester
+          subject and token id
+        type: local
+      - stepNumber: 8
+        description: Create the pending approval request
+        type: call
+        targetComponent: approval_repository
+        targetMethod: create
+      - stepNumber: 9
+        description: Append a redacted audit event without letting a failure fail the request creation
+        type: try
+        endStep: 11
+        catches:
+          - error: audit append failure
+            step: 12
+      - stepNumber: 10
+        description: >-
+          Append the redacted approval.request.created audit event (info level) under the active
+          retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 11
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 13
+      - stepNumber: 12
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 13
+        description: Return the pending approval request
+        type: return
+        outcome: pending approval request
   - name: executeApprovedRequest
     narrative:
       - stepNumber: 1
@@ -364,7 +385,7 @@ methods:
         type: throw
         error: the approval has expired
       - stepNumber: 11
-        description: Dispatch to the admin plane's pre-authorized execution entry point by the request's kind
+        description: Dispatch by the request's kind
         type: switch
         'on': request.kind
         cases:
@@ -376,10 +397,12 @@ methods:
             step: 16
         defaultStep: 18
       - stepNumber: 12
-        description: Execute the approved project initialization
+        description: >-
+          Execute the approved project initialization under pack policy via the policy
+          orchestrator's pre-authorized entry
         type: call
-        targetComponent: admin_orchestrator
-        targetMethod: executeApprovedCreate
+        targetComponent: project_policy_orchestrator
+        targetMethod: executeApprovedInit
       - stepNumber: 13
         description: Continue to mark the approval completed
         type: jump
@@ -439,4 +462,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-09T19:32:43.183Z'
-updatedAt: '2026-07-09T19:33:07.163Z'
+updatedAt: '2026-07-09T20:52:49.905Z'

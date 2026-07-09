@@ -1,0 +1,48 @@
+id: project_policy_portal_impl
+name: Project Policy Portal Implementation
+description: >-
+  Control-plane HTTP boundary for profile-aware project initialization and pack/profile policy
+  administration: forwards each operation to the project policy orchestrator. The pre-authorized
+  entries (executeApprovedInit, evaluateInitRequest) are intentionally not exposed here.
+contract: iproject_policy_portal
+sourcePath: src/server/policy.ts
+methods:
+  - name: initializeProjectWithProfile
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project policy orchestrator
+        type: call
+        targetComponent: project_policy_orchestrator
+        targetMethod: initializeProjectWithProfile
+  - name: evaluateProjectPolicy
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project policy orchestrator
+        type: call
+        targetComponent: project_policy_orchestrator
+        targetMethod: evaluateProjectPolicy
+  - name: reconcileProjectPolicy
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project policy orchestrator
+        type: call
+        targetComponent: project_policy_orchestrator
+        targetMethod: reconcileProjectPolicy
+  - name: getPackPolicy
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project policy orchestrator
+        type: call
+        targetComponent: project_policy_orchestrator
+        targetMethod: getPackPolicy
+  - name: setPackPolicy
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project policy orchestrator
+        type: call
+        targetComponent: project_policy_orchestrator
+        targetMethod: setPackPolicy
+detail: calls-only
+status: complete
+createdAt: '2026-07-09T20:50:26.189Z'
+updatedAt: '2026-07-09T20:53:18.727Z'

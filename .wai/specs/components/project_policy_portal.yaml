@@ -10,6 +10,6 @@ dependsOn:
   - host_server
   - project_policy_orchestrator
 portalType: HTTP_API
-status: draft
+status: complete
 createdAt: '2026-07-08T21:59:27.509Z'
-updatedAt: '2026-07-08T21:59:27.510Z'
+updatedAt: '2026-07-09T20:53:26.905Z'

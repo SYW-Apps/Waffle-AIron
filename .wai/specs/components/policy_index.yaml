@@ -8,6 +8,6 @@ componentType: Index
 owns: []
 dependsOn:
   - policy_store
-status: draft
+status: complete
 createdAt: '2026-07-08T21:59:13.986Z'
-updatedAt: '2026-07-08T21:59:13.987Z'
+updatedAt: '2026-07-09T20:53:24.479Z'

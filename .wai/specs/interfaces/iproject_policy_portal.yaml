@@ -70,6 +70,6 @@ methods:
       transport: HTTP
       method: PUT
       path: /instance/pack-policy
-status: draft
+status: complete
 createdAt: '2026-07-08T21:59:56.662Z'
-updatedAt: '2026-07-08T22:00:03.171Z'
+updatedAt: '2026-07-09T20:53:13.403Z'

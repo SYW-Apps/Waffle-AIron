@@ -11,11 +11,12 @@ methods:
     description: >-
       MCP/UI/CLI workflow `sdd_host_request_project_initialization`: authenticate the caller
       credential, authorize by grants (any authenticated principal may request — no special grant
-      required), validate the ProjectInitRequest structurally only in this phase (policy/profile
-      evaluation is a Phase 3 integration and is not performed here), create a pending
-      ApprovalRequest of kind project:init carrying a redacted summary and payload, audit the
-      request, and return the pending request. Does not create the project until an authorized
-      decision approves and it is executed.
+      required), validate the ProjectInitRequest structurally, then evaluate it against the active
+      instance pack policy via the policy orchestrator's pre-authorized evaluation — rejecting the
+      request immediately when an enforcing policy reports violations and attaching warn-mode
+      findings to the approval summary — create a pending ApprovalRequest of kind project:init
+      carrying a redacted summary and payload, audit the request, and return the pending request.
+      Does not create the project until an authorized decision approves and it is executed.
     signature: 'requestProjectInitialization(credential: string, request: ProjectInitRequest): ApprovalRequest'
     returns: ApprovalRequest
     params:
@@ -101,10 +102,13 @@ methods:
   - name: executeApprovedRequest
     description: >-
       Authenticate the caller credential, authorize the original requester or an instance-admin,
-      require the request to be approved and unexpired, then dispatch by kind to the admin plane's
-      pre-authorized execution entry points (executeApprovedCreate / executeApprovedLock /
-      executeApprovedPromote), mark the approval completed, and audit the execution at security
-      level. Rejects pending, denied, expired, completed, or unauthorized requests.
+      require the request to be approved and unexpired, then dispatch by kind: project:init to the
+      policy orchestrator's pre-authorized executeApprovedInit (which enforces pack policy,
+      provisions the project via the admin plane, applies required/default packs, and records the
+      profile selection), and project:lock / project:promote to the admin plane's pre-authorized
+      executeApprovedLock / executeApprovedPromote; mark the approval completed, and audit the
+      execution at security level. Rejects pending, denied, expired, completed, or unauthorized
+      requests.
     signature: 'executeApprovedRequest(credential: string, requestId: string): string'
     returns: string
     params:
@@ -114,4 +118,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-09T07:19:58.825Z'
-updatedAt: '2026-07-09T19:33:00.737Z'
+updatedAt: '2026-07-09T20:51:13.198Z'

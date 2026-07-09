@@ -1,0 +1,30 @@
+id: ipolicy_store
+name: Policy Store Interface
+description: >-
+  Private single-record store contract for the active hosted instance pack/profile policy,
+  file-backed as a single record at <dataDir>/pack-policy.json. Holds at most one active
+  InstancePackPolicy.
+component: policy_store
+methods:
+  - name: load
+    description: >-
+      Read the persisted active policy record from <dataDir>/pack-policy.json and hold it as the
+      authoritative in-memory representation, returning it. A missing file yields null (no policy
+      ever configured); an unreadable file or structurally invalid JSON fails with a storage error
+      naming the path — the store never silently drops a persisted policy.
+    signature: 'load(): InstancePackPolicy | null'
+    returns: InstancePackPolicy | null
+    params: []
+  - name: replaceActive
+    description: >-
+      Swap the authoritative in-memory active policy to the supplied record in one assignment, only
+      ever called by the owned registry after durable persistence has succeeded. Never partially
+      applies, so concurrent reads through the index always observe a consistent record.
+    signature: 'replaceActive(policy: InstancePackPolicy): void'
+    returns: void
+    params:
+      - name: policy
+        type: InstancePackPolicy
+status: complete
+createdAt: '2026-07-09T20:46:15.267Z'
+updatedAt: '2026-07-09T20:53:08.896Z'

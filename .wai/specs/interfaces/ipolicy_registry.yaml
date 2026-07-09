@@ -1,0 +1,25 @@
+id: ipolicy_registry
+name: Policy Registry Interface
+description: >-
+  Private write-path contract for the active hosted instance pack/profile policy. The registry owns
+  server-side updatedAt stamping and durable persistence; it performs no authorization and no
+  updatedBy stamping (the orchestrator supplies updatedBy from the authenticated caller).
+component: policy_registry
+methods:
+  - name: setPackPolicy
+    description: >-
+      Persist the supplied policy as the replacement active policy: stamp updatedAt server-side
+      (preserving the orchestrator-supplied updatedBy), write the single record via
+      write-temp-then-rename, refresh the owned store via replaceActive, and return the stored
+      policy. A persistence failure leaves the previous record intact and surfaces as a storage
+      error.
+    signature: 'setPackPolicy(policy: InstancePackPolicy): InstancePackPolicy'
+    returns: InstancePackPolicy
+    params:
+      - name: policy
+        type: InstancePackPolicy
+    guarantees:
+      - atomic
+status: complete
+createdAt: '2026-07-09T20:46:20.093Z'
+updatedAt: '2026-07-09T20:53:09.900Z'

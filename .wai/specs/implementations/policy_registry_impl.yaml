@@ -1,0 +1,23 @@
+id: policy_registry_impl
+name: Policy Registry Implementation
+description: >-
+  Write path for the active hosted instance pack/profile policy: stamp updatedAt server-side,
+  persist the single record durably, and refresh the store. Owns no authorization and no updatedBy
+  stamping.
+contract: ipolicy_registry
+sourcePath: src/server/policy.ts
+methods:
+  - name: setPackPolicy
+    narrative: []
+    intent: >-
+      Stamp updatedAt to the current server time on the supplied policy — preserving the
+      orchestrator-supplied updatedBy and the caller's pack/profile lists and enforcement posture
+      verbatim — then persist it as the single active record via write-temp-then-rename, refresh the
+      store with replaceActive, and return the stored policy. A persistence failure leaves the
+      previous record intact and surfaces as a storage error. Authorization is enforced by the
+      orchestrator, not here; the registry owns only server-side stamping and durable replacement of
+      the one active record.
+detail: intent
+status: complete
+createdAt: '2026-07-09T20:47:44.803Z'
+updatedAt: '2026-07-09T20:53:15.402Z'

@@ -10,6 +10,6 @@ owns:
   - policy_registry
   - policy_index
 dependsOn: []
-status: draft
+status: complete
 createdAt: '2026-07-08T21:59:18.801Z'
-updatedAt: '2026-07-08T21:59:18.802Z'
+updatedAt: '2026-07-09T20:53:25.470Z'
