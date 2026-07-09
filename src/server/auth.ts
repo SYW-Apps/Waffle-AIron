@@ -1,5 +1,12 @@
 import * as crypto from 'crypto';
-import { type Principal, type ViewGrant, UNAUTHENTICATED } from './types.js';
+import {
+  type ApiKeyRecord,
+  type Principal,
+  type ProjectGrant,
+  type Role,
+  type ViewGrant,
+  UNAUTHENTICATED,
+} from './types.js';
 import { findByTokenHash, hashToken } from './credentials.js';
 import { resolveSecret } from '../utils/secrets.js';
 
@@ -10,25 +17,101 @@ import { resolveSecret } from '../utils/secrets.js';
 // the credential registry; the control-plane master credential verifies against
 // WAIRON_ADMIN_TOKEN (an env-injected secret) so the admin API can be reached
 // before any project or key exists (the bootstrap chicken-and-egg). Performs no
-// routing — only produces a Principal.
+// routing — only produces a Principal, resolving its subject and precise grants.
 // ---------------------------------------------------------------------------
 
-/** Verify a data-plane bearer token to a Principal (or UNAUTHENTICATED). */
-export function authenticate(dataDir: string, token: string | null): Principal {
+/** True once a credential record is past its expiresAt or has a revokedAt set. */
+function isExpiredOrRevoked(rec: ApiKeyRecord): boolean {
+  if (rec.revokedAt) return true;
+  if (rec.expiresAt && Date.parse(rec.expiresAt) <= Date.now()) return true;
+  return false;
+}
+
+/** Compatibility projection of legacy role/projects into precise grants:
+ *  admin → a single instance-wide grant; editor → an mcp:read/mcp:write grant
+ *  per authorized project. */
+function projectGrantsFromRole(role: Role, projects: string[]): ProjectGrant[] {
+  if (role === 'admin') {
+    return [{ projectId: '*', permissions: ['*'], role: 'admin' }];
+  }
+  return projects.map((projectId) => ({
+    projectId,
+    permissions: ['mcp:read', 'mcp:write'],
+    role: 'editor',
+  }));
+}
+
+/** Assemble an authenticated Principal from a matched credential record:
+ *  subject from ownerSubject when present, grants from the record when present,
+ *  otherwise projected from the compatibility role/projects. */
+function principalFromRecord(rec: ApiKeyRecord): Principal {
+  const principal: Principal = {
+    tokenId: rec.id,
+    role: rec.role,
+    projects: rec.projects,
+    authenticated: true,
+    grants: rec.grants ?? projectGrantsFromRole(rec.role, rec.projects),
+  };
+  if (rec.ownerSubject) principal.subject = rec.ownerSubject;
+  return principal;
+}
+
+/** Salted-hash lookup of a bearer token → authenticated Principal, rejecting
+ *  (UNAUTHENTICATED) when no record matches or the record is expired/revoked. */
+function resolveTokenPrincipal(dataDir: string, token: string | null): Principal {
   if (!token) return UNAUTHENTICATED;
   const rec = findByTokenHash(dataDir, hashToken(token));
   if (!rec) return UNAUTHENTICATED;
-  return { tokenId: rec.id, role: rec.role, projects: rec.projects, authenticated: true };
+  if (isExpiredOrRevoked(rec)) return UNAUTHENTICATED;
+  return principalFromRecord(rec);
+}
+
+/** Constant-time check of a presented credential against WAIRON_ADMIN_TOKEN. */
+function masterMatches(credential: string | null): boolean {
+  const master = process.env['WAIRON_ADMIN_TOKEN'];
+  if (!master || !credential) return false;
+  const a = Buffer.from(hashToken(credential), 'hex');
+  const b = Buffer.from(hashToken(master), 'hex');
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+/** The bootstrap/control-plane admin identity: admin over all projects, carrying
+ *  a bootstrap subject and an instance-wide administrative grant. */
+function bootstrapAdminPrincipal(): Principal {
+  return {
+    tokenId: 'admin:master',
+    role: 'admin',
+    projects: ['*'],
+    authenticated: true,
+    subject: {
+      userId: 'bootstrap',
+      kind: 'bootstrap',
+      issuer: 'bootstrap',
+      displayName: 'Bootstrap Administrator',
+    },
+    grants: [{ projectId: '*', permissions: ['*'], role: 'admin' }],
+  };
+}
+
+/** Verify a data-plane bearer token to a Principal (or UNAUTHENTICATED). Resolves
+ *  the Principal's subject and grants from the record (legacy records fall back to
+ *  the role/projects projection); rejects expired or revoked records. */
+export function authenticate(dataDir: string, token: string | null): Principal {
+  return resolveTokenPrincipal(dataDir, token);
 }
 
 /** Verify the control-plane master credential to an admin Principal (or reject). */
 export function authenticateMaster(token: string | null): Principal {
-  const master = process.env['WAIRON_ADMIN_TOKEN'];
-  if (!master || !token) return UNAUTHENTICATED;
-  const a = Buffer.from(hashToken(token), 'hex');
-  const b = Buffer.from(hashToken(master), 'hex');
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return UNAUTHENTICATED;
+  if (!masterMatches(token)) return UNAUTHENTICATED;
   return { tokenId: 'admin:master', role: 'admin', projects: ['*'], authenticated: true };
+}
+
+/** The single control-plane entry point accepting either credential kind: the
+ *  bootstrap/master credential (→ bootstrap admin Principal) or a stored bearer
+ *  token (→ the same token path as authenticate, including expiry/revocation). */
+export function authenticateCredential(dataDir: string, credential: string | null): Principal {
+  if (masterMatches(credential)) return bootstrapAdminPrincipal();
+  return resolveTokenPrincipal(dataDir, credential);
 }
 
 // ── Signed capability tokens for browser diagram viewing ─────────────────────
