@@ -31,7 +31,10 @@ Phase 2 COMPLETE.
 
 ### Phase 3 — Project policy / profiles (ACTIVE)
 Approved design: IdP methods on ipolicy_repository deferred to Phase 5; policy-aware approval execution via pre-authorized executeApprovedInit wrapping admin executeApprovedCreate (keeps it wired; self_service → policy → admin acyclic); request-time evaluateInitRequest in requestProjectInitialization (warn attaches findings, enforce rejects); direct portal creation gated by project:create; new vocab: policy:manage. Policy store = single active InstancePackPolicy at pack-policy.json.
-- [ ] Spec finalization (subagent) → validation → human lock → implementation
+- [x] Spec finalization; all gates green; human locked (draft-freeze reverted)
+- [x] Implementation: policy plane (policy.ts, 17 tests; packs.ts pre-authorized entries) → self-service retarget (5 tests). 377 tests green; live e2e: block-mode policy rejected a non-compliant agent request at request time with actionable findings; compliant request flowed through approval; project provisioned with profileSelection recorded.
+
+Phase 3 COMPLETE. Tech debt: ProjectConfigSchema doesn't model profileSelection (raw-YAML workaround in policy.ts) — fold into the core-model pass. UX watch-item (Robbe): warn/block surfacing needs an end-user pass with the Phase 5 UI.
 
 ### Phase 4 — Landscape / organization
 - [ ] Not started
