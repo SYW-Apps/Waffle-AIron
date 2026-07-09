@@ -6,7 +6,19 @@ import { authenticate, verifyViewToken } from './auth.js';
 import { resolveProjectRoot, existingProjectRoot } from './projects.js';
 import { createScopedServer, hostCore } from './adapters.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
-import type { AuditEvent, HostConfig, Principal, PrincipalSubject } from './types.js';
+import {
+  requestProjectInitialization,
+  requestProjectLock,
+  requestProjectPromotion,
+  getRequestStatus,
+} from './selfservice.js';
+import type {
+  AuditEvent,
+  HostConfig,
+  Principal,
+  PrincipalSubject,
+  ProjectInitRequest,
+} from './types.js';
 
 // ---------------------------------------------------------------------------
 // Host Request Orchestrator (sdd_host)
@@ -117,6 +129,100 @@ export function auditToolCall(
   }
 }
 
+// ── Data-plane self-service dispatch (steps 10–19 of handleRequest) ──────────
+
+/** The four approval-backed self-service tools the data plane handles directly,
+ *  bypassing the scoped sdd_* MCP server. Every other tool falls through to it. */
+const SELF_SERVICE_TOOLS = new Set<string>([
+  'sdd_host_request_project_initialization',
+  'sdd_host_request_project_lock',
+  'sdd_host_request_project_promotion',
+  'sdd_host_get_approval_status',
+]);
+
+/** The MCP tool-result envelope — the exact shape the scoped sdd_* server returns:
+ *  text content, optionally flagged as an error. */
+interface McpToolResult {
+  content: { type: 'text'; text: string }[];
+  isError?: boolean;
+}
+
+/** The fields the data plane reads off a JSON-RPC request to route a `tools/call`. */
+interface JsonRpcRequest {
+  id?: unknown;
+  method?: unknown;
+  params?: { name?: unknown; arguments?: unknown };
+}
+
+/** The single dispatchable JSON-RPC request in a body (unwrapping a batch array),
+ *  or undefined when the body carries none. */
+function jsonRpcRequest(body: unknown): JsonRpcRequest | undefined {
+  const msg = Array.isArray(body)
+    ? body.find((m) => m && typeof m === 'object' && 'method' in m)
+    : body;
+  return msg && typeof msg === 'object' ? (msg as JsonRpcRequest) : undefined;
+}
+
+/** Shape a caught error into an `isError` MCP tool result carrying a clear message
+ *  (UnauthenticatedError / ForbiddenError / not-found all read clearly) — never a
+ *  stack trace. */
+function toolErrorResult(err: unknown): McpToolResult {
+  return {
+    content: [{ type: 'text', text: err instanceof Error ? err.message : String(err) }],
+    isError: true,
+  };
+}
+
+/**
+ * Steps 10–19: when the message is a `tools/call` for one of the four approval-backed
+ * self-service tools, dispatch it to the self-service orchestrator — re-authenticating
+ * the RAW bearer credential (the orchestrator is the single auth authority) — and shape
+ * the outcome into the standard JSON-RPC tool-result envelope. Returns the full JSON-RPC
+ * response to send, or undefined when the call is not a self-service tool (the caller
+ * then falls through to the scoped sdd_* MCP server — step 21).
+ *
+ * Project lock and promotion are ALWAYS scoped to the already-bound project id; a
+ * project id supplied in the tool arguments is deliberately IGNORED, so a caller can
+ * never request an action against a project it is not scoped to. Initialization instead
+ * carries the (new) project as its decoded ProjectInitRequest arguments.
+ */
+export function dispatchSelfServiceTool(
+  cfg: HostConfig,
+  credential: string | null,
+  projectId: string,
+  body: unknown,
+): { jsonrpc: '2.0'; id: unknown; result: McpToolResult } | undefined {
+  const msg = jsonRpcRequest(body);
+  if (!msg || msg.method !== 'tools/call') return undefined;
+  const name = msg.params?.name;
+  if (typeof name !== 'string' || !SELF_SERVICE_TOOLS.has(name)) return undefined;
+
+  const args = (msg.params?.arguments ?? {}) as Record<string, unknown>;
+  const id = msg.id ?? null;
+  let result: McpToolResult;
+  try {
+    let value: unknown;
+    switch (name) {
+      case 'sdd_host_request_project_initialization':
+        value = requestProjectInitialization(cfg, credential, args as unknown as ProjectInitRequest);
+        break;
+      case 'sdd_host_request_project_lock':
+        value = requestProjectLock(cfg, credential, projectId); // bound project; args ignored
+        break;
+      case 'sdd_host_request_project_promotion':
+        value = requestProjectPromotion(cfg, credential, projectId); // bound project; args ignored
+        break;
+      default: // 'sdd_host_get_approval_status'
+        value = getRequestStatus(cfg, credential, String(args.requestId ?? ''));
+        break;
+    }
+    result = { content: [{ type: 'text', text: JSON.stringify(value) }] };
+  } catch (err) {
+    result = toolErrorResult(err);
+  }
+  return { jsonrpc: '2.0', id, result };
+}
+
 /** Authenticate → resolve+bind project scope → dispatch the sdd_* call. */
 export async function handleMcpRequest(
   cfg: HostConfig,
@@ -124,9 +230,10 @@ export async function handleMcpRequest(
   res: ServerResponse,
   body: unknown,
 ): Promise<void> {
+  const credential = bearerToken(req);
   let principal: Principal;
   if (cfg.authEnabled) {
-    principal = authenticate(cfg.dataDir, bearerToken(req));
+    principal = authenticate(cfg.dataDir, credential);
     if (!principal.authenticated) {
       sendJson(res, 401, { error: 'unauthorized' });
       return;
@@ -143,6 +250,20 @@ export async function handleMcpRequest(
   }
 
   await runWithProjectRoot(root, async () => {
+    // The project id is the basename of its isolated root (<dataDir>/projects/<id>).
+    const projectId = path.basename(root);
+
+    // Steps 10–20: the four approval-backed self-service tools are handled here,
+    // bypassing the scoped sdd_* MCP server. The response still flows through the
+    // SAME best-effort audit path (auditToolCall) the scoped dispatch uses.
+    const selfServiceResponse = dispatchSelfServiceTool(cfg, credential, projectId, body);
+    if (selfServiceResponse !== undefined) {
+      sendJson(res, 200, selfServiceResponse);
+      auditToolCall(cfg.dataDir, principal, projectId, body, deriveMcpOutcome(selfServiceResponse));
+      return;
+    }
+
+    // Steps 21–22: every other tool dispatches into a fresh scoped MCP server.
     const server = createScopedServer();
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
@@ -166,9 +287,8 @@ export async function handleMcpRequest(
     await server.connect(transport);
     await transport.handleRequest(req, res, body);
 
-    // Steps 12–17: audit the handled data-plane tool call (best-effort). The
-    // project id is the basename of its isolated root (<dataDir>/projects/<id>).
-    auditToolCall(cfg.dataDir, principal, path.basename(root), body, deriveMcpOutcome(response));
+    // Steps 23–27: audit the handled data-plane tool call (best-effort).
+    auditToolCall(cfg.dataDir, principal, projectId, body, deriveMcpOutcome(response));
   });
 }
 
