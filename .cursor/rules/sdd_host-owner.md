@@ -84,6 +84,7 @@ src/server/http.ts
 src/server/request.ts
 src/server/identity.ts
 src/server/packs.ts
+src/server/policy.ts
 src/server/projects.ts
 src/utils/secrets.ts
 src/server/selfservice.ts
