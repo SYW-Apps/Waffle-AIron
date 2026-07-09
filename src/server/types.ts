@@ -79,6 +79,74 @@ export interface ApiKeyRecord {
   revokedAt?: string;
 }
 
+/** A hosted human or service-principal account bound to an identity subject. */
+export interface HostedUserRecord {
+  id: string;
+  /** The identity this account is bound to (issuer, kind, external subject). */
+  subject: PrincipalSubject;
+  /** Lifecycle status: 'active' | 'suspended' | 'deactivated'. */
+  status: string;
+  /** Project and instance permissions granted to this user. */
+  grants: ProjectGrant[];
+  createdAt: string;
+  /** ISO-8601 timestamp of the user's most recent authenticated activity. */
+  lastSeenAt?: string;
+}
+
+/** A durable, redacted audit event: who acted, through which token, on what, with what outcome.
+ *  Never contains raw bearer tokens, secrets, or full spec bodies. */
+export interface AuditEvent {
+  id: string;
+  timestamp: string;
+  /** 'debug' | 'info' | 'warning' | 'error' | 'security' */
+  level: string;
+  /** e.g. 'auth' | 'mcp' | 'admin' | 'project' | 'lock' | 'pack' | 'producer' | 'audit' */
+  category: string;
+  /** Canonical action name, e.g. 'mcp.tool.call', 'token.mint', 'user.create'. */
+  action: string;
+  /** 'success' | 'denied' | 'failed' | 'skipped' */
+  outcome: string;
+  /** Resolved identity responsible for the action. */
+  actor: PrincipalSubject;
+  /** Credential id used for the request — never the raw token. */
+  tokenId?: string;
+  projectId?: string;
+  requestId?: string;
+  /** Redacted target identifier: tool name, route, key id, pack name, … */
+  target?: string;
+  /** Small redacted diagnostic payload serialized by policy. */
+  metadata?: string;
+}
+
+/** Admin filter for querying the audit log; unset fields match everything. */
+export interface AuditQuery {
+  projectId?: string;
+  actorUserId?: string;
+  tokenId?: string;
+  category?: string;
+  action?: string;
+  outcome?: string;
+  minimumLevel?: string;
+  /** ISO-8601 inclusive time range bounds. */
+  from?: string;
+  to?: string;
+  limit?: number;
+}
+
+/** Instance-level durable audit capture and retention policy. */
+export interface AuditRetentionPolicy {
+  enabled: boolean;
+  /** Lowest event level that is captured at all. */
+  minimumLevel: string;
+  retentionDays: number;
+  /** Optional longer retention for 'security'-level events. */
+  securityRetentionDays?: number;
+  /** Whether read-only actions are captured (high volume). */
+  includeReadEvents: boolean;
+  /** 'none' | 'redacted' | 'full-redacted' — how much metadata is persisted. */
+  metadataMode: string;
+}
+
 /** A registered hosted project mapped to its isolated .wai/ root. */
 export interface HostedProjectRecord {
   id: string;
