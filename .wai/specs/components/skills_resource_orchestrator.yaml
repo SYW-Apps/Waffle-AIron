@@ -1,0 +1,16 @@
+id: skills_resource_orchestrator
+name: Skills Resource Orchestrator
+description: >-
+  Draft workflow owner for publishing trusted built-in SDD skills as MCP-readable resources and
+  prompts. This supports cloud-only agents that cannot receive filesystem-exported skill files. In a
+  future revision, the sdd_mcp mcp_orchestrator will surface these built-in SDD skill resources for
+  MCP clients that cannot receive filesystem-exported skills; that capability is owned here and not
+  yet wired into the mcp_orchestrator.
+subsystem: sdd_skills
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - skills_resource_specialist
+status: draft
+createdAt: '2026-07-08T22:02:30.528Z'
+updatedAt: '2026-07-09T15:42:32.483Z'

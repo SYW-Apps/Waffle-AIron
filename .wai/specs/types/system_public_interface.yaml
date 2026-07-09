@@ -1,0 +1,57 @@
+kind: value-object
+id: system_public_interface
+name: SystemPublicInterface
+description: >-
+  L0 public surface intentionally exposed by a system to other hosted projects or external
+  consumers. It must point to an existing subsystem public interface, so project-boundary access
+  never targets private components or internal subsystem surfaces by accident.
+fields:
+  - name: id
+    type: string
+    description: Stable public interface id within the system.
+    optional: false
+  - name: name
+    type: string
+    description: Human-readable public surface name.
+    optional: false
+  - name: subsystem
+    type: string
+    description: Subsystem that publishes the underlying L1 public interface.
+    optional: false
+  - name: component
+    type: string
+    description: Portal or compatible public component backing the subsystem public interface.
+    optional: false
+  - name: interface
+    type: string
+    description: Optional L3 interface id backing the surface.
+    optional: true
+  - name: type
+    type: string
+    description: >-
+      Surface kind, aligned with subsystem publicInterfaces: REST, GraphQL, MessageBus, RPC, or
+      Custom.
+    optional: false
+  - name: details
+    type: string
+    description: Consumer-facing description of what the surface exposes and what remains private.
+    optional: false
+  - name: audience
+    type: string
+    description: 'Intended audience: "project", "department", "instance", "partner", or "external".'
+    optional: false
+  - name: authPolicy
+    type: string
+    description: Short policy identifier or prose summary for how callers authenticate to this surface.
+    optional: false
+  - name: version
+    type: string
+    description: Optional public contract version.
+    optional: true
+  - name: stability
+    type: string
+    description: 'Contract stability: "draft", "stable", or "deprecated".'
+    optional: true
+methods: []
+createdAt: '2026-07-08T21:10:42.862Z'
+updatedAt: '2026-07-08T21:10:42.867Z'

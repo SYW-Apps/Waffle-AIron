@@ -1,0 +1,27 @@
+kind: value-object
+id: remote_public_interface_ref
+name: RemotePublicInterfaceRef
+description: >-
+  Reference from one hosted project to another hosted project's declared L0 public surface. This is
+  the cross-project equivalent of Adapter-to-remote-Portal access and must never grant private spec
+  access.
+fields:
+  - name: projectId
+    type: string
+    description: Target hosted project id.
+    optional: false
+  - name: systemInterfaceId
+    type: string
+    description: Target system public interface id within the target project.
+    optional: false
+  - name: version
+    type: string
+    description: Optional required public contract version.
+    optional: true
+  - name: reason
+    type: string
+    description: Why this project consumes the remote public surface.
+    optional: false
+methods: []
+createdAt: '2026-07-08T21:10:48.242Z'
+updatedAt: '2026-07-08T21:10:48.285Z'

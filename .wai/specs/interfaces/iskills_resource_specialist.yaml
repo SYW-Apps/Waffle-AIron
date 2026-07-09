@@ -1,0 +1,22 @@
+id: iskills_resource_specialist
+name: Skills Resource Specialist Interface
+description: Draft contract for exposing built-in SDD skills as MCP-readable resources and prompts.
+component: skills_resource_specialist
+methods:
+  - name: listSkillResources
+    description: List Wairon-provided skill resources that should be advertised to connected MCP agents.
+    signature: 'listSkillResources(): SkillResourceDescriptor[]'
+    returns: SkillResourceDescriptor[]
+    params: []
+  - name: readSkillResource
+    description: >-
+      Return the skill content for one resource id or URI. The result is serialized text and must
+      come from trusted bundled skill content.
+    signature: 'readSkillResource(resourceId: string): string'
+    returns: string
+    params:
+      - name: resourceId
+        type: string
+status: draft
+createdAt: '2026-07-08T22:01:40.898Z'
+updatedAt: '2026-07-08T22:01:40.899Z'

@@ -1,0 +1,14 @@
+id: skills_resource_specialist
+name: Skills Resource Specialist
+description: >-
+  Draft specialist that exposes built-in SDD guidance as MCP-readable skill resources and prompts.
+  It complements filesystem export so cloud-only agents can read skills such as sdd-architect
+  directly from Wairon.
+subsystem: sdd_skills
+componentType: Specialist
+owns: []
+dependsOn:
+  - skills_exporter
+status: draft
+createdAt: '2026-07-08T22:01:27.596Z'
+updatedAt: '2026-07-08T22:01:27.598Z'

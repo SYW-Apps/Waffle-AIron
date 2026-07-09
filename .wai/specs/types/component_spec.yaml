@@ -6,19 +6,24 @@ fields:
   - name: id
     type: string
     description: Stable component identifier
+    optional: false
     key: primary
   - name: name
     type: string
     description: Human-readable component name
+    optional: false
   - name: description
     type: string
     description: What this component does
+    optional: false
   - name: subsystem
     type: string
     description: Owning subsystem id
+    optional: false
   - name: componentType
     type: string
     description: 'Stereotype: Portal, Orchestrator, Store, Adapter, …'
+    optional: false
   - name: portalType
     type: string
     description: Wire flavour when componentType is Portal (HTTP_API, gRPC, …)
@@ -26,13 +31,22 @@ fields:
   - name: owns
     type: string[]
     description: Private member component ids (pattern containment, one hop)
+    optional: false
   - name: dependsOn
     type: string[]
     description: Collaborator component ids
+    optional: false
   - name: status
     type: string
     description: draft | design | complete
     optional: true
+  - name: remoteInterfaces
+    type: RemotePublicInterfaceRef[]
+    description: >-
+      Optional remote project public surfaces consumed by this component. Valid only for Adapter
+      components; dependsOn remains local-only and must not point directly into another hosted
+      project.
+    optional: true
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-03T00:00:00.000Z'
+updatedAt: '2026-07-08T21:11:54.403Z'

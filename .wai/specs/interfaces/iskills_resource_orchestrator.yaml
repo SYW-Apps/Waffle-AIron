@@ -1,0 +1,22 @@
+id: iskills_resource_orchestrator
+name: Skills Resource Orchestrator Interface
+description: Draft contract for MCP-readable built-in SDD skill resources.
+component: skills_resource_orchestrator
+methods:
+  - name: listSkillResources
+    description: >-
+      List Wairon-provided skill resources that hosted or stdio MCP clients may advertise to
+      connected agents.
+    signature: 'listSkillResources(): SkillResourceDescriptor[]'
+    returns: SkillResourceDescriptor[]
+    params: []
+  - name: readSkillResource
+    description: Read one trusted Wairon-provided skill resource as text for an MCP client.
+    signature: 'readSkillResource(resourceId: string): string'
+    returns: string
+    params:
+      - name: resourceId
+        type: string
+status: draft
+createdAt: '2026-07-08T22:02:40.411Z'
+updatedAt: '2026-07-08T22:02:40.412Z'

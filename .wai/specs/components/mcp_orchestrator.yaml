@@ -1,10 +1,14 @@
-id: "mcp_orchestrator"
-name: "MCP Orchestrator"
-description: "Owns the sdd_* tool workflows: validates tool inputs, coordinates the core client adapter for spec reads/writes and the validator client adapter for conformance runs, and shapes tool responses."
-subsystem: "sdd_mcp"
-componentType: "Orchestrator"
+id: mcp_orchestrator
+name: MCP Orchestrator
+description: >-
+  Owns the sdd_* tool workflows: validates tool inputs, coordinates the core client adapter for spec
+  reads/writes and the validator client adapter for conformance runs, and shapes tool responses.
+subsystem: sdd_mcp
+componentType: Orchestrator
+owns: []
 dependsOn:
-  - "mcp_core_adapter"
-  - "mcp_validator_adapter"
-createdAt: "2026-07-02T00:00:00Z"
-updatedAt: "2026-07-02T00:00:00Z"
+  - mcp_core_adapter
+  - mcp_validator_adapter
+status: complete
+createdAt: '2026-07-02T00:00:00Z'
+updatedAt: '2026-07-09T15:42:30.929Z'
