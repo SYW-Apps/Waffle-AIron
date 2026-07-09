@@ -1,0 +1,19 @@
+id: project_policy_orchestrator
+name: Project Policy Orchestrator
+description: >-
+  Draft hosted workflow owner for profile-aware project initialization and pack/profile policy
+  enforcement. It authorizes by Principal grants, requires or records profile selection according to
+  policy, applies required/default declarative packs, evaluates project compliance, and audits
+  policy decisions.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - auth_specialist
+  - project_registry
+  - pack_registry
+  - policy_repository
+  - audit_repository
+status: draft
+createdAt: '2026-07-08T21:59:23.605Z'
+updatedAt: '2026-07-08T21:59:23.606Z'

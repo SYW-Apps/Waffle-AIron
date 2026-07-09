@@ -1,0 +1,100 @@
+id: iself_service_orchestrator
+name: Self-Service Orchestrator Interface
+description: >-
+  Draft contract for approval-backed self-service workflows, including MCP-safe request tools for
+  cloud agents.
+component: self_service_orchestrator
+methods:
+  - name: requestProjectInitialization
+    description: >-
+      MCP/UI/CLI workflow `sdd_host_request_project_initialization`: authenticate the requester,
+      validate the ProjectInitRequest against policy enough to produce a redacted summary, create a
+      pending approval request, and audit the request. Does not create the project until approved.
+    signature: >-
+      requestProjectInitialization(principal: Principal, request: ProjectInitRequest):
+      ApprovalRequest
+    returns: ApprovalRequest
+    params:
+      - name: principal
+        type: Principal
+      - name: request
+        type: ProjectInitRequest
+    guarantees:
+      - atomic
+  - name: requestProjectLock
+    description: >-
+      MCP/UI/CLI workflow `sdd_host_request_project_lock`: authenticate the requester, create a
+      pending approval request for validating and locking the current project, and audit the
+      request. Does not lock until approved unless policy grants direct lock permission.
+    signature: 'requestProjectLock(principal: Principal, projectId: string): ApprovalRequest'
+    returns: ApprovalRequest
+    params:
+      - name: principal
+        type: Principal
+      - name: projectId
+        type: string
+    guarantees:
+      - atomic
+  - name: requestProjectPromotion
+    description: >-
+      MCP/UI/CLI workflow `sdd_host_request_project_promotion`: create a pending approval request
+      for promoting a locked project after state re-check. Does not promote until approved unless
+      policy grants direct promote permission.
+    signature: 'requestProjectPromotion(principal: Principal, projectId: string): ApprovalRequest'
+    returns: ApprovalRequest
+    params:
+      - name: principal
+        type: Principal
+      - name: projectId
+        type: string
+    guarantees:
+      - atomic
+  - name: getRequestStatus
+    description: >-
+      MCP-safe workflow `sdd_host_get_approval_status`: return one approval request visible to the
+      authenticated requester without exposing unrelated requests.
+    signature: 'getRequestStatus(principal: Principal, requestId: string): ApprovalRequest'
+    returns: ApprovalRequest
+    params:
+      - name: principal
+        type: Principal
+      - name: requestId
+        type: string
+  - name: listPendingRequests
+    description: UI/CLI workflow for authorized approvers to list pending approval requests they may decide.
+    signature: 'listPendingRequests(principal: Principal, projectId: string): ApprovalRequest[]'
+    returns: ApprovalRequest[]
+    params:
+      - name: principal
+        type: Principal
+      - name: projectId
+        type: string
+        optional: true
+  - name: decideRequest
+    description: >-
+      UI/CLI workflow for an authorized user/admin to approve or deny a pending request and audit
+      the decision.
+    signature: 'decideRequest(principal: Principal, decision: ApprovalDecision): ApprovalRequest'
+    returns: ApprovalRequest
+    params:
+      - name: principal
+        type: Principal
+      - name: decision
+        type: ApprovalDecision
+    guarantees:
+      - atomic
+  - name: executeApprovedRequest
+    description: >-
+      Execute one approved request by delegating to project policy, admin, or identity workflows,
+      then mark the approval completed and audit the outcome. Rejects pending, denied, expired, or
+      unauthorized requests.
+    signature: 'executeApprovedRequest(principal: Principal, requestId: string): string'
+    returns: string
+    params:
+      - name: principal
+        type: Principal
+      - name: requestId
+        type: string
+status: draft
+createdAt: '2026-07-09T07:19:58.825Z'
+updatedAt: '2026-07-09T07:19:58.827Z'

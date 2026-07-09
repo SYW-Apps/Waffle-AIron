@@ -1,0 +1,68 @@
+id: iproject_policy_orchestrator
+name: Project Policy Orchestrator Interface
+description: >-
+  Draft contract for profile-aware hosted project initialization and pack/profile policy
+  enforcement.
+component: project_policy_orchestrator
+methods:
+  - name: initializeProjectWithProfile
+    description: >-
+      Authenticate and authorize project creation, require or validate profile selection according
+      to instance policy, create the hosted project record, apply required/default declarative
+      packs, record selected profiles, and audit the initialization.
+    signature: >-
+      initializeProjectWithProfile(credential: string, request: ProjectInitRequest):
+      HostedProjectRecord
+    returns: HostedProjectRecord
+    params:
+      - name: credential
+        type: string
+      - name: request
+        type: ProjectInitRequest
+    guarantees:
+      - atomic
+  - name: evaluateProjectPolicy
+    description: >-
+      Authenticate, bind the hosted project scope, and evaluate project packs/profile selection
+      against the active instance policy.
+    signature: 'evaluateProjectPolicy(credential: string, projectId: string): PolicyEvaluationResult'
+    returns: PolicyEvaluationResult
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+  - name: reconcileProjectPolicy
+    description: >-
+      Authenticate, evaluate the project, and apply allowed auto-reconciliation steps for missing
+      required/default declarative packs when policy mode permits it.
+    signature: 'reconcileProjectPolicy(credential: string, projectId: string): PolicyEvaluationResult'
+    returns: PolicyEvaluationResult
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+  - name: getPackPolicy
+    description: Authenticate and return the active hosted instance pack/profile policy.
+    signature: 'getPackPolicy(credential: string): InstancePackPolicy'
+    returns: InstancePackPolicy
+    params:
+      - name: credential
+        type: string
+  - name: setPackPolicy
+    description: >-
+      Authenticate, authorize policy administration, replace the active pack/profile policy, and
+      audit the change.
+    signature: 'setPackPolicy(credential: string, policy: InstancePackPolicy): InstancePackPolicy'
+    returns: InstancePackPolicy
+    params:
+      - name: credential
+        type: string
+      - name: policy
+        type: InstancePackPolicy
+    guarantees:
+      - atomic
+status: draft
+createdAt: '2026-07-08T21:59:46.667Z'
+updatedAt: '2026-07-08T21:59:46.668Z'

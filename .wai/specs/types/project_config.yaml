@@ -1,18 +1,33 @@
 kind: value-object
 id: project_config
 name: ProjectConfig
-description: Project configuration
+description: >-
+  Project configuration, including output targets, rule configuration, extension pack registration,
+  and the hosted/profile selection applied when the project was initialized or reconciled.
 fields:
   - name: name
     type: string
     description: Project name
+    optional: false
     key: primary
   - name: targets
     type: object[]
     description: 'Output targets: type (claude | gemini | custom), outputDir, enabled'
+    optional: false
   - name: rules
     type: RulesConfig
     description: Topology + conformance rule configuration
+    optional: false
+  - name: extensions
+    type: object
+    description: Extension configuration such as registered pack references and whether global packs are used.
+    optional: true
+  - name: profileSelection
+    type: ProjectProfileSelection
+    description: >-
+      Hosted/profile selection applied to this project, when initialized or reconciled through
+      hosted policy workflows.
+    optional: true
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-03T00:00:00.000Z'
+updatedAt: '2026-07-08T22:03:03.910Z'

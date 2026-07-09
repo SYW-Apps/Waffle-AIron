@@ -1,0 +1,15 @@
+id: policy_repository
+name: Policy Repository
+description: >-
+  Facade for durable hosted instance policy state. Hosted workflows use this repository to read and
+  update pack/profile enforcement policy instead of reaching into private policy storage blocks.
+subsystem: sdd_host
+componentType: Repository
+owns:
+  - policy_store
+  - policy_registry
+  - policy_index
+dependsOn: []
+status: draft
+createdAt: '2026-07-08T21:59:18.801Z'
+updatedAt: '2026-07-08T21:59:18.802Z'

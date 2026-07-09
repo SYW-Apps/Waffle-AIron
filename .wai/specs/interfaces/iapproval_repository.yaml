@@ -1,0 +1,73 @@
+id: iapproval_repository
+name: Approval Repository Interface
+description: Facade contract for durable hosted approval requests and decisions.
+component: approval_repository
+methods:
+  - name: create
+    description: Persist a new pending approval request with a redacted payload summary.
+    signature: 'create(request: ApprovalRequest): ApprovalRequest'
+    returns: ApprovalRequest
+    params:
+      - name: request
+        type: ApprovalRequest
+    guarantees:
+      - atomic
+  - name: decide
+    description: >-
+      Record an approval or denial decision for a pending approval request. The decision's decidedBy
+      MUST differ from the request's requestedBy and the decider must hold an approval-capable
+      grant; any self-approval attempt is rejected.
+    signature: 'decide(decision: ApprovalDecision): ApprovalRequest'
+    returns: ApprovalRequest
+    params:
+      - name: decision
+        type: ApprovalDecision
+    guarantees:
+      - atomic
+  - name: getById
+    description: Return one approval request by id, or null when absent.
+    signature: 'getById(id: string): ApprovalRequest | null'
+    returns: ApprovalRequest | null
+    params:
+      - name: id
+        type: string
+  - name: list
+    description: List approval requests filtered by status, project, requester, or action kind.
+    signature: >-
+      list(status: string, projectId: string, requestedByUserId: string, kind: string):
+      ApprovalRequest[]
+    returns: ApprovalRequest[]
+    params:
+      - name: status
+        type: string
+        optional: true
+      - name: projectId
+        type: string
+        optional: true
+      - name: requestedByUserId
+        type: string
+        optional: true
+      - name: kind
+        type: string
+        optional: true
+  - name: markCompleted
+    description: Mark an approved request completed after the privileged workflow has executed successfully.
+    signature: 'markCompleted(id: string): ApprovalRequest'
+    returns: ApprovalRequest
+    params:
+      - name: id
+        type: string
+    guarantees:
+      - atomic
+  - name: expirePending
+    description: >-
+      Expire pending approval requests older than their expiresAt timestamp and return the number
+      expired.
+    signature: 'expirePending(now: string): number'
+    returns: number
+    params:
+      - name: now
+        type: string
+status: draft
+createdAt: '2026-07-09T07:19:42.563Z'
+updatedAt: '2026-07-09T15:43:10.017Z'

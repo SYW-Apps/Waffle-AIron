@@ -1,0 +1,49 @@
+id: ipolicy_repository
+name: Policy Repository Interface
+description: >-
+  Facade contract for hosted instance policy and configuration state, including pack/profile
+  enforcement policy and identity-provider configuration.
+component: policy_repository
+methods:
+  - name: getPackPolicy
+    description: >-
+      Return the active instance pack/profile policy, or a secure default policy if none has been
+      configured.
+    signature: 'getPackPolicy(): InstancePackPolicy'
+    returns: InstancePackPolicy
+    params: []
+  - name: setPackPolicy
+    description: Replace the active instance pack/profile policy after admin authorization.
+    signature: 'setPackPolicy(policy: InstancePackPolicy): InstancePackPolicy'
+    returns: InstancePackPolicy
+    params:
+      - name: policy
+        type: InstancePackPolicy
+    guarantees:
+      - atomic
+  - name: listIdentityProviders
+    description: List configured identity providers without exposing raw client secrets.
+    signature: 'listIdentityProviders(): IdentityProviderConfig[]'
+    returns: IdentityProviderConfig[]
+    params: []
+  - name: upsertIdentityProvider
+    description: >-
+      Create or update one identity provider configuration. Secret values are referenced by key, not
+      stored inline.
+    signature: 'upsertIdentityProvider(config: IdentityProviderConfig): IdentityProviderConfig'
+    returns: IdentityProviderConfig
+    params:
+      - name: config
+        type: IdentityProviderConfig
+    guarantees:
+      - atomic
+  - name: removeIdentityProvider
+    description: Disable or remove one identity provider configuration according to policy retention.
+    signature: 'removeIdentityProvider(id: string): void'
+    returns: void
+    params:
+      - name: id
+        type: string
+status: draft
+createdAt: '2026-07-08T21:59:33.749Z'
+updatedAt: '2026-07-08T22:03:13.357Z'
