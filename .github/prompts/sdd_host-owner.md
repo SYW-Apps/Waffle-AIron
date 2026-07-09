@@ -83,9 +83,13 @@ src/server/adapters.ts
 src/server/http.ts
 src/server/request.ts
 src/server/identity.ts
+src/server/landscape.ts
+src/server/organization.ts
 src/server/packs.ts
 src/server/policy.ts
 src/server/projects.ts
+src/server/relations.ts
+src/server/surfaces.ts
 src/utils/secrets.ts
 src/server/selfservice.ts
 src/server/users.ts
