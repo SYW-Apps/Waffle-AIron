@@ -235,6 +235,127 @@ export interface PolicyEvaluationResult {
   messages: string[];
 }
 
+/** A node in the hosted organization hierarchy (department, team, domain, …). */
+export interface OrganizationUnitRecord {
+  id: string;
+  name: string;
+  /** e.g. 'organization' | 'department' | 'team' | 'domain' */
+  kind: string;
+  /** Parent unit id; absent on root units. (Type spec marks this required — narrative
+   *  says "when set"; root units omit it. Flagged for a type-spec fix.) */
+  parentId?: string;
+  status: string;
+  createdAt: string;
+  createdBy: PrincipalSubject;
+}
+
+/** Places (or shares) a hosted project into an organization unit. Visual grouping only —
+ *  placements never confer reachability. */
+export interface ProjectPlacement {
+  id: string;
+  projectId: string;
+  unitId: string;
+  /** e.g. 'owner' | 'shared' */
+  role: string;
+  createdAt: string;
+  createdBy: PrincipalSubject;
+}
+
+/** Both collections of the organization store, loaded together. */
+export interface OrganizationState {
+  units: OrganizationUnitRecord[];
+  placements: ProjectPlacement[];
+}
+
+/** A remote project public surface consumed across project boundaries. */
+export interface RemotePublicInterfaceRef {
+  projectId: string;
+  systemInterfaceId: string;
+  version?: string;
+  reason: string;
+}
+
+/** A directed cross-project relation: source consumes target's public interface. */
+export interface ProjectRelationRecord {
+  id: string;
+  sourceProjectId: string;
+  targetProjectId: string;
+  /** e.g. 'consumes' | 'depends-on' | 'observes' */
+  kind: string;
+  /** The source-side client Adapter component id realizing the hop. */
+  sourceAdapter: string;
+  targetPublicInterface: RemotePublicInterfaceRef;
+  reason: string;
+  /** 'active' | 'suspended' | 'retired' — only active relations confer reachability. */
+  status: string;
+  createdAt: string;
+  createdBy: PrincipalSubject;
+}
+
+/** A redacted summary of one published system-level interface. Never carries private
+ *  components, narratives, implementations, root paths, or secrets. */
+export interface PublicInterfaceSummary {
+  id: string;
+  name: string;
+  type: string;
+  audience: string;
+  version?: string;
+  stability?: string;
+  methods: string[];
+  endpoints?: string[];
+  publicTypes?: string[];
+  details: string;
+}
+
+/** The stored, redacted public surface of one hosted project at one spec state. */
+export interface ProjectPublicSurfaceSnapshot {
+  projectId: string;
+  stateId: string;
+  systemName: string;
+  interfaces: PublicInterfaceSummary[];
+  exportedAt: string;
+  exportedBy?: PrincipalSubject;
+}
+
+/** One project id reachable from the caller's current project, with the relations
+ *  that make it reachable. */
+export interface ReachableProjectRef {
+  projectId: string;
+  relationIds: string[];
+  relationKinds: string[];
+  publicInterfaceIds: string[];
+}
+
+/** A node of the hosted landscape graph (unit, project, or public interface). */
+export interface LandscapeNode {
+  id: string;
+  label: string;
+  /** 'unit' | 'project' | 'interface' */
+  nodeKind: string;
+  projectId?: string;
+  unitId?: string;
+  publicInterfaceId?: string;
+  status?: string;
+}
+
+/** A directed edge of the hosted landscape graph. */
+export interface LandscapeEdge {
+  from: string;
+  to: string;
+  /** 'hierarchy' | 'placement' | 'relation' */
+  edgeKind: string;
+  relationId?: string;
+  label?: string;
+}
+
+/** The assembled hosted landscape graph. */
+export interface LandscapeGraphModel {
+  nodes: LandscapeNode[];
+  edges: LandscapeEdge[];
+  generatedAt: string;
+  scope?: string;
+}
+
 /** A registered hosted project mapped to its isolated .wai/ root. */
 export interface HostedProjectRecord {
   id: string;
