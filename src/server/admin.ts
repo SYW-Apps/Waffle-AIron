@@ -58,6 +58,16 @@ function requireAdmin(credential: string | null): void {
 
 export function createProject(cfg: HostConfig, credential: string | null, id: string): HostedProjectRecord {
   requireAdmin(credential);
+  return executeApprovedCreate(cfg, id);
+}
+
+/**
+ * Pre-authorized entry for the approval workflow: the same privileged action as
+ * createProject but WITHOUT credential authentication — the caller
+ * (self_service_orchestrator) has already enforced approval-based authorization.
+ * Never routed from any portal.
+ */
+export function executeApprovedCreate(cfg: HostConfig, id: string): HostedProjectRecord {
   const rec = createProjectRecord(cfg.dataDir, id);
   runWithProjectRoot(rec.rootPath, () => hostCore.provisionProject(id));
   return rec;
@@ -99,8 +109,18 @@ export function listKeys(cfg: HostConfig, credential: string | null, project: st
 
 export function lockProject(cfg: HostConfig, credential: string | null, project: string): LockRecord {
   requireAdmin(credential);
-  const root = existingProjectRoot(cfg.dataDir, project);
-  if (!root) throw new Error(`Unknown project "${project}".`);
+  return executeApprovedLock(cfg, project);
+}
+
+/**
+ * Pre-authorized entry for the approval workflow: the same privileged action as
+ * lockProject but WITHOUT credential authentication — the caller
+ * (self_service_orchestrator) has already enforced approval-based authorization.
+ * Never routed from any portal.
+ */
+export function executeApprovedLock(cfg: HostConfig, projectId: string): LockRecord {
+  const root = existingProjectRoot(cfg.dataDir, projectId);
+  if (!root) throw new Error(`Unknown project "${projectId}".`);
   return runWithProjectRoot(root, () => {
     // Git-backed: pull the default branch into the working branch first so the
     // lock (and PR) is based on the latest. No-op for native projects.
@@ -116,7 +136,7 @@ export function lockProject(cfg: HostConfig, credential: string | null, project:
 
     // Git-backed: commit the promoted working tree and push the working branch;
     // returns the commit + compare URL a human opens the PR from. No-op if native.
-    const publish = hostGit.publish(`wairon lock: ${project}`);
+    const publish = hostGit.publish(`wairon lock: ${projectId}`);
 
     const record: LockRecord = {
       stateId,
@@ -232,8 +252,18 @@ export function diagramViewLink(cfg: HostConfig, credential: string | null, proj
 
 export function promoteProject(cfg: HostConfig, credential: string | null, project: string): PromoteResult {
   requireAdmin(credential);
-  const root = existingProjectRoot(cfg.dataDir, project);
-  if (!root) throw new Error(`Unknown project "${project}".`);
+  return executeApprovedPromote(cfg, project);
+}
+
+/**
+ * Pre-authorized entry for the approval workflow: the same privileged action as
+ * promoteProject but WITHOUT credential authentication — the caller
+ * (self_service_orchestrator) has already enforced approval-based authorization.
+ * Never routed from any portal.
+ */
+export function executeApprovedPromote(cfg: HostConfig, projectId: string): PromoteResult {
+  const root = existingProjectRoot(cfg.dataDir, projectId);
+  if (!root) throw new Error(`Unknown project "${projectId}".`);
   return runWithProjectRoot(root, () => {
     const lock = hostCore.readLockRecord();
     if (!lock) {
