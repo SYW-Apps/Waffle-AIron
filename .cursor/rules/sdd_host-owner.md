@@ -75,6 +75,7 @@ You own and decide on everything within:
 .wai/specs/components/user_repository.yaml
 .wai/specs/components/user_store.yaml
 src/server/admin.ts
+src/server/approvals.ts
 src/server/audit.ts
 src/server/auth.ts
 src/server/credentials.ts
@@ -85,6 +86,7 @@ src/server/identity.ts
 src/server/packs.ts
 src/server/projects.ts
 src/utils/secrets.ts
+src/server/selfservice.ts
 src/server/users.ts
 ```
 
