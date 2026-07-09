@@ -9,7 +9,8 @@ methods:
     description: >-
       Authenticate the bearer token, resolve the authorized project root (rejecting cross-project
       access), bind the request-scoped root, dispatch the sdd_* tool call within that scope, and
-      return the response.
+      return the response. Appends a redacted audit event for every handled data-plane tool call;
+      append failures are recorded as server diagnostics and never fail the request.
     signature: 'handleRequest(request: HttpRequest): HttpResponse'
     returns: HttpResponse
     params:
@@ -23,4 +24,4 @@ methods:
     returns: HttpResponse
 status: complete
 createdAt: '2026-07-04T12:49:34.974Z'
-updatedAt: '2026-07-09T15:42:05.113Z'
+updatedAt: '2026-07-09T17:41:46.362Z'

@@ -1,0 +1,42 @@
+id: audit_repository_impl
+name: Audit Repository Implementation
+description: >-
+  Facade over the owned audit store, registry, and index. Pure 1:1 forwarding — appends and prunes
+  go to the registry, queries go to the index. The repository's contract-level policy (appends never
+  block or fail the caller's primary action) is honored by callers wrapping append; the facade
+  itself adds no logic.
+contract: iaudit_repository
+sourcePath: src/server/audit.ts
+methods:
+  - name: append
+    narrative:
+      - stepNumber: 1
+        description: Forward to the audit registry
+        type: call
+        targetComponent: audit_registry
+        targetMethod: append
+  - name: query
+    narrative:
+      - stepNumber: 1
+        description: Forward to the audit index
+        type: call
+        targetComponent: audit_index
+        targetMethod: query
+  - name: count
+    narrative:
+      - stepNumber: 1
+        description: Forward to the audit index
+        type: call
+        targetComponent: audit_index
+        targetMethod: count
+  - name: prune
+    narrative:
+      - stepNumber: 1
+        description: Forward to the audit registry
+        type: call
+        targetComponent: audit_registry
+        targetMethod: prune
+detail: calls-only
+status: complete
+createdAt: '2026-07-09T17:31:09.662Z'
+updatedAt: '2026-07-09T17:43:53.402Z'

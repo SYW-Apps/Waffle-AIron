@@ -2,15 +2,16 @@ id: iauth_specialist
 name: Auth Specialist Interface
 description: >-
   Contract for credential verification into a Principal. The single authentication authority; it
-  resolves the credential's token id, role, and authorized project set but performs no workflow
-  authorization routing. (A resolved subject and precise grants are a draft extension.)
+  resolves the credential's subject, token id, role, authorized project set, and precise grants but
+  performs no workflow authorization routing.
 component: auth_specialist
 methods:
   - name: authenticate
     description: >-
       Verify a data-plane bearer token by constant-time comparison of its hash against stored
-      records; return the resolved Principal (token id, role, and authorized project set) or reject
-      as unauthenticated.
+      records; resolves the Principal's subject and grants from the credential record when present
+      (legacy records fall back to the role/projects projection) and rejects expired (expiresAt) or
+      revoked (revokedAt) records, or rejects as unauthenticated when no record matches.
     signature: 'authenticate(token: string): Principal'
     returns: Principal
     params:
@@ -37,6 +38,16 @@ methods:
       rejecting.
     signature: 'verifyViewToken(token: string): ViewGrant'
     returns: ViewGrant
+  - name: authenticateCredential
+    description: >-
+      Verify either the bootstrap/control-plane credential or a stored bearer token by constant-time
+      comparison, resolving subject and grants; the single entry point for control-plane surfaces
+      that accept both credential kinds.
+    signature: 'authenticateCredential(credential: string): Principal'
+    returns: Principal
+    params:
+      - name: credential
+        type: string
 status: complete
 createdAt: '2026-07-04T12:49:50.542Z'
-updatedAt: '2026-07-09T15:42:40.919Z'
+updatedAt: '2026-07-09T17:37:26.803Z'

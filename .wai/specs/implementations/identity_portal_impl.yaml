@@ -1,0 +1,68 @@
+id: identity_portal_impl
+name: Identity Portal Implementation
+description: >-
+  Control-plane HTTP boundary for hosted identity: forwards each token, user-grant, and audit
+  operation to the identity orchestrator.
+contract: iidentity_portal
+sourcePath: src/server/identity.ts
+methods:
+  - name: mintToken
+    narrative:
+      - stepNumber: 1
+        description: Forward to the identity orchestrator
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: mintToken
+  - name: revokeToken
+    narrative:
+      - stepNumber: 1
+        description: Forward to the identity orchestrator
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: revokeToken
+  - name: listUsers
+    narrative:
+      - stepNumber: 1
+        description: Forward to the identity orchestrator
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: listUsers
+  - name: replaceUserGrants
+    narrative:
+      - stepNumber: 1
+        description: Forward to the identity orchestrator
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: replaceUserGrants
+  - name: listAuditEvents
+    narrative:
+      - stepNumber: 1
+        description: Forward to the identity orchestrator's audit query
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: queryAuditEvents
+  - name: pruneAuditEvents
+    narrative:
+      - stepNumber: 1
+        description: Forward to the identity orchestrator
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: pruneAuditEvents
+  - name: upsertUser
+    narrative:
+      - stepNumber: 1
+        description: Forward to the identity orchestrator
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: upsertUser
+  - name: setUserStatus
+    narrative:
+      - stepNumber: 1
+        description: Forward to the identity orchestrator
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: setUserStatus
+detail: calls-only
+status: complete
+createdAt: '2026-07-09T17:41:06.029Z'
+updatedAt: '2026-07-09T18:03:06.695Z'

@@ -21,6 +21,6 @@ methods:
         type: AuditRetentionPolicy
       - name: now
         type: string
-status: draft
+status: complete
 createdAt: '2026-07-08T20:16:48.659Z'
-updatedAt: '2026-07-08T20:16:48.660Z'
+updatedAt: '2026-07-09T17:43:38.342Z'

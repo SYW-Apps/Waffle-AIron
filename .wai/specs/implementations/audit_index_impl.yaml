@@ -1,0 +1,24 @@
+id: audit_index_impl
+name: Audit Index Implementation
+description: >-
+  Admin-only read-path projection over the audit store's event set. Shares the store's references;
+  never mutates.
+contract: iaudit_index
+sourcePath: src/server/audit.ts
+methods:
+  - name: query
+    narrative: []
+    intent: >-
+      Return the events matching every populated filter of the admin query — time range, level,
+      category, action, actor subject, token id, project id, request id — sorted newest-first and
+      windowed by the query's offset and limit so large audit histories page instead of flooding the
+      caller. Unpopulated filters match everything; an empty result is normal, never an error.
+  - name: count
+    narrative: []
+    intent: >-
+      Return the number of events the same filter semantics as query would match, ignoring offset
+      and limit, so admin UIs can paginate without fetching pages. Never fails on lookups.
+detail: intent
+status: complete
+createdAt: '2026-07-09T17:31:00.564Z'
+updatedAt: '2026-07-09T17:43:52.901Z'

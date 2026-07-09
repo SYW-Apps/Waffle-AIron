@@ -36,6 +36,6 @@ methods:
         type: ProjectGrant[]
     guarantees:
       - atomic
-status: draft
+status: complete
 createdAt: '2026-07-08T20:16:18.364Z'
-updatedAt: '2026-07-08T20:16:18.365Z'
+updatedAt: '2026-07-09T17:43:41.817Z'

@@ -9,6 +9,6 @@ componentType: Registry
 owns: []
 dependsOn:
   - audit_store
-status: draft
+status: complete
 createdAt: '2026-07-08T20:14:52.852Z'
-updatedAt: '2026-07-08T20:14:52.853Z'
+updatedAt: '2026-07-09T17:43:27.426Z'

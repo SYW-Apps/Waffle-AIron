@@ -1,0 +1,35 @@
+id: user_registry_impl
+name: User Registry Implementation
+description: >-
+  Write path for hosted-user records: mutates the user set, persists it durably to the users file,
+  then refreshes the owned store. Never touches the index (the index projects over the store's
+  references).
+contract: iuser_registry
+sourcePath: src/server/users.ts
+methods:
+  - name: upsert
+    narrative: []
+    intent: >-
+      Merge the supplied record into the current user set by id — inserting when absent, replacing
+      field-for-field when present — stamp updatedAt (and createdAt on insert), persist the complete
+      set durably via write-temp-then-rename so a crash never truncates the file, then push the new
+      set into the store with replaceAll and return the stored record. When persistence fails, no
+      in-memory state changes and the storage error propagates to the caller.
+  - name: setStatus
+    narrative: []
+    intent: >-
+      Locate the user by id — failing with a not-found error when absent — set its lifecycle status
+      (active, suspended, deactivated) while preserving identity, grant, and audit-history fields
+      untouched, stamp updatedAt, then persist and swap exactly as upsert does. Invalid status
+      values are rejected before any mutation.
+  - name: replaceGrants
+    narrative: []
+    intent: >-
+      Locate the user by id — failing with a not-found error when absent — replace its grants array
+      wholesale with the supplied set (no merging; the caller has already computed and authorized
+      the final grant state), stamp updatedAt, then persist and swap exactly as upsert does. The
+      registry performs no authorization itself.
+detail: intent
+status: complete
+createdAt: '2026-07-09T17:30:03.044Z'
+updatedAt: '2026-07-09T17:43:55.400Z'

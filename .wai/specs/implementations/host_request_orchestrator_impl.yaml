@@ -54,6 +54,30 @@ methods:
         description: Connect the scoped server to the request transport and process the JSON-RPC message
         type: local
       - stepNumber: 12
+        description: >-
+          Build the redacted AuditEvent (action mcp.tool.call, actor and tokenId from the principal,
+          project id, tool name as target, outcome)
+        type: local
+      - stepNumber: 13
+        description: Append the audit event without letting a failure fail the request
+        type: try
+        endStep: 15
+        catches:
+          - error: audit append failure
+            step: 16
+      - stepNumber: 14
+        description: Append the redacted mcp.tool.call audit event under the active retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 15
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 17
+      - stepNumber: 16
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 17
         description: Return the MCP response
         type: return
         outcome: MCP response
@@ -84,4 +108,4 @@ methods:
         outcome: canvas html response
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-07-04T16:01:28.525Z'
+updatedAt: '2026-07-09T17:47:40.530Z'

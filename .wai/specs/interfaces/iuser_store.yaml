@@ -19,6 +19,6 @@ methods:
     params:
       - name: records
         type: HostedUserRecord[]
-status: draft
+status: complete
 createdAt: '2026-07-08T20:16:02.168Z'
-updatedAt: '2026-07-08T20:16:02.170Z'
+updatedAt: '2026-07-09T17:43:40.812Z'

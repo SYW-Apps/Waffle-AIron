@@ -1,0 +1,380 @@
+id: identity_orchestrator_impl
+name: Identity Orchestrator Implementation
+description: >-
+  Hosted identity control-plane workflows: authenticate the caller credential, authorize by grants,
+  then manage user-bound MCP/API tokens, user grants, and admin-only audit access. Audit appends are
+  best-effort and never fail the primary action.
+contract: iidentity_orchestrator
+sourcePath: src/server/identity.ts
+methods:
+  - name: mintToken
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential (bootstrap or user-bound token)
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          If the caller's grants cover neither key:manage for every requested project nor an
+          instance-wide admin grant, deny
+        type: branch
+        condition: >-
+          the caller's grants cover neither key:manage for every requested project nor an
+          instance-wide admin grant
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the delegation
+        type: throw
+        error: Forbidden — caller may not delegate the requested grants
+      - stepNumber: 4
+        description: List hosted projects to validate the request
+        type: call
+        targetComponent: project_registry
+        targetMethod: list
+      - stepNumber: 5
+        description: Verify that every project id referenced in request.grants exists among the known projects
+        type: local
+      - stepNumber: 6
+        description: If any requested project id is unknown, reject
+        type: branch
+        condition: a requested project id is unknown
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Reject the unknown project
+        type: throw
+        error: unknown project
+      - stepNumber: 8
+        description: Generate a cryptographically random token and compute its salted hash
+        type: local
+      - stepNumber: 9
+        description: >-
+          Build the ApiKeyRecord (hashed token, ownerSubject from the request, createdBySubject from
+          the actor principal, grants, label, expiresAt, plus the role/projects compatibility
+          projection derived from the grants)
+        type: local
+      - stepNumber: 10
+        description: Persist the credential record
+        type: call
+        targetComponent: credential_registry
+        targetMethod: create
+      - stepNumber: 11
+        description: Append a redacted audit event without letting a failure fail the mint
+        type: try
+        endStep: 13
+        catches:
+          - error: audit append failure
+            step: 14
+      - stepNumber: 12
+        description: Append the redacted token.mint audit event under the active retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 13
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 15
+      - stepNumber: 14
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 15
+        description: Return the plaintext token (shown exactly once)
+        type: return
+        outcome: plaintext token returned once
+  - name: revokeToken
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          If the caller's grants cover neither key:manage for the token's scope nor an instance-wide
+          admin grant, deny
+        type: branch
+        condition: >-
+          the caller's grants cover neither key:manage for the token's scope nor an instance-wide
+          admin grant
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the revocation
+        type: throw
+        error: Forbidden — caller may not manage this token
+      - stepNumber: 4
+        description: Revoke the credential record by token id
+        type: call
+        targetComponent: credential_registry
+        targetMethod: revoke
+      - stepNumber: 5
+        description: Append a redacted audit event without letting a failure fail the revoke
+        type: try
+        endStep: 7
+        catches:
+          - error: audit append failure
+            step: 8
+      - stepNumber: 6
+        description: Append the redacted token.revoke audit event under the active retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 7
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 9
+      - stepNumber: 8
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 9
+        description: Return once revoked
+        type: return
+        outcome: revoked
+  - name: replaceUserGrants
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: If the caller lacks an instance-wide admin grant, deny
+        type: branch
+        condition: the caller lacks an instance-wide admin grant
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the grant administration
+        type: throw
+        error: Forbidden — grant administration requires an instance-wide admin grant
+      - stepNumber: 4
+        description: Replace the user's grants wholesale through the repository
+        type: call
+        targetComponent: user_repository
+        targetMethod: replaceGrants
+      - stepNumber: 5
+        description: Append a redacted audit event without letting a failure fail the grant replacement
+        type: try
+        endStep: 7
+        catches:
+          - error: audit append failure
+            step: 8
+      - stepNumber: 6
+        description: Append the redacted user.grants.replace audit event under the active retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 7
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 9
+      - stepNumber: 8
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 9
+        description: Return the updated user record
+        type: return
+        outcome: updated user record
+  - name: listUsers
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          If the caller lacks both an instance-wide admin grant and a user-administration grant,
+          deny
+        type: branch
+        condition: the caller lacks both an instance-wide admin grant and a user-administration grant
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the listing
+        type: throw
+        error: Forbidden — user administration required
+      - stepNumber: 4
+        description: List hosted users, optionally narrowed to one project's grant holders
+        type: call
+        targetComponent: user_repository
+        targetMethod: list
+      - stepNumber: 5
+        description: Return the hosted user records
+        type: return
+        outcome: hosted user records
+  - name: queryAuditEvents
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: If the caller lacks both audit:read and an instance-wide admin grant, deny
+        type: branch
+        condition: the caller lacks both audit:read and an instance-wide admin grant
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the audit read
+        type: throw
+        error: Forbidden — audit read access required
+      - stepNumber: 4
+        description: Return redacted audit events matching the query
+        type: call
+        targetComponent: audit_repository
+        targetMethod: query
+      - stepNumber: 5
+        description: Return the redacted audit events
+        type: return
+        outcome: redacted audit events
+  - name: pruneAuditEvents
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: If the caller lacks an instance-wide admin grant, deny
+        type: branch
+        condition: the caller lacks an instance-wide admin grant
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the audit administration
+        type: throw
+        error: Forbidden — audit administration requires an instance-wide admin grant
+      - stepNumber: 4
+        description: >-
+          Resolve the active AuditRetentionPolicy from the host config, using the secure default
+          policy when unset
+        type: local
+      - stepNumber: 5
+        description: Apply the retention policy and delete expired audit events
+        type: call
+        targetComponent: audit_repository
+        targetMethod: prune
+      - stepNumber: 6
+        description: Append a redacted audit event without letting a failure fail the prune
+        type: try
+        endStep: 8
+        catches:
+          - error: audit append failure
+            step: 9
+      - stepNumber: 7
+        description: Append the redacted audit.prune audit event under the active retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 8
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 10
+      - stepNumber: 9
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 10
+        description: Return the number of events removed
+        type: return
+        outcome: removed count
+  - name: upsertUser
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: If the caller lacks an instance-wide admin grant, deny
+        type: branch
+        condition: the caller lacks an instance-wide admin grant
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the user administration
+        type: throw
+        error: Forbidden — user administration requires an instance-wide admin grant
+      - stepNumber: 4
+        description: Look up any existing user record by id to distinguish creation from update
+        type: call
+        targetComponent: user_repository
+        targetMethod: getById
+      - stepNumber: 5
+        description: >-
+          Build the redacted audit event with action user.create when no record existed, or
+          user.update otherwise
+        type: local
+      - stepNumber: 6
+        description: Create or update the hosted user through the repository
+        type: call
+        targetComponent: user_repository
+        targetMethod: upsert
+      - stepNumber: 7
+        description: Append the audit event without letting a failure fail the upsert
+        type: try
+        endStep: 9
+        catches:
+          - error: audit append failure
+            step: 10
+      - stepNumber: 8
+        description: >-
+          Append the redacted user.create or user.update audit event under the active retention
+          policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 9
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 11
+      - stepNumber: 10
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 11
+        description: Return the stored user record
+        type: return
+        outcome: stored user record
+  - name: setUserStatus
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: If the caller lacks an instance-wide admin grant, deny
+        type: branch
+        condition: the caller lacks an instance-wide admin grant
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the user administration
+        type: throw
+        error: Forbidden — user administration requires an instance-wide admin grant
+      - stepNumber: 4
+        description: Set the user's lifecycle status through the repository
+        type: call
+        targetComponent: user_repository
+        targetMethod: setStatus
+      - stepNumber: 5
+        description: Append the audit event without letting a failure fail the status change
+        type: try
+        endStep: 7
+        catches:
+          - error: audit append failure
+            step: 8
+      - stepNumber: 6
+        description: Append the redacted user.status.set audit event under the active retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 7
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 9
+      - stepNumber: 8
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 9
+        description: Return the updated user record
+        type: return
+        outcome: updated user record
+detail: full
+status: complete
+createdAt: '2026-07-09T17:40:44.290Z'
+updatedAt: '2026-07-09T18:02:58.364Z'

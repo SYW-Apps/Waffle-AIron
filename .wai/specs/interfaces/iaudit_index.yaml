@@ -17,6 +17,6 @@ methods:
     params:
       - name: query
         type: AuditQuery
-status: draft
+status: complete
 createdAt: '2026-07-08T20:16:53.264Z'
-updatedAt: '2026-07-08T20:16:53.266Z'
+updatedAt: '2026-07-09T17:43:39.310Z'

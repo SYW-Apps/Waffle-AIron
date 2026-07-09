@@ -17,6 +17,6 @@ methods:
     params:
       - name: events
         type: AuditEvent[]
-status: draft
+status: complete
 createdAt: '2026-07-08T20:16:41.322Z'
-updatedAt: '2026-07-08T20:16:41.324Z'
+updatedAt: '2026-07-09T17:43:37.313Z'

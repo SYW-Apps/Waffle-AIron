@@ -24,9 +24,24 @@ methods:
         type: return
         outcome: unauthenticated
       - stepNumber: 5
-        description: Assemble the Principal (tokenId, role, authorized projects) from the record
+        description: Check the record's expiresAt and revokedAt fields
         type: local
       - stepNumber: 6
+        description: If the record is expired or revoked, reject
+        type: branch
+        condition: the record is expired or revoked
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Return an unauthenticated principal
+        type: return
+        outcome: unauthenticated
+      - stepNumber: 8
+        description: >-
+          Assemble the Principal (tokenId, subject and grants from the record when present,
+          otherwise projected from the record's role and authorized projects; plus the compatibility
+          role and project set)
+        type: local
+      - stepNumber: 9
         description: Return the authenticated principal
         type: return
         outcome: authenticated principal
@@ -102,6 +117,63 @@ methods:
         description: Return the ViewGrant
         type: return
         outcome: ViewGrant
+  - name: authenticateCredential
+    narrative:
+      - stepNumber: 1
+        description: Constant-time compare the presented credential's hash against the configured master hash
+        type: local
+      - stepNumber: 2
+        description: If the master credential does not match, fall through to the token path
+        type: branch
+        condition: master credential matches
+        onFalseStep: 5
+      - stepNumber: 3
+        description: >-
+          Assemble the bootstrap admin Principal (admin role, all projects, bootstrap subject,
+          instance-wide administrative grant)
+        type: local
+      - stepNumber: 4
+        description: Return the bootstrap admin principal
+        type: return
+        outcome: bootstrap admin principal
+      - stepNumber: 5
+        description: Compute the salted hash of the presented token
+        type: local
+      - stepNumber: 6
+        description: Look up a credential record by token hash
+        type: call
+        targetComponent: credential_registry
+        targetMethod: findByToken
+      - stepNumber: 7
+        description: If no record matches, reject
+        type: branch
+        condition: no matching record
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Return an unauthenticated principal
+        type: return
+        outcome: unauthenticated
+      - stepNumber: 9
+        description: Check the record's expiresAt and revokedAt fields
+        type: local
+      - stepNumber: 10
+        description: If the record is expired or revoked, reject
+        type: branch
+        condition: the record is expired or revoked
+        onFalseStep: 12
+      - stepNumber: 11
+        description: Return an unauthenticated principal
+        type: return
+        outcome: unauthenticated
+      - stepNumber: 12
+        description: >-
+          Assemble the Principal with subject and grants from the record (falling back to the
+          role/projects projection for legacy records)
+        type: local
+      - stepNumber: 13
+        description: Return the authenticated principal
+        type: return
+        outcome: authenticated principal
 status: complete
 createdAt: '2026-07-04T12:54:26.477Z'
-updatedAt: '2026-07-04T16:01:11.284Z'
+updatedAt: '2026-07-09T17:38:56.188Z'

@@ -86,6 +86,34 @@ methods:
       transport: HTTP
       method: POST
       path: /identity/audit/prune
-status: draft
+  - name: upsertUser
+    description: Create or update one hosted user or service principal after authorization.
+    signature: 'upsertUser(credential: string, record: HostedUserRecord): HostedUserRecord'
+    returns: HostedUserRecord
+    params:
+      - name: credential
+        type: string
+      - name: record
+        type: HostedUserRecord
+    endpoint:
+      transport: HTTP
+      method: PUT
+      path: /identity/users/{id}
+  - name: setUserStatus
+    description: Set one hosted user's lifecycle status after authorization.
+    signature: 'setUserStatus(credential: string, userId: string, status: string): HostedUserRecord'
+    returns: HostedUserRecord
+    params:
+      - name: credential
+        type: string
+      - name: userId
+        type: string
+      - name: status
+        type: string
+    endpoint:
+      transport: HTTP
+      method: PUT
+      path: /identity/users/{id}/status
+status: complete
 createdAt: '2026-07-08T20:19:45.785Z'
-updatedAt: '2026-07-08T20:41:14.919Z'
+updatedAt: '2026-07-09T18:02:42.624Z'

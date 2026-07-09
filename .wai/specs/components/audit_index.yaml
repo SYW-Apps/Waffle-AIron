@@ -8,6 +8,12 @@ componentType: Index
 owns: []
 dependsOn:
   - audit_store
-status: draft
+lint:
+  allow:
+    - code: UNUSED_METHOD
+      reason: >-
+        count() backs paginated audit reporting for the draft admin_ui/operations surfaces; no Phase
+        1 workflow needs a count. Allow self-expires once a paginated consumer lands.
+status: complete
 createdAt: '2026-07-08T20:14:55.863Z'
-updatedAt: '2026-07-08T20:14:55.865Z'
+updatedAt: '2026-07-09T17:55:06.993Z'

@@ -13,6 +13,6 @@ dependsOn:
   - credential_registry
   - project_registry
   - audit_repository
-status: draft
+status: complete
 createdAt: '2026-07-08T20:15:25.548Z'
-updatedAt: '2026-07-08T20:15:25.549Z'
+updatedAt: '2026-07-09T17:43:33.431Z'

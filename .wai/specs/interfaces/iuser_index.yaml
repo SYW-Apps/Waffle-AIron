@@ -30,6 +30,6 @@ methods:
       - name: projectId
         type: string
         optional: true
-status: draft
+status: complete
 createdAt: '2026-07-08T20:16:24.537Z'
-updatedAt: '2026-07-08T20:16:24.538Z'
+updatedAt: '2026-07-09T17:43:42.809Z'

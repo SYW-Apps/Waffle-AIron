@@ -8,6 +8,13 @@ componentType: Index
 owns: []
 dependsOn:
   - user_store
-status: draft
+lint:
+  allow:
+    - code: UNUSED_METHOD
+      reason: >-
+        findByExternalSubject backs the Phase 5 external-login (SSO) resolve-or-create lookup via
+        the deferred identity_provider_adapter. No Phase 1 workflow consumes it; this allow
+        self-expires once Phase 5 wires it.
+status: complete
 createdAt: '2026-07-08T20:14:40.372Z'
-updatedAt: '2026-07-08T20:14:40.373Z'
+updatedAt: '2026-07-09T18:03:17.722Z'
