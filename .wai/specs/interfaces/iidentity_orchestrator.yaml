@@ -1,0 +1,63 @@
+id: iidentity_orchestrator
+name: Identity Orchestrator Interface
+description: >-
+  Contract for hosted identity workflows: resolving actor records, managing user grants, minting and
+  revoking user-bound MCP tokens, and writing audit events for those actions.
+component: identity_orchestrator
+methods:
+  - name: resolveOrCreateUser
+    description: >-
+      Resolve a hosted user by subject or create an active local record for the subject when policy
+      allows first-login provisioning.
+    signature: 'resolveOrCreateUser(subject: PrincipalSubject): HostedUserRecord'
+    returns: HostedUserRecord
+    params:
+      - name: subject
+        type: PrincipalSubject
+  - name: replaceUserGrants
+    description: Authorize and replace grants for one hosted user, then audit the grant change.
+    signature: 'replaceUserGrants(actor: Principal, userId: string, grants: ProjectGrant[]): HostedUserRecord'
+    returns: HostedUserRecord
+    params:
+      - name: actor
+        type: Principal
+      - name: userId
+        type: string
+      - name: grants
+        type: ProjectGrant[]
+    guarantees:
+      - atomic
+  - name: mintToken
+    description: >-
+      Authorize delegation, mint a user-bound MCP/API token, persist only its hashed credential
+      record, and audit the token creation. Returns plaintext once.
+    signature: 'mintToken(actor: Principal, request: TokenMintRequest): string'
+    returns: string
+    params:
+      - name: actor
+        type: Principal
+      - name: request
+        type: TokenMintRequest
+  - name: revokeToken
+    description: Authorize token management, revoke the credential record, and audit the revocation.
+    signature: 'revokeToken(actor: Principal, tokenId: string): void'
+    returns: void
+    params:
+      - name: actor
+        type: Principal
+      - name: tokenId
+        type: string
+  - name: recordAuthenticatedAction
+    description: >-
+      Write a redacted audit event for an authenticated hosted action using the configured audit
+      policy.
+    signature: 'recordAuthenticatedAction(actor: Principal, event: AuditEvent): void'
+    returns: void
+    params:
+      - name: actor
+        type: Principal
+      - name: event
+        type: AuditEvent
+status: draft
+createdAt: '2026-07-08T20:17:23.976Z'
+updatedAt: '2026-07-08T20:17:23.978Z'

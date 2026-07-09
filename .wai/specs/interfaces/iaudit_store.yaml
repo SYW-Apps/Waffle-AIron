@@ -1,0 +1,22 @@
+id: iaudit_store
+name: Audit Store Interface
+description: Private store contract for redacted hosted audit events.
+component: audit_store
+methods:
+  - name: load
+    description: Load persisted audit events into the authoritative store representation.
+    signature: 'load(): AuditEvent[]'
+    returns: AuditEvent[]
+    params: []
+  - name: replaceAll
+    description: >-
+      Replace the store contents with the supplied complete audit-event set after persistence has
+      succeeded.
+    signature: 'replaceAll(events: AuditEvent[]): void'
+    returns: void
+    params:
+      - name: events
+        type: AuditEvent[]
+status: draft
+createdAt: '2026-07-08T20:16:41.322Z'
+updatedAt: '2026-07-08T20:16:41.324Z'

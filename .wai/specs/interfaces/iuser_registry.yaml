@@ -1,0 +1,41 @@
+id: iuser_registry
+name: User Registry Interface
+description: Private write-path contract for hosted user and service-principal records.
+component: user_registry
+methods:
+  - name: upsert
+    description: >-
+      Create or update a hosted user record and persist the complete user set atomically for the
+      registry's storage backend.
+    signature: 'upsert(record: HostedUserRecord): HostedUserRecord'
+    returns: HostedUserRecord
+    params:
+      - name: record
+        type: HostedUserRecord
+    guarantees:
+      - atomic
+  - name: setStatus
+    description: Set a user's lifecycle status while preserving its identity and grant history fields.
+    signature: 'setStatus(id: string, status: string): HostedUserRecord'
+    returns: HostedUserRecord
+    params:
+      - name: id
+        type: string
+      - name: status
+        type: string
+    guarantees:
+      - atomic
+  - name: replaceGrants
+    description: Replace the project grants for a hosted user after the caller has authorized the grant change.
+    signature: 'replaceGrants(id: string, grants: ProjectGrant[]): HostedUserRecord'
+    returns: HostedUserRecord
+    params:
+      - name: id
+        type: string
+      - name: grants
+        type: ProjectGrant[]
+    guarantees:
+      - atomic
+status: draft
+createdAt: '2026-07-08T20:16:18.364Z'
+updatedAt: '2026-07-08T20:16:18.365Z'

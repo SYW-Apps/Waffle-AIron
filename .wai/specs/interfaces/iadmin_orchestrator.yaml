@@ -1,8 +1,9 @@
 id: iadmin_orchestrator
 name: Admin Orchestrator Interface
 description: >-
-  Contract for the control-plane workflows behind the admin portal: authenticate the master
-  credential, then perform the requested project/key/lock/promote action.
+  Contract for the control-plane workflows behind the admin portal: authenticate a bootstrap/admin
+  (master) credential and, only for an admin principal, perform the requested project, API-key,
+  lock, promote, diagram, producer, secret, or git action.
 component: admin_orchestrator
 methods:
   - name: createProject
@@ -97,4 +98,4 @@ methods:
     returns: string[]
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-07-04T18:46:26.170Z'
+updatedAt: '2026-07-09T15:42:56.756Z'

@@ -1,0 +1,14 @@
+id: user_registry
+name: User Registry
+description: >-
+  Write-path component for creating, disabling, deleting, and updating hosted user records and their
+  project grants. All persisted changes go through this registry so token issuance and audit can
+  attribute user lifecycle changes.
+subsystem: sdd_host
+componentType: Registry
+owns: []
+dependsOn:
+  - user_store
+status: draft
+createdAt: '2026-07-08T20:14:37.100Z'
+updatedAt: '2026-07-08T20:14:37.101Z'

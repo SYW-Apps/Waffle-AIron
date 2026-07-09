@@ -1,0 +1,40 @@
+kind: entity
+id: web_session
+name: WebSession
+description: >-
+  Authenticated admin UI session bound to a hosted PrincipalSubject and derived grants. The record
+  stores session metadata and expiry, never raw external identity tokens unless represented by a
+  secret reference.
+subsystem: sdd_host
+fields:
+  - name: id
+    type: string
+    description: Stable session id.
+    optional: false
+  - name: subject
+    type: PrincipalSubject
+    description: Resolved identity for the session.
+    optional: false
+  - name: grants
+    type: ProjectGrant[]
+    description: Server-derived grants available to this session.
+    optional: false
+  - name: createdAt
+    type: string
+    description: ISO-8601 creation timestamp.
+    optional: false
+  - name: expiresAt
+    type: string
+    description: ISO-8601 expiry timestamp.
+    optional: false
+  - name: lastSeenAt
+    type: string
+    description: ISO-8601 last activity timestamp.
+    optional: true
+  - name: providerId
+    type: string
+    description: IdentityProviderConfig id used for sign-in.
+    optional: true
+methods: []
+createdAt: '2026-07-08T22:00:22.213Z'
+updatedAt: '2026-07-08T22:00:22.236Z'

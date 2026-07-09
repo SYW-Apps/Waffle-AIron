@@ -1,0 +1,13 @@
+id: audit_store
+name: Audit Store
+description: >-
+  Authoritative in-memory representation of persisted hosted audit events and the active retention
+  cursor. It stores redacted audit records only and never receives raw tokens, secrets, or full spec
+  payloads.
+subsystem: sdd_host
+componentType: Store
+owns: []
+dependsOn: []
+status: draft
+createdAt: '2026-07-08T20:14:49.071Z'
+updatedAt: '2026-07-08T20:14:49.073Z'

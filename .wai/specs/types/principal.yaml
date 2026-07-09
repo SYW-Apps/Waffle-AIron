@@ -3,21 +3,31 @@ id: principal
 name: Principal
 description: >-
   The authenticated caller identity and authorized scope produced by verifying a credential.
-  Transient (never persisted). Its project set and role are server-side bindings derived from the
-  token, never from client-supplied parameters.
+  Transient (never persisted). Its subject, grants, project set, and role are server-side bindings
+  derived from the token or bootstrap credential, never from client-supplied parameters. The
+  role/projects fields remain a coarse compatibility projection; precise authorization is expressed
+  by grants.
 fields:
   - name: tokenId
     type: string
-    description: Stable id of the credential that authenticated (for audit); never the raw key
+    description: Stable id of the credential that authenticated, used for audit correlation; never the raw key.
     optional: false
   - name: role
     type: string
-    description: 'Authorization role: "editor" (data-plane sdd_* only) or "admin" (control plane)'
+    description: Coarse compatibility role derived from grants, such as "editor" or "admin".
     optional: false
   - name: projects
     type: string[]
-    description: Project ids this principal may act on; "*" denotes all projects
+    description: Compatibility projection of project ids this principal may act on; "*" denotes all projects.
     optional: false
+  - name: subject
+    type: PrincipalSubject
+    description: Resolved human, service, or bootstrap identity responsible for the authenticated action.
+    optional: true
+  - name: grants
+    type: ProjectGrant[]
+    description: Precise server-derived project and instance permissions for authorization checks.
+    optional: true
 methods: []
 createdAt: '2026-07-04T12:44:18.529Z'
-updatedAt: '2026-07-04T12:44:18.539Z'
+updatedAt: '2026-07-08T19:34:59.535Z'

@@ -1,22 +1,30 @@
 id: iauth_specialist
 name: Auth Specialist Interface
 description: >-
-  Contract for credential verification into a Principal. The single authentication authority;
-  performs no routing.
+  Contract for credential verification into a Principal. The single authentication authority; it
+  resolves the credential's token id, role, and authorized project set but performs no workflow
+  authorization routing. (A resolved subject and precise grants are a draft extension.)
 component: auth_specialist
 methods:
   - name: authenticate
     description: >-
       Verify a data-plane bearer token by constant-time comparison of its hash against stored
-      records; return the resolved Principal or reject as unauthenticated.
+      records; return the resolved Principal (token id, role, and authorized project set) or reject
+      as unauthenticated.
     signature: 'authenticate(token: string): Principal'
     returns: Principal
+    params:
+      - name: token
+        type: string
   - name: authenticateMaster
     description: >-
-      Verify the control-plane master credential by constant-time comparison; return an admin
-      Principal or reject.
+      Verify the bootstrap/control-plane master credential by constant-time comparison; return an
+      administrative Principal (admin role over all projects) or reject.
     signature: 'authenticateMaster(credential: string): Principal'
     returns: Principal
+    params:
+      - name: credential
+        type: string
   - name: signViewToken
     description: >-
       Mint a short-lived HMAC-signed capability token for viewing one project's diagram in a browser
@@ -31,4 +39,4 @@ methods:
     returns: ViewGrant
 status: complete
 createdAt: '2026-07-04T12:49:50.542Z'
-updatedAt: '2026-07-04T16:00:15.418Z'
+updatedAt: '2026-07-09T15:42:40.919Z'

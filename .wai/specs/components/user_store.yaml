@@ -1,0 +1,12 @@
+id: user_store
+name: User Store
+description: >-
+  Authoritative in-memory representation of hosted users and service principals loaded from the
+  hosted data root. Owns no workflow decisions; it is the state holder behind the user repository.
+subsystem: sdd_host
+componentType: Store
+owns: []
+dependsOn: []
+status: draft
+createdAt: '2026-07-08T20:14:31.257Z'
+updatedAt: '2026-07-08T20:14:31.259Z'

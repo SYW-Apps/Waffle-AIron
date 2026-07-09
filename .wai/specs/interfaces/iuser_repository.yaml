@@ -1,0 +1,70 @@
+id: iuser_repository
+name: User Repository Interface
+description: >-
+  Facade contract for durable hosted user and service-principal state. External hosted workflows
+  depend on this contract instead of the private store, registry, or index.
+component: user_repository
+methods:
+  - name: getById
+    description: Return one hosted user by Wairon user id or null when absent.
+    signature: 'getById(id: string): HostedUserRecord | null'
+    returns: HostedUserRecord | null
+    params:
+      - name: id
+        type: string
+  - name: findByExternalSubject
+    description: Return one hosted user by external issuer subject or null when absent.
+    signature: 'findByExternalSubject(issuer: string, externalSubject: string): HostedUserRecord | null'
+    returns: HostedUserRecord | null
+    params:
+      - name: issuer
+        type: string
+      - name: externalSubject
+        type: string
+  - name: list
+    description: List hosted users for admin UI and audit investigation workflows.
+    signature: 'list(status: string, projectId: string): HostedUserRecord[]'
+    returns: HostedUserRecord[]
+    params:
+      - name: status
+        type: string
+        optional: true
+      - name: projectId
+        type: string
+        optional: true
+  - name: upsert
+    description: Create or update a hosted user through the repository facade.
+    signature: 'upsert(record: HostedUserRecord): HostedUserRecord'
+    returns: HostedUserRecord
+    params:
+      - name: record
+        type: HostedUserRecord
+    guarantees:
+      - atomic
+  - name: setStatus
+    description: Set a user's lifecycle status through the repository facade.
+    signature: 'setStatus(id: string, status: string): HostedUserRecord'
+    returns: HostedUserRecord
+    params:
+      - name: id
+        type: string
+      - name: status
+        type: string
+    guarantees:
+      - atomic
+  - name: replaceGrants
+    description: >-
+      Replace a user's grants through the repository facade after authorization has been completed
+      by the orchestrator.
+    signature: 'replaceGrants(id: string, grants: ProjectGrant[]): HostedUserRecord'
+    returns: HostedUserRecord
+    params:
+      - name: id
+        type: string
+      - name: grants
+        type: ProjectGrant[]
+    guarantees:
+      - atomic
+status: draft
+createdAt: '2026-07-08T20:16:35.931Z'
+updatedAt: '2026-07-08T20:16:35.933Z'

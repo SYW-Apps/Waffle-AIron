@@ -1,0 +1,16 @@
+id: identity_portal
+name: Identity Portal
+description: >-
+  Draft control-plane HTTP entrypoint for hosted users, project grants, user-bound MCP/API tokens,
+  and admin-only audit queries. Kept separate from the completed admin_portal so the new
+  professional-use identity surface can evolve without invalidating existing admin workflows.
+subsystem: sdd_host
+componentType: Portal
+owns: []
+dependsOn:
+  - host_server
+  - identity_orchestrator
+portalType: HTTP_API
+status: draft
+createdAt: '2026-07-08T20:19:33.494Z'
+updatedAt: '2026-07-08T20:19:33.496Z'

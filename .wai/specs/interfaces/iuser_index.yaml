@@ -1,0 +1,35 @@
+id: iuser_index
+name: User Index Interface
+description: Private read-path contract for hosted users and service principals.
+component: user_index
+methods:
+  - name: getById
+    description: Return one hosted user by Wairon user id or null when absent.
+    signature: 'getById(id: string): HostedUserRecord | null'
+    returns: HostedUserRecord | null
+    params:
+      - name: id
+        type: string
+  - name: findByExternalSubject
+    description: Return one hosted user by issuer and external subject id or null when absent.
+    signature: 'findByExternalSubject(issuer: string, externalSubject: string): HostedUserRecord | null'
+    returns: HostedUserRecord | null
+    params:
+      - name: issuer
+        type: string
+      - name: externalSubject
+        type: string
+  - name: list
+    description: List hosted users, optionally narrowed by status or project id.
+    signature: 'list(status: string, projectId: string): HostedUserRecord[]'
+    returns: HostedUserRecord[]
+    params:
+      - name: status
+        type: string
+        optional: true
+      - name: projectId
+        type: string
+        optional: true
+status: draft
+createdAt: '2026-07-08T20:16:24.537Z'
+updatedAt: '2026-07-08T20:16:24.538Z'

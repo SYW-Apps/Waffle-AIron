@@ -1,0 +1,14 @@
+id: audit_registry
+name: Audit Registry
+description: >-
+  Append and pruning write-path for hosted audit events. It appends redacted AuditEvent records,
+  applies the configured AuditRetentionPolicy, and never exposes mutation shortcuts to callers
+  outside the audit repository.
+subsystem: sdd_host
+componentType: Registry
+owns: []
+dependsOn:
+  - audit_store
+status: draft
+createdAt: '2026-07-08T20:14:52.852Z'
+updatedAt: '2026-07-08T20:14:52.853Z'

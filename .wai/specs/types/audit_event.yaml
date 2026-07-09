@@ -1,0 +1,66 @@
+kind: entity
+id: audit_event
+name: AuditEvent
+description: >-
+  Durable hosted-instance audit event recording who acted, through which token, against which
+  project or instance resource, and with what outcome. Events deliberately exclude raw bearer
+  tokens, secrets, and full specification payloads.
+subsystem: sdd_host
+fields:
+  - name: id
+    type: string
+    description: Stable event id.
+    optional: false
+  - name: timestamp
+    type: string
+    description: ISO-8601 event timestamp.
+    optional: false
+  - name: level
+    type: string
+    description: 'Event level: "debug", "info", "warning", "error", or "security".'
+    optional: false
+  - name: category
+    type: string
+    description: >-
+      Event category such as "auth", "mcp", "admin", "project", "lock", "pack", "producer", or
+      "audit".
+    optional: false
+  - name: action
+    type: string
+    description: >-
+      Canonical action name, for example "mcp.tool.call", "project.create", "token.mint", or
+      "lock.create".
+    optional: false
+  - name: outcome
+    type: string
+    description: 'Outcome: "success", "denied", "failed", or "skipped".'
+    optional: false
+  - name: actor
+    type: PrincipalSubject
+    description: Resolved user or service identity responsible for the action.
+    optional: false
+  - name: tokenId
+    type: string
+    description: Credential id used for the request, if any; never the raw token.
+    optional: true
+  - name: projectId
+    type: string
+    description: Hosted project affected by the action, when project-scoped.
+    optional: true
+  - name: requestId
+    type: string
+    description: Request correlation id for HTTP/MCP tracing.
+    optional: true
+  - name: target
+    type: string
+    description: Redacted target identifier such as tool name, route, key id, pack name, or producer target.
+    optional: true
+  - name: metadata
+    type: string
+    description: >-
+      Small redacted diagnostic payload serialized by policy; must not contain secrets or full spec
+      bodies.
+    optional: true
+methods: []
+createdAt: '2026-07-08T19:34:52.040Z'
+updatedAt: '2026-07-08T19:34:52.073Z'

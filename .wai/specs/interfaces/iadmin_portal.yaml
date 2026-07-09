@@ -1,8 +1,9 @@
 id: iadmin_portal
 name: Admin Portal Interface
 description: >-
-  Control-plane admin API contract: project and API-key lifecycle plus the privileged state-scoped
-  lock/promote. Every method carries the master credential, verified before any effect.
+  Control-plane admin API contract: project, API-key (token), pack, producer, secret, git, lock, and
+  promote workflows. Every method authenticates a bootstrap/admin (master) credential and rejects
+  any non-admin principal before any effect.
 component: admin_portal
 methods:
   - name: createProject
@@ -257,4 +258,4 @@ methods:
       path: /admin/projects/{id}/packs/{name}
 status: complete
 createdAt: '2026-07-04T12:50:05.545Z'
-updatedAt: '2026-07-04T18:43:24.290Z'
+updatedAt: '2026-07-09T15:42:55.332Z'

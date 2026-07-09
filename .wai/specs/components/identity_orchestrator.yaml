@@ -1,0 +1,18 @@
+id: identity_orchestrator
+name: Identity Orchestrator
+description: >-
+  Owns hosted identity workflows that are not pure authentication: resolving or creating local user
+  records, granting project permissions, minting and revoking user-bound MCP tokens, and recording
+  identity/audit events for those changes. It does not handle raw HTTP transport.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - auth_specialist
+  - user_repository
+  - credential_registry
+  - project_registry
+  - audit_repository
+status: draft
+createdAt: '2026-07-08T20:15:25.548Z'
+updatedAt: '2026-07-08T20:15:25.549Z'

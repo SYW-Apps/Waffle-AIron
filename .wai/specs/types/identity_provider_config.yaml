@@ -1,0 +1,48 @@
+kind: entity
+id: identity_provider_config
+name: IdentityProviderConfig
+description: >-
+  Hosted-instance configuration for an external identity provider used by the admin UI or future
+  user-facing control plane. It stores provider metadata and references to secrets by key name,
+  never raw client secrets.
+subsystem: sdd_host
+fields:
+  - name: id
+    type: string
+    description: Stable identity provider config id.
+    optional: false
+  - name: providerType
+    type: string
+    description: 'Provider kind: "oidc", "google_workspace", "entra_id", "keycloak", "authentik", or "local".'
+    optional: false
+  - name: issuerUrl
+    type: string
+    description: OIDC issuer/discovery URL when applicable.
+    optional: true
+  - name: clientId
+    type: string
+    description: Public client id for OIDC/browser flows.
+    optional: true
+  - name: clientSecretRef
+    type: string
+    description: Secret registry key holding the client secret; never the raw secret.
+    optional: true
+  - name: allowedDomains
+    type: string[]
+    description: Optional email domains allowed to authenticate through this provider.
+    optional: true
+  - name: adminGroupClaims
+    type: string[]
+    description: External group or claim values mapped to hosted instance admin grants.
+    optional: true
+  - name: enabled
+    type: boolean
+    description: Whether this provider is available for sign-in.
+    optional: false
+  - name: updatedAt
+    type: string
+    description: ISO-8601 update timestamp.
+    optional: false
+methods: []
+createdAt: '2026-07-08T22:00:13.587Z'
+updatedAt: '2026-07-08T22:00:13.611Z'
