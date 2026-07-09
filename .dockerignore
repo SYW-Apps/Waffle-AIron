@@ -9,6 +9,9 @@ coverage
 .claude
 .gemini
 .vscode
+.env
+.env.*
+!.env.example
 docs
 examples
 *.log

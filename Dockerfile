@@ -19,9 +19,19 @@ RUN npm run build
 
 # ---- runtime ----
 FROM node:20-bookworm-slim AS runtime
+ARG VERSION=dev
+ARG REVISION=unknown
+ARG CREATED=unknown
 ENV NODE_ENV=production \
     WAIRON_DATA_DIR=/data \
     WAIRON_PACKS_DIR=/data/packs
+LABEL org.opencontainers.image.title="wairon" \
+      org.opencontainers.image.description="Self-hosted Wairon MCP hosting server" \
+      org.opencontainers.image.source="https://github.com/SYW-Apps/Waffle-AIron" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.created="${CREATED}" \
+      org.opencontainers.image.licenses="MIT"
 WORKDIR /app
 # git is required for git-backed projects (wairon host git …); ca-certificates for HTTPS remotes.
 RUN apt-get update \
@@ -46,6 +56,7 @@ VOLUME ["/data"]
 # default (reach it via `docker exec` / the CLI). To expose the admin API, run
 # with `--admin-host 0.0.0.0` and publish 8081 behind your own TLS + auth.
 EXPOSE 8080
+STOPSIGNAL SIGTERM
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
