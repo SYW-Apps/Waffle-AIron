@@ -1,0 +1,14 @@
+id: backup_registry
+name: Backup Registry
+description: >-
+  Write-path component for creating, updating, pruning, and marking hosted backup records. It
+  records metadata and status transitions only; archive I/O is handled by the backup archive
+  adapter.
+subsystem: sdd_host
+componentType: Registry
+owns: []
+dependsOn:
+  - backup_store
+status: draft
+createdAt: '2026-07-09T09:08:44.148Z'
+updatedAt: '2026-07-09T09:08:44.149Z'

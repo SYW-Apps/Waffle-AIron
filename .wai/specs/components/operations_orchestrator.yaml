@@ -1,0 +1,21 @@
+id: operations_orchestrator
+name: Operations Orchestrator
+description: >-
+  Draft workflow owner for hosted operational safety: backup creation, restore request handling,
+  backup listing, health reports, usage snapshots, quota evaluation, and audit of operational
+  actions. It does not perform raw archive I/O directly; that remains behind the backup repository.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - auth_specialist
+  - project_registry
+  - backup_repository
+  - policy_repository
+  - approval_repository
+  - diagnostics_specialist
+  - quota_specialist
+  - audit_repository
+status: draft
+createdAt: '2026-07-09T09:09:26.722Z'
+updatedAt: '2026-07-09T09:09:26.723Z'

@@ -1,0 +1,13 @@
+id: diagnostics_specialist
+name: Diagnostics Specialist
+description: >-
+  Draft specialist that runs redacted operational diagnostics for the hosted instance: data
+  directory writability, project registry consistency, control-plane exposure posture, backup
+  recency, audit policy, and quota observations.
+subsystem: sdd_host
+componentType: Specialist
+owns: []
+dependsOn: []
+status: draft
+createdAt: '2026-07-09T09:09:16.033Z'
+updatedAt: '2026-07-09T09:09:16.035Z'

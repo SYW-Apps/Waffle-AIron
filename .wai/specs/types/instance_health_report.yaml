@@ -1,0 +1,30 @@
+kind: value-object
+id: instance_health_report
+name: InstanceHealthReport
+description: >-
+  Aggregated operational health report for the hosted Wairon instance. It summarizes readiness,
+  storage, auth, policy, backup, and quota checks without leaking private project specs or secrets.
+fields:
+  - name: status
+    type: string
+    description: 'Overall status: "ok", "degraded", or "unhealthy".'
+    optional: false
+  - name: generatedAt
+    type: string
+    description: ISO-8601 generation timestamp.
+    optional: false
+  - name: checks
+    type: DiagnosticCheckResult[]
+    description: Individual diagnostic check results.
+    optional: false
+  - name: usage
+    type: ResourceUsageSnapshot[]
+    description: Relevant usage snapshots visible to the caller.
+    optional: true
+  - name: backupStatus
+    type: BackupRecord
+    description: Most recent backup record visible to the caller, when available.
+    optional: true
+methods: []
+createdAt: '2026-07-09T09:08:32.204Z'
+updatedAt: '2026-07-09T09:08:32.239Z'

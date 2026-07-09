@@ -2,27 +2,75 @@ id: sdd_host
 name: SDD Hosting Server
 description: >-
   Hosts wairon over streamable HTTP for many fully-isolated, independent wairon projects, scoping
-  every request to its authenticated project. Splits a public data plane (project-key-scoped MCP
-  over HTTP, reusing the sdd_* tool surface unchanged) from an admin control plane
-  (master-credential API + CLI) that owns project and API-key lifecycle plus the privileged,
-  state-scoped lock/promote flow. Each hosted project is a wholly separate .wai/ tree under the data
-  root; this is NOT subsystem/projectPath chaining. Auth is default-on and toggleable for trusted
-  networks.
+  every request to its authenticated project. Splits a public data plane (project-grant-scoped MCP
+  over HTTP, reusing the sdd_* tool surface unchanged plus explicit discovery/self-service tools)
+  from configurable control planes: existing admin API, draft identity/audit API, draft landscape
+  API, draft project-policy API, optional admin UI, and local-only CLI/container control. Each
+  hosted project is a wholly separate .wai/ tree under the data root; this is NOT
+  subsystem/projectPath chaining. Auth is default-on and control-plane exposure is configurable, so
+  operators may keep network admin APIs disabled while still managing the instance locally. The
+  hosted server is distributed as an immutable container image for self-hosting; operators update by
+  pulling and redeploying the image while preserving the data volume.
 parentSystem: Waffle-AIron
 publicInterfaces:
   - type: REST
     details: >-
-      Streamable HTTP MCP endpoint (POST /mcp) exposing the sdd_* tool surface, request-scoped to
-      the authenticated project; plus /healthz and /readyz. The data-plane front door for remote MCP
-      clients.
+      Streamable HTTP MCP endpoint (POST /mcp) exposing the sdd_* tool surface request-scoped to the
+      authenticated project, plus minimal hosted landscape discovery tools and approval-backed
+      self-service request tools. Discovery first lists only reachable external project ids, then
+      returns redacted public interface summaries for a selected reachable project. Self-service
+      tools create approval requests for privileged actions such as project initialization or
+      locking rather than executing them directly. Includes /healthz and /readyz.
     component: host_http_portal
   - type: REST
     details: >-
-      Control-plane admin API (separately bound, master-credential gated): project create/destroy,
-      API-key mint/rotate/revoke, and the privileged lock/promote actions. Reached by operators and
-      by the wairon CLI.
+      Existing control-plane admin API (separately bound and exposure-policy controlled): current
+      project lifecycle, API-key lifecycle, pack management, producers, secrets, git backing, and
+      privileged lock/promote actions. Reached by operators and by the wairon CLI when HTTP admin is
+      enabled.
     component: admin_portal
+  - type: REST
+    details: >-
+      Draft identity/audit control-plane API for hosted users, project grants, user-bound MCP/API
+      tokens, and admin-only redacted audit access. This surface is separated from the completed
+      admin API until the new professional-use workflows are fully designed and implemented.
+    component: identity_portal
+    interface: iidentity_portal
+  - type: REST
+    details: >-
+      Draft hosted landscape control-plane API for organization hierarchy, project placement,
+      public-surface snapshots, cross-project relations, and landscape graph retrieval. It reads
+      public snapshots and hosted metadata only, never target project internals.
+    component: landscape_portal
+    interface: ilandscape_portal
+  - type: REST
+    details: >-
+      Draft project policy control-plane API for profile-aware project initialization,
+      required/default pack enforcement, policy evaluation, and allowed pack/profile reconciliation.
+    component: project_policy_portal
+    interface: iproject_policy_portal
+  - type: REST
+    details: >-
+      Optional draft browser admin UI with SSO-backed sessions for professional hosted operations.
+      It delegates to identity, project policy, landscape, audit, and existing admin workflows
+      according to grants.
+    component: admin_ui_portal
+    interface: iadmin_ui_portal
+  - type: Custom
+    details: >-
+      Draft local-only CLI/container control surface for operators who disable or restrict HTTP
+      control planes. It uses the same audited approval, policy, identity, landscape, and admin
+      workflows through local process invocation.
+    component: local_control_portal
+    interface: ilocal_control_portal
+  - type: REST
+    details: >-
+      Draft operations control-plane API for backup creation/listing, restore approval requests,
+      health reports, usage snapshots, quota observations, and backup retention pruning. Exposure is
+      controlled by HostExposurePolicy and restore remains approval-backed.
+    component: operations_portal
+    interface: ioperations_portal
 trustedLinks: []
 status: complete
 createdAt: '2026-07-04T12:33:06.563Z'
-updatedAt: '2026-07-04T13:06:22.432Z'
+updatedAt: '2026-07-09T09:11:08.182Z'

@@ -3,7 +3,7 @@ id: host_config
 name: HostConfig
 description: >-
   Resolved runtime configuration for the hosting server: bind addresses for the data and admin
-  planes, the data root, and the auth posture (default-on, toggleable).
+  planes, the data root, auth posture, durable audit policy, and control-plane exposure posture.
 fields:
   - name: host
     type: string
@@ -29,6 +29,31 @@ fields:
     type: string
     description: Path to the API-key auth file
     optional: true
+  - name: auditPolicy
+    type: AuditRetentionPolicy
+    description: >-
+      Instance-level durable audit capture and retention policy. If omitted, the server uses the
+      secure default policy.
+    optional: true
+  - name: exposurePolicy
+    type: HostExposurePolicy
+    description: >-
+      Runtime exposure policy controlling which admin/UI/control-plane surfaces are exposed over
+      HTTP versus local/CLI-only access.
+    optional: true
+  - name: backupPolicy
+    type: BackupPolicy
+    description: >-
+      Hosted backup policy used by operations workflows when no stronger instance policy is
+      configured.
+    optional: true
+  - name: quotaPolicy
+    type: ResourceQuotaPolicy
+    description: >-
+      Hosted quota/rate policy evaluated for advisory (observe/warn) reporting only in this draft;
+      it does not yet block or throttle project, token, or MCP usage. Actual enforcement in the data
+      plane is a future integration and out of scope for now.
+    optional: true
 methods: []
 createdAt: '2026-07-04T12:58:10.758Z'
-updatedAt: '2026-07-04T12:58:10.770Z'
+updatedAt: '2026-07-09T15:43:18.828Z'

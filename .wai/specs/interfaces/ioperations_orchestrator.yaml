@@ -1,0 +1,75 @@
+id: ioperations_orchestrator
+name: Operations Orchestrator Interface
+description: >-
+  Draft contract for hosted operational workflows: backup, restore request, health, usage, and quota
+  evaluation.
+component: operations_orchestrator
+methods:
+  - name: createBackup
+    description: >-
+      Authenticate and authorize backup creation, run backup through the backup repository, and
+      audit the result.
+    signature: 'createBackup(credential: string, scope: string): BackupRecord'
+    returns: BackupRecord
+    params:
+      - name: credential
+        type: string
+      - name: scope
+        type: string
+  - name: listBackups
+    description: Authenticate and list backup records visible to the caller.
+    signature: 'listBackups(credential: string, scope: string): BackupRecord[]'
+    returns: BackupRecord[]
+    params:
+      - name: credential
+        type: string
+      - name: scope
+        type: string
+        optional: true
+  - name: requestRestore
+    description: >-
+      Authenticate, validate restore feasibility, create an approval request for the restore, and
+      audit the request. Does not restore data until approved and executed.
+    signature: 'requestRestore(credential: string, request: RestoreRequest): ApprovalRequest'
+    returns: ApprovalRequest
+    params:
+      - name: credential
+        type: string
+      - name: request
+        type: RestoreRequest
+    guarantees:
+      - atomic
+  - name: getHealthReport
+    description: Authenticate and return a redacted hosted instance health report visible to the caller.
+    signature: 'getHealthReport(credential: string, scope: string): InstanceHealthReport'
+    returns: InstanceHealthReport
+    params:
+      - name: credential
+        type: string
+      - name: scope
+        type: string
+        optional: true
+  - name: getUsage
+    description: >-
+      Authenticate and return resource usage snapshots visible to the caller, with quota messages
+      applied.
+    signature: 'getUsage(credential: string, scope: string): ResourceUsageSnapshot[]'
+    returns: ResourceUsageSnapshot[]
+    params:
+      - name: credential
+        type: string
+      - name: scope
+        type: string
+        optional: true
+  - name: pruneBackups
+    description: >-
+      Authenticate and apply backup retention policy, returning the number of backup
+      records/archives pruned.
+    signature: 'pruneBackups(credential: string): number'
+    returns: number
+    params:
+      - name: credential
+        type: string
+status: draft
+createdAt: '2026-07-09T09:10:20.273Z'
+updatedAt: '2026-07-09T09:10:20.274Z'

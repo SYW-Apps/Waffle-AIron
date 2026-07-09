@@ -1,0 +1,22 @@
+id: admin_ui_orchestrator
+name: Admin UI Orchestrator
+description: >-
+  Draft workflow owner for browser-based hosted administration: SSO sign-in, session resolution,
+  landing-page data composition, and dispatch to identity, policy, landscape, and audit workflows.
+  It reads identity provider configuration through the policy repository and keeps UI/session
+  concerns out of the existing completed admin API.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - auth_specialist
+  - identity_provider_adapter
+  - policy_repository
+  - identity_orchestrator
+  - project_policy_orchestrator
+  - landscape_orchestrator
+  - audit_repository
+  - secret_registry
+status: draft
+createdAt: '2026-07-08T22:00:33.070Z'
+updatedAt: '2026-07-08T22:03:18.749Z'

@@ -1,0 +1,16 @@
+id: admin_ui_portal
+name: Admin UI Portal
+description: >-
+  Draft browser-facing admin UI entrypoint. Provides optional hosted UI screens for instance admins
+  and project users to manage projects, profile selections, tokens, audit logs, packs, SSO,
+  organization hierarchy, and landscape relations according to their grants.
+subsystem: sdd_host
+componentType: Portal
+owns: []
+dependsOn:
+  - host_server
+  - admin_ui_orchestrator
+portalType: HTTP_API
+status: draft
+createdAt: '2026-07-08T22:00:38.535Z'
+updatedAt: '2026-07-08T22:00:38.536Z'

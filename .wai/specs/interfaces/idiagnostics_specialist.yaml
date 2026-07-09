@@ -1,0 +1,42 @@
+id: idiagnostics_specialist
+name: Diagnostics Specialist Interface
+description: Draft contract for redacted hosted instance diagnostics and health report assembly.
+component: diagnostics_specialist
+methods:
+  - name: runChecks
+    description: Run operational diagnostic checks visible to the caller and return redacted check results.
+    signature: 'runChecks(scope: string): DiagnosticCheckResult[]'
+    returns: DiagnosticCheckResult[]
+    params:
+      - name: scope
+        type: string
+        optional: true
+  - name: collectUsage
+    description: >-
+      Collect usage snapshots for instance, project, user, or token scope without exposing private
+      specs or secrets.
+    signature: 'collectUsage(scope: string): ResourceUsageSnapshot[]'
+    returns: ResourceUsageSnapshot[]
+    params:
+      - name: scope
+        type: string
+        optional: true
+  - name: buildHealthReport
+    description: >-
+      Build an aggregated instance health report from diagnostics, usage snapshots, and the latest
+      visible backup record.
+    signature: >-
+      buildHealthReport(checks: DiagnosticCheckResult[], usage: ResourceUsageSnapshot[],
+      latestBackup: BackupRecord): InstanceHealthReport
+    returns: InstanceHealthReport
+    params:
+      - name: checks
+        type: DiagnosticCheckResult[]
+      - name: usage
+        type: ResourceUsageSnapshot[]
+      - name: latestBackup
+        type: BackupRecord
+        optional: true
+status: draft
+createdAt: '2026-07-09T09:10:04.195Z'
+updatedAt: '2026-07-09T09:10:04.197Z'

@@ -1,0 +1,19 @@
+id: local_control_portal
+name: Local Control Portal
+description: >-
+  Draft local-only control entrypoint used by CLI or container/SSH execution when HTTP admin APIs
+  are disabled or restricted. It exposes the same authorized hosted workflows through local process
+  invocation, preserving audit and approval semantics without requiring a network admin API.
+subsystem: sdd_host
+componentType: Portal
+owns: []
+dependsOn:
+  - self_service_orchestrator
+  - project_policy_orchestrator
+  - identity_orchestrator
+  - landscape_orchestrator
+  - admin_orchestrator
+portalType: CLI
+status: draft
+createdAt: '2026-07-09T07:20:21.724Z'
+updatedAt: '2026-07-09T07:20:21.726Z'

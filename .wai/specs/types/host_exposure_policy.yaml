@@ -1,0 +1,60 @@
+kind: value-object
+id: host_exposure_policy
+name: HostExposurePolicy
+description: >-
+  Runtime exposure posture for a hosted Wairon instance. It controls which control-plane surfaces
+  are bound over HTTP, which are local/CLI-only, and whether browser UI, identity, landscape, or
+  policy surfaces are enabled. The secure default posture disables every HTTP control-plane surface
+  (admin API, admin UI, identity, landscape, project-policy, and operations); cliControlEnabled
+  defaults to true and requireTls defaults to true, so the data plane is the only surface exposed by
+  default.
+fields:
+  - name: adminApiMode
+    type: string
+    description: 'Admin API exposure mode: "disabled", "local_only", "private_network", or "public".'
+    optional: false
+  - name: adminUiEnabled
+    type: boolean
+    description: Whether the optional browser admin UI is served.
+    optional: false
+  - name: identityApiEnabled
+    type: boolean
+    description: Whether the draft identity/audit control-plane API is served over HTTP.
+    optional: false
+  - name: landscapeApiEnabled
+    type: boolean
+    description: Whether the draft landscape control-plane API is served over HTTP.
+    optional: false
+  - name: projectPolicyApiEnabled
+    type: boolean
+    description: Whether the draft project policy control-plane API is served over HTTP.
+    optional: false
+  - name: cliControlEnabled
+    type: boolean
+    description: >-
+      Whether local CLI/container execution may use the same control workflows even when HTTP admin
+      APIs are disabled.
+    optional: false
+  - name: requireTls
+    type: boolean
+    description: >-
+      Whether externally exposed HTTP control-plane surfaces must be served behind TLS or trusted
+      TLS termination.
+    optional: false
+  - name: allowedOrigins
+    type: string[]
+    description: Optional allowed browser origins for UI/control-plane requests.
+    optional: true
+  - name: allowedNetworks
+    type: string[]
+    description: Optional CIDR/network labels allowed to reach private-network control-plane surfaces.
+    optional: true
+  - name: operationsApiEnabled
+    type: boolean
+    description: >-
+      Whether the draft operations API for backup, health, restore request, usage, and quota
+      reporting is served over HTTP.
+    optional: false
+methods: []
+createdAt: '2026-07-09T07:18:28.871Z'
+updatedAt: '2026-07-09T15:43:29.681Z'

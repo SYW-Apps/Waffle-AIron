@@ -1,0 +1,35 @@
+kind: value-object
+id: resource_quota_policy
+name: ResourceQuotaPolicy
+description: >-
+  Hosted-instance quota policy limiting resource use by project, user, or token. Quotas protect
+  self-hosted instances from runaway agents without requiring providers to expose private billing
+  systems.
+fields:
+  - name: enabled
+    type: boolean
+    description: Whether quota enforcement is active.
+    optional: false
+  - name: maxProjectsPerUser
+    type: number
+    description: Maximum active hosted projects a non-admin user may own.
+    optional: true
+  - name: maxMcpRequestsPerMinute
+    type: number
+    description: Maximum MCP tool calls per minute per token or principal.
+    optional: true
+  - name: maxProjectBytes
+    type: number
+    description: Maximum approximate bytes allowed for one hosted project root.
+    optional: true
+  - name: maxAuditEventsPerDay
+    type: number
+    description: Maximum audit events retained per day before policy throttling or pruning warnings apply.
+    optional: true
+  - name: mode
+    type: string
+    description: 'Enforcement mode: "observe", "warn", or "block".'
+    optional: false
+methods: []
+createdAt: '2026-07-09T09:08:07.406Z'
+updatedAt: '2026-07-09T09:08:07.447Z'

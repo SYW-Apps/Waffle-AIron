@@ -1,0 +1,77 @@
+id: ilocal_control_portal
+name: Local Control Portal Interface
+description: >-
+  Draft local-only CLI/container execution contract for hosted control workflows when HTTP admin
+  APIs are disabled, private, or not convenient for an operator.
+component: local_control_portal
+methods:
+  - name: initializeProjectWithProfile
+    description: >-
+      Run profile-aware project initialization through local control, preserving policy checks and
+      audit.
+    signature: >-
+      initializeProjectWithProfile(credential: string, request: ProjectInitRequest):
+      HostedProjectRecord
+    returns: HostedProjectRecord
+    params:
+      - name: credential
+        type: string
+      - name: request
+        type: ProjectInitRequest
+    endpoint:
+      transport: CLI
+      command: wairon host project init
+  - name: listPendingApprovals
+    description: List pending approval requests visible to the local operator's credential.
+    signature: 'listPendingApprovals(credential: string, projectId: string): ApprovalRequest[]'
+    returns: ApprovalRequest[]
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+        optional: true
+    endpoint:
+      transport: CLI
+      command: wairon host approvals list
+  - name: decideApproval
+    description: Approve or deny one pending approval request through local control.
+    signature: 'decideApproval(credential: string, decision: ApprovalDecision): ApprovalRequest'
+    returns: ApprovalRequest
+    params:
+      - name: credential
+        type: string
+      - name: decision
+        type: ApprovalDecision
+    endpoint:
+      transport: CLI
+      command: wairon host approvals decide
+  - name: executeApprovedRequest
+    description: Execute one approved request through local control and return a redacted result summary.
+    signature: 'executeApprovedRequest(credential: string, requestId: string): string'
+    returns: string
+    params:
+      - name: credential
+        type: string
+      - name: requestId
+        type: string
+    endpoint:
+      transport: CLI
+      command: wairon host approvals execute
+  - name: setExposurePolicy
+    description: >-
+      Update the hosted exposure policy through local control, useful before enabling HTTP admin or
+      UI surfaces.
+    signature: 'setExposurePolicy(credential: string, policy: HostExposurePolicy): HostExposurePolicy'
+    returns: HostExposurePolicy
+    params:
+      - name: credential
+        type: string
+      - name: policy
+        type: HostExposurePolicy
+    endpoint:
+      transport: CLI
+      command: wairon host exposure set
+status: draft
+createdAt: '2026-07-09T07:20:34.132Z'
+updatedAt: '2026-07-09T07:20:38.891Z'

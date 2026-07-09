@@ -1,0 +1,15 @@
+id: operations_portal
+name: Operations Portal
+description: >-
+  Draft control-plane HTTP entrypoint for operational health, backup, restore-request, quota, and
+  usage reporting workflows. Exposure is governed by HostExposurePolicy.
+subsystem: sdd_host
+componentType: Portal
+owns: []
+dependsOn:
+  - host_server
+  - operations_orchestrator
+portalType: HTTP_API
+status: draft
+createdAt: '2026-07-09T09:09:32.066Z'
+updatedAt: '2026-07-09T09:09:32.067Z'
