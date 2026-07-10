@@ -1,12 +1,25 @@
-schemaVersion: "1.0.0"
-id: "iskills_portal"
-name: "Skills Portal Interface"
-description: "Inbound Portal contract for skills subsystem."
-component: "skills_portal"
+id: iskills_portal
+name: Skills Portal Interface
+description: Inbound Portal contract for skills subsystem.
+component: skills_portal
 methods:
-  - name: "exportSddSkills"
-    description: "Triggers skill exporting"
-    signature: "exportSddSkills(): void"
-    returns: "void"
-createdAt: "2026-06-19T12:00:00Z"
-updatedAt: "2026-06-19T12:00:00Z"
+  - name: exportSddSkills
+    description: Triggers skill exporting
+    signature: 'exportSddSkills(): void'
+    returns: void
+  - name: listResources
+    description: Publish the built-in SDD skills as MCP resource descriptors for the MCP server.
+    signature: 'listResources(): SkillResourceDescriptor[]'
+    returns: SkillResourceDescriptor[]
+    params: []
+  - name: readResource
+    description: Read one built-in SDD skill's content by MCP resource id for the MCP server.
+    signature: 'readResource(resourceId: string): string'
+    returns: string
+    params:
+      - name: resourceId
+        type: string
+        description: The MCP resource id / skill id to read.
+status: complete
+createdAt: '2026-06-19T12:00:00Z'
+updatedAt: '2026-07-10T12:21:28.128Z'

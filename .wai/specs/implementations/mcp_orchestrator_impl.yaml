@@ -147,6 +147,20 @@ methods:
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: internalizeSubsystem
+  - name: listResources
+    narrative:
+      - stepNumber: 1
+        description: List the built-in SDD skill resources via the skills client adapter.
+        type: call
+        targetComponent: mcp_skills_adapter
+        targetMethod: listResources
+  - name: readResource
+    narrative:
+      - stepNumber: 1
+        description: Read one built-in SDD skill resource via the skills client adapter.
+        type: call
+        targetComponent: mcp_skills_adapter
+        targetMethod: readResource
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-07-05T18:45:36.647Z'
+updatedAt: '2026-07-10T12:22:05.404Z'

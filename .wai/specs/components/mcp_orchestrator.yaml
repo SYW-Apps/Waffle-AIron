@@ -9,6 +9,7 @@ owns: []
 dependsOn:
   - mcp_core_adapter
   - mcp_validator_adapter
+  - mcp_skills_adapter
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-07-09T15:42:30.929Z'
+updatedAt: '2026-07-10T12:22:00.516Z'

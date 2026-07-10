@@ -1,0 +1,51 @@
+id: skills_resource_orchestrator_impl
+name: Skills Resource Orchestrator Implementation
+description: >-
+  The MCP-resource workflow for the built-in SDD skills: lists them as MCP resource descriptors and
+  reads one skill's content, rejecting unknown resource ids, resolving through the Skills Resource
+  Specialist.
+contract: iskills_resource_orchestrator
+sourcePath: src/core/skills.ts
+methods:
+  - name: listResources
+    narrative:
+      - stepNumber: 1
+        description: Resolve the built-in skill descriptors from the specialist.
+        type: call
+        targetComponent: skills_resource_specialist
+        targetMethod: listSkillResources
+      - stepNumber: 2
+        description: Return the descriptors shaped as MCP resources.
+        type: return
+        outcome: resource descriptors
+    detail: full
+  - name: readResource
+    narrative:
+      - stepNumber: 1
+        description: List the available skill resources to validate the requested id.
+        type: call
+        targetComponent: skills_resource_specialist
+        targetMethod: listSkillResources
+      - stepNumber: 2
+        description: Reject an unknown resource id; otherwise resolve its content.
+        type: branch
+        condition: no listed descriptor's id matches the requested resourceId
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Fail the read for an unknown skill resource id.
+        type: throw
+        error: SkillResourceNotFoundError
+      - stepNumber: 4
+        description: Read the resolved skill's markdown content from the specialist.
+        type: call
+        targetComponent: skills_resource_specialist
+        targetMethod: readSkillResource
+      - stepNumber: 5
+        description: Return the skill content for the MCP resource read.
+        type: return
+        outcome: skill markdown content
+    detail: full
+status: complete
+createdAt: '2026-07-10T12:21:20.703Z'
+updatedAt: '2026-07-10T12:24:01.344Z'

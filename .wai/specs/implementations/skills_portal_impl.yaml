@@ -1,16 +1,30 @@
-schemaVersion: "1.0.0"
-id: "skills_portal_impl"
-name: "Skills Portal Implementation"
-description: "Concrete implementation forwarding portal requests to skills orchestrator."
-contract: "iskills_portal"
-sourcePath: "src/core/skills.ts"
+id: skills_portal_impl
+name: Skills Portal Implementation
+description: Concrete implementation forwarding portal requests to skills orchestrator.
+contract: iskills_portal
+sourcePath: src/core/skills.ts
 methods:
-  - name: "exportSddSkills"
+  - name: exportSddSkills
     narrative:
       - stepNumber: 1
-        description: "Forward exportSddSkills call to skills orchestrator"
-        type: "call"
-        targetComponent: "skills_orchestrator"
-        targetMethod: "exportSddSkills"
-createdAt: "2026-06-19T12:00:00Z"
-updatedAt: "2026-06-19T12:00:00Z"
+        description: Forward exportSddSkills call to skills orchestrator
+        type: call
+        targetComponent: skills_orchestrator
+        targetMethod: exportSddSkills
+  - name: listResources
+    narrative:
+      - stepNumber: 1
+        description: Forward the resource list to the skills resource workflow.
+        type: call
+        targetComponent: skills_resource_orchestrator
+        targetMethod: listResources
+  - name: readResource
+    narrative:
+      - stepNumber: 1
+        description: Forward the resource read to the skills resource workflow.
+        type: call
+        targetComponent: skills_resource_orchestrator
+        targetMethod: readResource
+status: complete
+createdAt: '2026-06-19T12:00:00Z'
+updatedAt: '2026-07-10T12:21:35.026Z'

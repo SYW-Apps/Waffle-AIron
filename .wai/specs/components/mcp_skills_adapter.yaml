@@ -1,0 +1,14 @@
+id: mcp_skills_adapter
+name: MCP Skills Client Adapter
+description: >-
+  Local client adapter in sdd_mcp that crosses the subsystem boundary to sdd_skills: forwards MCP
+  resource list/read for the built-in SDD skills to the published skills portal, so the MCP server
+  can publish the four SDD skills as read-only MCP resources.
+subsystem: sdd_mcp
+componentType: Adapter
+owns: []
+dependsOn:
+  - skills_portal
+status: complete
+createdAt: '2026-07-10T12:21:43.021Z'
+updatedAt: '2026-07-10T12:21:55.252Z'

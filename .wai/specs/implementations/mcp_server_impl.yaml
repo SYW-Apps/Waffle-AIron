@@ -1,37 +1,47 @@
-schemaVersion: "1.0.0"
-id: "mcp_server_impl"
-name: "MCP Server Implementation"
-description: "Concrete implementation of the MCP Server Interface using the @modelcontextprotocol/sdk."
-contract: "imcp_server"
-sourcePath: "src/mcp/server.ts"
+id: mcp_server_impl
+name: MCP Server Implementation
+description: Concrete implementation of the MCP Server Interface using the @modelcontextprotocol/sdk.
+contract: imcp_server
+sourcePath: src/mcp/server.ts
 methods:
-  - name: "createMcpServer"
+  - name: createMcpServer
     narrative:
       - stepNumber: 1
-        description: "Instantiate McpServer with name 'wairon' and version"
-        type: "local"
+        description: Instantiate McpServer with name 'wairon' and version
+        type: local
       - stepNumber: 2
-        description: "Register tool 'listAgents' which resolves dynamic agent topology using agent_resolver"
-        type: "call"
-        targetComponent: "mcp_core_adapter"
-        targetMethod: "resolveAgentTopology"
+        description: Register tool 'listAgents' which resolves dynamic agent topology using agent_resolver
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: resolveAgentTopology
       - stepNumber: 3
-        description: "Register tool 'getAgent' which retrieves a single resolved agent's details"
-        type: "call"
-        targetComponent: "mcp_core_adapter"
-        targetMethod: "resolveAgentTopology"
+        description: Register tool 'getAgent' which retrieves a single resolved agent's details
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: resolveAgentTopology
       - stepNumber: 4
-        description: "Register validation tools executing validateSddTree"
-        type: "call"
-        targetComponent: "mcp_validator_adapter"
-        targetMethod: "validateSddTree"
+        description: Register validation tools executing validateSddTree
+        type: call
+        targetComponent: mcp_validator_adapter
+        targetMethod: validateSddTree
       - stepNumber: 5
-        description: "Register loader tools to fetch system, subsystem, and component specs from spec_loader"
-        type: "call"
-        targetComponent: "mcp_core_adapter"
-        targetMethod: "loadSystemSpec"
+        description: Register loader tools to fetch system, subsystem, and component specs from spec_loader
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadSystemSpec
       - stepNumber: 6
-        description: "Return configured McpServer instance"
-        type: "local"
-createdAt: "2026-06-11T14:50:00Z"
-updatedAt: "2026-06-19T12:00:00Z"
+        description: >-
+          Register MCP resource endpoints (resources/list and resources/read) on the SDK server so
+          the MCP server now publishes the four built-in SDD skills (sdd-architect, sdd-auditor,
+          sdd-implement, sdd-narrative) as read-only MCP resources for cloud-only agents that cannot
+          receive filesystem-exported skills. Because both the stdio server and the hosted
+          per-project scoped server reuse this same factory (host_mcp_adapter forwards to
+          mcp_portal.createMcpServer), both transports publish the resources automatically; inbound
+          resource reads dispatch through the MCP portal to the resource workflow.
+        type: local
+      - stepNumber: 7
+        description: Return configured McpServer instance
+        type: local
+status: complete
+createdAt: '2026-06-11T14:50:00Z'
+updatedAt: '2026-07-10T12:22:32.973Z'
