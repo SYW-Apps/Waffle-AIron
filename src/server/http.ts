@@ -91,7 +91,7 @@ function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResponse): 
 export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: ServerResponse): Promise<void> {
   const cred = bearerToken(req);
   const url = new URL(req.url ?? '/', 'http://localhost');
-  const parts = url.pathname.split('/').filter(Boolean); // ['admin', ...]
+  const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent); // ['admin', ...]
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const body: any = req.method === 'POST' || req.method === 'PUT' ? (await readBody(req)) ?? {} : {};

@@ -694,7 +694,7 @@ export function handleLandscapeRequest(
   body: any,
   url: URL,
 ): void {
-  const parts = url.pathname.split('/').filter(Boolean); // ['landscape', ...]
+  const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent); // ['landscape', ...]
   try {
     if (parts[1] === 'units') {
       // PUT /landscape/units/{id}

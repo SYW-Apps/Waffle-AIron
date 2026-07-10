@@ -665,7 +665,7 @@ export async function handleIdentityRequest(
   body: any,
   url: URL,
 ): Promise<void> {
-  const parts = url.pathname.split('/').filter(Boolean); // ['identity', ...]
+  const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent); // ['identity', ...]
   try {
     // ── headless SSO login (unauthenticated: no credential) ──────────────────
     // POST /identity/sso/start  { providerId, redirectUri }

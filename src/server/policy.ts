@@ -717,7 +717,7 @@ export function handlePolicyRequest(
   body: any,
   url: URL,
 ): void {
-  const parts = url.pathname.split('/').filter(Boolean);
+  const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
   try {
     if (parts[0] === 'projects') {
       // POST /projects/init
