@@ -168,7 +168,7 @@ export interface ResourceQuotaPolicy {
 
 /** The assembled read-only instance health report. */
 export interface InstanceHealthReport {
-  /** 'healthy' | 'degraded' | 'unhealthy' */
+  /** 'ok' | 'degraded' | 'unhealthy' */
   status: string;
   generatedAt: string;
   checks: DiagnosticCheckResult[];
@@ -423,6 +423,33 @@ export interface HostedProjectRecord {
   createdAt: string;
 }
 
+/** Runtime exposure posture for a hosted instance: which control-plane surfaces
+ *  are bound over HTTP versus local/CLI-only. Mirrors
+ *  .wai/specs/types/host_exposure_policy.yaml. */
+export interface HostExposurePolicy {
+  /** 'disabled' | 'local_only' | 'private_network' | 'public'. */
+  adminApiMode: string;
+  /** Whether the optional browser admin UI is served. */
+  adminUiEnabled: boolean;
+  /** Whether the draft identity/audit control-plane API is served over HTTP. */
+  identityApiEnabled: boolean;
+  /** Whether the draft landscape control-plane API is served over HTTP. */
+  landscapeApiEnabled: boolean;
+  /** Whether the draft project-policy control-plane API is served over HTTP. */
+  projectPolicyApiEnabled: boolean;
+  /** Whether local CLI/container execution may use the control workflows even
+   *  when HTTP admin APIs are disabled. */
+  cliControlEnabled: boolean;
+  /** Whether externally exposed HTTP control-plane surfaces must sit behind TLS. */
+  requireTls: boolean;
+  /** Optional allowed browser origins for UI/control-plane requests. */
+  allowedOrigins?: string[];
+  /** Optional CIDR/network labels allowed to reach private-network surfaces. */
+  allowedNetworks?: string[];
+  /** Whether the operations (health/usage/quota) control-plane API is served over HTTP. */
+  operationsApiEnabled: boolean;
+}
+
 /** Resolved runtime configuration for the hosting server. */
 export interface HostConfig {
   host: string;
@@ -431,6 +458,12 @@ export interface HostConfig {
   adminPort: number;
   dataDir: string;
   authEnabled: boolean;
+  /** Runtime control-plane exposure posture; the secure compatible default is
+   *  resolved when omitted. */
+  exposurePolicy?: HostExposurePolicy;
+  /** Advisory (observe/warn) resource quota policy; a disabled default is
+   *  resolved when omitted. Never blocks or throttles in this draft. */
+  quotaPolicy?: ResourceQuotaPolicy;
 }
 
 /** Outcome of a gated promote — never an actual merge. */

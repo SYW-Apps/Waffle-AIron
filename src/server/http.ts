@@ -1,6 +1,7 @@
 import * as http from 'http';
 import type { IncomingMessage, ServerResponse } from 'http';
 import * as fs from 'fs';
+import * as path from 'path';
 import { handleMcpRequest, handleViewDiagram, sendJson, bearerToken } from './request.js';
 import * as admin from './admin.js';
 import * as packs from './packs.js';
@@ -8,8 +9,9 @@ import * as identity from './identity.js';
 import * as selfservice from './selfservice.js';
 import * as policy from './policy.js';
 import * as landscape from './landscape.js';
+import * as operations from './operations.js';
 import { AdminAuthError, LockValidationError } from './admin.js';
-import type { ApprovalDecision, HostConfig, Role } from './types.js';
+import type { ApprovalDecision, HostConfig, HostExposurePolicy, Role } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Host HTTP Portal + Host Server (sdd_host)
@@ -86,40 +88,108 @@ function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResponse): 
   sendJson(res, 404, { error: 'not found' });
 }
 
+// ── Control-plane exposure policy ───────────────────────────────────────────
+//
+// HostExposurePolicy governs which control-plane surfaces the admin listener
+// mounts over HTTP. The COMPATIBLE default keeps current behavior for existing
+// deployments — every surface on, admin API in loopback-only mode — so an
+// instance with no policy configured behaves exactly as before. An explicit
+// policy overrides it flag-by-flag: only what a policy DISABLES is gated off.
+//
+// Phase 5b policy source (smallest honest mechanism): an already-plumbed
+// HostConfig.exposurePolicy wins; otherwise an optional JSON file
+// <dataDir>/exposure-policy.json is read (a partial object is fine — its flags
+// override the compatible default). Env/flag plumbing can come later.
+
+/** The compatible default: everything mounted on the loopback admin listener,
+ *  matching pre-exposure-policy behavior. */
+const COMPATIBLE_DEFAULT_EXPOSURE: HostExposurePolicy = {
+  adminApiMode: 'local_only',
+  adminUiEnabled: true,
+  identityApiEnabled: true,
+  landscapeApiEnabled: true,
+  projectPolicyApiEnabled: true,
+  cliControlEnabled: true,
+  requireTls: true,
+  operationsApiEnabled: true,
+};
+
+/** Read an optional <dataDir>/exposure-policy.json override (a partial policy);
+ *  absent/malformed yields undefined so the compatible default stands. */
+function readExposurePolicyFile(dataDir: string): Partial<HostExposurePolicy> | undefined {
+  try {
+    const raw = fs.readFileSync(path.join(dataDir, 'exposure-policy.json'), 'utf8');
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? (parsed as Partial<HostExposurePolicy>) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Resolve the effective exposure policy: an explicit HostConfig.exposurePolicy
+ *  or the <dataDir>/exposure-policy.json override, merged OVER the compatible
+ *  default so unset flags keep current (mounted) behavior. */
+export function resolveExposurePolicy(cfg: HostConfig): HostExposurePolicy {
+  const override = cfg.exposurePolicy ?? readExposurePolicyFile(cfg.dataDir);
+  return { ...COMPATIBLE_DEFAULT_EXPOSURE, ...(override ?? {}) };
+}
+
 // ── Admin plane ───────────────────────────────────────────────────────────
 
 export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: ServerResponse): Promise<void> {
   const cred = bearerToken(req);
   const url = new URL(req.url ?? '/', 'http://localhost');
   const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent); // ['admin', ...]
+  const exposure = resolveExposurePolicy(cfg);
   try {
+    // adminApiMode 'disabled' → nothing on the admin listener is mounted; every
+    // surface (admin API, identity, policy, landscape, operations, approvals,
+    // UI) answers 404. The data plane rides a separate listener, unaffected.
+    if (exposure.adminApiMode === 'disabled') {
+      return sendJson(res, 404, { error: 'not found' });
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const body: any = req.method === 'POST' || req.method === 'PUT' ? (await readBody(req)) ?? {} : {};
 
-    // Identity control plane rides the admin listener in Phase 1 (see identity.ts).
-    // It owns its own error → status mapping, so it returns before the admin catch.
+    // Identity control plane rides the admin listener behind identityApiEnabled
+    // (see identity.ts). It owns its own error → status mapping, so it returns
+    // before the admin catch. A disabled flag answers 404 (surface not mounted).
     if (parts[0] === 'identity') {
+      if (!exposure.identityApiEnabled) return sendJson(res, 404, { error: 'not found' });
       identity.handleIdentityRequest(cfg, cred, req, res, body, url);
       return;
     }
 
-    // Project policy control plane (Phase 3) rides the admin listener like
-    // /identity. It handles the bare /projects/init + /projects/{id}/policy/*
-    // and /instance/pack-policy routes only — NOT /admin/projects (parts[0]
-    // here is 'projects', never 'admin', so the admin project block below is
-    // never shadowed). Owns its own error → status mapping, returning before
-    // the admin catch.
+    // Project policy control plane (Phase 3) rides the admin listener behind
+    // projectPolicyApiEnabled. It handles the bare /projects/init +
+    // /projects/{id}/policy/* and /instance/pack-policy routes only — NOT
+    // /admin/projects (parts[0] here is 'projects', never 'admin', so the admin
+    // project block below is never shadowed). Owns its own error → status
+    // mapping, returning before the admin catch.
     if (parts[0] === 'projects' || parts[0] === 'instance') {
+      if (!exposure.projectPolicyApiEnabled) return sendJson(res, 404, { error: 'not found' });
       policy.handlePolicyRequest(cfg, cred, req, res, body, url);
       return;
     }
 
-    // Landscape control plane (Phase 4) rides the admin listener like /identity
-    // and the policy mount. It owns its own error → status mapping, returning
+    // Landscape control plane (Phase 4) rides the admin listener behind
+    // landscapeApiEnabled. It owns its own error → status mapping, returning
     // before the admin catch. parts[0] here is 'landscape', never 'admin', so the
     // admin blocks below are never shadowed.
     if (parts[0] === 'landscape') {
+      if (!exposure.landscapeApiEnabled) return sendJson(res, 404, { error: 'not found' });
       landscape.handleLandscapeRequest(cfg, cred, req, res, body, url);
+      return;
+    }
+
+    // Operations control plane (Phase 5b) rides the admin listener behind
+    // operationsApiEnabled. Read-only health/usage/quota; owns its own error →
+    // status mapping, returning before the admin catch. parts[0] here is
+    // 'operations', never 'admin', so the admin blocks below are never shadowed.
+    if (parts[0] === 'operations') {
+      if (!exposure.operationsApiEnabled) return sendJson(res, 404, { error: 'not found' });
+      operations.handleOperationsRequest(cfg, cred, req, res, url);
       return;
     }
 
