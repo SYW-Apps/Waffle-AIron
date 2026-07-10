@@ -6,7 +6,7 @@ import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { AI_PATHS } from '../config/loader.js';
 import { globalPacksDir, discoverPacks } from '../core/extensions.js';
 import { authenticateCredential } from './auth.js';
-import { UnauthenticatedError, ForbiddenError } from './identity.js';
+import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { executeApprovedCreate } from './admin.js';
 import { resolveProjectRoot } from './projects.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
