@@ -41,12 +41,6 @@ fields:
       Runtime exposure policy controlling which admin/UI/control-plane surfaces are exposed over
       HTTP versus local/CLI-only access.
     optional: true
-  - name: backupPolicy
-    type: BackupPolicy
-    description: >-
-      Hosted backup policy used by operations workflows when no stronger instance policy is
-      configured.
-    optional: true
   - name: quotaPolicy
     type: ResourceQuotaPolicy
     description: >-
@@ -56,4 +50,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-07-04T12:58:10.758Z'
-updatedAt: '2026-07-09T15:43:18.828Z'
+updatedAt: '2026-07-10T11:21:04.876Z'

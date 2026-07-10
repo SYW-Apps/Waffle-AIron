@@ -5,8 +5,8 @@ component: host_server
 methods:
   - name: start
     description: >-
-      Bind the data-plane and admin-plane listeners (honoring auth and bind configuration) and begin
-      accepting connections.
+      Bind the data-plane and admin-plane listeners (honoring auth, bind configuration, and the
+      resolved HostExposurePolicy gating of control-plane surfaces) and begin accepting connections.
     signature: 'start(config: HostConfig): void'
     returns: void
   - name: stop
@@ -15,4 +15,4 @@ methods:
     returns: void
 status: complete
 createdAt: '2026-07-04T12:49:31.392Z'
-updatedAt: '2026-07-04T13:06:22.840Z'
+updatedAt: '2026-07-10T11:25:31.080Z'

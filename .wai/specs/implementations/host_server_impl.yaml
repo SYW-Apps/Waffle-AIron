@@ -1,6 +1,8 @@
 id: host_server_impl
 name: Host Server Implementation
-description: HTTP listener lifecycle for the data-plane and admin-plane portals.
+description: >-
+  HTTP listener lifecycle for the data-plane and admin-plane portals, with control-plane exposure
+  gating resolved from HostExposurePolicy.
 contract: ihost_server
 sourcePath: src/server/http.ts
 methods:
@@ -12,15 +14,27 @@ methods:
           is set
         type: local
       - stepNumber: 2
-        description: Bind the data-plane listener and route /mcp, /healthz, /readyz to the host HTTP portal
+        description: >-
+          Resolve the effective HostExposurePolicy from HostConfig.exposurePolicy, applying the
+          secure default posture when it is unset
         type: local
       - stepNumber: 3
-        description: Bind the admin-plane listener (separate bind) and route /admin/* to the admin portal
+        description: Bind the data-plane listener and route /mcp, /healthz, /readyz to the host HTTP portal
         type: local
       - stepNumber: 4
-        description: Begin accepting connections on both listeners
+        description: >-
+          Bind the admin-plane listener (separate, loopback-by-default bind); then, when
+          adminApiMode is not 'disabled', mount the control-plane routers on it per the resolved
+          exposure policy: the existing admin API (/admin/*), and — each only when its exposure flag
+          enables it — the identity/audit API, the project-policy API (/projects and /instance), the
+          landscape API, the operations API (/operations/*), the approvals API, and the optional
+          browser admin UI; a surface whose flag is disabled is not mounted and answers
+          404/disabled. When adminApiMode is 'disabled', no control-plane router is mounted.
         type: local
       - stepNumber: 5
+        description: Begin accepting connections on both listeners
+        type: local
+      - stepNumber: 6
         description: Return the running server handle
         type: return
         outcome: running
@@ -38,4 +52,4 @@ methods:
         outcome: stopped
 status: complete
 createdAt: '2026-07-04T12:54:36.977Z'
-updatedAt: '2026-07-04T13:06:22.991Z'
+updatedAt: '2026-07-10T11:25:42.157Z'

@@ -1,0 +1,44 @@
+id: quota_specialist_impl
+name: Quota Specialist Implementation
+description: >-
+  Pure advisory evaluation of resource usage snapshots against quota policy: annotates observe/warn
+  messages and never blocks or throttles.
+contract: iquota_specialist
+sourcePath: src/server/operations.ts
+methods:
+  - name: evaluateUsage
+    narrative:
+      - stepNumber: 1
+        description: If quota enforcement is disabled in the policy, return the snapshots unchanged
+        type: branch
+        condition: quota enforcement is disabled in the policy
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Return the snapshots unchanged
+        type: return
+        outcome: snapshots unchanged (quota disabled)
+      - stepNumber: 3
+        description: Iterate over the usage snapshots to annotate advisory messages
+        type: loop
+        loopKind: forEach
+        over: snapshots
+        endStep: 5
+      - stepNumber: 4
+        description: >-
+          Compare the snapshot's counters (project count, project bytes, MCP request rate, audit
+          events) against the policy limits and append an observe/warn message for each exceeded
+          limit
+        type: local
+      - stepNumber: 5
+        description: >-
+          Keep messages non-enforcing: downgrade any would-be 'block' outcome to an advisory
+          observation
+        type: local
+      - stepNumber: 6
+        description: Return the annotated usage snapshots
+        type: return
+        outcome: advisory quota-annotated snapshots
+detail: full
+status: complete
+createdAt: '2026-07-10T11:27:18.012Z'
+updatedAt: '2026-07-10T11:27:35.512Z'

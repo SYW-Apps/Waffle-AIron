@@ -3,74 +3,77 @@ name: SDD Hosting Server
 description: >-
   Hosts wairon over streamable HTTP for many fully-isolated, independent wairon projects, scoping
   every request to its authenticated project. Splits a public data plane (project-grant-scoped MCP
-  over HTTP, reusing the sdd_* tool surface unchanged plus explicit discovery/self-service tools)
-  from configurable control planes: existing admin API, draft identity/audit API, draft landscape
-  API, draft project-policy API, optional admin UI, and local-only CLI/container control. Each
-  hosted project is a wholly separate .wai/ tree under the data root; this is NOT
-  subsystem/projectPath chaining. Auth is default-on and control-plane exposure is configurable, so
-  operators may keep network admin APIs disabled while still managing the instance locally. The
-  hosted server is distributed as an immutable container image for self-hosting; operators update by
-  pulling and redeploying the image while preserving the data volume.
+  over HTTP, reusing the sdd_* tool surface unchanged plus explicit discovery and approval-backed
+  self-service tools) from exposure-policy-controlled control planes: the admin API, the
+  identity/audit API with headless SSO onboarding, the project-policy API, the hosted landscape API,
+  and the read-only operations API — plus a deferred draft browser admin UI and local-only control
+  surface. Each hosted project is a wholly separate .wai/ tree under the data root; this is NOT
+  subsystem/projectPath chaining. Auth is default-on and control-plane exposure is configurable via
+  HostExposurePolicy, so operators may keep network admin APIs disabled while still managing the
+  instance locally. The hosted server is distributed as an immutable container image for
+  self-hosting; operators update by pulling and redeploying the image while preserving the data
+  volume; durable backups are platform data-volume snapshots.
 parentSystem: Waffle-AIron
 publicInterfaces:
   - type: REST
     details: >-
       Streamable HTTP MCP endpoint (POST /mcp) exposing the sdd_* tool surface request-scoped to the
-      authenticated project, plus minimal hosted landscape discovery tools and approval-backed
-      self-service request tools. Discovery first lists only reachable external project ids, then
-      returns redacted public interface summaries for a selected reachable project. Self-service
-      tools create approval requests for privileged actions such as project initialization or
-      locking rather than executing them directly. Includes /healthz and /readyz.
+      authenticated project, plus hosted landscape discovery tools and approval-backed self-service
+      request tools. Discovery first lists only reachable external project ids, then returns
+      redacted public interface summaries for a selected reachable project. Self-service tools
+      create approval requests for privileged actions such as project initialization or locking
+      rather than executing them directly. Includes /healthz and /readyz.
     component: host_http_portal
   - type: REST
     details: >-
-      Existing control-plane admin API (separately bound and exposure-policy controlled): current
-      project lifecycle, API-key lifecycle, pack management, producers, secrets, git backing, and
-      privileged lock/promote actions. Reached by operators and by the wairon CLI when HTTP admin is
-      enabled.
+      Control-plane admin API (separately bound and exposure-policy controlled): project lifecycle,
+      API-key lifecycle, pack management, producers, secrets, git backing, privileged lock/promote
+      actions, and the approval decision endpoints. Reached by operators and by the wairon CLI when
+      HTTP admin is enabled.
     component: admin_portal
   - type: REST
     details: >-
-      Draft identity/audit control-plane API for hosted users, project grants, user-bound MCP/API
-      tokens, and admin-only redacted audit access. This surface is separated from the completed
-      admin API until the new professional-use workflows are fully designed and implemented.
+      Identity/audit control-plane API for hosted users, project grants, user-bound MCP/API tokens,
+      admin-only redacted audit access, identity-provider configuration, and headless SSO onboarding
+      (start/callback minting a user-bound token shown once).
     component: identity_portal
     interface: iidentity_portal
   - type: REST
     details: >-
-      Draft hosted landscape control-plane API for organization hierarchy, project placement,
+      Hosted landscape control-plane API for organization hierarchy, project placement,
       public-surface snapshots, cross-project relations, and landscape graph retrieval. It reads
       public snapshots and hosted metadata only, never target project internals.
     component: landscape_portal
     interface: ilandscape_portal
   - type: REST
     details: >-
-      Draft project policy control-plane API for profile-aware project initialization,
-      required/default pack enforcement, policy evaluation, and allowed pack/profile reconciliation.
+      Project policy control-plane API for profile-aware project initialization, required/default
+      pack enforcement, policy evaluation, and allowed pack/profile reconciliation.
     component: project_policy_portal
     interface: iproject_policy_portal
   - type: REST
     details: >-
       Optional draft browser admin UI with SSO-backed sessions for professional hosted operations.
-      It delegates to identity, project policy, landscape, audit, and existing admin workflows
-      according to grants.
+      Deferred pending real-usage evidence; it would delegate to identity, project policy,
+      landscape, audit, and existing admin workflows according to grants.
     component: admin_ui_portal
     interface: iadmin_ui_portal
   - type: Custom
     details: >-
       Draft local-only CLI/container control surface for operators who disable or restrict HTTP
-      control planes. It uses the same audited approval, policy, identity, landscape, and admin
-      workflows through local process invocation.
+      control planes. Deferred pending exposure-policy-driven need; it would use the same audited
+      approval, policy, identity, landscape, and admin workflows through local process invocation.
     component: local_control_portal
     interface: ilocal_control_portal
   - type: REST
     details: >-
-      Draft operations control-plane API for backup creation/listing, restore approval requests,
-      health reports, usage snapshots, quota observations, and backup retention pruning. Exposure is
-      controlled by HostExposurePolicy and restore remains approval-backed.
+      Operations control-plane API (read-only) for instance health reports, resource usage
+      snapshots, and advisory quota observations. Exposure is controlled by HostExposurePolicy;
+      durable backups are handled out-of-band via platform data-volume snapshots rather than this
+      API.
     component: operations_portal
     interface: ioperations_portal
 trustedLinks: []
 status: complete
 createdAt: '2026-07-04T12:33:06.563Z'
-updatedAt: '2026-07-09T09:11:08.182Z'
+updatedAt: '2026-07-10T11:29:16.970Z'

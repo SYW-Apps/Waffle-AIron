@@ -3,7 +3,7 @@ id: instance_health_report
 name: InstanceHealthReport
 description: >-
   Aggregated operational health report for the hosted Wairon instance. It summarizes readiness,
-  storage, auth, policy, backup, and quota checks without leaking private project specs or secrets.
+  storage, auth, policy, and quota checks without leaking private project specs or secrets.
 fields:
   - name: status
     type: string
@@ -21,10 +21,6 @@ fields:
     type: ResourceUsageSnapshot[]
     description: Relevant usage snapshots visible to the caller.
     optional: true
-  - name: backupStatus
-    type: BackupRecord
-    description: Most recent backup record visible to the caller, when available.
-    optional: true
 methods: []
 createdAt: '2026-07-09T09:08:32.204Z'
-updatedAt: '2026-07-09T09:08:32.239Z'
+updatedAt: '2026-07-10T11:21:06.373Z'

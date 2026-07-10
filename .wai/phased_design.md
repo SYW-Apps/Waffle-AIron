@@ -48,6 +48,6 @@ Phase 4 COMPLETE. Type-spec fix pending: organization_unit_record.parentId requi
 **5b — Slim operations + exposure enforcement**: health/usage/advisory-quota read-only surface (diagnostics + quota specialists); HostExposurePolicy actually gates the mounted control planes; backup_* + backup_archive_adapter + restore specs DELETED (platform snapshots are the documented backup path).
 **Deferred as drafts**: admin_ui_* (+ web_session) pending real-usage/UX evidence; local_control_portal pending exposure-policy-driven need.
 **5c — skills resources** (sdd_mcp/sdd_skills): after 5a/5b.
-- [ ] 5a spec finalization → lock → implementation
-- [ ] 5b spec finalization → lock → implementation
-- [ ] 5c
+- [x] 5a COMPLETE: spec'd, locked, implemented (idp.ts OIDC adapter; auth.ts SSO state; policy.ts IdP storage; identity.ts six flows + routes; errors.ts extracted breaking the identity↔policy cycle). 476+ tests; live e2e: stub provider → start → callback → first-login user (empty grants) → 403 on data plane → admin grants → re-login → data-plane success; zero lint allows remain anywhere. Bonus fix found by e2e: URL-decode path segments in all four routers (SSO ids carry colons).
+- [ ] 5b spec finalization (slim operations + HostExposurePolicy enforcement + backup_* deletion) → lock → implementation
+- [ ] 5c skills resources

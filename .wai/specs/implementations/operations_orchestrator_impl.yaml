@@ -1,0 +1,131 @@
+id: operations_orchestrator_impl
+name: Operations Orchestrator Implementation
+description: >-
+  Read-only hosted operational insight workflows: authenticate and authorize the caller, then
+  assemble instance health reports, resource usage snapshots, and advisory quota observations from
+  hosted project records. Performs no writes and no audit.
+contract: ioperations_orchestrator
+sourcePath: src/server/operations.ts
+methods:
+  - name: getHealthReport
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential (bootstrap or user-bound token)
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          If the caller's grants cover neither operations:read nor an instance-wide admin grant,
+          deny
+        type: branch
+        condition: the caller's grants cover neither operations:read nor an instance-wide admin grant
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the health read
+        type: throw
+        error: Forbidden — operations read access required
+      - stepNumber: 4
+        description: List all hosted project records
+        type: call
+        targetComponent: project_registry
+        targetMethod: list
+      - stepNumber: 5
+        description: Derive redacted diagnostic checks from the project records
+        type: call
+        targetComponent: diagnostics_specialist
+        targetMethod: runChecks
+      - stepNumber: 6
+        description: Derive usage snapshots for the requested scope from the project records
+        type: call
+        targetComponent: diagnostics_specialist
+        targetMethod: collectUsage
+      - stepNumber: 7
+        description: Assemble the aggregated instance health report from the checks and usage
+        type: call
+        targetComponent: diagnostics_specialist
+        targetMethod: buildHealthReport
+      - stepNumber: 8
+        description: Return the redacted health report
+        type: return
+        outcome: redacted health report
+  - name: getUsage
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          If the caller's grants cover neither operations:read nor an instance-wide admin grant,
+          deny
+        type: branch
+        condition: the caller's grants cover neither operations:read nor an instance-wide admin grant
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the usage read
+        type: throw
+        error: Forbidden — operations read access required
+      - stepNumber: 4
+        description: List all hosted project records
+        type: call
+        targetComponent: project_registry
+        targetMethod: list
+      - stepNumber: 5
+        description: Derive usage snapshots for the requested scope from the project records
+        type: call
+        targetComponent: diagnostics_specialist
+        targetMethod: collectUsage
+      - stepNumber: 6
+        description: Return the redacted usage snapshots
+        type: return
+        outcome: redacted usage snapshots
+  - name: evaluateQuota
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          If the caller's grants cover neither operations:read nor an instance-wide admin grant,
+          deny
+        type: branch
+        condition: the caller's grants cover neither operations:read nor an instance-wide admin grant
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the quota read
+        type: throw
+        error: Forbidden — operations read access required
+      - stepNumber: 4
+        description: List all hosted project records
+        type: call
+        targetComponent: project_registry
+        targetMethod: list
+      - stepNumber: 5
+        description: Derive usage snapshots for the requested scope from the project records
+        type: call
+        targetComponent: diagnostics_specialist
+        targetMethod: collectUsage
+      - stepNumber: 6
+        description: >-
+          Resolve the advisory ResourceQuotaPolicy from the host config, using the secure default
+          policy when unset
+        type: local
+      - stepNumber: 7
+        description: >-
+          Evaluate the usage snapshots against the advisory quota policy, annotating observe/warn
+          messages
+        type: call
+        targetComponent: quota_specialist
+        targetMethod: evaluateUsage
+      - stepNumber: 8
+        description: Return the advisory quota-annotated usage snapshots
+        type: return
+        outcome: advisory quota-annotated usage snapshots
+detail: full
+status: complete
+createdAt: '2026-07-10T11:27:00.178Z'
+updatedAt: '2026-07-10T11:27:33.853Z'

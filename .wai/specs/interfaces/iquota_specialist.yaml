@@ -1,21 +1,24 @@
 id: iquota_specialist
 name: Quota Specialist Interface
-description: Draft contract for evaluating hosted resource usage against quota policy.
+description: >-
+  Contract for advisory evaluation of hosted resource usage against quota policy. Evaluation is
+  observational only.
 component: quota_specialist
 methods:
-  - name: evaluate
+  - name: evaluateUsage
     description: >-
-      Evaluate one or more usage snapshots against quota policy and return updated snapshots with
-      quota messages describing observe/warn/block decisions.
+      Evaluate resource usage snapshots against the advisory ResourceQuotaPolicy and return them
+      annotated with observe/warn quota messages. Advisory only: even a policy 'block' mode yields
+      an observational message and never blocks or throttles.
     signature: >-
-      evaluate(policy: ResourceQuotaPolicy, snapshots: ResourceUsageSnapshot[]):
+      evaluateUsage(snapshots: ResourceUsageSnapshot[], policy: ResourceQuotaPolicy):
       ResourceUsageSnapshot[]
     returns: ResourceUsageSnapshot[]
     params:
-      - name: policy
-        type: ResourceQuotaPolicy
       - name: snapshots
         type: ResourceUsageSnapshot[]
-status: draft
+      - name: policy
+        type: ResourceQuotaPolicy
+status: complete
 createdAt: '2026-07-09T09:09:54.317Z'
-updatedAt: '2026-07-09T09:09:54.319Z'
+updatedAt: '2026-07-10T11:27:32.102Z'

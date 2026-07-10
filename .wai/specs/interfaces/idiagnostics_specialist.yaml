@@ -1,42 +1,47 @@
 id: idiagnostics_specialist
 name: Diagnostics Specialist Interface
-description: Draft contract for redacted hosted instance diagnostics and health report assembly.
+description: >-
+  Contract for pure redacted hosted-instance diagnostics, usage derivation, and health report
+  assembly over supplied hosted project records. No I/O: the caller supplies the records.
 component: diagnostics_specialist
 methods:
   - name: runChecks
-    description: Run operational diagnostic checks visible to the caller and return redacted check results.
-    signature: 'runChecks(scope: string): DiagnosticCheckResult[]'
+    description: >-
+      Derive redacted operational diagnostic checks (project-registry consistency, per-project state
+      presence, and project-count sanity) from the supplied hosted project records.
+    signature: 'runChecks(projects: HostedProjectRecord[], scope: string): DiagnosticCheckResult[]'
     returns: DiagnosticCheckResult[]
     params:
+      - name: projects
+        type: HostedProjectRecord[]
       - name: scope
         type: string
         optional: true
   - name: collectUsage
     description: >-
-      Collect usage snapshots for instance, project, user, or token scope without exposing private
-      specs or secrets.
-    signature: 'collectUsage(scope: string): ResourceUsageSnapshot[]'
+      Derive resource usage snapshots for the requested scope from the supplied hosted project
+      records, without exposing private specs or secrets.
+    signature: 'collectUsage(projects: HostedProjectRecord[], scope: string): ResourceUsageSnapshot[]'
     returns: ResourceUsageSnapshot[]
     params:
+      - name: projects
+        type: HostedProjectRecord[]
       - name: scope
         type: string
         optional: true
   - name: buildHealthReport
     description: >-
-      Build an aggregated instance health report from diagnostics, usage snapshots, and the latest
-      visible backup record.
+      Assemble an aggregated instance health report from diagnostic checks and usage snapshots,
+      computing the overall status.
     signature: >-
-      buildHealthReport(checks: DiagnosticCheckResult[], usage: ResourceUsageSnapshot[],
-      latestBackup: BackupRecord): InstanceHealthReport
+      buildHealthReport(checks: DiagnosticCheckResult[], usage: ResourceUsageSnapshot[]):
+      InstanceHealthReport
     returns: InstanceHealthReport
     params:
       - name: checks
         type: DiagnosticCheckResult[]
       - name: usage
         type: ResourceUsageSnapshot[]
-      - name: latestBackup
-        type: BackupRecord
-        optional: true
-status: draft
+status: complete
 createdAt: '2026-07-09T09:10:04.195Z'
-updatedAt: '2026-07-09T09:10:04.197Z'
+updatedAt: '2026-07-10T11:27:31.127Z'

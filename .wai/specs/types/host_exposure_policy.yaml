@@ -52,9 +52,9 @@ fields:
   - name: operationsApiEnabled
     type: boolean
     description: >-
-      Whether the draft operations API for backup, health, restore request, usage, and quota
+      Whether the operations control-plane API for read-only health, usage, and advisory quota
       reporting is served over HTTP.
     optional: false
 methods: []
 createdAt: '2026-07-09T07:18:28.871Z'
-updatedAt: '2026-07-09T15:43:29.681Z'
+updatedAt: '2026-07-10T11:21:07.205Z'

@@ -1,48 +1,10 @@
 id: ioperations_portal
 name: Operations Portal Interface
-description: Draft control-plane HTTP contract for hosted operational safety workflows.
+description: >-
+  Control-plane HTTP contract for read-only hosted operational insight: health, usage, and advisory
+  quota reporting. Exposure is governed by HostExposurePolicy.
 component: operations_portal
 methods:
-  - name: createBackup
-    description: Create a backup for the instance or selected project scope.
-    signature: 'createBackup(credential: string, scope: string): BackupRecord'
-    returns: BackupRecord
-    params:
-      - name: credential
-        type: string
-      - name: scope
-        type: string
-    endpoint:
-      transport: HTTP
-      method: POST
-      path: /operations/backups
-  - name: listBackups
-    description: List backup records visible to the caller.
-    signature: 'listBackups(credential: string, scope: string): BackupRecord[]'
-    returns: BackupRecord[]
-    params:
-      - name: credential
-        type: string
-      - name: scope
-        type: string
-        optional: true
-    endpoint:
-      transport: HTTP
-      method: GET
-      path: /operations/backups
-  - name: requestRestore
-    description: Create an approval request for a restore operation; does not restore immediately.
-    signature: 'requestRestore(credential: string, request: RestoreRequest): ApprovalRequest'
-    returns: ApprovalRequest
-    params:
-      - name: credential
-        type: string
-      - name: request
-        type: RestoreRequest
-    endpoint:
-      transport: HTTP
-      method: POST
-      path: /operations/restores/request
   - name: getHealthReport
     description: Return a redacted operational health report.
     signature: 'getHealthReport(credential: string, scope: string): InstanceHealthReport'
@@ -58,7 +20,7 @@ methods:
       method: GET
       path: /operations/health
   - name: getUsage
-    description: Return resource usage snapshots with quota observations.
+    description: Return redacted resource usage snapshots.
     signature: 'getUsage(credential: string, scope: string): ResourceUsageSnapshot[]'
     returns: ResourceUsageSnapshot[]
     params:
@@ -71,17 +33,20 @@ methods:
       transport: HTTP
       method: GET
       path: /operations/usage
-  - name: pruneBackups
-    description: Apply backup retention pruning.
-    signature: 'pruneBackups(credential: string): number'
-    returns: number
+  - name: evaluateQuota
+    description: Return resource usage snapshots annotated with advisory (observe/warn) quota observations.
+    signature: 'evaluateQuota(credential: string, scope: string): ResourceUsageSnapshot[]'
+    returns: ResourceUsageSnapshot[]
     params:
       - name: credential
         type: string
+      - name: scope
+        type: string
+        optional: true
     endpoint:
       transport: HTTP
-      method: POST
-      path: /operations/backups/prune
-status: draft
+      method: GET
+      path: /operations/quota
+status: complete
 createdAt: '2026-07-09T09:10:34.177Z'
-updatedAt: '2026-07-09T09:10:41.612Z'
+updatedAt: '2026-07-10T11:27:29.221Z'
