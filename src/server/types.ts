@@ -32,8 +32,23 @@ export interface ProjectGrant {
   permissions: string[];
   /** Optional coarse display role derived from permissions ('viewer'…'admin'). */
   role?: string;
+  /** When set, the grant is scoped to an organization unit: it covers every
+   *  hosted project placed in that unit AND all descendant units (recursive
+   *  subtree). '*' in projectId remains the instance-wide super-admin scope. */
+  orgUnitId?: string;
   /** Optional ISO-8601 expiry for temporary grants. */
   expiresAt?: string;
+}
+
+/** The set of hosted projects/units a principal may act on for a permission —
+ *  or `all` for an instance-wide ('*') super-admin, meaning no filtering. */
+export interface ScopeResolution {
+  /** True = super-admin: unrestricted, projectIds/unitIds are not consulted. */
+  all: boolean;
+  /** In-scope project ids (empty when all=true — callers short-circuit on all). */
+  projectIds: string[];
+  /** In-scope unit ids (the resolved subtree) — used to filter users by home unit. */
+  unitIds: string[];
 }
 
 /** The authenticated caller identity and authorized scope. Transient. The
@@ -91,6 +106,9 @@ export interface HostedUserRecord {
   createdAt: string;
   /** ISO-8601 timestamp of the user's most recent authenticated activity. */
   lastSeenAt?: string;
+  /** The user's home organization unit; scoped user administration lists and
+   *  filters users by their home unit subtree. */
+  unitId?: string;
 }
 
 /** A durable, redacted audit event: who acted, through which token, on what, with what outcome.
