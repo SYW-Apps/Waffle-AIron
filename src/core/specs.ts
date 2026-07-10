@@ -1065,6 +1065,14 @@ export class SpecWorkspace {
     ensureDir(path.dirname(p));
 
     const { prefix } = splitNamespace(spec.id);
+    // Fix B2 (defense in depth): never persist an escaping projectPath, so no
+    // later code path can resolve+act on it. Only for a top-level (non-prefixed)
+    // subsystem, whose projectPath is relative to this.rootDir; a namespaced
+    // subsystem's projectPath is child-relative and is contained by the
+    // load-time guards (resolveSubprojectForNamespace + the recursive loader).
+    if (!prefix && spec.projectPath && spec.projectPath.trim() !== '') {
+      assertContainedProjectPath(this.rootDir, spec.projectPath);
+    }
     let specToWrite = prefix ? stripNamespaceFromSubsystem(spec, prefix) : spec;
 
     if (prefix) {

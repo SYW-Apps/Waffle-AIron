@@ -85,6 +85,21 @@ describe('assertContainedProjectPath (write/setter guard)', () => {
   it('rejects a nested-then-escape path', () => {
     expect(() => assertContainedProjectPath(root, 'packages/../../victim')).toThrow(/must resolve within/);
   });
+
+  it('saveSubsystemSpec refuses to PERSIST an escaping projectPath (defense in depth)', () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-b2-save-'));
+    const proj = path.join(base, 'proj');
+    try {
+      initProject(proj, 'proj-system');
+      expect(() => saveSubsystemSpec(subsystem('billing', 'proj-system', '../escape'))).toThrow(
+        /must resolve within the project root/,
+      );
+    } finally {
+      setProjectRoot(null);
+      invalidateSpecCache();
+      fs.rmSync(base, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('load-time projectPath containment', () => {
@@ -105,9 +120,14 @@ describe('load-time projectPath containment', () => {
     initProject(victim, 'victim-system');
     saveSubsystemSpec(subsystem('secret', 'victim-system'));
 
-    // Root declares a chained subsystem whose projectPath escapes to ../victim.
+    // Root declares a chained subsystem; save it clean (the write guard would
+    // otherwise refuse an escaping projectPath — see the write-guard test below),
+    // then inject the ../victim escape directly on disk to simulate a
+    // maliciously-written spec, exercising the load-time guard in isolation.
     initProject(root, 'root-system');
-    saveSubsystemSpec(subsystem('billing', 'root-system', path.relative(root, victim)));
+    saveSubsystemSpec(subsystem('billing', 'root-system'));
+    const billingIndex = path.join(root, '.wai', 'specs', 'billing', '.index.yaml');
+    fs.appendFileSync(billingIndex, `projectPath: ${path.relative(root, victim)}\n`);
 
     setProjectRoot(root);
     invalidateSpecCache();

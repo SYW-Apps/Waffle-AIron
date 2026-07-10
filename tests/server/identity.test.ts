@@ -189,6 +189,48 @@ describe('identity orchestrator (sdd_host)', () => {
     ).toThrow(/unknown project/i);
   });
 
+  // Re-review S5: an empty permissions[] must NOT vacuously pass delegation.
+  it('rejects a grant carrying no permissions (empty-array delegation bypass)', () => {
+    createProjectRecord(dataDir, 'proj-a');
+    // A non-admin caller who could otherwise ride the vacuous .every([]) path.
+    const caller = mintOwnedToken('u-weak', [{ projectId: 'proj-a', permissions: ['mcp:read'] }]);
+    expect(() =>
+      identity.mintToken(cfg, caller, {
+        ownerUserId: 'u-weak',
+        label: 't',
+        grants: [{ projectId: 'proj-a', permissions: [] }],
+      }),
+    ).toThrow(/at least one permission/i);
+  });
+
+  // Re-review B1: a delegator cannot mint a fresh token for a deactivated user.
+  it('refuses to mint a token for a deactivated user', () => {
+    createProjectRecord(dataDir, 'proj-a');
+    identity.upsertUser(cfg, MASTER, mkUser({ id: 'u-gone', subject: subject({ userId: 'u-gone' }) }));
+    identity.setUserStatus(cfg, MASTER, 'u-gone', 'inactive');
+    expect(() =>
+      identity.mintToken(cfg, MASTER, {
+        ownerUserId: 'u-gone',
+        label: 't',
+        grants: [{ projectId: 'proj-a', permissions: ['mcp:read'] }],
+      }),
+    ).toThrow(/deactivated user/i);
+  });
+
+  // Re-review B1: deactivation revokes tokens even when the record id differs
+  // from the subject's userId (admin-created user with a divergent id).
+  it('revokes tokens owned under the subject id when it diverges from the record id', () => {
+    identity.upsertUser(
+      cfg,
+      MASTER,
+      mkUser({ id: 'rec-42', subject: subject({ userId: 'subj-42' }) }),
+    );
+    const tokenBySubject = mintOwnedToken('subj-42', []);
+    identity.setUserStatus(cfg, MASTER, 'rec-42', 'inactive');
+    const rec = persistedByHash(hashToken(tokenBySubject));
+    expect(rec?.revokedAt).toBeTruthy();
+  });
+
   // ── revokeToken ──────────────────────────────────────────────────────────
 
   it('revokes a token as admin and audits token.revoke', () => {

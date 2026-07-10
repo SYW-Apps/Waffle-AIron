@@ -239,16 +239,21 @@ export function mintToken(cfg: HostConfig, credential: string | null, request: T
   // delegation still requires instance-admin.
   const admin = isInstanceAdmin(principal);
   const grants = request.grants ?? [];
+  // A grant carrying no permissions is malformed: it would still project to an
+  // editor token for the project (compatibility projection), so an empty
+  // permissions[] must NOT vacuously pass the delegation check below.
+  if (grants.some((g) => g.projectId !== '*' && (g.permissions?.length ?? 0) === 0)) {
+    throw new ForbiddenError('each requested grant must carry at least one permission');
+  }
   const mayDelegate =
     admin ||
     grants.every((g) =>
       g.projectId === '*'
         ? admin
-        : g.permissions.every(
-            (p) =>
-              coversPermission(principal, g.projectId, KEY_MANAGE_PERMISSION) &&
-              coversPermission(principal, g.projectId, p),
-          ),
+        : // Must be able to manage keys for this project AT ALL, and must hold
+          // each permission being delegated (can't hand out unheld permissions).
+          coversPermission(principal, g.projectId, KEY_MANAGE_PERMISSION) &&
+          g.permissions.every((p) => coversPermission(principal, g.projectId, p)),
     );
   if (!mayDelegate) {
     throw new ForbiddenError('caller may not delegate the requested grants');
@@ -260,6 +265,15 @@ export function mintToken(cfg: HostConfig, credential: string | null, request: T
     if (g.projectId !== '*' && !known.has(g.projectId)) {
       throw new Error(`unknown project "${g.projectId}"`);
     }
+  }
+
+  // Refuse minting a token for a user record that has been deactivated — else
+  // deactivation could be undone by an authorized delegator minting fresh tokens
+  // for the inactive owner. A request.ownerUserId with no user record (e.g. a
+  // service principal) is allowed.
+  const owner = getUserById(cfg.dataDir, request.ownerUserId);
+  if (owner && owner.status !== 'active') {
+    throw new ForbiddenError('cannot mint a token for a deactivated user');
   }
 
   // Mint the token and compute its salted hash (same shape as the admin key-mint).
@@ -445,7 +459,15 @@ export function setUserStatus(
   // revoke every one of their non-revoked credentials at the credential layer so
   // authenticate() rejects them. Returning to 'active' does NOT restore tokens.
   const deactivating = status !== 'active';
-  const revokedTokens = deactivating ? revokeAllForOwner(cfg.dataDir, userId) : 0;
+  // Sweep by every id a token could be owned under: the record id AND the
+  // resolved subject id (they diverge for admin-created users whose id != the
+  // subject's userId), so revocation can't silently miss tokens.
+  let revokedTokens = 0;
+  if (deactivating) {
+    const ownerIds = new Set([userId]);
+    if (updated.subject?.userId) ownerIds.add(updated.subject.userId);
+    for (const ownerId of ownerIds) revokedTokens += revokeAllForOwner(cfg.dataDir, ownerId);
+  }
 
   const event = deactivating
     ? buildAuditEvent(principal, 'user.deactivate', 'security', 'admin', {

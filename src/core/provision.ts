@@ -138,9 +138,10 @@ export function moveSubsystemProject(subsystemId: string, newProjectPath: string
 
   const nextPath = toPosixPath(newProjectPath);
   const root = getProjectRoot();
-  const oldDir = path.resolve(root, sub.projectPath);
-  // Fix B2: contain the new target within the bound root before any on-disk
-  // relocation or spec write; absolute/../-escaping targets are rejected.
+  // Fix B2: contain BOTH the persisted source and the new target within the
+  // bound root before any on-disk relocation or spec write; absolute/../-escaping
+  // paths are rejected (the source is attacker-influenced via set-project-path).
+  const oldDir = assertContainedProjectPath(root, sub.projectPath);
   const newDir = assertContainedProjectPath(root, nextPath);
 
   if (oldDir !== newDir) {
@@ -264,7 +265,10 @@ export function internalizeSubsystem(subsystemId: string): void {
 
   const parentRoot = getProjectRoot();
   const parentSpecsDir = aiPathsAt(parentRoot).specsDir();
-  const childDir = path.resolve(parentRoot, foo.projectPath);
+  // Fix B2: the PERSISTED projectPath is attacker-influenced (a prior
+  // set-project-path). Contain it before resolving — otherwise the fs.rmSync of
+  // childWai below could delete a directory outside the bound project root.
+  const childDir = assertContainedProjectPath(parentRoot, foo.projectPath);
   const childWai = path.join(childDir, '.wai');
   const childFooDir = path.join(childDir, '.wai', 'specs', subsystemId);
   if (!fs.existsSync(childFooDir)) {
