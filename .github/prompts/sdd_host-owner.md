@@ -63,6 +63,7 @@ You own and decide on everything within:
 .wai/specs/components/public_surface_repository.yaml
 .wai/specs/components/public_surface_store.yaml
 .wai/specs/components/quota_specialist.yaml
+.wai/specs/components/scope_specialist.yaml
 .wai/specs/components/secret_registry.yaml
 .wai/specs/components/self_service_orchestrator.yaml
 .wai/specs/components/user_index.yaml
@@ -87,6 +88,7 @@ src/server/policy.ts
 src/server/projects.ts
 src/server/relations.ts
 src/server/surfaces.ts
+src/server/scope.ts
 src/utils/secrets.ts
 src/server/selfservice.ts
 src/server/users.ts
