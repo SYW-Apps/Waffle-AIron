@@ -83,6 +83,7 @@ src/server/adapters.ts
 src/server/http.ts
 src/server/request.ts
 src/server/identity.ts
+src/server/idp.ts
 src/server/landscape.ts
 src/server/organization.ts
 src/server/packs.ts
