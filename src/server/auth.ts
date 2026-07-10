@@ -146,3 +146,36 @@ export function verifyViewToken(token: string): ViewGrant {
   if (Date.now() > payload.exp) throw new Error('expired view token');
   return { project: payload.project, format: payload.format, expiresAt: new Date(payload.exp).toISOString() };
 }
+
+// ── Signed SSO state for the OIDC/SSO login round-trip ───────────────────────
+//
+// SSO state is a stateless capability: the authorize-redirect encodes an opaque
+// login payload here and the callback verifies it, so no server-side session
+// store is needed to detect tampering or replay. Signed with the same server
+// signing authority as view tokens (WAIRON_SIGNING_SECRET, else
+// WAIRON_ADMIN_TOKEN) and carries a short expiry (10 minutes — long enough for a
+// human to complete an external login, short enough to bound replay).
+
+const SSO_STATE_TTL_MS = 10 * 60 * 1000;
+
+/** Mint a short-lived HMAC-signed SSO state binding an opaque login payload to an
+ *  expiry, using the single server signing authority. */
+export function signSsoState(payload: string): string {
+  const body = Buffer.from(JSON.stringify({ payload, exp: Date.now() + SSO_STATE_TTL_MS })).toString('base64url');
+  const sig = crypto.createHmac('sha256', signingKey()).update(body).digest('base64url');
+  return `${body}.${sig}`;
+}
+
+/** Verify an SSO state (signature + expiry, constant-time) and return the original
+ *  payload, or throw on a tampered or expired state. */
+export function verifySsoState(state: string): string {
+  const [body, sig] = String(state).split('.');
+  if (!body || !sig) throw new Error('invalid SSO state');
+  const expected = crypto.createHmac('sha256', signingKey()).update(body).digest('base64url');
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) throw new Error('invalid SSO state');
+  const parsed = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as { payload: string; exp: number };
+  if (Date.now() > parsed.exp) throw new Error('expired SSO state');
+  return parsed.payload;
+}

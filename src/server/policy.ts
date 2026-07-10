@@ -17,6 +17,7 @@ import type {
   AuditRetentionPolicy,
   HostConfig,
   HostedProjectRecord,
+  IdentityProviderConfig,
   InstancePackPolicy,
   PolicyEvaluationResult,
   Principal,
@@ -115,6 +116,112 @@ export const PERMISSIVE_DEFAULT_POLICY: InstancePackPolicy = {
 /** The active policy or the permissive default when none has ever been configured. */
 function effectivePolicy(dataDir: string): InstancePackPolicy {
   return getPackPolicyRecord(dataDir) ?? PERMISSIVE_DEFAULT_POLICY;
+}
+
+// ── Policy Repository: identity-provider (SSO) collection storage ─────────────
+//
+// The same policy store also holds the identity-provider (SSO) configuration
+// collection, file-backed at <dataDir>/identity-providers.json. Same storage
+// discipline as the pack policy: a missing file reads as an empty collection,
+// malformed JSON fails with a storage error naming the path (losing a provider
+// would silently disable sign-in), and writes go through write-temp-then-rename.
+// The registry stamps updatedAt server-side and persists only a clientSecretRef
+// into the host secret mechanism — never a raw client secret — so the whole
+// config is whitelist-projected to the persisted type before it is written.
+
+function identityProvidersPath(dataDir: string): string {
+  return path.join(dataDir, 'identity-providers.json');
+}
+
+/**
+ * Whitelist-project an identity-provider config to exactly the fields the type
+ * defines, dropping anything outside it (e.g. a raw clientSecret an caller might
+ * have attached) so no secret is ever persisted; clientSecretRef is preserved
+ * verbatim. Optional fields are copied only when present.
+ */
+function sanitizeIdentityProvider(config: IdentityProviderConfig): IdentityProviderConfig {
+  const clean: IdentityProviderConfig = {
+    id: config.id,
+    providerType: config.providerType,
+    enabled: config.enabled,
+    updatedAt: config.updatedAt,
+  };
+  if (config.issuerUrl !== undefined) clean.issuerUrl = config.issuerUrl;
+  if (config.clientId !== undefined) clean.clientId = config.clientId;
+  if (config.clientSecretRef !== undefined) clean.clientSecretRef = config.clientSecretRef;
+  if (config.allowedDomains !== undefined) clean.allowedDomains = config.allowedDomains;
+  if (config.adminGroupClaims !== undefined) clean.adminGroupClaims = config.adminGroupClaims;
+  return clean;
+}
+
+/** Persist the whole identity-provider collection atomically (write-temp-then-rename). */
+function writeIdentityProviderRecords(dataDir: string, records: IdentityProviderConfig[]): void {
+  const p = identityProvidersPath(dataDir);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  const tmp = `${p}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(records, null, 2) + '\n');
+  fs.renameSync(tmp, p);
+}
+
+/**
+ * policy_store.load → policy_index.listIdentityProviders →
+ * policy_repository.listIdentityProviders. Read every configured identity
+ * provider. A missing file yields an empty collection (none ever configured); an
+ * unreadable file or structurally invalid JSON fails with a storage error naming
+ * the path (losing a persisted provider would silently disable sign-in).
+ */
+export function listIdentityProviderRecords(dataDir: string): IdentityProviderConfig[] {
+  const p = identityProvidersPath(dataDir);
+  let raw: string;
+  try {
+    raw = fs.readFileSync(p, 'utf8');
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw new Error(`Failed to read identity provider store at ${p}: ${(e as Error).message}`);
+  }
+  try {
+    return JSON.parse(raw) as IdentityProviderConfig[];
+  } catch (e) {
+    throw new Error(`Identity provider store at ${p} contains malformed JSON: ${(e as Error).message}`);
+  }
+}
+
+/**
+ * policy_registry.upsertIdentityProvider → policy_repository.upsertIdentityProvider.
+ * Create or update one identity-provider configuration by id: stamp updatedAt
+ * server-side, whitelist-project the config to the persisted type (dropping any
+ * field outside it so a raw client secret can never be written, preserving
+ * clientSecretRef verbatim), insert or replace it in place within the collection,
+ * persist the whole collection via write-temp-then-rename, and return the stored
+ * config. A persistence failure leaves the previous collection intact.
+ */
+export function upsertIdentityProviderRecord(
+  dataDir: string,
+  config: IdentityProviderConfig,
+): IdentityProviderConfig {
+  const stored = sanitizeIdentityProvider({ ...config, updatedAt: new Date().toISOString() });
+  const records = listIdentityProviderRecords(dataDir);
+  const idx = records.findIndex((c) => c.id === stored.id);
+  if (idx >= 0) records[idx] = stored;
+  else records.push(stored);
+  writeIdentityProviderRecords(dataDir, records);
+  return stored;
+}
+
+/**
+ * policy_registry.removeIdentityProvider → policy_repository.removeIdentityProvider.
+ * Remove one identity-provider configuration by id, rejecting an unknown id with a
+ * not-found error; otherwise persist the reduced collection via
+ * write-temp-then-rename. A persistence failure leaves the previous collection
+ * intact.
+ */
+export function removeIdentityProviderRecord(dataDir: string, id: string): void {
+  const records = listIdentityProviderRecords(dataDir);
+  const next = records.filter((c) => c.id !== id);
+  if (next.length === records.length) {
+    throw new Error(`Identity provider "${id}" not found.`);
+  }
+  writeIdentityProviderRecords(dataDir, next);
 }
 
 // ── grant vocabulary + authorization helpers (mirrored from identity.ts) ─────
