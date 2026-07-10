@@ -449,15 +449,26 @@ export function upsertUnit(
 ): OrganizationUnitRecord {
   const principal = requirePrincipal(cfg, credential);
   const scope = resolveScopeFor(cfg, principal, LANDSCAPE_MANAGE_PERMISSION);
-  // The caller's scope must cover the target unit: its own id (updating an
-  // existing unit) or its parentId (creating a child under an in-scope unit). A
-  // brand-new root unit (no in-scope id or parent) requires a super-admin.
-  const unitInScope = !!unit.id && scope.unitIds.includes(unit.id);
-  const parentInScope = !!unit.parentId && scope.unitIds.includes(unit.parentId);
-  if (!scope.all && !unitInScope && !parentInScope) {
-    throw new ForbiddenError(
-      'managing an organization unit requires landscape:manage scope over the unit or its parent',
-    );
+  // Authorize by whether the unit ALREADY exists, to close the reparent-capture
+  // hole (updating a foreign unit while only its NEW parent is in scope would
+  // graft that unit's whole subtree + projects into the caller's scope):
+  //   - existing unit → the caller must already own it (its CURRENT position);
+  //     if reparenting, the new parent must also be in scope.
+  //   - new unit → requires an in-scope parent (a new root requires super-admin).
+  if (!scope.all) {
+    const existing = unit.id ? getOrganizationUnit(cfg.dataDir, unit.id) : null;
+    if (existing) {
+      if (!scope.unitIds.includes(unit.id)) {
+        throw new ForbiddenError('managing an existing unit requires landscape:manage scope over that unit');
+      }
+      if (unit.parentId && unit.parentId !== existing.parentId && !scope.unitIds.includes(unit.parentId)) {
+        throw new ForbiddenError('reparenting a unit requires landscape:manage scope over the new parent');
+      }
+    } else if (!unit.parentId || !scope.unitIds.includes(unit.parentId)) {
+      throw new ForbiddenError(
+        'creating an organization unit requires landscape:manage scope over its parent (a new root requires a super-admin)',
+      );
+    }
   }
   const stored = upsertOrganizationUnit(cfg.dataDir, unit);
   tryAppendAudit(cfg, buildAuditEvent(principal, 'unit.upsert', 'info', 'landscape', { target: stored.id }));
@@ -476,10 +487,17 @@ export function placeProject(
 ): ProjectPlacement {
   const principal = requirePrincipal(cfg, credential);
   const scope = resolveScopeFor(cfg, principal, LANDSCAPE_MANAGE_PERMISSION);
-  // The caller's scope must cover the target unit (placement.unitId). A
-  // super-admin places into any unit.
+  // The caller's scope must cover BOTH the target unit AND the project being
+  // placed. Checking only the destination unit was a scope-capture hole: a unit
+  // admin could adopt any project into their unit and thereby pull it into their
+  // scope (→ destroy/lock/promote/audit it). The project's authority comes from
+  // its CURRENT placements, so require it already be in the caller's scope; a
+  // super-admin places anything anywhere.
   if (!scope.all && !scope.unitIds.includes(placement.unitId)) {
     throw new ForbiddenError('placing a project requires landscape:manage scope over the target unit');
+  }
+  if (!scope.all && !permits(scope, placement.projectId)) {
+    throw new ForbiddenError('placing a project requires landscape:manage scope over the project being placed');
   }
   if (!getOrganizationUnit(cfg.dataDir, placement.unitId)) {
     throw new Error('the target organization unit does not exist');

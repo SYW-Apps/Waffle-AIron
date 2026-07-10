@@ -530,9 +530,11 @@ describe('identity orchestrator (sdd_host)', () => {
     repoUpsertUser(dataDir, mkUser({ id: 'u-web', unitId: 'web' }));
     repoUpsertUser(dataDir, mkUser({ id: 'u-sales', unitId: 'sales' }));
 
-    const caller = mintNonAdminToken([{ projectId: '', orgUnitId: 'eng', permissions: ['user:admin'] }]);
+    // The caller must HOLD every permission it delegates (over the grant's
+    // scope), so it carries user:admin AND mcp:read over eng.
+    const caller = mintNonAdminToken([{ projectId: '', orgUnitId: 'eng', permissions: ['user:admin', 'mcp:read'] }]);
 
-    // In-scope project grant → allowed.
+    // In-scope project grant of a held permission → allowed.
     expect(
       identity.replaceUserGrants(cfg, caller, 'u-web', [{ projectId: 'p-web', permissions: ['mcp:read'] }]).grants,
     ).toEqual([{ projectId: 'p-web', permissions: ['mcp:read'] }]);
@@ -541,6 +543,16 @@ describe('identity orchestrator (sdd_host)', () => {
       identity.replaceUserGrants(cfg, caller, 'u-web', [{ projectId: '', orgUnitId: 'web', permissions: ['mcp:read'] }])
         .grants,
     ).toHaveLength(1);
+
+    // Finding 3: the caller cannot assign a permission it does NOT itself hold,
+    // even fully in scope — user:admin does not confer the power to grant
+    // mcp:write / project:destroy.
+    expect(() =>
+      identity.replaceUserGrants(cfg, caller, 'u-web', [{ projectId: 'p-web', permissions: ['mcp:write'] }]),
+    ).toThrow(ForbiddenError);
+    expect(() =>
+      identity.replaceUserGrants(cfg, caller, 'u-web', [{ projectId: '', orgUnitId: 'web', permissions: ['project:destroy'] }]),
+    ).toThrow(ForbiddenError);
 
     // Escalation attempts are all rejected: instance-wide '*', an out-of-scope
     // unit, and an out-of-scope specific project.

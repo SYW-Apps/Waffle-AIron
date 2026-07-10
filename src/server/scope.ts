@@ -69,8 +69,10 @@ export function resolveScope(
   placements: ProjectPlacement[],
 ): ScopeResolution {
   // First pass: an instance-wide super-admin grant short-circuits all filtering.
+  // A grant that names an orgUnitId is unit-scoped by intent even if its
+  // projectId is '*' (contradictory) — it must NOT confer super-admin.
   for (const grant of grants) {
-    if (grant.projectId === WILDCARD && grantCarries(grant, permission)) {
+    if (grant.projectId === WILDCARD && !grant.orgUnitId && grantCarries(grant, permission)) {
       return { all: true, projectIds: [], unitIds: [] };
     }
   }

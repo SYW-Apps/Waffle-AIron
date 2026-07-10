@@ -106,6 +106,32 @@ function coversPermission(principal: Principal, projectId: string, permission: s
   );
 }
 
+/** True when the caller may delegate every grant in `grants` — for each grant,
+ *  the caller must hold each of its permissions over that grant's scope (a
+ *  unit-scoped grant → the unit is in the caller's scope for that permission; a
+ *  project grant → the project is). A '*' projectId requires instance-admin.
+ *  Super-admin delegates anything. Shared by mintToken and replaceUserGrants so
+ *  neither can hand out authority the caller doesn't itself hold. */
+function callerMayDelegateGrants(cfg: HostConfig, principal: Principal, grants: ProjectGrant[]): boolean {
+  if (isInstanceAdmin(principal)) return true;
+  const memo = new Map<string, ScopeResolution>();
+  const scopeFor = (permission: string): ScopeResolution => {
+    let s = memo.get(permission);
+    if (s === undefined) {
+      s = resolveScopeFor(cfg, principal, permission);
+      memo.set(permission, s);
+    }
+    return s;
+  };
+  const covers = (g: ProjectGrant, p: string): boolean => {
+    const s = scopeFor(p);
+    if (s.all) return true;
+    if (g.orgUnitId !== undefined && g.orgUnitId !== '') return s.unitIds.includes(g.orgUnitId);
+    return permits(s, g.projectId);
+  };
+  return grants.every((g) => (g.projectId === '*' ? false : g.permissions.every((p) => covers(g, p))));
+}
+
 // Phase 6 scoped administration: an instance-wide ('*') grant carrying the
 // permission resolves to scope.all (super-admin); a UNIT-scoped grant carrying
 // it resolves to that unit subtree's projects+units; a specific-project grant
@@ -446,9 +472,14 @@ export function replaceUserGrants(
           ? !inScopeUnits.has(g.orgUnitId)
           : g.projectId !== '' && !inScopeProjects.has(g.projectId),
     );
-    if (!targetInScope || escalates) {
+    // (c) the caller must actually HOLD every permission it assigns over that
+    //     grant's scope — checking only the scope dimension (a,b) let a
+    //     user:admin-only caller grant a user project:destroy/'*'/etc. it never
+    //     held, which becomes a live token on the user's next SSO login.
+    const overReaches = !callerMayDelegateGrants(cfg, principal, grants);
+    if (!targetInScope || escalates || overReaches) {
       throw new ForbiddenError(
-        "grant administration requires scope over the target user's home unit and may not exceed the caller's own authority",
+        "grant administration requires scope over the target user's home unit and may not assign authority the caller does not itself hold",
       );
     }
   }

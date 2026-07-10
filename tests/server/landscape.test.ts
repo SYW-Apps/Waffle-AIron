@@ -539,17 +539,30 @@ describe('landscape orchestrator (sdd_host)', () => {
 
     // upsertUnit: a child under the in-scope unit A is allowed; under out-of-scope
     // unit B is 403; a brand-new root is 403 (only a super-admin creates roots).
-    expect(upsertUnit(cfg, tokenA, unitRec({ name: 'A Child', parentId: unitA.id })).id).toBeTruthy();
+    const aChild = upsertUnit(cfg, tokenA, unitRec({ name: 'A Child', parentId: unitA.id }));
+    expect(aChild.id).toBeTruthy();
     expect(() => upsertUnit(cfg, tokenA, unitRec({ name: 'B Child', parentId: unitB.id }))).toThrow(ForbiddenError);
     expect(() => upsertUnit(cfg, tokenA, unitRec({ name: 'New Root' }))).toThrow(ForbiddenError);
-
-    // placeProject: into unit A OK, into unit B 403.
-    project('extra-in');
-    expect(
-      placeProject(cfg, tokenA, placementRec({ projectId: 'extra-in', unitId: unitA.id, role: 'owner' })).id,
-    ).toBeTruthy();
+    // Finding 2: reparenting a FOREIGN unit (B) under an in-scope unit is 403 —
+    // you cannot pull another subtree into your scope.
     expect(() =>
-      placeProject(cfg, tokenA, placementRec({ projectId: 'extra-in', unitId: unitB.id })),
+      upsertUnit(cfg, tokenA, { ...unitB, parentId: aChild.id }),
+    ).toThrow(ForbiddenError);
+
+    // placeProject: the caller must control BOTH the project and the target unit.
+    // Sharing an already-in-scope project (a-src, in unit A) into an in-scope
+    // child unit is allowed.
+    expect(
+      placeProject(cfg, tokenA, placementRec({ projectId: 'a-src', unitId: aChild.id, role: 'shared' })).id,
+    ).toBeTruthy();
+    // Destination out of scope (unit B) → 403.
+    expect(() =>
+      placeProject(cfg, tokenA, placementRec({ projectId: 'a-src', unitId: unitB.id })),
+    ).toThrow(ForbiddenError);
+    // Finding 1: adopting a FOREIGN project (b-src, in unit B) into an in-scope
+    // unit is 403 — you cannot pull a project you don't control into your scope.
+    expect(() =>
+      placeProject(cfg, tokenA, placementRec({ projectId: 'b-src', unitId: unitA.id })),
     ).toThrow(ForbiddenError);
 
     // upsertRelation: source in scope (a-src) OK, source out of scope (b-src) 403.
