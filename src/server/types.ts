@@ -356,6 +356,23 @@ export interface LandscapeGraphModel {
   scope?: string;
 }
 
+/** An OIDC/SSO identity provider configuration. Never carries a raw client secret —
+ *  clientSecretRef points into the host secret mechanism. */
+export interface IdentityProviderConfig {
+  id: string;
+  /** e.g. 'oidc' | 'authentik' | 'keycloak' | 'google' | 'entra' */
+  providerType: string;
+  issuerUrl?: string;
+  clientId?: string;
+  clientSecretRef?: string;
+  /** Email domains allowed to first-login provision, when set. */
+  allowedDomains?: string[];
+  /** Provider group claims that map to instance-admin, when set. */
+  adminGroupClaims?: string[];
+  enabled: boolean;
+  updatedAt: string;
+}
+
 /** A registered hosted project mapped to its isolated .wai/ root. */
 export interface HostedProjectRecord {
   id: string;
