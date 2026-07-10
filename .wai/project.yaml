@@ -22,6 +22,13 @@ targets:
 rules:
   noOverlappingOwnership: true
   requireOwnedPaths: true
+  complexity:
+    # The hosted control-plane hub orchestrators (admin, identity, landscape)
+    # legitimately coordinate up to ~10 collaborators after Phase 6 folded in
+    # scoped-administration deps. A reviewed, visible cap of 10 — rather than
+    # per-spec lint.allow silences — governs both the GOD_COMPONENT and
+    # EXCESSIVE_DEPENDENCIES rules. Genuinely bloated components still warn.
+    maxComponentDependencies: 10
   # wairon's code realizes several spec-level roles inside shared modules
   # (e.g. portal+orchestrator+adapters folded into src/mcp/server.ts), so
   # per-component implementer agents would claim overlapping paths. Subsystem
