@@ -47,6 +47,9 @@ describe('hosted pack management (sdd_host)', () => {
     fs.mkdirSync(dataDir, { recursive: true });
     process.env.WAIRON_ADMIN_TOKEN = ADMIN;
     process.env.WAIRON_PACKS_DIR = path.join(dataDir, 'packs');
+    // Isolate the image tier too: a populated /opt/wairon/packs on the host
+    // must never leak into these instance-tier assertions.
+    process.env.WAIRON_IMAGE_PACKS_DIR = path.join(dataDir, 'image-packs');
     cfg = { host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: true };
   });
 

@@ -199,6 +199,36 @@ docker compose exec wairon wairon host packs list
 docker compose exec wairon wairon packs add /data/incoming/acme-rules.cjs --global
 ```
 
+#### Extension packs on hosted instances — bake, don't shell in
+
+Server-global packs come from **two tiers**, merged at discovery time:
+
+- **Image tier** (`WAIRON_IMAGE_PACKS_DIR` = `/opt/wairon/packs`) — immutable,
+  baked into the layer, read-only at runtime. This is the **recommended** channel:
+  build an extension image FROM the published base and `COPY` your packs in, so the
+  set is versioned, reviewable, and reproducible across every replica.
+- **Instance tier** (`WAIRON_PACKS_DIR` = `$WAIRON_DATA_DIR/packs`) — mutable, on
+  the `/data` volume. The `install` / `remove` admin surface writes here (never the
+  image tier), for **local, dev, and emergency** hotfixes without a rebuild.
+
+A minimal extension image:
+
+```dockerfile
+FROM ghcr.io/syw-apps/wairon:2.x
+# packs/ holds declarative or rule packs; they land in the immutable image tier.
+COPY packs/ /opt/wairon/packs/
+```
+
+Redeploying that image keeps the `/data` volume, so instance-tier installs and all
+project state survive the swap. **Instance packs shadow image packs** on a name
+collision — the instance copy is the effective one, and the shadowed image pack
+surfaces as **drift** in `GET /operations/health` (the `pack-shadowing` check), so
+an emergency override is never silent. Removing an instance pack re-exposes the
+image pack of the same name; removing a pack that a project still references
+**intentionally invalidates** that project — the fallout is visible in the health
+report (`missing-pack-references`) and in the project's own validation. Bake the
+durable doctrine into the image tier and treat instance installs as temporary.
+
 ### Runtime secrets — no restart
 
 Integration tokens resolve **data-dir store → env**, so an integration can be
@@ -371,7 +401,8 @@ project specs and API keys.
 | Admin-plane bind host | `--admin-host` | — | `127.0.0.1` |
 | Admin-plane port | `--admin-port` | — | `8081` |
 | Data root | `--data-dir` | `WAIRON_DATA_DIR` | `~/.wairon/data` |
-| Server-global packs dir | — | `WAIRON_PACKS_DIR` | `$WAIRON_DATA_DIR/packs` (persists on the volume) |
+| Server-global packs dir (instance tier, mutable) | — | `WAIRON_PACKS_DIR` | `$WAIRON_DATA_DIR/packs` (persists on the volume) |
+| Image-layer packs dir (immutable, baked) | — | `WAIRON_IMAGE_PACKS_DIR` | `/opt/wairon/packs` (empty in the base image; extension images `COPY` into it) |
 | Data-plane auth | `--no-auth` (off) | — | on |
 | Master credential | — | `WAIRON_ADMIN_TOKEN` | *(required unless `--no-auth`)* |
 | Diagram view-link signing key | — | `WAIRON_SIGNING_SECRET` | falls back to `WAIRON_ADMIN_TOKEN` |

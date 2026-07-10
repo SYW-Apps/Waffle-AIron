@@ -24,6 +24,7 @@ import type {
   HostedProjectRecord,
   PrincipalSubject,
   ProjectGrant,
+  ProjectPackReference,
   ResourceQuotaPolicy,
   ResourceUsageSnapshot,
 } from '../../src/server/types.js';
@@ -59,40 +60,77 @@ function snapshot(over: Partial<ResourceUsageSnapshot> = {}): ResourceUsageSnaps
 
 describe('diagnostics specialist (pure)', () => {
   it('runChecks: consistent records → all checks pass', () => {
-    const checks = runChecks([rec({ id: 'a', rootPath: '/x/a' }), rec({ id: 'b', rootPath: '/x/b' })]);
+    const checks = runChecks([rec({ id: 'a', rootPath: '/x/a' }), rec({ id: 'b', rootPath: '/x/b' })], [], [], []);
     const consistency = checks.find((c) => c.id === 'project-registry-consistency')!;
     expect(consistency.status).toBe('pass');
     expect(checks.find((c) => c.id === 'project-state-presence')!.status).toBe('pass');
     expect(checks.find((c) => c.id === 'project-count-sanity')!.status).toBe('pass');
+    // The two pack-tier checks are always present and pass with no packs/refs.
+    expect(checks.find((c) => c.id === 'pack-shadowing')!.status).toBe('pass');
+    expect(checks.find((c) => c.id === 'missing-pack-references')!.status).toBe('pass');
+    expect(checks).toHaveLength(5);
     for (const c of checks) expect(Date.parse(c.observedAt)).toBeGreaterThan(0);
   });
 
   it('runChecks: a ghost record with an unresolvable root fails the consistency check', () => {
-    const checks = runChecks([rec({ id: 'a', rootPath: '/x/a' }), rec({ id: 'ghost', rootPath: '' })]);
+    const checks = runChecks([rec({ id: 'a', rootPath: '/x/a' }), rec({ id: 'ghost', rootPath: '' })], [], [], []);
     const consistency = checks.find((c) => c.id === 'project-registry-consistency')!;
     expect(consistency.status).toBe('fail');
     expect(consistency.message).toMatch(/unresolvable root/i);
   });
 
   it('runChecks: duplicate ids fail the consistency check', () => {
-    const checks = runChecks([rec({ id: 'dup', rootPath: '/x/1' }), rec({ id: 'dup', rootPath: '/x/2' })]);
+    const checks = runChecks([rec({ id: 'dup', rootPath: '/x/1' }), rec({ id: 'dup', rootPath: '/x/2' })], [], [], []);
     expect(checks.find((c) => c.id === 'project-registry-consistency')!.status).toBe('fail');
   });
 
   it('runChecks: a disabled record warns the state-presence check', () => {
-    const checks = runChecks([rec({ id: 'a', rootPath: '/x/a' }), rec({ id: 'b', rootPath: '/x/b', status: 'disabled' })]);
+    const checks = runChecks([rec({ id: 'a', rootPath: '/x/a' }), rec({ id: 'b', rootPath: '/x/b', status: 'disabled' })], [], [], []);
     expect(checks.find((c) => c.id === 'project-state-presence')!.status).toBe('warn');
   });
 
   it('runChecks: zero active projects warns the count-sanity check', () => {
-    const checks = runChecks([]);
+    const checks = runChecks([], [], [], []);
     expect(checks.find((c) => c.id === 'project-count-sanity')!.status).toBe('warn');
   });
 
   it('runChecks: a scope selector narrows the checks to one project', () => {
     // Ghost record is 'b'; scoping to the healthy 'a' hides it → consistency passes.
-    const checks = runChecks([rec({ id: 'a', rootPath: '/x/a' }), rec({ id: 'b', rootPath: '' })], 'a');
+    const checks = runChecks([rec({ id: 'a', rootPath: '/x/a' }), rec({ id: 'b', rootPath: '' })], [], [], [], 'a');
     expect(checks.find((c) => c.id === 'project-registry-consistency')!.status).toBe('pass');
+  });
+
+  it('runChecks: pack-shadowing warns and names the pack present in both tiers', () => {
+    const checks = runChecks([rec({ id: 'a', rootPath: '/x/a' })], ['shared', 'image-only'], ['shared', 'inst-only'], []);
+    const shadowing = checks.find((c) => c.id === 'pack-shadowing')!;
+    expect(shadowing.status).toBe('warn');
+    expect(shadowing.message).toMatch(/shared/);
+    expect(shadowing.message).not.toMatch(/image-only|inst-only/);
+  });
+
+  it('runChecks: missing-pack-references fails, naming the project, its missing refs, and invalidated profiles', () => {
+    const references: ProjectPackReference[] = [
+      { projectId: 'a', packNames: ['present', 'gone'], profileIds: ['prof-x'] },
+      { projectId: 'b', packNames: ['present'] },
+    ];
+    const checks = runChecks(
+      [rec({ id: 'a', rootPath: '/x/a' }), rec({ id: 'b', rootPath: '/x/b' })],
+      ['present'],
+      [],
+      references,
+    );
+    const missing = checks.find((c) => c.id === 'missing-pack-references')!;
+    expect(missing.status).toBe('fail');
+    expect(missing.message).toMatch(/\ba\b/);
+    expect(missing.message).toMatch(/gone/);
+    expect(missing.message).toMatch(/prof-x/);
+    expect(missing.message).not.toMatch(/present/); // a resolvable ref is not flagged
+  });
+
+  it('runChecks: a reference resolved by either tier does not fail missing-pack-references', () => {
+    const references: ProjectPackReference[] = [{ projectId: 'a', packNames: ['img', 'inst'] }];
+    const checks = runChecks([rec({ id: 'a', rootPath: '/x/a' })], ['img'], ['inst'], references);
+    expect(checks.find((c) => c.id === 'missing-pack-references')!.status).toBe('pass');
   });
 
   it('collectUsage: scope unset yields only an instance snapshot with the active count', () => {
@@ -180,24 +218,39 @@ describe('quota specialist (pure, advisory)', () => {
 
 describe('operations orchestrator (sdd_host)', () => {
   let dataDir: string;
+  let instancePacksDir: string;
+  let imagePacksDir: string;
   let cfg: HostConfig;
   const savedEnv = { ...process.env };
 
   beforeEach(() => {
     dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-operations-'));
+    // Isolate BOTH server-global pack tiers so getHealthReport never reads the
+    // developer's real ~/.wairon/packs or a machine /opt/wairon/packs.
+    instancePacksDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-operations-inst-'));
+    imagePacksDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-operations-image-'));
     process.env.WAIRON_ADMIN_TOKEN = MASTER;
+    process.env.WAIRON_PACKS_DIR = instancePacksDir;
+    process.env.WAIRON_IMAGE_PACKS_DIR = imagePacksDir;
     cfg = { host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: true };
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
     process.env = { ...savedEnv };
-    try {
-      fs.rmSync(dataDir, { recursive: true, force: true });
-    } catch {
-      /* windows file locks */
+    for (const dir of [dataDir, instancePacksDir, imagePacksDir]) {
+      try {
+        fs.rmSync(dir, { recursive: true, force: true });
+      } catch {
+        /* windows file locks */
+      }
     }
   });
+
+  /** Seed a declarative pack named `name` into a given server-global tier dir. */
+  function seedPack(dir: string, name: string): void {
+    fs.writeFileSync(path.join(dir, `${name}.yaml`), `name: ${name}\nprofiles: {}\nlanguages: {}\n`);
+  }
 
   let tokenSeq = 0;
   function mintToken(grants: ProjectGrant[]): string {
@@ -228,7 +281,8 @@ describe('operations orchestrator (sdd_host)', () => {
 
     const report = getHealthReport(cfg, opsToken());
     expect(report.status).toBe('ok');
-    expect(report.checks.length).toBe(3);
+    // 3 base checks + pack-shadowing + missing-pack-references (both always present).
+    expect(report.checks.length).toBe(5);
     expect(report.usage?.[0].scope).toBe('instance');
 
     expect(() => getHealthReport(cfg, plainToken())).toThrow(ForbiddenError);
@@ -240,6 +294,55 @@ describe('operations orchestrator (sdd_host)', () => {
   it('getHealthReport: a ghost project record makes the instance unhealthy', () => {
     seedRegistry([rec({ id: 'ghost', rootPath: '', status: 'active', createdAt: '2026-01-01T00:00:00.000Z' })]);
     expect(getHealthReport(cfg, MASTER).status).toBe('unhealthy');
+  });
+
+  /** Write a profileSelection into a project's raw .wai/project.yaml. */
+  function writeProfileSelection(root: string, requiredPackNames: string[], profileIds: string[]): void {
+    const dir = path.join(root, '.wai');
+    fs.mkdirSync(dir, { recursive: true });
+    const yaml =
+      'profileSelection:\n' +
+      `  requiredPackNames: [${requiredPackNames.map((n) => JSON.stringify(n)).join(', ')}]\n` +
+      `  profileIds: [${profileIds.map((n) => JSON.stringify(n)).join(', ')}]\n` +
+      `  selectedAt: ''\n`;
+    fs.writeFileSync(path.join(dir, 'project.yaml'), yaml);
+  }
+
+  it('getHealthReport: an instance pack shadowing an image pack surfaces as a pack-shadowing warning', () => {
+    createProject(cfg, MASTER, 'proj-a');
+    seedPack(imagePacksDir, 'overlap');
+    seedPack(instancePacksDir, 'overlap'); // same name in both tiers → instance shadows image
+
+    const report = getHealthReport(cfg, MASTER);
+    const shadowing = report.checks.find((c) => c.id === 'pack-shadowing')!;
+    expect(shadowing.status).toBe('warn');
+    expect(shadowing.message).toMatch(/overlap/);
+    expect(report.status).toBe('degraded');
+  });
+
+  it('getHealthReport: a project referencing a pack absent from both tiers fails missing-pack-references', () => {
+    const rec = createProject(cfg, MASTER, 'proj-a');
+    writeProfileSelection(rec.rootPath, ['ghost-pack'], ['prof-y']);
+
+    const report = getHealthReport(cfg, MASTER);
+    const missing = report.checks.find((c) => c.id === 'missing-pack-references')!;
+    expect(missing.status).toBe('fail');
+    expect(missing.message).toMatch(/proj-a/);
+    expect(missing.message).toMatch(/ghost-pack/);
+    expect(missing.message).toMatch(/prof-y/);
+    expect(report.status).toBe('unhealthy');
+  });
+
+  it('getHealthReport: a clean instance with resolvable references adds no new findings', () => {
+    const rec = createProject(cfg, MASTER, 'proj-a');
+    seedPack(imagePacksDir, 'baked'); // distinct names → no shadowing
+    seedPack(instancePacksDir, 'installed');
+    writeProfileSelection(rec.rootPath, ['baked', 'installed'], ['prof-ok']);
+
+    const report = getHealthReport(cfg, MASTER);
+    expect(report.checks.find((c) => c.id === 'pack-shadowing')!.status).toBe('pass');
+    expect(report.checks.find((c) => c.id === 'missing-pack-references')!.status).toBe('pass');
+    expect(report.status).toBe('ok');
   });
 
   it('getUsage: returns the instance snapshot with the active project count', () => {
@@ -272,13 +375,19 @@ describe('operations orchestrator (sdd_host)', () => {
 describe('operations portal (sdd_host http)', () => {
   let dataDir: string;
   let cfg: HostConfig;
+  let instancePacksDir: string;
+  let imagePacksDir: string;
   let server: http.Server;
   let baseUrl: string;
   const savedEnv = { ...process.env };
 
   beforeEach(async () => {
     dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-operations-http-'));
+    instancePacksDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-operations-http-inst-'));
+    imagePacksDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-operations-http-image-'));
     process.env.WAIRON_ADMIN_TOKEN = MASTER;
+    process.env.WAIRON_PACKS_DIR = instancePacksDir;
+    process.env.WAIRON_IMAGE_PACKS_DIR = imagePacksDir;
     cfg = {
       host: '127.0.0.1',
       port: 0,
@@ -299,10 +408,12 @@ describe('operations portal (sdd_host http)', () => {
     vi.restoreAllMocks();
     await new Promise<void>((resolve) => server.close(() => resolve()));
     process.env = { ...savedEnv };
-    try {
-      fs.rmSync(dataDir, { recursive: true, force: true });
-    } catch {
-      /* windows file locks */
+    for (const dir of [dataDir, instancePacksDir, imagePacksDir]) {
+      try {
+        fs.rmSync(dir, { recursive: true, force: true });
+      } catch {
+        /* windows file locks */
+      }
     }
   });
 

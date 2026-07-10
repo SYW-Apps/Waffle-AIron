@@ -3,12 +3,14 @@ import { authenticateCredential } from './auth.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { listProjectRecords } from './projects.js';
 import { sendJson } from './request.js';
+import * as packs from './packs.js';
 import type {
   DiagnosticCheckResult,
   HostConfig,
   HostedProjectRecord,
   InstanceHealthReport,
   Principal,
+  ProjectPackReference,
   ResourceQuotaPolicy,
   ResourceUsageSnapshot,
 } from './types.js';
@@ -90,12 +92,19 @@ function scopeRecords(projects: HostedProjectRecord[], scope?: string): HostedPr
 }
 
 /**
- * Derive redacted operational diagnostic checks — project-registry consistency
- * (unique ids and resolvable roots), per-project state presence, and a
- * project-count sanity check — purely from the supplied hosted project records.
+ * Derive redacted operational diagnostic checks purely from the supplied inputs —
+ * project-registry consistency (unique ids and resolvable roots), per-project
+ * state presence, a project-count sanity check, pack-shadowing (an instance pack
+ * shadowing a same-named image pack), and missing-pack-references (a project
+ * referencing a pack that resolves in neither the image nor the instance tier).
+ * Pure: the caller supplies the records, the two pack-tier name listings, and the
+ * per-project references — this function does no I/O.
  */
 export function runChecks(
   projects: HostedProjectRecord[],
+  imagePackNames: string[],
+  instancePackNames: string[],
+  projectReferences: ProjectPackReference[],
   scope?: string,
 ): DiagnosticCheckResult[] {
   const scoped = scopeRecords(projects, scope);
@@ -143,6 +152,52 @@ export function runChecks(
     id: 'project-count-sanity',
     status: activeCount === 0 ? 'warn' : 'pass',
     message: `${activeCount} active hosted project(s).`,
+    observedAt,
+  });
+
+  // Pack-shadowing: an instance pack shadowing a same-named image pack is drift —
+  // the instance copy takes precedence over the immutable image copy. Derived
+  // purely from the two tier name listings.
+  const instanceSet = new Set(instancePackNames);
+  const shadowed = [...new Set(imagePackNames.filter((n) => instanceSet.has(n)))];
+  checks.push({
+    id: 'pack-shadowing',
+    status: shadowed.length > 0 ? 'warn' : 'pass',
+    message:
+      shadowed.length > 0
+        ? `${shadowed.length} image-tier pack(s) shadowed by an instance pack (the instance copy takes precedence): ${shadowed.join(', ')}.`
+        : 'No image-tier packs are shadowed by an instance pack.',
+    observedAt,
+  });
+
+  // Missing-pack-references: a project referencing a pack absent from BOTH tiers
+  // is invalidated (e.g. an instance pack was removed while a project still
+  // depends on it). Fail and name each offending project with its missing refs
+  // and any profile ids thereby invalidated. Derived purely from the supplied
+  // per-project references and the two tier listings.
+  const availablePacks = new Set([...imagePackNames, ...instancePackNames]);
+  const referenceById = new Map(projectReferences.map((r) => [r.projectId, r]));
+  const invalidatedProjects: string[] = [];
+  for (const project of scoped) {
+    const reference = referenceById.get(project.id);
+    if (!reference) continue;
+    const missingRefs = [...new Set(reference.packNames.filter((n) => !availablePacks.has(n)))];
+    if (missingRefs.length === 0) continue;
+    const invalidatedProfiles = reference.profileIds ?? [];
+    invalidatedProjects.push(
+      `${project.id} → missing pack(s): ${missingRefs.join(', ')}` +
+        (invalidatedProfiles.length > 0
+          ? `; invalidated profile(s): ${invalidatedProfiles.join(', ')}`
+          : ''),
+    );
+  }
+  checks.push({
+    id: 'missing-pack-references',
+    status: invalidatedProjects.length > 0 ? 'fail' : 'pass',
+    message:
+      invalidatedProjects.length > 0
+        ? `${invalidatedProjects.length} project(s) reference packs absent from both tiers — ${invalidatedProjects.join(' | ')}.`
+        : 'All project pack/profile references resolve in the image or instance tier.',
     observedAt,
   });
 
@@ -249,7 +304,18 @@ export function getHealthReport(
   requireOperationsRead(principal);
 
   const projects = listProjectRecords(cfg.dataDir);
-  const checks = runChecks(projects, scope);
+
+  // List the server-global packs across both tiers (image + instance), then
+  // derive the per-tier name listings from the tier-tagged descriptors. A
+  // shadowed image pack still counts as present in the image tier.
+  const globalPacks = packs.storeListGlobalPacks();
+  const imagePackNames = globalPacks.filter((p) => p.tier === 'image').map((p) => p.name);
+  const instancePackNames = globalPacks.filter((p) => p.tier === 'instance').map((p) => p.name);
+
+  // Read each project's declared pack/profile references from its isolated root.
+  const projectReferences = projects.map((p) => packs.readProjectReferences(p.rootPath));
+
+  const checks = runChecks(projects, imagePackNames, instancePackNames, projectReferences, scope);
   const usage = collectUsage(projects, scope);
   return buildHealthReport(checks, usage);
 }

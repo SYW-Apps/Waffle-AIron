@@ -22,9 +22,15 @@ FROM node:20-bookworm-slim AS runtime
 ARG VERSION=dev
 ARG REVISION=unknown
 ARG CREATED=unknown
+# WAIRON_IMAGE_PACKS_DIR is the immutable image-layer extension-pack tier: an
+# extension image built FROM this one does `COPY packs/ /opt/wairon/packs/` to bake
+# packs into the layer. It is read-only at runtime and merged with the mutable
+# instance tier (WAIRON_PACKS_DIR) at discovery time — instance packs win on a
+# name collision. Declared before the build COPY so its layer stays cache-stable.
 ENV NODE_ENV=production \
     WAIRON_DATA_DIR=/data \
-    WAIRON_PACKS_DIR=/data/packs
+    WAIRON_PACKS_DIR=/data/packs \
+    WAIRON_IMAGE_PACKS_DIR=/opt/wairon/packs
 LABEL org.opencontainers.image.title="wairon" \
       org.opencontainers.image.description="Self-hosted Wairon MCP hosting server" \
       org.opencontainers.image.source="https://github.com/SYW-Apps/Waffle-AIron" \
@@ -46,7 +52,7 @@ COPY --from=build /app/dist ./dist
 RUN ln -s /app/dist/cli/index.js /usr/local/bin/wairon \
  && ln -s /app/dist/cli/index.js /usr/local/bin/wai \
  && useradd --system --uid 10001 --create-home --home-dir /home/wairon wairon \
- && mkdir -p /data \
+ && mkdir -p /data /opt/wairon/packs \
  && chown -R wairon:wairon /data
 
 USER wairon
