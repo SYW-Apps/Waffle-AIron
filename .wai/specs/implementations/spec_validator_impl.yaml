@@ -43,14 +43,27 @@ methods:
         description: Integrate Zod schema loader errors
         type: local
       - stepNumber: 9
+        description: >-
+          Round-trip serializability: the registered roundtrip-serialization rule dry-runs every
+          in-scope spec through the writer relativization + schema pipeline via the core adapter (no
+          I/O), reporting ROUNDTRIP_SERIALIZATION errors so validate predicts every write lock would
+          refuse
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: dryRunSerializeSpecs
+      - stepNumber: 10
         description: Load project extensions and compose the active validation rule sequence
         type: local
-      - stepNumber: 10
-        description: >-
-          Run hierarchy, type-reference, contract, narrative, boundary, graph, naming,
-          documentation, and complexity rules
-        type: local
       - stepNumber: 11
+        description: >-
+          Run hierarchy, namespace-hygiene, round-trip, type-reference, contract (incl. cross-tree
+          ref recognition), narrative, boundary, graph, naming, documentation, complexity, and
+          semantic-edge rules (dispatch-table capability contracts and guarantee backing, dispatch-
+          and lifecycle-rooted reachability, durability round-trip hydration with a non-flooded boot
+          graph, untyped cross-subsystem seams with dispatch-table exemption, prose-claim
+          realization)
+        type: local
+      - stepNumber: 12
         description: Return the aggregated validation result
         type: return
         outcome: ValidationResult
@@ -109,17 +122,26 @@ methods:
         targetComponent: validator_core_adapter
         targetMethod: loadTypeSpecs
       - stepNumber: 8
+        description: >-
+          Round-trip serializability: the registered roundtrip-serialization rule dry-runs every
+          in-scope spec through the writer pipeline via the core adapter, identical to
+          validateSddTree
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: dryRunSerializeSpecs
+      - stepNumber: 9
         description: Treat every spec as complete (suppress the draft severity relaxation), mutating nothing
         type: local
-      - stepNumber: 9
-        description: >-
-          Run the same active rule sequence as validateSddTree at full strictness, including naming,
-          documentation, and complexity rules
-        type: local
       - stepNumber: 10
+        description: >-
+          Run the same active rule sequence as validateSddTree at full strictness, including
+          namespace-hygiene, round-trip, naming, documentation, complexity, and the semantic-edge
+          rules
+        type: local
+      - stepNumber: 11
         description: Return the as-complete validation result
         type: return
         outcome: as-complete ValidationResult
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-06T21:22:50.205Z'
+updatedAt: '2026-07-10T22:14:29.570Z'

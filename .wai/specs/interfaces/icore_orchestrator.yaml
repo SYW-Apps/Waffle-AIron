@@ -127,6 +127,12 @@ methods:
     description: Delegate loading type specs to spec loader
     signature: 'loadTypeSpecs(): TypeSpec[]'
     returns: TypeSpec[]
+  - name: dryRunSerializeSpecs
+    description: >-
+      Delegate the in-memory round-trip serialization check to spec loader (optionally
+      scope-filtered)
+    signature: 'dryRunSerializeSpecs(include?: (specId: string) => boolean): ValidationIssue[]'
+    returns: ValidationIssue[]
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-10T15:19:55.153Z'
+updatedAt: '2026-07-10T22:14:12.051Z'

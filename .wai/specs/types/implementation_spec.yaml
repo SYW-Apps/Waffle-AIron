@@ -6,16 +6,20 @@ fields:
   - name: id
     type: string
     description: Implementation spec id
+    optional: false
     key: primary
   - name: name
     type: string
     description: Human-readable implementation name
+    optional: false
   - name: description
     type: string
     description: Implementation approach summary
+    optional: false
   - name: contract
     type: string
     description: L3 interface id this implements
+    optional: false
   - name: sourcePath
     type: string
     description: Concrete source file realizing it
@@ -26,11 +30,15 @@ fields:
     optional: true
   - name: methods
     type: object[]
-    description: Per-method L5 narratives (steps, detail, intent)
+    description: >-
+      Per-method L5 narratives (steps, detail, intent). A dispatch step routes a named capability
+      through a target Portal's dispatch table — validated against that table (UNSERVED_CAPABILITY)
+      and traversed by reachability, unlike a bare call to the generic handle.
+    optional: false
   - name: status
     type: string
     description: draft | design | complete
     optional: true
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-03T00:00:00.000Z'
+updatedAt: '2026-07-10T18:47:37.564Z'

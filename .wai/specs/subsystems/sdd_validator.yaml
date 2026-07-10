@@ -1,10 +1,17 @@
-id: "sdd_validator"
-name: "SDD Architectural Validator"
-description: "Checks spec tree completeness, interface contract compliance, and enforces component-type interaction boundaries."
-parentSystem: "Waffle-AIron"
+id: sdd_validator
+name: SDD Architectural Validator
+description: >-
+  Checks spec tree completeness, interface contract compliance, and component-type interaction
+  boundaries; validates semantic wiring (dispatch tables, lifecycle-rooted reachability, durability
+  round-trips, typed cross-subsystem seams, prose-claim realization), namespace hygiene (reserved
+  keywords, root-subsystem shadowing, cross-tree reference recognition), and writer round-trip
+  serializability, so validate predicts every write lock would refuse.
+parentSystem: Waffle-AIron
 publicInterfaces:
-  - type: "Custom"
-    component: "validator_portal"
-    details: "Provides spec validation services."
-createdAt: "2026-06-10T19:28:00.000Z"
-updatedAt: "2026-06-10T19:28:00.000Z"
+  - type: Custom
+    details: Provides spec validation services.
+    component: validator_portal
+trustedLinks: []
+status: complete
+createdAt: '2026-06-10T19:28:00.000Z'
+updatedAt: '2026-07-10T22:14:31.264Z'

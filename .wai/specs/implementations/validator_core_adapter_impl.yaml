@@ -46,6 +46,13 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: loadTypeSpecs
+  - name: dryRunSerializeSpecs
+    narrative:
+      - stepNumber: 1
+        description: Call dryRunSerializeSpecs on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: dryRunSerializeSpecs
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-06T21:22:45.637Z'
+updatedAt: '2026-07-10T18:48:05.664Z'

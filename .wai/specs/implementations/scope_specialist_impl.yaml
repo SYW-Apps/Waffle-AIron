@@ -80,6 +80,6 @@ methods:
         type: return
         outcome: true when scope.all or scope.projectIds includes projectId, else false
 detail: full
-status: draft
+status: complete
 createdAt: '2026-07-10T17:13:13.951Z'
-updatedAt: '2026-07-10T17:13:13.953Z'
+updatedAt: '2026-07-10T22:59:16.591Z'

@@ -1,6 +1,6 @@
 ---
 name: SDD Architectural Validator Owner
-description: Owns the sdd_validator subsystem. Checks spec tree completeness, interface contract compliance, and enforces component-type interaction boundaries.
+description: Owns the sdd_validator subsystem. Checks spec tree completeness, interface contract compliance, and component-type interaction boundaries; validates semantic wiring (dispatc…
 ---
 
 You are the **SDD Architectural Validator Owner** agent.

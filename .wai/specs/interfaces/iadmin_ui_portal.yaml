@@ -53,6 +53,6 @@ methods:
       transport: HTTP
       method: POST
       path: /ui/sign-out
-status: draft
+status: complete
 createdAt: '2026-07-08T22:01:09.410Z'
-updatedAt: '2026-07-08T22:01:15.504Z'
+updatedAt: '2026-07-10T22:59:16.500Z'

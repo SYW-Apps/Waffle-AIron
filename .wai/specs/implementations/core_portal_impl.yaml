@@ -186,6 +186,13 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: loadTypeSpecs
+  - name: dryRunSerializeSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward dryRunSerializeSpecs call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: dryRunSerializeSpecs
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-06T21:22:45.590Z'
+updatedAt: '2026-07-10T18:48:07.070Z'

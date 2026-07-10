@@ -11,6 +11,6 @@ dependsOn:
   - host_server
   - admin_ui_orchestrator
 portalType: HTTP_API
-status: draft
+status: complete
 createdAt: '2026-07-08T22:00:38.535Z'
-updatedAt: '2026-07-08T22:00:38.536Z'
+updatedAt: '2026-07-10T22:59:16.406Z'

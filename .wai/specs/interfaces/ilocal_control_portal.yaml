@@ -72,6 +72,6 @@ methods:
     endpoint:
       transport: CLI
       command: wairon host exposure set
-status: draft
+status: complete
 createdAt: '2026-07-09T07:20:34.132Z'
-updatedAt: '2026-07-09T07:20:38.891Z'
+updatedAt: '2026-07-10T22:59:16.529Z'

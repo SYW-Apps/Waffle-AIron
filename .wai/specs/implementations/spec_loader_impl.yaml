@@ -101,6 +101,22 @@ methods:
         description: Return the array of parsed type specs
         type: return
         outcome: TypeSpec[]
+  - name: dryRunSerializeSpecs
+    narrative: []
+    detail: intent
+    intent: >-
+      Re-serializes every currently loaded spec — subsystems, components, interfaces,
+      implementations, types, AND groups — in memory through the exact writer pipeline the save
+      paths use: the same deepest-mount prefix derivation, the same namespace relativization, and
+      the same schema parse, shared code with the real save path so the check can never drift from
+      what a write would actually do, without touching the filesystem. An optional include predicate
+      skips out-of-scope specs before the expensive clone and parse, so scoped validation pays
+      scoped cost. For each spec whose serialized form the writer schema refuses, collects a
+      ROUNDTRIP_SERIALIZATION issue naming the spec id and the offending field path (rendered by the
+      same formatter as the save-time refusal, so the two outputs correlate); an unserializable spec
+      never throws, it only surfaces issues. Returns the collected issues so validate reports at
+      validate time every refusal that lock's status promotion or any later save would otherwise
+      raise mid-write.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-06T20:49:17.672Z'
+updatedAt: '2026-07-10T22:14:42.040Z'

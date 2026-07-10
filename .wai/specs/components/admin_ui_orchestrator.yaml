@@ -17,6 +17,6 @@ dependsOn:
   - landscape_orchestrator
   - audit_repository
   - secret_registry
-status: draft
+status: complete
 createdAt: '2026-07-08T22:00:33.070Z'
-updatedAt: '2026-07-08T22:03:18.749Z'
+updatedAt: '2026-07-10T22:59:16.371Z'

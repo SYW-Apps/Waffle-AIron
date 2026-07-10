@@ -52,6 +52,6 @@ methods:
     params:
       - name: sessionId
         type: string
-status: draft
+status: complete
 createdAt: '2026-07-08T22:01:01.129Z'
-updatedAt: '2026-07-08T22:01:01.130Z'
+updatedAt: '2026-07-10T22:59:16.472Z'

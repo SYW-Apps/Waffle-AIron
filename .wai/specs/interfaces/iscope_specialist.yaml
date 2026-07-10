@@ -42,6 +42,6 @@ methods:
         type: ScopeResolution
       - name: projectId
         type: string
-status: draft
+status: complete
 createdAt: '2026-07-10T17:12:57.981Z'
-updatedAt: '2026-07-10T17:12:57.983Z'
+updatedAt: '2026-07-10T22:59:16.562Z'

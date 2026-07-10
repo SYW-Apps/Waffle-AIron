@@ -1,0 +1,29 @@
+kind: value-object
+id: lifecycle_entrypoint
+name: LifecycleEntrypoint
+description: >-
+  A declared lifecycle flow root on a subsystem: a component.method the runtime invokes at a
+  lifecycle phase (init/shutdown). Reachability analysis (unused-detection, durability round-trip)
+  treats these as entrypoints alongside Portals, Observers, and published components — making
+  boot-time wiring like hydration and environment provisioning statically checkable
+  (INVALID_LIFECYCLE_ENTRYPOINT when the target does not exist).
+fields:
+  - name: phase
+    type: string
+    description: init | shutdown — which lifecycle flow this roots
+    optional: false
+  - name: component
+    type: string
+    description: Component id whose method the runtime invokes at this phase
+    optional: false
+  - name: method
+    type: string
+    description: Method name on that component's interface
+    optional: false
+  - name: description
+    type: string
+    description: What this lifecycle flow establishes or tears down
+    optional: true
+methods: []
+createdAt: '2026-07-10T18:47:29.021Z'
+updatedAt: '2026-07-10T18:47:29.161Z'

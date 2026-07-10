@@ -64,6 +64,20 @@ methods:
     signature: 'loadTypeSpecs(): TypeSpec[]'
     returns: TypeSpec[]
     params: []
+  - name: dryRunSerializeSpecs
+    description: >-
+      Re-serializes every currently loaded spec (subsystems, components, interfaces,
+      implementations, types, and groups) in memory through the exact writer pipeline the save paths
+      use — the same namespace relativization and the same schema parse, never a parallel
+      reimplementation — without touching the filesystem. The optional include predicate skips
+      out-of-scope specs BEFORE the expensive clone+parse so scoped validation pays scoped cost.
+      Returns one ROUNDTRIP_SERIALIZATION issue per refused spec, naming the spec id and offending
+      field path; never throws for an unserializable spec. Guarantees validate predicts every
+      refusal lock or any save would raise.
+    signature: 'dryRunSerializeSpecs(include?: (specId: string) => boolean): ValidationIssue[]'
+    returns: ValidationIssue[]
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-06T20:49:02.379Z'
+updatedAt: '2026-07-10T22:14:10.086Z'

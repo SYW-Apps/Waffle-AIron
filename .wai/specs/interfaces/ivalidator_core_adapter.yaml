@@ -27,6 +27,14 @@ methods:
     description: Loads type specs via core portal
     signature: 'loadTypeSpecs(): TypeSpec[]'
     returns: TypeSpec[]
+  - name: dryRunSerializeSpecs
+    description: >-
+      Dry-runs every loaded spec through the writer relativization + schema pipeline via the core
+      portal (no I/O), returning one issue per spec the writer would refuse — gives validate-time
+      visibility of every write lock would reject. Accepts the validation run's scope predicate so
+      scoped runs pay scoped cost.
+    signature: 'dryRunSerializeSpecs(include?: (specId: string) => boolean): ValidationIssue[]'
+    returns: ValidationIssue[]
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-06T21:22:36.690Z'
+updatedAt: '2026-07-10T22:14:16.427Z'

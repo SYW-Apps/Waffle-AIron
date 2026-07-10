@@ -392,6 +392,13 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: loadTypeSpecs
+  - name: dryRunSerializeSpecs
+    narrative:
+      - stepNumber: 1
+        description: Delegate the in-memory round-trip serialization check to spec loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: dryRunSerializeSpecs
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-10T15:19:23.694Z'
+updatedAt: '2026-07-10T18:48:08.998Z'
