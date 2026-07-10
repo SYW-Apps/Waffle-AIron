@@ -231,6 +231,25 @@ describe('identity orchestrator (sdd_host)', () => {
     expect(rec?.revokedAt).toBeTruthy();
   });
 
+  // 3rd-review B1: the mint deactivation guard must resolve the owner by the
+  // subject id too, or minting with the subject id of a divergent-id user dodges
+  // it and re-enables the deactivated identity.
+  it('refuses to mint for a deactivated user addressed by their subject id (divergent id)', () => {
+    createProjectRecord(dataDir, 'proj-a');
+    identity.upsertUser(cfg, MASTER, mkUser({ id: 'rec-9', subject: subject({ userId: 'subj-9' }) }));
+    identity.setUserStatus(cfg, MASTER, 'rec-9', 'inactive');
+    // Both the record id AND the subject id must be refused.
+    for (const ownerUserId of ['rec-9', 'subj-9']) {
+      expect(() =>
+        identity.mintToken(cfg, MASTER, {
+          ownerUserId,
+          label: 't',
+          grants: [{ projectId: 'proj-a', permissions: ['mcp:read'] }],
+        }),
+      ).toThrow(/deactivated user/i);
+    }
+  });
+
   // ── revokeToken ──────────────────────────────────────────────────────────
 
   it('revokes a token as admin and audits token.revoke', () => {
