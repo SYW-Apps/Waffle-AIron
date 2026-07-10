@@ -2,7 +2,13 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { RootsListChangedNotificationSchema } from '@modelcontextprotocol/sdk/types.js';
+import {
+  RootsListChangedNotificationSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
+  McpError,
+  ErrorCode,
+} from '@modelcontextprotocol/sdk/types.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -10,6 +16,11 @@ import { setProjectRoot } from '../utils/fs.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import type { ValidationIssue } from '../core/validation.js';
 import { EndpointSchema, type Endpoint, type SubsystemSpec } from '../models/specs.js';
+import {
+  listResources as coreListSkillResources,
+  readResource as coreReadSkillResource,
+  type SkillResourceDescriptor,
+} from '../core/skills.js';
 
 // ---------------------------------------------------------------------------
 // wairon MCP Server
@@ -43,6 +54,7 @@ function requireProvision() {
 }
 
 
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -71,6 +83,69 @@ function reg<Args extends Record<string, unknown>>(
 ): void {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (server as any).registerTool(name, config, cb as any);
+}
+
+// ---------------------------------------------------------------------------
+// Built-in SDD skill resources (mcp_skills_adapter + SDK registration)
+//
+// The MCP server publishes the four built-in SDD skills as read-only MCP
+// resources so cloud-only agents (which cannot receive the filesystem-exported
+// skills) can still discover and pull them. mcp_skills_adapter is the sanctioned
+// cross-subsystem hop into the sdd_skills portal.
+// ---------------------------------------------------------------------------
+
+const SKILL_RESOURCE_MIME = 'text/markdown';
+
+// mcp_skills_adapter — thin forwarders across the boundary into the skills
+// portal. Statically imported (not lazily required like the project-root-
+// sensitive core adapters) because the skills templates resolve relative to the
+// package, independent of the request-scoped project root.
+function listSkillResources(): SkillResourceDescriptor[] {
+  return coreListSkillResources();
+}
+function readSkillResource(resourceId: string): string {
+  return coreReadSkillResource(resourceId);
+}
+
+/** Resolve an MCP resource URI (wairon-skill://<id>) back to its skill id. */
+function skillIdFromResourceUri(uri: string): string {
+  try {
+    const u = new URL(uri);
+    return u.host || u.pathname.replace(/^\/+/, '') || uri;
+  } catch {
+    return uri;
+  }
+}
+
+/**
+ * Register the resources/list + resources/read endpoints on the SDK server so
+ * both the stdio server and the hosted per-project scoped server (which reuse
+ * this same factory) publish the built-in SDD skills automatically. Reads
+ * dispatch through the skills adapter to the resource workflow; an unknown URI
+ * surfaces the not-found message as an MCP error.
+ */
+function registerSkillResources(server: McpServer): void {
+  server.server.registerCapabilities({ resources: {} });
+
+  server.server.setRequestHandler(ListResourcesRequestSchema, () => ({
+    resources: listSkillResources().map((d) => ({
+      uri: d.resourceUri,
+      name: d.name,
+      description: d.description,
+      mimeType: SKILL_RESOURCE_MIME,
+    })),
+  }));
+
+  server.server.setRequestHandler(ReadResourceRequestSchema, (request) => {
+    const uri = request.params.uri;
+    try {
+      const content = readSkillResource(skillIdFromResourceUri(uri));
+      return { contents: [{ uri, mimeType: SKILL_RESOURCE_MIME, text: content }] };
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      throw new McpError(ErrorCode.InvalidParams, message);
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -825,6 +900,9 @@ export function createMcpServer(): McpServer {
       }
     },
   );
+
+  // ── Built-in SDD skills as read-only MCP resources ────────────────────────
+  registerSkillResources(server);
 
   return server;
 }
