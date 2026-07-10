@@ -457,31 +457,21 @@ export function replaceUserGrants(
     throw new Error(`Hosted user "${userId}" not found.`);
   }
 
-  if (!scope.all) {
-    const inScopeUnits = new Set(scope.unitIds);
-    const inScopeProjects = new Set(scope.projectIds);
-    // (a) the caller must have scope over the target user's home unit (a user with
-    //     no home unit is manageable only by a super-admin).
-    const targetInScope = existing.unitId !== undefined && inScopeUnits.has(existing.unitId);
-    // (b) escalation guard: no instance-wide '*' grant, no org unit outside the
-    //     caller's scope, and no specific project outside the caller's scope.
-    const escalates = grants.some((g) =>
-      g.projectId === '*'
-        ? true
-        : g.orgUnitId !== undefined && g.orgUnitId !== ''
-          ? !inScopeUnits.has(g.orgUnitId)
-          : g.projectId !== '' && !inScopeProjects.has(g.projectId),
-    );
-    // (c) the caller must actually HOLD every permission it assigns over that
-    //     grant's scope — checking only the scope dimension (a,b) let a
-    //     user:admin-only caller grant a user project:destroy/'*'/etc. it never
-    //     held, which becomes a live token on the user's next SSO login.
-    const overReaches = !callerMayDelegateGrants(cfg, principal, grants);
-    if (!targetInScope || escalates || overReaches) {
-      throw new ForbiddenError(
-        "grant administration requires scope over the target user's home unit and may not assign authority the caller does not itself hold",
-      );
-    }
+  // (1) Target visibility: a scope.all caller — a true super-admin OR a delegated
+  //     instance-wide user:admin — may manage any user. Otherwise the target's
+  //     home unit must be in scope (a user with no home unit is super-admin-only).
+  if (!scope.all && !(existing.unitId !== undefined && scope.unitIds.includes(existing.unitId))) {
+    throw new ForbiddenError("grant administration requires scope over the target user's home unit");
+  }
+
+  // (2) Delegation guard: ONLY a genuine super-admin ('*'/'*') may assign
+  //     arbitrary authority. A delegated instance-wide user:admin has scope.all
+  //     for target VISIBILITY but is NOT omnipotent — it, like every non-admin,
+  //     may not assign grants exceeding the authority it itself holds (else it
+  //     could self-grant '*' → full admin on next SSO login). Gate on
+  //     isInstanceAdmin, matching mintToken (the two must not diverge).
+  if (!isInstanceAdmin(principal) && !callerMayDelegateGrants(cfg, principal, grants)) {
+    throw new ForbiddenError("grant administration may not assign authority the caller does not itself hold");
   }
 
   const updated = repoReplaceUserGrants(cfg.dataDir, userId, grants);

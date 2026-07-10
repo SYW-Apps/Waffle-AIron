@@ -577,6 +577,23 @@ describe('identity orchestrator (sdd_host)', () => {
     ).toEqual([{ projectId: '*', permissions: ['mcp:read'] }]);
   });
 
+  it('replaceUserGrants: a DELEGATED instance-wide user:admin (not a true super-admin) still cannot self-escalate to "*"', () => {
+    seedOrg(dataDir);
+    repoUpsertUser(dataDir, mkUser({ id: 'u-web', unitId: 'web' }));
+    // An instance-wide user:admin: scope.all=true for target VISIBILITY (may
+    // manage any user) but NOT a '*'/'*' super-admin — it holds only user:admin.
+    const instAdmin = mintNonAdminToken([{ projectId: '*', permissions: ['user:admin'] }]);
+
+    // It can manage a user's lifecycle anywhere (visibility) — but it cannot
+    // assign authority it does not hold: granting '*' or mcp:read (unheld) is 403.
+    expect(() =>
+      identity.replaceUserGrants(cfg, instAdmin, 'u-web', [{ projectId: '*', permissions: ['*'] }]),
+    ).toThrow(ForbiddenError);
+    expect(() =>
+      identity.replaceUserGrants(cfg, instAdmin, 'u-web', [{ projectId: 'p-web', permissions: ['mcp:read'] }]),
+    ).toThrow(ForbiddenError);
+  });
+
   it('mintToken: a scoped caller may only delegate within its own scope; MASTER may delegate beyond it', () => {
     seedOrg(dataDir);
     createProjectRecord(dataDir, 'p-web');
