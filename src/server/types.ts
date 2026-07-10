@@ -133,6 +133,48 @@ export interface AuditQuery {
   limit?: number;
 }
 
+/** One diagnostic check outcome inside an instance health report. */
+export interface DiagnosticCheckResult {
+  id: string;
+  /** 'pass' | 'warn' | 'fail' */
+  status: string;
+  message: string;
+  observedAt: string;
+  details?: string;
+}
+
+/** Resource usage observed for one scope ('instance' or a project id). */
+export interface ResourceUsageSnapshot {
+  scope: string;
+  capturedAt: string;
+  projectCount?: number;
+  projectBytes?: number;
+  mcpRequestsLastMinute?: number;
+  auditEventsToday?: number;
+  /** Advisory observe/warn findings annotated by the quota specialist. */
+  quotaMessages: string[];
+}
+
+/** Advisory quota policy protecting the instance; observe/warn only. */
+export interface ResourceQuotaPolicy {
+  enabled: boolean;
+  maxProjectsPerUser?: number;
+  maxMcpRequestsPerMinute?: number;
+  maxProjectBytes?: number;
+  maxAuditEventsPerDay?: number;
+  /** 'observe' | 'warn' */
+  mode: string;
+}
+
+/** The assembled read-only instance health report. */
+export interface InstanceHealthReport {
+  /** 'healthy' | 'degraded' | 'unhealthy' */
+  status: string;
+  generatedAt: string;
+  checks: DiagnosticCheckResult[];
+  usage?: ResourceUsageSnapshot[];
+}
+
 /** Instance-level durable audit capture and retention policy. */
 export interface AuditRetentionPolicy {
   enabled: boolean;
