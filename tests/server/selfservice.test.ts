@@ -14,6 +14,7 @@ import {
 } from '../../src/server/selfservice.js';
 import { createProject } from '../../src/server/admin.js';
 import { setPackPolicyRecord } from '../../src/server/policy.js';
+import { upsertOrganizationUnit, placeProject as placeProjectInUnit } from '../../src/server/organization.js';
 import { listProjectPacks } from '../../src/server/packs.js';
 import { UnauthenticatedError, ForbiddenError } from '../../src/server/identity.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
@@ -294,43 +295,107 @@ describe('self-service orchestrator (sdd_host)', () => {
     expect(listPendingRequests(cfg, decider)).toHaveLength(2);
   });
 
-  // ── S2: approval:decide is an INSTANCE capability (cross-tenant leak) ──────────
+  // ── Phase 6 scoped model: approval:decide is scope-aware ──────────────────────
   //
-  // A PROJECT-SCOPED approval:decide grant carries the permission but is scoped to
-  // one tenant — it must NOT let the holder list/decide approvals instance-wide.
-  // Only an instance-wide ({projectId:'*'}) approval:decide grant (or admin) does.
+  // Under Phase 6 tenancy a project-scoped approval:decide grant no longer fails
+  // every list/decide (the old instance-wide-only behavior) — it decides ONLY its
+  // own project's requests. A unit-scoped grant decides its subtree. A grant with
+  // no approval:decide reach at all, and any project outside scope, is still 403.
 
-  it('S2: a project-scoped approval:decide grant is rejected (403) for listing/deciding; an instance-wide grant passes', () => {
-    createProjectRecord(dataDir, 'proj-a');
-    const requester = requesterToken('s2-req', 'proj-a', 'u-s2req');
-    const req = requestProjectLock(cfg, requester, 'proj-a');
-
-    // Grant scoped to a single project carrying approval:decide → still denied.
-    const projDecider = mintToken({
-      id: 's2-pd',
-      grants: [{ projectId: 'proj-a', permissions: ['approval:decide'] }],
-      subject: subject({ userId: 'u-s2pd' }),
+  /** Mint a unit-scoped approval:decide grant token. */
+  function unitDeciderToken(id: string, unitId: string, userId: string): string {
+    return mintToken({
+      id,
+      grants: [{ projectId: '', orgUnitId: unitId, permissions: ['approval:decide'] }],
+      subject: subject({ userId }),
     });
-    expect(() => listPendingRequests(cfg, projDecider)).toThrow(ForbiddenError);
+  }
+
+  /** Seed two projects placed in two sibling units; returns the unit + request ids. */
+  function seedScopedApprovals() {
+    createProjectRecord(dataDir, 'in-proj');
+    createProjectRecord(dataDir, 'out-proj');
+    const unitA = upsertOrganizationUnit(dataDir, {
+      id: '', name: 'A', kind: 'team', status: 'active', createdAt: '', createdBy: subject(),
+    });
+    const unitB = upsertOrganizationUnit(dataDir, {
+      id: '', name: 'B', kind: 'team', status: 'active', createdAt: '', createdBy: subject(),
+    });
+    placeProjectInUnit(dataDir, {
+      id: '', projectId: 'in-proj', unitId: unitA.id, role: 'owner', createdAt: '', createdBy: subject(),
+    });
+    placeProjectInUnit(dataDir, {
+      id: '', projectId: 'out-proj', unitId: unitB.id, role: 'owner', createdAt: '', createdBy: subject(),
+    });
+    const rIn = requestProjectLock(cfg, requesterToken('sa-ri', 'in-proj', 'u-sa-ri'), 'in-proj');
+    const rOut = requestProjectLock(cfg, requesterToken('sa-ro', 'out-proj', 'u-sa-ro'), 'out-proj');
+    return { unitA, unitB, rIn, rOut };
+  }
+
+  it('scoped model: a project-scoped approval:decide grant lists/decides only its own project', () => {
+    createProjectRecord(dataDir, 'proj-a');
+    createProjectRecord(dataDir, 'proj-b');
+    const rA = requestProjectLock(cfg, requesterToken('sm-ra', 'proj-a', 'u-sm-ra'), 'proj-a');
+    const rB = requestProjectLock(cfg, requesterToken('sm-rb', 'proj-b', 'u-sm-rb'), 'proj-b');
+
+    const projDecider = mintToken({
+      id: 'sm-pd',
+      grants: [{ projectId: 'proj-a', permissions: ['approval:decide'] }],
+      subject: subject({ userId: 'u-sm-pd' }),
+    });
+
+    // Lists ONLY proj-a's pending request (proj-b filtered out).
+    expect(listPendingRequests(cfg, projDecider).map((r) => r.projectId)).toEqual(['proj-a']);
+
+    // Deciding an out-of-scope request (proj-b) is 403; the in-scope one succeeds.
     expect(() =>
-      decideRequest(cfg, projDecider, {
-        requestId: req.id,
-        approved: true,
-        decidedBy: subject(),
-        decidedAt: new Date().toISOString(),
-      }),
+      decideRequest(cfg, projDecider, { requestId: rB.id, approved: true, decidedBy: subject(), decidedAt: new Date().toISOString() }),
+    ).toThrow(ForbiddenError);
+    expect(
+      decideRequest(cfg, projDecider, { requestId: rA.id, approved: true, decidedBy: subject(), decidedAt: new Date().toISOString() }).status,
+    ).toBe('approved');
+
+    // A grant with no approval:decide reach at all is still 403.
+    const noReach = mintToken({ id: 'sm-nr', grants: [{ projectId: 'proj-a', permissions: ['mcp:write'] }], subject: subject({ userId: 'u-sm-nr' }) });
+    expect(() => listPendingRequests(cfg, noReach)).toThrow(ForbiddenError);
+
+    // The instance-wide decider retains full access.
+    expect(listPendingRequests(cfg, deciderToken('sm-id', 'u-sm-id')).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('scoped approval:decide: a unit-scoped decider lists/decides only its subtree', () => {
+    const { unitA, rIn, rOut } = seedScopedApprovals();
+    const decider = unitDeciderToken('usd', unitA.id, 'u-usd');
+
+    // Lists only the in-subtree pending request.
+    expect(listPendingRequests(cfg, decider).map((r) => r.projectId)).toEqual(['in-proj']);
+
+    // Out-of-subtree decision → 403; in-subtree → approved.
+    expect(() =>
+      decideRequest(cfg, decider, { requestId: rOut.id, approved: true, decidedBy: subject(), decidedAt: new Date().toISOString() }),
+    ).toThrow(ForbiddenError);
+    expect(
+      decideRequest(cfg, decider, { requestId: rIn.id, approved: true, decidedBy: subject(), decidedAt: new Date().toISOString() }).status,
+    ).toBe('approved');
+  });
+
+  it('decideRequest: a project:init request for a not-yet-created project is decidable only by a super-admin (fail closed for scoped deciders)', () => {
+    const requester = mintToken({ id: 'nc-req', grants: [], subject: subject({ userId: 'u-nc-req' }) });
+    const pending = requestProjectInitialization(cfg, requester, { id: 'ghost-init' });
+
+    // A unit-scoped decider cannot cover a not-yet-created (unplaced) project → 403.
+    const unit = upsertOrganizationUnit(dataDir, {
+      id: '', name: 'U', kind: 'team', status: 'active', createdAt: '', createdBy: subject(),
+    });
+    const scopedDecider = unitDeciderToken('nc-sd', unit.id, 'u-nc-sd');
+    expect(() =>
+      decideRequest(cfg, scopedDecider, { requestId: pending.id, approved: true, decidedBy: subject(), decidedAt: new Date().toISOString() }),
     ).toThrow(ForbiddenError);
 
-    // The instance-wide decider still lists and decides.
-    const decider = deciderToken('s2-id', 'u-s2id');
-    expect(listPendingRequests(cfg, decider).length).toBeGreaterThanOrEqual(1);
-    const decided = decideRequest(cfg, decider, {
-      requestId: req.id,
-      approved: true,
-      decidedBy: subject(),
-      decidedAt: new Date().toISOString(),
-    });
-    expect(decided.status).toBe('approved');
+    // A super-admin (instance-wide approval:decide) decides it.
+    expect(
+      decideRequest(cfg, deciderToken('nc-id', 'u-nc-id'), { requestId: pending.id, approved: true, decidedBy: subject(), decidedAt: new Date().toISOString() }).status,
+    ).toBe('approved');
   });
 
   // ── decideRequest ────────────────────────────────────────────────────────────

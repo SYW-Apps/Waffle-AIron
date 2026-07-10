@@ -112,12 +112,13 @@ describe('handleMcpRequest self-service dispatch (end-to-end)', () => {
     return token;
   }
 
-  /** An agent token scoped to `project` with mcp:write over it (may request actions). */
+  /** An editor agent token scoped to `project` with mcp:read + mcp:write over it
+   *  (may request actions and drive ordinary read/write sdd_* tools). */
   function agentToken(id: string, project: string, userId: string): string {
     return mintToken({
       id,
       projects: [project],
-      grants: [{ projectId: project, permissions: ['mcp:write'] }],
+      grants: [{ projectId: project, permissions: ['mcp:read', 'mcp:write'] }],
       userId,
     });
   }

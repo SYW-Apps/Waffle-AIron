@@ -12,6 +12,7 @@ import { UnauthenticatedError, ForbiddenError } from './identity.js';
 import { executeApprovedLock, executeApprovedPromote } from './admin.js';
 import { evaluateInitRequest, executeApprovedInit } from './policy.js';
 import { isValidProjectId, listProjectRecords, existingProjectRoot } from './projects.js';
+import { resolveScopeFor, permits } from './scope.js';
 import type {
   ApprovalRequest,
   ApprovalDecision,
@@ -360,11 +361,18 @@ export function listPendingRequests(
   projectId?: string,
 ): ApprovalRequest[] {
   const principal = requirePrincipal(cfg, credential);
-  if (!mayDecide(principal)) {
-    throw new ForbiddenError('deciding approvals requires approval:decide or an instance-admin grant');
+  const scope = resolveScopeFor(cfg, principal, APPROVAL_DECIDE_PERMISSION);
+  if (!scope.all && scope.projectIds.length === 0 && scope.unitIds.length === 0) {
+    throw new ForbiddenError(
+      'deciding approvals requires an instance-wide or unit-scoped approval:decide grant',
+    );
   }
   expirePendingApprovals(cfg.dataDir, new Date().toISOString());
-  return listApprovalRequests(cfg.dataDir, 'pending', projectId);
+  const pending = listApprovalRequests(cfg.dataDir, 'pending', projectId);
+  if (scope.all) return pending;
+  // Filter to requests whose project is within the caller's scope (honoring any
+  // optional project narrowing already applied above).
+  return pending.filter((r) => r.projectId !== undefined && scope.projectIds.includes(r.projectId));
 }
 
 /**
@@ -381,12 +389,18 @@ export function decideRequest(
   decision: ApprovalDecision,
 ): ApprovalRequest {
   const principal = requirePrincipal(cfg, credential);
-  if (!mayDecide(principal)) {
-    throw new ForbiddenError('deciding approvals requires approval:decide or an instance-admin grant');
-  }
+  const scope = resolveScopeFor(cfg, principal, APPROVAL_DECIDE_PERMISSION);
 
   const req = getApprovalRequestById(cfg.dataDir, decision.requestId);
   if (!req) throw new Error(`Approval request "${decision.requestId}" not found.`);
+
+  // Scope point-check: the caller's approval:decide scope must permit the
+  // request's project. A request with no projectId (or a project:init target that
+  // is not yet an in-scope project) is decidable only by a super-admin — permits
+  // fails closed for a scoped caller on an empty/out-of-scope projectId.
+  if (!permits(scope, req.projectId ?? '')) {
+    throw new ForbiddenError("deciding this approval requires approval:decide scope over the request's project");
+  }
 
   // Self-approval rejection: the decided-by identity is ALWAYS the authenticated
   // caller — never the client-supplied value — so a requester cannot approve their

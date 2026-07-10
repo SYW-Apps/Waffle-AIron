@@ -380,6 +380,10 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
     sendJson(res, 404, { error: 'not found' });
   } catch (err) {
     if (err instanceof PayloadTooLargeError) return sendJson(res, 413, { error: err.message });
+    if (err instanceof identity.UnauthenticatedError) return sendJson(res, 401, { error: 'unauthorized' });
+    // Scope denials from the Phase 6 admin lifecycle throw ForbiddenError; map it
+    // to 403 like every other plane (AdminAuthError stays 403 for compatibility).
+    if (err instanceof identity.ForbiddenError) return sendJson(res, 403, { error: err.message });
     if (err instanceof AdminAuthError) return sendJson(res, 403, { error: 'forbidden' });
     if (err instanceof LockValidationError) return sendJson(res, 409, { error: err.message, errors: err.errors });
     sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) });

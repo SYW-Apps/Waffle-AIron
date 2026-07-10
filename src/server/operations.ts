@@ -3,6 +3,7 @@ import { authenticateCredential } from './auth.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { listProjectRecords } from './projects.js';
 import { sendJson } from './request.js';
+import { resolveScopeFor } from './scope.js';
 import * as packs from './packs.js';
 import type {
   DiagnosticCheckResult,
@@ -13,6 +14,7 @@ import type {
   ProjectPackReference,
   ResourceQuotaPolicy,
   ResourceUsageSnapshot,
+  ScopeResolution,
 } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -40,18 +42,14 @@ const OPERATIONS_READ_PERMISSION = 'operations:read';
  *  disabled, so quota evaluation is a no-op until an operator opts in. */
 const DISABLED_QUOTA_POLICY: ResourceQuotaPolicy = { enabled: false, mode: 'observe' };
 
-// ── authorization helpers (mirrored from identity.ts / landscape.ts) ─────────
+// ── authorization helpers (scope-aware — Phase 6 tenancy) ────────────────────
 //
-// '*' is the wildcard in BOTH projectId and permissions (per the grant model).
-
-// An instance-wide capability requires a grant scoped to ALL projects ('*')
-// carrying the permission (or the '*' wildcard). A project-scoped grant, even
-// one carrying the permission, does NOT confer instance-wide reach.
-function carriesInstancePermission(principal: Principal, permission: string): boolean {
-  return (principal.grants ?? []).some(
-    (g) => g.projectId === '*' && (g.permissions.includes('*') || g.permissions.includes(permission)),
-  );
-}
+// Operations reads authorize by an instance-wide OR unit-scoped operations:read
+// grant. A '*'/'*' bootstrap or an instance-wide ({projectId:'*'}) operations:read
+// grant resolves to `all` (unfiltered). A unit-scoped grant resolves to that
+// unit's subtree of projects: the per-project inputs are narrowed to that set
+// BEFORE the diagnostics/quota specialists run, so a scoped operator sees health
+// and usage only for their subtree's projects.
 
 /** Authenticate the caller credential or throw (401-mapping). */
 function requirePrincipal(cfg: HostConfig, credential: string | null): Principal {
@@ -60,11 +58,20 @@ function requirePrincipal(cfg: HostConfig, credential: string | null): Principal
   return principal;
 }
 
-/** Require operations:read (or an instance-wide admin grant) for an operations read. */
-function requireOperationsRead(principal: Principal): void {
-  if (!carriesInstancePermission(principal, OPERATIONS_READ_PERMISSION)) {
+/** Resolve the caller's operations:read scope, rejecting a caller with no reach
+ *  at all (scope.all is false and neither an in-scope project nor unit). */
+function requireOperationsReadScope(cfg: HostConfig, principal: Principal): ScopeResolution {
+  const scope = resolveScopeFor(cfg, principal, OPERATIONS_READ_PERMISSION);
+  if (!scope.all && scope.projectIds.length === 0 && scope.unitIds.length === 0) {
     throw new ForbiddenError('operations read access required');
   }
+  return scope;
+}
+
+/** Narrow hosted project records to the caller's scope (a super-admin keeps all). */
+function narrowToScope(projects: HostedProjectRecord[], scope: ScopeResolution): HostedProjectRecord[] {
+  if (scope.all) return projects;
+  return projects.filter((p) => scope.projectIds.includes(p.id));
 }
 
 /** Resolve the advisory quota policy from host config, secure (disabled) default
@@ -297,9 +304,9 @@ export function getHealthReport(
   scope?: string,
 ): InstanceHealthReport {
   const principal = requirePrincipal(cfg, credential);
-  requireOperationsRead(principal);
+  const readScope = requireOperationsReadScope(cfg, principal);
 
-  const projects = listProjectRecords(cfg.dataDir);
+  const projects = narrowToScope(listProjectRecords(cfg.dataDir), readScope);
 
   // List the server-global packs across both tiers (image + instance), then
   // derive the per-tier name listings from the tier-tagged descriptors. A
@@ -326,9 +333,9 @@ export function getUsage(
   scope?: string,
 ): ResourceUsageSnapshot[] {
   const principal = requirePrincipal(cfg, credential);
-  requireOperationsRead(principal);
+  const readScope = requireOperationsReadScope(cfg, principal);
 
-  const projects = listProjectRecords(cfg.dataDir);
+  const projects = narrowToScope(listProjectRecords(cfg.dataDir), readScope);
   return collectUsage(projects, scope);
 }
 
@@ -344,9 +351,9 @@ export function evaluateQuota(
   scope?: string,
 ): ResourceUsageSnapshot[] {
   const principal = requirePrincipal(cfg, credential);
-  requireOperationsRead(principal);
+  const readScope = requireOperationsReadScope(cfg, principal);
 
-  const projects = listProjectRecords(cfg.dataDir);
+  const projects = narrowToScope(listProjectRecords(cfg.dataDir), readScope);
   const usage = collectUsage(projects, scope);
   const policy = resolveQuotaPolicy(cfg);
   return evaluateUsage(usage, policy);

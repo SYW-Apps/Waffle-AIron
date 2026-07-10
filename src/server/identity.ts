@@ -30,6 +30,8 @@ import {
   DEFAULT_AUDIT_POLICY,
 } from './audit.js';
 import { listProjectRecords } from './projects.js';
+import { listOrganizationUnits } from './organization.js';
+import { resolveScopeFor, permits } from './scope.js';
 import { sendJson } from './request.js';
 import type {
   ApiKeyRecord,
@@ -43,6 +45,7 @@ import type {
   PrincipalSubject,
   ProjectGrant,
   Role,
+  ScopeResolution,
 } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -103,13 +106,13 @@ function coversPermission(principal: Principal, projectId: string, permission: s
   );
 }
 
-// An instance-wide capability requires a grant scoped to ALL projects ('*')
-// carrying the permission (or the '*' wildcard). A project-scoped grant, even
-// one carrying the permission, does NOT confer instance-wide reach.
-function carriesInstancePermission(principal: Principal, permission: string): boolean {
-  return (principal.grants ?? []).some(
-    (g) => g.projectId === '*' && (g.permissions.includes('*') || g.permissions.includes(permission)),
-  );
+// Phase 6 scoped administration: an instance-wide ('*') grant carrying the
+// permission resolves to scope.all (super-admin); a UNIT-scoped grant carrying
+// it resolves to that unit subtree's projects+units; a specific-project grant
+// resolves to just that project. A caller with neither an in-scope project nor
+// an in-scope unit (and not super-admin) has no authority and is denied outright.
+function scopeIsEmpty(scope: ScopeResolution): boolean {
+  return !scope.all && scope.projectIds.length === 0 && scope.unitIds.length === 0;
 }
 
 /** Permission that authorizes user administration. The published grant
@@ -201,6 +204,39 @@ function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
   }
 }
 
+/**
+ * Gather the audit events the caller may read for `query`, constrained to their
+ * resolved audit:read scope. A super-admin (scope.all) reads instance-wide. A
+ * scoped caller reads only events tagged with one of their in-scope project ids:
+ * the audit query carries a single projectId, so a caller-supplied projectId is
+ * intersected with the in-scope set (an out-of-scope filter yields nothing) and
+ * an unfiltered read runs the query once per in-scope project and merges. Events
+ * with no projectId (instance-level) are never surfaced to a scoped caller. The
+ * result is ordered newest-first and the query's limit is applied to the merge,
+ * so a scoped caller can NEVER see an out-of-scope project's events.
+ */
+function scopedAuditEvents(cfg: HostConfig, scope: ScopeResolution, query: AuditQuery): AuditEvent[] {
+  if (scope.all) return repoQueryAuditEvents(cfg.dataDir, query);
+
+  const inScope = new Set(scope.projectIds);
+  const targets =
+    query.projectId !== undefined
+      ? inScope.has(query.projectId)
+        ? [query.projectId]
+        : []
+      : scope.projectIds;
+
+  // Query per in-scope project without the limit, then merge, order newest-first,
+  // and apply the limit globally so the top-N is correct across projects.
+  const { limit, ...rest } = query;
+  const merged: AuditEvent[] = [];
+  for (const projectId of targets) {
+    merged.push(...repoQueryAuditEvents(cfg.dataDir, { ...rest, projectId }));
+  }
+  merged.sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
+  return limit !== undefined && limit >= 0 ? merged.slice(0, limit) : merged;
+}
+
 /** Authenticate the caller credential or throw (401-mapping). */
 function requirePrincipal(cfg: HostConfig, credential: string | null): Principal {
   const principal = authenticateCredential(cfg.dataDir, credential);
@@ -222,21 +258,20 @@ function compatibilityProjection(grants: ProjectGrant[]): { role: Role; projects
 // ── orchestrator methods ────────────────────────────────────────────────────
 
 /**
- * Authenticate the caller, authorize token delegation (instance-admin, or — per
- * requested (project, permission) — the caller holding BOTH key:manage AND that
- * permission for the project, so callers only delegate what they themselves hold),
- * validate the requested projects exist, mint a user-bound token, persist only its
- * hashed record with owner/grant metadata, and append a redacted audit event.
- * Returns the plaintext token exactly once.
+ * Authenticate the caller, then authorize token delegation strictly against the
+ * caller's OWN scope: instance-admin may delegate anything; otherwise, for every
+ * requested grant the caller must hold BOTH key:manage AND each requested
+ * permission for the target project (so callers only delegate what they hold),
+ * AND — expanding the caller's unit-scoped grants across each unit's recursive
+ * subtree — the caller's resolved scope for every requested permission must cover
+ * the grant's target (its specific projectId, or its orgUnitId, or a super-admin
+ * scope). Validate the requested projects/units exist, mint a user-bound token,
+ * persist only its hashed record with owner/grant metadata, and append a redacted
+ * audit event. Returns the plaintext token exactly once.
  */
 export function mintToken(cfg: HostConfig, credential: string | null, request: TokenMintRequest): string {
   const principal = requirePrincipal(cfg, credential);
 
-  // Authorize delegation: instance-admin may delegate anything; otherwise, for
-  // every requested (project, permission), the caller must hold BOTH key:manage
-  // AND that permission itself for that project — holding key:manage alone is not
-  // enough to hand out permissions the caller lacks. An instance-wide ('*')
-  // delegation still requires instance-admin.
   const admin = isInstanceAdmin(principal);
   const grants = request.grants ?? [];
   // A grant carrying no permissions is malformed: it would still project to an
@@ -245,25 +280,60 @@ export function mintToken(cfg: HostConfig, credential: string | null, request: T
   if (grants.some((g) => g.projectId !== '*' && (g.permissions?.length ?? 0) === 0)) {
     throw new ForbiddenError('each requested grant must carry at least one permission');
   }
+
+  // Resolve the caller's own scope per permission once (org data is gathered
+  // inside resolveScopeFor); a requested grant's target is delegable for a
+  // permission only when the caller is super-admin for it, the requested
+  // projectId is in that scope, or the requested orgUnitId is in that scope.
+  const scopeMemo = new Map<string, ScopeResolution>();
+  const callerScope = (permission: string): ScopeResolution => {
+    let s = scopeMemo.get(permission);
+    if (s === undefined) {
+      s = resolveScopeFor(cfg, principal, permission);
+      scopeMemo.set(permission, s);
+    }
+    return s;
+  };
+  const scopeCovers = (grant: ProjectGrant, permission: string): boolean => {
+    const s = callerScope(permission);
+    if (s.all) return true;
+    if (grant.orgUnitId !== undefined && grant.orgUnitId !== '') {
+      return s.unitIds.includes(grant.orgUnitId);
+    }
+    return permits(s, grant.projectId);
+  };
+
+  // Instance-admin may delegate anything; otherwise, for every requested grant
+  // the caller must hold key:manage AND each permission for the project (S5), and
+  // that permission's resolved scope must cover the grant's target. An
+  // instance-wide ('*') delegation still requires instance-admin.
   const mayDelegate =
     admin ||
     grants.every((g) =>
       g.projectId === '*'
         ? admin
-        : // Must be able to manage keys for this project AT ALL, and must hold
-          // each permission being delegated (can't hand out unheld permissions).
-          coversPermission(principal, g.projectId, KEY_MANAGE_PERMISSION) &&
-          g.permissions.every((p) => coversPermission(principal, g.projectId, p)),
+        : coversPermission(principal, g.projectId, KEY_MANAGE_PERMISSION) &&
+          g.permissions.every((p) => coversPermission(principal, g.projectId, p)) &&
+          g.permissions.every((p) => scopeCovers(g, p)),
     );
   if (!mayDelegate) {
     throw new ForbiddenError('caller may not delegate the requested grants');
   }
 
-  // Validate every referenced project exists ('*' already gated to instance-admin).
-  const known = new Set(listProjectRecords(cfg.dataDir).map((p) => p.id));
+  // Validate every referenced target exists: a specific projectId among the known
+  // hosted projects, and an orgUnitId among the organization units ('*' already
+  // gated to instance-admin above).
+  const knownProjects = new Set(listProjectRecords(cfg.dataDir).map((p) => p.id));
+  const knownUnits = new Set(listOrganizationUnits(cfg.dataDir).map((u) => u.id));
   for (const g of grants) {
-    if (g.projectId !== '*' && !known.has(g.projectId)) {
-      throw new Error(`unknown project "${g.projectId}"`);
+    if (g.orgUnitId !== undefined && g.orgUnitId !== '') {
+      if (!knownUnits.has(g.orgUnitId)) {
+        throw new Error(`unknown organization unit "${g.orgUnitId}"`);
+      }
+    } else if (g.projectId !== '*' && g.projectId !== '') {
+      if (!knownProjects.has(g.projectId)) {
+        throw new Error(`unknown project "${g.projectId}"`);
+      }
     }
   }
 
@@ -338,8 +408,12 @@ export function revokeToken(cfg: HostConfig, credential: string | null, tokenId:
 }
 
 /**
- * Authenticate the caller, require an instance-wide admin grant, replace the
- * user's grants wholesale through the repository, and append a redacted audit event.
+ * Authenticate the caller, authorize grant administration by an instance-wide OR
+ * unit-scoped user:admin grant: the caller's scope must permit the target user's
+ * home unit, and — the privilege-escalation guard — a non-super-admin caller may
+ * not assign grants exceeding its own authority (no instance-wide '*', no org unit
+ * or project outside its scope). Replace the user's grants wholesale through the
+ * repository, and append a redacted audit event. A super-admin bypasses both checks.
  */
 export function replaceUserGrants(
   cfg: HostConfig,
@@ -348,8 +422,35 @@ export function replaceUserGrants(
   grants: ProjectGrant[],
 ): HostedUserRecord {
   const principal = requirePrincipal(cfg, credential);
-  if (!isInstanceAdmin(principal)) {
-    throw new ForbiddenError('grant administration requires an instance-wide admin grant');
+  const scope = resolveScopeFor(cfg, principal, USER_ADMIN_PERMISSION);
+
+  // Read the target's current home unit (and separate not-found from a scope
+  // denial) before authorizing.
+  const existing = getUserById(cfg.dataDir, userId);
+  if (existing === null) {
+    throw new Error(`Hosted user "${userId}" not found.`);
+  }
+
+  if (!scope.all) {
+    const inScopeUnits = new Set(scope.unitIds);
+    const inScopeProjects = new Set(scope.projectIds);
+    // (a) the caller must have scope over the target user's home unit (a user with
+    //     no home unit is manageable only by a super-admin).
+    const targetInScope = existing.unitId !== undefined && inScopeUnits.has(existing.unitId);
+    // (b) escalation guard: no instance-wide '*' grant, no org unit outside the
+    //     caller's scope, and no specific project outside the caller's scope.
+    const escalates = grants.some((g) =>
+      g.projectId === '*'
+        ? true
+        : g.orgUnitId !== undefined && g.orgUnitId !== ''
+          ? !inScopeUnits.has(g.orgUnitId)
+          : g.projectId !== '' && !inScopeProjects.has(g.projectId),
+    );
+    if (!targetInScope || escalates) {
+      throw new ForbiddenError(
+        "grant administration requires scope over the target user's home unit and may not exceed the caller's own authority",
+      );
+    }
   }
 
   const updated = repoReplaceUserGrants(cfg.dataDir, userId, grants);
@@ -363,9 +464,12 @@ export function replaceUserGrants(
 }
 
 /**
- * Authenticate the caller, require instance-admin or a user-administration grant,
- * and list hosted users optionally narrowed to one project's grant holders. No
- * audit event (a read).
+ * Authenticate the caller, authorize user administration by an instance-wide OR
+ * unit-scoped user:admin grant, and list hosted users FILTERED to the caller's
+ * scope: a super-admin sees all, a scoped caller sees only users whose home unit
+ * is within scope.unitIds (a user with no home unit is visible only to a
+ * super-admin). Optionally narrowed to one project's grant holders. No audit
+ * event (a read).
  */
 export function listUsers(
   cfg: HostConfig,
@@ -373,15 +477,21 @@ export function listUsers(
   project?: string,
 ): HostedUserRecord[] {
   const principal = requirePrincipal(cfg, credential);
-  if (!carriesInstancePermission(principal, USER_ADMIN_PERMISSION)) {
+  const scope = resolveScopeFor(cfg, principal, USER_ADMIN_PERMISSION);
+  if (scopeIsEmpty(scope)) {
     throw new ForbiddenError('user administration required');
   }
-  return repoListUsers(cfg.dataDir, undefined, project);
+  const users = repoListUsers(cfg.dataDir, undefined, project);
+  if (scope.all) return users;
+  const inScope = new Set(scope.unitIds);
+  return users.filter((u) => u.unitId !== undefined && inScope.has(u.unitId));
 }
 
 /**
- * Authenticate the caller, require instance-admin or an audit:read grant, and
- * return redacted audit events matching the query. No audit event (a read).
+ * Authenticate the caller, authorize audit read access by an instance-wide OR
+ * unit-scoped audit:read grant, and return redacted audit events matching the
+ * query FILTERED to the caller's scope: a super-admin reads instance-wide, a
+ * scoped caller reads only their in-scope projects' events. No audit event (a read).
  */
 export function queryAuditEvents(
   cfg: HostConfig,
@@ -389,10 +499,11 @@ export function queryAuditEvents(
   query: AuditQuery,
 ): AuditEvent[] {
   const principal = requirePrincipal(cfg, credential);
-  if (!carriesInstancePermission(principal, AUDIT_READ_PERMISSION)) {
+  const scope = resolveScopeFor(cfg, principal, AUDIT_READ_PERMISSION);
+  if (scopeIsEmpty(scope)) {
     throw new ForbiddenError('audit read access required');
   }
-  return repoQueryAuditEvents(cfg.dataDir, query);
+  return scopedAuditEvents(cfg, scope, query);
 }
 
 /**
@@ -415,9 +526,12 @@ export function pruneAuditEvents(cfg: HostConfig, credential: string | null): nu
 }
 
 /**
- * Authenticate the caller, require an instance-wide admin grant, create or update
- * the hosted user through the repository, and append a redacted audit event
- * distinguishing creation from update.
+ * Authenticate the caller, authorize user administration by an instance-wide OR
+ * unit-scoped user:admin grant whose scope permits the target user's home unit
+ * (both the incoming record's home unit and, on update, the existing record's),
+ * create or update the hosted user through the repository, and append a redacted
+ * audit event distinguishing creation from update. A super-admin bypasses the
+ * home-unit check; a user with no home unit is manageable only by a super-admin.
  */
 export function upsertUser(
   cfg: HostConfig,
@@ -425,12 +539,26 @@ export function upsertUser(
   record: HostedUserRecord,
 ): HostedUserRecord {
   const principal = requirePrincipal(cfg, credential);
-  if (!carriesInstancePermission(principal, USER_ADMIN_PERMISSION)) {
-    throw new ForbiddenError('user administration required');
+  const scope = resolveScopeFor(cfg, principal, USER_ADMIN_PERMISSION);
+
+  // Distinguish creation from update, and read the existing home unit, by probing
+  // for an existing record first.
+  const existing = getUserById(cfg.dataDir, record.id);
+  const existed = existing !== null;
+
+  // A scoped (non-super-admin) admin may only manage users within its unit
+  // subtree: the incoming record's home unit — and, on update, the existing
+  // record's home unit — must both be in scope.
+  if (!scope.all) {
+    const inScope = new Set(scope.unitIds);
+    const incomingInScope = record.unitId !== undefined && inScope.has(record.unitId);
+    const existingInScope =
+      !existed || (existing!.unitId !== undefined && inScope.has(existing!.unitId));
+    if (!incomingInScope || !existingInScope) {
+      throw new ForbiddenError("user administration requires scope over the target user's home unit");
+    }
   }
 
-  // Distinguish creation from update by probing for an existing record first.
-  const existed = getUserById(cfg.dataDir, record.id) !== null;
   const action = existed ? 'user.update' : 'user.create';
 
   const stored = repoUpsertUser(cfg.dataDir, record);
@@ -455,8 +583,20 @@ export function setUserStatus(
   status: string,
 ): HostedUserRecord {
   const principal = requirePrincipal(cfg, credential);
-  if (!carriesInstancePermission(principal, USER_ADMIN_PERMISSION)) {
-    throw new ForbiddenError('user administration required');
+  const scope = resolveScopeFor(cfg, principal, USER_ADMIN_PERMISSION);
+
+  // Look up the target to read its home unit (and separate not-found from a scope
+  // denial). A scoped admin may only act on a user within its unit subtree; a user
+  // with no home unit is manageable only by a super-admin.
+  const existing = getUserById(cfg.dataDir, userId);
+  if (existing === null) {
+    throw new Error(`Hosted user "${userId}" not found.`);
+  }
+  if (!scope.all) {
+    const inScope = new Set(scope.unitIds);
+    if (existing.unitId === undefined || !inScope.has(existing.unitId)) {
+      throw new ForbiddenError("user administration requires scope over the target user's home unit");
+    }
   }
 
   const updated = repoSetUserStatus(cfg.dataDir, userId, status);
@@ -656,9 +796,11 @@ export function removeIdentityProvider(cfg: HostConfig, credential: string | nul
 }
 
 /**
- * Authenticate the caller, require instance-admin or an audit:read grant (same
- * authorization as queryAuditEvents), and return the count of redacted audit events
- * matching the query by forwarding to the audit repository. No audit event (a read).
+ * Authenticate the caller, authorize audit read access by an instance-wide OR
+ * unit-scoped audit:read grant (same authorization as queryAuditEvents), and
+ * return the count of redacted audit events matching the query SCOPED to the
+ * caller: a super-admin counts instance-wide, a scoped caller counts only their
+ * in-scope projects' events. No audit event (a read).
  */
 export function countAuditEvents(
   cfg: HostConfig,
@@ -666,10 +808,13 @@ export function countAuditEvents(
   query: AuditQuery,
 ): number {
   const principal = requirePrincipal(cfg, credential);
-  if (!carriesInstancePermission(principal, AUDIT_READ_PERMISSION)) {
+  const scope = resolveScopeFor(cfg, principal, AUDIT_READ_PERMISSION);
+  if (scopeIsEmpty(scope)) {
     throw new ForbiddenError('audit read access required');
   }
-  return repoCountAuditEvents(cfg.dataDir, query);
+  if (scope.all) return repoCountAuditEvents(cfg.dataDir, query);
+  // A count ignores the query limit; scope the query to the in-scope projects.
+  return scopedAuditEvents(cfg, scope, { ...query, limit: undefined }).length;
 }
 
 // ── Identity Portal (HTTP) ──────────────────────────────────────────────────

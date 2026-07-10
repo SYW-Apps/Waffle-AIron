@@ -3,7 +3,9 @@ import { runWithProjectRoot } from '../utils/fs.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import { stateIdEquals } from '../core/statehash.js';
 import type { LockRecord } from '../core/lockfile.js';
-import { authenticateMaster, signViewToken } from './auth.js';
+import { authenticateMaster, authenticateCredential, signViewToken } from './auth.js';
+import { resolveScopeFor, permits } from './scope.js';
+import { placeProject as placeProjectInUnit } from './organization.js';
 import {
   hashToken,
   createCredential,
@@ -23,6 +25,8 @@ import type {
   ApiKeyRecord,
   HostConfig,
   HostedProjectRecord,
+  Principal,
+  PrincipalSubject,
   PromoteResult,
   Role,
 } from './types.js';
@@ -39,8 +43,11 @@ import type {
 // ---------------------------------------------------------------------------
 
 export class AdminAuthError extends Error {
-  constructor() {
-    super('Forbidden: a valid admin credential is required.');
+  // A default message covers a missing/unauthenticated credential; the scoped
+  // project-lifecycle methods pass a specific reason for a scope denial (an
+  // authenticated caller lacking authority). Both map to 403 on the admin plane.
+  constructor(message = 'Forbidden: a valid admin credential is required.') {
+    super(message);
     this.name = 'AdminAuthError';
   }
 }
@@ -56,9 +63,73 @@ function requireAdmin(credential: string | null): void {
   if (!authenticateMaster(credential).authenticated) throw new AdminAuthError();
 }
 
-export function createProject(cfg: HostConfig, credential: string | null, id: string): HostedProjectRecord {
-  requireAdmin(credential);
-  return executeApprovedCreate(cfg, id);
+/**
+ * Authenticate the caller credential (bootstrap master — which resolves to an
+ * instance-wide super-admin — or a user-bound token) to a Principal, or reject.
+ * Mirrors identity.ts's requirePrincipal, but throws the admin-plane AdminAuthError
+ * (→ 403) so an unauthenticated request is rejected exactly as the former
+ * master-only gate did. Scope, not authentication, decides authority afterwards.
+ */
+function requirePrincipal(cfg: HostConfig, credential: string | null): Principal {
+  const principal = authenticateCredential(cfg.dataDir, credential);
+  if (!principal.authenticated) throw new AdminAuthError();
+  return principal;
+}
+
+/** The audit/placement subject for a principal: its resolved subject, or a
+ *  synthesized service identity keyed by the token id for legacy credentials. */
+function principalSubject(principal: Principal): PrincipalSubject {
+  return (
+    principal.subject ?? { userId: 'token:' + principal.tokenId, kind: 'service', issuer: 'local' }
+  );
+}
+
+/**
+ * Authenticate the caller and resolve their project:create scope over the
+ * organization tree. A super-admin (bootstrap master or an instance-wide grant)
+ * may create anywhere and optionally place the project; a unit-scoped creator
+ * holding project:create for an organization unit MUST supply a target unit within
+ * their scope, and the new project is auto-placed there so the creator retains
+ * scope over it. A caller with no create authority, or a unit-scoped caller with a
+ * missing/out-of-scope target unit, is rejected.
+ */
+export function createProject(
+  cfg: HostConfig,
+  credential: string | null,
+  id: string,
+  unitId?: string,
+): HostedProjectRecord {
+  const principal = requirePrincipal(cfg, credential);
+  const scope = resolveScopeFor(cfg, principal, 'project:create');
+
+  // No create authority at all: not a super-admin and no in-scope units.
+  if (!scope.all && scope.unitIds.length === 0) {
+    throw new AdminAuthError('Forbidden — creating a project requires project:create authority');
+  }
+  // A unit-scoped creator must target an in-scope unit; a super-admin may skip.
+  if (!scope.all && (!unitId || !scope.unitIds.includes(unitId))) {
+    throw new AdminAuthError(
+      'Forbidden — a unit-scoped project creator must target an organization unit within their scope',
+    );
+  }
+
+  // Allocate, provision, and bind the isolated tree (steps 9–11).
+  const rec = executeApprovedCreate(cfg, id);
+
+  // When a target unit was provided, auto-place the new project in it so the
+  // creator retains scope over what they just created (a super-admin may create
+  // without placing when no unit is given).
+  if (unitId) {
+    placeProjectInUnit(cfg.dataDir, {
+      id: '',
+      projectId: id,
+      unitId,
+      role: 'owner',
+      createdAt: '',
+      createdBy: principalSubject(principal),
+    });
+  }
+  return rec;
 }
 
 /**
@@ -74,7 +145,11 @@ export function executeApprovedCreate(cfg: HostConfig, id: string): HostedProjec
 }
 
 export function destroyProject(cfg: HostConfig, credential: string | null, id: string): void {
-  requireAdmin(credential);
+  const principal = requirePrincipal(cfg, credential);
+  const scope = resolveScopeFor(cfg, principal, 'project:destroy');
+  if (!permits(scope, id)) {
+    throw new AdminAuthError('Forbidden — destroying a project requires project:destroy scope over it');
+  }
   removeProjectRecord(cfg.dataDir, id);
 }
 
@@ -108,7 +183,11 @@ export function listKeys(cfg: HostConfig, credential: string | null, project: st
 }
 
 export function lockProject(cfg: HostConfig, credential: string | null, project: string): LockRecord {
-  requireAdmin(credential);
+  const principal = requirePrincipal(cfg, credential);
+  const scope = resolveScopeFor(cfg, principal, 'lock:create');
+  if (!permits(scope, project)) {
+    throw new AdminAuthError('Forbidden — locking a project requires lock:create scope over it');
+  }
   return executeApprovedLock(cfg, project);
 }
 
@@ -251,7 +330,11 @@ export function diagramViewLink(cfg: HostConfig, credential: string | null, proj
 }
 
 export function promoteProject(cfg: HostConfig, credential: string | null, project: string): PromoteResult {
-  requireAdmin(credential);
+  const principal = requirePrincipal(cfg, credential);
+  const scope = resolveScopeFor(cfg, principal, 'promote:mark-ready');
+  if (!permits(scope, project)) {
+    throw new AdminAuthError('Forbidden — promoting a project requires promote:mark-ready scope over it');
+  }
   return executeApprovedPromote(cfg, project);
 }
 

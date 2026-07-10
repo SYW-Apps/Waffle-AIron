@@ -25,6 +25,7 @@ import {
   findPublicInterface,
 } from './surfaces.js';
 import { sendJson } from './request.js';
+import { resolveScope, resolveScopeFor, permits } from './scope.js';
 import type {
   AuditEvent,
   AuditRetentionPolicy,
@@ -41,6 +42,7 @@ import type {
   ProjectRelationRecord,
   PublicInterfaceSummary,
   ReachableProjectRef,
+  ScopeResolution,
 } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -67,18 +69,15 @@ import type {
 const LANDSCAPE_MANAGE_PERMISSION = 'landscape:manage';
 const LANDSCAPE_READ_PERMISSION = 'landscape:read';
 
-// ── authorization helpers (mirrored from identity.ts / policy.ts) ────────────
+// ── authorization helpers (scope-aware — Phase 6 tenancy) ────────────────────
 //
-// '*' is the wildcard in BOTH projectId and permissions (per the grant model).
-
-// An instance-wide capability requires a grant scoped to ALL projects ('*')
-// carrying the permission (or the '*' wildcard). A project-scoped grant, even
-// one carrying the permission, does NOT confer instance-wide reach.
-function carriesInstancePermission(principal: Principal, permission: string): boolean {
-  return (principal.grants ?? []).some(
-    (g) => g.projectId === '*' && (g.permissions.includes('*') || g.permissions.includes(permission)),
-  );
-}
+// Every control-plane method resolves the caller's landscape scope for the
+// permission it needs (landscape:manage for writes, landscape:read for reads),
+// via scope_specialist over the org unit tree + placements. A '*'/'*' bootstrap
+// or an instance-wide ({projectId:'*'}) grant carrying the permission resolves to
+// `all` (super-admin, unfiltered). A unit-scoped grant expands to that unit's
+// recursive subtree of units + every project placed in it: reads FILTER to that
+// scope and writes require the write target to fall inside it.
 
 /** Authenticate the caller credential or throw (401-mapping). */
 function requirePrincipal(cfg: HostConfig, credential: string | null): Principal {
@@ -87,23 +86,34 @@ function requirePrincipal(cfg: HostConfig, credential: string | null): Principal
   return principal;
 }
 
-/** Require a landscape:manage grant or an instance-admin grant for a landscape write. */
-function requireManage(principal: Principal, action: string): void {
-  if (!carriesInstancePermission(principal, LANDSCAPE_MANAGE_PERMISSION)) {
-    throw new ForbiddenError(`${action} requires a landscape:manage grant or an instance-admin grant`);
-  }
+/** A scoped caller with neither an in-scope project nor an in-scope unit has no
+ *  reach at all — the control-plane reads treat that as Forbidden. */
+function scopeIsEmpty(scope: ScopeResolution): boolean {
+  return !scope.all && scope.projectIds.length === 0 && scope.unitIds.length === 0;
 }
 
-/** Require a landscape:read (or manage/admin) grant for a landscape control-plane read. */
-function requireRead(principal: Principal, action: string): void {
-  if (
-    !carriesInstancePermission(principal, LANDSCAPE_READ_PERMISSION) &&
-    !carriesInstancePermission(principal, LANDSCAPE_MANAGE_PERMISSION)
-  ) {
-    throw new ForbiddenError(
-      `${action} requires a landscape:read, landscape:manage, or instance-admin grant`,
-    );
-  }
+/**
+ * Resolve the caller's landscape READ scope: the union of their landscape:read and
+ * landscape:manage scopes over the pre-gathered org tree — a manage grant (unit-
+ * scoped or instance-wide) also confers read over the same subtree, and the
+ * instance-admin/instance-wide wildcard yields `all`. Pure over the supplied
+ * units/placements (no extra I/O).
+ */
+function resolveLandscapeReadScope(
+  principal: Principal,
+  units: OrganizationUnitRecord[],
+  placements: ProjectPlacement[],
+): ScopeResolution {
+  const grants = principal.grants ?? [];
+  const read = resolveScope(grants, LANDSCAPE_READ_PERMISSION, units, placements);
+  if (read.all) return read;
+  const manage = resolveScope(grants, LANDSCAPE_MANAGE_PERMISSION, units, placements);
+  if (manage.all) return manage;
+  return {
+    all: false,
+    projectIds: [...new Set([...read.projectIds, ...manage.projectIds])],
+    unitIds: [...new Set([...read.unitIds, ...manage.unitIds])],
+  };
 }
 
 // ── subject / audit helpers (mirrored from identity.ts / policy.ts) ──────────
@@ -438,7 +448,17 @@ export function upsertUnit(
   unit: OrganizationUnitRecord,
 ): OrganizationUnitRecord {
   const principal = requirePrincipal(cfg, credential);
-  requireManage(principal, 'managing organization units');
+  const scope = resolveScopeFor(cfg, principal, LANDSCAPE_MANAGE_PERMISSION);
+  // The caller's scope must cover the target unit: its own id (updating an
+  // existing unit) or its parentId (creating a child under an in-scope unit). A
+  // brand-new root unit (no in-scope id or parent) requires a super-admin.
+  const unitInScope = !!unit.id && scope.unitIds.includes(unit.id);
+  const parentInScope = !!unit.parentId && scope.unitIds.includes(unit.parentId);
+  if (!scope.all && !unitInScope && !parentInScope) {
+    throw new ForbiddenError(
+      'managing an organization unit requires landscape:manage scope over the unit or its parent',
+    );
+  }
   const stored = upsertOrganizationUnit(cfg.dataDir, unit);
   tryAppendAudit(cfg, buildAuditEvent(principal, 'unit.upsert', 'info', 'landscape', { target: stored.id }));
   return stored;
@@ -455,7 +475,12 @@ export function placeProject(
   placement: ProjectPlacement,
 ): ProjectPlacement {
   const principal = requirePrincipal(cfg, credential);
-  requireManage(principal, 'placing a project');
+  const scope = resolveScopeFor(cfg, principal, LANDSCAPE_MANAGE_PERMISSION);
+  // The caller's scope must cover the target unit (placement.unitId). A
+  // super-admin places into any unit.
+  if (!scope.all && !scope.unitIds.includes(placement.unitId)) {
+    throw new ForbiddenError('placing a project requires landscape:manage scope over the target unit');
+  }
   if (!getOrganizationUnit(cfg.dataDir, placement.unitId)) {
     throw new Error('the target organization unit does not exist');
   }
@@ -484,7 +509,12 @@ export function refreshPublicSurface(
   projectId: string,
 ): ProjectPublicSurfaceSnapshot {
   const principal = requirePrincipal(cfg, credential);
-  requireManage(principal, "refreshing a project's public surface");
+  const scope = resolveScopeFor(cfg, principal, LANDSCAPE_MANAGE_PERMISSION);
+  if (!permits(scope, projectId)) {
+    throw new ForbiddenError(
+      "refreshing a project's public surface requires landscape:manage scope over the project",
+    );
+  }
 
   const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
   if (!root) throw new Error(`Unknown project "${projectId}".`);
@@ -529,7 +559,12 @@ export function upsertRelation(
   relation: ProjectRelationRecord,
 ): ProjectRelationRecord {
   const principal = requirePrincipal(cfg, credential);
-  requireManage(principal, 'managing cross-project relations');
+  const scope = resolveScopeFor(cfg, principal, LANDSCAPE_MANAGE_PERMISSION);
+  if (!permits(scope, relation.sourceProjectId)) {
+    throw new ForbiddenError(
+      'managing a cross-project relation requires landscape:manage scope over its source project',
+    );
+  }
 
   const targetProjectId = relation.targetPublicInterface.projectId;
   const targetInterfaceId = relation.targetPublicInterface.systemInterfaceId;
@@ -567,8 +602,19 @@ export function listRelations(
   projectId?: string,
 ): ProjectRelationRecord[] {
   const principal = requirePrincipal(cfg, credential);
-  requireRead(principal, 'listing cross-project relations');
-  return listProjectRelations(cfg.dataDir, projectId);
+  const units = listOrganizationUnits(cfg.dataDir);
+  const placements = listProjectPlacements(cfg.dataDir);
+  const scope = resolveLandscapeReadScope(principal, units, placements);
+  if (scopeIsEmpty(scope)) {
+    throw new ForbiddenError('listing cross-project relations requires landscape:read scope');
+  }
+  const relations = listProjectRelations(cfg.dataDir, projectId);
+  if (scope.all) return relations;
+  // A relation is visible when its source OR target project is in the caller's
+  // scope (per ilandscape_orchestrator.listRelations).
+  return relations.filter(
+    (r) => scope.projectIds.includes(r.sourceProjectId) || scope.projectIds.includes(r.targetProjectId),
+  );
 }
 
 /**
@@ -583,20 +629,52 @@ export function generateLandscape(
   scope?: string,
 ): LandscapeGraphModel {
   const principal = requirePrincipal(cfg, credential);
-  requireRead(principal, 'generating the landscape');
 
   const units = listOrganizationUnits(cfg.dataDir);
   const placements = listProjectPlacements(cfg.dataDir);
+  const readScope = resolveLandscapeReadScope(principal, units, placements);
+  if (scopeIsEmpty(readScope)) {
+    throw new ForbiddenError('generating the landscape requires landscape:read scope');
+  }
+
   const projects = listProjectRecords(cfg.dataDir);
   const relations = listProjectRelations(cfg.dataDir);
 
+  // Narrow the inputs to the caller's scope BEFORE projecting the graph (a
+  // super-admin keeps everything). Relations are kept only when BOTH endpoints
+  // are in scope so the scoped graph never carries a dangling edge to — or leaks
+  // the id of — an out-of-scope project. Equivalent to filtering the built graph's
+  // nodes to scope and dropping edges that reference a dropped node.
+  let scopedUnits = units;
+  let scopedProjects = projects;
+  let scopedPlacements = placements;
+  let scopedRelations = relations;
+  if (!readScope.all) {
+    const projSet = new Set(readScope.projectIds);
+    const unitSet = new Set(readScope.unitIds);
+    scopedUnits = units.filter((u) => unitSet.has(u.id));
+    scopedProjects = projects.filter((p) => projSet.has(p.id));
+    scopedPlacements = placements.filter((pl) => unitSet.has(pl.unitId) && projSet.has(pl.projectId));
+    scopedRelations = relations.filter(
+      (r) => projSet.has(r.sourceProjectId) && projSet.has(r.targetProjectId),
+    );
+  }
+
   const snapshots: ProjectPublicSurfaceSnapshot[] = [];
-  for (const project of projects) {
+  for (const project of scopedProjects) {
     const snap = getPublicSurfaceSnapshot(cfg.dataDir, project.id);
     if (snap) snapshots.push(snap);
   }
 
-  const graph = buildLandscapeGraph(units, projects, placements, snapshots, relations);
+  const graph = buildLandscapeGraph(scopedUnits, scopedProjects, scopedPlacements, snapshots, scopedRelations);
+  if (!readScope.all) {
+    // Coherence: a narrowed unit whose parent is out of scope would otherwise leave
+    // a `contains` edge pointing at an absent parent node. Drop any edge whose
+    // endpoints are not both present nodes so the scoped graph never dangles or
+    // leaks an out-of-scope id.
+    const nodeIds = new Set(graph.nodes.map((n) => n.id));
+    graph.edges = graph.edges.filter((e) => nodeIds.has(e.from) && nodeIds.has(e.to));
+  }
   if (scope !== undefined && scope !== '') graph.scope = scope;
   return graph;
 }
@@ -667,7 +745,15 @@ export function listReachableProjectInterfacesForMcp(
  */
 export function removeRelation(cfg: HostConfig, credential: string | null, id: string): void {
   const principal = requirePrincipal(cfg, credential);
-  requireManage(principal, 'managing cross-project relations');
+  const scope = resolveScopeFor(cfg, principal, LANDSCAPE_MANAGE_PERMISSION);
+  // Resolve the relation to point-check its source project. A missing relation
+  // yields no source, which a scoped caller can never cover — fail closed.
+  const target = listProjectRelations(cfg.dataDir).find((r) => r.id === id);
+  if (!permits(scope, target?.sourceProjectId ?? '')) {
+    throw new ForbiddenError(
+      'removing a cross-project relation requires landscape:manage scope over its source project',
+    );
+  }
   removeProjectRelation(cfg.dataDir, id);
   tryAppendAudit(cfg, buildAuditEvent(principal, 'relation.remove', 'info', 'landscape', { target: id }));
 }

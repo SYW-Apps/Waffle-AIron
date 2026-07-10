@@ -178,13 +178,14 @@ describe('handleMcpRequest landscape discovery dispatch (end-to-end)', () => {
     return token;
   }
 
-  /** An agent token scoped to `project` with mcp:write over it. Note: landscape
-   *  discovery is authenticated-only (no landscape grant required over the wire). */
+  /** An editor agent token scoped to `project` with mcp:read + mcp:write over it.
+   *  Note: landscape discovery is authenticated-only (no landscape grant required
+   *  over the wire); the ordinary sdd_* regression call needs mcp:read. */
   function agentToken(id: string, project: string, userId: string): string {
     return mintToken({
       id,
       projects: [project],
-      grants: [{ projectId: project, permissions: ['mcp:write'] }],
+      grants: [{ projectId: project, permissions: ['mcp:read', 'mcp:write'] }],
       userId,
     });
   }

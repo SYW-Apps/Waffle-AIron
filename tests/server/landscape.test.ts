@@ -415,25 +415,172 @@ describe('landscape orchestrator (sdd_host)', () => {
     expect(Array.isArray(graph.edges)).toBe(true);
   });
 
-  // ── S2: instance capabilities need an INSTANCE-WIDE grant (cross-tenant leak) ──
+  // ── Phase 6 scoped model: a project-scoped grant confers SCOPED reach ─────────
   //
-  // A PROJECT-SCOPED grant carrying the landscape permission must NOT satisfy an
-  // instance-wide capability — otherwise a single-tenant grant could read/manage
-  // every tenant's landscape. Only a {projectId:'*'} grant (or admin) passes.
+  // Under Phase 6 tenancy a project-scoped grant no longer merely fails every
+  // instance capability — it confers authority narrowed to its own project(s).
+  // (Previously such a grant was rejected outright; this is the deliberate scoped
+  // replacement of that post-hardening instance-wide-only behavior.) It still
+  // carries NO unit-management authority, and its reads see only its own project —
+  // never the whole instance.
 
   const projManageToken = () => mintToken([{ projectId: 'acme', permissions: ['landscape:manage'] }]);
   const projReadToken = () => mintToken([{ projectId: 'acme', permissions: ['landscape:read'] }]);
 
-  it('S2: a project-scoped landscape grant is rejected (403) for instance capabilities; only an instance-wide grant passes', () => {
-    // Project-scoped grants carrying the exact instance permission are rejected.
+  it('scoped model: a project-scoped landscape grant confers only its project scope — not unit management, not an instance-wide view', () => {
+    // A project-scoped grant carries no unit scope → it can never manage org units.
     expect(() => upsertUnit(cfg, projManageToken(), unitRec({ name: 'X' }))).toThrow(ForbiddenError);
-    expect(() => generateLandscape(cfg, projReadToken())).toThrow(ForbiddenError);
-    expect(() => listRelations(cfg, projReadToken())).toThrow(ForbiddenError);
 
-    // The instance-wide ({projectId:'*'}) equivalents still pass.
+    // A project-scoped landscape:read grant is NOT denied outright — it has reach —
+    // but its view is narrowed to its one project (here empty, since 'acme' is not a
+    // hosted project), never the whole instance.
+    const scopedGraph = generateLandscape(cfg, projReadToken());
+    expect(scopedGraph.nodes.some((n) => n.nodeKind === 'project')).toBe(false);
+    expect(listRelations(cfg, projReadToken())).toEqual([]);
+
+    // The instance-wide ({projectId:'*'}) equivalents retain full access.
     expect(upsertUnit(cfg, manageToken(), unitRec({ name: 'X' })).id).toBeTruthy();
     expect(Array.isArray(generateLandscape(cfg, readToken()).nodes)).toBe(true);
     expect(listRelations(cfg, readToken())).toEqual([]);
+  });
+
+  // ── Phase 6 unit-scoped administration ────────────────────────────────────────
+  //
+  // A unit-scoped grant (orgUnitId) confers landscape authority over that unit's
+  // recursive subtree of units + every project placed in it. Reads FILTER to that
+  // scope; writes require the target to fall inside it. A super-admin (MASTER /
+  // instance-wide grant) is unaffected — the suites above already assert that.
+
+  const unitManageToken = (unitId: string) =>
+    mintToken([{ projectId: '', orgUnitId: unitId, permissions: ['landscape:manage'] }]);
+  const unitReadToken = (unitId: string) =>
+    mintToken([{ projectId: '', orgUnitId: unitId, permissions: ['landscape:read'] }]);
+
+  /** Seed a two-branch org: unit A (the in-scope subtree) and sibling unit B (out
+   *  of scope) under a shared root, each owning a source + dst project with a
+   *  refreshed dst surface and one intra-branch relation. */
+  function seedScopedOrg(): {
+    root: OrganizationUnitRecord;
+    unitA: OrganizationUnitRecord;
+    unitB: OrganizationUnitRecord;
+    relIn: ProjectRelationRecord;
+    relOut: ProjectRelationRecord;
+  } {
+    const root = upsertUnit(cfg, MASTER, unitRec({ name: 'Root' }));
+    const unitA = upsertUnit(cfg, MASTER, unitRec({ name: 'Team A', parentId: root.id }));
+    const unitB = upsertUnit(cfg, MASTER, unitRec({ name: 'Team B', parentId: root.id }));
+
+    project('a-src');
+    const aDst = project('a-dst');
+    project('b-src');
+    const bDst = project('b-dst');
+    seedSurface(aDst.rootPath, [{ id: 'a-api', name: 'A API', type: 'REST', details: 'd' }]);
+    seedSurface(bDst.rootPath, [{ id: 'b-api', name: 'B API', type: 'REST', details: 'd' }]);
+    refreshPublicSurface(cfg, MASTER, 'a-dst');
+    refreshPublicSurface(cfg, MASTER, 'b-dst');
+
+    placeProject(cfg, MASTER, placementRec({ projectId: 'a-src', unitId: unitA.id, role: 'owner' }));
+    placeProject(cfg, MASTER, placementRec({ projectId: 'a-dst', unitId: unitA.id, role: 'owner' }));
+    placeProject(cfg, MASTER, placementRec({ projectId: 'b-src', unitId: unitB.id, role: 'owner' }));
+    placeProject(cfg, MASTER, placementRec({ projectId: 'b-dst', unitId: unitB.id, role: 'owner' }));
+
+    const relIn = upsertRelation(
+      cfg,
+      MASTER,
+      relationRec({
+        sourceProjectId: 'a-src',
+        targetProjectId: 'a-dst',
+        targetPublicInterface: { projectId: 'a-dst', systemInterfaceId: 'a-api', reason: 'r' },
+      }),
+    );
+    const relOut = upsertRelation(
+      cfg,
+      MASTER,
+      relationRec({
+        sourceProjectId: 'b-src',
+        targetProjectId: 'b-dst',
+        targetPublicInterface: { projectId: 'b-dst', systemInterfaceId: 'b-api', reason: 'r' },
+      }),
+    );
+    return { root, unitA, unitB, relIn, relOut };
+  }
+
+  it('scoped landscape:read: a unit-scoped caller sees only their subtree relations and graph', () => {
+    const { unitA, relIn, relOut } = seedScopedOrg();
+    const tokenA = unitReadToken(unitA.id);
+
+    // listRelations: only the in-subtree relation (both endpoints in scope) is visible.
+    const rels = listRelations(cfg, tokenA);
+    expect(rels.map((r) => r.id)).toEqual([relIn.id]);
+    expect(rels.map((r) => r.id)).not.toContain(relOut.id);
+
+    // generateLandscape: only unit A and its projects appear; unit B, its projects,
+    // and the root (out of A's subtree) are filtered out.
+    const graph = generateLandscape(cfg, tokenA);
+    expect(graph.nodes.filter((n) => n.nodeKind === 'orgUnit').map((n) => n.unitId)).toEqual([unitA.id]);
+    expect(
+      graph.nodes
+        .filter((n) => n.nodeKind === 'project')
+        .map((n) => n.projectId)
+        .sort(),
+    ).toEqual(['a-dst', 'a-src']);
+    expect(graph.nodes.some((n) => n.projectId === 'b-src' || n.projectId === 'b-dst')).toBe(false);
+
+    // No edge dangles to a filtered-out node; the in-scope relation edge survives.
+    const nodeIds = new Set(graph.nodes.map((n) => n.id));
+    expect(graph.edges.every((e) => nodeIds.has(e.from) && nodeIds.has(e.to))).toBe(true);
+    expect(graph.edges.some((e) => e.relationId === relIn.id)).toBe(true);
+    expect(graph.edges.some((e) => e.relationId === relOut.id)).toBe(false);
+  });
+
+  it('scoped landscape:manage: writes are 403 outside the subtree and OK inside', () => {
+    const { unitA, unitB, relIn, relOut } = seedScopedOrg();
+    const tokenA = unitManageToken(unitA.id);
+
+    // upsertUnit: a child under the in-scope unit A is allowed; under out-of-scope
+    // unit B is 403; a brand-new root is 403 (only a super-admin creates roots).
+    expect(upsertUnit(cfg, tokenA, unitRec({ name: 'A Child', parentId: unitA.id })).id).toBeTruthy();
+    expect(() => upsertUnit(cfg, tokenA, unitRec({ name: 'B Child', parentId: unitB.id }))).toThrow(ForbiddenError);
+    expect(() => upsertUnit(cfg, tokenA, unitRec({ name: 'New Root' }))).toThrow(ForbiddenError);
+
+    // placeProject: into unit A OK, into unit B 403.
+    project('extra-in');
+    expect(
+      placeProject(cfg, tokenA, placementRec({ projectId: 'extra-in', unitId: unitA.id, role: 'owner' })).id,
+    ).toBeTruthy();
+    expect(() =>
+      placeProject(cfg, tokenA, placementRec({ projectId: 'extra-in', unitId: unitB.id })),
+    ).toThrow(ForbiddenError);
+
+    // upsertRelation: source in scope (a-src) OK, source out of scope (b-src) 403.
+    expect(
+      upsertRelation(
+        cfg,
+        tokenA,
+        relationRec({
+          sourceProjectId: 'a-src',
+          targetProjectId: 'a-dst',
+          targetPublicInterface: { projectId: 'a-dst', systemInterfaceId: 'a-api', reason: 'r' },
+        }),
+      ).id,
+    ).toBeTruthy();
+    expect(() =>
+      upsertRelation(
+        cfg,
+        tokenA,
+        relationRec({
+          sourceProjectId: 'b-src',
+          targetProjectId: 'b-dst',
+          targetPublicInterface: { projectId: 'b-dst', systemInterfaceId: 'b-api', reason: 'r' },
+        }),
+      ),
+    ).toThrow(ForbiddenError);
+
+    // removeRelation: point-checked to the relation's source project. The
+    // out-of-scope relation is 403 (fail-closed), the in-scope one removes.
+    expect(() => removeRelation(cfg, tokenA, relOut.id)).toThrow(ForbiddenError);
+    removeRelation(cfg, tokenA, relIn.id);
+    expect(listRelations(cfg, MASTER).some((r) => r.id === relIn.id)).toBe(false);
   });
 });
 

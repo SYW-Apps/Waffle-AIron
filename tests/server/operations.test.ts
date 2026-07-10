@@ -17,6 +17,7 @@ import {
 import { routeAdmin } from '../../src/server/http.js';
 import { createProject } from '../../src/server/admin.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
+import { upsertOrganizationUnit, placeProject as placeProjectInUnit } from '../../src/server/organization.js';
 import { UnauthenticatedError, ForbiddenError } from '../../src/server/errors.js';
 import type {
   ApiKeyRecord,
@@ -294,16 +295,51 @@ describe('operations orchestrator (sdd_host)', () => {
     expect(getHealthReport(cfg, MASTER).status).toBe('ok');
   });
 
-  it('S2: a project-scoped operations:read grant is rejected (403); only an instance-wide grant passes', () => {
+  it('scoped model: a project-scoped operations:read grant sees only its project slice, not the whole instance', () => {
     createProject(cfg, MASTER, 'proj-a');
 
-    // Project-scoped grant carrying operations:read does NOT confer instance reach.
-    expect(() => getHealthReport(cfg, projOpsToken())).toThrow(ForbiddenError);
-    expect(() => getUsage(cfg, projOpsToken())).toThrow(ForbiddenError);
-    expect(() => evaluateQuota(cfg, projOpsToken())).toThrow(ForbiddenError);
+    // Under Phase 6 a project-scoped operations:read grant is no longer a blanket
+    // 403 — it has reach, narrowed to its own project. 'acme' is not hosted, so the
+    // scoped operator sees zero projects (never the instance's 'proj-a').
+    // (Deliberate replacement of the old instance-wide-only rejection behavior.)
+    expect(getHealthReport(cfg, projOpsToken()).usage?.[0].projectCount).toBe(0);
+    expect(getUsage(cfg, projOpsToken())[0].projectCount).toBe(0);
+    expect(evaluateQuota(cfg, projOpsToken())[0].projectCount).toBe(0);
 
-    // The instance-wide ({projectId:'*'}) grant still passes.
-    expect(getHealthReport(cfg, opsToken()).status).toBe('ok');
+    // A grant with NO operations:read reach at all is still 403.
+    expect(() => getHealthReport(cfg, plainToken())).toThrow(ForbiddenError);
+
+    // The instance-wide ({projectId:'*'}) grant sees the whole instance.
+    expect(getHealthReport(cfg, opsToken()).usage?.[0].projectCount).toBe(1);
+  });
+
+  it('scoped operations:read: a unit-scoped operator sees health/usage only for their subtree projects', () => {
+    createProject(cfg, MASTER, 'in-proj');
+    createProject(cfg, MASTER, 'out-proj');
+
+    const unitA = upsertOrganizationUnit(dataDir, {
+      id: '', name: 'A', kind: 'team', status: 'active', createdAt: '', createdBy: SUBJECT,
+    });
+    const unitB = upsertOrganizationUnit(dataDir, {
+      id: '', name: 'B', kind: 'team', status: 'active', createdAt: '', createdBy: SUBJECT,
+    });
+    placeProjectInUnit(dataDir, {
+      id: '', projectId: 'in-proj', unitId: unitA.id, role: 'owner', createdAt: '', createdBy: SUBJECT,
+    });
+    placeProjectInUnit(dataDir, {
+      id: '', projectId: 'out-proj', unitId: unitB.id, role: 'owner', createdAt: '', createdBy: SUBJECT,
+    });
+
+    const tokenA = mintToken([{ projectId: '', orgUnitId: unitA.id, permissions: ['operations:read'] }]);
+
+    // Usage: the instance snapshot counts only the in-scope project; instance-wide sees both.
+    expect(getUsage(cfg, tokenA)[0].projectCount).toBe(1);
+    expect(getUsage(cfg, opsToken())[0].projectCount).toBe(2);
+
+    // Health checks run only over the in-scope project (registry-consistency names 1 record).
+    const report = getHealthReport(cfg, tokenA);
+    expect(report.checks.find((c) => c.id === 'project-registry-consistency')!.message).toMatch(/1 record/);
+    expect(report.usage?.[0].projectCount).toBe(1);
   });
 
   it('getHealthReport: a ghost project record makes the instance unhealthy', () => {
