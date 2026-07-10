@@ -22,6 +22,9 @@ dependsOn:
   - landscape_diagram_specialist
   - audit_repository
   - host_core_adapter
+  - scope_specialist
+lint:
+  allow: []
 status: complete
 createdAt: '2026-07-08T21:12:56.113Z'
-updatedAt: '2026-07-09T22:13:11.990Z'
+updatedAt: '2026-07-10T17:37:00.669Z'

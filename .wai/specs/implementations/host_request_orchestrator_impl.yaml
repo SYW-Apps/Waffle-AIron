@@ -4,42 +4,19 @@ description: >-
   Per-request data-plane workflow: authenticate, resolve and bind the authorized project scope, then
   dispatch the sdd_* call — routing the approval-backed self-service tools to the self-service
   orchestrator, the hosted landscape discovery tools to the landscape orchestrator (currentProjectId
-  = the bound project), and every other tool to the scoped MCP server.
+  = the bound project), and every other tool to the scoped MCP server after enforcing the granular
+  data-plane permission (mcp:read for reads, mcp:write for writes) from the principal's grant for
+  the bound project.
 contract: ihost_request_orchestrator
 sourcePath: src/server/request.ts
 methods:
-  - name: viewDiagram
-    narrative:
-      - stepNumber: 1
-        description: Extract the signed view token from the request query
-        type: local
-      - stepNumber: 2
-        description: Verify the token (signature + expiry); rejects if invalid
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: verifyViewToken
-      - stepNumber: 3
-        description: Resolve the granted project's isolated root and bind it
-        type: local
-      - stepNumber: 4
-        description: Render the canvas in scope
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: renderDiagram
-      - stepNumber: 5
-        description: Wrap the canvas HTML in a text/html response
-        type: local
-      - stepNumber: 6
-        description: Return the canvas HTML response
-        type: return
-        outcome: canvas html response
   - name: handleRequest
     narrative:
       - stepNumber: 1
         description: Extract the bearer token from the request Authorization header
         type: local
       - stepNumber: 2
-        description: Authenticate the token to a principal
+        description: Authenticate the token to a principal (resolving its precise grants)
         type: call
         targetComponent: auth_specialist
         targetMethod: authenticate
@@ -47,6 +24,7 @@ methods:
         description: If the principal is unauthenticated, reject
         type: branch
         condition: principal is unauthenticated
+        onTrueStep: 4
         onFalseStep: 5
       - stepNumber: 4
         description: Return 401 Unauthorized
@@ -64,6 +42,7 @@ methods:
         description: If no authorized root resolved, reject cross-project access
         type: branch
         condition: resolved root is empty (project not authorized)
+        onTrueStep: 8
         onFalseStep: 9
       - stepNumber: 8
         description: Return 403 Forbidden
@@ -84,6 +63,7 @@ methods:
         condition: >-
           the called tool is one of the sdd_host_* self-service tools or the hosted landscape
           discovery tools
+        onTrueStep: 11
         onFalseStep: 25
       - stepNumber: 11
         description: Dispatch by tool name to the matching orchestrator method
@@ -163,46 +143,100 @@ methods:
         description: Shape the self-service or landscape result into the JSON-RPC tool response envelope
         type: local
       - stepNumber: 24
-        description: Continue to the shared audit-event build step, skipping the scoped MCP server dispatch
+        description: >-
+          Continue to the shared audit-event build step, skipping the ordinary permission gate and
+          scoped MCP server dispatch
         type: jump
-        toStep: 27
+        toStep: 30
       - stepNumber: 25
+        description: >-
+          Classify the called sdd_* tool as a write or a read: write tools have names starting with
+          sdd_add_, sdd_update_, sdd_delete_, sdd_write_, sdd_define_, sdd_set_, sdd_initialize_,
+          sdd_externalize_, sdd_internalize_, or sdd_move_; read tools have names starting with
+          sdd_get_ or sdd_validate_ (sdd_get_status is a read). The required data-plane permission
+          is mcp:write for a write tool and mcp:read for a read tool.
+        type: local
+      - stepNumber: 26
+        description: >-
+          If the authenticated principal's grant covering the bound project does not carry the
+          matching data-plane permission — consulting principal.grants for the bound project, NOT
+          the coarse role/projects projection; mcp:write for writes, mcp:read for reads, where a '*'
+          permission or an instance-wide '*' project grant covers both — reject
+        type: branch
+        condition: >-
+          the principal's grant for the bound project lacks the required data-plane permission
+          (mcp:read for a read tool, mcp:write for a write tool)
+        onTrueStep: 27
+        onFalseStep: 28
+      - stepNumber: 27
+        description: >-
+          Reject with a clear MCP error that the required data-plane permission (mcp:read or
+          mcp:write) is missing for the bound project
+        type: throw
+        error: >-
+          Forbidden — the token's grant for this project lacks the required data-plane permission
+          (mcp:read or mcp:write)
+      - stepNumber: 28
         description: Instantiate the scoped sdd_* MCP server
         type: call
         targetComponent: host_mcp_adapter
         targetMethod: createScopedServer
-      - stepNumber: 26
+      - stepNumber: 29
         description: Connect the scoped server to the request transport and process the JSON-RPC message
         type: local
-      - stepNumber: 27
+      - stepNumber: 30
         description: >-
           Build the redacted AuditEvent (action mcp.tool.call, actor and tokenId from the principal,
           project id, tool name as target, outcome)
         type: local
-      - stepNumber: 28
+      - stepNumber: 31
         description: Append the audit event without letting a failure fail the request
         type: try
-        endStep: 30
+        endStep: 33
         catches:
           - error: audit append failure
-            step: 31
-      - stepNumber: 29
+            step: 34
+      - stepNumber: 32
         description: Append the redacted mcp.tool.call audit event under the active retention policy
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 30
+      - stepNumber: 33
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 32
-      - stepNumber: 31
+        toStep: 35
+      - stepNumber: 34
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 32
+      - stepNumber: 35
         description: Return the MCP response
         type: return
         outcome: MCP response
-detail: full
+  - name: viewDiagram
+    narrative:
+      - stepNumber: 1
+        description: Extract the signed view token from the request query
+        type: local
+      - stepNumber: 2
+        description: Verify the token (signature + expiry); rejects if invalid
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: verifyViewToken
+      - stepNumber: 3
+        description: Resolve the granted project's isolated root and bind it
+        type: local
+      - stepNumber: 4
+        description: Render the canvas in scope
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: renderDiagram
+      - stepNumber: 5
+        description: Wrap the canvas HTML in a text/html response
+        type: local
+      - stepNumber: 6
+        description: Return the canvas HTML response
+        type: return
+        outcome: canvas html response
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-07-09T22:12:59.458Z'
+updatedAt: '2026-07-10T17:25:36.860Z'

@@ -17,6 +17,8 @@ dependsOn:
   - diagnostics_specialist
   - quota_specialist
   - pack_registry
+  - organization_repository
+  - scope_specialist
 status: complete
 createdAt: '2026-07-09T09:09:26.722Z'
-updatedAt: '2026-07-10T12:36:11.054Z'
+updatedAt: '2026-07-10T17:13:28.376Z'

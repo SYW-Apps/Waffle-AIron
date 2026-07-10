@@ -19,6 +19,10 @@ dependsOn:
   - host_git_adapter
   - host_producer_adapter
   - secret_registry
+  - organization_repository
+  - scope_specialist
+lint:
+  allow: []
 status: complete
 createdAt: '2026-07-04T12:33:51.178Z'
-updatedAt: '2026-07-08T20:19:28.936Z'
+updatedAt: '2026-07-10T17:36:59.120Z'

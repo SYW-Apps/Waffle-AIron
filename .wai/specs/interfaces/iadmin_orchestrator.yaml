@@ -7,11 +7,31 @@ description: >-
 component: admin_orchestrator
 methods:
   - name: createProject
-    description: Authenticate, allocate the project, and bootstrap its isolated spec tree.
-    signature: 'createProject(credential: string, id: string): HostedProjectRecord'
+    description: >-
+      Authenticate the caller (bootstrap master or a user token). Resolve the caller's
+      project:create scope over the organization tree: a super-admin (instance-wide grant) may
+      create any project and optionally place it in a target unit; a unit-scoped creator holding
+      project:create for an organization unit MUST supply a target unit within their scope, and the
+      new project is auto-placed there. Allocate the project, bootstrap its isolated spec tree, and
+      place it when a target unit is given.
+    signature: 'createProject(credential: string, id: string, unitId: string): HostedProjectRecord'
     returns: HostedProjectRecord
+    params:
+      - name: credential
+        type: string
+      - name: id
+        type: string
+      - name: unitId
+        type: string
+        description: >-
+          Optional target organization unit to place the new project in. Required (and must be
+          within scope) for a unit-scoped creator; optional for a super-admin.
+        optional: true
   - name: destroyProject
-    description: Authenticate and deregister the project and its tree.
+    description: >-
+      Authenticate the caller (bootstrap master or a user token), require the caller's
+      project:destroy scope to permit the target project (a super-admin permits any), and deregister
+      the project and its tree.
     signature: 'destroyProject(credential: string, id: string): void'
     returns: void
   - name: listProjects
@@ -32,14 +52,16 @@ methods:
     returns: ApiKeyRecord[]
   - name: lockProject
     description: >-
-      Authenticate, bind the project scope, validate-as-complete, and on success promote statuses
-      and write the StateId-scoped lock record.
+      Authenticate the caller (bootstrap master or a user token), require the caller's lock:create
+      scope to permit the target project, bind the project scope, validate-as-complete, and on
+      success promote statuses and write the StateId-scoped lock record.
     signature: 'lockProject(credential: string, project: string): LockRecord'
     returns: LockRecord
   - name: promoteProject
     description: >-
-      Authenticate, bind scope, read the lock, re-check the current StateId, and mark
-      ready-for-promotion only when it still matches; reject stale locks.
+      Authenticate the caller (bootstrap master or a user token), require the caller's
+      promote:mark-ready scope to permit the target project, bind scope, read the lock, re-check the
+      current StateId, and mark ready-for-promotion only when it still matches; reject stale locks.
     signature: 'promoteProject(credential: string, project: string): PromoteResult'
     returns: PromoteResult
   - name: generateDiagram
@@ -128,4 +150,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-07-09T19:23:46.588Z'
+updatedAt: '2026-07-10T17:21:59.390Z'

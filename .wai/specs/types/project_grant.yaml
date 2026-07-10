@@ -26,6 +26,13 @@ fields:
     type: string
     description: Optional ISO-8601 expiry for temporary grants.
     optional: true
+  - name: orgUnitId
+    type: string
+    description: >-
+      When set, this grant is scoped to an organization unit: it covers every hosted project placed
+      in that unit AND all descendant units (recursive subtree). Mutually exclusive in intent with a
+      specific projectId; '*' remains the instance-wide super-admin scope.
+    optional: true
 methods: []
 createdAt: '2026-07-08T19:34:29.321Z'
-updatedAt: '2026-07-08T19:34:29.356Z'
+updatedAt: '2026-07-10T17:12:36.271Z'
