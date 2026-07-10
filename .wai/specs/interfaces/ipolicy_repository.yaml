@@ -1,11 +1,12 @@
 id: ipolicy_repository
 name: Policy Repository Interface
 description: >-
-  Facade contract for durable hosted instance pack/profile enforcement policy. Hosted workflows read
-  and replace the active InstancePackPolicy through this repository instead of reaching into private
-  policy storage blocks. Pure 1:1 forwarding: getPackPolicy to the index, setPackPolicy to the
-  registry. Identity-provider configuration (SSO) is deferred to Phase 5 and is intentionally absent
-  from this contract.
+  Facade contract for durable hosted instance pack/profile enforcement policy and identity-provider
+  (SSO) configuration. Hosted workflows read and replace the active InstancePackPolicy and manage
+  the identity-provider collection through this repository instead of reaching into private policy
+  storage blocks. Pure 1:1 forwarding: getPackPolicy and listIdentityProviders to the index;
+  setPackPolicy, upsertIdentityProvider, and removeIdentityProvider to the registry. No logic lives
+  on this facade.
 component: policy_repository
 methods:
   - name: getPackPolicy
@@ -28,6 +29,36 @@ methods:
         type: InstancePackPolicy
     guarantees:
       - atomic
+  - name: listIdentityProviders
+    description: >-
+      Forward to the index and return every configured identity provider, or an empty list when none
+      has been configured. Pure forwarding — no logic on this facade.
+    signature: 'listIdentityProviders(): IdentityProviderConfig[]'
+    returns: IdentityProviderConfig[]
+    params: []
+  - name: upsertIdentityProvider
+    description: >-
+      Forward to the registry to create or update one identity-provider configuration and return the
+      stored config. The registry stamps updatedAt; the config carries a clientSecretRef that points
+      at the host secret mechanism, never a raw client secret.
+    signature: 'upsertIdentityProvider(config: IdentityProviderConfig): IdentityProviderConfig'
+    returns: IdentityProviderConfig
+    params:
+      - name: config
+        type: IdentityProviderConfig
+    guarantees:
+      - atomic
+  - name: removeIdentityProvider
+    description: >-
+      Forward to the registry to remove one identity-provider configuration by id; the registry
+      rejects an unknown id with a not-found error.
+    signature: 'removeIdentityProvider(id: string): void'
+    returns: void
+    params:
+      - name: id
+        type: string
+    guarantees:
+      - atomic
 status: complete
 createdAt: '2026-07-08T21:59:33.749Z'
-updatedAt: '2026-07-09T20:53:11.903Z'
+updatedAt: '2026-07-10T08:16:16.440Z'

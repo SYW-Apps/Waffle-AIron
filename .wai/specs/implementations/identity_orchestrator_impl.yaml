@@ -2,8 +2,10 @@ id: identity_orchestrator_impl
 name: Identity Orchestrator Implementation
 description: >-
   Hosted identity control-plane workflows: authenticate the caller credential, authorize by grants,
-  then manage user-bound MCP/API tokens, user grants, and admin-only audit access. Audit appends are
-  best-effort and never fail the primary action.
+  then manage user-bound MCP/API tokens, user grants, identity-provider (SSO) configuration, and
+  admin-only audit access; plus the unauthenticated headless SSO login pair (start/complete) that
+  derives trust from the signed SSO state and the provider code exchange and inlines first-login
+  user provisioning. Audit appends are best-effort and never fail the primary action.
 contract: iidentity_orchestrator
 sourcePath: src/server/identity.ts
 methods:
@@ -374,7 +376,319 @@ methods:
         description: Return the updated user record
         type: return
         outcome: updated user record
+  - name: startSsoLogin
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the configured identity providers through the policy repository (no caller
+          credential — starting a login is unauthenticated by nature)
+        type: call
+        targetComponent: policy_repository
+        targetMethod: listIdentityProviders
+      - stepNumber: 2
+        description: >-
+          Select the identity-provider configuration whose id is providerId from the listed
+          providers
+        type: local
+      - stepNumber: 3
+        description: If the selected provider is unknown or not enabled, reject
+        type: branch
+        condition: the selected provider is unknown or not enabled
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the login start for an unknown or disabled provider
+        type: throw
+        error: unknown or disabled identity provider
+      - stepNumber: 5
+        description: Generate a cryptographically random nonce for this login attempt
+        type: local
+      - stepNumber: 6
+        description: >-
+          Sign an SSO state binding providerId, the nonce, and redirectUri via the single signing
+          authority
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: signSsoState
+      - stepNumber: 7
+        description: Build the provider authorization URL from the config, the signed state, and redirectUri
+        type: call
+        targetComponent: identity_provider_adapter
+        targetMethod: buildAuthorizationUrl
+      - stepNumber: 8
+        description: Append a redacted audit event without letting a failure fail the login start
+        type: try
+        endStep: 10
+        catches:
+          - error: audit append failure
+            step: 11
+      - stepNumber: 9
+        description: Append the redacted sso.start audit event (info level) under the active retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 10
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 12
+      - stepNumber: 11
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 12
+        description: Return the provider authorization URL
+        type: return
+        outcome: authorization URL
+  - name: completeSsoLogin
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Verify the signed SSO state via the single signing authority — a tampered or expired state
+          is rejected; the original payload is returned (no caller credential — trust derives from
+          the signed state and the code exchange)
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: verifySsoState
+      - stepNumber: 2
+        description: Parse the verified state payload into providerId, nonce, and redirectUri
+        type: local
+      - stepNumber: 3
+        description: Resolve the configured identity providers through the policy repository
+        type: call
+        targetComponent: policy_repository
+        targetMethod: listIdentityProviders
+      - stepNumber: 4
+        description: Select the identity-provider configuration whose id is the state's providerId
+        type: local
+      - stepNumber: 5
+        description: If the selected provider is unknown or not enabled, reject
+        type: branch
+        condition: the selected provider is unknown or not enabled
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Reject the callback for an unknown or disabled provider
+        type: throw
+        error: unknown or disabled identity provider
+      - stepNumber: 7
+        description: >-
+          Exchange the authorization code for provider tokens using the config and the state's
+          redirectUri, receiving a redacted provider response summary
+        type: call
+        targetComponent: identity_provider_adapter
+        targetMethod: exchangeCode
+      - stepNumber: 8
+        description: >-
+          Verify the provider metadata and resolve it to a Wairon PrincipalSubject (issuer +
+          external subject), without leaking raw provider tokens
+        type: call
+        targetComponent: identity_provider_adapter
+        targetMethod: resolveSubject
+      - stepNumber: 9
+        description: Look up the hosted user by the resolved subject's issuer and external subject id
+        type: call
+        targetComponent: user_repository
+        targetMethod: findByExternalSubject
+      - stepNumber: 10
+        description: >-
+          If no hosted user matched the resolved external subject, provision one; otherwise skip to
+          minting
+        type: branch
+        condition: no hosted user matched the resolved external subject
+        onFalseStep: 13
+      - stepNumber: 11
+        description: >-
+          Build a new active HostedUserRecord for the resolved subject — first-login provisioning:
+          status active, empty grants (an admin assigns grants afterwards), createdAt now
+        type: local
+      - stepNumber: 12
+        description: Persist the newly provisioned first-login user record through the user repository
+        type: call
+        targetComponent: user_repository
+        targetMethod: upsert
+      - stepNumber: 13
+        description: >-
+          Resolve the effective user record (the freshly provisioned record on first login,
+          otherwise the existing match) and mint a user-bound token: generate a cryptographically
+          random token, compute its salted hash, and build the ApiKeyRecord (keyHash, ownerSubject =
+          the resolved user's subject, createdBySubject = the resolved user's subject, grants = the
+          resolved user's current grants, createdAt now, plus the role/projects compatibility
+          projection derived from the grants)
+        type: local
+      - stepNumber: 14
+        description: Persist only the hashed credential record
+        type: call
+        targetComponent: credential_registry
+        targetMethod: create
+      - stepNumber: 15
+        description: Append a redacted audit event without letting a failure fail the login
+        type: try
+        endStep: 17
+        catches:
+          - error: audit append failure
+            step: 18
+      - stepNumber: 16
+        description: >-
+          Append the redacted sso.login audit event (security level) under the active retention
+          policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 17
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 19
+      - stepNumber: 18
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 19
+        description: Return the plaintext user-bound token (shown exactly once)
+        type: return
+        outcome: plaintext token returned once
+  - name: listIdentityProviders
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: If the caller lacks an instance-wide admin grant, deny
+        type: branch
+        condition: the caller lacks an instance-wide admin grant
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the identity-provider administration
+        type: throw
+        error: Forbidden — identity-provider administration requires an instance-wide admin grant
+      - stepNumber: 4
+        description: List the configured identity providers through the policy repository
+        type: call
+        targetComponent: policy_repository
+        targetMethod: listIdentityProviders
+      - stepNumber: 5
+        description: Return the identity-provider configurations
+        type: return
+        outcome: identity-provider configurations
+  - name: upsertIdentityProvider
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: If the caller lacks an instance-wide admin grant, deny
+        type: branch
+        condition: the caller lacks an instance-wide admin grant
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the identity-provider administration
+        type: throw
+        error: Forbidden — identity-provider administration requires an instance-wide admin grant
+      - stepNumber: 4
+        description: >-
+          Create or update the identity-provider configuration through the policy repository (the
+          config carries a clientSecretRef, never a raw secret)
+        type: call
+        targetComponent: policy_repository
+        targetMethod: upsertIdentityProvider
+      - stepNumber: 5
+        description: Append a redacted audit event without letting a failure fail the upsert
+        type: try
+        endStep: 7
+        catches:
+          - error: audit append failure
+            step: 8
+      - stepNumber: 6
+        description: >-
+          Append the redacted idp.upsert audit event (security level) under the active retention
+          policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 7
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 9
+      - stepNumber: 8
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 9
+        description: Return the stored identity-provider configuration
+        type: return
+        outcome: stored identity-provider configuration
+  - name: removeIdentityProvider
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: If the caller lacks an instance-wide admin grant, deny
+        type: branch
+        condition: the caller lacks an instance-wide admin grant
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the identity-provider administration
+        type: throw
+        error: Forbidden — identity-provider administration requires an instance-wide admin grant
+      - stepNumber: 4
+        description: >-
+          Remove the identity-provider configuration by id through the policy repository (an unknown
+          id is rejected)
+        type: call
+        targetComponent: policy_repository
+        targetMethod: removeIdentityProvider
+      - stepNumber: 5
+        description: Append a redacted audit event without letting a failure fail the removal
+        type: try
+        endStep: 7
+        catches:
+          - error: audit append failure
+            step: 8
+      - stepNumber: 6
+        description: >-
+          Append the redacted idp.remove audit event (security level) under the active retention
+          policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 7
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 9
+      - stepNumber: 8
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 9
+        description: Return once the identity-provider configuration has been removed
+        type: return
+        outcome: identity provider removed
+  - name: countAuditEvents
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: If the caller lacks both audit:read and an instance-wide admin grant, deny
+        type: branch
+        condition: the caller lacks both audit:read and an instance-wide admin grant
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the audit read
+        type: throw
+        error: Forbidden — audit read access required
+      - stepNumber: 4
+        description: Count redacted audit events matching the query through the audit repository
+        type: call
+        targetComponent: audit_repository
+        targetMethod: count
+      - stepNumber: 5
+        description: Return the audit event count
+        type: return
+        outcome: audit event count
 detail: full
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-07-09T18:02:58.364Z'
+updatedAt: '2026-07-10T08:18:12.587Z'

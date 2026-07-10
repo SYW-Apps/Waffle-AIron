@@ -43,5 +43,11 @@ Approved design: credential-based discovery methods (uniform with Phases 1–3);
 
 Phase 4 COMPLETE. Type-spec fix pending: organization_unit_record.parentId required-vs-"when set" mismatch (typed optional in code).
 
-### Phase 5 — Operations, Admin UI (SSO), local control
-- [ ] Not started (identity_provider_adapter narratives land here)
+### Phase 5 — split per approved scope decision
+**5a — Headless SSO onboarding (ACTIVE)**: /identity/sso/start + /identity/sso/callback on the identity portal (OIDC code exchange → resolve-or-create user inlined into completeSsoLogin → mint user-bound token shown once); stateless HMAC SSO state signed by auth_specialist; IdP config CRUD restored on ipolicy_repository (instance-admin gated, surfaced on /identity/providers); audit count endpoint. Clears all 4 lint allows + every Phase-5 deferral marker. resolveOrCreateUser resolves as inlined narrative steps (a public method would be uncallable → honest inline instead).
+**5b — Slim operations + exposure enforcement**: health/usage/advisory-quota read-only surface (diagnostics + quota specialists); HostExposurePolicy actually gates the mounted control planes; backup_* + backup_archive_adapter + restore specs DELETED (platform snapshots are the documented backup path).
+**Deferred as drafts**: admin_ui_* (+ web_session) pending real-usage/UX evidence; local_control_portal pending exposure-policy-driven need.
+**5c — skills resources** (sdd_mcp/sdd_skills): after 5a/5b.
+- [ ] 5a spec finalization → lock → implementation
+- [ ] 5b spec finalization → lock → implementation
+- [ ] 5c

@@ -1,9 +1,10 @@
 id: ipolicy_registry
 name: Policy Registry Interface
 description: >-
-  Private write-path contract for the active hosted instance pack/profile policy. The registry owns
-  server-side updatedAt stamping and durable persistence; it performs no authorization and no
-  updatedBy stamping (the orchestrator supplies updatedBy from the authenticated caller).
+  Private write-path contract for the active hosted instance pack/profile policy and the
+  identity-provider (SSO) configuration collection. The registry owns server-side updatedAt stamping
+  and durable persistence; it performs no authorization (the orchestrator enforces that) and no
+  updatedBy stamping.
 component: policy_registry
 methods:
   - name: setPackPolicy
@@ -20,6 +21,33 @@ methods:
         type: InstancePackPolicy
     guarantees:
       - atomic
+  - name: upsertIdentityProvider
+    description: >-
+      Create or update one identity-provider configuration: stamp updatedAt server-side, persist the
+      identity-provider collection durably via write-temp-then-rename, refresh the owned store, and
+      return the stored config. The config carries a clientSecretRef that points at the host secret
+      mechanism; the registry persists the reference only and never a raw client secret. A
+      persistence failure leaves the previous collection intact and surfaces as a storage error.
+    signature: 'upsertIdentityProvider(config: IdentityProviderConfig): IdentityProviderConfig'
+    returns: IdentityProviderConfig
+    params:
+      - name: config
+        type: IdentityProviderConfig
+    guarantees:
+      - atomic
+  - name: removeIdentityProvider
+    description: >-
+      Remove one identity-provider configuration by id: reject with a not-found error when no
+      configuration has that id; otherwise persist the reduced collection durably via
+      write-temp-then-rename, refresh the owned store, and return once removed. A persistence
+      failure leaves the previous collection intact and surfaces as a storage error.
+    signature: 'removeIdentityProvider(id: string): void'
+    returns: void
+    params:
+      - name: id
+        type: string
+    guarantees:
+      - atomic
 status: complete
 createdAt: '2026-07-09T20:46:20.093Z'
-updatedAt: '2026-07-09T20:53:09.900Z'
+updatedAt: '2026-07-10T08:16:27.437Z'

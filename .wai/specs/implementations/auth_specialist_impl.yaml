@@ -174,6 +174,54 @@ methods:
         description: Return the authenticated principal
         type: return
         outcome: authenticated principal
+  - name: signSsoState
+    narrative:
+      - stepNumber: 1
+        description: 'Build the payload: the caller-supplied opaque payload plus an expiry (now + a short TTL)'
+        type: local
+      - stepNumber: 2
+        description: Compute the HMAC signature over the payload with the server signing secret
+        type: local
+      - stepNumber: 3
+        description: Encode payload + signature into a URL-safe state string
+        type: local
+      - stepNumber: 4
+        description: Return the signed SSO state
+        type: return
+        outcome: signed SSO state
+  - name: verifySsoState
+    narrative:
+      - stepNumber: 1
+        description: Decode the state into payload + signature
+        type: local
+      - stepNumber: 2
+        description: Recompute the HMAC and constant-time compare
+        type: local
+      - stepNumber: 3
+        description: If the signature does not match, reject
+        type: branch
+        condition: signature mismatch
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject a tampered state
+        type: throw
+        error: invalid SSO state
+      - stepNumber: 5
+        description: If the expiry has passed, reject
+        type: branch
+        condition: expiry has passed
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Reject an expired state
+        type: throw
+        error: expired SSO state
+      - stepNumber: 7
+        description: Extract the original payload from the verified state
+        type: local
+      - stepNumber: 8
+        description: Return the original payload
+        type: return
+        outcome: original payload
 status: complete
 createdAt: '2026-07-04T12:54:26.477Z'
-updatedAt: '2026-07-09T17:38:56.188Z'
+updatedAt: '2026-07-10T08:16:06.569Z'

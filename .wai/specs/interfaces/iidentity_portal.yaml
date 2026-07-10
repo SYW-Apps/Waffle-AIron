@@ -1,8 +1,8 @@
 id: iidentity_portal
 name: Identity Portal Interface
 description: >-
-  Draft control-plane HTTP contract for user-bound token management, hosted user grants, and
-  admin-only audit access.
+  Control-plane HTTP contract for headless SSO login, user-bound token management, hosted user
+  grants, identity-provider (SSO) configuration, and admin-only audit access.
 component: identity_portal
 methods:
   - name: mintToken
@@ -114,6 +114,90 @@ methods:
       transport: HTTP
       method: PUT
       path: /identity/users/{id}/status
+  - name: startSsoLogin
+    description: >-
+      Begin a headless SSO login for one provider and return the provider authorization URL.
+      Unauthenticated by nature — no caller credential.
+    signature: 'startSsoLogin(providerId: string, redirectUri: string): string'
+    returns: string
+    params:
+      - name: providerId
+        type: string
+      - name: redirectUri
+        type: string
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /identity/sso/start
+  - name: completeSsoLogin
+    description: >-
+      Complete a headless SSO login from the provider callback and return a user-bound token once.
+      Unauthenticated by nature — trust derives from the signed state and the code exchange.
+    signature: 'completeSsoLogin(state: string, code: string): string'
+    returns: string
+    params:
+      - name: state
+        type: string
+      - name: code
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /identity/sso/callback
+  - name: listIdentityProviders
+    description: List configured identity providers after instance-admin authorization.
+    signature: 'listIdentityProviders(credential: string): IdentityProviderConfig[]'
+    returns: IdentityProviderConfig[]
+    params:
+      - name: credential
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /identity/providers
+  - name: upsertIdentityProvider
+    description: Create or update one identity-provider configuration after instance-admin authorization.
+    signature: >-
+      upsertIdentityProvider(credential: string, config: IdentityProviderConfig):
+      IdentityProviderConfig
+    returns: IdentityProviderConfig
+    params:
+      - name: credential
+        type: string
+      - name: config
+        type: IdentityProviderConfig
+    endpoint:
+      transport: HTTP
+      method: PUT
+      path: /identity/providers/{id}
+  - name: removeIdentityProvider
+    description: Remove one identity-provider configuration by id after instance-admin authorization.
+    signature: 'removeIdentityProvider(credential: string, id: string): void'
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: id
+        type: string
+    endpoint:
+      transport: HTTP
+      method: DELETE
+      path: /identity/providers/{id}
+  - name: countAuditEvents
+    description: >-
+      Return the count of redacted audit events matching the supplied query after admin-only
+      authorization.
+    signature: 'countAuditEvents(credential: string, query: AuditQuery): number'
+    returns: number
+    params:
+      - name: credential
+        type: string
+      - name: query
+        type: AuditQuery
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /identity/audit/count
 status: complete
 createdAt: '2026-07-08T20:19:45.785Z'
-updatedAt: '2026-07-09T18:02:42.624Z'
+updatedAt: '2026-07-10T08:18:37.775Z'

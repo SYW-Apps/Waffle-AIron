@@ -1,29 +1,33 @@
 id: policy_store_impl
 name: Policy Store Implementation
 description: >-
-  Authoritative in-memory holder of the single active hosted instance pack/profile policy,
-  file-backed as one record under the server data root (pack-policy.json).
+  Authoritative in-memory holder of hosted instance policy: the single active pack/profile policy
+  record (file-backed as pack-policy.json under the server data root) and the identity-provider
+  (SSO) configuration collection (file-backed as identity-providers.json under the same data root).
 contract: ipolicy_store
 sourcePath: src/server/policy.ts
 methods:
   - name: load
     narrative: []
     intent: >-
-      Read the single persisted policy record from the pack-policy.json file under the server data
-      root and hold it as the authoritative in-memory representation, returning it. A missing file
+      Read the single persisted pack-policy record from pack-policy.json and the identity-provider
+      collection from identity-providers.json, both under the server data root, and hold them as the
+      authoritative in-memory representation, returning the pack policy. A missing pack-policy file
       yields null — signalling that no policy has ever been configured, which the orchestrator
-      resolves to the documented permissive default. An unreadable file or structurally invalid JSON
-      fails with a storage error naming the path; the store never silently drops a persisted policy,
-      because losing it would silently relax enforcement for every subsequent project
-      initialization.
+      resolves to the documented permissive default; a missing identity-providers file yields an
+      empty collection. An unreadable file or structurally invalid JSON fails with a storage error
+      naming the path; the store never silently drops a persisted policy or provider configuration,
+      because losing either would silently relax enforcement or sign-in for every subsequent
+      operation.
   - name: replaceActive
     narrative: []
     intent: >-
-      Swap the authoritative in-memory active policy to the supplied record in one assignment, only
-      ever called by the owned registry after durable persistence has succeeded. Never partially
-      applies, so concurrent reads through the index always observe a single consistent policy
-      record.
+      Swap the authoritative in-memory active pack-policy record to the supplied record in one
+      assignment, only ever called by the owned registry after durable persistence has succeeded.
+      Never partially applies, so concurrent reads through the index always observe a single
+      consistent pack-policy record. The identity-provider collection the store also holds is loaded
+      at load() time and replaced through the registry's provider write path, not by this method.
 detail: intent
 status: complete
 createdAt: '2026-07-09T20:47:39.801Z'
-updatedAt: '2026-07-09T20:53:14.398Z'
+updatedAt: '2026-07-10T08:16:42.581Z'

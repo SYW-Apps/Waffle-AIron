@@ -1,11 +1,13 @@
 id: iidentity_orchestrator
 name: Identity Orchestrator Interface
 description: >-
-  Contract for hosted identity workflows behind the identity portal: authenticate the caller
-  credential (bootstrap or user-bound token), authorize by grants, then manage users, grants,
-  user-bound MCP/API tokens, and admin-only audit access. Follows the control-plane house pattern:
-  every method carries the raw credential and the orchestrator authenticates via the auth specialist
-  before any effect.
+  Contract for hosted identity workflows behind the identity portal: headless SSO login
+  (unauthenticated start/complete with first-login user provisioning), plus credential-authenticated
+  management of users, grants, user-bound MCP/API tokens, identity-provider (SSO) configuration, and
+  admin-only audit read/count. Follows the control-plane house pattern: every credential-bearing
+  method authenticates via the auth specialist before any effect. The SSO start/complete pair
+  carries no credential and derives trust entirely from the signed SSO state and the provider code
+  exchange.
 component: identity_orchestrator
 methods:
   - name: mintToken
@@ -113,6 +115,92 @@ methods:
         type: string
     guarantees:
       - atomic
+  - name: startSsoLogin
+    description: >-
+      Begin a headless SSO login: resolve the enabled identity-provider configuration through the
+      policy repository, generate a nonce, sign an SSO state binding providerId, nonce, and
+      redirectUri via the auth specialist, build the provider authorization URL through the identity
+      provider adapter, append a best-effort sso.start (info) audit event, and return the
+      authorization URL. Starting a login is unauthenticated by nature — no caller credential is
+      required or accepted; the signed state is the only integrity anchor carried into the callback.
+    signature: 'startSsoLogin(providerId: string, redirectUri: string): string'
+    returns: string
+    params:
+      - name: providerId
+        type: string
+      - name: redirectUri
+        type: string
+  - name: completeSsoLogin
+    description: >-
+      Complete a headless SSO login: verify the signed SSO state via the auth specialist (a tampered
+      or expired state is rejected), resolve the bound identity-provider configuration, exchange the
+      authorization code and resolve the external subject through the provider adapter, look up the
+      hosted user by issuer + external subject, provision a first-login active user record with
+      empty grants when absent (an admin assigns grants afterwards), mint a user-bound MCP/API token
+      for the resolved user persisting only its hashed credential record, append a best-effort
+      sso.login (security) audit event, and return the plaintext token exactly once. Inlines
+      first-login provisioning — there is no separate resolve-or-create method. Unauthenticated by
+      nature: no caller credential is required or accepted.
+    signature: 'completeSsoLogin(state: string, code: string): string'
+    returns: string
+    params:
+      - name: state
+        type: string
+      - name: code
+        type: string
+  - name: listIdentityProviders
+    description: >-
+      Authenticate the caller, authorize instance-admin-only identity-provider administration, and
+      return every configured identity provider by forwarding to the policy repository. Not audited
+      (a read).
+    signature: 'listIdentityProviders(credential: string): IdentityProviderConfig[]'
+    returns: IdentityProviderConfig[]
+    params:
+      - name: credential
+        type: string
+  - name: upsertIdentityProvider
+    description: >-
+      Authenticate the caller, authorize instance-admin-only identity-provider administration,
+      create or update one identity-provider configuration through the policy repository, append a
+      redacted idp.upsert (security) audit event, and return the stored config. The config carries a
+      clientSecretRef, never a raw secret.
+    signature: >-
+      upsertIdentityProvider(credential: string, config: IdentityProviderConfig):
+      IdentityProviderConfig
+    returns: IdentityProviderConfig
+    params:
+      - name: credential
+        type: string
+      - name: config
+        type: IdentityProviderConfig
+    guarantees:
+      - atomic
+  - name: removeIdentityProvider
+    description: >-
+      Authenticate the caller, authorize instance-admin-only identity-provider administration,
+      remove one identity-provider configuration by id through the policy repository (an unknown id
+      is rejected), and append a redacted idp.remove (security) audit event.
+    signature: 'removeIdentityProvider(credential: string, id: string): void'
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: id
+        type: string
+    guarantees:
+      - atomic
+  - name: countAuditEvents
+    description: >-
+      Authenticate the caller, authorize admin-only audit read access (audit:read or an
+      instance-wide admin grant), and return the count of redacted audit events matching the query
+      by forwarding to the audit repository. Not audited (a read).
+    signature: 'countAuditEvents(credential: string, query: AuditQuery): number'
+    returns: number
+    params:
+      - name: credential
+        type: string
+      - name: query
+        type: AuditQuery
 status: complete
 createdAt: '2026-07-08T20:17:23.976Z'
-updatedAt: '2026-07-09T18:02:39.330Z'
+updatedAt: '2026-07-10T08:17:10.600Z'

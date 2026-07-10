@@ -14,12 +14,7 @@ owns:
   - audit_index
 dependsOn: []
 lint:
-  allow:
-    - code: UNUSED_METHOD
-      reason: >-
-        count() backs paginated audit reporting for the draft admin_ui/operations surfaces; Phase 1
-        queryAuditEvents returns the event list without a total. Allow self-expires once a paginated
-        consumer lands.
+  allow: []
 status: complete
 createdAt: '2026-07-08T20:15:14.291Z'
-updatedAt: '2026-07-09T17:55:05.964Z'
+updatedAt: '2026-07-10T08:19:22.873Z'

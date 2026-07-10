@@ -20,7 +20,28 @@ methods:
         type: call
         targetComponent: policy_registry
         targetMethod: setPackPolicy
+  - name: listIdentityProviders
+    narrative:
+      - stepNumber: 1
+        description: Forward to the policy index
+        type: call
+        targetComponent: policy_index
+        targetMethod: listIdentityProviders
+  - name: upsertIdentityProvider
+    narrative:
+      - stepNumber: 1
+        description: Forward to the policy registry
+        type: call
+        targetComponent: policy_registry
+        targetMethod: upsertIdentityProvider
+  - name: removeIdentityProvider
+    narrative:
+      - stepNumber: 1
+        description: Forward to the policy registry
+        type: call
+        targetComponent: policy_registry
+        targetMethod: removeIdentityProvider
 detail: calls-only
 status: complete
 createdAt: '2026-07-09T20:47:51.139Z'
-updatedAt: '2026-07-09T20:53:17.399Z'
+updatedAt: '2026-07-10T08:16:36.587Z'
