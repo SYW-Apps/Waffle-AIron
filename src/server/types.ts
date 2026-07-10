@@ -491,4 +491,19 @@ export interface PackDescriptor {
   languages: number;
   rules: number;
   error?: string;
+  /** Which global tier the pack came from: 'image' (immutable, baked into an
+   *  extended image at WAIRON_IMAGE_PACKS_DIR) or 'instance' (mutable, on the
+   *  data volume). Absent for project-scoped packs. */
+  tier?: string;
+  /** True on an image-tier pack shadowed by a same-named instance pack
+   *  (instance wins; shadowing is drift and surfaces in the health report). */
+  shadowed?: boolean;
+}
+
+/** A project's declared pack/profile references — path-free, safe for
+ *  redacted diagnostics. */
+export interface ProjectPackReference {
+  projectId: string;
+  packNames: string[];
+  profileIds?: string[];
 }
