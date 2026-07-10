@@ -122,12 +122,34 @@ export const LintConfigSchema = z.object({
 });
 export type LintConfig = z.infer<typeof LintConfigSchema>;
 
+/**
+ * A declared lifecycle flow root: a component.method the runtime invokes at a
+ * lifecycle phase (init/shutdown). Reachability analysis (unused-detection,
+ * durability round-trip) treats these as entrypoints alongside Portals,
+ * Observers, and published components — boot-time wiring like hydration and
+ * environment provisioning becomes statically checkable instead of a blanket
+ * lint-allow ("called at startup, invisible to the walker").
+ */
+export const LifecycleEntrypointSchema = z.object({
+  /** Which lifecycle flow this roots. */
+  phase: z.enum(['init', 'shutdown']),
+  /** Component id whose method the runtime invokes at this phase. */
+  component: z.string(),
+  /** Method name on that component's interface. */
+  method: z.string(),
+  /** What this lifecycle flow establishes or tears down. */
+  description: z.string().optional(),
+});
+export type LifecycleEntrypoint = z.infer<typeof LifecycleEntrypointSchema>;
+
 export const SubsystemSpecSchema = z.object({
   id: SpecIdSchema,
   name: z.string(),
   description: z.string(),
   parentSystem: z.string(), // References L0 System Name or file
   publicInterfaces: z.array(PublicInterfaceSchema).default([]),
+  /** Declared init/shutdown flow roots (see LifecycleEntrypointSchema). */
+  lifecycle: z.array(LifecycleEntrypointSchema).optional(),
   /**
    * Optional subsystem profile override (e.g. for fullstack systems). Open
    * string: built-ins are backend, frontend-reactive, frontend-controller,
@@ -179,6 +201,37 @@ export const PATTERN_TYPES: ReadonlySet<ComponentType> = new Set(['Repository', 
 export const PortalTypeSchema = z.enum(['HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'Custom']);
 export type PortalType = z.infer<typeof PortalTypeSchema>;
 
+/**
+ * One entry of a generic-dispatch Portal's machine-readable dispatch table:
+ * maps a runtime capability name to the component.method serving it. Makes
+ * dynamic dispatch visible to the static walker — each binding is validated
+ * against the serving component's interface (UNSERVED_CAPABILITY) and
+ * traversed by unused-detection, so a portal with a table no longer needs
+ * "invisible to the static walker" lint-allows (which then go stale and are
+ * flagged by the stale-allow audit).
+ */
+export const DispatchBindingSchema = z.object({
+  /** Capability name exactly as dispatched at runtime (e.g. "shadow_module.get"). */
+  capability: z.string().min(1),
+  /** Component id serving this capability (local, super::-relative, or ::-absolute). */
+  component: z.string(),
+  /** Method name on the serving component's interface. */
+  method: z.string(),
+  /** What this capability does. */
+  description: z.string().optional(),
+});
+export type DispatchBinding = z.infer<typeof DispatchBindingSchema>;
+
+/**
+ * Store durability declaration. `durable` promises the state survives restart:
+ * the durability round-trip rule then requires a hydration read-back (a read-
+ * effect contract method) reachable from a declared lifecycle init entrypoint
+ * (MISSING_HYDRATION otherwise). `ram-projection` declares the state is
+ * rebuilt, not restored — exempt from the round-trip requirement.
+ */
+export const DurabilitySchema = z.enum(['ram-projection', 'durable']);
+export type Durability = z.infer<typeof DurabilitySchema>;
+
 export const ComponentSpecSchema = z.object({
   id: SpecIdSchema,
   name: z.string(),
@@ -191,6 +244,10 @@ export const ComponentSpecSchema = z.object({
   dependsOn: z.array(z.string()).default([]),
   portalType: PortalTypeSchema.optional(),
   basePath: z.string().optional(),
+  /** Portal-only: capability → component.method dispatch table (see DispatchBindingSchema). */
+  dispatch: z.array(DispatchBindingSchema).optional(),
+  /** Store-only: whether held state survives restart (see DurabilitySchema). */
+  durability: DurabilitySchema.optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
   status: SpecStatusSchema.optional().default('complete'),
@@ -268,6 +325,12 @@ export const MethodSignatureSchema = z.object({
    * actually delivered is implementation correctness (implementer tests), not a static check.
    */
   guarantees: z.array(GuaranteeSchema).optional(),
+  /**
+   * State-effect direction of this method on its component's held state. Required on a
+   * durable Store's contract methods so the durability round-trip rule can pair external
+   * writes with hydration read-backs (MISSING_HYDRATION); optional elsewhere.
+   */
+  effect: z.enum(['read', 'write']).optional(),
 });
 
 export type MethodSignature = z.infer<typeof MethodSignatureSchema>;
@@ -299,15 +362,16 @@ export type InterfaceSpec = z.infer<typeof InterfaceSpecSchema>;
 // by the narrative-flow validation rule, not the schema.
 // ---------------------------------------------------------------------------
 export const NarrativeStepTypeSchema = z.enum([
-  'local',   // in-component work
-  'call',    // cross-component call (targetComponent/targetMethod)
-  'branch',  // if/else: condition + onTrueStep (default next) / onFalseStep
-  'switch',  // multiway dispatch: on + cases[{value, step}] + defaultStep
-  'loop',    // header step; body = next..endStep; loopKind picks the form
-  'try',     // guarded region: body = next..endStep; catches[{error, step}] + finallyStep
-  'jump',    // unconditional goto (break / continue / rejoin-after-catch)
-  'return',  // terminator (happy or handled-failure exit)
-  'throw',   // error terminator: this path raises/propagates
+  'local',    // in-component work
+  'call',     // cross-component call (targetComponent/targetMethod)
+  'dispatch', // capability routed through a generic Portal's dispatch table (targetComponent + capability)
+  'branch',   // if/else: condition + onTrueStep (default next) / onFalseStep
+  'switch',   // multiway dispatch: on + cases[{value, step}] + defaultStep
+  'loop',     // header step; body = next..endStep; loopKind picks the form
+  'try',      // guarded region: body = next..endStep; catches[{error, step}] + finallyStep
+  'jump',     // unconditional goto (break / continue / rejoin-after-catch)
+  'return',   // terminator (happy or handled-failure exit)
+  'throw',    // error terminator: this path raises/propagates
 ]);
 export type NarrativeStepType = z.infer<typeof NarrativeStepTypeSchema>;
 
@@ -330,8 +394,9 @@ export const NarrativeStepSchema = z.object({
   stepNumber: z.number().int().positive(),
   description: z.string(),
   type: NarrativeStepTypeSchema,
-  targetComponent: z.string().optional(), // Required if type is 'call', references L2 Component id
+  targetComponent: z.string().optional(), // Required if type is 'call' or 'dispatch', references L2 Component id
   targetMethod: z.string().optional(),    // Required if type is 'call', references Method name on target interface
+  capability: z.string().optional(),      // Required if type is 'dispatch': the capability routed through the target Portal's dispatch table
   assertsGuarantees: z.array(GuaranteeSchema).optional(),
 
   // --- flow config (per type; validated by the narrative-flow rule) ---------

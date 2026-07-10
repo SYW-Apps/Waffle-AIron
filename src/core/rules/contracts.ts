@@ -15,6 +15,7 @@ export const contractsRule: SddRule = {
     { code: 'MISSING_TARGET_COMPONENT', defaultSeverity: 'error', summary: 'Call step missing targetComponent' },
     { code: 'MISSING_TARGET_METHOD', defaultSeverity: 'error', summary: 'Call step missing targetMethod' },
     { code: 'INVALID_TARGET_COMPONENT_REFERENCE', defaultSeverity: 'error', summary: 'Call step targets a non-existent component' },
+    { code: 'CROSS_TREE_REF_UNRESOLVED', defaultSeverity: 'warning', summary: 'Cross-tree reference (super::/:: form) not resolvable in this standalone context — only the parent project can verify it' },
     { code: 'UNDECLARED_DEPENDENCY_CALL', defaultSeverity: 'error', summary: 'Call step targets a component the caller does not depend on or own' },
     { code: 'INVALID_TARGET_METHOD_REFERENCE', defaultSeverity: 'error', summary: 'Call step targets a method not on any target interface' },
     { code: 'NARRATIVE_SEMANTIC_UNBACKED', defaultSeverity: 'warning', summary: 'Narrative asserts a guarantee the called contract does not declare' },
@@ -24,7 +25,7 @@ export const contractsRule: SddRule = {
       const contract = ctx.interfaceMap.get(impl.contract);
       if (!contract) continue;
 
-      const isDraftCtx = impl.status === 'draft' || impl.status === 'design' || ctx.isComponentDraft(contract.component) || contract.status === 'draft' || contract.status === 'design';
+      const isDraftCtx = ctx.isImplementationDraft(impl);
 
       const contractMethodNames = new Set(contract.methods.map(m => m.name));
       const implMethodNames = new Set(impl.methods.map(m => m.name));
@@ -55,19 +56,66 @@ export const contractsRule: SddRule = {
         }
       }
 
-      // Level 5 narrative step validation
+      // Level 5 narrative step validation. Dispatch steps share the component-
+      // existence and declared-dependency checks with call steps; capability
+      // resolution against the target Portal's table is the dispatch rule's.
       for (const implMethod of impl.methods) {
         for (const step of implMethod.narrative) {
-          if (step.type !== 'call') continue;
+          if (step.type !== 'call' && step.type !== 'dispatch') continue;
 
           if (!step.targetComponent) {
             ctx.addIssue(
               'error',
               'MISSING_TARGET_COMPONENT',
-              `Method "${implMethod.name}" in implementation "${impl.id}" has a call step (${step.stepNumber}) missing "targetComponent".`,
+              `Method "${implMethod.name}" in implementation "${impl.id}" has a ${step.type} step (${step.stepNumber}) missing "targetComponent".`,
               impl.id,
               isDraftCtx,
             );
+            continue;
+          }
+
+          // An unresolved relative form (super::/::) means the ref points
+          // outside THIS loading root — a chained subproject opened
+          // standalone physically does not contain its parent's specs, so the
+          // edge is only verifiable from the parent. That is a known-honest
+          // state, not a spec defect: warn with its own code instead of
+          // raising the same error a genuine typo gets.
+          const isCrossTreeForm = step.targetComponent.startsWith('::') || step.targetComponent.startsWith('super::');
+
+          if (step.type === 'dispatch') {
+            const dispatchTarget = ctx.componentMap.get(step.targetComponent);
+            if (!dispatchTarget) {
+              if (isCrossTreeForm) {
+                ctx.addIssue(
+                  'warning',
+                  'CROSS_TREE_REF_UNRESOLVED',
+                  `Method "${implMethod.name}" in implementation "${impl.id}" dispatches through cross-tree component "${step.targetComponent}" (step ${step.stepNumber}), which cannot be resolved from this project — validate from the parent project to verify the edge.`,
+                  impl.id,
+                  isDraftCtx,
+                );
+              } else {
+                ctx.addIssue(
+                  'error',
+                  'INVALID_TARGET_COMPONENT_REFERENCE',
+                  `Method "${implMethod.name}" in implementation "${impl.id}" dispatches through component "${step.targetComponent}" which does not exist (step ${step.stepNumber}).`,
+                  impl.id,
+                  isDraftCtx,
+                );
+              }
+              continue;
+            }
+            const dispatchCaller = ctx.componentMap.get(contract.component);
+            if (dispatchCaller && step.targetComponent !== dispatchCaller.id
+                && !dispatchCaller.dependsOn.includes(step.targetComponent)
+                && !dispatchCaller.owns.includes(step.targetComponent)) {
+              ctx.addIssue(
+                'error',
+                'UNDECLARED_DEPENDENCY_CALL',
+                `Method "${implMethod.name}" in implementation "${impl.id}" (component "${dispatchCaller.id}") dispatches through component "${step.targetComponent}" (step ${step.stepNumber}) but component "${dispatchCaller.id}" does not list "${step.targetComponent}" as a dependency.`,
+                impl.id,
+                isDraftCtx || ctx.isComponentDraft(dispatchCaller.id),
+              );
+            }
             continue;
           }
 
@@ -84,13 +132,23 @@ export const contractsRule: SddRule = {
 
           const targetComp = ctx.componentMap.get(step.targetComponent);
           if (!targetComp) {
-            ctx.addIssue(
-              'error',
-              'INVALID_TARGET_COMPONENT_REFERENCE',
-              `Method "${implMethod.name}" in implementation "${impl.id}" calls component "${step.targetComponent}" which does not exist (step ${step.stepNumber}).`,
-              impl.id,
-              isDraftCtx || ctx.isComponentDraft(step.targetComponent),
-            );
+            if (isCrossTreeForm) {
+              ctx.addIssue(
+                'warning',
+                'CROSS_TREE_REF_UNRESOLVED',
+                `Method "${implMethod.name}" in implementation "${impl.id}" calls cross-tree component "${step.targetComponent}" (step ${step.stepNumber}), which cannot be resolved from this project — validate from the parent project to verify the edge.`,
+                impl.id,
+                isDraftCtx,
+              );
+            } else {
+              ctx.addIssue(
+                'error',
+                'INVALID_TARGET_COMPONENT_REFERENCE',
+                `Method "${implMethod.name}" in implementation "${impl.id}" calls component "${step.targetComponent}" which does not exist (step ${step.stepNumber}).`,
+                impl.id,
+                isDraftCtx,
+              );
+            }
             continue;
           }
 
@@ -110,7 +168,7 @@ export const contractsRule: SddRule = {
           }
 
           // Check if target component has an interface containing targetMethod
-          const targetInterfaces = ctx.interfaces.filter(i => i.component === step.targetComponent);
+          const targetInterfaces = ctx.interfacesByComponent.get(step.targetComponent) ?? [];
           let targetMethodSpec: (typeof targetInterfaces)[number]['methods'][number] | undefined;
           for (const targetIntf of targetInterfaces) {
             const found = targetIntf.methods.find(m => m.name === step.targetMethod);

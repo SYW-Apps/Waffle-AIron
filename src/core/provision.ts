@@ -358,6 +358,27 @@ function rewriteRefsInDir(specsDir: string, renameMap: Map<string, string>, excl
         raw.dependsOn = next;
         changed = true;
       }
+      // A Portal's dispatch table carries component refs of its own.
+      if (Array.isArray(raw.dispatch)) {
+        for (const b of raw.dispatch) {
+          const nc = remap(b.component);
+          if (nc !== b.component) {
+            b.component = nc;
+            changed = true;
+          }
+        }
+      }
+    } else if ('parentSystem' in raw && Array.isArray(raw.lifecycle)) {
+      // Subsystem index: lifecycle entrypoints name components (same-subsystem
+      // by rule, but rewrite defensively so a legacy/misdeclared tree can't
+      // silently dangle across a migration).
+      for (const le of raw.lifecycle) {
+        const nc = remap(le.component);
+        if (nc !== le.component) {
+          le.component = nc;
+          changed = true;
+        }
+      }
     } else if ('component' in raw && Array.isArray(raw.methods)) {
       for (const m of raw.methods) {
         if (!Array.isArray(m.params)) continue;

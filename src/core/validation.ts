@@ -250,6 +250,9 @@ export function validateSddTree(
     } else {
       issues.push(...loaderErrors);
     }
+    // Round-trip serializability runs as a registered rule (roundtripRule in
+    // rules/namespace.ts) — visible in `rules list`, severity-tunable, scoped
+    // like every other finding.
 
     if (!system) {
       issues.push(issue('error', 'MISSING_SYSTEM_SPEC', 'L0 System specification (.system.yaml) is missing.'));

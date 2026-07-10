@@ -65,9 +65,15 @@ export interface RuleContext {
   interfaceIds: Set<string>;
   /** Per-subsystem published component ids (its public surface). */
   publicSet: Map<string, Set<string>>;
+  /** Interfaces grouped by owning component id — the shared read path for a component's contract methods (rules and the reachability walker must agree on this enumeration). */
+  interfacesByComponent: Map<string, InterfaceSpec[]>;
+  /** Implementations grouped by their contract interface id. */
+  implementationsByContract: Map<string, ImplementationSpec[]>;
 
   /** True when the spec (or its ancestors) is in draft/design status. */
   isComponentDraft(compId: string): boolean;
+  /** True when the implementation, its contract, or the contract's component is in draft/design status — the shared draft recipe for implementation-scoped findings. */
+  isImplementationDraft(impl: ImplementationSpec): boolean;
   /** The architectural profile governing a component (subsystem override, else project type). */
   getComponentProfile(compId: string): ArchProfile;
   /** Whether a type reference resolves against builtins, generics, or defined types. */

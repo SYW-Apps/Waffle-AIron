@@ -403,6 +403,35 @@ export function generateSequenceDiagram(
         case 'throw':
           lines.push(`  Note over ${selfId}: ${escapeLabel(truncate(`⚡ throw${step.error ? ` ${step.error}` : ''}`, 70))}`);
           break;
+        case 'dispatch': {
+          if (!step.targetComponent) break;
+          const portal = componentById.get(step.targetComponent);
+          if (!portal) {
+            lines.push(`  Note over ${selfId}: ${escapeLabel(`dispatches via unknown "${step.targetComponent}"`)}`);
+            break;
+          }
+          const portalId = declare(portal);
+          lines.push(`  ${selfId}->>${portalId}: ${escapeLabel(`⟨${step.capability ?? '?'}⟩`)}`);
+          // Follow the table binding so the diagram shows the real server —
+          // and keep walking its narrative, exactly like a call step, so the
+          // downstream flow doesn't silently truncate at the dispatch hop.
+          const binding = portal.dispatch?.find(b => b.capability === step.capability);
+          const server = binding ? componentById.get(binding.component) : undefined;
+          if (binding && server) {
+            const serverId = declare(server);
+            const expandable = depth < maxDepth
+              && !!findMethodImpl(server.id, binding.method)
+              && server.id !== comp.id;
+            if (expandable) {
+              lines.push(`  ${portalId}->>+${serverId}: ${escapeLabel(binding.method)}()`);
+              walk(server, binding.method, depth + 1, nextStack);
+              lines.push(`  ${serverId}-->>-${portalId}: return`);
+            } else {
+              lines.push(`  ${portalId}->>${serverId}: ${escapeLabel(binding.method)}()`);
+            }
+          }
+          break;
+        }
         case 'call': {
           if (!step.targetComponent || !step.targetMethod) break;
           const target = componentById.get(step.targetComponent);

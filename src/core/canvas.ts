@@ -167,6 +167,9 @@ export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
             ...(s.type === 'call' && s.targetComponent && s.targetMethod
               ? { call: { component: s.targetComponent, method: s.targetMethod } }
               : {}),
+            ...(s.type === 'dispatch' && s.targetComponent && s.capability
+              ? { call: { component: s.targetComponent, method: `⟨${s.capability}⟩` } }
+              : {}),
             ...(s.condition ? { cond: s.condition } : {}),
             ...(s.onTrueStep !== undefined ? { onTrue: s.onTrueStep } : {}),
             ...(s.onFalseStep !== undefined ? { onFalse: s.onFalseStep } : {}),
@@ -2832,7 +2835,7 @@ var MODEL = __MODEL_JSON__;
     eles.push({ data: { id: 'start', label: (c ? c.name : top.comp) + '.' + top.method + '()', w: 280, h: 44, tw: 260 }, position: { x: 0, y: 0 }, classes: 'flowstart' });
     graph.steps.forEach(function (s, i) {
       var id = 'n' + s.n;
-      var isCall = s.kind === 'call' && !!s.call;
+      var isCall = (s.kind === 'call' || s.kind === 'dispatch') && !!s.call;
       var callable = isCall && !!narrativeFor(s.call.component, s.call.method);
       var isCond = s.kind === 'branch' || s.kind === 'switch' || s.kind === 'loop';
       var label = flowStepLabel(s) + (isCall ? '\\n\\u2192 ' + s.call.component + '.' + s.call.method + '()' + (callable ? '  \\u21B4' : '') : '');
@@ -3002,7 +3005,7 @@ var MODEL = __MODEL_JSON__;
     comps.push({ id: 'start', name: flowTitle() + '()', subsystem: 'flow', componentType: 'Start', public: false, owns: [] });
     graph.steps.forEach(function (s) {
       var name = flowStepLabel(s) + (s.call ? ' \\u2192 ' + s.call.component + '.' + s.call.method + '()' : '');
-      comps.push({ id: 'n' + s.n, name: name, subsystem: 'flow', componentType: s.kind === 'call' ? 'Call' : 'Step', public: false, owns: [] });
+      comps.push({ id: 'n' + s.n, name: name, subsystem: 'flow', componentType: (s.kind === 'call' || s.kind === 'dispatch') ? 'Call' : 'Step', public: false, owns: [] });
     });
     if (graph.first !== null) edges.push({ from: 'start', to: 'n' + graph.first, cross: false });
     graph.edges.forEach(function (e) {

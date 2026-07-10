@@ -23,6 +23,8 @@ import { patternsRule } from './patterns.js';
 import { profilesRule } from './profiles.js';
 import { publicSurfaceRule } from './public-surface.js';
 import { cyclesRule, reachabilityRule } from './graph.js';
+import { dispatchRule, lifecycleRule, durabilityRule, untypedSeamRule, proseClaimRule } from './semantic-edges.js';
+import { roundtripRule, namespaceHygieneRule } from './namespace.js';
 import { couplingRule } from './coupling.js';
 import { languageRule } from './language.js';
 import { technologyRule } from './technology.js';
@@ -40,6 +42,10 @@ export * from './type-analysis.js';
 
 export const SDD_RULES: SddRule[] = [
   hierarchyRule,
+  // Namespace integrity right after hierarchy: unresolvable/unwritable ids
+  // explain many downstream findings, so surface them early in the list.
+  namespaceHygieneRule,
+  roundtripRule,
   typeReferencesRule,
   contractsRule,
   narrativeFlowRule,
@@ -50,7 +56,15 @@ export const SDD_RULES: SddRule[] = [
   profilesRule,
   publicSurfaceRule,
   cyclesRule,
+  // Semantic-edge family: dispatch/lifecycle validity BEFORE reachability so a
+  // reader sees the broken edge finding next to the unused-detection fallout
+  // it explains.
+  dispatchRule,
+  lifecycleRule,
   reachabilityRule,
+  durabilityRule,
+  untypedSeamRule,
+  proseClaimRule,
   couplingRule,
   languageRule,
   technologyRule,
@@ -158,6 +172,19 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
   const componentIds = new Set(components.map(c => c.id));
   const interfaceIds = new Set(interfaces.map(i => i.id));
 
+  const interfacesByComponent = new Map<string, InterfaceSpec[]>();
+  for (const intf of interfaces) {
+    const list = interfacesByComponent.get(intf.component);
+    if (list) list.push(intf);
+    else interfacesByComponent.set(intf.component, [intf]);
+  }
+  const implementationsByContract = new Map<string, ImplementationSpec[]>();
+  for (const impl of implementations) {
+    const list = implementationsByContract.get(impl.contract);
+    if (list) list.push(impl);
+    else implementationsByContract.set(impl.contract, [impl]);
+  }
+
   // A subsystem's published public surface: the component ids bound via its
   // publicInterfaces. Cross-subsystem dependencies may only target these.
   const publicSet = new Map<string, Set<string>>();
@@ -179,6 +206,13 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     if (sub && (sub.status === 'draft' || sub.status === 'design')) return true;
 
     return false;
+  };
+
+  const isImplementationDraft = (impl: ImplementationSpec): boolean => {
+    if (impl.status === 'draft' || impl.status === 'design') return true;
+    const contract = interfaceMap.get(impl.contract);
+    if (!contract) return false;
+    return contract.status === 'draft' || contract.status === 'design' || isComponentDraft(contract.component);
   };
 
   const getComponentProfile = (compId: string): ArchProfile => {
@@ -293,7 +327,10 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     componentIds,
     interfaceIds,
     publicSet,
+    interfacesByComponent,
+    implementationsByContract,
     isComponentDraft,
+    isImplementationDraft,
     getComponentProfile,
     isTypeResolved,
     targetLanguageFor,
