@@ -22,11 +22,6 @@ You own and decide on everything within:
 .wai/specs/components/audit_repository.yaml
 .wai/specs/components/audit_store.yaml
 .wai/specs/components/auth_specialist.yaml
-.wai/specs/components/backup_archive_adapter.yaml
-.wai/specs/components/backup_index.yaml
-.wai/specs/components/backup_registry.yaml
-.wai/specs/components/backup_repository.yaml
-.wai/specs/components/backup_store.yaml
 .wai/specs/components/credential_registry.yaml
 .wai/specs/components/diagnostics_specialist.yaml
 .wai/specs/components/host_core_adapter.yaml
@@ -79,6 +74,7 @@ src/server/approvals.ts
 src/server/audit.ts
 src/server/auth.ts
 src/server/credentials.ts
+src/server/operations.ts
 src/server/adapters.ts
 src/server/http.ts
 src/server/request.ts
