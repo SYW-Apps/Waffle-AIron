@@ -8,11 +8,12 @@ component: operations_orchestrator
 methods:
   - name: getHealthReport
     description: >-
-      Authenticate the caller, authorize operations read, list hosted projects, list both
-      server-global pack tiers, and read each project's pack/profile references, then assemble a
-      redacted instance health report (diagnostic checks — including pack-shadowing and
-      missing-pack-references — plus usage snapshots) via the diagnostics specialist. Read-only;
-      performs no writes and no audit.
+      Authenticate the caller, authorize operations read via an INSTANCE-WIDE operations:read grant
+      (projectId '*') or the instance-admin wildcard — a project-scoped grant carrying
+      operations:read does NOT suffice — list hosted projects, list both server-global pack tiers,
+      and read each project's pack/profile references, then assemble a redacted instance health
+      report (diagnostic checks — including pack-shadowing and missing-pack-references — plus usage
+      snapshots) via the diagnostics specialist. Read-only; performs no writes and no audit.
     signature: 'getHealthReport(credential: string, scope: string): InstanceHealthReport'
     returns: InstanceHealthReport
     params:
@@ -23,8 +24,9 @@ methods:
         optional: true
   - name: getUsage
     description: >-
-      Authenticate the caller, authorize operations read, and return redacted resource usage
-      snapshots derived from the hosted project records. Read-only.
+      Authenticate the caller, authorize operations read via an INSTANCE-WIDE operations:read grant
+      (projectId '*') or the instance-admin wildcard — a project-scoped grant does NOT suffice — and
+      return redacted resource usage snapshots derived from the hosted project records. Read-only.
     signature: 'getUsage(credential: string, scope: string): ResourceUsageSnapshot[]'
     returns: ResourceUsageSnapshot[]
     params:
@@ -35,10 +37,11 @@ methods:
         optional: true
   - name: evaluateQuota
     description: >-
-      Authenticate the caller, authorize operations read, collect usage snapshots, and evaluate them
-      against the advisory ResourceQuotaPolicy (resolved from host config, secure default when
-      unset), returning snapshots annotated with observe/warn advisory quota messages. Advisory only
-      — never blocks or throttles.
+      Authenticate the caller, authorize operations read via an INSTANCE-WIDE operations:read grant
+      (projectId '*') or the instance-admin wildcard — a project-scoped grant does NOT suffice —
+      collect usage snapshots, and evaluate them against the advisory ResourceQuotaPolicy (resolved
+      from host config, secure default when unset), returning snapshots annotated with observe/warn
+      advisory quota messages. Advisory only — never blocks or throttles.
     signature: 'evaluateQuota(credential: string, scope: string): ResourceUsageSnapshot[]'
     returns: ResourceUsageSnapshot[]
     params:
@@ -49,4 +52,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-09T09:10:20.273Z'
-updatedAt: '2026-07-10T12:36:38.553Z'
+updatedAt: '2026-07-10T15:15:51.132Z'

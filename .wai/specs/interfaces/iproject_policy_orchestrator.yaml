@@ -10,9 +10,10 @@ component: project_policy_orchestrator
 methods:
   - name: initializeProjectWithProfile
     description: >-
-      Authenticate the caller credential and authorize project creation (a project:create grant or
-      an instance-admin grant), then perform the same profile-aware initialization body as
-      executeApprovedInit: validate the request against the active pack policy (throwing on
+      Authenticate the caller credential and authorize project creation via an INSTANCE-WIDE
+      project:create grant (projectId '*') or the instance-admin wildcard — a project-scoped grant
+      carrying project:create does NOT suffice — then perform the same profile-aware initialization
+      body as executeApprovedInit: validate the request against the active pack policy (throwing on
       violations under an enforcing policy), create the hosted project, apply the instance's
       required/default declarative packs via the pack registry, record the resolved profile
       selection into the project's config, and audit the initialization. Returns the created hosted
@@ -68,9 +69,11 @@ methods:
         type: string
   - name: setPackPolicy
     description: >-
-      Authenticate the caller credential and authorize policy administration (a policy:manage grant
-      or an instance-admin grant), stamp updatedBy from the authenticated caller, replace the active
-      pack/profile policy wholesale through the repository, and audit the change at security level.
+      Authenticate the caller credential and authorize policy administration via an INSTANCE-WIDE
+      policy:manage grant (projectId '*') or the instance-admin wildcard — a project-scoped
+      policy:manage grant does NOT suffice — stamp updatedBy from the authenticated caller, replace
+      the active pack/profile policy wholesale through the repository, and audit the change at
+      security level.
     signature: 'setPackPolicy(credential: string, policy: InstancePackPolicy): InstancePackPolicy'
     returns: InstancePackPolicy
     params:
@@ -111,4 +114,4 @@ methods:
         type: ProjectInitRequest
 status: complete
 createdAt: '2026-07-08T21:59:46.667Z'
-updatedAt: '2026-07-09T20:53:12.904Z'
+updatedAt: '2026-07-10T15:15:57.724Z'

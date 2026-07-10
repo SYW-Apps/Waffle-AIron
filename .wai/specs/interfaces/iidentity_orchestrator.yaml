@@ -12,11 +12,12 @@ component: identity_orchestrator
 methods:
   - name: mintToken
     description: >-
-      Authenticate the caller, authorize token delegation against the caller's grants (key:manage
-      covering every requested project, or an instance-wide admin grant), validate the requested
-      projects exist, mint a user-bound MCP/API token, persist only its hashed credential record
-      with owner/grant metadata, and append a redacted audit event. Returns the plaintext token
-      exactly once.
+      Authenticate the caller, then authorize token delegation strictly against the caller's OWN
+      grants: the caller must itself hold every permission requested for each project named in
+      request.grants, or hold an instance-wide admin grant — merely holding key:manage does NOT
+      permit delegating arbitrary permissions. Validate the requested projects exist, mint a
+      user-bound MCP/API token, persist only its hashed credential record with owner/grant metadata,
+      and append a redacted audit event. Returns the plaintext token exactly once.
     signature: 'mintToken(credential: string, request: TokenMintRequest): string'
     returns: string
     params:
@@ -37,9 +38,9 @@ methods:
         type: string
   - name: replaceUserGrants
     description: >-
-      Authenticate the caller, authorize grant administration (instance-wide admin grant required),
-      replace the user's grants wholesale through the user repository, and append a redacted audit
-      event.
+      Authenticate the caller, authorize grant administration — an INSTANCE-WIDE admin grant (the
+      instance-admin wildcard, projectId '*'); a project-scoped grant does NOT suffice — replace the
+      user's grants wholesale through the user repository, and append a redacted audit event.
     signature: >-
       replaceUserGrants(credential: string, userId: string, grants: ProjectGrant[]):
       HostedUserRecord
@@ -55,8 +56,9 @@ methods:
       - atomic
   - name: listUsers
     description: >-
-      Authenticate the caller, authorize user administration, and list hosted users optionally
-      narrowed to one project's grant holders.
+      Authenticate the caller, authorize user administration — an INSTANCE-WIDE user:admin grant
+      (projectId '*') or the instance-admin wildcard; a project-scoped grant carrying user:admin
+      does NOT suffice — and list hosted users optionally narrowed to one project's grant holders.
     signature: 'listUsers(credential: string, project: string): HostedUserRecord[]'
     returns: HostedUserRecord[]
     params:
@@ -67,8 +69,10 @@ methods:
         optional: true
   - name: queryAuditEvents
     description: >-
-      Authenticate the caller, authorize admin-only audit read access, and return redacted audit
-      events matching the query.
+      Authenticate the caller, authorize admin-only audit read access — an INSTANCE-WIDE audit:read
+      grant (projectId '*') or the instance-admin wildcard; a project-scoped audit:read grant does
+      NOT satisfy this instance-wide capability — and return redacted audit events matching the
+      query.
     signature: 'queryAuditEvents(credential: string, query: AuditQuery): AuditEvent[]'
     returns: AuditEvent[]
     params:
@@ -88,9 +92,10 @@ methods:
         type: string
   - name: upsertUser
     description: >-
-      Authenticate the caller, authorize user administration (instance-wide admin grant), create or
-      update the hosted user through the user repository, and append a redacted audit event
-      distinguishing creation from update.
+      Authenticate the caller, authorize user administration — an INSTANCE-WIDE user:admin grant
+      (projectId '*') or the instance-admin wildcard; a project-scoped grant does NOT suffice —
+      create or update the hosted user through the user repository, and append a redacted audit
+      event distinguishing creation from update.
     signature: 'upsertUser(credential: string, record: HostedUserRecord): HostedUserRecord'
     returns: HostedUserRecord
     params:
@@ -102,8 +107,15 @@ methods:
       - atomic
   - name: setUserStatus
     description: >-
-      Authenticate the caller, authorize user administration (instance-wide admin grant), set the
-      user's lifecycle status through the user repository, and append a redacted audit event.
+      Authenticate the caller, authorize user administration — an INSTANCE-WIDE user:admin grant
+      (projectId '*') or the instance-admin wildcard; a project-scoped grant does NOT suffice — then
+      set the user's lifecycle status through the user repository. When the new status is not
+      'active' (deactivation), revoke ALL of the user's credentials via
+      credential_registry.revokeAllForOwner so existing tokens can no longer authenticate, and
+      append a security-level 'user.deactivate' audit event including the revoked-token count; the
+      user record is retained for audit provenance. Returning a user to 'active' does NOT
+      auto-restore any revoked tokens — the user re-logs in via SSO or an admin mints fresh. For a
+      status change that keeps the user active, append the ordinary 'user.status.set' event.
     signature: 'setUserStatus(credential: string, userId: string, status: string): HostedUserRecord'
     returns: HostedUserRecord
     params:
@@ -191,9 +203,10 @@ methods:
       - atomic
   - name: countAuditEvents
     description: >-
-      Authenticate the caller, authorize admin-only audit read access (audit:read or an
-      instance-wide admin grant), and return the count of redacted audit events matching the query
-      by forwarding to the audit repository. Not audited (a read).
+      Authenticate the caller, authorize admin-only audit read access — an INSTANCE-WIDE audit:read
+      grant (projectId '*') or the instance-admin wildcard; a project-scoped audit:read grant does
+      NOT suffice — and return the count of redacted audit events matching the query by forwarding
+      to the audit repository. Not audited (a read).
     signature: 'countAuditEvents(credential: string, query: AuditQuery): number'
     returns: number
     params:
@@ -203,4 +216,4 @@ methods:
         type: AuditQuery
 status: complete
 createdAt: '2026-07-08T20:17:23.976Z'
-updatedAt: '2026-07-10T08:17:10.600Z'
+updatedAt: '2026-07-10T15:16:23.434Z'

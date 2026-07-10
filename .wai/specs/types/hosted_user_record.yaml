@@ -16,7 +16,13 @@ fields:
     optional: false
   - name: status
     type: string
-    description: 'Lifecycle status: "active", "disabled", or "deleted".'
+    description: >-
+      Lifecycle status collapsed to a single axis: "active" or "inactive". Any non-"active" value
+      (including legacy "disabled"/"deleted" and the former distinct suspend/deactivate states, now
+      collapsed) is treated as inactive. An inactive record is retained for audit provenance but the
+      user cannot act: on deactivation every one of the user's credentials is revoked and SSO
+      re-login is blocked. Returning to "active" does NOT auto-restore revoked tokens — the user
+      re-logs in via SSO or an admin mints fresh.
     optional: false
   - name: grants
     type: ProjectGrant[]
@@ -32,4 +38,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-07-08T19:34:35.627Z'
-updatedAt: '2026-07-08T19:34:35.660Z'
+updatedAt: '2026-07-10T15:15:46.607Z'

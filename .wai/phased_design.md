@@ -43,6 +43,17 @@ Approved design: credential-based discovery methods (uniform with Phases 1–3);
 
 Phase 4 COMPLETE. Type-spec fix pending: organization_unit_record.parentId required-vs-"when set" mismatch (typed optional in code).
 
+### Security-hardening pass (post-prod-review, ACTIVE) — decisions from Robbe 2026-07-10
+Prod-readiness review found blockers; docker VERIFIED production-ready (built/booted/health/placeholder-refusal/admin-isolation all pass). Fixing now:
+- **B1 user lifecycle**: collapse to ONE active|inactive flag (drop suspend/deactivate distinction — overkill). inactive = revoke all keys (credential_registry sweep by ownerSubject) + authenticate() blocks inactive + completeSsoLogin blocks inactive re-login. Record KEPT for audit provenance (no hard-delete by default; optional hard-delete after deactivation). Contract changes: auth_specialist status check, credential_registry new revokeAllForOwner, identity_orchestrator setUserStatus triggers revocation.
+- **B2 projectPath chaining**: KEEP as full feature hosted+local (Robbe corrected me — the "NOT chaining" spec line is about the isolation unit, not disabling chaining within a project; bigger hosted systems need it MORE). Fix = CONTAINMENT only: loader (specs.ts ~585/654) + setter must resolve projectPath WITHIN the bound project root, reject absolute + ../ escape. Zero feature loss. Cross-PROJECT stays the landscape plane's job.
+- **S2-minimal**: instance-permissions (audit:read, landscape:read/manage, operations:read, user:admin, approval:decide, policy:manage, project:create) require an INSTANCE-WIDE grant; reject/ignore project-scoped forms so they can't confer instance-wide reach. (Full org-unit-scoped admin = deferred Phase 6.)
+- **S5**: mintToken must verify the caller holds each delegated permission for that project (not just key:manage). **S3**: max-body cap on readBody before auth on public /mcp.
+Deferred: S4 (HostExposurePolicy requireTls/allowedOrigins/allowedNetworks unenforced), JWKS verification, N-notes.
+
+### Phase 6 — Tenancy & scoped administration (DEFERRED, approved direction)
+Org units already exist (Phase 4, currently visual-only). Make them ACCESS-bearing: grants gain optional org-unit scope; aggregate reads (audit/landscape/operations/user-list) filter to the unit subtree. super-admin = instance `*`; tenant owner = root-unit-scoped admin; team/dept lead = sub-unit-scoped. Users get unit membership. This is the proper fix for S2 that the minimal fix stands in for.
+
 ### Phase 5 — split per approved scope decision
 **5a — Headless SSO onboarding (ACTIVE)**: /identity/sso/start + /identity/sso/callback on the identity portal (OIDC code exchange → resolve-or-create user inlined into completeSsoLogin → mint user-bound token shown once); stateless HMAC SSO state signed by auth_specialist; IdP config CRUD restored on ipolicy_repository (instance-admin gated, surfaced on /identity/providers); audit count endpoint. Clears all 4 lint allows + every Phase-5 deferral marker. resolveOrCreateUser resolves as inlined narrative steps (a public method would be uncallable → honest inline instead).
 **5b — Slim operations + exposure enforcement**: health/usage/advisory-quota read-only surface (diagnostics + quota specialists); HostExposurePolicy actually gates the mounted control planes; backup_* + backup_archive_adapter + restore specs DELETED (platform snapshots are the documented backup path).

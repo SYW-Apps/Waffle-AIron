@@ -73,9 +73,10 @@ methods:
         type: string
   - name: listPendingRequests
     description: >-
-      UI/CLI workflow: authenticate the caller credential, authorize by grants (approval:decide or
-      instance-admin only), lazily expire overdue pending requests first, then list the pending
-      approval requests the caller may decide, optionally narrowed to one project.
+      UI/CLI workflow: authenticate the caller credential, authorize by grants — an INSTANCE-WIDE
+      approval:decide grant (projectId '*') or the instance-admin wildcard; a project-scoped grant
+      carrying approval:decide does NOT suffice — lazily expire overdue pending requests first, then
+      list the pending approval requests the caller may decide, optionally narrowed to one project.
     signature: 'listPendingRequests(credential: string, projectId: string): ApprovalRequest[]'
     returns: ApprovalRequest[]
     params:
@@ -86,8 +87,9 @@ methods:
         optional: true
   - name: decideRequest
     description: >-
-      UI/CLI workflow: authenticate the caller credential, authorize by grants (approval:decide or
-      instance-admin) and reject self-approval — the decision's decidedBy MUST differ from the
+      UI/CLI workflow: authenticate the caller credential, authorize by grants — an INSTANCE-WIDE
+      approval:decide grant (projectId '*') or the instance-admin wildcard; a project-scoped grant
+      does NOT suffice — and reject self-approval — the decision's decidedBy MUST differ from the
       request's requestedBy — then approve or deny the pending request and audit the decision at
       security level.
     signature: 'decideRequest(credential: string, decision: ApprovalDecision): ApprovalRequest'
@@ -118,4 +120,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-09T07:19:58.825Z'
-updatedAt: '2026-07-09T20:51:13.198Z'
+updatedAt: '2026-07-10T15:15:54.607Z'

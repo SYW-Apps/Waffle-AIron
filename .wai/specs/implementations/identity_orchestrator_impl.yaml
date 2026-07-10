@@ -18,12 +18,13 @@ methods:
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
-          If the caller's grants cover neither key:manage for every requested project nor an
-          instance-wide admin grant, deny
+          If the caller does not itself hold every permission requested (for each project named in
+          request.grants) and also lacks an instance-wide admin grant, deny — holding key:manage
+          alone is NOT sufficient to delegate arbitrary permissions
         type: branch
         condition: >-
-          the caller's grants cover neither key:manage for every requested project nor an
-          instance-wide admin grant
+          the caller lacks an instance-wide admin grant and, for some requested (project,
+          permission) in request.grants, does not itself hold that permission for that project
         onFalseStep: 4
       - stepNumber: 3
         description: Reject the delegation
@@ -354,25 +355,42 @@ methods:
         targetComponent: user_repository
         targetMethod: setStatus
       - stepNumber: 5
+        description: >-
+          If the new status is not 'active' (a deactivation), revoke all of the user's credentials
+          before auditing; an active status skips straight to the audit append
+        type: branch
+        condition: the new status is not 'active'
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Revoke every non-revoked credential owned by the user so existing tokens can no longer
+          authenticate, capturing the revoked count for the audit event
+        type: call
+        targetComponent: credential_registry
+        targetMethod: revokeAllForOwner
+      - stepNumber: 7
         description: Append the audit event without letting a failure fail the status change
         type: try
-        endStep: 7
+        endStep: 9
         catches:
           - error: audit append failure
-            step: 8
-      - stepNumber: 6
-        description: Append the redacted user.status.set audit event under the active retention policy
+            step: 10
+      - stepNumber: 8
+        description: >-
+          Append the redacted audit event under the active retention policy — action
+          'user.deactivate' at security level (including the revoked-token count) when the status
+          change deactivated the user, otherwise 'user.status.set' at info level
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 7
+      - stepNumber: 9
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 9
-      - stepNumber: 8
+        toStep: 11
+      - stepNumber: 10
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 9
+      - stepNumber: 11
         description: Return the updated user record
         type: return
         outcome: updated user record
@@ -505,6 +523,18 @@ methods:
         targetMethod: upsert
       - stepNumber: 13
         description: >-
+          Reject re-login for a deactivated user before minting: if the hosted user resolved for
+          this login is not 'active', deny (a freshly provisioned first-login record is always
+          active, so only an existing deactivated user is rejected here)
+        type: branch
+        condition: the resolved hosted user's status is not 'active'
+        onFalseStep: 15
+      - stepNumber: 14
+        description: Reject the re-login of a deactivated user
+        type: throw
+        error: deactivated user may not re-login
+      - stepNumber: 15
+        description: >-
           Resolve the effective user record (the freshly provisioned record on first login,
           otherwise the existing match) and mint a user-bound token: generate a cryptographically
           random token, compute its salted hash, and build the ApiKeyRecord (keyHash, ownerSubject =
@@ -512,33 +542,33 @@ methods:
           resolved user's current grants, createdAt now, plus the role/projects compatibility
           projection derived from the grants)
         type: local
-      - stepNumber: 14
+      - stepNumber: 16
         description: Persist only the hashed credential record
         type: call
         targetComponent: credential_registry
         targetMethod: create
-      - stepNumber: 15
+      - stepNumber: 17
         description: Append a redacted audit event without letting a failure fail the login
         type: try
-        endStep: 17
+        endStep: 19
         catches:
           - error: audit append failure
-            step: 18
-      - stepNumber: 16
+            step: 20
+      - stepNumber: 18
         description: >-
           Append the redacted sso.login audit event (security level) under the active retention
           policy
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 17
+      - stepNumber: 19
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 19
-      - stepNumber: 18
+        toStep: 21
+      - stepNumber: 20
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 19
+      - stepNumber: 21
         description: Return the plaintext user-bound token (shown exactly once)
         type: return
         outcome: plaintext token returned once
@@ -691,4 +721,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-07-10T08:18:12.587Z'
+updatedAt: '2026-07-10T15:18:44.921Z'

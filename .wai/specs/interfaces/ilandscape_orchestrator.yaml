@@ -7,9 +7,10 @@ component: landscape_orchestrator
 methods:
   - name: upsertUnit
     description: >-
-      Authenticate the credential via the single auth authority and require a landscape:manage grant
-      or an instance-admin grant, then create or update one organization unit and append a redacted
-      audit event (action unit.upsert, info).
+      Authenticate the credential via the single auth authority and require an INSTANCE-WIDE
+      landscape:manage grant (projectId '*') or the instance-admin wildcard — a project-scoped
+      landscape:manage grant does NOT suffice — then create or update one organization unit and
+      append a redacted audit event (action unit.upsert, info).
     signature: 'upsertUnit(credential: string, unit: OrganizationUnitRecord): OrganizationUnitRecord'
     returns: OrganizationUnitRecord
     params:
@@ -21,9 +22,10 @@ methods:
       - atomic
   - name: placeProject
     description: >-
-      Authenticate the credential via the single auth authority and require a landscape:manage grant
-      or an instance-admin grant, then place a hosted project in an organization unit and append a
-      redacted audit event (action project.place, info).
+      Authenticate the credential via the single auth authority and require an INSTANCE-WIDE
+      landscape:manage grant (projectId '*') or the instance-admin wildcard — a project-scoped grant
+      does NOT suffice — then place a hosted project in an organization unit and append a redacted
+      audit event (action project.place, info).
     signature: 'placeProject(credential: string, placement: ProjectPlacement): ProjectPlacement'
     returns: ProjectPlacement
     params:
@@ -35,12 +37,13 @@ methods:
       - atomic
   - name: refreshPublicSurface
     description: >-
-      Authenticate the credential via the single auth authority and require a landscape:manage grant
-      or an instance-admin grant. Resolve and bind the target project root, read its L0
-      publicInterfaces (leniently — the field is optional and may be absent) plus the referenced
-      subsystem public interfaces through the host core adapter, build the redacted public-surface
-      snapshot, replace it in the public-surface repository, and append a redacted audit event
-      (action surface.refresh, info).
+      Authenticate the credential via the single auth authority and require an INSTANCE-WIDE
+      landscape:manage grant (projectId '*') or the instance-admin wildcard — a project-scoped grant
+      does NOT suffice. Resolve and bind the target project root, read its L0 publicInterfaces
+      (leniently — the field is optional and may be absent) plus the referenced subsystem public
+      interfaces through the host core adapter, build the redacted public-surface snapshot, replace
+      it in the public-surface repository, and append a redacted audit event (action
+      surface.refresh, info).
     signature: 'refreshPublicSurface(credential: string, projectId: string): ProjectPublicSurfaceSnapshot'
     returns: ProjectPublicSurfaceSnapshot
     params:
@@ -50,8 +53,9 @@ methods:
         type: string
   - name: upsertRelation
     description: >-
-      Authenticate the credential via the single auth authority and require a landscape:manage grant
-      or an instance-admin grant. Validate targetPublicInterface against the target project's stored
+      Authenticate the credential via the single auth authority and require an INSTANCE-WIDE
+      landscape:manage grant (projectId '*') or the instance-admin wildcard — a project-scoped grant
+      does NOT suffice. Validate targetPublicInterface against the target project's stored
       public-surface snapshot via the public-surface repository — reject an unknown interface ref,
       and when the target has no snapshot reject with guidance to run refreshPublicSurface first —
       then create or update the cross-project relation and append a redacted audit event (action
@@ -67,8 +71,9 @@ methods:
       - atomic
   - name: listRelations
     description: >-
-      Authenticate the credential via the single auth authority and require a landscape:read grant
-      (a landscape:manage or instance-admin grant also satisfies it), then list cross-project
+      Authenticate the credential via the single auth authority and require an INSTANCE-WIDE
+      landscape:read grant (projectId '*') — an instance-wide landscape:manage or the instance-admin
+      wildcard also satisfies it; a project-scoped grant does NOT suffice — then list cross-project
       relations visible to the caller. Reads are not audited.
     signature: 'listRelations(credential: string, projectId: string): ProjectRelationRecord[]'
     returns: ProjectRelationRecord[]
@@ -80,10 +85,12 @@ methods:
         optional: true
   - name: generateLandscape
     description: >-
-      Authenticate the credential via the single auth authority and require a landscape:read grant
-      (a landscape:manage or instance-admin grant also satisfies it), gather authorized organization
-      units, placements, projects, relations, and per-project public-surface snapshots, and return a
-      landscape graph built only from hosted metadata and redacted snapshots. Reads are not audited.
+      Authenticate the credential via the single auth authority and require an INSTANCE-WIDE
+      landscape:read grant (projectId '*') — an instance-wide landscape:manage or the instance-admin
+      wildcard also satisfies it; a project-scoped grant does NOT suffice — gather authorized
+      organization units, placements, projects, relations, and per-project public-surface snapshots,
+      and return a landscape graph built only from hosted metadata and redacted snapshots. Reads are
+      not audited.
     signature: 'generateLandscape(credential: string, scope: string): LandscapeGraphModel'
     returns: LandscapeGraphModel
     params:
@@ -133,9 +140,10 @@ methods:
         type: string
   - name: removeRelation
     description: >-
-      Authenticate the credential via the single auth authority and require a landscape:manage grant
-      or an instance-admin grant, then remove one cross-project relation by id and append a redacted
-      audit event (action relation.remove, info).
+      Authenticate the credential via the single auth authority and require an INSTANCE-WIDE
+      landscape:manage grant (projectId '*') or the instance-admin wildcard — a project-scoped grant
+      does NOT suffice — then remove one cross-project relation by id and append a redacted audit
+      event (action relation.remove, info).
     signature: 'removeRelation(credential: string, id: string): void'
     returns: void
     params:
@@ -145,4 +153,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-08T21:13:44.021Z'
-updatedAt: '2026-07-09T22:17:24.077Z'
+updatedAt: '2026-07-10T15:16:12.917Z'

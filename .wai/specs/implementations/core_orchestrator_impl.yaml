@@ -231,18 +231,31 @@ methods:
           subsystem.projectPath
         type: local
       - stepNumber: 5
+        description: >-
+          Containment guard: reject a projectPath that escapes the owning project. The child project
+          directory must resolve to a location strictly within the bound project root
+        type: branch
+        condition: >-
+          the resolved child project directory is not contained within the bound project root (an
+          absolute path or a ../-escaping projectPath)
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Reject a projectPath that resolves outside the project root
+        type: throw
+        error: projectPath must resolve within the project root
+      - stepNumber: 7
         description: Skip scaffolding when the child directory is already an initialized wairon project
         type: branch
         condition: the child directory already contains an initialized wairon project
-        onTrueStep: 7
-        onFalseStep: 6
-      - stepNumber: 6
+        onTrueStep: 9
+        onFalseStep: 8
+      - stepNumber: 8
         description: >-
           Scope the project root to the child directory, provision an isolated child project named
           projectName (default project.yaml + bootstrap L0 system spec), then restore the parent
           root scope
         type: local
-      - stepNumber: 7
+      - stepNumber: 9
         description: Chained subsystem wired and child project ensured
         type: return
         outcome: chained subsystem created
@@ -381,4 +394,4 @@ methods:
         targetMethod: loadTypeSpecs
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-06T21:22:45.545Z'
+updatedAt: '2026-07-10T15:19:23.694Z'
