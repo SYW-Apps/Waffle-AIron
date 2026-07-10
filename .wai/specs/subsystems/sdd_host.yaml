@@ -12,7 +12,8 @@ description: >-
   HostExposurePolicy, so operators may keep network admin APIs disabled while still managing the
   instance locally. The hosted server is distributed as an immutable container image for
   self-hosting; operators update by pulling and redeploying the image while preserving the data
-  volume; durable backups are platform data-volume snapshots.
+  volume, and extension packs ship baked into extended images (built FROM the base image) as the
+  primary hosted distribution channel; durable backups are platform data-volume snapshots.
 parentSystem: Waffle-AIron
 publicInterfaces:
   - type: REST
@@ -76,4 +77,4 @@ publicInterfaces:
 trustedLinks: []
 status: complete
 createdAt: '2026-07-04T12:33:06.563Z'
-updatedAt: '2026-07-10T11:29:16.970Z'
+updatedAt: '2026-07-10T12:36:15.851Z'

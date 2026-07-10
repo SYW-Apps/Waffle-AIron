@@ -2,7 +2,8 @@ id: diagnostics_specialist_impl
 name: Diagnostics Specialist Implementation
 description: >-
   Pure derivation of redacted diagnostic checks and usage snapshots from supplied hosted project
-  records, plus assembly of an aggregated instance health report. No I/O.
+  records, the two server-global pack-tier name listings, and per-project pack/profile references,
+  plus assembly of an aggregated instance health report. No I/O.
 contract: idiagnostics_specialist
 sourcePath: src/server/operations.ts
 methods:
@@ -27,9 +28,22 @@ methods:
         description: Derive a project-count sanity check from the number of active records
         type: local
       - stepNumber: 5
-        description: Assemble the DiagnosticCheckResult list with redacted messages and observation timestamps
+        description: >-
+          Derive a 'pack-shadowing' check: compute the pack names present in BOTH the image-tier and
+          instance-tier listings; when non-empty, warn and name each shadowed pack (noting the
+          instance copy takes precedence over the image copy), otherwise ok
         type: local
       - stepNumber: 6
+        description: >-
+          Derive a 'missing-pack-references' check: for each in-scope project, compute the
+          referenced pack names absent from the union of both tier listings; when any project has
+          missing references, fail (error) and name each such project with its missing pack refs
+          plus any profile ids thereby invalidated, otherwise ok
+        type: local
+      - stepNumber: 7
+        description: Assemble the DiagnosticCheckResult list with redacted messages and observation timestamps
+        type: local
+      - stepNumber: 8
         description: Return the diagnostic check results
         type: return
         outcome: diagnostic check results
@@ -78,4 +92,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-10T11:27:12.680Z'
-updatedAt: '2026-07-10T11:27:35.085Z'
+updatedAt: '2026-07-10T12:37:16.347Z'

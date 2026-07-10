@@ -12,10 +12,13 @@ methods:
     narrative: []
     detail: intent
     intent: >-
-      Discovers every pack ref in the server-global packs directory (WAIRON_PACKS_DIR, or
-      <data-dir>/packs) and probes each in isolation via the core extension loader, returning a
-      descriptor per pack (name plus profile/language/rule counts, or the load error). Never throws
-      for a bad pack — the error rides on its descriptor so one broken pack cannot hide the rest.
+      Discovers pack refs across BOTH server-global tiers — the immutable image-layer directory
+      (WAIRON_IMAGE_PACKS_DIR, default /opt/wairon/packs) and the mutable instance directory
+      (WAIRON_PACKS_DIR, or <data-dir>/packs) — and probes each in isolation via the core extension
+      loader. Returns their union as descriptors, each tagged with its tier; when the same pack name
+      exists in both tiers the instance copy is the effective one and the image copy is marked
+      shadowed, so drift is visible in the listing itself. Never throws for a bad pack — the error
+      rides on its descriptor so one broken pack cannot hide the rest.
   - name: installGlobalPack
     narrative: []
     detail: intent
@@ -23,15 +26,20 @@ methods:
       Rejects an unsafe pack name (anything outside [A-Za-z0-9._-], to prevent path traversal).
       Parses the content as YAML and validates it against the declarative-pack schema (name +
       profiles + language/platform tables); a programmatic/code pack — or any parse or shape failure
-      — is refused with guidance to install code packs via the trusted filesystem. On success writes
-      it atomically as <name>.yaml into the global packs directory (creating the directory if
-      needed) and returns its probe.
+      — is refused with guidance to install code packs via the trusted filesystem (a baked image
+      layer or a mounted packs volume). On success writes it atomically as <name>.yaml into the
+      MUTABLE instance packs directory (WAIRON_PACKS_DIR), creating that directory if needed; the
+      immutable image-layer directory is never written. Returns its probe (tier 'instance').
   - name: removeGlobalPack
     narrative: []
     detail: intent
     intent: >-
-      Resolves the named pack (by file stem or declared name) in the global packs directory and
-      deletes it; raises a clear error if no such pack is installed.
+      Resolves the named pack (by file stem or declared name) in the MUTABLE instance packs
+      directory and deletes it; the immutable image-layer directory is never touched, so a pack that
+      exists only in the image tier cannot be removed here (the attempt raises a clear error).
+      Removing an instance pack that shadowed a same-named image pack re-exposes the image pack.
+      Removal intentionally invalidates any project that still references the pack — that fallout
+      surfaces via the missing-pack-references drift check.
   - name: listProjectPacks
     narrative: []
     detail: intent
@@ -56,7 +64,17 @@ methods:
       deletes the vendored file, guarded to never delete a path outside .wai/packs (a ref pointing
       elsewhere is deregistered but its files are left in place). Raises a clear error if the
       project has no such registered pack.
+  - name: readProjectReferences
+    narrative: []
+    detail: intent
+    intent: >-
+      Reads the given project's .wai/project.yaml and returns its declared pack/profile references
+      as a ProjectPackReference: the pack names registered under extensions.packs, unioned with the
+      required/default pack names recorded in its profileSelection, plus the selected profile ids.
+      Returns empty reference lists (never throws) when the project has no config or no
+      extensions/profile selection, and carries no filesystem paths so the result is safe for
+      redacted diagnostics.
 detail: intent
 status: complete
 createdAt: '2026-07-04T18:42:57.340Z'
-updatedAt: '2026-07-04T18:47:59.218Z'
+updatedAt: '2026-07-10T12:37:01.067Z'

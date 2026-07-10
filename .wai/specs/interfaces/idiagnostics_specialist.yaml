@@ -7,13 +7,29 @@ component: diagnostics_specialist
 methods:
   - name: runChecks
     description: >-
-      Derive redacted operational diagnostic checks (project-registry consistency, per-project state
-      presence, and project-count sanity) from the supplied hosted project records.
-    signature: 'runChecks(projects: HostedProjectRecord[], scope: string): DiagnosticCheckResult[]'
+      Derive redacted operational diagnostic checks from the supplied inputs: project-registry
+      consistency, per-project state presence, project-count sanity, pack-shadowing (an instance
+      pack shadowing a same-named image pack), and missing-pack-references (a project referencing a
+      pack/profile that resolves in neither the image nor the instance tier). Pure — the caller
+      supplies the project records, the two pack-tier name listings, and the per-project references.
+    signature: >-
+      runChecks(projects: HostedProjectRecord[], imagePackNames: string[], instancePackNames:
+      string[], projectReferences: ProjectPackReference[], scope: string): DiagnosticCheckResult[]
     returns: DiagnosticCheckResult[]
     params:
       - name: projects
         type: HostedProjectRecord[]
+      - name: imagePackNames
+        type: string[]
+        description: Pack names present in the immutable image-layer tier (WAIRON_IMAGE_PACKS_DIR).
+      - name: instancePackNames
+        type: string[]
+        description: Pack names present in the mutable instance tier (WAIRON_PACKS_DIR).
+      - name: projectReferences
+        type: ProjectPackReference[]
+        description: >-
+          Per-project declared pack/profile references, so the check can flag references absent from
+          both tiers.
       - name: scope
         type: string
         optional: true
@@ -44,4 +60,4 @@ methods:
         type: ResourceUsageSnapshot[]
 status: complete
 createdAt: '2026-07-09T09:10:04.195Z'
-updatedAt: '2026-07-10T11:27:31.127Z'
+updatedAt: '2026-07-10T12:36:36.177Z'

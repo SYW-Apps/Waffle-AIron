@@ -1,14 +1,15 @@
 id: diagnostics_specialist
 name: Diagnostics Specialist
 description: >-
-  Pure specialist that derives redacted operational diagnostics and usage snapshots from hosted
-  project records supplied by the operations orchestrator, and assembles an aggregated instance
-  health report. It performs no I/O of its own and owns no state; it reasons only over the records
-  passed to it.
+  Pure specialist that derives redacted operational diagnostics and usage snapshots from inputs
+  supplied by the operations orchestrator — hosted project records, the two server-global pack-tier
+  name listings (image and instance), and per-project pack/profile references — and assembles an
+  aggregated instance health report. It performs no I/O of its own and owns no state; it reasons
+  only over the values passed to it.
 subsystem: sdd_host
 componentType: Specialist
 owns: []
 dependsOn: []
 status: complete
 createdAt: '2026-07-09T09:09:16.033Z'
-updatedAt: '2026-07-10T11:27:27.586Z'
+updatedAt: '2026-07-10T12:36:10.382Z'

@@ -1,9 +1,10 @@
 id: operations_orchestrator_impl
 name: Operations Orchestrator Implementation
 description: >-
-  Read-only hosted operational insight workflows: authenticate and authorize the caller, then
-  assemble instance health reports, resource usage snapshots, and advisory quota observations from
-  hosted project records. Performs no writes and no audit.
+  Read-only hosted operational insight workflows: authenticate and authorize the caller, then gather
+  the hosted project records, both server-global pack tiers, and per-project pack/profile references
+  and assemble instance health reports, resource usage snapshots, and advisory quota observations.
+  Performs no writes and no audit.
 contract: ioperations_orchestrator
 sourcePath: src/server/operations.ts
 methods:
@@ -31,21 +32,48 @@ methods:
         targetComponent: project_registry
         targetMethod: list
       - stepNumber: 5
-        description: Derive redacted diagnostic checks from the project records
+        description: >-
+          List the server-global packs across both tiers (image and instance), tier-tagged and
+          shadow-marked
+        type: call
+        targetComponent: pack_registry
+        targetMethod: listGlobalPacks
+      - stepNumber: 6
+        description: >-
+          Derive the image-tier and instance-tier pack name listings from the tier-tagged global
+          pack descriptors
+        type: local
+      - stepNumber: 7
+        description: >-
+          For each hosted project record, read its declared pack/profile references, accumulating a
+          ProjectPackReference per project
+        type: loop
+        loopKind: forEach
+        over: the hosted project records
+        endStep: 8
+      - stepNumber: 8
+        description: Read the project's pack/profile references from its isolated root
+        type: call
+        targetComponent: pack_registry
+        targetMethod: readProjectReferences
+      - stepNumber: 9
+        description: >-
+          Derive redacted diagnostic checks from the project records, the two pack-tier name
+          listings, and the per-project references
         type: call
         targetComponent: diagnostics_specialist
         targetMethod: runChecks
-      - stepNumber: 6
+      - stepNumber: 10
         description: Derive usage snapshots for the requested scope from the project records
         type: call
         targetComponent: diagnostics_specialist
         targetMethod: collectUsage
-      - stepNumber: 7
+      - stepNumber: 11
         description: Assemble the aggregated instance health report from the checks and usage
         type: call
         targetComponent: diagnostics_specialist
         targetMethod: buildHealthReport
-      - stepNumber: 8
+      - stepNumber: 12
         description: Return the redacted health report
         type: return
         outcome: redacted health report
@@ -128,4 +156,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-10T11:27:00.178Z'
-updatedAt: '2026-07-10T11:27:33.853Z'
+updatedAt: '2026-07-10T12:37:37.229Z'

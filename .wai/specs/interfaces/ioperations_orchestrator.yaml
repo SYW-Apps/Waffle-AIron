@@ -8,9 +8,11 @@ component: operations_orchestrator
 methods:
   - name: getHealthReport
     description: >-
-      Authenticate the caller, authorize operations read, list hosted projects, and assemble a
-      redacted instance health report (diagnostic checks plus usage snapshots) via the diagnostics
-      specialist. Read-only; performs no writes and no audit.
+      Authenticate the caller, authorize operations read, list hosted projects, list both
+      server-global pack tiers, and read each project's pack/profile references, then assemble a
+      redacted instance health report (diagnostic checks — including pack-shadowing and
+      missing-pack-references — plus usage snapshots) via the diagnostics specialist. Read-only;
+      performs no writes and no audit.
     signature: 'getHealthReport(credential: string, scope: string): InstanceHealthReport'
     returns: InstanceHealthReport
     params:
@@ -47,4 +49,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-09T09:10:20.273Z'
-updatedAt: '2026-07-10T11:27:30.097Z'
+updatedAt: '2026-07-10T12:36:38.553Z'

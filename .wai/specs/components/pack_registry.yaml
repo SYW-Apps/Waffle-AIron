@@ -2,18 +2,24 @@ id: pack_registry
 name: Pack Registry
 description: >-
   I/O manager for the container's extension-pack store — the plugin surface that adds architectural
-  profiles, language/platform tables, and rules. Manages two scopes: the server-global packs
-  directory (WAIRON_PACKS_DIR, defaulted onto the data volume so installs persist across restarts)
-  and a bound project's .wai/packs/ plus its .wai/project.yaml registration (committed with the
-  project, so every clone and CI enforce it). Installs over this surface accept declarative packs
-  only (profiles + language/platform tables — pure data); programmatic rule/code packs are refused
-  and must be installed via the trusted filesystem (a mounted packs volume or `wairon packs add`).
-  Listing probes each pack for its name and profile/language/rule counts, or its load error. Modeled
-  as a single file-backed Registry.
+  profiles, language/platform tables, and rules. Server-global packs are discovered from TWO tiers:
+  the immutable image-layer directory (WAIRON_IMAGE_PACKS_DIR, default /opt/wairon/packs), baked
+  into extended images at build time (built FROM the base image + COPY packs/) and never written at
+  runtime, and the mutable instance directory (WAIRON_PACKS_DIR, defaulted onto the data volume so
+  installs persist across restarts). The global pack set is their merge; on a name collision the
+  INSTANCE pack wins and the shadowed image pack is surfaced as drift. Installs and removals operate
+  ONLY on the mutable instance directory — the image tier is immutable. It also manages a bound
+  project's .wai/packs/ plus its .wai/project.yaml registration (committed with the project, so
+  every clone and CI enforce it), and can read a project's declared pack/profile references for
+  operational drift checks. Installs over this surface accept declarative packs only (profiles +
+  language/platform tables — pure data); programmatic rule/code packs are refused and must be
+  installed via the trusted filesystem (a baked image layer, a mounted packs volume, or local
+  `wairon packs add`). Listing probes each pack for its name, tier, and profile/language/rule
+  counts, or its load error. Modeled as a single file-backed Registry.
 subsystem: sdd_host
 componentType: Registry
 owns: []
 dependsOn: []
 status: complete
 createdAt: '2026-07-04T18:42:27.572Z'
-updatedAt: '2026-07-04T18:47:23.111Z'
+updatedAt: '2026-07-10T12:36:06.025Z'

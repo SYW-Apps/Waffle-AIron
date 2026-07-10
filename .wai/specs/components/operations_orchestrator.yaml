@@ -3,10 +3,11 @@ name: Operations Orchestrator
 description: >-
   Read-only workflow owner for hosted operational insight: it authenticates and authorizes each
   caller, then assembles redacted instance health reports, resource usage snapshots, and advisory
-  (observe/warn) quota observations. It delegates diagnostic and usage derivation to the diagnostics
-  specialist and quota evaluation to the quota specialist, and performs no writes. Durable
-  backup/restore is intentionally out of scope: operators rely on platform-level data-volume
-  snapshots per the hosted deployment guidance.
+  (observe/warn) quota observations. It gathers the hosted project records, the two server-global
+  pack-tier listings, and per-project pack/profile references, delegates diagnostic and usage
+  derivation to the diagnostics specialist and quota evaluation to the quota specialist, and
+  performs no writes. Durable backup/restore is intentionally out of scope: operators rely on
+  platform-level data-volume snapshots per the hosted deployment guidance.
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
@@ -15,6 +16,7 @@ dependsOn:
   - project_registry
   - diagnostics_specialist
   - quota_specialist
+  - pack_registry
 status: complete
 createdAt: '2026-07-09T09:09:26.722Z'
-updatedAt: '2026-07-10T11:27:26.659Z'
+updatedAt: '2026-07-10T12:36:11.054Z'
