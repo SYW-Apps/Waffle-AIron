@@ -267,6 +267,29 @@ describe('identity SSO orchestrator (sdd_host)', () => {
     expect(principal.grants).toEqual(grants);
   });
 
+  // ── deactivated returning user is refused (B1) ─────────────────────────────
+
+  it('completeSsoLogin refuses a returning user who has been deactivated, while a first login still succeeds', async () => {
+    upsertIdentityProviderRecord(dataDir, providerConfig());
+
+    // First login provisions the user (active) and mints a token.
+    const s1 = stateFrom(identity.startSsoLogin(cfg, PROVIDER_ID, 'https://app.example/cb'));
+    const firstToken = await identity.completeSsoLogin(cfg, s1, 'code-1');
+    expect(firstToken).toMatch(/^wk_[0-9a-f]+$/);
+
+    // An admin deactivates the user (this also revokes the first token).
+    identity.setUserStatus(cfg, MASTER, `sso:${PROVIDER_ID}:ext-1`, 'suspended');
+    expect(authenticate(dataDir, firstToken).authenticated).toBe(false);
+
+    // A subsequent SSO login for the same (now deactivated) subject is refused before minting …
+    const s2 = stateFrom(identity.startSsoLogin(cfg, PROVIDER_ID, 'https://app.example/cb'));
+    await expect(identity.completeSsoLogin(cfg, s2, 'code-2')).rejects.toThrow(ForbiddenError);
+
+    // … and no fresh (active) credential was minted for the refused login.
+    const active = listCredentials(dataDir, '*').filter((r) => !r.revokedAt);
+    expect(active).toHaveLength(0);
+  });
+
   // ── state integrity ────────────────────────────────────────────────────────
 
   it('completeSsoLogin rejects a tampered state', async () => {

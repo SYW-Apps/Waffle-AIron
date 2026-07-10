@@ -130,6 +130,52 @@ function isWithin(dir: string, file: string): boolean {
   return f === d || f.startsWith(d + path.sep);
 }
 
+// ---------------------------------------------------------------------------
+// projectPath chaining containment (Fix B2)
+//
+// A subsystem's `projectPath` is resolved with path.resolve, which honors
+// absolute paths and ../ traversal. Left unchecked, a chained subproject could
+// escape the bound project root and federate — and, via a code pack living
+// there, execute — another tenant's spec tree. The single invariant enforced
+// everywhere a projectPath is written or resolved: the child directory must
+// stay strictly within its owning project root. Empty/undefined projectPath is
+// not chaining and is never checked here (callers skip it).
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether a subproject's already-resolved child directory escapes `projectRoot`.
+ * `resolvedChildDir` is resolved by the caller because for multi-hop chains the
+ * resolution base is an intermediate parent, while the containment boundary is
+ * always the bound top root. An absolute `projectPath` or a `../`-escape fails.
+ */
+function projectPathEscapesRoot(
+  projectRoot: string,
+  projectPath: string,
+  resolvedChildDir: string,
+): boolean {
+  return path.isAbsolute(projectPath) || !isWithin(projectRoot, resolvedChildDir);
+}
+
+/**
+ * Assert a subsystem `projectPath` resolves strictly within `projectRoot`, and
+ * return the resolved absolute child directory. Throws a clear Error naming the
+ * offending path when `projectPath` is absolute or `../`-escapes the root.
+ * Applied on every write/setter path that persists a projectPath; the load-time
+ * loader uses projectPathEscapesRoot directly (it collects issues, not throws).
+ */
+export function assertContainedProjectPath(projectRoot: string, projectPath: string): string {
+  const root = path.resolve(projectRoot);
+  const resolved = path.resolve(root, projectPath);
+  if (projectPathEscapesRoot(root, projectPath, resolved)) {
+    throw new Error(
+      `projectPath "${projectPath}" must resolve within the project root "${root}", but resolves ` +
+        `to "${resolved}"; absolute paths and ../-escaping paths are rejected so a chained ` +
+        `subproject is always contained by its parent.`,
+    );
+  }
+  return resolved;
+}
+
 /**
  * Collapse a mount subsystem (has projectPath) and its same-id child realization
  * into a single flat external subsystem: the child provides the content, the
@@ -583,6 +629,23 @@ export class SpecWorkspace {
     if (currentDepth < maxDepth) {
       for (const subproj of localSubprojects) {
         const childDir = path.resolve(projectDir, subproj.projectPath);
+
+        // Containment guard (Fix B2) — THE critical read-time defense. The
+        // resolution base is the immediate parent (projectDir) so nested chains
+        // compose, but containment is always checked against this.rootDir, the
+        // workspace's bound root (the tenant project root when hosted). No hop,
+        // however deep, may escape it via an absolute or ../ projectPath. On a
+        // violation, surface a loader error and SKIP the child (do not recurse).
+        if (projectPathEscapesRoot(this.rootDir, subproj.projectPath, childDir)) {
+          this.loaderIssues.push({
+            severity: 'error',
+            code: 'PROJECTPATH_ESCAPE',
+            message: `Subproject path "${subproj.projectPath}" declared by subsystem "${subproj.subsystemId}" escapes the project root "${this.rootDir}" (resolves to "${childDir}"); absolute and ../-escaping projectPaths are rejected. Skipping this subproject.`,
+            specId: subproj.subsystemId,
+          });
+          continue;
+        }
+
         if (visitedDirs.has(childDir)) {
           this.loaderIssues.push({
             severity: 'error',
@@ -651,7 +714,21 @@ export class SpecWorkspace {
       const index = this.scanAll();
       const sub = index.subsystems.find((s) => s.id === currentPrefix);
       if (sub && sub.projectPath) {
-        currentDir = path.resolve(currentDir, sub.projectPath);
+        const nextDir = path.resolve(currentDir, sub.projectPath);
+        // Containment guard (Fix B2): never resolve a namespace into a directory
+        // that escapes the bound top root (this.rootDir). Surface a loader error
+        // and SKIP the escaping hop, leaving currentDir contained, rather than
+        // handing back an out-of-root directory for a save/lookup.
+        if (projectPathEscapesRoot(this.rootDir, sub.projectPath, nextDir)) {
+          this.loaderIssues.push({
+            severity: 'error',
+            code: 'PROJECTPATH_ESCAPE',
+            message: `Subproject path "${sub.projectPath}" declared by subsystem "${currentPrefix}" escapes the project root "${this.rootDir}" (resolves to "${nextDir}"); absolute and ../-escaping projectPaths are rejected. Skipping this subproject.`,
+            specId: currentPrefix,
+          });
+          continue;
+        }
+        currentDir = nextDir;
         resolvedAny = true;
       }
     }

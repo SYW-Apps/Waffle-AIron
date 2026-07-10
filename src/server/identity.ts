@@ -11,6 +11,7 @@ import {
   hashToken,
   createCredential,
   revokeCredential,
+  revokeAllForOwner,
   listCredentials,
 } from './credentials.js';
 import {
@@ -102,12 +103,12 @@ function coversPermission(principal: Principal, projectId: string, permission: s
   );
 }
 
-/** True when the caller carries `permission` in any grant, regardless of project
- *  scope (or a wildcard '*' permission). Used for instance-wide capabilities like
- *  audit:read and user administration. */
-function carriesPermission(principal: Principal, permission: string): boolean {
+// An instance-wide capability requires a grant scoped to ALL projects ('*')
+// carrying the permission (or the '*' wildcard). A project-scoped grant, even
+// one carrying the permission, does NOT confer instance-wide reach.
+function carriesInstancePermission(principal: Principal, permission: string): boolean {
   return (principal.grants ?? []).some(
-    (g) => g.permissions.includes('*') || g.permissions.includes(permission),
+    (g) => g.projectId === '*' && (g.permissions.includes('*') || g.permissions.includes(permission)),
   );
 }
 
@@ -221,24 +222,33 @@ function compatibilityProjection(grants: ProjectGrant[]): { role: Role; projects
 // ── orchestrator methods ────────────────────────────────────────────────────
 
 /**
- * Authenticate the caller, authorize token delegation (key:manage covering every
- * requested project, or an instance-wide admin grant), validate the requested
- * projects exist, mint a user-bound token, persist only its hashed record with
- * owner/grant metadata, and append a redacted audit event. Returns the plaintext
- * token exactly once.
+ * Authenticate the caller, authorize token delegation (instance-admin, or — per
+ * requested (project, permission) — the caller holding BOTH key:manage AND that
+ * permission for the project, so callers only delegate what they themselves hold),
+ * validate the requested projects exist, mint a user-bound token, persist only its
+ * hashed record with owner/grant metadata, and append a redacted audit event.
+ * Returns the plaintext token exactly once.
  */
 export function mintToken(cfg: HostConfig, credential: string | null, request: TokenMintRequest): string {
   const principal = requirePrincipal(cfg, credential);
 
-  // Authorize delegation: instance-admin may delegate anything; otherwise the
-  // caller must hold key:manage for every requested project, and an instance-wide
-  // ('*') delegation requires instance-admin.
+  // Authorize delegation: instance-admin may delegate anything; otherwise, for
+  // every requested (project, permission), the caller must hold BOTH key:manage
+  // AND that permission itself for that project — holding key:manage alone is not
+  // enough to hand out permissions the caller lacks. An instance-wide ('*')
+  // delegation still requires instance-admin.
   const admin = isInstanceAdmin(principal);
   const grants = request.grants ?? [];
   const mayDelegate =
     admin ||
     grants.every((g) =>
-      g.projectId === '*' ? admin : coversPermission(principal, g.projectId, KEY_MANAGE_PERMISSION),
+      g.projectId === '*'
+        ? admin
+        : g.permissions.every(
+            (p) =>
+              coversPermission(principal, g.projectId, KEY_MANAGE_PERMISSION) &&
+              coversPermission(principal, g.projectId, p),
+          ),
     );
   if (!mayDelegate) {
     throw new ForbiddenError('caller may not delegate the requested grants');
@@ -343,7 +353,7 @@ export function listUsers(
   project?: string,
 ): HostedUserRecord[] {
   const principal = requirePrincipal(cfg, credential);
-  if (!isInstanceAdmin(principal) && !carriesPermission(principal, USER_ADMIN_PERMISSION)) {
+  if (!carriesInstancePermission(principal, USER_ADMIN_PERMISSION)) {
     throw new ForbiddenError('user administration required');
   }
   return repoListUsers(cfg.dataDir, undefined, project);
@@ -359,7 +369,7 @@ export function queryAuditEvents(
   query: AuditQuery,
 ): AuditEvent[] {
   const principal = requirePrincipal(cfg, credential);
-  if (!isInstanceAdmin(principal) && !carriesPermission(principal, AUDIT_READ_PERMISSION)) {
+  if (!carriesInstancePermission(principal, AUDIT_READ_PERMISSION)) {
     throw new ForbiddenError('audit read access required');
   }
   return repoQueryAuditEvents(cfg.dataDir, query);
@@ -395,8 +405,8 @@ export function upsertUser(
   record: HostedUserRecord,
 ): HostedUserRecord {
   const principal = requirePrincipal(cfg, credential);
-  if (!isInstanceAdmin(principal)) {
-    throw new ForbiddenError('user administration requires an instance-wide admin grant');
+  if (!carriesInstancePermission(principal, USER_ADMIN_PERMISSION)) {
+    throw new ForbiddenError('user administration required');
   }
 
   // Distinguish creation from update by probing for an existing record first.
@@ -411,8 +421,12 @@ export function upsertUser(
 }
 
 /**
- * Authenticate the caller, require an instance-wide admin grant, set the user's
- * lifecycle status through the repository, and append a redacted audit event.
+ * Authenticate the caller, require a user-administration instance grant, set the
+ * user's lifecycle status through the repository, and — when the change deactivates
+ * the user (any non-'active' status) — revoke every one of the user's non-revoked
+ * credentials so existing tokens can no longer authenticate, auditing a
+ * security-level user.deactivate (with the revoked-token count) rather than the
+ * info-level user.status.set. Returning to 'active' does not restore revoked tokens.
  */
 export function setUserStatus(
   cfg: HostConfig,
@@ -421,16 +435,25 @@ export function setUserStatus(
   status: string,
 ): HostedUserRecord {
   const principal = requirePrincipal(cfg, credential);
-  if (!isInstanceAdmin(principal)) {
-    throw new ForbiddenError('user administration requires an instance-wide admin grant');
+  if (!carriesInstancePermission(principal, USER_ADMIN_PERMISSION)) {
+    throw new ForbiddenError('user administration required');
   }
 
   const updated = repoSetUserStatus(cfg.dataDir, userId, status);
 
-  tryAppendAudit(
-    cfg,
-    buildAuditEvent(principal, 'user.status.set', 'security', 'admin', { target: userId }),
-  );
+  // Deactivation (any non-'active' status) cuts off the user's existing access:
+  // revoke every one of their non-revoked credentials at the credential layer so
+  // authenticate() rejects them. Returning to 'active' does NOT restore tokens.
+  const deactivating = status !== 'active';
+  const revokedTokens = deactivating ? revokeAllForOwner(cfg.dataDir, userId) : 0;
+
+  const event = deactivating
+    ? buildAuditEvent(principal, 'user.deactivate', 'security', 'admin', {
+        target: userId,
+        metadata: JSON.stringify({ revokedTokens }),
+      })
+    : buildAuditEvent(principal, 'user.status.set', 'info', 'admin', { target: userId });
+  tryAppendAudit(cfg, event);
 
   return updated;
 }
@@ -485,9 +508,10 @@ export function startSsoLogin(cfg: HostConfig, providerId: string, redirectUri: 
  * rejected), resolve the bound enabled provider, exchange the code and resolve the
  * external subject, look up the hosted user by issuer + external subject, provision
  * a first-login active user with EMPTY grants when absent (an admin assigns grants
- * afterwards), mint a user-bound token for the resolved user persisting only its
- * hashed record, append a best-effort sso.login (security) audit event, and return
- * the plaintext token exactly once. Unauthenticated by nature — no caller credential.
+ * afterwards), reject re-login for an existing deactivated user before minting,
+ * mint a user-bound token for the resolved user persisting only its hashed record,
+ * append a best-effort sso.login (security) audit event, and return the plaintext
+ * token exactly once. Unauthenticated by nature — no caller credential.
  */
 export async function completeSsoLogin(cfg: HostConfig, state: string, code: string): Promise<string> {
   // Verify + parse the signed state (throws on a tampered or expired state).
@@ -512,6 +536,13 @@ export async function completeSsoLogin(cfg: HostConfig, state: string, code: str
       createdAt: new Date().toISOString(),
     };
     user = repoUpsertUser(cfg.dataDir, provisioned);
+  }
+
+  // Reject re-login for a deactivated user before minting. A freshly provisioned
+  // first-login record is always active, so only an existing deactivated user is
+  // rejected here — deactivation blocks SSO re-login as well as revoking tokens.
+  if (user.status !== 'active') {
+    throw new ForbiddenError('deactivated user may not sign in');
   }
 
   // Mint a user-bound token (same record shape as mintToken) carrying the resolved
@@ -607,7 +638,7 @@ export function countAuditEvents(
   query: AuditQuery,
 ): number {
   const principal = requirePrincipal(cfg, credential);
-  if (!isInstanceAdmin(principal) && !carriesPermission(principal, AUDIT_READ_PERMISSION)) {
+  if (!carriesInstancePermission(principal, AUDIT_READ_PERMISSION)) {
     throw new ForbiddenError('audit read access required');
   }
   return repoCountAuditEvents(cfg.dataDir, query);

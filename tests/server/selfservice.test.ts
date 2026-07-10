@@ -294,6 +294,45 @@ describe('self-service orchestrator (sdd_host)', () => {
     expect(listPendingRequests(cfg, decider)).toHaveLength(2);
   });
 
+  // ── S2: approval:decide is an INSTANCE capability (cross-tenant leak) ──────────
+  //
+  // A PROJECT-SCOPED approval:decide grant carries the permission but is scoped to
+  // one tenant — it must NOT let the holder list/decide approvals instance-wide.
+  // Only an instance-wide ({projectId:'*'}) approval:decide grant (or admin) does.
+
+  it('S2: a project-scoped approval:decide grant is rejected (403) for listing/deciding; an instance-wide grant passes', () => {
+    createProjectRecord(dataDir, 'proj-a');
+    const requester = requesterToken('s2-req', 'proj-a', 'u-s2req');
+    const req = requestProjectLock(cfg, requester, 'proj-a');
+
+    // Grant scoped to a single project carrying approval:decide → still denied.
+    const projDecider = mintToken({
+      id: 's2-pd',
+      grants: [{ projectId: 'proj-a', permissions: ['approval:decide'] }],
+      subject: subject({ userId: 'u-s2pd' }),
+    });
+    expect(() => listPendingRequests(cfg, projDecider)).toThrow(ForbiddenError);
+    expect(() =>
+      decideRequest(cfg, projDecider, {
+        requestId: req.id,
+        approved: true,
+        decidedBy: subject(),
+        decidedAt: new Date().toISOString(),
+      }),
+    ).toThrow(ForbiddenError);
+
+    // The instance-wide decider still lists and decides.
+    const decider = deciderToken('s2-id', 'u-s2id');
+    expect(listPendingRequests(cfg, decider).length).toBeGreaterThanOrEqual(1);
+    const decided = decideRequest(cfg, decider, {
+      requestId: req.id,
+      approved: true,
+      decidedBy: subject(),
+      decidedAt: new Date().toISOString(),
+    });
+    expect(decided.status).toBe('approved');
+  });
+
   // ── decideRequest ────────────────────────────────────────────────────────────
 
   it('decideRequest: derives decidedBy from the authenticated caller and ignores the client-supplied value', () => {

@@ -180,6 +180,24 @@ describe('project policy orchestrator (sdd_host)', () => {
     expect(stored.updatedBy?.userId).toBe('u-mg');
   });
 
+  // ── S2: policy:manage / project:create are INSTANCE capabilities (cross-tenant) ─
+  //
+  // A PROJECT-SCOPED grant carrying the instance permission must NOT satisfy an
+  // instance-wide capability. Only an instance-wide ({projectId:'*'}) grant passes.
+
+  it('S2: a project-scoped policy:manage / project:create grant is rejected (403); an instance-wide grant passes', () => {
+    // Project-scoped policy:manage → still denied; instance-wide → authorized.
+    const projMgr = mintToken({ id: 's2-pm', grants: [{ projectId: 'acme', permissions: ['policy:manage'] }], subject: subject({ userId: 'u-s2pm' }) });
+    expect(() => setPackPolicy(cfg, projMgr, samplePolicy())).toThrow(ForbiddenError);
+    const instMgr = mintToken({ id: 's2-im', grants: [{ projectId: '*', permissions: ['policy:manage'] }], subject: subject({ userId: 'u-s2im' }) });
+    expect(setPackPolicy(cfg, instMgr, samplePolicy()).id).toBeTruthy();
+
+    // Project-scoped project:create → still denied; nothing is provisioned.
+    const projCreator = mintToken({ id: 's2-pc', grants: [{ projectId: 'acme', permissions: ['project:create'] }], subject: subject({ userId: 'u-s2pc' }) });
+    expect(() => initializeProjectWithProfile(cfg, projCreator, { id: 'nope-s2' })).toThrow(ForbiddenError);
+    expect(existingProjectRoot(dataDir, 'nope-s2')).toBeNull();
+  });
+
   // ── evaluateInitRequest ──────────────────────────────────────────────────
 
   it('evaluateInitRequest: flags a missing required profile selection under requireProfileSelection', () => {

@@ -51,8 +51,9 @@ import type {
  *  indefinitely. HostConfig-driven overrides are a later phase. */
 const DEFAULT_APPROVAL_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-/** The permission that authorizes deciding/listing approval requests. Instance
- *  scope (like audit:read), so authorized via carriesPermission. */
+/** The permission that authorizes deciding/listing approval requests. An
+ *  INSTANCE-WIDE capability, so authorized via carriesInstancePermission — a
+ *  project-scoped approval:decide grant does not satisfy it. */
 const APPROVAL_DECIDE_PERMISSION = 'approval:decide';
 /** The permission that lets a caller request a project's lock/promotion. */
 const MCP_WRITE_PERMISSION = 'mcp:write';
@@ -80,18 +81,20 @@ function coversPermission(principal: Principal, projectId: string, permission: s
   );
 }
 
-/** True when the caller carries `permission` in any grant, regardless of project
- *  scope (or a wildcard '*' permission). Used for instance-wide capabilities. */
-function carriesPermission(principal: Principal, permission: string): boolean {
+// An instance-wide capability requires a grant scoped to ALL projects ('*')
+// carrying the permission (or the '*' wildcard). A project-scoped grant, even
+// one carrying the permission, does NOT confer instance-wide reach.
+function carriesInstancePermission(principal: Principal, permission: string): boolean {
   return (principal.grants ?? []).some(
-    (g) => g.permissions.includes('*') || g.permissions.includes(permission),
+    (g) => g.projectId === '*' && (g.permissions.includes('*') || g.permissions.includes(permission)),
   );
 }
 
-/** True when the caller may decide/list approvals: an approval:decide grant or
- *  an instance-admin grant. */
+/** True when the caller may decide/list approvals: an instance-wide approval:decide
+ *  grant or an instance-admin grant (both carry projectId '*'). A project-scoped
+ *  approval:decide grant does NOT confer instance-wide approval authority. */
 function mayDecide(principal: Principal): boolean {
-  return carriesPermission(principal, APPROVAL_DECIDE_PERMISSION) || isInstanceAdmin(principal);
+  return carriesInstancePermission(principal, APPROVAL_DECIDE_PERMISSION);
 }
 
 // ── subject / audit helpers (mirrored from identity.ts) ─────────────────────

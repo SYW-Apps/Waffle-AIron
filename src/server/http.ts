@@ -22,9 +22,46 @@ import type { ApprovalDecision, HostConfig, HostExposurePolicy, Role } from './t
 // admin orchestrator. host_server owns the listener lifecycle.
 // ---------------------------------------------------------------------------
 
+// ── Request body size cap (Fix S3) ──────────────────────────────────────────
+//
+// readBody runs on the public data plane (/mcp binds 0.0.0.0) BEFORE any
+// authentication, so an unauthenticated client could stream an unbounded body
+// and exhaust process memory. Cap the accumulated body: short-circuit an
+// oversize Content-Length header, and stop buffering the moment the streamed
+// bytes exceed the limit. Both cases reject with PayloadTooLargeError, which the
+// route handlers map to HTTP 413. Breaking out of the read loop pauses the
+// request stream, so TCP backpressure bounds any further buffering; the socket
+// is left intact so the 413 response can be delivered.
+const MAX_BODY_BYTES = 8 * 1024 * 1024; // 8 MB
+
+/** Thrown by readBody when a request body exceeds MAX_BODY_BYTES (by declared
+ *  Content-Length or by streamed bytes). Route handlers map it to HTTP 413. */
+export class PayloadTooLargeError extends Error {
+  constructor(message = `request body exceeds the maximum allowed size of ${MAX_BODY_BYTES} bytes`) {
+    super(message);
+    this.name = 'PayloadTooLargeError';
+  }
+}
+
 async function readBody(req: IncomingMessage): Promise<unknown> {
+  // Short-circuit an oversize declared Content-Length before reading a byte.
+  const declared = Number(req.headers['content-length']);
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+    throw new PayloadTooLargeError();
+  }
+
   const chunks: Buffer[] = [];
-  for await (const c of req) chunks.push(c as Buffer);
+  let total = 0;
+  for await (const c of req) {
+    const chunk = c as Buffer;
+    total += chunk.length;
+    if (total > MAX_BODY_BYTES) {
+      // Stop accumulating immediately; throwing settles this promise once and
+      // exits the loop (pausing the stream) so we never buffer the whole body.
+      throw new PayloadTooLargeError();
+    }
+    chunks.push(chunk);
+  }
   const raw = Buffer.concat(chunks).toString('utf8');
   if (!raw) return undefined;
   try {
@@ -33,6 +70,8 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
     return undefined;
   }
 }
+
+export { MAX_BODY_BYTES, readBody };
 
 function diagramContentType(format: string): string {
   switch (format) {
@@ -81,7 +120,12 @@ function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResponse): 
     readBody(req)
       .then((body) => handleMcpRequest(cfg, req, res, body))
       .catch((err) => {
-        if (!res.headersSent) sendJson(res, 500, { error: String(err) });
+        if (res.headersSent) return;
+        if (err instanceof PayloadTooLargeError) {
+          sendJson(res, 413, { error: err.message });
+        } else {
+          sendJson(res, 500, { error: String(err) });
+        }
       });
     return;
   }
@@ -335,6 +379,7 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
 
     sendJson(res, 404, { error: 'not found' });
   } catch (err) {
+    if (err instanceof PayloadTooLargeError) return sendJson(res, 413, { error: err.message });
     if (err instanceof AdminAuthError) return sendJson(res, 403, { error: 'forbidden' });
     if (err instanceof LockValidationError) return sendJson(res, 409, { error: err.message, errors: err.errors });
     sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) });

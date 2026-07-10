@@ -44,16 +44,12 @@ const DISABLED_QUOTA_POLICY: ResourceQuotaPolicy = { enabled: false, mode: 'obse
 //
 // '*' is the wildcard in BOTH projectId and permissions (per the grant model).
 
-/** Instance-admin = a grant over every project ('*') with every permission ('*'). */
-function isInstanceAdmin(principal: Principal): boolean {
-  return (principal.grants ?? []).some((g) => g.projectId === '*' && g.permissions.includes('*'));
-}
-
-/** True when the caller carries `permission` in any grant, regardless of project
- *  scope (or a wildcard '*' permission). Operations reads are instance-wide. */
-function carriesPermission(principal: Principal, permission: string): boolean {
+// An instance-wide capability requires a grant scoped to ALL projects ('*')
+// carrying the permission (or the '*' wildcard). A project-scoped grant, even
+// one carrying the permission, does NOT confer instance-wide reach.
+function carriesInstancePermission(principal: Principal, permission: string): boolean {
   return (principal.grants ?? []).some(
-    (g) => g.permissions.includes('*') || g.permissions.includes(permission),
+    (g) => g.projectId === '*' && (g.permissions.includes('*') || g.permissions.includes(permission)),
   );
 }
 
@@ -66,7 +62,7 @@ function requirePrincipal(cfg: HostConfig, credential: string | null): Principal
 
 /** Require operations:read (or an instance-wide admin grant) for an operations read. */
 function requireOperationsRead(principal: Principal): void {
-  if (!carriesPermission(principal, OPERATIONS_READ_PERMISSION) && !isInstanceAdmin(principal)) {
+  if (!carriesInstancePermission(principal, OPERATIONS_READ_PERMISSION)) {
     throw new ForbiddenError('operations read access required');
   }
 }

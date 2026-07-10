@@ -247,11 +247,12 @@ function coversPermission(principal: Principal, projectId: string, permission: s
   );
 }
 
-/** True when the caller carries `permission` in any grant, regardless of project
- *  scope (or a wildcard '*' permission). Used for instance-wide capabilities. */
-function carriesPermission(principal: Principal, permission: string): boolean {
+// An instance-wide capability requires a grant scoped to ALL projects ('*')
+// carrying the permission (or the '*' wildcard). A project-scoped grant, even
+// one carrying the permission, does NOT confer instance-wide reach.
+function carriesInstancePermission(principal: Principal, permission: string): boolean {
   return (principal.grants ?? []).some(
-    (g) => g.permissions.includes('*') || g.permissions.includes(permission),
+    (g) => g.projectId === '*' && (g.permissions.includes('*') || g.permissions.includes(permission)),
   );
 }
 
@@ -536,7 +537,7 @@ export function initializeProjectWithProfile(
   request: ProjectInitRequest,
 ): HostedProjectRecord {
   const principal = requirePrincipal(cfg, credential);
-  if (!carriesPermission(principal, PROJECT_CREATE_PERMISSION) && !isInstanceAdmin(principal)) {
+  if (!carriesInstancePermission(principal, PROJECT_CREATE_PERMISSION)) {
     throw new ForbiddenError('creating a project requires a project:create grant or an instance-admin grant');
   }
   return performInit(cfg, request, principal);
@@ -677,7 +678,7 @@ export function setPackPolicy(
   policy: InstancePackPolicy,
 ): InstancePackPolicy {
   const principal = requirePrincipal(cfg, credential);
-  if (!carriesPermission(principal, POLICY_MANAGE_PERMISSION) && !isInstanceAdmin(principal)) {
+  if (!carriesInstancePermission(principal, POLICY_MANAGE_PERMISSION)) {
     throw new ForbiddenError('policy administration requires a policy:manage grant or an instance-admin grant');
   }
 

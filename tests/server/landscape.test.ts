@@ -414,6 +414,27 @@ describe('landscape orchestrator (sdd_host)', () => {
     expect(Array.isArray(graph.nodes)).toBe(true);
     expect(Array.isArray(graph.edges)).toBe(true);
   });
+
+  // ── S2: instance capabilities need an INSTANCE-WIDE grant (cross-tenant leak) ──
+  //
+  // A PROJECT-SCOPED grant carrying the landscape permission must NOT satisfy an
+  // instance-wide capability — otherwise a single-tenant grant could read/manage
+  // every tenant's landscape. Only a {projectId:'*'} grant (or admin) passes.
+
+  const projManageToken = () => mintToken([{ projectId: 'acme', permissions: ['landscape:manage'] }]);
+  const projReadToken = () => mintToken([{ projectId: 'acme', permissions: ['landscape:read'] }]);
+
+  it('S2: a project-scoped landscape grant is rejected (403) for instance capabilities; only an instance-wide grant passes', () => {
+    // Project-scoped grants carrying the exact instance permission are rejected.
+    expect(() => upsertUnit(cfg, projManageToken(), unitRec({ name: 'X' }))).toThrow(ForbiddenError);
+    expect(() => generateLandscape(cfg, projReadToken())).toThrow(ForbiddenError);
+    expect(() => listRelations(cfg, projReadToken())).toThrow(ForbiddenError);
+
+    // The instance-wide ({projectId:'*'}) equivalents still pass.
+    expect(upsertUnit(cfg, manageToken(), unitRec({ name: 'X' })).id).toBeTruthy();
+    expect(Array.isArray(generateLandscape(cfg, readToken()).nodes)).toBe(true);
+    expect(listRelations(cfg, readToken())).toEqual([]);
+  });
 });
 
 // ── Landscape Diagram Specialist (pure buildGraph) ───────────────────────────

@@ -5,7 +5,13 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import * as identity from '../../src/server/identity.js';
 import { UnauthenticatedError, ForbiddenError } from '../../src/server/identity.js';
-import { createCredential, hashToken, listCredentials } from '../../src/server/credentials.js';
+import { authenticate } from '../../src/server/auth.js';
+import {
+  createCredential,
+  hashToken,
+  listCredentials,
+  revokeAllForOwner,
+} from '../../src/server/credentials.js';
 import { createProjectRecord } from '../../src/server/projects.js';
 import { upsertUser as repoUpsertUser } from '../../src/server/users.js';
 import { appendAuditEvent, queryAuditEvents as auditQuery, DEFAULT_AUDIT_POLICY } from '../../src/server/audit.js';
@@ -79,6 +85,22 @@ describe('identity orchestrator (sdd_host)', () => {
     return token;
   }
 
+  // Mint a stored token OWNED by a given user id (ownerSubject.userId); returns the plaintext.
+  function mintOwnedToken(ownerUserId: string, grants: ProjectGrant[] = []): string {
+    const token = 'wk_' + crypto.randomBytes(8).toString('hex');
+    const record: ApiKeyRecord = {
+      id: crypto.randomBytes(6).toString('hex'),
+      keyHash: hashToken(token),
+      role: 'editor',
+      projects: grants.map((g) => g.projectId),
+      grants,
+      createdAt: new Date().toISOString(),
+      ownerSubject: { userId: ownerUserId, kind: 'human', issuer: 'local' },
+    };
+    createCredential(dataDir, record);
+    return token;
+  }
+
   function persistedByHash(tokenHash: string): ApiKeyRecord | undefined {
     return listCredentials(dataDir, '*').find((r) => r.keyHash === tokenHash);
   }
@@ -107,10 +129,34 @@ describe('identity orchestrator (sdd_host)', () => {
     expect(events[0].target).toBe(rec!.id);
   });
 
-  it('mints a token when a non-admin caller holds key:manage covering every requested project', () => {
+  it('mints a token when a non-admin caller holds key:manage AND the delegated permission for every requested project', () => {
     createProjectRecord(dataDir, 'proj-a');
-    const caller = mintNonAdminToken([{ projectId: 'proj-a', permissions: ['key:manage'] }]);
+    // The caller may only delegate permissions it itself holds (S5): key:manage + mcp:read.
+    const caller = mintNonAdminToken([{ projectId: 'proj-a', permissions: ['key:manage', 'mcp:read'] }]);
 
+    const token = identity.mintToken(cfg, caller, {
+      ownerUserId: 'u-owner',
+      label: 't',
+      grants: [{ projectId: 'proj-a', permissions: ['mcp:read'] }],
+    });
+    expect(token).toMatch(/^wk_/);
+  });
+
+  it('S5: a key:manage-only caller cannot mint a token carrying a permission it lacks for the project', () => {
+    createProjectRecord(dataDir, 'proj-a');
+    // Caller holds key:manage + mcp:read for proj-a, but NOT mcp:write.
+    const caller = mintNonAdminToken([{ projectId: 'proj-a', permissions: ['key:manage', 'mcp:read'] }]);
+
+    // Delegating mcp:write (which the caller does not hold) is refused …
+    expect(() =>
+      identity.mintToken(cfg, caller, {
+        ownerUserId: 'u-owner',
+        label: 't',
+        grants: [{ projectId: 'proj-a', permissions: ['mcp:write'] }],
+      }),
+    ).toThrow(ForbiddenError);
+
+    // … while delegating a permission the caller DOES hold succeeds.
     const token = identity.mintToken(cfg, caller, {
       ownerUserId: 'u-owner',
       label: 't',
@@ -211,15 +257,47 @@ describe('identity orchestrator (sdd_host)', () => {
 
   // ── setUserStatus ──────────────────────────────────────────────────────────
 
-  it('sets user status as admin and audits user.status.set', () => {
+  it('deactivates a user as admin (non-active status) and audits a security-level user.deactivate', () => {
     repoUpsertUser(dataDir, mkUser({ id: 'u-3' }));
 
     const updated = identity.setUserStatus(cfg, MASTER, 'u-3', 'suspended');
     expect(updated.status).toBe('suspended');
 
-    const events = auditQuery(dataDir, { action: 'user.status.set' });
+    const events = auditQuery(dataDir, { action: 'user.deactivate' });
     expect(events).toHaveLength(1);
     expect(events[0].level).toBe('security');
+    // No user.status.set event for a deactivation.
+    expect(auditQuery(dataDir, { action: 'user.status.set' })).toHaveLength(0);
+  });
+
+  it('B1: deactivating a user revokes ALL their tokens (authenticate now fails), audits the revoked count, and reactivation does not restore them', () => {
+    repoUpsertUser(dataDir, mkUser({ id: 'u-deact' }));
+    const t1 = mintOwnedToken('u-deact');
+    const t2 = mintOwnedToken('u-deact');
+    // Both tokens authenticate before deactivation.
+    expect(authenticate(dataDir, t1).authenticated).toBe(true);
+    expect(authenticate(dataDir, t2).authenticated).toBe(true);
+
+    const updated = identity.setUserStatus(cfg, MASTER, 'u-deact', 'suspended');
+    expect(updated.status).toBe('suspended');
+
+    // Existing sessions are cut off at the credential layer.
+    expect(authenticate(dataDir, t1).authenticated).toBe(false);
+    expect(authenticate(dataDir, t2).authenticated).toBe(false);
+
+    // The security event carries the revoked-token count in its metadata.
+    const events = auditQuery(dataDir, { action: 'user.deactivate' });
+    expect(events).toHaveLength(1);
+    expect(events[0].level).toBe('security');
+    expect(events[0].metadata).toBe(JSON.stringify({ revokedTokens: 2 }));
+
+    // Returning to 'active' does NOT restore the revoked tokens, and audits info-level user.status.set.
+    identity.setUserStatus(cfg, MASTER, 'u-deact', 'active');
+    expect(authenticate(dataDir, t1).authenticated).toBe(false);
+    expect(authenticate(dataDir, t2).authenticated).toBe(false);
+    const reactivate = auditQuery(dataDir, { action: 'user.status.set' });
+    expect(reactivate).toHaveLength(1);
+    expect(reactivate[0].level).toBe('info');
   });
 
   it('rejects setUserStatus (403) for a non-admin token', () => {
@@ -258,6 +336,18 @@ describe('identity orchestrator (sdd_host)', () => {
     expect(() => identity.queryAuditEvents(cfg, plain, {})).toThrow(ForbiddenError);
   });
 
+  it('S2: a project-scoped audit:read grant is rejected (403) from queryAuditEvents while an instance-wide one passes', () => {
+    appendAuditEvent(dataDir, mkEvent({ action: 'token.mint', level: 'security' }), DEFAULT_AUDIT_POLICY);
+
+    // A project-scoped grant carrying audit:read does NOT confer instance-wide reach → 403.
+    const scoped = mintNonAdminToken([{ projectId: 'acme', permissions: ['audit:read'] }]);
+    expect(() => identity.queryAuditEvents(cfg, scoped, {})).toThrow(ForbiddenError);
+
+    // The same permission scoped to ALL projects ('*') is the instance-wide capability → allowed.
+    const instanceWide = mintNonAdminToken([{ projectId: '*', permissions: ['audit:read'] }]);
+    expect(identity.queryAuditEvents(cfg, instanceWide, {}).length).toBeGreaterThanOrEqual(1);
+  });
+
   // ── pruneAuditEvents ─────────────────────────────────────────────────────────
 
   it('prunes expired audit events as admin and audits audit.prune', () => {
@@ -287,6 +377,38 @@ describe('identity orchestrator (sdd_host)', () => {
     expect(updated.status).toBe('suspended');
     // The failure was recorded as a server diagnostic.
     expect(errSpy).toHaveBeenCalled();
+  });
+
+  // ── revokeAllForOwner (credential registry) ─────────────────────────────────
+
+  it('revokeAllForOwner revokes every non-revoked credential owned by the user, returns the count, and leaves others intact', () => {
+    const owned1 = mintOwnedToken('owner-1');
+    const owned2 = mintOwnedToken('owner-1');
+    const otherOwner = mintOwnedToken('owner-2');
+    const unowned = mintNonAdminToken([{ projectId: 'proj-a', permissions: ['mcp:read'] }]); // no ownerSubject
+
+    const count = revokeAllForOwner(dataDir, 'owner-1');
+    expect(count).toBe(2);
+
+    // owner-1's tokens no longer authenticate and carry a revokedAt timestamp.
+    expect(authenticate(dataDir, owned1).authenticated).toBe(false);
+    expect(authenticate(dataDir, owned2).authenticated).toBe(false);
+    const owner1Recs = listCredentials(dataDir, '*').filter((r) => r.ownerSubject?.userId === 'owner-1');
+    expect(owner1Recs.every((r) => typeof r.revokedAt === 'string')).toBe(true);
+
+    // A different owner's token and an unowned token are untouched.
+    expect(authenticate(dataDir, otherOwner).authenticated).toBe(true);
+    expect(authenticate(dataDir, unowned).authenticated).toBe(true);
+  });
+
+  it('revokeAllForOwner is idempotent (already-revoked skipped) and returns 0 for an owner with no active credentials', () => {
+    mintOwnedToken('owner-x');
+
+    expect(revokeAllForOwner(dataDir, 'owner-x')).toBe(1);
+    // A second pass revokes nothing — already-revoked records are skipped.
+    expect(revokeAllForOwner(dataDir, 'owner-x')).toBe(0);
+    // An owner with no credentials at all revokes nothing.
+    expect(revokeAllForOwner(dataDir, 'nobody')).toBe(0);
   });
 
   // ── authentication ──────────────────────────────────────────────────────────

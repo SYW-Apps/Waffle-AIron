@@ -71,16 +71,12 @@ const LANDSCAPE_READ_PERMISSION = 'landscape:read';
 //
 // '*' is the wildcard in BOTH projectId and permissions (per the grant model).
 
-/** Instance-admin = a grant over every project ('*') with every permission ('*'). */
-function isInstanceAdmin(principal: Principal): boolean {
-  return (principal.grants ?? []).some((g) => g.projectId === '*' && g.permissions.includes('*'));
-}
-
-/** True when the caller carries `permission` in any grant, regardless of project
- *  scope (or a wildcard '*' permission). Landscape capabilities are instance-wide. */
-function carriesPermission(principal: Principal, permission: string): boolean {
+// An instance-wide capability requires a grant scoped to ALL projects ('*')
+// carrying the permission (or the '*' wildcard). A project-scoped grant, even
+// one carrying the permission, does NOT confer instance-wide reach.
+function carriesInstancePermission(principal: Principal, permission: string): boolean {
   return (principal.grants ?? []).some(
-    (g) => g.permissions.includes('*') || g.permissions.includes(permission),
+    (g) => g.projectId === '*' && (g.permissions.includes('*') || g.permissions.includes(permission)),
   );
 }
 
@@ -93,7 +89,7 @@ function requirePrincipal(cfg: HostConfig, credential: string | null): Principal
 
 /** Require a landscape:manage grant or an instance-admin grant for a landscape write. */
 function requireManage(principal: Principal, action: string): void {
-  if (!carriesPermission(principal, LANDSCAPE_MANAGE_PERMISSION) && !isInstanceAdmin(principal)) {
+  if (!carriesInstancePermission(principal, LANDSCAPE_MANAGE_PERMISSION)) {
     throw new ForbiddenError(`${action} requires a landscape:manage grant or an instance-admin grant`);
   }
 }
@@ -101,9 +97,8 @@ function requireManage(principal: Principal, action: string): void {
 /** Require a landscape:read (or manage/admin) grant for a landscape control-plane read. */
 function requireRead(principal: Principal, action: string): void {
   if (
-    !carriesPermission(principal, LANDSCAPE_READ_PERMISSION) &&
-    !carriesPermission(principal, LANDSCAPE_MANAGE_PERMISSION) &&
-    !isInstanceAdmin(principal)
+    !carriesInstancePermission(principal, LANDSCAPE_READ_PERMISSION) &&
+    !carriesInstancePermission(principal, LANDSCAPE_MANAGE_PERMISSION)
   ) {
     throw new ForbiddenError(
       `${action} requires a landscape:read, landscape:manage, or instance-admin grant`,

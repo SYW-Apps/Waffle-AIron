@@ -16,8 +16,11 @@ import type { HostedUserRecord, ProjectGrant } from './types.js';
 // reads to the index and writes to the registry, with no logic of their own.
 // ---------------------------------------------------------------------------
 
-/** Lifecycle statuses a hosted user may hold. */
-const VALID_STATUSES = ['active', 'suspended', 'deactivated'];
+/** Lifecycle statuses a hosted user may hold. The status axis is canonically
+ *  `active` | `inactive` (per hosted_user_record); the legacy `suspended` /
+ *  `deactivated` / `disabled` values are still accepted and all mean inactive
+ *  (any non-`active` status revokes access and blocks sign-in). */
+const VALID_STATUSES = ['active', 'inactive', 'suspended', 'deactivated', 'disabled'];
 
 function storePath(dataDir: string): string {
   return path.join(dataDir, 'users.json');

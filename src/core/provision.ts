@@ -12,6 +12,7 @@ import {
   collectPromotableSpecs,
   applySpecStatus,
   invalidateSpecCache,
+  assertContainedProjectPath,
 } from './specs.js';
 import { saveProjectConfig, aiPathsAt } from '../config/loader.js';
 import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive } from '../utils/fs.js';
@@ -101,8 +102,11 @@ export function createChainedSubsystem(subsystem: SubsystemSpec, projectName: st
   // 1. Persist the parent L1 subsystem spec (with projectPath) at the parent root.
   saveSubsystemSpec({ ...subsystem, projectPath });
 
-  // 2. Resolve the child project directory relative to the bound (parent) root.
-  const childDir = path.resolve(getProjectRoot(), projectPath);
+  // 2. Resolve + contain the child project directory relative to the bound
+  //    (parent) root. Fix B2: reject an absolute or ../-escaping projectPath so
+  //    a chained subproject can never scaffold, load, or execute code outside
+  //    its parent. Throws before any child scaffolding below.
+  const childDir = assertContainedProjectPath(getProjectRoot(), projectPath);
 
   // 3. Scaffold the child project unless it is already initialized (idempotent).
   const alreadyInitialized = fs.existsSync(aiPathsAt(childDir).projectConfig());
@@ -135,7 +139,9 @@ export function moveSubsystemProject(subsystemId: string, newProjectPath: string
   const nextPath = toPosixPath(newProjectPath);
   const root = getProjectRoot();
   const oldDir = path.resolve(root, sub.projectPath);
-  const newDir = path.resolve(root, nextPath);
+  // Fix B2: contain the new target within the bound root before any on-disk
+  // relocation or spec write; absolute/../-escaping targets are rejected.
+  const newDir = assertContainedProjectPath(root, nextPath);
 
   if (oldDir !== newDir) {
     if (!fs.existsSync(oldDir)) {
@@ -195,7 +201,9 @@ export function externalizeSubsystem(subsystemId: string, projectPath: string): 
   }
 
   const relPath = toPosixPath(projectPath);
-  const childDir = path.resolve(parentRoot, relPath);
+  // Fix B2: contain the child project within the parent root before provisioning
+  // or moving any specs; absolute/../-escaping projectPaths are rejected.
+  const childDir = assertContainedProjectPath(parentRoot, relPath);
   const childFooDir = path.join(childDir, '.wai', 'specs', subsystemId);
   if (fs.existsSync(childFooDir)) {
     throw new WaironError(`target already contains a "${subsystemId}" subsystem: ${childFooDir}`);

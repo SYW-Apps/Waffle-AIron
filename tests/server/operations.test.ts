@@ -270,6 +270,9 @@ describe('operations orchestrator (sdd_host)', () => {
 
   const opsToken = () => mintToken([{ projectId: '*', permissions: ['operations:read'] }]);
   const plainToken = () => mintToken([{ projectId: '*', permissions: ['mcp:write'] }]);
+  // A PROJECT-SCOPED operations:read grant (S2): carries the permission but is
+  // scoped to one tenant — it must NOT confer instance-wide operations reach.
+  const projOpsToken = () => mintToken([{ projectId: 'acme', permissions: ['operations:read'] }]);
 
   /** Overwrite projects.json directly (used to seed a ghost record). */
   function seedRegistry(records: HostedProjectRecord[]): void {
@@ -289,6 +292,18 @@ describe('operations orchestrator (sdd_host)', () => {
     expect(() => getHealthReport(cfg, null)).toThrow(UnauthenticatedError);
     expect(() => getHealthReport(cfg, 'bogus-token')).toThrow(UnauthenticatedError);
     expect(getHealthReport(cfg, MASTER).status).toBe('ok');
+  });
+
+  it('S2: a project-scoped operations:read grant is rejected (403); only an instance-wide grant passes', () => {
+    createProject(cfg, MASTER, 'proj-a');
+
+    // Project-scoped grant carrying operations:read does NOT confer instance reach.
+    expect(() => getHealthReport(cfg, projOpsToken())).toThrow(ForbiddenError);
+    expect(() => getUsage(cfg, projOpsToken())).toThrow(ForbiddenError);
+    expect(() => evaluateQuota(cfg, projOpsToken())).toThrow(ForbiddenError);
+
+    // The instance-wide ({projectId:'*'}) grant still passes.
+    expect(getHealthReport(cfg, opsToken()).status).toBe('ok');
   });
 
   it('getHealthReport: a ghost project record makes the instance unhealthy', () => {
