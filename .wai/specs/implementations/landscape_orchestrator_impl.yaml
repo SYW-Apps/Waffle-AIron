@@ -801,6 +801,89 @@ methods:
         description: Return the document body with its content type and download filename
         type: return
         outcome: the downloadable surface artifact
+  - name: getProjectSurfaceForMcp
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential through the single auth authority
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Gather all organization units
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listUnits
+      - stepNumber: 3
+        description: The instance defines organization units (visibility semantics active)
+        type: branch
+        condition: at least one organization unit exists
+        onTrueStep: 7
+        onFalseStep: 4
+      - stepNumber: 4
+        description: 'Legacy posture: list the ACTIVE relations from the current project'
+        type: call
+        targetComponent: project_relation_repository
+        targetMethod: list
+      - stepNumber: 5
+        description: An active relation from the current project covers the target (ceiling = instance)
+        type: branch
+        condition: an ACTIVE relation whose sourceProjectId is the current project targets the target project
+        onTrueStep: 12
+        onFalseStep: 6
+      - stepNumber: 6
+        description: Reject the unreachable target
+        type: throw
+        error: >-
+          Forbidden — the target project is not reachable from the current project through an active
+          relation
+      - stepNumber: 7
+        description: Gather all project placements
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listPlacements
+      - stepNumber: 8
+        description: Resolve the current project's visibility view over the unit graph
+        type: call
+        targetComponent: visibility_specialist
+        targetMethod: resolveVisibility
+      - stepNumber: 9
+        description: >-
+          Classify the observer→target audience distance — it becomes the ceiling of the generated
+          snapshot
+        type: call
+        targetComponent: visibility_specialist
+        targetMethod: audienceDistance
+      - stepNumber: 10
+        description: The target is not visible to the current project (distance is null)
+        type: branch
+        condition: the distance is null (target not visible through the unit graph)
+        onTrueStep: 11
+        onFalseStep: 12
+      - stepNumber: 11
+        description: Reject the invisible target
+        type: throw
+        error: >-
+          Forbidden — the target project's surface is not exposed to the current project's
+          organization units
+      - stepNumber: 12
+        description: >-
+          Locate the target project's record and root server-side — the server acts as trusted
+          intermediary; the caller never reads the target tree directly
+        type: local
+      - stepNumber: 13
+        description: >-
+          Generate the target's contract-grade snapshot at the resolved audience ceiling against the
+          target's bound root
+        type: call
+        targetComponent: host_surfaces_adapter
+        targetMethod: exportBoundSurface
+      - stepNumber: 14
+        description: Stamp the snapshot origin exchanged for the consumer's import
+        type: local
+      - stepNumber: 15
+        description: Return the exchanged contract-grade snapshot
+        type: return
+        outcome: SurfaceSnapshot (origin exchanged)
 status: complete
 createdAt: '2026-07-09T22:10:36.787Z'
-updatedAt: '2026-07-11T09:49:23.239Z'
+updatedAt: '2026-07-11T10:13:15.015Z'

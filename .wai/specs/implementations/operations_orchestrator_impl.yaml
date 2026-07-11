@@ -79,23 +79,42 @@ methods:
         targetComponent: pack_registry
         targetMethod: readProjectReferences
       - stepNumber: 13
+        description: Gather the cross-project relations sourced from in-scope projects (relation-health inputs)
+        type: call
+        targetComponent: project_relation_repository
+        targetMethod: list
+      - stepNumber: 14
+        description: For each distinct relation target project
+        type: loop
+        loopKind: forEach
+        over: the distinct relation target projects
+        endStep: 15
+      - stepNumber: 15
+        description: >-
+          Fetch the target's stored public-surface snapshot for interface-drift checking (a missing
+          snapshot is itself a finding)
+        type: call
+        targetComponent: public_surface_repository
+        targetMethod: getSnapshot
+      - stepNumber: 16
         description: >-
           Derive redacted diagnostic checks from the in-scope project records, the two pack-tier
-          name listings, and the per-project references
+          name listings, the per-project references, and the relation-health inputs (relations +
+          target snapshots)
         type: call
         targetComponent: diagnostics_specialist
         targetMethod: runChecks
-      - stepNumber: 14
+      - stepNumber: 17
         description: Derive usage snapshots for the requested scope from the in-scope project records
         type: call
         targetComponent: diagnostics_specialist
         targetMethod: collectUsage
-      - stepNumber: 15
+      - stepNumber: 18
         description: Assemble the aggregated instance health report from the checks and usage
         type: call
         targetComponent: diagnostics_specialist
         targetMethod: buildHealthReport
-      - stepNumber: 16
+      - stepNumber: 19
         description: Return the redacted health report scoped to the caller
         type: return
         outcome: redacted health report
@@ -219,4 +238,4 @@ methods:
         outcome: advisory quota-annotated usage snapshots
 status: complete
 createdAt: '2026-07-10T11:27:00.178Z'
-updatedAt: '2026-07-10T17:18:37.454Z'
+updatedAt: '2026-07-11T10:13:57.380Z'

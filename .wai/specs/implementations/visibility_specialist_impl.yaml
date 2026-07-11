@@ -66,6 +66,6 @@ methods:
         description: Return the distance class, or null when the target is not visible
         type: return
         outcome: department | instance | partner | null
-status: draft
+status: complete
 createdAt: '2026-07-11T09:37:36.149Z'
-updatedAt: '2026-07-11T09:37:36.150Z'
+updatedAt: '2026-07-11T10:05:10.902Z'

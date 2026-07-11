@@ -41,9 +41,16 @@ methods:
           plus any profile ids thereby invalidated, otherwise ok
         type: local
       - stepNumber: 7
-        description: Assemble the DiagnosticCheckResult list with redacted messages and observation timestamps
+        description: >-
+          Relation health (when relation data is supplied): verify every ACTIVE cross-project
+          relation targets a project whose stored snapshot exists and still exposes the referenced
+          interface — missing snapshots or drifted interfaces yield a warn check naming the relation
+          ids
         type: local
       - stepNumber: 8
+        description: Assemble the DiagnosticCheckResult list with redacted messages and observation timestamps
+        type: local
+      - stepNumber: 9
         description: Return the diagnostic check results
         type: return
         outcome: diagnostic check results
@@ -92,4 +99,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-10T11:27:12.680Z'
-updatedAt: '2026-07-10T12:37:16.347Z'
+updatedAt: '2026-07-11T10:13:20.187Z'

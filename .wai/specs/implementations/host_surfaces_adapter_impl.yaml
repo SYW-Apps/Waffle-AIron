@@ -10,6 +10,6 @@ methods:
         type: call
         targetComponent: surface_portal
         targetMethod: exportSurface
-status: draft
+status: complete
 createdAt: '2026-07-11T09:48:59.060Z'
-updatedAt: '2026-07-11T09:48:59.061Z'
+updatedAt: '2026-07-11T10:05:10.870Z'

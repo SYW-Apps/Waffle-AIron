@@ -56,15 +56,14 @@ methods:
           If the called tool is one of the approval-backed self-service tools
           (sdd_host_request_project_initialization, sdd_host_request_project_lock,
           sdd_host_request_project_promotion, sdd_host_get_approval_status) or one of the hosted
-          landscape discovery tools (sdd_landscape_list_reachable_projects,
-          sdd_landscape_list_reachable_project_interfaces), dispatch it to the matching orchestrator
-          instead of the scoped MCP server
+          landscape tools (sdd_landscape_list_reachable_projects,
+          sdd_landscape_list_reachable_project_interfaces, sdd_landscape_list_visible_surfaces,
+          sdd_landscape_get_project_surface), dispatch it to the matching orchestrator instead of
+          the scoped MCP server
         type: branch
-        condition: >-
-          the called tool is one of the sdd_host_* self-service tools or the hosted landscape
-          discovery tools
+        condition: the called tool is one of the sdd_host_* self-service tools or the hosted landscape tools
         onTrueStep: 11
-        onFalseStep: 25
+        onFalseStep: 30
       - stepNumber: 11
         description: Dispatch by tool name to the matching orchestrator method
         type: switch
@@ -82,6 +81,10 @@ methods:
             step: 20
           - value: sdd_landscape_list_reachable_project_interfaces
             step: 22
+          - value: sdd_landscape_list_visible_surfaces
+            step: 24
+          - value: sdd_landscape_get_project_surface
+            step: 26
         defaultStep: 12
       - stepNumber: 12
         description: >-
@@ -93,7 +96,7 @@ methods:
       - stepNumber: 13
         description: Continue to shape the response
         type: jump
-        toStep: 23
+        toStep: 28
       - stepNumber: 14
         description: Request a project lock, passing the authenticated credential and project id
         type: call
@@ -102,7 +105,7 @@ methods:
       - stepNumber: 15
         description: Continue to shape the response
         type: jump
-        toStep: 23
+        toStep: 28
       - stepNumber: 16
         description: Request a project promotion, passing the authenticated credential and project id
         type: call
@@ -111,7 +114,7 @@ methods:
       - stepNumber: 17
         description: Continue to shape the response
         type: jump
-        toStep: 23
+        toStep: 28
       - stepNumber: 18
         description: Get the approval-request status, passing the authenticated credential and request id
         type: call
@@ -120,7 +123,7 @@ methods:
       - stepNumber: 19
         description: Continue to shape the response
         type: jump
-        toStep: 23
+        toStep: 28
       - stepNumber: 20
         description: >-
           List reachable projects, passing the authenticated credential and currentProjectId = the
@@ -131,7 +134,7 @@ methods:
       - stepNumber: 21
         description: Continue to shape the response
         type: jump
-        toStep: 23
+        toStep: 28
       - stepNumber: 22
         description: >-
           List reachable project interfaces, passing the authenticated credential, currentProjectId
@@ -140,15 +143,41 @@ methods:
         targetComponent: landscape_orchestrator
         targetMethod: listReachableProjectInterfacesForMcp
       - stepNumber: 23
+        description: Continue to shape the response (reachable-interfaces path)
+        type: jump
+        toStep: 28
+      - stepNumber: 24
+        description: >-
+          Dispatch the visibility-resolved discovery catalog (currentProjectId = the BOUND project;
+          never from arguments)
+        type: call
+        targetComponent: landscape_orchestrator
+        targetMethod: listVisibleSurfaces
+      - stepNumber: 25
+        description: Continue to shape the response
+        type: jump
+        toStep: 28
+      - stepNumber: 26
+        description: >-
+          Dispatch the contract-grade surface fetch (currentProjectId = the BOUND project;
+          targetProjectId from arguments)
+        type: call
+        targetComponent: landscape_orchestrator
+        targetMethod: getProjectSurfaceForMcp
+      - stepNumber: 27
+        description: Continue to shape the response
+        type: jump
+        toStep: 28
+      - stepNumber: 28
         description: Shape the self-service or landscape result into the JSON-RPC tool response envelope
         type: local
-      - stepNumber: 24
+      - stepNumber: 29
         description: >-
           Continue to the shared audit-event build step, skipping the ordinary permission gate and
           scoped MCP server dispatch
         type: jump
-        toStep: 30
-      - stepNumber: 25
+        toStep: 35
+      - stepNumber: 30
         description: >-
           Classify the called sdd_* tool as a write or a read: write tools have names starting with
           sdd_add_, sdd_update_, sdd_delete_, sdd_write_, sdd_define_, sdd_set_, sdd_initialize_,
@@ -156,7 +185,7 @@ methods:
           sdd_get_ or sdd_validate_ (sdd_get_status is a read). The required data-plane permission
           is mcp:write for a write tool and mcp:read for a read tool.
         type: local
-      - stepNumber: 26
+      - stepNumber: 31
         description: >-
           If the authenticated principal's grant covering the bound project does not carry the
           matching data-plane permission — consulting principal.grants for the bound project, NOT
@@ -166,9 +195,9 @@ methods:
         condition: >-
           the principal's grant for the bound project lacks the required data-plane permission
           (mcp:read for a read tool, mcp:write for a write tool)
-        onTrueStep: 27
-        onFalseStep: 28
-      - stepNumber: 27
+        onTrueStep: 32
+        onFalseStep: 33
+      - stepNumber: 32
         description: >-
           Reject with a clear MCP error that the required data-plane permission (mcp:read or
           mcp:write) is missing for the bound project
@@ -176,39 +205,39 @@ methods:
         error: >-
           Forbidden — the token's grant for this project lacks the required data-plane permission
           (mcp:read or mcp:write)
-      - stepNumber: 28
+      - stepNumber: 33
         description: Instantiate the scoped sdd_* MCP server
         type: call
         targetComponent: host_mcp_adapter
         targetMethod: createScopedServer
-      - stepNumber: 29
+      - stepNumber: 34
         description: Connect the scoped server to the request transport and process the JSON-RPC message
         type: local
-      - stepNumber: 30
+      - stepNumber: 35
         description: >-
           Build the redacted AuditEvent (action mcp.tool.call, actor and tokenId from the principal,
           project id, tool name as target, outcome)
         type: local
-      - stepNumber: 31
+      - stepNumber: 36
         description: Append the audit event without letting a failure fail the request
         type: try
-        endStep: 33
+        endStep: 38
         catches:
           - error: audit append failure
-            step: 34
-      - stepNumber: 32
+            step: 39
+      - stepNumber: 37
         description: Append the redacted mcp.tool.call audit event under the active retention policy
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 33
+      - stepNumber: 38
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 35
-      - stepNumber: 34
+        toStep: 40
+      - stepNumber: 39
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 35
+      - stepNumber: 40
         description: Return the MCP response
         type: return
         outcome: MCP response
@@ -239,4 +268,4 @@ methods:
         outcome: canvas html response
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-07-10T17:25:36.860Z'
+updatedAt: '2026-07-11T10:12:32.487Z'

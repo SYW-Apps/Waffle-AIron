@@ -163,9 +163,9 @@ methods:
       Discovery catalog for one observer project: authenticate the credential, resolve the
       observer's unit-graph visibility (open-within-tenant subtree, closed groups hidden, exposeTo
       grants honored, cross-tenant grant-only), and return each visible target with its audience
-      distance and the redacted catalog summaries whose audience ceiling covers that distance. This
-      is how a tenant sees the honest complete picture — everything in its subtree plus everything
-      granted to it — without any relation existing yet. Reads are not audited.
+      distance and the redacted catalog summaries whose audience ceiling covers that distance. Also
+      exposed as the data-plane MCP tool sdd_landscape_list_visible_surfaces with currentProjectId =
+      the BOUND project. Reads are not audited.
     signature: 'listVisibleSurfaces(credential: string, currentProjectId: string): VisibleSurfaceEntry[]'
     returns: VisibleSurfaceEntry[]
     params:
@@ -195,6 +195,27 @@ methods:
         description: native | openapi
       - name: maxAudience
         type: string
+  - name: getProjectSurfaceForMcp
+    description: >-
+      MCP tool workflow `sdd_landscape_get_project_surface` — the CONSUMER path of the surface
+      exchange: authenticate the caller; when the instance defines organization units, gate by
+      unit-graph visibility (an invisible target is Forbidden) and use the observer's audience
+      distance as the ceiling; on an instance with no units, fall back to relations-only
+      reachability with an instance-grade ceiling (legacy posture). Then generate the target
+      project's CONTRACT-GRADE snapshot at that ceiling (the server reads the target tree only as
+      trusted intermediary; the caller never touches it) and return it stamped origin exchanged —
+      ready for `wairon surface import` on the consumer side.
+    signature: >-
+      getProjectSurfaceForMcp(credential: string, currentProjectId: string, targetProjectId:
+      string): SurfaceSnapshot
+    returns: SurfaceSnapshot
+    params:
+      - name: credential
+        type: string
+      - name: currentProjectId
+        type: string
+      - name: targetProjectId
+        type: string
 status: complete
 createdAt: '2026-07-08T21:13:44.021Z'
-updatedAt: '2026-07-11T09:59:41.006Z'
+updatedAt: '2026-07-11T10:12:56.246Z'

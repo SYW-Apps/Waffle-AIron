@@ -31,6 +31,7 @@ You own and decide on everything within:
 .wai/specs/components/host_producer_adapter.yaml
 .wai/specs/components/host_request_orchestrator.yaml
 .wai/specs/components/host_server.yaml
+.wai/specs/components/host_surfaces_adapter.yaml
 .wai/specs/components/host_validator_adapter.yaml
 .wai/specs/components/identity_orchestrator.yaml
 .wai/specs/components/identity_portal.yaml
@@ -70,6 +71,7 @@ You own and decide on everything within:
 .wai/specs/components/user_registry.yaml
 .wai/specs/components/user_repository.yaml
 .wai/specs/components/user_store.yaml
+.wai/specs/components/visibility_specialist.yaml
 src/server/admin.ts
 src/server/approvals.ts
 src/server/audit.ts

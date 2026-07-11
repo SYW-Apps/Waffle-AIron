@@ -47,6 +47,6 @@ methods:
         type: string
     guarantees:
       - idempotent
-status: draft
+status: complete
 createdAt: '2026-07-11T09:37:26.241Z'
-updatedAt: '2026-07-11T09:37:26.243Z'
+updatedAt: '2026-07-11T10:05:10.837Z'

@@ -7,14 +7,17 @@ component: diagnostics_specialist
 methods:
   - name: runChecks
     description: >-
-      Derive redacted operational diagnostic checks from the supplied inputs: project-registry
-      consistency, per-project state presence, project-count sanity, pack-shadowing (an instance
-      pack shadowing a same-named image pack), and missing-pack-references (a project referencing a
-      pack/profile that resolves in neither the image nor the instance tier). Pure — the caller
-      supplies the project records, the two pack-tier name listings, and the per-project references.
+      Derive redacted operational diagnostic checks purely from the supplied inputs:
+      project-registry consistency, per-project state presence, project-count sanity, pack
+      shadowing, missing pack references, and — when relation data is supplied — relation health (an
+      ACTIVE cross-project relation must target a project with a stored public-surface snapshot that
+      still exposes the referenced interface; missing snapshots or drifted interfaces produce a
+      warn). Pure: no I/O.
     signature: >-
       runChecks(projects: HostedProjectRecord[], imagePackNames: string[], instancePackNames:
-      string[], projectReferences: ProjectPackReference[], scope: string): DiagnosticCheckResult[]
+      string[], projectReferences: ProjectPackReference[], scope?: string, relations?:
+      ProjectRelationRecord[], relationSnapshots?: ProjectPublicSurfaceSnapshot[]):
+      DiagnosticCheckResult[]
     returns: DiagnosticCheckResult[]
     params:
       - name: projects
@@ -60,4 +63,4 @@ methods:
         type: ResourceUsageSnapshot[]
 status: complete
 createdAt: '2026-07-09T09:10:04.195Z'
-updatedAt: '2026-07-10T12:36:36.177Z'
+updatedAt: '2026-07-11T10:13:18.303Z'
