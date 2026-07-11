@@ -33,7 +33,15 @@ methods:
       Remove every session whose expiresAt is at or before the supplied instant, persist the reduced
       set durably and swap it into the store, and return the number of sessions removed. A no-op
       returns zero without rewriting unchanged state.
+  - name: removeAllForSubject
+    narrative: []
+    intent: >-
+      Remove every session whose subject user id matches the given userId — correlated revocation
+      used when a user is deactivated so no live browser session outlives the deactivation — persist
+      the reduced set durably via write-temp-then-rename and swap it into the store, and return the
+      number of sessions removed. A user with no sessions is a no-op returning zero without
+      rewriting unchanged state.
 detail: intent
 status: complete
 createdAt: '2026-07-11T11:34:56.490Z'
-updatedAt: '2026-07-11T11:44:41.026Z'
+updatedAt: '2026-07-11T13:17:34.395Z'

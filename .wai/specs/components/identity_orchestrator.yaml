@@ -22,8 +22,9 @@ dependsOn:
   - policy_repository
   - organization_repository
   - scope_specialist
+  - web_session_repository
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-08T20:15:25.548Z'
-updatedAt: '2026-07-10T17:37:00.256Z'
+updatedAt: '2026-07-11T13:17:38.997Z'

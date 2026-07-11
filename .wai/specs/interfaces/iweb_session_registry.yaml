@@ -49,6 +49,18 @@ methods:
         type: string
     guarantees:
       - atomic
+  - name: removeAllForSubject
+    description: >-
+      Remove every session belonging to the given user id and return the number removed; used for
+      correlated revocation when a user is deactivated so no live browser session outlives the
+      deactivation. A user with no sessions is a no-op returning zero.
+    signature: 'removeAllForSubject(userId: string): number'
+    returns: number
+    params:
+      - name: userId
+        type: string
+    guarantees:
+      - atomic
 status: complete
 createdAt: '2026-07-11T11:32:46.115Z'
-updatedAt: '2026-07-11T11:44:31.732Z'
+updatedAt: '2026-07-11T13:17:32.321Z'

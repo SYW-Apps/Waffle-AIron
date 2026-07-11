@@ -158,6 +158,23 @@ class WebSessionRegistry {
   }
 
   /**
+   * Remove every session belonging to the given subject user id (correlated
+   * revocation when a user is deactivated — a separate credential type from
+   * tokens, so it must be swept too), persist and swap the reduced set, and
+   * return the number removed. A user with no sessions is a no-op returning zero.
+   */
+  removeAllForSubject(userId: string): number {
+    const sessions = this.store.all();
+    const next = sessions.filter((s) => s.subject.userId !== userId);
+    const removed = sessions.length - next.length;
+    if (removed > 0) {
+      persistSessions(this.dataDir, next);
+      this.store.replaceAll(next);
+    }
+    return removed;
+  }
+
+  /**
    * Remove every session whose expiresAt is at or before the supplied instant,
    * persist and swap the reduced set, and return the number removed. A no-op
    * returns zero without rewriting unchanged state.
@@ -226,6 +243,14 @@ export function pruneExpiredWebSessions(dataDir: string, now: string): number {
   const store = new WebSessionStore(dataDir);
   store.load();
   return new WebSessionRegistry(dataDir, store).pruneExpired(now);
+}
+
+/** Remove every browser session belonging to the given user id (correlated
+ *  revocation on deactivation); returns the count removed (atomic). */
+export function removeAllWebSessionsForSubject(dataDir: string, userId: string): number {
+  const store = new WebSessionStore(dataDir);
+  store.load();
+  return new WebSessionRegistry(dataDir, store).removeAllForSubject(userId);
 }
 
 /** Return one browser session by id, or null when absent. */

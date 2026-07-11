@@ -48,7 +48,14 @@ methods:
         type: call
         targetComponent: web_session_index
         targetMethod: listBySubject
+  - name: removeAllForSubject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the web session registry
+        type: call
+        targetComponent: web_session_registry
+        targetMethod: removeAllForSubject
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:35:06.198Z'
-updatedAt: '2026-07-11T11:44:41.316Z'
+updatedAt: '2026-07-11T13:17:37.884Z'

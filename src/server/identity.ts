@@ -30,6 +30,7 @@ import {
   DEFAULT_AUDIT_POLICY,
 } from './audit.js';
 import { listProjectRecords } from './projects.js';
+import { removeAllWebSessionsForSubject } from './websessions.js';
 import { listOrganizationUnits } from './organization.js';
 import { resolveScopeFor, permits } from './scope.js';
 import { sendJson } from './request.js';
@@ -628,20 +629,27 @@ export function setUserStatus(
   // revoke every one of their non-revoked credentials at the credential layer so
   // authenticate() rejects them. Returning to 'active' does NOT restore tokens.
   const deactivating = status !== 'active';
-  // Sweep by every id a token could be owned under: the record id AND the
+  // Sweep by every id a credential could be owned under: the record id AND the
   // resolved subject id (they diverge for admin-created users whose id != the
-  // subject's userId), so revocation can't silently miss tokens.
+  // subject's userId), so revocation can't silently miss anything.
   let revokedTokens = 0;
+  let revokedSessions = 0;
   if (deactivating) {
     const ownerIds = new Set([userId]);
     if (updated.subject?.userId) ownerIds.add(updated.subject.userId);
-    for (const ownerId of ownerIds) revokedTokens += revokeAllForOwner(cfg.dataDir, ownerId);
+    for (const ownerId of ownerIds) {
+      revokedTokens += revokeAllForOwner(cfg.dataDir, ownerId);
+      // Browser web sessions are a SEPARATE credential store the data-plane auth
+      // bridge accepts (a ws_ cookie drives /mcp like a bearer). Deactivation must
+      // sweep them too, or a deactivated user keeps a live session until it expires.
+      revokedSessions += removeAllWebSessionsForSubject(cfg.dataDir, ownerId);
+    }
   }
 
   const event = deactivating
     ? buildAuditEvent(principal, 'user.deactivate', 'security', 'admin', {
         target: userId,
-        metadata: JSON.stringify({ revokedTokens }),
+        metadata: JSON.stringify({ revokedTokens, revokedSessions }),
       })
     : buildAuditEvent(principal, 'user.status.set', 'info', 'admin', { target: userId });
   tryAppendAudit(cfg, event);

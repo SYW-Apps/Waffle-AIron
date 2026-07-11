@@ -5,13 +5,14 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import * as identity from '../../src/server/identity.js';
 import { UnauthenticatedError, ForbiddenError } from '../../src/server/identity.js';
-import { authenticate } from '../../src/server/auth.js';
+import { authenticate, authenticateSession } from '../../src/server/auth.js';
 import {
   createCredential,
   hashToken,
   listCredentials,
   revokeAllForOwner,
 } from '../../src/server/credentials.js';
+import { createWebSession, getWebSessionById } from '../../src/server/websessions.js';
 import { createProjectRecord } from '../../src/server/projects.js';
 import { upsertUser as repoUpsertUser } from '../../src/server/users.js';
 import { upsertOrganizationUnit, placeProject } from '../../src/server/organization.js';
@@ -375,11 +376,11 @@ describe('identity orchestrator (sdd_host)', () => {
     expect(authenticate(dataDir, t1).authenticated).toBe(false);
     expect(authenticate(dataDir, t2).authenticated).toBe(false);
 
-    // The security event carries the revoked-token count in its metadata.
+    // The security event carries the revoked-token (and revoked-session) counts.
     const events = auditQuery(dataDir, { action: 'user.deactivate' });
     expect(events).toHaveLength(1);
     expect(events[0].level).toBe('security');
-    expect(events[0].metadata).toBe(JSON.stringify({ revokedTokens: 2 }));
+    expect(events[0].metadata).toBe(JSON.stringify({ revokedTokens: 2, revokedSessions: 0 }));
 
     // Returning to 'active' does NOT restore the revoked tokens, and audits info-level user.status.set.
     identity.setUserStatus(cfg, MASTER, 'u-deact', 'active');
@@ -394,6 +395,38 @@ describe('identity orchestrator (sdd_host)', () => {
     repoUpsertUser(dataDir, mkUser({ id: 'u-3' }));
     const caller = mintNonAdminToken([{ projectId: 'proj-a', permissions: ['user:admin'] }]);
     expect(() => identity.setUserStatus(cfg, caller, 'u-3', 'suspended')).toThrow(ForbiddenError);
+  });
+
+  // Adversarial review (web UI wave 3): browser web sessions are a SEPARATE
+  // credential store the data-plane auth bridge accepts (a ws_ cookie drives /mcp
+  // like a bearer). Deactivation must sweep them too, or a deactivated user keeps a
+  // live session — the B1 hole, reintroduced by the session store.
+  it('deactivating a user revokes ALL their live web sessions (the auth bridge can no longer resolve them) and counts them in the audit event', () => {
+    const future = new Date(Date.now() + 3_600_000).toISOString();
+    repoUpsertUser(dataDir, mkUser({ id: 'u-sess', subject: subject({ userId: 'u-sess' }) }));
+    const s1 = createWebSession(dataDir, { id: '', subject: subject({ userId: 'u-sess' }), grants: [], createdAt: '', expiresAt: future });
+    const s2 = createWebSession(dataDir, { id: '', subject: subject({ userId: 'u-sess' }), grants: [], createdAt: '', expiresAt: future });
+    // A bystander's session must survive the sweep.
+    const other = createWebSession(dataDir, { id: '', subject: subject({ userId: 'u-other' }), grants: [], createdAt: '', expiresAt: future });
+
+    // Both of the user's sessions authenticate through the bridge before deactivation.
+    expect(authenticateSession(dataDir, s1.id).authenticated).toBe(true);
+    expect(authenticateSession(dataDir, s2.id).authenticated).toBe(true);
+
+    identity.setUserStatus(cfg, MASTER, 'u-sess', 'suspended');
+
+    // The user's sessions are gone; the bridge resolves them to UNAUTHENTICATED.
+    expect(getWebSessionById(dataDir, s1.id)).toBeNull();
+    expect(getWebSessionById(dataDir, s2.id)).toBeNull();
+    expect(authenticateSession(dataDir, s1.id).authenticated).toBe(false);
+    expect(authenticateSession(dataDir, s2.id).authenticated).toBe(false);
+    // The bystander is untouched.
+    expect(getWebSessionById(dataDir, other.id)).not.toBeNull();
+
+    // The security event carries the revoked-session count.
+    const events = auditQuery(dataDir, { action: 'user.deactivate' });
+    expect(events).toHaveLength(1);
+    expect(events[0].metadata).toBe(JSON.stringify({ revokedTokens: 0, revokedSessions: 2 }));
   });
 
   // ── listUsers authorization ─────────────────────────────────────────────────

@@ -475,7 +475,7 @@ methods:
         type: branch
         condition: the new status is not 'active'
         onTrueStep: 12
-        onFalseStep: 13
+        onFalseStep: 14
       - stepNumber: 12
         description: >-
           Revoke every non-revoked credential owned by the user so existing tokens can no longer
@@ -484,28 +484,38 @@ methods:
         targetComponent: credential_registry
         targetMethod: revokeAllForOwner
       - stepNumber: 13
+        description: >-
+          Still on the deactivation path, revoke every one of the user's browser sessions too, so a
+          deactivation also invalidates live web sessions (a separate credential type from tokens
+          that the auth bridge accepts on the data plane), capturing the revoked-session count for
+          the audit event
+        type: call
+        targetComponent: web_session_repository
+        targetMethod: removeAllForSubject
+      - stepNumber: 14
         description: Append the audit event without letting a failure fail the status change
         type: try
-        endStep: 15
+        endStep: 16
         catches:
           - error: audit append failure
-            step: 16
-      - stepNumber: 14
+            step: 17
+      - stepNumber: 15
         description: >-
           Append the redacted audit event under the active retention policy — action
-          'user.deactivate' at security level (including the revoked-token count) when the status
-          change deactivated the user, otherwise 'user.status.set' at info level
+          'user.deactivate' at security level (including the revoked-token and revoked-session
+          counts) when the status change deactivated the user, otherwise 'user.status.set' at info
+          level
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 15
+      - stepNumber: 16
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 17
-      - stepNumber: 16
+        toStep: 18
+      - stepNumber: 17
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 17
+      - stepNumber: 18
         description: Return the updated user record
         type: return
         outcome: updated user record
@@ -907,4 +917,4 @@ methods:
         outcome: identity provider removed
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-07-10T17:27:08.970Z'
+updatedAt: '2026-07-11T13:18:04.989Z'

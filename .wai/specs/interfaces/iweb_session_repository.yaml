@@ -59,6 +59,17 @@ methods:
     params:
       - name: userId
         type: string
+  - name: removeAllForSubject
+    description: >-
+      Forward to the registry to remove every browser session belonging to the given user id
+      (correlated revocation on deactivation) and return the number removed.
+    signature: 'removeAllForSubject(userId: string): number'
+    returns: number
+    params:
+      - name: userId
+        type: string
+    guarantees:
+      - atomic
 status: complete
 createdAt: '2026-07-11T11:32:56.623Z'
-updatedAt: '2026-07-11T11:44:33.167Z'
+updatedAt: '2026-07-11T13:17:35.874Z'
