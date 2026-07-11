@@ -468,6 +468,61 @@ export interface IdentityProviderConfig {
   updatedAt: string;
 }
 
+/** A durable browser session for the hosted web UI. The session id (reserved
+ *  prefix) is itself a first-class credential — it resolves to a Principal via
+ *  authenticateCredential exactly like a bearer token, so the browser reuses
+ *  every scoped endpoint. Created on SSO sign-in, removed on sign-out, expiring. */
+export interface WebSession {
+  id: string;
+  subject: PrincipalSubject;
+  grants: ProjectGrant[];
+  createdAt: string;
+  expiresAt: string;
+  lastSeenAt?: string;
+  providerId?: string;
+  /** Optional correlated user-bound token id, for correlated revocation. */
+  tokenId?: string;
+}
+
+/** One node of the web UI's level-of-detail architecture graph. */
+export interface WebGraphNode {
+  id: string;
+  label: string;
+  /** 'unit' | 'project' | 'subsystem' | 'component' | 'interface' | 'type' */
+  kind: string;
+  /** Detail level: lower = higher-level (landscape/subsystem), deeper = L2/L3. */
+  level: number;
+  parentId?: string;
+  projectId?: string;
+  status?: string;
+  /** Count of validation issues on this node (overlaid on the project tier). */
+  issueCount?: number;
+}
+
+/** A level-of-detail graph payload for the web UI: the landscape tier, or one
+ *  project's spec graph expanded to the requested level. */
+export interface WebGraphModel {
+  /** 'landscape' | 'project' */
+  tier: string;
+  nodes: WebGraphNode[];
+  edges: LandscapeEdge[];
+  /** The maximum detail level included. */
+  level: number;
+  generatedAt: string;
+  scope?: string;
+}
+
+/** The current principal's identity + derived capability flags, so the web
+ *  client renders role-appropriately (an admin is a developer with more scope). */
+export interface WebContext {
+  subject: PrincipalSubject;
+  grants: ProjectGrant[];
+  isAdmin: boolean;
+  canWriteProjects: boolean;
+  visibleProjectIds: string[];
+  visibleUnitIds: string[];
+}
+
 /** A registered hosted project mapped to its isolated .wai/ root. */
 export interface HostedProjectRecord {
   id: string;
