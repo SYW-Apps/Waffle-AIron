@@ -132,6 +132,24 @@ describe('dependency conformance — UNDECLARED_DEPENDENCY', () => {
     } finally { proj.cleanup(); }
   });
 
+  it('the reverse edge does NOT forgive a Store importing its consumer (mounting shapes only)', () => {
+    const proj = createTempProject();
+    // orchestrator declares dependsOn store (correct direction) — but the STORE
+    // file imports the orchestrator: a real inversion, not portal mounting.
+    proj.component('orch-a', 'Orchestrator', 'sub-a', 'dependsOn: [store-b]');
+    proj.component('store-b', 'Store');
+    proj.wire('orch-a', 'src/a.ts');
+    proj.wire('store-b', 'src/b.ts');
+    proj.source('src/a.ts', body('orcha', "import { runstoreb } from './b.js';\nrunstoreb();\n"));
+    proj.source('src/b.ts', body('storeb', "import { runorcha } from './a.js';\nvoid runorcha;\n"));
+    proj.activate();
+    try {
+      const found = depIssues(validateSddTree());
+      expect(found.map(i => i.code)).toContain('UNDECLARED_DEPENDENCY');
+      expect(found.find(i => i.code === 'UNDECLARED_DEPENDENCY')?.specId).toBe('impl-store-b');
+    } finally { proj.cleanup(); }
+  });
+
   it('type-only imports never form an edge', () => {
     const proj = createTempProject();
     proj.component('orch-a', 'Orchestrator');

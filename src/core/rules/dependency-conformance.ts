@@ -150,7 +150,14 @@ export const dependencyConformanceRule: SddRule = {
           // it mounts ONTO the server (portal → supervisor), while the server
           // file physically imports the portal's file to dispatch inward —
           // the declared relation exists, code chose the other direction.
-          if (cf.subsystem === cg.subsystem && dependsOrOwns(cg, cf.id)) return true;
+          // ONLY the mounting shape (the reverse-declarer is an inbound
+          // Portal/Observer) is forgiven; a Store importing the orchestrator
+          // that depends on it stays a violation.
+          if (
+            cf.subsystem === cg.subsystem
+            && dependsOrOwns(cg, cf.id)
+            && (cg.componentType === 'Portal' || cg.componentType === 'Observer')
+          ) return true;
           // member of a pattern the importer depends on (facade hop)
           const owner = ctx.components.find(c => (c.owns ?? []).includes(cg.id));
           if (owner && (dependsOrOwns(cf, owner.id) || cf.id === owner.id)) return true;
@@ -178,18 +185,21 @@ export const dependencyConformanceRule: SddRule = {
     }
 
     // ---- UNREALIZED_DEPENDENCY: every declared edge should leave a trace ----
-    // A trace is a runtime import, a re-export (barrel forwarding), or the
-    // REVERSE import within the subsystem (mutual wiring, one file direction).
-    const hasImportBetween = (fromFiles: Set<string>, toFiles: Set<string>): boolean => {
+    // A trace is a runtime import, a re-export (barrel forwarding), or — for a
+    // mounting declarer (Portal/Observer) — the REVERSE import (the server
+    // file imports the portal's file; mutual wiring, one file direction).
+    const hasImportBetween = (fromFiles: Set<string>, toFiles: Set<string>, allowReverse: boolean): boolean => {
       for (const f of fromFiles) {
         const targets = realizationEdges.get(f);
         if (!targets) continue;
         for (const t of toFiles) if (targets.has(t)) return true;
       }
-      for (const t of toFiles) {
-        const reverse = realizationEdges.get(t);
-        if (!reverse) continue;
-        for (const f of fromFiles) if (reverse.has(f)) return true;
+      if (allowReverse) {
+        for (const t of toFiles) {
+          const reverse = realizationEdges.get(t);
+          if (!reverse) continue;
+          for (const f of fromFiles) if (reverse.has(f)) return true;
+        }
       }
       return false;
     };
@@ -198,6 +208,7 @@ export const dependencyConformanceRule: SddRule = {
       const fromFiles = filesByComponent.get(component.id);
       if (!fromFiles) continue;
 
+      const isMountingDeclarer = component.componentType === 'Portal' || component.componentType === 'Observer';
       const declaredTargets = [...component.dependsOn, ...(component.owns ?? [])];
       for (const targetId of declaredTargets) {
         const target = ctx.componentMap.get(targetId);
@@ -213,12 +224,12 @@ export const dependencyConformanceRule: SddRule = {
           if (subsystemFiles.size === 0) continue;
           for (const f of fromFiles) subsystemFiles.delete(f); // shared files satisfy trivially
           if (subsystemFiles.size === 0) continue;
-          if (hasImportBetween(fromFiles, subsystemFiles)) continue;
+          if (hasImportBetween(fromFiles, subsystemFiles, isMountingDeclarer)) continue;
         } else {
           const toFiles = filesByComponent.get(targetId);
           if (!toFiles) continue; // target unmapped (no sourcePath / non-exact) — Level 1 territory
           if ([...fromFiles].some(f => toFiles.has(f))) continue; // N:1 same-file collapse
-          if (hasImportBetween(fromFiles, toFiles)) continue;
+          if (hasImportBetween(fromFiles, toFiles, isMountingDeclarer)) continue;
         }
 
         const impls = implsByComponent.get(component.id) ?? [];
