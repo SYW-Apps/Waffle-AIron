@@ -1,0 +1,14 @@
+id: host_surfaces_adapter
+name: Host Surfaces Client Adapter
+description: >-
+  Client adapter from the hosting server to the surface-exchange subsystem's published portal:
+  generates a bound project's contract-grade surface artifact (native snapshot or OpenAPI rendering)
+  against the currently bound project root, exactly like the host core adapter's spec reads.
+subsystem: sdd_host
+componentType: Adapter
+owns: []
+dependsOn:
+  - surface_portal
+status: draft
+createdAt: '2026-07-11T09:48:43.505Z'
+updatedAt: '2026-07-11T09:48:43.507Z'

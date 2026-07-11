@@ -1,0 +1,71 @@
+id: visibility_specialist_impl
+name: Visibility Specialist Implementation
+description: Pure unit-graph visibility resolution.
+contract: ivisibility_specialist
+methods:
+  - name: resolveVisibility
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Collect the observer's unit membership: units its placements land in plus each unit's
+          ancestor chain up to its tenant root
+        type: local
+      - stepNumber: 2
+        description: >-
+          Resolve each unit's effective posture: walk inherit up the parent chain (a root unit
+          defaults to open); remember every exposeTo grant
+        type: local
+      - stepNumber: 3
+        description: For each placement of every other project
+        type: loop
+        loopKind: forEach
+        over: placements of other projects
+        endStep: 7
+      - stepNumber: 4
+        description: >-
+          Placement unit inside the observer's own subtree (shares a membership unit or its
+          descendants)
+        type: branch
+        condition: the placement unit is within the observer's membership subtree
+        onTrueStep: 6
+        onFalseStep: 5
+      - stepNumber: 5
+        description: >-
+          Otherwise visible only when the path from the placement unit up to the shared root crosses
+          no closed posture the observer is outside of, staying within the same tenant root
+          (distance instance) — or when an exposeTo grant on the path names one of the observer's
+          units (distance partner when crossing tenant roots, else the granting side's class)
+        type: local
+      - stepNumber: 6
+        description: >-
+          Record the visible target with its distance class (department for the own subtree) and the
+          granting unit
+        type: local
+      - stepNumber: 7
+        description: Continue with the next placement
+        type: local
+      - stepNumber: 8
+        description: Return the resolution (observer units, visible projects with distances)
+        type: return
+        outcome: VisibilityResolution
+  - name: isVisible
+    narrative:
+      - stepNumber: 1
+        description: Report whether visibleProjects contains the target project id
+        type: local
+      - stepNumber: 2
+        description: Return the point-check result
+        type: return
+        outcome: boolean
+  - name: audienceDistance
+    narrative:
+      - stepNumber: 1
+        description: Look the target up in visibleProjects and take its distance class
+        type: local
+      - stepNumber: 2
+        description: Return the distance class, or null when the target is not visible
+        type: return
+        outcome: department | instance | partner | null
+status: draft
+createdAt: '2026-07-11T09:37:36.149Z'
+updatedAt: '2026-07-11T09:37:36.150Z'

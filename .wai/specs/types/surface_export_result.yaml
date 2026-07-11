@@ -1,0 +1,22 @@
+kind: value-object
+id: surface_export_result
+name: SurfaceExportResult
+description: >-
+  Result of a surface export: the projected snapshot, plus the rendered document body when a codec
+  format (e.g. openapi) was requested and the written output path when one was given.
+fields:
+  - name: snapshot
+    type: SurfaceSnapshot
+    description: The projected contract-grade snapshot.
+    optional: false
+  - name: rendered
+    type: string
+    description: Rendered document body (e.g. OpenAPI 3.1 JSON) when a codec format was requested.
+    optional: true
+  - name: writtenTo
+    type: string
+    description: Written output path when one was requested.
+    optional: true
+methods: []
+createdAt: '2026-07-11T09:48:49.299Z'
+updatedAt: '2026-07-11T09:48:49.355Z'

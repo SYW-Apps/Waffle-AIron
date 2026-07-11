@@ -1,0 +1,29 @@
+kind: value-object
+id: visibility_resolution
+name: VisibilityResolution
+description: >-
+  The computed surface-visibility view of one observer project over the hosted instance: which
+  projects' public surfaces it may discover, and at what audience distance. Distance classes map
+  onto surface audience ceilings — family (same project family), department (same owning unit
+  subtree), instance (same tenant, other subtree), partner (cross-tenant via exposeTo grant) — so
+  entry filtering is effective-visibility = audience ceiling ∩ unit-graph reachability.
+subsystem: sdd_host
+fields:
+  - name: observerProjectId
+    type: string
+    description: The project whose viewpoint this resolution represents.
+    optional: false
+    key: primary
+  - name: observerUnitIds
+    type: string[]
+    description: Units the observer's placements land in, plus their ancestor chains.
+    optional: false
+  - name: visibleProjects
+    type: object[]
+    description: >-
+      Per visible target: { projectId, distance: department | instance | partner, via: unitId } —
+      the placement unit that granted visibility.
+    optional: false
+methods: []
+createdAt: '2026-07-11T09:37:02.102Z'
+updatedAt: '2026-07-11T09:37:02.149Z'

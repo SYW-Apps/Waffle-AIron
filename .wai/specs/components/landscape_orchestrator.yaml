@@ -23,8 +23,10 @@ dependsOn:
   - audit_repository
   - host_core_adapter
   - scope_specialist
+  - visibility_specialist
+  - host_surfaces_adapter
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-08T21:12:56.113Z'
-updatedAt: '2026-07-10T17:37:00.669Z'
+updatedAt: '2026-07-11T09:49:01.039Z'

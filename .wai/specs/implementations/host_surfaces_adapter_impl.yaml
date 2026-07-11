@@ -1,0 +1,15 @@
+id: host_surfaces_adapter_impl
+name: Host Surfaces Adapter Implementation
+description: Bound-project surface generation forwarded to the surface portal.
+contract: ihost_surfaces_adapter
+methods:
+  - name: exportBoundSurface
+    narrative:
+      - stepNumber: 1
+        description: Forward exportSurface to the surface portal against the currently bound project root
+        type: call
+        targetComponent: surface_portal
+        targetMethod: exportSurface
+status: draft
+createdAt: '2026-07-11T09:48:59.060Z'
+updatedAt: '2026-07-11T09:48:59.061Z'

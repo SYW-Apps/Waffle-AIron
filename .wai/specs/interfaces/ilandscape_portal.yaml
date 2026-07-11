@@ -100,6 +100,42 @@ methods:
       transport: HTTP
       method: DELETE
       path: /landscape/relations/{id}
+  - name: listVisibleSurfaces
+    description: >-
+      Visibility-resolved discovery catalog for one observer project (targets + audience-filtered
+      redacted summaries).
+    signature: 'listVisibleSurfaces(credential: string, currentProjectId: string): VisibleSurfaceEntry[]'
+    returns: VisibleSurfaceEntry[]
+    params:
+      - name: credential
+        type: string
+      - name: currentProjectId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /landscape/projects/{id}/visible-surfaces
+  - name: exportProjectSurface
+    description: >-
+      Generate-and-download one project's surface artifact (native snapshot YAML or OpenAPI 3.1
+      JSON) as an attachment — generation on request, never a served UI.
+    signature: >-
+      exportProjectSurface(credential: string, projectId: string, format: string, maxAudience:
+      string): object
+    returns: object
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+      - name: format
+        type: string
+      - name: maxAudience
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /landscape/projects/{id}/surface
 status: complete
 createdAt: '2026-07-08T21:13:58.131Z'
-updatedAt: '2026-07-09T22:17:26.576Z'
+updatedAt: '2026-07-11T09:49:07.104Z'
