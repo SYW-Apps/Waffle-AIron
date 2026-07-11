@@ -2,9 +2,15 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { authenticate, authenticateCredential, authenticateMaster } from '../../src/server/auth.js';
+import {
+  authenticate,
+  authenticateCredential,
+  authenticateMaster,
+  authenticateSession,
+} from '../../src/server/auth.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
-import type { ApiKeyRecord, PrincipalSubject, ProjectGrant } from '../../src/server/types.js';
+import { createWebSession, WEB_SESSION_PREFIX } from '../../src/server/websessions.js';
+import type { ApiKeyRecord, PrincipalSubject, ProjectGrant, WebSession } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
 // Auth Specialist (sdd_host) — subject/grant resolution, expiry/revocation, and
@@ -170,5 +176,96 @@ describe('auth specialist (sdd_host)', () => {
     const p = authenticateMaster(MASTER);
     expect(p).toEqual({ tokenId: 'admin:master', role: 'admin', projects: ['*'], authenticated: true });
     expect(authenticateMaster('wrong').authenticated).toBe(false);
+  });
+
+  // ── web-session bridge: authenticateSession + session-id credential ───────
+  //
+  // A browser session id (reserved prefix) is a first-class credential: it
+  // resolves to the same Principal shape a bearer token yields, so every scoped
+  // endpoint authenticates a session with no per-endpoint change. Both
+  // authenticateSession and the session branch of authenticateCredential share the
+  // one resolveSessionPrincipal code path.
+
+  const SESSION_SUBJECT: PrincipalSubject = { userId: 'u-web', kind: 'human', issuer: 'oidc', displayName: 'Web User' };
+  const SESSION_GRANTS: ProjectGrant[] = [
+    { projectId: 'proj-a', permissions: ['mcp:read', 'mcp:write'], role: 'editor' },
+  ];
+
+  function seedSession(over: Partial<WebSession> = {}): WebSession {
+    return createWebSession(dataDir, {
+      id: '', // the registry mints a reserved-prefix id
+      subject: SESSION_SUBJECT,
+      grants: SESSION_GRANTS,
+      createdAt: '1999-01-01T00:00:00.000Z',
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      ...over,
+    });
+  }
+
+  it('authenticateSession resolves a live session to a Principal carrying its subject and grants', () => {
+    const s = seedSession();
+    const p = authenticateSession(dataDir, s.id);
+    expect(p.authenticated).toBe(true);
+    expect(p.subject).toEqual(SESSION_SUBJECT);
+    expect(p.grants).toEqual(SESSION_GRANTS);
+    // coarse compatibility projection derived from the grants (no '*' grant → editor)
+    expect(p.role).toBe('editor');
+    expect(p.projects).toEqual(['proj-a']);
+  });
+
+  it('authenticateSession derives an admin projection from an instance-wide grant', () => {
+    const s = seedSession({ grants: [{ projectId: '*', permissions: ['*'], role: 'admin' }] });
+    const p = authenticateSession(dataDir, s.id);
+    expect(p.role).toBe('admin');
+    expect(p.projects).toEqual(['*']);
+  });
+
+  it('authenticateCredential resolves a valid session id identically to authenticateSession', () => {
+    const s = seedSession();
+    const viaCredential = authenticateCredential(dataDir, s.id);
+    expect(viaCredential.authenticated).toBe(true);
+    expect(viaCredential.subject).toEqual(SESSION_SUBJECT);
+    expect(viaCredential.grants).toEqual(SESSION_GRANTS);
+    // one shared code path → the two entry points return the same Principal
+    expect(viaCredential).toEqual(authenticateSession(dataDir, s.id));
+  });
+
+  it('rejects an expired session as unauthenticated via both entry points', () => {
+    const s = seedSession({ expiresAt: new Date(Date.now() - 1000).toISOString() });
+    expect(authenticateSession(dataDir, s.id).authenticated).toBe(false);
+    expect(authenticateCredential(dataDir, s.id).authenticated).toBe(false);
+  });
+
+  it('rejects an absent (well-formed) session id as unauthenticated via both entry points', () => {
+    const ghost = `${WEB_SESSION_PREFIX}deadbeefdeadbeef`;
+    expect(authenticateSession(dataDir, ghost).authenticated).toBe(false);
+    expect(authenticateCredential(dataDir, ghost).authenticated).toBe(false);
+  });
+
+  it('does not treat a bearer token as a session (authenticateSession accepts session ids only)', () => {
+    const token = 'tok-not-a-session';
+    createCredential(dataDir, mkRecord({ id: 'c-web', keyHash: hashToken(token) }));
+    // the token authenticates on the bearer path …
+    expect(authenticate(dataDir, token).authenticated).toBe(true);
+    // … but must not resolve as a session
+    expect(authenticateSession(dataDir, token).authenticated).toBe(false);
+  });
+
+  // ── regressions: the pre-existing credential kinds still authenticate ──────
+
+  it('a bearer token still authenticates through authenticateCredential unchanged (regression)', () => {
+    const token = 'tok-bridge-regression';
+    const ownerSubject: PrincipalSubject = { userId: 'u-3', kind: 'human', issuer: 'local' };
+    createCredential(dataDir, mkRecord({ id: 'c-bridge', keyHash: hashToken(token), ownerSubject }));
+    expect(authenticateCredential(dataDir, token)).toEqual(authenticate(dataDir, token));
+    expect(authenticateCredential(dataDir, token).authenticated).toBe(true);
+  });
+
+  it('the master credential still authenticates through authenticateCredential unchanged (regression)', () => {
+    const p = authenticateCredential(dataDir, MASTER);
+    expect(p.authenticated).toBe(true);
+    expect(p.role).toBe('admin');
+    expect(p.projects).toEqual(['*']);
+    expect(p.subject?.kind).toBe('bootstrap');
   });
 });

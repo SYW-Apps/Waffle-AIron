@@ -8,6 +8,7 @@ import {
   UNAUTHENTICATED,
 } from './types.js';
 import { findByTokenHash, hashToken } from './credentials.js';
+import { getWebSessionById, WEB_SESSION_PREFIX } from './websessions.js';
 import { resolveSecret } from '../utils/secrets.js';
 
 // ---------------------------------------------------------------------------
@@ -93,6 +94,42 @@ function bootstrapAdminPrincipal(): Principal {
   };
 }
 
+/** Reverse of projectGrantsFromRole: derive the coarse role/projects
+ *  compatibility projection from precise grants — any instance-wide ('*') grant →
+ *  admin over ['*']; otherwise editor over the distinct granted project ids. Kept
+ *  local (mirrors identity.ts's compatibilityProjection) because auth.ts must not
+ *  import from identity.ts. */
+function compatibilityProjectionFromGrants(grants: ProjectGrant[]): { role: Role; projects: string[] } {
+  if (grants.some((g) => g.projectId === '*')) {
+    return { role: 'admin', projects: ['*'] };
+  }
+  return { role: 'editor', projects: [...new Set(grants.map((g) => g.projectId))] };
+}
+
+/** The single, shared session-resolution path used by BOTH authenticateSession
+ *  and the session branch of authenticateCredential, so the two can never diverge.
+ *  Look up the browser session by id; reject an absent or expired (expiresAt at or
+ *  before now) session as UNAUTHENTICATED. Otherwise assemble the same Principal
+ *  shape a bearer token yields — subject and grants straight from the session, with
+ *  the coarse role/projects compatibility projection derived from those grants and
+ *  no credential-record lookup. The raw session id is a secret credential, so it is
+ *  never used as the audit-facing tokenId (only a correlated tokenId, when present). */
+function resolveSessionPrincipal(dataDir: string, sessionId: string): Principal {
+  const session = getWebSessionById(dataDir, sessionId);
+  if (!session) return UNAUTHENTICATED;
+  if (Date.parse(session.expiresAt) <= Date.now()) return UNAUTHENTICATED;
+  const { role, projects } = compatibilityProjectionFromGrants(session.grants);
+  const principal: Principal = {
+    tokenId: session.tokenId ?? '',
+    role,
+    projects,
+    authenticated: true,
+    subject: session.subject,
+    grants: session.grants,
+  };
+  return principal;
+}
+
 /** Verify a data-plane bearer token to a Principal (or UNAUTHENTICATED). Resolves
  *  the Principal's subject and grants from the record (legacy records fall back to
  *  the role/projects projection); rejects expired or revoked records. */
@@ -106,12 +143,29 @@ export function authenticateMaster(token: string | null): Principal {
   return { tokenId: 'admin:master', role: 'admin', projects: ['*'], authenticated: true };
 }
 
-/** The single control-plane entry point accepting either credential kind: the
- *  bootstrap/master credential (→ bootstrap admin Principal) or a stored bearer
- *  token (→ the same token path as authenticate, including expiry/revocation). */
+/** The single control-plane entry point accepting three credential kinds: a browser
+ *  web-session id (reserved prefix → resolved via the shared session helper, so a
+ *  session authenticates every scoped endpoint exactly like a bearer token), the
+ *  bootstrap/master credential (→ bootstrap admin Principal), or a stored bearer
+ *  token (→ the same token path as authenticate, including expiry/revocation).
+ *  The session branch is checked FIRST and shares resolveSessionPrincipal with
+ *  authenticateSession so the two can never diverge. */
 export function authenticateCredential(dataDir: string, credential: string | null): Principal {
+  if (credential && credential.startsWith(WEB_SESSION_PREFIX)) {
+    return resolveSessionPrincipal(dataDir, credential);
+  }
   if (masterMatches(credential)) return bootstrapAdminPrincipal();
   return resolveTokenPrincipal(dataDir, credential);
+}
+
+/** Resolve a browser session id to a Principal — the auth bridge that lets the web
+ *  UI reuse every scoped endpoint with a session cookie in place of a bearer token.
+ *  An absent or expired session resolves to UNAUTHENTICATED (never throws), and a
+ *  non-session credential (e.g. a bearer token) simply finds no session and is
+ *  rejected — session ids only. Shares resolveSessionPrincipal with
+ *  authenticateCredential's session branch (one code path, no divergence). */
+export function authenticateSession(dataDir: string, sessionId: string): Principal {
+  return resolveSessionPrincipal(dataDir, sessionId);
 }
 
 // ── Signed capability tokens for browser diagram viewing ─────────────────────
