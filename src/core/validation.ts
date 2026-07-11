@@ -15,6 +15,7 @@ import {
 } from './specs.js';
 import { buildRuleContext, composeRuleSequence, makeScopeFilter } from './rules/index.js';
 import { LoadedExtensions, loadProjectExtensions } from './extensions.js';
+import { loadSurfaceSnapshots } from './surfaces.js';
 
 // ---------------------------------------------------------------------------
 // Validation
@@ -229,6 +230,9 @@ export function validateSddTree(
   const interfaces = loadInterfaceSpecs();
   const implementations = loadImplementationSpecs();
   const types = loadTypeSpecs();
+  // Stored surface snapshots (.wai/surfaces/): declared contracts that
+  // unresolved cross-tree/remote references validate against.
+  const surfaceSnapshots = loadSurfaceSnapshots();
 
   // As-complete mode: flip statuses on the freshly loaded instances — these
   // are the workspace cache's own objects, loaded after the cache clear above,
@@ -276,6 +280,7 @@ export function validateSddTree(
       projectType,
       scopeSubsystem,
       extensions,
+      surfaceSnapshots,
       issues,
     });
 

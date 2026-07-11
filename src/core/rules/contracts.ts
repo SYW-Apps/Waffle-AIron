@@ -1,4 +1,5 @@
 import { SddRule } from './types.js';
+import { resolveSurfaceRef } from './namespace.js';
 
 /**
  * Contract ↔ implementation symmetry, and narrative-step resolution: every
@@ -15,7 +16,8 @@ export const contractsRule: SddRule = {
     { code: 'MISSING_TARGET_COMPONENT', defaultSeverity: 'error', summary: 'Call step missing targetComponent' },
     { code: 'MISSING_TARGET_METHOD', defaultSeverity: 'error', summary: 'Call step missing targetMethod' },
     { code: 'INVALID_TARGET_COMPONENT_REFERENCE', defaultSeverity: 'error', summary: 'Call step targets a non-existent component' },
-    { code: 'CROSS_TREE_REF_UNRESOLVED', defaultSeverity: 'warning', summary: 'Cross-tree reference (super::/:: form) not resolvable in this standalone context — only the parent project can verify it' },
+    { code: 'CROSS_TREE_REF_UNRESOLVED', defaultSeverity: 'warning', summary: 'Cross-tree reference (super::/:: form) with no surface snapshot covering it — only the parent project can verify it' },
+    { code: 'SURFACE_REF_NOT_EXPOSED', defaultSeverity: 'error', summary: 'Cross-tree reference resolves to a surface snapshot that does not expose the called method/capability' },
     { code: 'UNDECLARED_DEPENDENCY_CALL', defaultSeverity: 'error', summary: 'Call step targets a component the caller does not depend on or own' },
     { code: 'INVALID_TARGET_METHOD_REFERENCE', defaultSeverity: 'error', summary: 'Call step targets a method not on any target interface' },
     { code: 'NARRATIVE_SEMANTIC_UNBACKED', defaultSeverity: 'warning', summary: 'Narrative asserts a guarantee the called contract does not declare' },
@@ -86,10 +88,24 @@ export const contractsRule: SddRule = {
             const dispatchTarget = ctx.componentMap.get(step.targetComponent);
             if (!dispatchTarget) {
               if (isCrossTreeForm) {
+                const resolved = resolveSurfaceRef(ctx, step.targetComponent);
+                if (resolved) {
+                  // Validate the capability against the DECLARED surface.
+                  if (step.capability && !(resolved.entry.dispatch ?? []).some(b => b.capability === step.capability)) {
+                    ctx.addIssue(
+                      'error',
+                      'SURFACE_REF_NOT_EXPOSED',
+                      `Method "${implMethod.name}" in implementation "${impl.id}" dispatches capability "${step.capability}" through cross-tree portal "${step.targetComponent}" (step ${step.stepNumber}), but the surface snapshot of "${resolved.snapshot.projectName}" does not serve that capability on "${resolved.entry.id}".`,
+                      impl.id,
+                      isDraftCtx,
+                    );
+                  }
+                  continue;
+                }
                 ctx.addIssue(
                   'warning',
                   'CROSS_TREE_REF_UNRESOLVED',
-                  `Method "${implMethod.name}" in implementation "${impl.id}" dispatches through cross-tree component "${step.targetComponent}" (step ${step.stepNumber}), which cannot be resolved from this project — validate from the parent project to verify the edge.`,
+                  `Method "${implMethod.name}" in implementation "${impl.id}" dispatches through cross-tree component "${step.targetComponent}" (step ${step.stepNumber}), and no surface snapshot covers it — validate from the parent project, or import/generate the producing project's surface.`,
                   impl.id,
                   isDraftCtx,
                 );
@@ -133,10 +149,38 @@ export const contractsRule: SddRule = {
           const targetComp = ctx.componentMap.get(step.targetComponent);
           if (!targetComp) {
             if (isCrossTreeForm) {
+              const resolved = resolveSurfaceRef(ctx, step.targetComponent);
+              if (resolved) {
+                // Validate method + asserted guarantees against the DECLARED surface.
+                const surfaceMethod = resolved.entry.methods.find(m => m.name === step.targetMethod);
+                if (!surfaceMethod) {
+                  ctx.addIssue(
+                    'error',
+                    'SURFACE_REF_NOT_EXPOSED',
+                    `Method "${implMethod.name}" in implementation "${impl.id}" calls "${step.targetMethod}" on cross-tree component "${step.targetComponent}" (step ${step.stepNumber}), but the surface snapshot of "${resolved.snapshot.projectName}" does not expose that method on "${resolved.entry.id}".`,
+                    impl.id,
+                    isDraftCtx,
+                  );
+                } else if (step.assertsGuarantees) {
+                  const declared = new Set(surfaceMethod.guarantees ?? []);
+                  for (const g of step.assertsGuarantees) {
+                    if (!declared.has(g)) {
+                      ctx.addIssue(
+                        'warning',
+                        'NARRATIVE_SEMANTIC_UNBACKED',
+                        `Step ${step.stepNumber} of "${implMethod.name}" in implementation "${impl.id}" asserts guarantee "${g}", but the surface snapshot of "${resolved.snapshot.projectName}" does not declare it on "${resolved.entry.id}.${step.targetMethod}".`,
+                        impl.id,
+                        isDraftCtx,
+                      );
+                    }
+                  }
+                }
+                continue;
+              }
               ctx.addIssue(
                 'warning',
                 'CROSS_TREE_REF_UNRESOLVED',
-                `Method "${implMethod.name}" in implementation "${impl.id}" calls cross-tree component "${step.targetComponent}" (step ${step.stepNumber}), which cannot be resolved from this project — validate from the parent project to verify the edge.`,
+                `Method "${implMethod.name}" in implementation "${impl.id}" calls cross-tree component "${step.targetComponent}" (step ${step.stepNumber}), and no surface snapshot covers it — validate from the parent project, or import/generate the producing project's surface.`,
                 impl.id,
                 isDraftCtx,
               );

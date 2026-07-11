@@ -6,6 +6,7 @@ import {
   ImplementationSpec,
   TypeSpec,
   RulesConfig,
+  SurfaceSnapshot,
 } from '../../models/index.js';
 import type { ProfileDef, LanguagePackDef } from '../extensions.js';
 
@@ -67,6 +68,8 @@ export interface RuleContext {
   publicSet: Map<string, Set<string>>;
   /** Interfaces grouped by owning component id — the shared read path for a component's contract methods (rules and the reachability walker must agree on this enumeration). */
   interfacesByComponent: Map<string, InterfaceSpec[]>;
+  /** Stored surface snapshots (.wai/surfaces/) — declared contracts that unresolved cross-tree/remote references validate against. */
+  surfaceSnapshots: SurfaceSnapshot[];
   /** Implementations grouped by their contract interface id. */
   implementationsByContract: Map<string, ImplementationSpec[]>;
 

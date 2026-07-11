@@ -1,5 +1,27 @@
-import { SddRule } from './types.js';
+import { SurfaceContractEntry, SurfaceSnapshot } from '../../models/index.js';
+import { RuleContext, SddRule } from './types.js';
 import { dryRunSerializeSpecs } from '../specs.js';
+import { checkChildSurfaceFreshness } from '../surfaces.js';
+
+/**
+ * Resolve an unresolved cross-tree reference (a `super::`/`::` form whose
+ * target is outside this loading root) against the stored surface snapshots:
+ * the ref's final segment is matched against each snapshot's exported entry
+ * ids and backing component names. A hit means the edge is validated against
+ * the DECLARED contract instead of falling back to the unresolvable warning.
+ */
+export function resolveSurfaceRef(
+  ctx: RuleContext,
+  ref: string,
+): { snapshot: SurfaceSnapshot; entry: SurfaceContractEntry } | null {
+  const local = ref.split('::').filter(seg => seg && seg !== 'super').pop();
+  if (!local) return null;
+  for (const snapshot of ctx.surfaceSnapshots) {
+    const entry = snapshot.interfaces.find(e => e.component === local || e.id === local);
+    if (entry) return { snapshot, entry };
+  }
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // Namespace integrity: the :: grammar must stay round-trippable. Two rules:
@@ -23,6 +45,27 @@ export const roundtripRule: SddRule = {
   check(ctx) {
     for (const issue of dryRunSerializeSpecs(ctx.isSpecInScope)) {
       ctx.addIssue('error', 'ROUNDTRIP_SERIALIZATION', issue.message, issue.specId);
+    }
+  },
+};
+
+/**
+ * Parent-side surface freshness: a chained child holds the parent-surface
+ * snapshot it validates against standalone; when the parent's exported
+ * contracts change without regenerating, the child is verifying against a
+ * stale truth. Computable exactly here — the only context where both sides
+ * (the live parent tree and the child's held snapshot) are visible.
+ */
+export const surfaceFreshnessRule: SddRule = {
+  name: 'surface-freshness',
+  description:
+    'Every chained child\'s stored parent-surface snapshot must match the parent\'s CURRENT exported contracts — a drifted snapshot means the child validates standalone against a stale truth. Regenerate with `wairon surface generate-children`.',
+  codes: [
+    { code: 'SURFACE_STALE', defaultSeverity: 'warning', summary: 'A chained child holds a parent surface snapshot whose contracts no longer match the current tree' },
+  ],
+  check(ctx) {
+    for (const issue of checkChildSurfaceFreshness()) {
+      ctx.addIssue('warning', 'SURFACE_STALE', issue.message, issue.specId);
     }
   },
 };

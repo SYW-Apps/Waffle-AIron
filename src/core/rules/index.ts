@@ -24,7 +24,7 @@ import { profilesRule } from './profiles.js';
 import { publicSurfaceRule } from './public-surface.js';
 import { cyclesRule, reachabilityRule } from './graph.js';
 import { dispatchRule, lifecycleRule, durabilityRule, untypedSeamRule, proseClaimRule } from './semantic-edges.js';
-import { roundtripRule, namespaceHygieneRule } from './namespace.js';
+import { roundtripRule, namespaceHygieneRule, surfaceFreshnessRule } from './namespace.js';
 import { couplingRule } from './coupling.js';
 import { languageRule } from './language.js';
 import { technologyRule } from './technology.js';
@@ -46,6 +46,7 @@ export const SDD_RULES: SddRule[] = [
   // explain many downstream findings, so surface them early in the list.
   namespaceHygieneRule,
   roundtripRule,
+  surfaceFreshnessRule,
   typeReferencesRule,
   contractsRule,
   narrativeFlowRule,
@@ -158,6 +159,8 @@ export interface BuildContextOptions {
   scopeSubsystem?: string;
   /** Loaded extension packs (pack profiles/languages/rules); empty when absent. */
   extensions?: LoadedExtensions;
+  /** Stored surface snapshots for cross-tree/remote reference resolution. */
+  surfaceSnapshots?: import('../../models/index.js').SurfaceSnapshot[];
   /** Collector the context's addIssue pushes into. */
   issues: ValidationIssue[];
 }
@@ -336,6 +339,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     targetLanguageFor,
     isSpecInScope,
     ext: { profiles: extensions.profiles, languages: extensions.languages },
+    surfaceSnapshots: opts.surfaceSnapshots ?? [],
     lintAllows,
     knownIssueCodes,
     addIssue,

@@ -42,6 +42,7 @@ import {
   runHostSecret,
   runHostPacks,
   runProduce,
+  runSurface,
   runSubsystemAdd,
   runSubsystemMove,
   runSubsystemExternalize,
@@ -335,6 +336,28 @@ program
   .option('--token <token>', 'integration token (else env, else interactive prompt)')
   .action(async (target: string, opts) => {
     await runProduce(target, { page: opts.page, token: opts.token });
+  });
+
+// ---------------------------------------------------------------------------
+// surface — Public Surface Exchange (sdd_surfaces)
+// ---------------------------------------------------------------------------
+
+program
+  .command('surface <action>')
+  .description('public surface exchange: export | import | list | generate-children')
+  .option('--audience <level>', 'export ceiling: project | department | instance | partner | external (default instance)')
+  .option('--format <fmt>', 'export format: native | openapi (default native)')
+  .option('--out <path>', 'export output path (else print)')
+  .option('--source <path>', 'import: the surface document (native snapshot YAML or OpenAPI)')
+  .option('--origin <origin>', 'import provenance: exchanged | authored (default authored)')
+  .action(async (action: string, opts) => {
+    await runSurface(action, {
+      audience: opts.audience,
+      format: opts.format,
+      out: opts.out,
+      source: opts.source,
+      origin: opts.origin,
+    });
   });
 
 // ---------------------------------------------------------------------------

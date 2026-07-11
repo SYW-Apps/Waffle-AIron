@@ -42,12 +42,55 @@ export const DiagramConfigSchema = z.object({
 });
 export type DiagramConfig = z.infer<typeof DiagramConfigSchema>;
 
+/**
+ * Ascending audience reach for L0 gateway entries. An entry travels only as
+ * far as its audience allows: project (family-internal — exported only into
+ * own chained children), department (owning org-unit subtree), instance
+ * (whole hosted instance), partner (grant-gated cross-tenant), external
+ * (publicly consumable / 3rd-party-facing).
+ */
+export const SURFACE_AUDIENCES = ['project', 'department', 'instance', 'partner', 'external'] as const;
+export const SurfaceAudienceSchema = z.enum(SURFACE_AUDIENCES);
+export type SurfaceAudience = z.infer<typeof SurfaceAudienceSchema>;
+
+/**
+ * One entry of the project's L0 gateway surface — the ONLY thing another
+ * project may consume. Fields are lenient (existing trees authored this
+ * un-schema'd); the surface projector applies defaults where sensible.
+ */
+export const SystemPublicInterfaceSchema = z.object({
+  /** Stable public interface id within the system. */
+  id: z.string().optional(),
+  name: z.string().optional(),
+  /** Subsystem publishing the backing L1 public interface. */
+  subsystem: z.string().optional(),
+  /** Portal (or compatible published component) backing this entry. */
+  component: z.string().optional(),
+  /** Optional L3 interface id backing the surface. */
+  interface: z.string().optional(),
+  /** Surface kind: REST, GraphQL, MessageBus, RPC, or Custom. */
+  type: z.string().optional(),
+  details: z.string().optional(),
+  /** Exposure ceiling (see SurfaceAudienceSchema). Defaults to 'instance' at projection time. */
+  audience: z.string().optional(),
+  authPolicy: z.string().optional(),
+  version: z.string().optional(),
+  stability: z.string().optional(),
+});
+export type SystemPublicInterface = z.infer<typeof SystemPublicInterfaceSchema>;
+
 export const SystemSpecSchema = z.object({
   schemaVersion: z.string().default('1.0.0'),
   name: z.string(),
   vision: z.string(),
   boundaries: z.array(BoundaryItemSchema).default([]),
   globalRequirements: z.array(RequirementItemSchema).default([]),
+  /**
+   * The project's gateway surface: entries intentionally exported beyond the
+   * project, each backed by a subsystem-published Portal and carrying an
+   * audience ceiling. Cross-PROJECT consumption may only target these.
+   */
+  publicInterfaces: z.array(SystemPublicInterfaceSchema).optional(),
   /**
    * System-level databases. Enables database table mapping, PK/FK views,
    * and isolated ERD schemas.
@@ -545,6 +588,65 @@ export const TypeSpecSchema = z.object({
   updatedAt: z.string().datetime(),
 });
 export type TypeSpec = z.infer<typeof TypeSpecSchema>;
+
+// ---------------------------------------------------------------------------
+// Surface snapshots — the portable, contract-grade public-surface artifact
+// (Public Surface Exchange). One format, three origins: generated (own
+// parent/child family), exchanged (another wairon project), authored (an
+// external 3rd-party system, hand-declared or imported from OpenAPI).
+// ---------------------------------------------------------------------------
+
+export const SurfaceOriginSchema = z.enum(['generated', 'exchanged', 'authored']);
+export type SurfaceOrigin = z.infer<typeof SurfaceOriginSchema>;
+
+/** A self-contained type definition embedded in a snapshot (closure member). */
+export const SurfaceTypeDefSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  kind: z.string().default('value-object'),
+  fields: z.array(z.object({
+    name: z.string(),
+    type: z.string(),
+    description: z.string().optional(),
+    optional: z.boolean().optional(),
+  })).default([]),
+});
+export type SurfaceTypeDef = z.infer<typeof SurfaceTypeDefSchema>;
+
+/** One exported interface at CONTRACT grade — full methods + dispatch table. */
+export const SurfaceContractEntrySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  /** Exposure level of the L0 entry (see SurfaceAudienceSchema). */
+  audience: z.string().default('instance'),
+  /** Transport kind: REST, GraphQL, MessageBus, RPC, or Custom. */
+  type: z.string().default('Custom'),
+  /** Local name of the backing Portal in the producing project. */
+  component: z.string(),
+  /** Full contract methods (params, returns, guarantees, effect, endpoint). */
+  methods: z.array(MethodSignatureSchema).default([]),
+  /** The backing portal's capability dispatch table, when generic-dispatch. */
+  dispatch: z.array(DispatchBindingSchema).optional(),
+  details: z.string().default(''),
+  version: z.string().optional(),
+  stability: z.string().optional(),
+});
+export type SurfaceContractEntry = z.infer<typeof SurfaceContractEntrySchema>;
+
+export const SurfaceSnapshotSchema = z.object({
+  /** Producing project/system name — the snapshot's resolution identity. */
+  projectName: z.string(),
+  origin: SurfaceOriginSchema,
+  /** Producing spec tree's StateId at generation time (wairon-produced snapshots). */
+  stateId: z.string().optional(),
+  /** Contract version for authored/3rd-party surfaces without a StateId. */
+  version: z.string().optional(),
+  generatedAt: z.string(),
+  interfaces: z.array(SurfaceContractEntrySchema).default([]),
+  /** Transitive type closure of every exported signature — self-contained. */
+  types: z.array(SurfaceTypeDefSchema).default([]),
+});
+export type SurfaceSnapshot = z.infer<typeof SurfaceSnapshotSchema>;
 
 export const GroupSpecSchema = z.object({
   kind: z.literal('group'),
