@@ -292,11 +292,14 @@ describe('standalone child: cross-tree refs warn instead of erroring like typos'
 
     const { validateSddTree } = await import('../../src/core/validation.js');
     const res = validateSddTree();
+    // Two warnings: the call step (contracts rule) AND the dependsOn edge
+    // (stereotype-deps) — both honest, neither a typo-grade error.
     const crossTree = res.issues.filter(i => i.code === 'CROSS_TREE_REF_UNRESOLVED');
-    expect(crossTree).toHaveLength(1);
-    expect(crossTree[0].severity).toBe('warning');
-    expect(crossTree[0].message).toMatch(/validate from the parent project/);
+    expect(crossTree).toHaveLength(2);
+    expect(crossTree.every(i => i.severity === 'warning')).toBe(true);
+    expect(crossTree.map(i => i.message).join('\n')).toMatch(/validate from the parent project/);
     expect(res.issues.filter(i => i.code === 'INVALID_TARGET_COMPONENT_REFERENCE')).toHaveLength(0);
+    expect(res.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE')).toHaveLength(0);
   });
 });
 
