@@ -165,45 +165,6 @@ methods:
         description: Return the original payload
         type: return
         outcome: original payload
-  - name: authenticateSession
-    narrative:
-      - stepNumber: 1
-        description: Look up the browser session by id through the web session repository
-        type: call
-        targetComponent: web_session_repository
-        targetMethod: getById
-      - stepNumber: 2
-        description: If no session matches the id, reject as unauthenticated
-        type: branch
-        condition: no session matches the id (getById returned null)
-        onTrueStep: 3
-        onFalseStep: 4
-      - stepNumber: 3
-        description: Reject the absent session
-        type: throw
-        error: unauthenticated — no such session
-      - stepNumber: 4
-        description: If the session has expired (now is at or after its expiresAt), reject as unauthenticated
-        type: branch
-        condition: the session has expired (now >= expiresAt)
-        onTrueStep: 5
-        onFalseStep: 6
-      - stepNumber: 5
-        description: Reject the expired session
-        type: throw
-        error: unauthenticated — session expired
-      - stepNumber: 6
-        description: >-
-          Assemble the Principal directly from the session's stored PrincipalSubject and
-          server-derived grants — tokenId from the session when present, and the coarse
-          role/projects compatibility projection derived from the grants — with no credential-record
-          lookup
-        type: local
-      - stepNumber: 7
-        description: Return the resolved Principal
-        type: return
-        outcome: authenticated principal
-    detail: full
   - name: authenticateCredential
     narrative:
       - stepNumber: 1
@@ -294,6 +255,44 @@ methods:
         description: Return the authenticated principal.
         type: return
         outcome: authenticated principal
+  - name: authenticateSession
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Look up the browser session by id through the web session repository (shares the private
+          session-resolution helper with authenticateCredential's session branch).
+        type: call
+        targetComponent: web_session_repository
+        targetMethod: getById
+      - stepNumber: 2
+        description: If no session matches the id, resolve to an unauthenticated principal.
+        type: branch
+        condition: no session matches the id
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return an unauthenticated principal (no such session).
+        type: return
+        outcome: unauthenticated
+      - stepNumber: 4
+        description: >-
+          If the session has expired (now is at or after its expiresAt), resolve to an
+          unauthenticated principal.
+        type: branch
+        condition: the session has expired
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Return an unauthenticated principal (session expired).
+        type: return
+        outcome: unauthenticated
+      - stepNumber: 6
+        description: >-
+          Assemble the Principal from the session's subject and grants (same Principal shape a
+          bearer token yields), never carrying the raw session id as the token id.
+        type: local
+      - stepNumber: 7
+        description: Return the resolved Principal.
+        type: return
+        outcome: authenticated principal
 status: complete
 createdAt: '2026-07-04T12:54:26.477Z'
-updatedAt: '2026-07-11T11:52:18.239Z'
+updatedAt: '2026-07-11T12:37:26.379Z'
