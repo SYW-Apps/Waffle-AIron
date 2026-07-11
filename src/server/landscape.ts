@@ -26,6 +26,9 @@ import {
 } from './surfaces.js';
 import { sendJson } from './request.js';
 import { resolveScope, resolveScopeFor, permits } from './scope.js';
+import { resolveVisibility, isVisible, audienceDistance, audienceCovers } from './visibility.js';
+import { hostSurfaces } from './adapters.js';
+import * as yamlLib from 'js-yaml';
 import type {
   AuditEvent,
   AuditRetentionPolicy,
@@ -43,6 +46,7 @@ import type {
   PublicInterfaceSummary,
   ReachableProjectRef,
   ScopeResolution,
+  VisibleSurfaceEntry,
 } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -587,6 +591,22 @@ export function upsertRelation(
   const targetProjectId = relation.targetPublicInterface.projectId;
   const targetInterfaceId = relation.targetPublicInterface.systemInterfaceId;
 
+  // Stage 2: a relation may only consume a surface the unit graph exposes to
+  // the SOURCE — a snapshot merely existing is no longer enough. An instance
+  // with NO organization units defined retains the pre-visibility behavior:
+  // the unit graph gates only once it exists (otherwise every simple
+  // single-team instance would need an org tree before its first relation).
+  const units = listOrganizationUnits(cfg.dataDir);
+  if (units.length > 0) {
+    const placements = listProjectPlacements(cfg.dataDir);
+    const sourceView = resolveVisibility(relation.sourceProjectId, units, placements);
+    if (!isVisible(sourceView, targetProjectId)) {
+      throw new ForbiddenError(
+        "the target project's surface is not exposed to the source project's organization units",
+      );
+    }
+  }
+
   if (!getPublicSurfaceSnapshot(cfg.dataDir, targetProjectId)) {
     throw new Error(
       'the target project has no public-surface snapshot — run refreshPublicSurface for it before creating a relation',
@@ -753,7 +773,92 @@ export function listReachableProjectInterfacesForMcp(
 
   const snapshot = getPublicSurfaceSnapshot(cfg.dataDir, targetProjectId);
   if (!snapshot) return [];
-  return snapshot.interfaces;
+
+  // Stage 2: entries are AUDIENCE-FILTERED by the observer's unit-graph
+  // distance to the target. An instance with no org units keeps legacy
+  // behavior (all entries); an invisible target (e.g. a legacy relation
+  // predating a closure) classifies as the farthest distance, so only
+  // external/public entries survive.
+  const units = listOrganizationUnits(cfg.dataDir);
+  if (units.length === 0) return snapshot.interfaces;
+  const placements = listProjectPlacements(cfg.dataDir);
+  const view = resolveVisibility(currentProjectId, units, placements);
+  const distance = audienceDistance(view, targetProjectId);
+  return snapshot.interfaces.filter((i) => audienceCovers(i.audience, distance));
+}
+
+/**
+ * Stage 2 discovery catalog: authenticate the caller, resolve the observer
+ * project's unit-graph visibility (open-within-tenant, closed groups hidden,
+ * exposeTo grants honored, cross-tenant grant-only), and return each visible
+ * target with its audience distance and the redacted catalog summaries whose
+ * audience ceiling covers that distance. The honest complete picture —
+ * everything in the observer's subtree plus everything granted to it —
+ * without any relation existing yet. Reads are not audited.
+ */
+export function listVisibleSurfaces(
+  cfg: HostConfig,
+  credential: string | null,
+  currentProjectId: string,
+): VisibleSurfaceEntry[] {
+  requirePrincipal(cfg, credential);
+
+  const units = listOrganizationUnits(cfg.dataDir);
+  const placements = listProjectPlacements(cfg.dataDir);
+  const view = resolveVisibility(currentProjectId, units, placements);
+
+  const out: VisibleSurfaceEntry[] = [];
+  for (const visible of view.visibleProjects) {
+    const snapshot = getPublicSurfaceSnapshot(cfg.dataDir, visible.projectId);
+    const interfaces = snapshot
+      ? snapshot.interfaces.filter((i) => audienceCovers(i.audience, visible.distance))
+      : [];
+    out.push({ projectId: visible.projectId, distance: visible.distance, interfaces });
+  }
+  return out;
+}
+
+/**
+ * Generate-and-download a project's surface artifact on request — the diagram
+ * pattern applied to surfaces (Swagger UI SERVING is deliberately out of
+ * scope; this only renders the document). Requires landscape:manage scope
+ * over the project (the contract grade exposes full method contracts).
+ * format: 'native' (snapshot YAML) | 'openapi' (OpenAPI 3.1 JSON).
+ */
+export function exportProjectSurface(
+  cfg: HostConfig,
+  credential: string | null,
+  projectId: string,
+  format: string,
+  maxAudience: string,
+): { body: string; contentType: string; filename: string } {
+  const principal = requirePrincipal(cfg, credential);
+  const scope = resolveScopeFor(cfg, principal, LANDSCAPE_MANAGE_PERMISSION);
+  if (!permits(scope, projectId)) {
+    throw new ForbiddenError(
+      "exporting a project's surface artifact requires landscape:manage scope over the project",
+    );
+  }
+  if (format !== 'native' && format !== 'openapi') {
+    throw new Error(`Unknown surface format "${format}" (supported: native, openapi).`);
+  }
+
+  const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
+  if (!root) throw new Error(`Unknown project "${projectId}".`);
+
+  const result = runWithProjectRoot(root, () => hostSurfaces.exportBoundSurface(maxAudience, format));
+  if (format === 'openapi') {
+    return {
+      body: result.rendered ?? '{}',
+      contentType: 'application/json',
+      filename: `${projectId}-surface.openapi.json`,
+    };
+  }
+  return {
+    body: yamlLib.dump(result.snapshot),
+    contentType: 'application/yaml',
+    filename: `${projectId}-surface.yaml`,
+  };
 }
 
 /**
@@ -812,6 +917,27 @@ export function handleLandscapeRequest(
       // POST /landscape/projects/{id}/public-surface/refresh
       if (req.method === 'POST' && parts.length === 5 && parts[3] === 'public-surface' && parts[4] === 'refresh') {
         return sendJson(res, 200, refreshPublicSurface(cfg, credential, parts[2]));
+      }
+      // GET /landscape/projects/{id}/visible-surfaces
+      if (req.method === 'GET' && parts.length === 4 && parts[3] === 'visible-surfaces') {
+        return sendJson(res, 200, listVisibleSurfaces(cfg, credential, parts[2]));
+      }
+      // GET /landscape/projects/{id}/surface?format=native|openapi&audience=<level>
+      // Generate-and-download (the diagram pattern) — never a served UI.
+      if (req.method === 'GET' && parts.length === 4 && parts[3] === 'surface') {
+        const artifact = exportProjectSurface(
+          cfg,
+          credential,
+          parts[2],
+          url.searchParams.get('format') ?? 'native',
+          url.searchParams.get('audience') ?? 'instance',
+        );
+        res.writeHead(200, {
+          'content-type': artifact.contentType,
+          'content-disposition': `attachment; filename="${artifact.filename}"`,
+        });
+        res.end(artifact.body);
+        return;
       }
     }
 

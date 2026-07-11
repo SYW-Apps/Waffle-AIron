@@ -307,6 +307,17 @@ export interface OrganizationUnitRecord {
   status: string;
   createdAt: string;
   createdBy: PrincipalSubject;
+  /** Surface-visibility posture of this unit's subtree: 'inherit' (default — take
+   *  the parent's posture; a root unit inherits 'open'), 'open', or 'closed'
+   *  (placements hidden from everyone outside this unit's subtree except units
+   *  granted via exposeTo). Tenant roots are always closed toward OTHER tenant
+   *  roots — cross-tenant visibility exists only through exposeTo (fail-closed). */
+  visibility?: string;
+  /** Unit ids granted visibility into this unit's subtree placements — the
+   *  allow-list that punches holes through a closed posture and the ONLY path
+   *  across tenant roots. No deny-lists: restrict by placing sensitive projects
+   *  in a closed group instead. */
+  exposeTo?: string[];
 }
 
 /** Places (or shares) a hosted project into an organization unit. Visual grouping only —
@@ -365,6 +376,23 @@ export interface PublicInterfaceSummary {
   endpoints?: string[];
   publicTypes?: string[];
   details: string;
+}
+
+/** The computed surface-visibility view of one observer project (visibility_specialist). */
+export interface VisibilityResolution {
+  observerProjectId: string;
+  /** Units the observer's placements land in, plus their ancestor chains. */
+  observerUnitIds: string[];
+  /** Per visible target: the audience distance and the placement unit that granted visibility. */
+  visibleProjects: { projectId: string; distance: 'department' | 'instance' | 'partner'; via: string }[];
+}
+
+/** One entry of the visibility-resolved discovery catalog (listVisibleSurfaces). */
+export interface VisibleSurfaceEntry {
+  projectId: string;
+  distance: string;
+  /** Redacted catalog summaries, already audience-filtered for this observer. */
+  interfaces: PublicInterfaceSummary[];
 }
 
 /** The stored, redacted public surface of one hosted project at one spec state. */

@@ -8,6 +8,7 @@ import { loadProjectConfig } from '../config/loader.js';
 import { createMcpServer } from '../mcp/server.js';
 import * as gitPortal from '../git/index.js';
 import * as producerPortal from '../producers/index.js';
+import * as surfacePortal from '../core/surfaces.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 // ---------------------------------------------------------------------------
@@ -57,4 +58,11 @@ export const hostProducer = {
   produce: producerPortal.produce,
   remove: producerPortal.remove,
   list: producerPortal.list,
+};
+
+// host_surfaces_adapter → sdd_surfaces (surface_portal): surface-artifact
+// generation against the CURRENTLY BOUND project root (callers bind via
+// runWithProjectRoot, exactly like hostCore reads).
+export const hostSurfaces = {
+  exportBoundSurface: surfacePortal.exportSurface,
 };

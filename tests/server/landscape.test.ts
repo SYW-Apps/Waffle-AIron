@@ -390,6 +390,9 @@ describe('landscape orchestrator (sdd_host)', () => {
 
     const unit = upsertUnit(cfg, MASTER, unitRec({ name: 'Portfolio' }));
     placeProject(cfg, MASTER, placementRec({ projectId: 'g-a', unitId: unit.id, role: 'owner' }));
+    // Stage 2: once an org graph exists, a relation target must be VISIBLE to
+    // the source through it — an unplaced project is exposed nowhere.
+    placeProject(cfg, MASTER, placementRec({ projectId: 'g-b', unitId: unit.id, role: 'shared' }));
     const rel = upsertRelation(
       cfg,
       MASTER,
@@ -723,6 +726,11 @@ describe('landscape portal (sdd_host http)', () => {
     const refresh = await api('POST', '/landscape/projects/dst-proj/public-surface/refresh', { cred: MASTER });
     expect(refresh.status).toBe(200);
     expect(refresh.json.interfaces).toHaveLength(1);
+
+    // Stage 2: once an org graph exists, the relation target must be VISIBLE
+    // to the source through it — place both endpoints in the same unit.
+    await api('PUT', '/landscape/projects/src-proj/placements/team-1', { cred: MASTER, body: { role: 'owner' } });
+    await api('PUT', '/landscape/projects/dst-proj/placements/team-1', { cred: MASTER, body: { role: 'shared' } });
 
     // PUT /landscape/relations/{id} → 200.
     const rel = await api('PUT', '/landscape/relations/rel-1', {
