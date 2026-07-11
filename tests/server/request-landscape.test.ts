@@ -317,6 +317,41 @@ describe('handleMcpRequest landscape discovery dispatch (end-to-end)', () => {
     }
   }, 20_000);
 
+  it('advertises the hosted data-plane tools in tools/list (execution stays intercepted upstream)', async () => {
+    const token = agentToken('k-list', 'alpha', 'u-list');
+    const res = await post({ jsonrpc: '2.0', id: 9, method: 'tools/list', params: {} }, token, 'alpha');
+    const body = await res.text();
+    for (const name of [
+      'sdd_host_request_project_initialization',
+      'sdd_host_request_project_lock',
+      'sdd_host_request_project_promotion',
+      'sdd_host_get_approval_status',
+      'sdd_landscape_list_reachable_projects',
+      'sdd_landscape_list_reachable_project_interfaces',
+      'sdd_landscape_list_visible_surfaces',
+      'sdd_landscape_get_project_surface',
+    ]) {
+      expect(body).toContain(name);
+    }
+  }, 20_000);
+
+  it('sdd_landscape_list_visible_surfaces + get_project_surface dispatch over the wire (legacy relations posture)', async () => {
+    const token = agentToken('k-vis', 'alpha', 'u-vis');
+
+    // No org units: the catalog is empty (no unit graph to see through) but the
+    // relation-backed contract fetch works (legacy reachability).
+    const catalogRes = await post(call('sdd_landscape_list_visible_surfaces'), token, 'alpha');
+    const catalog = JSON.parse(toolText((await catalogRes.json()) as RpcResponse));
+    expect(Array.isArray(catalog)).toBe(true);
+
+    const surfaceRes = await post(call('sdd_landscape_get_project_surface', { projectId: 'beta' }), token, 'alpha');
+    const rpc = (await surfaceRes.json()) as RpcResponse;
+    expect(rpc.result?.isError).not.toBe(true);
+    const snapshot = JSON.parse(toolText(rpc));
+    expect(snapshot.origin).toBe('exchanged');
+    expect(typeof snapshot.projectName).toBe('string');
+  }, 20_000);
+
   it('leaves a normal sdd_* tool call unaffected (regression)', async () => {
     const token = agentToken('agent-normal', 'alpha', 'u-normal');
 

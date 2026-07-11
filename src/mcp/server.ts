@@ -152,7 +152,19 @@ function registerSkillResources(server: McpServer): void {
 // Server factory
 // ---------------------------------------------------------------------------
 
-export function createMcpServer(): McpServer {
+export interface McpServerOptions {
+  /**
+   * Advertise the hosted data-plane tools (self-service approvals + landscape
+   * discovery/exchange) in tools/list. Their EXECUTION is intercepted by the
+   * hosting request orchestrator BEFORE any call reaches this server — the
+   * registrations here exist so MCP clients can DISCOVER the tools; the stub
+   * handlers only fire outside a hosted request, where the tools are
+   * unsupported by design. Never set for the local stdio server.
+   */
+  hostedTools?: boolean;
+}
+
+export function createMcpServer(options: McpServerOptions = {}): McpServer {
   const server = new McpServer({
     name: 'wairon',
     version: WAIRON_VERSION,
@@ -928,6 +940,54 @@ export function createMcpServer(): McpServer {
 
   // ── Built-in SDD skills as read-only MCP resources ────────────────────────
   registerSkillResources(server);
+
+  // ── Hosted data-plane tool ADVERTISEMENT (discovery only) ─────────────────
+  // Execution is intercepted upstream by the hosting request orchestrator;
+  // these registrations make the tools visible in tools/list so agents can
+  // find them. The handlers only fire outside a hosted request.
+  if (options.hostedTools) {
+    const hostedStub = (): CallToolResult =>
+      errText('This hosted tool is dispatched by the hosting data plane before reaching the MCP server; it is unavailable outside a hosted request.');
+
+    reg<Record<string, never>>(server, 'sdd_host_request_project_lock', {
+      description: 'Hosted self-service: create an approval request to LOCK the bound project (validate-as-complete gate + commit-scoped lock record). Returns the approval request for tracking; an admin decides it.',
+      inputSchema: {},
+    }, hostedStub);
+    reg<Record<string, never>>(server, 'sdd_host_request_project_promotion', {
+      description: 'Hosted self-service: create an approval request to PROMOTE the bound, locked project after a StateId re-check. Returns the approval request; an admin decides it.',
+      inputSchema: {},
+    }, hostedStub);
+    reg<{ id: string }>(server, 'sdd_host_request_project_initialization', {
+      description: 'Hosted self-service: create an approval request to initialize a new hosted project (optionally into an organization unit, with a profile selection). Returns the approval request; an admin decides it.',
+      inputSchema: {
+        id: z.string().describe('Requested project id'),
+        displayName: z.string().optional(),
+        description: z.string().optional(),
+        ownerUnitId: z.string().optional().describe('Organization unit to place the project in'),
+        environment: z.string().optional(),
+      },
+    }, hostedStub);
+    reg<{ requestId: string }>(server, 'sdd_host_get_approval_status', {
+      description: 'Hosted self-service: read the status of one of your approval requests.',
+      inputSchema: { requestId: z.string() },
+    }, hostedStub);
+    reg<Record<string, never>>(server, 'sdd_landscape_list_reachable_projects', {
+      description: 'Hosted landscape: the projects reachable from the BOUND project through ACTIVE cross-project relations (directional, relations-only), each with the relation ids/kinds and target public interface ids.',
+      inputSchema: {},
+    }, hostedStub);
+    reg<{ projectId: string }>(server, 'sdd_landscape_list_reachable_project_interfaces', {
+      description: 'Hosted landscape: redacted, audience-filtered public interface summaries of one reachable target project (Forbidden outside the reachable set; private by default).',
+      inputSchema: { projectId: z.string().describe('The reachable target project id') },
+    }, hostedStub);
+    reg<Record<string, never>>(server, 'sdd_landscape_list_visible_surfaces', {
+      description: 'Hosted landscape: the visibility-resolved discovery catalog for the BOUND project — every target the organization unit graph exposes to it (open-within-tenant, closed groups hidden, exposeTo grants honored), with audience distance and audience-filtered summaries. No relation required.',
+      inputSchema: {},
+    }, hostedStub);
+    reg<{ projectId: string }>(server, 'sdd_landscape_get_project_surface', {
+      description: 'Hosted landscape: fetch a visible target project\'s CONTRACT-GRADE surface snapshot (full method contracts, dispatch tables, type closure) at your audience-distance ceiling, origin "exchanged" — save it under .wai/surfaces/ (wairon surface import) so your adapters validate against the declared contract.',
+      inputSchema: { projectId: z.string().describe('The visible target project id') },
+    }, hostedStub);
+  }
 
   return server;
 }

@@ -39,9 +39,11 @@ export function validateProjectAsComplete() {
   return validateAsComplete({ rules: config.rules, projectType: config.projectType });
 }
 
-// host_mcp_adapter → sdd_mcp (mcp_portal): reuse the sdd_* tool surface in-scope
+// host_mcp_adapter → sdd_mcp (mcp_portal): reuse the sdd_* tool surface in-scope,
+// with the hosted data-plane tools ADVERTISED for discovery (their execution is
+// intercepted by the request orchestrator before reaching the server).
 export function createScopedServer(): McpServer {
-  return createMcpServer();
+  return createMcpServer({ hostedTools: true });
 }
 
 // host_git_adapter → sdd_git (git_portal)
