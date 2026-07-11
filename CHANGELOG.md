@@ -97,6 +97,39 @@ migration*).
   — previously invisible unused components/methods may now be reported
   (true positives).
 
+### Code↔spec conformance (new rule families)
+
+"Does the code match the specs?" is now part of `wairon validate` instead of
+a manual sweep. Two rule families, fed by a per-run source-code model built
+with **zero mandatory parser dependencies** (TypeScript compiler resolved
+dynamically from the analyzed project or the wairon install when available;
+declarative per-language pattern tables for 12 languages; a generic
+word-boundary scan as the universal floor — every finding carries its
+analysis grade `exact | pattern | generic`).
+
+- **`structural-conformance`** — every L4 `sourcePath` must resolve to a real
+  file inside the project root (`MISSING_SOURCE_FILE`,
+  `SOURCE_PATH_ESCAPES_ROOT` — *errors*), and every L3 contract method must be
+  realized in that file (`UNREALIZED_METHOD`, `MISSING_SOURCE_PATH`,
+  `CONFORMANCE_ANALYSIS_SKIPPED` — *warnings*). Realization is tiered per
+  implementation via the new **conformance dial** (`conformance: declared |
+  anchored | off`, Portal defaults to `anchored`) with per-method overrides,
+  and intent-language renames are declared with the new per-method
+  **`symbol:`** mapping (`put` realized by `saveSnapshot`). Many
+  implementations sharing one file (N:1) is fully supported.
+- **`dependency-conformance`** — runtime imports between component-mapped
+  files must be justified by declared `dependsOn`/`owns` relations
+  (`UNDECLARED_DEPENDENCY`), and declared edges should leave an import trace
+  (`UNREALIZED_DEPENDENCY`) — both *warnings*. Type-only imports and
+  re-export barrels never accuse; cross-subsystem imports are sanctioned by a
+  declared edge to the target subsystem's published surface; portal↔server
+  mounting declared in the portal→server direction is recognized.
+- All conformance codes are **completeness-classed**: draft/design specs
+  downgrade to draft-waived warnings, so in-progress trees stay green while
+  complete specs gate.
+- Design record: `docs/design/code-spec-conformance.md` (includes the Level 3
+  call-graph↔narrative sketch).
+
 ### Spec schema (additive)
 
 - `targetLanguage` on L0 (system default) and L1 (subsystem override).
@@ -348,12 +381,26 @@ migration*).
 
 ### Compatibility & migration
 
-**Who is affected:** only projects running **`wairon validate --ci`**
-(warnings-as-errors) in a pipeline. Plain `wairon validate` is unaffected —
-all new rules default to *warning* severity (except `INVALID_TRUSTED_LINK`,
+**Who is affected:** projects running **`wairon validate --ci`**
+(warnings-as-errors) in a pipeline, plus one case that affects plain
+`wairon validate`: structural conformance makes a **stale `sourcePath` a hard
+error** (`MISSING_SOURCE_FILE` — the spec names code that does not exist;
+`SOURCE_PATH_ESCAPES_ROOT` for absolute/parent-escaping paths). Every other
+new rule defaults to *warning* severity (except `INVALID_TRUSTED_LINK`,
 which requires the new field to exist at all).
 
-After upgrading, run `wairon validate` locally and review new warnings:
+After upgrading, run `wairon validate` locally and review new findings:
+
+0. **`MISSING_SOURCE_FILE`** — fix the `sourcePath` to the real file (or
+   remove it while the implementation is still design-only; drafts are
+   waived). **`UNREALIZED_METHOD`** — if the code name legitimately differs
+   from the contract name, declare it: `methods: [{ name: put, symbol:
+   saveSnapshot }]`; for registration-style realization (route/tool string
+   tables) dial the implementation to `conformance: anchored`; for
+   generated/vendored code use `conformance: off`.
+   **`UNDECLARED_DEPENDENCY`** — declare the real collaboration on the
+   component that uses it, or route the cross-subsystem hop through the
+   target's published portal.
 
 1. **`MUTUAL_SUBSYSTEM_DEPENDENCY`** — if the mutual coupling is intentional
    (e.g. a latency fast lane bypassing the bus), declare it on either
