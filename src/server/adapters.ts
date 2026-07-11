@@ -1,6 +1,6 @@
 import { computeStateId } from '../core/statehash.js';
 import { readLockRecord, writeLockRecord } from '../core/lockfile.js';
-import { loadSystemSpec, loadSubsystemSpecs } from '../core/specs.js';
+import { loadSystemSpec, loadSubsystemSpecs, buildProjectGraph } from '../core/specs.js';
 import { provisionProject, promoteAllComplete } from '../core/provision.js';
 import { validateAsComplete } from '../core/validation.js';
 import { renderDiagram } from '../core/diagram.js';
@@ -31,6 +31,8 @@ export const hostCore = {
   // snapshot; thin forwarders to the core spec reads (request-scoped root).
   loadSystemSpec,
   loadSubsystemSpecs,
+  // Level-of-detail project-tier graph for the web UI, forwarded to core_portal.
+  buildProjectGraph,
 };
 
 // host_validator_adapter → sdd_validator (validator_portal)

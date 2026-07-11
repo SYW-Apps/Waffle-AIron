@@ -22,6 +22,8 @@ import {
   SpecStatus,
 } from '../models/index.js';
 import type { ValidationIssue } from './validation.js';
+import { buildGraphModel } from './diagram.js';
+import type { WebGraphModel } from '../server/types.js';
 
 // ---------------------------------------------------------------------------
 // Spec workspace
@@ -2239,6 +2241,13 @@ export function saveTypeSpec(spec: TypeSpec): void {
 
 export function dryRunSerializeSpecs(include?: (specId: string) => boolean): ValidationIssue[] {
   return current().dryRunSerializeSpecs(include);
+}
+
+/** Project the current project's spec tree into a level-filtered WebGraphModel,
+ *  forwarded to the diagram specialist's pure graph projection (core_orchestrator
+ *  → diagram_specialist). */
+export function buildProjectGraph(level: number): WebGraphModel {
+  return buildGraphModel(level);
 }
 
 export function deleteTypeSpec(id: string): boolean {
