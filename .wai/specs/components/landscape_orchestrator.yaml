@@ -1,18 +1,15 @@
 id: landscape_orchestrator
 name: Landscape Orchestrator
 description: >-
-  Owns hosted-instance landscape workflows: organization-unit administration, project placement,
-  public-surface snapshot refresh, cross-project relation management (visibility-gated once
-  organization units exist), landscape graph generation, unit-graph surface discovery, and
-  surface-artifact export — plus the four data-plane MCP workflows
-  (sdd_landscape_list_reachable_projects, sdd_landscape_list_reachable_project_interfaces,
-  sdd_landscape_list_visible_surfaces, sdd_landscape_get_project_surface) that the
-  host_request_orchestrator dispatches to it with the bound project as the current project. It
-  authenticates credentials through the single auth authority, authorizes by Principal grants
-  (landscape:manage or instance-admin for writes; landscape:read or higher for control-plane reads)
-  and by unit-graph visibility for consumer-facing surface reads, reads a target project's specs
-  only to produce redacted or audience-filtered surface artifacts and otherwise consumes only stored
-  redacted snapshots, and records audit events for landscape changes.
+  Owns hosted-instance landscape ADMINISTRATION workflows: organization-unit administration, project
+  placement, public-surface snapshot refresh, cross-project relation management (visibility-gated
+  once organization units exist), and landscape graph generation. It authenticates credentials
+  through the single auth authority, authorizes by Principal grants (landscape:manage or
+  instance-admin for writes; landscape:read or higher for reads), reads a target project's specs
+  only to produce its redacted public-surface snapshot and otherwise consumes only stored redacted
+  snapshots, and records audit events for landscape changes. The consumer-facing discovery/exchange
+  workflows (the four data-plane MCP tools and the artifact download) live on the surface exchange
+  orchestrator — two workflows, two orchestrators.
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
@@ -27,9 +24,8 @@ dependsOn:
   - host_core_adapter
   - scope_specialist
   - visibility_specialist
-  - host_surfaces_adapter
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-08T21:12:56.113Z'
-updatedAt: '2026-07-11T10:12:49.102Z'
+updatedAt: '2026-07-11T12:03:50.251Z'

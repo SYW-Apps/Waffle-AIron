@@ -121,8 +121,8 @@ methods:
       JSON) as an attachment — generation on request, never a served UI.
     signature: >-
       exportProjectSurface(credential: string, projectId: string, format: string, maxAudience:
-      string): object
-    returns: object
+      string): SurfaceArtifact
+    returns: SurfaceArtifact
     params:
       - name: credential
         type: string
@@ -138,4 +138,4 @@ methods:
       path: /landscape/projects/{id}/surface
 status: complete
 createdAt: '2026-07-08T21:13:58.131Z'
-updatedAt: '2026-07-11T09:49:07.104Z'
+updatedAt: '2026-07-11T12:04:19.905Z'

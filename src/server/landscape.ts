@@ -47,6 +47,7 @@ import type {
   ReachableProjectRef,
   ScopeResolution,
   VisibleSurfaceEntry,
+  SurfaceArtifact,
 } from './types.js';
 import type { SurfaceSnapshot } from '../models/index.js';
 
@@ -880,7 +881,7 @@ export function exportProjectSurface(
   projectId: string,
   format: string,
   maxAudience: string,
-): { body: string; contentType: string; filename: string } {
+): SurfaceArtifact {
   const principal = requirePrincipal(cfg, credential);
   const scope = resolveScopeFor(cfg, principal, LANDSCAPE_MANAGE_PERMISSION);
   if (!permits(scope, projectId)) {

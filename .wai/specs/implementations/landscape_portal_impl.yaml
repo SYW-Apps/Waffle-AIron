@@ -58,18 +58,18 @@ methods:
   - name: listVisibleSurfaces
     narrative:
       - stepNumber: 1
-        description: Forward listVisibleSurfaces to the landscape orchestrator
+        description: Forward listVisibleSurfaces to the surface exchange orchestrator
         type: call
-        targetComponent: landscape_orchestrator
+        targetComponent: surface_exchange_orchestrator
         targetMethod: listVisibleSurfaces
   - name: exportProjectSurface
     narrative:
       - stepNumber: 1
-        description: Forward exportProjectSurface to the landscape orchestrator
+        description: Forward exportProjectSurface to the surface exchange orchestrator
         type: call
-        targetComponent: landscape_orchestrator
+        targetComponent: surface_exchange_orchestrator
         targetMethod: exportProjectSurface
 detail: calls-only
 status: complete
 createdAt: '2026-07-09T22:08:59.746Z'
-updatedAt: '2026-07-11T09:59:22.096Z'
+updatedAt: '2026-07-11T12:04:38.141Z'

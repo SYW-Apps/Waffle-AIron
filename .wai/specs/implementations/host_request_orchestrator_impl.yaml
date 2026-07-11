@@ -125,11 +125,9 @@ methods:
         type: jump
         toStep: 28
       - stepNumber: 20
-        description: >-
-          List reachable projects, passing the authenticated credential and currentProjectId = the
-          bound project
+        description: Dispatch the reachable-projects discovery with currentProjectId = the bound project
         type: call
-        targetComponent: landscape_orchestrator
+        targetComponent: surface_exchange_orchestrator
         targetMethod: listReachableProjectsForMcp
       - stepNumber: 21
         description: Continue to shape the response
@@ -137,10 +135,10 @@ methods:
         toStep: 28
       - stepNumber: 22
         description: >-
-          List reachable project interfaces, passing the authenticated credential, currentProjectId
-          = the bound project, and the decoded targetProjectId
+          Dispatch the reachable-target interface discovery (currentProjectId = bound project,
+          target from arguments)
         type: call
-        targetComponent: landscape_orchestrator
+        targetComponent: surface_exchange_orchestrator
         targetMethod: listReachableProjectInterfacesForMcp
       - stepNumber: 23
         description: Continue to shape the response (reachable-interfaces path)
@@ -151,7 +149,7 @@ methods:
           Dispatch the visibility-resolved discovery catalog (currentProjectId = the BOUND project;
           never from arguments)
         type: call
-        targetComponent: landscape_orchestrator
+        targetComponent: surface_exchange_orchestrator
         targetMethod: listVisibleSurfaces
       - stepNumber: 25
         description: Continue to shape the response
@@ -162,7 +160,7 @@ methods:
           Dispatch the contract-grade surface fetch (currentProjectId = the BOUND project;
           targetProjectId from arguments)
         type: call
-        targetComponent: landscape_orchestrator
+        targetComponent: surface_exchange_orchestrator
         targetMethod: getProjectSurfaceForMcp
       - stepNumber: 27
         description: Continue to shape the response
@@ -268,4 +266,4 @@ methods:
         outcome: canvas html response
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-07-11T10:12:32.487Z'
+updatedAt: '2026-07-11T12:04:36.043Z'

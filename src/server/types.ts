@@ -378,6 +378,13 @@ export interface PublicInterfaceSummary {
   details: string;
 }
 
+/** A downloadable rendered surface document (generate-and-download, the diagram pattern). */
+export interface SurfaceArtifact {
+  body: string;
+  contentType: string;
+  filename: string;
+}
+
 /** The computed surface-visibility view of one observer project (visibility_specialist). */
 export interface VisibilityResolution {
   observerProjectId: string;

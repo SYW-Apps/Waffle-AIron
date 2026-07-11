@@ -1,8 +1,10 @@
 id: ilandscape_orchestrator
 name: Landscape Orchestrator Interface
 description: >-
-  Contract for hosted-instance landscape workflows: organization hierarchy, project placement,
-  public-surface snapshots, cross-project relations, and landscape graph generation.
+  Contract for hosted-instance landscape ADMINISTRATION workflows: organization hierarchy, project
+  placement, public-surface snapshots, cross-project relations (visibility-gated once units exist),
+  and landscape graph generation. Consumer-facing discovery/exchange lives on the surface exchange
+  orchestrator.
 component: landscape_orchestrator
 methods:
   - name: upsertUnit
@@ -104,47 +106,6 @@ methods:
       - name: scope
         type: string
         optional: true
-  - name: listReachableProjectsForMcp
-    description: >-
-      MCP tool workflow `sdd_landscape_list_reachable_projects`: authenticate the caller through the
-      single auth authority, then return only the projects reachable from currentProjectId.
-      Reachability is DIRECTIONAL and RELATIONS-ONLY: the reachable targets are exactly the projects
-      that have an ACTIVE cross-project relation whose sourceProjectId is currentProjectId.
-      Organization placements confer no reachability and there is no transitive closure. Each result
-      is a ReachableProjectRef carrying the target project id with the relation ids, relation kinds,
-      and target public interface ids that make it reachable.
-    signature: >-
-      listReachableProjectsForMcp(credential: string, currentProjectId: string):
-      ReachableProjectRef[]
-    returns: ReachableProjectRef[]
-    params:
-      - name: credential
-        type: string
-      - name: currentProjectId
-        type: string
-  - name: listReachableProjectInterfacesForMcp
-    description: >-
-      MCP tool workflow `sdd_landscape_list_reachable_project_interfaces`: authenticate the caller
-      through the single auth authority, then return redacted public interface summaries for one
-      target project. Reject any target outside the caller's reachable set (no ACTIVE relation whose
-      sourceProjectId is currentProjectId is Forbidden). When the instance defines organization
-      units, entries are AUDIENCE-FILTERED: only summaries whose declared audience ceiling covers
-      the observer's unit-graph distance to the target (department | instance | partner, via the
-      visibility specialist) are returned; an instance with no units keeps all entries (legacy).
-      Never private components, narratives, implementations, root paths, secrets, or non-public
-      types. A target with no snapshot or no declared L0 public surfaces yields an empty list
-      (private by default).
-    signature: >-
-      listReachableProjectInterfacesForMcp(credential: string, currentProjectId: string,
-      targetProjectId: string): PublicInterfaceSummary[]
-    returns: PublicInterfaceSummary[]
-    params:
-      - name: credential
-        type: string
-      - name: currentProjectId
-        type: string
-      - name: targetProjectId
-        type: string
   - name: removeRelation
     description: >-
       Authenticate the credential via the single auth authority; authorized by an instance-wide OR
@@ -158,64 +119,6 @@ methods:
         type: string
       - name: id
         type: string
-  - name: listVisibleSurfaces
-    description: >-
-      Discovery catalog for one observer project: authenticate the credential, resolve the
-      observer's unit-graph visibility (open-within-tenant subtree, closed groups hidden, exposeTo
-      grants honored, cross-tenant grant-only), and return each visible target with its audience
-      distance and the redacted catalog summaries whose audience ceiling covers that distance. Also
-      exposed as the data-plane MCP tool sdd_landscape_list_visible_surfaces with currentProjectId =
-      the BOUND project. Reads are not audited.
-    signature: 'listVisibleSurfaces(credential: string, currentProjectId: string): VisibleSurfaceEntry[]'
-    returns: VisibleSurfaceEntry[]
-    params:
-      - name: credential
-        type: string
-      - name: currentProjectId
-        type: string
-  - name: exportProjectSurface
-    description: >-
-      Generate-and-download a project's surface artifact on request — the diagram pattern applied to
-      surfaces (Swagger UI SERVING is deliberately out of scope; this only renders the document).
-      Authenticate the credential; requires landscape:manage scope over the project (contract grade
-      exposes full method contracts). Resolve and bind the target project root, generate the
-      audience-filtered artifact via the host surfaces adapter (native snapshot YAML or OpenAPI 3.1
-      JSON), and return the document body with its content type and download filename.
-    signature: >-
-      exportProjectSurface(credential: string, projectId: string, format: string, maxAudience:
-      string): object
-    returns: object
-    params:
-      - name: credential
-        type: string
-      - name: projectId
-        type: string
-      - name: format
-        type: string
-        description: native | openapi
-      - name: maxAudience
-        type: string
-  - name: getProjectSurfaceForMcp
-    description: >-
-      MCP tool workflow `sdd_landscape_get_project_surface` — the CONSUMER path of the surface
-      exchange: authenticate the caller; when the instance defines organization units, gate by
-      unit-graph visibility (an invisible target is Forbidden) and use the observer's audience
-      distance as the ceiling; on an instance with no units, fall back to relations-only
-      reachability with an instance-grade ceiling (legacy posture). Then generate the target
-      project's CONTRACT-GRADE snapshot at that ceiling (the server reads the target tree only as
-      trusted intermediary; the caller never touches it) and return it stamped origin exchanged —
-      ready for `wairon surface import` on the consumer side.
-    signature: >-
-      getProjectSurfaceForMcp(credential: string, currentProjectId: string, targetProjectId:
-      string): SurfaceSnapshot
-    returns: SurfaceSnapshot
-    params:
-      - name: credential
-        type: string
-      - name: currentProjectId
-        type: string
-      - name: targetProjectId
-        type: string
 status: complete
 createdAt: '2026-07-08T21:13:44.021Z'
-updatedAt: '2026-07-11T10:12:56.246Z'
+updatedAt: '2026-07-11T12:03:42.921Z'

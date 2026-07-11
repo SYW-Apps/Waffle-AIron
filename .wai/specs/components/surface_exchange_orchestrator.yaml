@@ -1,0 +1,28 @@
+id: surface_exchange_orchestrator
+name: Surface Exchange Orchestrator
+description: >-
+  Owns the CONSUMER-facing surface-exchange workflows of the hosted instance: relations-only
+  reachability discovery, unit-graph visibility discovery, contract-grade surface fetch for
+  consumers, and operator surface-artifact export — the four data-plane MCP tools
+  (sdd_landscape_list_reachable_projects, sdd_landscape_list_reachable_project_interfaces,
+  sdd_landscape_list_visible_surfaces, sdd_landscape_get_project_surface) plus the control-plane
+  artifact download. Split from the landscape orchestrator, which keeps the ADMINISTRATION workflow
+  (units, placements, snapshot refresh, relations, graph): two workflows, two orchestrators.
+  Authenticates through the single auth authority, gates consumer reads by unit-graph visibility
+  (legacy relations-only fallback on unit-less instances), and reads target trees only as trusted
+  intermediary to produce audience-filtered artifacts.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - auth_specialist
+  - organization_repository
+  - project_relation_repository
+  - public_surface_repository
+  - visibility_specialist
+  - host_surfaces_adapter
+  - project_registry
+  - scope_specialist
+status: draft
+createdAt: '2026-07-11T12:02:27.573Z'
+updatedAt: '2026-07-11T12:02:27.575Z'
