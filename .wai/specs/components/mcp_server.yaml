@@ -1,10 +1,19 @@
-id: "mcp_server"
-name: "MCP Server Manager"
-description: "Exposes the 6 standard SDD tools and manages their request/response lifecycles."
-subsystem: "sdd_mcp"
-componentType: "Supervisor"
+id: mcp_server
+name: MCP Server Manager
+description: >-
+  Owns the live MCP server process: constructs the tool registry (sdd_* authoring/validation/status
+  tools, topology tools, skill resources, and — when hosted — the advertised data-plane tool
+  descriptors), binds the stdio transport, and supervises the session lifecycle. Carries the
+  BUILD-FRESHNESS GUARD: the server stamps its own entry file at startup and, once the build on disk
+  changes (rebuild/update), appends a loud stale-server warning to every tool result until the
+  session restarts — a long-running process keeps its startup-time schemas, and writes through a
+  stale process silently strip fields introduced by newer schemas.
+subsystem: sdd_mcp
+componentType: Supervisor
+owns: []
 dependsOn:
-  - "mcp_core_adapter"
-  - "mcp_validator_adapter"
-createdAt: "2026-06-10T19:28:00.000Z"
-updatedAt: "2026-06-19T12:00:00Z"
+  - mcp_core_adapter
+  - mcp_validator_adapter
+status: complete
+createdAt: '2026-06-10T19:28:00.000Z'
+updatedAt: '2026-07-11T11:01:05.227Z'

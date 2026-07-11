@@ -75,14 +75,71 @@ function errText(message: string): CallToolResult {
 // when inputSchema contains ZodOptional / ZodDefault / ZodString.describe() wrappers,
 // because the SDK's generic chain recurses beyond TS's limit. This helper breaks the
 // inference chain while preserving typed callback args via the explicit <Args> param.
+// ---------------------------------------------------------------------------
+// Build freshness — the stale-server guard.
+//
+// A long-running MCP server keeps the Zod schemas it was started with; after a
+// rebuild, writes through the OLD process silently STRIP any field a newer
+// schema added (this destroyed data twice before this guard existed). The
+// server stamps its own entry file at startup and, once the file on disk
+// changes, appends a loud warning to every tool result until restarted.
+// ---------------------------------------------------------------------------
+
+export interface BuildStamp {
+  path: string;
+  mtimeMs: number;
+  size: number;
+}
+
+/** Stamp a build entry file; null when it cannot be stat'd (e.g. pkg snapshot fs). */
+export function captureBuildStamp(entryPath: string): BuildStamp | null {
+  try {
+    const s = fs.statSync(entryPath);
+    return { path: entryPath, mtimeMs: s.mtimeMs, size: s.size };
+  } catch {
+    return null;
+  }
+}
+
+/** True once the stamped entry file changed on disk (rebuild/update since start). */
+export function isBuildStale(stamp: BuildStamp | null): boolean {
+  if (!stamp) return false;
+  try {
+    const s = fs.statSync(stamp.path);
+    return s.mtimeMs !== stamp.mtimeMs || s.size !== stamp.size;
+  } catch {
+    return false;
+  }
+}
+
+const SERVER_BUILD_STAMP = captureBuildStamp(__filename);
+
+const STALE_SERVER_WARNING =
+  '\n\n⚠ STALE SERVER: the wairon build on disk changed after this MCP server started. '
+  + 'Restart the MCP session (e.g. /mcp reconnect) before further spec edits — writes through '
+  + 'a stale server can silently drop fields introduced by newer schemas.';
+
+function withStaleWarning(result: CallToolResult): CallToolResult {
+  if (!isBuildStale(SERVER_BUILD_STAMP)) return result;
+  const first = result.content?.[0];
+  if (first && first.type === 'text') {
+    return {
+      ...result,
+      content: [{ ...first, text: `${first.text}${STALE_SERVER_WARNING}` }, ...result.content.slice(1)],
+    };
+  }
+  return result;
+}
+
 function reg<Args extends Record<string, unknown>>(
   server: McpServer,
   name: string,
   config: { description: string; inputSchema?: Record<string, z.ZodTypeAny> },
   cb: (args: Args) => CallToolResult,
 ): void {
+  const guarded = (args: Args): CallToolResult => withStaleWarning(cb(args));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (server as any).registerTool(name, config, cb as any);
+  (server as any).registerTool(name, config, guarded as any);
 }
 
 // ---------------------------------------------------------------------------
