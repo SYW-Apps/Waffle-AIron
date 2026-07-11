@@ -11,8 +11,6 @@ You own and decide on everything within:
 .wai/specs/subsystems/sdd_host.yaml
 .wai/specs/components/admin_orchestrator.yaml
 .wai/specs/components/admin_portal.yaml
-.wai/specs/components/admin_ui_orchestrator.yaml
-.wai/specs/components/admin_ui_portal.yaml
 .wai/specs/components/approval_index.yaml
 .wai/specs/components/approval_registry.yaml
 .wai/specs/components/approval_repository.yaml
@@ -67,11 +65,19 @@ You own and decide on everything within:
 .wai/specs/components/scope_specialist.yaml
 .wai/specs/components/secret_registry.yaml
 .wai/specs/components/self_service_orchestrator.yaml
+.wai/specs/components/surface_exchange_orchestrator.yaml
 .wai/specs/components/user_index.yaml
 .wai/specs/components/user_registry.yaml
 .wai/specs/components/user_repository.yaml
 .wai/specs/components/user_store.yaml
 .wai/specs/components/visibility_specialist.yaml
+.wai/specs/components/web_graph_orchestrator.yaml
+.wai/specs/components/web_orchestrator.yaml
+.wai/specs/components/web_portal.yaml
+.wai/specs/components/web_session_index.yaml
+.wai/specs/components/web_session_registry.yaml
+.wai/specs/components/web_session_repository.yaml
+.wai/specs/components/web_session_store.yaml
 src/server/admin.ts
 src/server/approvals.ts
 src/server/audit.ts
@@ -94,6 +100,8 @@ src/server/scope.ts
 src/utils/secrets.ts
 src/server/selfservice.ts
 src/server/users.ts
+src/server/web.ts
+src/server/websessions.ts
 ```
 
 ## Responsibilities
