@@ -5,6 +5,8 @@ import { listProjectRecords } from './projects.js';
 import { sendJson } from './request.js';
 import { resolveScopeFor } from './scope.js';
 import * as packs from './packs.js';
+import { listProjectRelations } from './relations.js';
+import { getPublicSurfaceSnapshot } from './surfaces.js';
 import type {
   DiagnosticCheckResult,
   HostConfig,
@@ -15,6 +17,8 @@ import type {
   ResourceQuotaPolicy,
   ResourceUsageSnapshot,
   ScopeResolution,
+  ProjectRelationRecord,
+  ProjectPublicSurfaceSnapshot,
 } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -109,6 +113,8 @@ export function runChecks(
   instancePackNames: string[],
   projectReferences: ProjectPackReference[],
   scope?: string,
+  relations?: ProjectRelationRecord[],
+  relationSnapshots?: ProjectPublicSurfaceSnapshot[],
 ): DiagnosticCheckResult[] {
   const scoped = scopeRecords(projects, scope);
   const observedAt = new Date().toISOString();
@@ -203,6 +209,41 @@ export function runChecks(
         : 'All project pack/profile references resolve in the image or instance tier.',
     observedAt,
   });
+
+  // Relation health (Phase 7 Stage 3): an ACTIVE cross-project relation must
+  // target a project that still HAS a public-surface snapshot, and that
+  // snapshot must still expose the referenced interface — surface refreshes
+  // can drift both out from under a standing relation. Only evaluated when
+  // the caller supplies relation data (older callers stay unaffected).
+  if (relations !== undefined) {
+    const active = relations.filter((r) => r.status === 'active');
+    const snapByProject = new Map((relationSnapshots ?? []).map((s) => [s.projectId, s]));
+    const missingSnapshot = active.filter((r) => !snapByProject.has(r.targetProjectId));
+    const drifted = active.filter((r) => {
+      const snap = snapByProject.get(r.targetProjectId);
+      const ifaceId = r.targetPublicInterface?.systemInterfaceId;
+      return !!snap && !!ifaceId && !snap.interfaces.some((i) => i.id === ifaceId);
+    });
+    const problems: string[] = [];
+    if (missingSnapshot.length > 0) {
+      problems.push(
+        `${missingSnapshot.length} active relation(s) target projects with no public-surface snapshot (${missingSnapshot.map((r) => r.id).join(', ')})`,
+      );
+    }
+    if (drifted.length > 0) {
+      problems.push(
+        `${drifted.length} active relation(s) target interfaces no longer exposed by the target's snapshot (${drifted.map((r) => r.id).join(', ')}) — the consumed contract drifted; refresh and re-validate`,
+      );
+    }
+    checks.push({
+      id: 'relation-health',
+      status: problems.length > 0 ? 'warn' : 'pass',
+      message: problems.length > 0
+        ? `Relation health degraded: ${problems.join('; ')}.`
+        : 'Every active cross-project relation targets a present snapshot interface.',
+      observedAt,
+    });
+  }
 
   return checks;
 }
@@ -318,7 +359,14 @@ export function getHealthReport(
   // Read each project's declared pack/profile references from its isolated root.
   const projectReferences = projects.map((p) => packs.readProjectReferences(p.rootPath));
 
-  const checks = runChecks(projects, imagePackNames, instancePackNames, projectReferences, scope);
+  // Relation health inputs: active relations sourced from in-scope projects,
+  // plus the stored snapshots of their targets.
+  const scopedIds = new Set(projects.map((p) => p.id));
+  const relations = listProjectRelations(cfg.dataDir).filter((r) => scopedIds.has(r.sourceProjectId));
+  const relationSnapshots = [...new Set(relations.map((r) => r.targetProjectId))]
+    .map((id) => getPublicSurfaceSnapshot(cfg.dataDir, id))
+    .filter((snap): snap is NonNullable<typeof snap> => !!snap);
+  const checks = runChecks(projects, imagePackNames, instancePackNames, projectReferences, scope, relations, relationSnapshots);
   const usage = collectUsage(projects, scope);
   return buildHealthReport(checks, usage);
 }

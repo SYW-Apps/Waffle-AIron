@@ -48,6 +48,7 @@ import type {
   ScopeResolution,
   VisibleSurfaceEntry,
 } from './types.js';
+import type { SurfaceSnapshot } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
 // Landscape Orchestrator + Diagram Specialist + Portal (sdd_host) — Phase 4
@@ -816,6 +817,54 @@ export function listVisibleSurfaces(
     out.push({ projectId: visible.projectId, distance: visible.distance, interfaces });
   }
   return out;
+}
+
+/**
+ * MCP tool workflow `sdd_landscape_get_project_surface`: the CONSUMER path of
+ * the surface exchange. Authenticate the caller, gate by unit-graph
+ * visibility (or, on an instance with no org units, by relations-only
+ * reachability — the legacy posture), then generate the target's
+ * CONTRACT-GRADE snapshot with the audience ceiling set to the observer's
+ * distance, stamped origin 'exchanged' — ready for `wairon surface import`
+ * on the consumer side. The server acts as the trusted intermediary: it reads
+ * the target tree only to produce the audience-filtered artifact.
+ */
+export function getProjectSurfaceForMcp(
+  cfg: HostConfig,
+  credential: string | null,
+  currentProjectId: string,
+  targetProjectId: string,
+): SurfaceSnapshot {
+  requirePrincipal(cfg, credential);
+
+  const units = listOrganizationUnits(cfg.dataDir);
+  let maxAudience: string;
+  if (units.length === 0) {
+    // Legacy (no org graph): relations-only reachability, instance-grade ceiling.
+    const active = listProjectRelations(cfg.dataDir, currentProjectId, targetProjectId, 'active');
+    if (active.length === 0) {
+      throw new ForbiddenError(
+        'the target project is not reachable from the current project through an active relation',
+      );
+    }
+    maxAudience = 'instance';
+  } else {
+    const placements = listProjectPlacements(cfg.dataDir);
+    const view = resolveVisibility(currentProjectId, units, placements);
+    const distance = audienceDistance(view, targetProjectId);
+    if (!distance) {
+      throw new ForbiddenError(
+        "the target project's surface is not exposed to the current project's organization units",
+      );
+    }
+    maxAudience = distance;
+  }
+
+  const record = listProjectRecords(cfg.dataDir).find((p) => p.id === targetProjectId);
+  if (!record?.rootPath) throw new Error(`Unknown project "${targetProjectId}".`);
+  const result = runWithProjectRoot(record.rootPath, () =>
+    hostSurfaces.exportBoundSurface(maxAudience, 'native'));
+  return { ...result.snapshot, origin: 'exchanged' };
 }
 
 /**

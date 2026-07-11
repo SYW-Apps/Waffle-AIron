@@ -15,6 +15,8 @@ import {
   generateLandscape,
   listReachableProjectsForMcp,
   listReachableProjectInterfacesForMcp,
+  listVisibleSurfaces,
+  getProjectSurfaceForMcp,
   buildLandscapeGraph,
 } from '../../src/server/landscape.js';
 import { routeAdmin } from '../../src/server/http.js';
@@ -409,6 +411,53 @@ describe('landscape orchestrator (sdd_host)', () => {
 
     expect(graph.edges.some((e) => e.edgeKind === 'owns' && e.label === 'owner')).toBe(true);
     expect(graph.edges.some((e) => e.relationId === rel.id)).toBe(true);
+  });
+
+  // ── Phase 7 Stage 3: consumer-path surface exchange over the data plane ─────
+
+  it('getProjectSurfaceForMcp: legacy (no units) gates by relations; grants contract-grade origin-exchanged snapshots', () => {
+    project('s3-src');
+    const dst = project('s3-dst');
+    seedSurface(dst.rootPath, [{ id: 'dst-api', name: 'Dst API', type: 'REST', details: 'd' }]);
+    refreshPublicSurface(cfg, MASTER, 's3-dst');
+
+    // No relation yet → unreachable (legacy posture, no org units defined).
+    expect(() => getProjectSurfaceForMcp(cfg, MASTER, 's3-src', 's3-dst')).toThrow(ForbiddenError);
+
+    upsertRelation(cfg, MASTER, relationRec({
+      sourceProjectId: 's3-src', targetProjectId: 's3-dst',
+      targetPublicInterface: { projectId: 's3-dst', systemInterfaceId: 'dst-api', reason: 'r' },
+    }));
+    const snapshot = getProjectSurfaceForMcp(cfg, MASTER, 's3-src', 's3-dst');
+    expect(snapshot.origin).toBe('exchanged');
+    expect(typeof snapshot.projectName).toBe('string');
+    expect(Array.isArray(snapshot.interfaces)).toBe(true);
+  });
+
+  it('getProjectSurfaceForMcp + listVisibleSurfaces: cross-tenant is grant-gated once units exist', () => {
+    project('s3-a');
+    const b = project('s3-b');
+    seedSurface(b.rootPath, [{ id: 'b-api', name: 'B API', type: 'REST', details: 'd' }]);
+    refreshPublicSurface(cfg, MASTER, 's3-b');
+
+    // Two tenant roots, no grant: invisible.
+    const acme = upsertUnit(cfg, MASTER, unitRec({ name: 'acme' }));
+    const globex = upsertUnit(cfg, MASTER, unitRec({ name: 'globex' }));
+    placeProject(cfg, MASTER, placementRec({ projectId: 's3-a', unitId: acme.id }));
+    placeProject(cfg, MASTER, placementRec({ projectId: 's3-b', unitId: globex.id }));
+    expect(() => getProjectSurfaceForMcp(cfg, MASTER, 's3-a', 's3-b')).toThrow(ForbiddenError);
+    expect(listVisibleSurfaces(cfg, MASTER, 's3-a').some((e) => e.projectId === 's3-b')).toBe(false);
+
+    // exposeTo grant on the target's tenant root opens it at partner distance.
+    upsertUnit(cfg, MASTER, { ...globex, exposeTo: [acme.id] });
+    const catalog = listVisibleSurfaces(cfg, MASTER, 's3-a');
+    const entry = catalog.find((e) => e.projectId === 's3-b');
+    expect(entry?.distance).toBe('partner');
+    // The stored summary's default audience ('public' → external) covers partner.
+    expect(entry?.interfaces.some((i) => i.id === 'b-api')).toBe(true);
+
+    const snapshot = getProjectSurfaceForMcp(cfg, MASTER, 's3-a', 's3-b');
+    expect(snapshot.origin).toBe('exchanged');
   });
 
   it('generateLandscape / listRelations: control-plane reads accept a landscape:read grant, reject a plain token', () => {

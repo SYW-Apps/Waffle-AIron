@@ -73,6 +73,36 @@ describe('diagnostics specialist (pure)', () => {
     for (const c of checks) expect(Date.parse(c.observedAt)).toBeGreaterThan(0);
   });
 
+  it('runChecks: relation health warns on missing target snapshots and drifted interfaces (Stage 3)', () => {
+    const projects = [rec({ id: 'a', rootPath: '/x/a' })];
+    const relation = (id: string, target: string, ifaceId: string) => ({
+      id, sourceProjectId: 'a', targetProjectId: target, kind: 'consumes',
+      sourceAdapter: 'ad', targetPublicInterface: { projectId: target, systemInterfaceId: ifaceId, reason: 'r' },
+      reason: 'r', status: 'active', createdAt: '', createdBy: { kind: 'user', id: 'u' },
+    }) as never;
+    const snap = (projectId: string, ifaceId: string) => ({
+      projectId, stateId: 's', systemName: projectId,
+      interfaces: [{ id: ifaceId, name: ifaceId, type: 'REST', audience: 'public', methods: [], details: '' }],
+      exportedAt: '', exportedBy: { kind: 'user', id: 'u' },
+    }) as never;
+
+    // Healthy: target snapshot present, interface still exposed.
+    const ok = runChecks(projects, [], [], [], undefined, [relation('r1', 'b', 'b-api')], [snap('b', 'b-api')]);
+    expect(ok.find((c) => c.id === 'relation-health')!.status).toBe('pass');
+
+    // Missing snapshot + drifted interface both warn, naming the relation ids.
+    const bad = runChecks(projects, [], [], [], undefined,
+      [relation('r-gone', 'ghost', 'x'), relation('r-drift', 'b', 'renamed-api')],
+      [snap('b', 'b-api')]);
+    const health = bad.find((c) => c.id === 'relation-health')!;
+    expect(health.status).toBe('warn');
+    expect(health.message).toMatch(/r-gone/);
+    expect(health.message).toMatch(/r-drift.*drifted/s);
+
+    // Without relation data the check is absent (older callers unaffected).
+    expect(runChecks(projects, [], [], []).some((c) => c.id === 'relation-health')).toBe(false);
+  });
+
   it('runChecks: a ghost record with an unresolvable root fails the consistency check', () => {
     const checks = runChecks([rec({ id: 'a', rootPath: '/x/a' }), rec({ id: 'ghost', rootPath: '' })], [], [], []);
     const consistency = checks.find((c) => c.id === 'project-registry-consistency')!;
@@ -285,8 +315,10 @@ describe('operations orchestrator (sdd_host)', () => {
 
     const report = getHealthReport(cfg, opsToken());
     expect(report.status).toBe('ok');
-    // 3 base checks + pack-shadowing + missing-pack-references (both always present).
-    expect(report.checks.length).toBe(5);
+    // 3 base checks + pack-shadowing + missing-pack-references + relation-health
+    // (the orchestrator always supplies relation data — Stage 3).
+    expect(report.checks.length).toBe(6);
+    expect(report.checks.find((c) => c.id === 'relation-health')!.status).toBe('pass');
     expect(report.usage?.[0].scope).toBe('instance');
 
     expect(() => getHealthReport(cfg, plainToken())).toThrow(ForbiddenError);

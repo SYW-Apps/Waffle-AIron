@@ -15,6 +15,8 @@ import {
 import {
   listReachableProjectsForMcp,
   listReachableProjectInterfacesForMcp,
+  listVisibleSurfaces,
+  getProjectSurfaceForMcp,
 } from './landscape.js';
 import type {
   AuditEvent,
@@ -150,6 +152,8 @@ const SELF_SERVICE_TOOLS = new Set<string>([
 const LANDSCAPE_DISCOVERY_TOOLS = new Set<string>([
   'sdd_landscape_list_reachable_projects',
   'sdd_landscape_list_reachable_project_interfaces',
+  'sdd_landscape_list_visible_surfaces',
+  'sdd_landscape_get_project_surface',
 ]);
 
 /** The MCP tool-result envelope — the exact shape the scoped sdd_* server returns:
@@ -324,6 +328,15 @@ export function dispatchSelfServiceTool(
           projectId,
           String(args.projectId ?? ''),
         );
+        break;
+      case 'sdd_landscape_list_visible_surfaces':
+        // The visibility-resolved discovery catalog for the BOUND project.
+        value = listVisibleSurfaces(cfg, credential, projectId);
+        break;
+      case 'sdd_landscape_get_project_surface':
+        // Contract-grade surface fetch: currentProjectId = the BOUND project;
+        // targetProjectId from arguments.projectId. Visibility-gated.
+        value = getProjectSurfaceForMcp(cfg, credential, projectId, String(args.projectId ?? ''));
         break;
       default: // 'sdd_host_get_approval_status'
         value = getRequestStatus(cfg, credential, String(args.requestId ?? ''));
