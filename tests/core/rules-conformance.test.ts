@@ -2,8 +2,10 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateSddTree, type ValidationIssue } from '../../src/core/validation.js';
 import { buildCodeModel } from '../../src/core/source-analysis.js';
+import { buildRuleContext } from '../../src/core/rules/index.js';
+import { structuralConformanceRule } from '../../src/core/rules/conformance.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 
 // ---------------------------------------------------------------------------
@@ -290,6 +292,37 @@ describe('structural conformance — method realization (exact TS analysis)', ()
   });
 });
 
+describe('conformance degradation visibility', () => {
+  it('fires CONFORMANCE_DEGRADED once when ts/js files were analyzed below exact grade', () => {
+    // The dev environment always resolves the TypeScript compiler, so the
+    // degraded state is fabricated directly: a ts file at pattern grade means
+    // the compiler was unavailable in the analyzed environment.
+    const issues: ValidationIssue[] = [];
+    const stamp = { createdAt: '2026-07-12T10:00:00Z', updatedAt: '2026-07-12T10:00:00Z' };
+    const ctx = buildRuleContext({
+      system: { schemaVersion: '1.0.0', name: 'S', vision: 'v', ...stamp } as never,
+      subsystems: [],
+      components: [],
+      interfaces: [],
+      implementations: [],
+      types: [],
+      projectType: 'backend',
+      codeModel: {
+        projectRoot: '/proj',
+        files: [{
+          path: 'src/a.ts', status: 'analyzed', language: 'typescript', analysisGrade: 'pattern',
+          declaredNames: [], anchoredNames: [], exportedNames: [], imports: [], reexports: [],
+        }],
+      },
+      issues,
+    });
+    structuralConformanceRule.check(ctx);
+    const degraded = issues.filter(i => i.code === 'CONFORMANCE_DEGRADED');
+    expect(degraded).toHaveLength(1);
+    expect(degraded[0].message).toContain('below exact grade');
+  });
+});
+
 describe('buildCodeModel — analyzer grades', () => {
   const mkTemp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-codemodel-'));
   const impl = (sourcePath: string) => ({
@@ -348,6 +381,33 @@ describe('buildCodeModel — analyzer grades', () => {
       fs.writeFileSync(path.join(dir, 'blob.ts'), Buffer.from([0x00, 0x01, 0x02, 0xff]));
       const model = buildCodeModel([impl('blob.ts')], dir);
       expect(model.files[0].status).toBe('unreadable');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('caps pattern analysis by size: a huge C# file degrades to the linear generic scan', () => {
+    const dir = mkTemp();
+    try {
+      // > 1MB of realistic-but-pathological input for the C# declaration regex
+      const filler = `public ${'x'.repeat(120)}\n`.repeat(12000);
+      fs.writeFileSync(path.join(dir, 'gen.cs'), `${filler}public void DoWork() {}\n`);
+      const started = Date.now();
+      const model = buildCodeModel([impl('gen.cs')], dir);
+      expect(Date.now() - started).toBeLessThan(5000);
+      expect(model.files[0].analysisGrade).toBe('generic');
+      expect(model.files[0].declaredNames).toContain('DoWork');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('normalizes backslash-authored sourcePaths into one shared facts entry', () => {
+    const dir = mkTemp();
+    try {
+      fs.mkdirSync(path.join(dir, 'src'));
+      fs.writeFileSync(path.join(dir, 'src', 'a.ts'), 'export function one(): void {}\n');
+      const a = { ...impl('src/a.ts'), id: 'impl-a' };
+      const b = { ...impl('src\\a.ts'), id: 'impl-b' };
+      const model = buildCodeModel([a, b], dir);
+      expect(model.files).toHaveLength(1);
+      expect(model.files[0].path).toBe('src/a.ts');
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 

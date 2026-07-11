@@ -134,6 +134,23 @@ The acceptance test was wairon's own tree with the rules ON. Highlights of what 
   `lint.allow` entries document deliberate exceptions with reasons (e.g. the shared
   secrets utility being spec-homed under `sdd_host` — placement debt, not sanction).
 
+## Hardening from the post-ship review (2026-07-12)
+
+An adversarial review plus live e2e testing produced five fixes: (1) degraded
+TS/JS analysis (compiler unresolvable — the normal state for npm installs of
+wairon analyzing projects without their own `typescript`) is now surfaced as
+one `CONFORMANCE_DEGRADED` warning per run instead of silently skipping
+dependency conformance; (2) the C#/Java declaration patterns were rewritten
+with same-line separators and pattern analysis is size-capped (1MB → generic
+scan) after a verified quadratic blowup on generated files; (3) failed
+compiler resolutions are retried after 30s in long-running processes;
+(4) facade-hop justification is now symmetric (an owned Store may import what
+its Repository declared; same-pattern siblings collaborate by construction);
+(5) the same-subsystem reverse-edge justification is restricted to mounting
+shapes (Portal/Observer declarers) so a Store importing its consumer stays a
+violation. sourcePath keys are normalized (backslash-authored paths merge
+into one facts entry).
+
 ## Known limitations (accepted, documented)
 
 - **Chained subprojects** are skipped in the parent run (they validate standalone).
@@ -147,6 +164,13 @@ The acceptance test was wairon's own tree with the rules ON. Highlights of what 
 - **N:1 union semantics**: in a shared file, an anchor satisfies every component that
   declares that method name, and an edge is justified if *any* component pair covers it.
   Coarse by design — under-reports rather than false-accuses. Level 3 disambiguates.
+- **Symlink containment**: sourcePath containment is textual; a symlinked directory
+  inside the project pointing outside the root would bypass it (deliberate setup,
+  not a drive-by risk).
+- **Hosted render-path cost**: the canvas issue overlay invokes the full validate
+  (including the source scan) on every hosted canvas render — bounded by the 1MB
+  pattern cap, but a `sourceAnalysis` opt-out on ValidationOptions is the natural
+  knob if hosted profiling ever demands it.
 
 ## Level 3 — call-graph ↔ L5 narrative steps (sketch only)
 

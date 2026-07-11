@@ -111,7 +111,11 @@ analysis grade `exact | pattern | generic`).
   file inside the project root (`MISSING_SOURCE_FILE`,
   `SOURCE_PATH_ESCAPES_ROOT` — *errors*), and every L3 contract method must be
   realized in that file (`UNREALIZED_METHOD`, `MISSING_SOURCE_PATH`,
-  `CONFORMANCE_ANALYSIS_SKIPPED` — *warnings*). Realization is tiered per
+  `CONFORMANCE_ANALYSIS_SKIPPED` — *warnings*). When TypeScript/JavaScript
+  files can only be analyzed below exact grade (no `typescript` resolvable
+  from the analyzed project or the wairon install), one
+  **`CONFORMANCE_DEGRADED`** warning per run makes the degradation visible —
+  install `typescript` in the analyzed project to restore exact analysis. Realization is tiered per
   implementation via the new **conformance dial** (`conformance: declared |
   anchored | off`, Portal defaults to `anchored`) with per-method overrides,
   and intent-language renames are declared with the new per-method

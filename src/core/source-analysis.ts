@@ -62,6 +62,11 @@ export function emptyCodeModel(): CodeModel {
   return { files: [], projectRoot: '' };
 }
 
+/** Canonical project-relative form all sourcePath keys are stored/looked up in. */
+export function normalizeSourcePath(p: string): string {
+  return p.replace(/\\/g, '/').replace(/^\.\//, '');
+}
+
 // ---------------------------------------------------------------------------
 // Language detection + declarative pattern tables
 // ---------------------------------------------------------------------------
@@ -131,7 +136,9 @@ const LANGUAGE_PATTERNS: Record<string, LanguagePatterns> = {
     ...C_FAMILY_COMMENTS,
     declarations: [
       /\b(?:class|interface|struct|enum|record)\s+([A-Za-z_]\w*)/g,
-      /\b(?:public|private|protected|internal|static|async|override|virtual)\s+[\w<>,[\]?\s]*?\b([A-Za-z_]\w*)\s*\(/g,
+      // separators are same-line only ([ \t], never \n) — an unbounded lazy
+      // class containing \s here is verified quadratic on large generated files
+      /\b(?:public|private|protected|internal|static|async|override|virtual)(?:[ \t]+[\w<>,[\]?]+)*[ \t]+([A-Za-z_]\w*)[ \t]*\(/g,
     ],
     imports: [/\busing\s+([\w.]+)\s*;/g],
     exportMarkers: [/^\s*public\b/],
@@ -140,7 +147,7 @@ const LANGUAGE_PATTERNS: Record<string, LanguagePatterns> = {
     ...C_FAMILY_COMMENTS,
     declarations: [
       /\b(?:class|interface|enum|record)\s+([A-Za-z_]\w*)/g,
-      /\b(?:public|private|protected|static|final|synchronized)\s+[\w<>,[\]?\s]*?\b([A-Za-z_]\w*)\s*\(/g,
+      /\b(?:public|private|protected|static|final|synchronized)(?:[ \t]+[\w<>,[\]?]+)*[ \t]+([A-Za-z_]\w*)[ \t]*\(/g,
     ],
     imports: [/\bimport\s+([\w.]+)\s*;/g],
     exportMarkers: [/^\s*public\b/],
@@ -179,6 +186,10 @@ const LANGUAGE_PATTERNS: Record<string, LanguagePatterns> = {
 
 // C-family patterns cover the same declaration shapes (`cpp` mirrors `c`).
 LANGUAGE_PATTERNS.cpp = LANGUAGE_PATTERNS.c;
+
+/** Pattern tables are for human-authored sources; above this size (generated/
+ *  minified) the linear generic scan takes over — regex worst cases stay bounded. */
+const PATTERN_ANALYSIS_MAX_BYTES = 1_000_000;
 
 const IDENTIFIER_RE = /[A-Za-z_$][\w$]*/g;
 const STRING_RE = /'([^'\\\n]*(?:\\.[^'\\\n]*)*)'|"([^"\\\n]*(?:\\.[^"\\\n]*)*)"|`([^`\\]*(?:\\.[^`\\]*)*)`/g;
@@ -287,11 +298,20 @@ function analyzeGeneric(text: string): Omit<SourceFileFacts, 'path' | 'status' |
 
 type TsModule = typeof import('typescript');
 
-const tsResolutionCache = new Map<string, TsModule | null>();
+/**
+ * Per-projectRoot resolution cache. Successful resolutions are kept for the
+ * process lifetime (the module is loaded either way); FAILED resolutions are
+ * retried after a short TTL so a long-running MCP/hosted process picks up an
+ * `npm install typescript` in the analyzed project without a restart.
+ */
+const tsResolutionCache = new Map<string, { ts: TsModule | null; at: number }>();
+const TS_RESOLUTION_RETRY_MS = 30_000;
 
 function resolveTypeScript(projectRoot: string): TsModule | null {
   const cached = tsResolutionCache.get(projectRoot);
-  if (cached !== undefined) return cached;
+  if (cached && (cached.ts !== null || Date.now() - cached.at < TS_RESOLUTION_RETRY_MS)) {
+    return cached.ts;
+  }
   let ts: TsModule | null = null;
   // The analyzed project's own compiler first, wairon's installation second.
   const bases = [path.join(projectRoot, 'package.json'), __filename];
@@ -304,7 +324,7 @@ function resolveTypeScript(projectRoot: string): TsModule | null {
       // keep trying — absence is a supported state, not an error
     }
   }
-  tsResolutionCache.set(projectRoot, ts);
+  tsResolutionCache.set(projectRoot, { ts, at: Date.now() });
   return ts;
 }
 
@@ -496,8 +516,9 @@ export function buildCodeModel(implementations: ImplementationSpec[], projectRoo
   const exactCache = new Map<string, ExactFacts | null>();
 
   for (const impl of implementations) {
-    const sourcePath = impl.sourcePath;
-    if (!sourcePath || seen.has(sourcePath)) continue;
+    if (!impl.sourcePath) continue;
+    const sourcePath = normalizeSourcePath(impl.sourcePath);
+    if (seen.has(sourcePath)) continue;
     seen.add(sourcePath);
 
     const empty = { declaredNames: [], anchoredNames: [], exportedNames: [], imports: [], reexports: [] };
@@ -558,9 +579,11 @@ export function buildCodeModel(implementations: ImplementationSpec[], projectRoo
       } else {
         analyzed = analyzeWithPatterns(text, LANGUAGE_PATTERNS[language]);
       }
-    } else if (language && LANGUAGE_PATTERNS[language]) {
+    } else if (language && LANGUAGE_PATTERNS[language] && text.length <= PATTERN_ANALYSIS_MAX_BYTES) {
       analyzed = analyzeWithPatterns(text, LANGUAGE_PATTERNS[language]);
     } else {
+      // unknown language, or a file too large for regex tables (generated/
+      // minified) — the linear word scan is the safe floor either way
       analyzed = analyzeGeneric(text);
     }
 

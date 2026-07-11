@@ -184,6 +184,41 @@ describe('dependency conformance — UNDECLARED_DEPENDENCY', () => {
     } finally { proj.cleanup(); }
   });
 
+  it('facade hop, importer side: an owned Store may import what its Repository declared', () => {
+    const proj = createTempProject();
+    proj.component('cust-repo', 'Repository', 'sub-a', 'owns: [cust-store]\ndependsOn: [db-adapter]');
+    proj.component('cust-store', 'Store');
+    proj.component('db-adapter', 'Adapter');
+    proj.wire('cust-repo', 'src/repo.ts');
+    proj.wire('cust-store', 'src/store.ts');
+    proj.wire('db-adapter', 'src/adapter.ts');
+    proj.source('src/repo.ts', body('custrepo', "import { runcuststore } from './store.js';\nvoid runcuststore;\n"));
+    // the STORE does the physical I/O the Repository declared
+    proj.source('src/store.ts', body('custstore', "import { rundbadapter } from './adapter.js';\nvoid rundbadapter;\n"));
+    proj.source('src/adapter.ts', body('dbadapter'));
+    proj.activate();
+    try {
+      expect(depIssues(validateSddTree()).map(i => i.code)).not.toContain('UNDECLARED_DEPENDENCY');
+    } finally { proj.cleanup(); }
+  });
+
+  it('same-pattern siblings collaborate by construction (Registry imports its Store)', () => {
+    const proj = createTempProject();
+    proj.component('cust-repo', 'Repository', 'sub-a', 'owns: [cust-store, cust-registry]');
+    proj.component('cust-store', 'Store');
+    proj.component('cust-registry', 'Registry');
+    proj.wire('cust-repo', 'src/repo.ts');
+    proj.wire('cust-store', 'src/store.ts');
+    proj.wire('cust-registry', 'src/registry.ts');
+    proj.source('src/repo.ts', body('custrepo', "import { runcuststore } from './store.js';\nimport { runcustregistry } from './registry.js';\nvoid runcuststore; void runcustregistry;\n"));
+    proj.source('src/store.ts', body('custstore'));
+    proj.source('src/registry.ts', body('custregistry', "import { runcuststore } from './store.js';\nvoid runcuststore;\n"));
+    proj.activate();
+    try {
+      expect(depIssues(validateSddTree()).map(i => i.code)).not.toContain('UNDECLARED_DEPENDENCY');
+    } finally { proj.cleanup(); }
+  });
+
   it('lint.allow silences the warning per spec', () => {
     const proj = createTempProject();
     proj.component('orch-a', 'Orchestrator');

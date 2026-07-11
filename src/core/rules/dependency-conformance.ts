@@ -1,5 +1,6 @@
 import * as path from 'path';
 import type { ComponentSpec, ImplementationSpec } from '../../models/index.js';
+import { normalizeSourcePath } from '../source-analysis.js';
 import { RuleContext, SddRule } from './types.js';
 import { isInChainedSubproject } from './conformance.js';
 
@@ -45,9 +46,7 @@ interface FileNode {
   draft: boolean;
 }
 
-function normalizePath(p: string): string {
-  return p.replace(/\\/g, '/').replace(/^\.\//, '');
-}
+const normalizePath = normalizeSourcePath;
 
 /** Pure candidate resolution of a relative specifier against the mapped-file set. */
 function resolveAgainst(mapped: Set<string>, fromFile: string, specifier: string): string | null {
@@ -134,6 +133,12 @@ export const dependencyConformanceRule: SddRule = {
     const dependsOrOwns = (from: ComponentSpec, toId: string): boolean =>
       from.dependsOn.includes(toId) || (from.owns ?? []).includes(toId);
 
+    // pattern facade ownership, one hop (owner computed once, both directions)
+    const ownerOf = new Map<string, ComponentSpec>();
+    for (const c of ctx.components) {
+      for (const member of c.owns ?? []) ownerOf.set(member, c);
+    }
+
     // Does `from` declare an edge to the published surface of `subsystemId`?
     const declaresSurfaceEdge = (from: ComponentSpec, subsystemId: string): boolean => {
       const published = ctx.publicSet.get(subsystemId);
@@ -158,9 +163,16 @@ export const dependencyConformanceRule: SddRule = {
             && dependsOrOwns(cg, cf.id)
             && (cg.componentType === 'Portal' || cg.componentType === 'Observer')
           ) return true;
-          // member of a pattern the importer depends on (facade hop)
-          const owner = ctx.components.find(c => (c.owns ?? []).includes(cg.id));
-          if (owner && (dependsOrOwns(cf, owner.id) || cf.id === owner.id)) return true;
+          // facade hops, both directions: the target is a member of a pattern
+          // the importer depends on/is; OR the importer is itself an owned
+          // member whose FACADE declares the collaborator (a Repository's
+          // Store does the physical I/O the Repository declared) — and two
+          // members of the same pattern collaborate by construction.
+          const ownerG = ownerOf.get(cg.id);
+          if (ownerG && (dependsOrOwns(cf, ownerG.id) || cf.id === ownerG.id)) return true;
+          const ownerF = ownerOf.get(cf.id);
+          if (ownerF && (dependsOrOwns(ownerF, cg.id) || ownerF.id === cg.id)) return true;
+          if (ownerF && ownerG && ownerF.id === ownerG.id) return true;
           // cross-subsystem: declared edge to the target subsystem's surface
           if (cf.subsystem !== cg.subsystem && declaresSurfaceEdge(cf, cg.subsystem)) return true;
         }

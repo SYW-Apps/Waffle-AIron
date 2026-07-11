@@ -1,4 +1,5 @@
 import type { SourceFileFacts } from '../source-analysis.js';
+import { normalizeSourcePath } from '../source-analysis.js';
 import { RuleContext, SddRule } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -62,16 +63,34 @@ export const structuralConformanceRule: SddRule = {
     { code: 'SOURCE_PATH_ESCAPES_ROOT', defaultSeverity: 'error', summary: 'An L4 sourcePath is absolute or escapes the project root (containment refusal)' },
     { code: 'UNREALIZED_METHOD', defaultSeverity: 'warning', summary: 'An L3 contract method has no anchor in its implementation\'s source file at the required conformance tier' },
     { code: 'CONFORMANCE_ANALYSIS_SKIPPED', defaultSeverity: 'warning', summary: 'A source file could not be analyzed (binary/unreadable) — method realization was not checked' },
+    { code: 'CONFORMANCE_DEGRADED', defaultSeverity: 'warning', summary: 'TypeScript/JavaScript files were analyzed below exact grade (compiler not resolvable) — dependency conformance skips them' },
   ],
 
   check(ctx: RuleContext): void {
     const lookups = new Map<string, FactsLookup>();
     for (const facts of ctx.codeModel.files) {
-      lookups.set(facts.path, {
+      lookups.set(normalizeSourcePath(facts.path), {
         declared: new Set([...facts.declaredNames, ...facts.exportedNames]),
         anchored: new Set([...facts.declaredNames, ...facts.exportedNames, ...facts.anchoredNames]),
         facts,
       });
+    }
+
+    // A silently degraded gate is worse than a degraded gate: when ts/js files
+    // could not be analyzed at exact grade the compiler was not resolvable —
+    // structural anchors stay honest (grade is on each finding), but dependency
+    // conformance SKIPS those files entirely. Surface that once per run.
+    const degradedTsFiles = ctx.codeModel.files.filter(
+      f => f.status === 'analyzed'
+        && (f.language === 'typescript' || f.language === 'javascript')
+        && f.analysisGrade !== 'exact',
+    );
+    if (degradedTsFiles.length > 0) {
+      ctx.addIssue(
+        'warning',
+        'CONFORMANCE_DEGRADED',
+        `${degradedTsFiles.length} TypeScript/JavaScript source file(s) were analyzed below exact grade — the TypeScript compiler could not be resolved from the analyzed project or the wairon installation. Structural findings carry their grade, but dependency conformance skips these files. Install "typescript" in the analyzed project to restore exact analysis.`,
+      );
     }
 
     for (const impl of ctx.implementations) {
@@ -94,7 +113,7 @@ export const structuralConformanceRule: SddRule = {
         continue;
       }
 
-      const lookup = lookups.get(impl.sourcePath);
+      const lookup = lookups.get(normalizeSourcePath(impl.sourcePath));
       if (!lookup) continue; // no code model for this path (context built without one)
 
       const { facts } = lookup;
