@@ -97,9 +97,12 @@ const DEV_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
  * Begin a browser SSO sign-in: resolve the enabled provider, generate a nonce,
  * sign an SSO state binding providerId + nonce + redirectUri, build the provider
  * authorization URL, append a best-effort web.signin.start (info) audit event, and
- * return the authorization URL. Unauthenticated by nature — no caller credential.
+ * return the authorization URL together with the nonce. The caller (the HTTP
+ * portal) installs the nonce as a short-lived HttpOnly cookie so the callback can
+ * prove the completing browser is the one that started — defeating login CSRF.
+ * Unauthenticated by nature — no caller credential.
  */
-export function startSignIn(cfg: HostConfig, providerId: string, redirectUri: string): string {
+export function startSignIn(cfg: HostConfig, providerId: string, redirectUri: string): { url: string; nonce: string } {
   const provider = resolveEnabledProvider(cfg, providerId); // steps 1–4 (throws on unknown/disabled)
 
   const nonce = crypto.randomBytes(16).toString('hex'); // step 5
@@ -110,7 +113,7 @@ export function startSignIn(cfg: HostConfig, providerId: string, redirectUri: st
   // steps 8–11: best-effort append (tryAppendAudit wraps the try/jump/catch).
   tryAppendAudit(cfg, buildSsoAuditEvent(ANONYMOUS_SSO_ACTOR, 'web.signin.start', 'info', { target: providerId }));
 
-  return url; // step 12
+  return { url, nonce }; // step 12
 }
 
 /**
@@ -122,12 +125,23 @@ export function startSignIn(cfg: HostConfig, providerId: string, redirectUri: st
  * bound to the resolved subject and the user's CURRENT grants (prior sessions left
  * intact — multi-device), append a best-effort web.signin (security) audit event,
  * and return the new session id. Unauthenticated by nature — no caller credential.
- * Async: exchangeCode does provider network I/O.
+ * `expectedNonce` is the value of the browser's SSO-nonce cookie: it MUST equal
+ * the nonce inside the signed state, proving the completing browser is the one
+ * that started the flow (login-CSRF defense). Async: exchangeCode does provider
+ * network I/O.
  */
-export async function completeSignIn(cfg: HostConfig, state: string, code: string): Promise<string> {
+export async function completeSignIn(cfg: HostConfig, state: string, code: string, expectedNonce: string | null): Promise<string> {
   // Verify + parse the signed state (throws on a tampered or expired state).
   const payload = JSON.parse(verifySsoState(state)) as SsoStatePayload; // steps 1–2
   const { providerId, redirectUri } = payload;
+
+  // Bind the completing browser to the initiating one: the state's nonce must
+  // match the HttpOnly nonce cookie. A forged/replayed callback delivered to a
+  // victim carries no matching cookie (an attacker cannot set it), so it fails
+  // closed — the login-CSRF vector.
+  if (!nonceMatches(payload.nonce, expectedNonce)) {
+    throw new ForbiddenError('SSO state does not match this browser — restart sign-in');
+  }
 
   const provider = resolveEnabledProvider(cfg, providerId); // steps 3–6
 
@@ -208,7 +222,8 @@ export function getCurrentContext(cfg: HostConfig, sessionId: string): WebContex
 
   // step 3: derive the capability flags from the principal's grants.
   const grants = principal.grants ?? [];
-  const isAdmin = grants.some((g) => g.projectId === '*');
+  // Instance admin = a genuine '*' grant, not a unit-scoped '*'+orgUnitId one.
+  const isAdmin = grants.some((g) => g.projectId === '*' && !g.orgUnitId);
   // A write permission — or the '*' wildcard (which the permission model treats as
   // covering every permission) — makes the caller a project author.
   const canWriteProjects = grants.some(
@@ -521,6 +536,39 @@ function clearSessionCookie(secure: boolean): string {
   return `${WEB_SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secure ? '; Secure' : ''}`;
 }
 
+/** Short-lived cookie binding the browser that STARTED an SSO flow to the one that
+ *  COMPLETES it — the callback requires the cookie's nonce to equal the nonce inside
+ *  the signed state, which defeats login CSRF (an attacker cannot set this HttpOnly
+ *  cookie in the victim's browser). Lives only for the ~10-min SSO round-trip. */
+export const WEB_SSO_NONCE_COOKIE = 'wairon_sso_nonce';
+const SSO_NONCE_MAX_AGE_S = 600;
+
+function ssoNonceCookieValue(req: IncomingMessage): string | null {
+  const header = req.headers['cookie'];
+  if (!header) return null;
+  const raw = Array.isArray(header) ? header.join(';') : header;
+  for (const part of raw.split(';')) {
+    const eq = part.indexOf('=');
+    if (eq === -1) continue;
+    if (part.slice(0, eq).trim() === WEB_SSO_NONCE_COOKIE) return part.slice(eq + 1).trim();
+  }
+  return null;
+}
+
+function setNonceCookie(nonce: string, secure: boolean): string {
+  return `${WEB_SSO_NONCE_COOKIE}=${nonce}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SSO_NONCE_MAX_AGE_S}${secure ? '; Secure' : ''}`;
+}
+
+function clearNonceCookie(secure: boolean): string {
+  return `${WEB_SSO_NONCE_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secure ? '; Secure' : ''}`;
+}
+
+/** Constant-time equality for the two hex nonces (absent cookie fails closed). */
+function nonceMatches(a: string | null, b: string | null): boolean {
+  if (!a || !b || a.length !== b.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
+
 /**
  * Serve the unified web UI client application shell for the requested path. No
  * orchestrator call; the shell is a THIN host that boots the session context and
@@ -819,21 +867,29 @@ export async function handleWebRequest(
       return;
     }
 
-    // POST /web/sso/start  { providerId, redirectUri } → { url }
+    // POST /web/sso/start  { providerId, redirectUri } → { url }; also installs the
+    // short-lived HttpOnly nonce cookie that binds this browser to the flow.
     if (req.method === 'POST' && parts.length === 3 && parts[1] === 'sso' && parts[2] === 'start') {
-      const authUrl = startSignIn(cfg, body?.providerId as string, body?.redirectUri as string);
-      return sendJson(res, 200, { url: authUrl });
+      const started = startSignIn(cfg, body?.providerId as string, body?.redirectUri as string);
+      res.writeHead(200, {
+        'content-type': 'application/json',
+        'set-cookie': setNonceCookie(started.nonce, ctx.secureCookie),
+      });
+      res.end(JSON.stringify({ url: started.url }));
+      return;
     }
 
-    // GET /web/sso/callback?state=&code= → set the session cookie and land on /.
+    // GET /web/sso/callback?state=&code= → require the nonce cookie to match the
+    // signed state, then set the session cookie, clear the nonce cookie, land on /.
     if (req.method === 'GET' && parts.length === 3 && parts[1] === 'sso' && parts[2] === 'callback') {
       const newSessionId = await completeSignIn(
         cfg,
         url.searchParams.get('state') ?? '',
         url.searchParams.get('code') ?? '',
+        ssoNonceCookieValue(req),
       );
       res.writeHead(302, {
-        'set-cookie': setSessionCookie(newSessionId, ctx.secureCookie),
+        'set-cookie': [setSessionCookie(newSessionId, ctx.secureCookie), clearNonceCookie(ctx.secureCookie)],
         location: '/',
       });
       res.end();

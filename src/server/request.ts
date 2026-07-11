@@ -163,13 +163,20 @@ interface JsonRpcRequest {
   params?: { name?: unknown; arguments?: unknown };
 }
 
+/** Every dispatchable JSON-RPC request (an object carrying a `method`) in a body,
+ *  unwrapping a batch array. */
+function jsonRpcRequests(body: unknown): JsonRpcRequest[] {
+  const arr = Array.isArray(body) ? body : [body];
+  return arr.filter((m): m is JsonRpcRequest => !!m && typeof m === 'object' && 'method' in m);
+}
+
 /** The single dispatchable JSON-RPC request in a body (unwrapping a batch array),
- *  or undefined when the body carries none. */
+ *  or undefined when the body carries none. Callers that gate/audit on this MUST
+ *  first reject multi-request batches (see handleMcpRequest) — the transport
+ *  dispatches EVERY message, so a second request would ride past a gate that
+ *  inspected only this one. */
 function jsonRpcRequest(body: unknown): JsonRpcRequest | undefined {
-  const msg = Array.isArray(body)
-    ? body.find((m) => m && typeof m === 'object' && 'method' in m)
-    : body;
-  return msg && typeof msg === 'object' ? (msg as JsonRpcRequest) : undefined;
+  return jsonRpcRequests(body)[0];
 }
 
 /** Shape a caught error into an `isError` MCP tool result carrying a clear message
@@ -230,7 +237,10 @@ function requiredDataPlanePermission(toolName: string): 'mcp:read' | 'mcp:write'
 function grantPermitsDataPlane(principal: Principal, projectId: string, permission: string): boolean {
   return (principal.grants ?? []).some(
     (g) =>
-      (g.projectId === projectId || g.projectId === '*') &&
+      // exact bound-project grant, or a genuine instance-wide '*' (NOT a
+      // unit-scoped grant that merely carries '*'+orgUnitId — that is bounded
+      // to its subtree and must not confer instance-wide data-plane reach).
+      (g.projectId === projectId || (g.projectId === '*' && !g.orgUnitId)) &&
       (g.permissions.includes('*') || g.permissions.includes(permission)),
   );
 }
@@ -385,6 +395,24 @@ export async function handleMcpRequest(
   const root = resolveProjectRoot(cfg.dataDir, principal, projectSelector(req));
   if (!root) {
     sendJson(res, 403, { error: 'project not authorized, unknown, or not specified' });
+    return;
+  }
+
+  // A JSON-RPC BATCH would let a second, unchecked request ride past the gates
+  // below: the permission gate, self-service dispatch, and audit each inspect a
+  // SINGLE message, but the transport dispatches every message in a batch array.
+  // A read-only (mcp:read) token could smuggle a write tool as the second element
+  // — unauthorized AND unaudited. The hosted data plane authorizes and audits
+  // exactly one tool call per request, so refuse multi-request bodies outright.
+  if (jsonRpcRequests(body).length > 1) {
+    sendJson(res, 400, {
+      jsonrpc: '2.0',
+      id: null,
+      error: {
+        code: -32600,
+        message: 'Batched JSON-RPC requests are not supported on the data plane; send one tool call per request.',
+      },
+    });
     return;
   }
 

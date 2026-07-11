@@ -120,6 +120,10 @@ function providerConfig(over: Partial<IdentityProviderConfig> = {}): IdentityPro
 function stateFrom(authUrl: string): string {
   return new URL(authUrl).searchParams.get('state') ?? '';
 }
+/** Run startSignIn and surface the state + nonce for a completeSignIn call. */
+function started(started: { url: string; nonce: string }): { state: string; nonce: string } {
+  return { state: stateFrom(started.url), nonce: started.nonce };
+}
 
 const SUBJECT: PrincipalSubject = { userId: 'u-1', kind: 'human', issuer: 'local', displayName: 'Ada' };
 
@@ -152,7 +156,7 @@ describe('web orchestrator SSO sign-in (sdd_host)', () => {
 
   it('startSignIn returns a provider authorization URL for an enabled provider (info audit)', () => {
     upsertIdentityProviderRecord(dataDir, providerConfig());
-    const authUrl = startSignIn(cfg, PROVIDER_ID, 'https://app.example/web/sso/callback');
+    const { url: authUrl } = startSignIn(cfg, PROVIDER_ID, 'https://app.example/web/sso/callback');
     const url = new URL(authUrl);
     expect(url.origin).toBe(issuerUrl);
     expect(url.pathname).toBe('/authorize');
@@ -178,9 +182,9 @@ describe('web orchestrator SSO sign-in (sdd_host)', () => {
 
   it('completeSignIn (first login): provisions an active user with empty grants and creates a resolvable WebSession (no token minted)', async () => {
     upsertIdentityProviderRecord(dataDir, providerConfig());
-    const state = stateFrom(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
+    const { state, nonce } = started(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
 
-    const sessionId = await completeSignIn(cfg, state, 'auth-code-1');
+    const sessionId = await completeSignIn(cfg, state, 'auth-code-1', nonce);
     expect(sessionId).toMatch(/^ws_[0-9a-f]+$/);
 
     // The user was provisioned: active, EMPTY grants, id = the resolved subject id.
@@ -206,13 +210,13 @@ describe('web orchestrator SSO sign-in (sdd_host)', () => {
 
   it('completeSignIn refuses a returning user who has been deactivated (creates no new session)', async () => {
     upsertIdentityProviderRecord(dataDir, providerConfig());
-    const s1 = stateFrom(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
-    await completeSignIn(cfg, s1, 'code-1');
+    const f1 = started(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
+    await completeSignIn(cfg, f1.state, 'code-1', f1.nonce);
 
     setUserStatus(dataDir, `sso:${PROVIDER_ID}:ext-1`, 'suspended');
 
-    const s2 = stateFrom(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
-    await expect(completeSignIn(cfg, s2, 'code-2')).rejects.toThrow(ForbiddenError);
+    const f2 = started(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
+    await expect(completeSignIn(cfg, f2.state, 'code-2', f2.nonce)).rejects.toThrow(ForbiddenError);
 
     // Only the first (pre-deactivation) session exists; the refused login minted nothing.
     expect(listWebSessionsBySubject(dataDir, `sso:${PROVIDER_ID}:ext-1`)).toHaveLength(1);
@@ -220,8 +224,10 @@ describe('web orchestrator SSO sign-in (sdd_host)', () => {
 
   it('completeSignIn does NOT revoke prior sessions (multi-device): two logins yield two live sessions', async () => {
     upsertIdentityProviderRecord(dataDir, providerConfig());
-    const idA = await completeSignIn(cfg, stateFrom(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb')), 'c1');
-    const idB = await completeSignIn(cfg, stateFrom(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb')), 'c2');
+    const fA = started(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
+    const idA = await completeSignIn(cfg, fA.state, 'c1', fA.nonce);
+    const fB = started(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
+    const idB = await completeSignIn(cfg, fB.state, 'c2', fB.nonce);
 
     expect(idA).not.toBe(idB);
     expect(getWebSessionById(dataDir, idA)).not.toBeNull();
@@ -229,9 +235,26 @@ describe('web orchestrator SSO sign-in (sdd_host)', () => {
     expect(listWebSessionsBySubject(dataDir, `sso:${PROVIDER_ID}:ext-1`)).toHaveLength(2);
   });
 
+  it('SECURITY: completeSignIn rejects a login-CSRF callback whose nonce cookie is absent or wrong', async () => {
+    upsertIdentityProviderRecord(dataDir, providerConfig());
+    const { state, nonce } = started(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
+
+    // Victim's browser has NO nonce cookie (attacker-delivered callback) → refused.
+    await expect(completeSignIn(cfg, state, 'code', null)).rejects.toThrow(ForbiddenError);
+    // A DIFFERENT browser's nonce (mismatch) → refused.
+    await expect(completeSignIn(cfg, state, 'code', 'deadbeef'.repeat(4))).rejects.toThrow(ForbiddenError);
+    // No session was created by either refused attempt.
+    expect(listWebSessionsBySubject(dataDir, `sso:${PROVIDER_ID}:ext-1`)).toHaveLength(0);
+
+    // The matching nonce (the browser that started the flow) → succeeds.
+    const id = await completeSignIn(cfg, state, 'code', nonce);
+    expect(id).toMatch(/^ws_[0-9a-f]+$/);
+  });
+
   it('completeSignIn rejects a tampered and an expired state', async () => {
     upsertIdentityProviderRecord(dataDir, providerConfig());
-    await expect(completeSignIn(cfg, 'tampered-not-a-state', 'code')).rejects.toThrow(/invalid SSO state/i);
+    // state verification runs BEFORE the nonce check, so the nonce arg is irrelevant here.
+    await expect(completeSignIn(cfg, 'tampered-not-a-state', 'code', 'n')).rejects.toThrow(/invalid SSO state/i);
 
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-07-11T00:00:00.000Z'));
@@ -239,7 +262,7 @@ describe('web orchestrator SSO sign-in (sdd_host)', () => {
       JSON.stringify({ providerId: PROVIDER_ID, nonce: 'n', redirectUri: 'https://app.example/cb' }),
     );
     vi.setSystemTime(new Date('2026-07-11T00:11:00.000Z')); // past the 10-minute TTL
-    await expect(completeSignIn(cfg, expired, 'code')).rejects.toThrow(/expired/i);
+    await expect(completeSignIn(cfg, expired, 'code', 'n')).rejects.toThrow(/expired/i);
   });
 });
 
@@ -685,9 +708,22 @@ describe('web portal HTTP mount (sdd_host)', () => {
     });
     expect(start.status).toBe(200);
     const state = new URL(JSON.parse(start.body).url).searchParams.get('state') ?? '';
+    // start installs the HttpOnly SSO-nonce cookie that binds this browser to the flow.
+    const startCookie = String(start.headers['set-cookie']?.[0] ?? '');
+    expect(startCookie).toMatch(/^wairon_sso_nonce=[0-9a-f]+/);
+    expect(startCookie).toMatch(/HttpOnly/);
+    const nonceCookie = /wairon_sso_nonce=[0-9a-f]+/.exec(startCookie)![0];
 
-    // callback → 302 to '/', setting an HttpOnly session cookie.
-    const cb = await raw({ method: 'GET', path: `/web/sso/callback?state=${encodeURIComponent(state)}&code=c1` });
+    // callback WITHOUT the nonce cookie is refused (login-CSRF defense).
+    const forged = await raw({ method: 'GET', path: `/web/sso/callback?state=${encodeURIComponent(state)}&code=c1` });
+    expect(forged.status).toBe(403);
+
+    // callback WITH the matching nonce cookie → 302 to '/', setting the session cookie.
+    const cb = await raw({
+      method: 'GET',
+      path: `/web/sso/callback?state=${encodeURIComponent(state)}&code=c1`,
+      headers: { cookie: nonceCookie },
+    });
     expect(cb.status).toBe(302);
     expect(cb.headers['location']).toBe('/');
     const setCookie = String(cb.headers['set-cookie']?.[0] ?? '');

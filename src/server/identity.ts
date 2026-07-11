@@ -277,7 +277,9 @@ function requirePrincipal(cfg: HostConfig, credential: string | null): Principal
  *  any instance-wide ('*') grant → admin over ['*']; otherwise editor over the
  *  distinct granted project ids. Mirrors auth.ts's forward projection in reverse. */
 function compatibilityProjection(grants: ProjectGrant[]): { role: Role; projects: string[] } {
-  if (grants.some((g) => g.projectId === '*')) {
+  // Instance-wide super-admin is '*' WITHOUT an orgUnitId (a unit-scoped '*'
+  // grant is bounded to its subtree — mirrors scope.ts and auth.ts).
+  if (grants.some((g) => g.projectId === '*' && !g.orgUnitId)) {
     return { role: 'admin', projects: ['*'] };
   }
   const projects = [...new Set(grants.map((g) => g.projectId))];

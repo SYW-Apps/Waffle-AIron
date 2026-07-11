@@ -100,7 +100,9 @@ function bootstrapAdminPrincipal(): Principal {
  *  local (mirrors identity.ts's compatibilityProjection) because auth.ts must not
  *  import from identity.ts. */
 function compatibilityProjectionFromGrants(grants: ProjectGrant[]): { role: Role; projects: string[] } {
-  if (grants.some((g) => g.projectId === '*')) {
+  // Instance-wide super-admin is '*' WITHOUT an orgUnitId — a unit-scoped grant
+  // that happens to carry '*' is bounded to its subtree (scope.ts agrees).
+  if (grants.some((g) => g.projectId === '*' && !g.orgUnitId)) {
     return { role: 'admin', projects: ['*'] };
   }
   return { role: 'editor', projects: [...new Set(grants.map((g) => g.projectId))] };
@@ -178,7 +180,15 @@ export function authenticateSession(dataDir: string, sessionId: string): Princip
 const VIEW_TTL_MS = 5 * 60 * 1000;
 
 function signingKey(): string {
-  return resolveSecret('signing-secret') || '';
+  // Fail CLOSED: an empty HMAC key would make view tokens and SSO state forgeable
+  // by anyone. The hosted server refuses to start without WAIRON_ADMIN_TOKEN, so
+  // this only guards the --no-auth path and any direct caller — never silently
+  // sign/verify with a blank key.
+  const key = resolveSecret('signing-secret');
+  if (!key) {
+    throw new Error('No signing secret available — set WAIRON_SIGNING_SECRET or WAIRON_ADMIN_TOKEN.');
+  }
+  return key;
 }
 
 /** Mint a short-lived HMAC-signed view token for one project's diagram. */

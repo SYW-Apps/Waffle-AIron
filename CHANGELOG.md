@@ -8,6 +8,30 @@ additive or a bug fix. The one compatibility surface to review before
 upgrading a CI pipeline is the conformance gate (see *Compatibility &
 migration*).
 
+### Security hardening (multi-tenant + web UI + image)
+
+Findings from an adversarial re-review of the authz core, the browser/SSO
+session surface, and a container CVE scan — all fixed:
+
+- **Data-plane batch bypass (HIGH):** a JSON-RPC *batch* body let a second,
+  unchecked tool call ride past the `mcp:read`/`mcp:write` permission gate
+  (which inspected only the first message) — a read-only token could smuggle a
+  write. The data plane now refuses multi-request batch bodies (`400`); one
+  tool call per request. Cross-tenant isolation was never affected.
+- **SSO login CSRF (HIGH):** the OIDC `state` nonce was signed but never bound
+  to the browser. Sign-in now sets a short-lived HttpOnly nonce cookie and the
+  callback requires it to match the signed state, so a forged/replayed callback
+  delivered to a victim fails closed.
+- **Grant-shape normalization:** a `projectId:'*'` grant that also carries an
+  `orgUnitId` is now treated as unit-scoped (never instance-wide super-admin)
+  everywhere, matching the scope engine.
+- **Signing key fails closed:** an absent signing secret now throws instead of
+  signing/verifying with an empty HMAC key (only reachable under `--no-auth`).
+- **Container image:** rebased to `node:24-alpine`, `apk upgrade`, and npm
+  removed from the runtime layer (the server runs `node` directly). The image
+  ships no perl/npm and scans **0 critical / 0 high**, down from 1 critical /
+  20 high on the previous debian base; size 488 MB → 318 MB.
+
 ### Hosting server (self-hosted)
 
 - **`wairon serve`** — run wairon as an HTTP server that hosts many

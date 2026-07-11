@@ -181,6 +181,28 @@ describe('handleMcpRequest granular data-plane permissions (end-to-end)', () => 
     }
   }, 20_000);
 
+  it('SECURITY: a read-only token cannot smuggle a write in a JSON-RPC batch (bypass refused)', async () => {
+    const tok = readOnly();
+
+    // The permission gate historically inspected only the FIRST batch message,
+    // while the transport dispatches EVERY message — a read tool up front and a
+    // write tool behind it would have run the write on a read-only grant. The
+    // data plane now refuses multi-request batches outright (HTTP 400, no
+    // dispatch), so the write never executes.
+    const batch = [call('sdd_get_status'), { ...call('sdd_initialize_system'), id: 2 }];
+    const res = await post(batch, tok);
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as RpcResponse;
+    expect(body.error?.code).toBe(-32600);
+    expect(body.error?.message ?? '').toMatch(/one tool call per request/i);
+  }, 20_000);
+
+  it('even an instance-wide grant may not batch (single tool call per request)', async () => {
+    const tok = instanceWide();
+    const res = await post([call('sdd_get_status'), { ...call('sdd_get_spec'), id: 2 }], tok);
+    expect(res.status).toBe(400);
+  }, 20_000);
+
   it('read/write token: allowed both a read and a write (write passes the gate)', async () => {
     const tok = readWrite();
 
