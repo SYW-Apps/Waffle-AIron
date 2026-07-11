@@ -7,8 +7,12 @@ import {
   tryAppendAudit,
   buildSsoAuditEvent,
   ANONYMOUS_SSO_ACTOR,
+  listUsers,
   type SsoStatePayload,
 } from './identity.js';
+import { assertAllowedRedirectUri } from './idp.js';
+import { getHealthReport, getUsage } from './operations.js';
+import { listPendingRequests, decideRequest } from './selfservice.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { findUserByExternalSubject, upsertUser } from './users.js';
 import {
@@ -25,6 +29,7 @@ import { generateLandscape } from './landscape.js';
 import { sendJson } from './httpio.js';
 import type { ValidationIssue } from '../core/validation.js';
 import type {
+  ApprovalDecision,
   HostConfig,
   HostedUserRecord,
   LandscapeGraphModel,
@@ -104,6 +109,11 @@ const DEV_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
  */
 export function startSignIn(cfg: HostConfig, providerId: string, redirectUri: string): { url: string; nonce: string } {
   const provider = resolveEnabledProvider(cfg, providerId); // steps 1–4 (throws on unknown/disabled)
+
+  // Pin the redirect URI to the provider's server-side allowlist (when configured)
+  // — the callback destination must never be attacker-chosen (open-redirect /
+  // code-delivery hardening on top of the nonce-cookie login-CSRF defense).
+  assertAllowedRedirectUri(provider, redirectUri);
 
   const nonce = crypto.randomBytes(16).toString('hex'); // step 5
   const payload: SsoStatePayload = { providerId, nonce, redirectUri };
@@ -679,6 +689,58 @@ header .brand { font-weight:800; font-size:17px; letter-spacing:.02em; }
 .empty .box { max-width:420px; background:var(--syw-surface-gradient); border:1px solid var(--chrome-border); border-radius:14px; padding:22px 24px; box-shadow:var(--syw-deep-shadow); }
 .empty h3 { margin:0 0 6px; font-size:15px; color:var(--ink); }
 .empty p { margin:0; font-size:12.5px; color:var(--dim); }
+
+/* ---- primary nav (Canvas / Specs / Admin) ---- */
+nav.tabs { display:flex; gap:2px; }
+nav.tabs button { border:none; background:transparent; color:var(--dim); padding:7px 13px; border-radius:8px; cursor:pointer; font-size:12.5px; font-weight:600; }
+nav.tabs button:hover { background:var(--hover-bg); color:var(--ink); }
+nav.tabs button.active { background:var(--hover-bg); color:var(--accent); }
+.view { position:absolute; inset:0; display:none; }
+.view.active { display:block; }
+
+/* ---- specs (authoring) view: list | inspector split ---- */
+.split { display:flex; height:100%; }
+.pane-l { width:300px; flex:0 0 auto; border-right:1px solid var(--chrome-border); overflow:auto; background:rgba(0,0,0,.15); }
+.pane-r { flex:1; min-width:0; overflow:auto; padding:16px 20px; }
+.pane-hd { padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); position:sticky; top:0; background:var(--chrome); border-bottom:1px solid var(--line); display:flex; align-items:center; gap:8px; }
+.speclist { list-style:none; margin:0; padding:6px; }
+.speclist li { padding:7px 10px; border-radius:7px; cursor:pointer; font-size:12.5px; color:var(--ink); display:flex; align-items:center; gap:8px; }
+.speclist li:hover { background:var(--hover-bg); }
+.speclist li.sel { background:var(--hover-bg); color:var(--accent); }
+.speclist .kind { font-size:10px; color:var(--dim); border:1px solid var(--line); border-radius:12px; padding:0 6px; flex:0 0 auto; }
+.insp h2 { margin:0 0 2px; font-size:18px; }
+.insp .meta { color:var(--dim); font-size:12px; margin:0 0 16px; }
+.insp label { display:block; color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.05em; margin:14px 0 5px; }
+.insp textarea, .insp input[type=text] { width:100%; background:var(--input-bg); color:var(--ink); border:1px solid var(--chrome-border); border-radius:9px; padding:9px 11px; font:inherit; }
+.insp textarea { min-height:96px; resize:vertical; }
+.insp textarea:focus, .insp input:focus { outline:none; border-color:var(--accent); box-shadow:var(--syw-glow); }
+.insp textarea:disabled, .insp input:disabled { opacity:.6; cursor:not-allowed; }
+.rowbtns { display:flex; gap:8px; margin-top:14px; align-items:center; }
+.json { background:rgba(0,0,0,.28); border:1px solid var(--line); border-radius:9px; padding:12px; font:11.5px/1.5 "SFMono-Regular",Consolas,monospace; color:var(--dim); white-space:pre; overflow:auto; max-height:360px; }
+.msg { font-size:12px; min-height:16px; }
+.msg.ok { color:var(--syw-cyan); } .msg.bad { color:var(--danger); }
+
+/* ---- admin view ---- */
+.admin-wrap { height:100%; display:flex; flex-direction:column; }
+.subtabs { display:flex; gap:2px; padding:8px 14px; border-bottom:1px solid var(--chrome-border); background:var(--chrome); flex:0 0 auto; }
+.subtabs button { border:1px solid transparent; background:transparent; color:var(--dim); padding:6px 12px; border-radius:8px; cursor:pointer; font-size:12px; font-weight:600; }
+.subtabs button.active { background:var(--hover-bg); color:var(--accent); border-color:var(--chrome-border); }
+.admin-body { flex:1; min-height:0; overflow:auto; padding:16px 20px; }
+.apanel { display:none; } .apanel.active { display:block; }
+table.grid { width:100%; border-collapse:collapse; font-size:12.5px; }
+table.grid th { text-align:left; color:var(--dim); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em; padding:8px 10px; border-bottom:1px solid var(--chrome-border); position:sticky; top:0; background:var(--chrome); }
+table.grid td { padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+table.grid tr:hover td { background:rgba(255,255,255,.03); }
+.pill { display:inline-block; font-size:10.5px; padding:1px 8px; border-radius:12px; border:1px solid var(--line); }
+.pill.ok { color:#7ee787; border-color:rgba(126,231,135,.4); } .pill.warn { color:var(--warn); border-color:rgba(245,158,11,.4); } .pill.bad { color:var(--danger); border-color:rgba(255,107,129,.4); }
+.mini { border:1px solid var(--chrome-border); background:var(--input-bg); color:var(--ink); padding:4px 9px; border-radius:7px; cursor:pointer; font-size:11.5px; }
+.mini:hover { background:var(--hover-bg); border-color:var(--accent); }
+.mini.danger:hover { border-color:var(--danger); color:var(--danger); }
+.hint { color:var(--dim); font-size:12px; padding:14px 4px; }
+.cards { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:16px; }
+.stat { background:var(--syw-surface-gradient); border:1px solid var(--chrome-border); border-radius:12px; padding:14px 18px; min-width:150px; }
+.stat .k { color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
+.stat .v { font-size:22px; font-weight:800; margin-top:3px; }
 </style>
 </head>
 <body data-theme="syw">
@@ -700,6 +762,11 @@ header .brand { font-weight:800; font-size:17px; letter-spacing:.02em; }
 <div id="app" hidden>
   <header id="topbar">
     <span class="brand syw-gradient-text">wairon</span>
+    <nav class="tabs" id="navTabs">
+      <button data-view="canvas" class="active">Canvas</button>
+      <button data-view="specs">Specs</button>
+      <button data-view="admin" id="navAdmin" hidden>Admin</button>
+    </nav>
     <div class="ctl" id="projCtl"><span>Project</span><select id="projSel"></select></div>
     <span class="spacer"></span>
     <span class="ro" id="roBadge" hidden title="Your grants are read-only">read-only</span>
@@ -713,8 +780,42 @@ header .brand { font-weight:800; font-size:17px; letter-spacing:.02em; }
     </div>
   </header>
   <div id="wrap">
-    <iframe id="cv" title="Architecture canvas" referrerpolicy="same-origin"></iframe>
-    <div class="empty" id="empty" hidden><div class="box"><h3>No project in scope</h3><p>There are no projects you can view yet.</p></div></div>
+    <!-- Canvas view (existing embedded architecture canvas) -->
+    <div class="view active" id="view-canvas">
+      <iframe id="cv" title="Architecture canvas" referrerpolicy="same-origin"></iframe>
+      <div class="empty" id="empty" hidden><div class="box"><h3>No project in scope</h3><p>There are no projects you can view yet.</p></div></div>
+    </div>
+
+    <!-- Specs view (authoring over /mcp) -->
+    <div class="view" id="view-specs">
+      <div class="split">
+        <div class="pane-l">
+          <div class="pane-hd"><span id="specsProj">specs</span><span class="spacer" style="flex:1"></span><button class="mini" id="btnValidate">Validate</button></div>
+          <ul class="speclist" id="specList"></ul>
+        </div>
+        <div class="pane-r">
+          <div class="insp" id="insp"><div class="hint">Select a component on the left to inspect and edit its specification.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Admin view (control-plane pages) -->
+    <div class="view" id="view-admin">
+      <div class="admin-wrap">
+        <div class="subtabs" id="adminSubtabs">
+          <button data-panel="approvals" class="active">Approvals</button>
+          <button data-panel="users">Users</button>
+          <button data-panel="landscape">Landscape</button>
+          <button data-panel="health">Health</button>
+        </div>
+        <div class="admin-body">
+          <div class="apanel active" id="ap-approvals"><div class="hint">Loading…</div></div>
+          <div class="apanel" id="ap-users"><div class="hint">Loading…</div></div>
+          <div class="apanel" id="ap-landscape"><div class="hint">Loading…</div></div>
+          <div class="apanel" id="ap-health"><div class="hint">Loading…</div></div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -781,8 +882,9 @@ header .brand { font-weight:800; font-size:17px; letter-spacing:.02em; }
     $('topbar').hidden = isLocal;
     $('whoLbl').textContent = (ctx.subject && ctx.subject.userId) || 'signed in';
     $('adminBadge').hidden = !ctx.isAdmin;
-    // Role-aware: when the caller cannot author, show a read-only marker (there
-    // are no write affordances in the shell yet — this only avoids implying write).
+    $('navAdmin').hidden = !ctx.isAdmin;      // the Admin tab appears only for admins
+    // Role-aware: developers who cannot author see a read-only marker AND the spec
+    // editor's write affordances are disabled (below).
     $('roBadge').hidden = !!ctx.canWriteProjects;
 
     var pids = ctx.visibleProjectIds || [];
@@ -795,21 +897,226 @@ header .brand { font-weight:800; font-size:17px; letter-spacing:.02em; }
     sel.value = selectedProjectId;
     // Hide the picker when there is nothing to choose (or in local single-project mode).
     $('projCtl').style.display = (!isLocal && pids.length > 0) ? 'flex' : 'none';
+    setView('canvas');
     loadCanvas();
   }
 
+  // ---- small helpers ------------------------------------------------------
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  // One JSON-RPC tool call over the existing /mcp data plane, bound to the selected
+  // project. The session cookie authenticates; Phase-6b grants authorize (a
+  // read-only session is refused write tools server-side). Returns the tool's parsed
+  // JSON result, or throws with the tool's error text.
+  function mcp(name, args) {
+    return api('/mcp?project=' + encodeURIComponent(selectedProjectId), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: name, arguments: args || {} } }),
+    }).then(function (r) {
+      if (r.status === 401) throw new Error('Session expired — sign in again.');
+      if (r.status === 403) throw new Error('Not permitted for this project.');
+      return r.json();
+    }).then(function (env) {
+      var result = env && env.result;
+      var text = result && result.content && result.content[0] && result.content[0].text;
+      if (result && result.isError) throw new Error(text || 'tool error');
+      if (env && env.error) throw new Error(env.error.message || 'rpc error');
+      try { return text ? JSON.parse(text) : null; } catch (e) { return text; }
+    });
+  }
+
+  // ---- primary tabs -------------------------------------------------------
+  var currentView = 'canvas';
+  function setView(name) {
+    currentView = name;
+    ['canvas', 'specs', 'admin'].forEach(function (v) {
+      var el = $('view-' + v); if (el) el.classList.toggle('active', v === name);
+    });
+    Array.prototype.forEach.call($('navTabs').children, function (b) {
+      b.classList.toggle('active', b.getAttribute('data-view') === name);
+    });
+    if (name === 'specs') loadSpecList();
+    if (name === 'admin') loadAdminPanel(currentPanel);
+  }
+  Array.prototype.forEach.call($('navTabs').children, function (b) {
+    b.addEventListener('click', function () {
+      var v = b.getAttribute('data-view');
+      if (v === 'admin' && !(ctx && ctx.isAdmin)) return;
+      setView(v);
+    });
+  });
+
   // ---- embedded canvas ----------------------------------------------------
-  // The iframe IS the canvas: it loads the SAME renderCanvasHtml engine as the
-  // static export, scoped to the selected project on a same-origin route. No
-  // diagram rendering happens in this shell.
   function loadCanvas() {
     if (!selectedProjectId) { $('cv').hidden = true; $('empty').hidden = false; return; }
     $('empty').hidden = true; $('cv').hidden = false;
     $('cv').src = '/web/canvas?projectId=' + encodeURIComponent(selectedProjectId);
   }
 
+  // ---- specs view (authoring over /mcp) -----------------------------------
+  var selectedSpec = null; // { kind, id }
+  function loadSpecList() {
+    $('specsProj').textContent = selectedProjectId || 'no project';
+    var list = $('specList'); list.innerHTML = '<li class="hint">Loading…</li>';
+    if (!selectedProjectId) { list.innerHTML = '<li class="hint">No project selected.</li>'; return; }
+    // The live project graph is the component index — list subsystems + components.
+    api('/web/graph?tier=project&projectId=' + encodeURIComponent(selectedProjectId) + '&level=3')
+      .then(function (r) { if (!r.ok) throw new Error('graph ' + r.status); return r.json(); })
+      .then(function (g) {
+        var nodes = (g.nodes || []).filter(function (n) { return n.kind === 'component' || n.kind === 'subsystem'; });
+        nodes.sort(function (a, b) { return (a.kind + a.label).localeCompare(b.kind + b.label); });
+        if (!nodes.length) { list.innerHTML = '<li class="hint">No components yet.</li>'; return; }
+        list.innerHTML = '';
+        nodes.forEach(function (n) {
+          var li = document.createElement('li');
+          li.innerHTML = '<span class="kind">' + esc(n.kind) + '</span><span>' + esc(n.label || n.id) + '</span>'
+            + (n.issueCount ? ' <span class="pill bad" title="validation issues">' + n.issueCount + '</span>' : '');
+          li.addEventListener('click', function () {
+            Array.prototype.forEach.call(list.children, function (x) { x.classList.remove('sel'); });
+            li.classList.add('sel');
+            selectSpec(n.kind === 'subsystem' ? 'subsystem' : 'component', n.id);
+          });
+          list.appendChild(li);
+        });
+      })
+      .catch(function (e) { list.innerHTML = '<li class="hint bad">' + esc(e.message) + '</li>'; });
+  }
+  function selectSpec(kind, id) {
+    selectedSpec = { kind: kind, id: id };
+    var insp = $('insp'); insp.innerHTML = '<div class="hint">Loading ' + esc(id) + '…</div>';
+    mcp('sdd_get_spec', { kind: kind, id: id }).then(function (spec) {
+      var canWrite = !!(ctx && ctx.canWriteProjects);
+      var desc = (spec && spec.description) || '';
+      insp.innerHTML =
+        '<h2>' + esc((spec && spec.name) || id) + '</h2>'
+        + '<p class="meta">' + esc(kind) + ' · ' + esc(id) + (spec && spec.componentType ? ' · ' + esc(spec.componentType) : '') + '</p>'
+        + '<label>Description</label>'
+        + '<textarea id="fDesc"' + (canWrite ? '' : ' disabled') + '>' + esc(desc) + '</textarea>'
+        + '<div class="rowbtns">'
+        + (canWrite ? '<button class="btn-primary" style="width:auto" id="fSave">Save</button>' : '<span class="ro">read-only — your grants cannot author</span>')
+        + '<span class="msg" id="fMsg"></span></div>'
+        + '<label>Full specification</label>'
+        + '<div class="json">' + esc(JSON.stringify(spec, null, 2)) + '</div>';
+      if (canWrite) $('fSave').addEventListener('click', saveSpec);
+    }).catch(function (e) { insp.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+  }
+  function saveSpec() {
+    if (!selectedSpec) return;
+    var msg = $('fMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
+    mcp('sdd_update_spec', { kind: selectedSpec.kind, id: selectedSpec.id, delta: { description: $('fDesc').value } })
+      .then(function () { msg.className = 'msg ok'; msg.textContent = 'Saved.'; loadSpecList(); })
+      .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+  }
+  $('btnValidate').addEventListener('click', function () {
+    var insp = $('insp'); insp.innerHTML = '<div class="hint">Validating…</div>';
+    mcp('sdd_validate_tree', {}).then(function (res) {
+      var issues = (res && res.issues) || [];
+      var errs = issues.filter(function (i) { return i.severity === 'error'; }).length;
+      var warns = issues.length - errs;
+      var html = '<h2>Validation</h2><p class="meta">' + (issues.length ? (errs + ' error(s), ' + warns + ' warning(s)') : 'clean — no findings') + '</p>';
+      if (issues.length) {
+        html += '<table class="grid"><thead><tr><th>Severity</th><th>Code</th><th>Spec</th><th>Message</th></tr></thead><tbody>';
+        issues.slice(0, 200).forEach(function (i) {
+          var cls = i.severity === 'error' ? 'bad' : 'warn';
+          html += '<tr><td><span class="pill ' + cls + '">' + esc(i.severity) + '</span></td><td>' + esc(i.code) + '</td><td>' + esc(i.specId || '') + '</td><td>' + esc(i.message) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+      insp.innerHTML = html;
+    }).catch(function (e) { insp.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+  });
+
+  // ---- admin view (control-plane pages) -----------------------------------
+  var currentPanel = 'approvals';
+  Array.prototype.forEach.call($('adminSubtabs').children, function (b) {
+    b.addEventListener('click', function () {
+      currentPanel = b.getAttribute('data-panel');
+      Array.prototype.forEach.call($('adminSubtabs').children, function (x) { x.classList.toggle('active', x === b); });
+      ['approvals', 'users', 'landscape', 'health'].forEach(function (p) { $('ap-' + p).classList.toggle('active', p === currentPanel); });
+      loadAdminPanel(currentPanel);
+    });
+  });
+  function adminGet(path) {
+    return api('/web/admin/' + path).then(function (r) {
+      if (r.status === 403) throw new Error('Your grants do not cover this control-plane view.');
+      if (!r.ok) throw new Error(path + ' ' + r.status);
+      return r.json();
+    });
+  }
+  function loadAdminPanel(panel) {
+    var el = $('ap-' + panel); if (!el) return;
+    el.innerHTML = '<div class="hint">Loading…</div>';
+    if (panel === 'approvals') {
+      adminGet('approvals').then(function (d) {
+        var rows = d.requests || [];
+        if (!rows.length) { el.innerHTML = '<div class="hint">No pending approval requests in your scope.</div>'; return; }
+        var html = '<table class="grid"><thead><tr><th>Kind</th><th>Project</th><th>Requested by</th><th>Summary</th><th></th></tr></thead><tbody>';
+        rows.forEach(function (r) {
+          html += '<tr><td>' + esc(r.kind) + '</td><td>' + esc(r.projectId || '—') + '</td><td>' + esc(r.requestedBy && r.requestedBy.userId) + '</td><td>' + esc(r.summary || '') + '</td>'
+            + '<td style="white-space:nowrap"><button class="mini" data-approve="' + esc(r.id) + '">Approve</button> <button class="mini danger" data-reject="' + esc(r.id) + '">Reject</button></td></tr>';
+        });
+        html += '</tbody></table>';
+        el.innerHTML = html;
+        Array.prototype.forEach.call(el.querySelectorAll('[data-approve]'), function (b) { b.addEventListener('click', function () { decide(b.getAttribute('data-approve'), true); }); });
+        Array.prototype.forEach.call(el.querySelectorAll('[data-reject]'), function (b) { b.addEventListener('click', function () { decide(b.getAttribute('data-reject'), false); }); });
+      }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+    } else if (panel === 'users') {
+      adminGet('users').then(function (d) {
+        var rows = d.users || [];
+        if (!rows.length) { el.innerHTML = '<div class="hint">No users in your scope.</div>'; return; }
+        var html = '<table class="grid"><thead><tr><th>User</th><th>Status</th><th>Unit</th><th>Grants</th></tr></thead><tbody>';
+        rows.forEach(function (u) {
+          var st = u.status === 'active' ? 'ok' : 'warn';
+          var grants = (u.grants || []).map(function (g) { return esc(g.projectId) + ':' + esc((g.permissions || []).join('/')); }).join(', ');
+          html += '<tr><td>' + esc(u.subject && u.subject.userId) + '</td><td><span class="pill ' + st + '">' + esc(u.status) + '</span></td><td>' + esc(u.unitId || '—') + '</td><td>' + (grants || '<span class="hint">none</span>') + '</td></tr>';
+        });
+        el.innerHTML = html + '</tbody></table>';
+      }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+    } else if (panel === 'landscape') {
+      adminGet('landscape').then(function (g) {
+        var units = (g.nodes || []).filter(function (n) { return n.nodeKind === 'unit'; });
+        var projs = (g.nodes || []).filter(function (n) { return n.nodeKind === 'project'; });
+        var html = '<div class="cards"><div class="stat"><div class="k">Org units</div><div class="v">' + units.length + '</div></div>'
+          + '<div class="stat"><div class="k">Projects</div><div class="v">' + projs.length + '</div></div>'
+          + '<div class="stat"><div class="k">Relations</div><div class="v">' + ((g.edges || []).length) + '</div></div></div>';
+        html += '<table class="grid"><thead><tr><th>Node</th><th>Kind</th><th>Status</th></tr></thead><tbody>';
+        (g.nodes || []).forEach(function (n) { html += '<tr><td>' + esc(n.label || n.id) + '</td><td>' + esc(n.nodeKind) + '</td><td>' + esc(n.status || '—') + '</td></tr>'; });
+        el.innerHTML = html + '</tbody></table>';
+      }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+    } else if (panel === 'health') {
+      adminGet('health').then(function (h) {
+        var st = h.status === 'ok' ? 'ok' : (h.status === 'degraded' ? 'warn' : 'bad');
+        var html = '<div class="cards"><div class="stat"><div class="k">Instance status</div><div class="v"><span class="pill ' + st + '">' + esc(h.status) + '</span></div></div></div>';
+        html += '<table class="grid"><thead><tr><th>Check</th><th>Status</th><th>Detail</th></tr></thead><tbody>';
+        (h.checks || []).forEach(function (c) {
+          var cs = c.status === 'pass' ? 'ok' : (c.status === 'warn' ? 'warn' : 'bad');
+          html += '<tr><td>' + esc(c.id) + '</td><td><span class="pill ' + cs + '">' + esc(c.status) + '</span></td><td>' + esc(c.message) + '</td></tr>';
+        });
+        el.innerHTML = html + '</tbody></table>';
+      }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+    }
+  }
+  function decide(requestId, approved) {
+    api('/web/admin/approvals/decide', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ requestId: requestId, approved: approved }),
+    }).then(function (r) {
+      if (!r.ok) return r.json().then(function (j) { throw new Error((j && j.error) || ('decide ' + r.status)); });
+      loadAdminPanel('approvals');
+    }).catch(function (e) { alert(e.message); });
+  }
+
   // ---- controls -----------------------------------------------------------
-  $('projSel').addEventListener('change', function () { selectedProjectId = $('projSel').value; loadCanvas(); });
+  $('projSel').addEventListener('change', function () {
+    selectedProjectId = $('projSel').value;
+    loadCanvas();
+    if (currentView === 'specs') loadSpecList();
+  });
 
   // account menu (sign out this device / everywhere)
   $('acctBtn').addEventListener('click', function (e) { e.stopPropagation(); $('acctDd').classList.toggle('open'); });
@@ -934,6 +1241,50 @@ export async function handleWebRequest(
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       res.end(canvasHtml);
       return;
+    }
+
+    // ── Admin control-plane, session-scoped (slice 3) ────────────────────────
+    // These reuse the EXISTING Phase-6 scoped control-plane functions, passing the
+    // browser session id as the credential (a ws_ session resolves to a Principal
+    // exactly like a bearer token). Each function authenticates and FILTERS to the
+    // caller's grants — a viewer session gets an empty/forbidden result, never
+    // another tenant's data. No new authorization surface, just a browser-reachable
+    // route onto the same scoped reads the admin API already exposes.
+    if (parts.length >= 2 && parts[1] === 'admin') {
+      // GET /web/admin/users — scoped user directory (user:admin scope).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'users') {
+        return sendJson(res, 200, { users: listUsers(cfg, sessionId) });
+      }
+      // GET /web/admin/landscape — the org-unit + project + relation graph (landscape:read).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'landscape') {
+        return sendJson(res, 200, generateLandscape(cfg, sessionId));
+      }
+      // GET /web/admin/health — instance health report (operations:read).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'health') {
+        return sendJson(res, 200, getHealthReport(cfg, sessionId));
+      }
+      // GET /web/admin/usage — resource usage snapshots (operations:read).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'usage') {
+        return sendJson(res, 200, { usage: getUsage(cfg, sessionId) });
+      }
+      // GET /web/admin/approvals — pending approval requests in the caller's scope
+      // (approval:decide).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'approvals') {
+        return sendJson(res, 200, { requests: listPendingRequests(cfg, sessionId) });
+      }
+      // POST /web/admin/approvals/decide { requestId, approved, reason } — decide a
+      // pending request. decidedBy is server-authoritative (the session principal);
+      // self-approval is refused inside decideRequest.
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'approvals' && parts[3] === 'decide') {
+        const decision: ApprovalDecision = {
+          requestId: String(body?.requestId ?? ''),
+          approved: body?.approved === true,
+          reason: typeof body?.reason === 'string' ? body.reason : undefined,
+          decidedBy: { userId: '', kind: 'human', issuer: 'local' }, // overridden server-side
+          decidedAt: '', // set server-side
+        };
+        return sendJson(res, 200, decideRequest(cfg, sessionId, decision));
+      }
     }
 
     sendJson(res, 404, { error: 'not found' });

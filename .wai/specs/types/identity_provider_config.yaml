@@ -43,6 +43,13 @@ fields:
     type: string
     description: ISO-8601 update timestamp.
     optional: false
+  - name: allowedRedirectUris
+    type: string[]
+    description: >-
+      Exact-match allowlist of redirect URIs accepted for this provider's SSO flow. When set and
+      non-empty, a redirectUri not on the list is refused (server-side redirect_uri pinning). When
+      unset/empty, any redirectUri is accepted (backward compatible).
+    optional: true
 methods: []
 createdAt: '2026-07-08T22:00:13.587Z'
-updatedAt: '2026-07-08T22:00:13.611Z'
+updatedAt: '2026-07-11T23:34:40.999Z'

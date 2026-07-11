@@ -272,3 +272,22 @@ export function resolveSubject(
     email,
   };
 }
+
+/**
+ * Enforce the provider's server-side redirect_uri allowlist.
+ *
+ * When `config.allowedRedirectUris` is set and non-empty, `redirectUri` must be
+ * an EXACT string match of one of its entries (no prefix/substring matching);
+ * otherwise this throws. When unset or empty, every redirectUri is accepted
+ * (backward compatible). The thrown message never echoes the supplied
+ * redirectUri, so a malicious value cannot be reflected back.
+ */
+export function assertAllowedRedirectUri(provider: IdentityProviderConfig, redirectUri: string): void {
+  const allowed = provider.allowedRedirectUris;
+  if (!allowed || allowed.length === 0) {
+    return;
+  }
+  if (!allowed.includes(redirectUri)) {
+    throw new Error(`redirect_uri not allowed for identity provider '${provider.id}'.`);
+  }
+}

@@ -590,15 +590,15 @@ describe('web portal client app shell (sdd_host)', () => {
   });
 
   it('has dropped the wave-4 from-scratch SVG renderer and the LOD slider entirely', () => {
-    // No trace of the hand-rolled layout/renderer, the level-of-detail slider, or
-    // the project-view use of /web/graph — the iframe IS the canvas now.
+    // No trace of the hand-rolled layout/renderer or the level-of-detail slider —
+    // the iframe IS the canvas. The Specs authoring view DOES fetch /web/graph as a
+    // plain JSON component index (not a renderer), so /web/graph is expected now.
     expect(html).not.toContain('data-tier');
     expect(html).not.toContain('data-node');
     expect(html).not.toContain('data-toggle');
     expect(html).not.toContain('levelRange');
     expect(html).not.toContain('renderGraph');
     expect(html).not.toContain('borderPt');
-    expect(html).not.toContain('/web/graph');
   });
 
   it('references no external http(s):// assets — everything is inline', () => {
@@ -874,4 +874,53 @@ describe('web portal HTTP mount (sdd_host)', () => {
     });
     expect(forbidden.status).toBe(403);
   }, 20_000);
+
+  it('admin routes: an instance-admin session reads the scoped control-plane views', async () => {
+    enableWebUi();
+    const admin = createWebSession(dataDir, {
+      id: '',
+      subject: SUBJECT,
+      grants: [{ projectId: '*', permissions: ['*'] }],
+      createdAt: '',
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+    });
+    const cookie = `wairon_session=${admin.id}`;
+
+    const users = await raw({ method: 'GET', path: '/web/admin/users', headers: { cookie } });
+    expect(users.status).toBe(200);
+    expect(JSON.parse(users.body)).toHaveProperty('users');
+
+    const health = await raw({ method: 'GET', path: '/web/admin/health', headers: { cookie } });
+    expect(health.status).toBe(200);
+    expect(JSON.parse(health.body)).toHaveProperty('status');
+
+    const approvals = await raw({ method: 'GET', path: '/web/admin/approvals', headers: { cookie } });
+    expect(approvals.status).toBe(200);
+    expect(JSON.parse(approvals.body)).toHaveProperty('requests');
+
+    const landscape = await raw({ method: 'GET', path: '/web/admin/landscape', headers: { cookie } });
+    expect(landscape.status).toBe(200);
+    expect(JSON.parse(landscape.body)).toHaveProperty('nodes');
+  }, 20_000);
+
+  it('admin routes: a viewer session (no admin grants) is refused with 403, no data leak', async () => {
+    enableWebUi();
+    const viewer = createWebSession(dataDir, {
+      id: '',
+      subject: SUBJECT,
+      grants: [{ projectId: 'demo', permissions: ['mcp:read'] }],
+      createdAt: '',
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+    });
+    const cookie = `wairon_session=${viewer.id}`;
+
+    // listUsers and getHealthReport both throw ForbiddenError on empty scope → 403.
+    expect((await raw({ method: 'GET', path: '/web/admin/users', headers: { cookie } })).status).toBe(403);
+    expect((await raw({ method: 'GET', path: '/web/admin/health', headers: { cookie } })).status).toBe(403);
+  }, 20_000);
+
+  it('admin routes require the web UI to be enabled (404 when disabled)', async () => {
+    // webUiEnabled defaults false — the admin routes are part of /web and 404 with it.
+    expect((await raw({ method: 'GET', path: '/web/admin/users' })).status).toBe(404);
+  });
 });

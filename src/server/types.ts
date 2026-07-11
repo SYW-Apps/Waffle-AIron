@@ -464,6 +464,10 @@ export interface IdentityProviderConfig {
   allowedDomains?: string[];
   /** Provider group claims that map to instance-admin, when set. */
   adminGroupClaims?: string[];
+  /** Exact-match allowlist of redirect URIs accepted for this provider's SSO flow.
+   *  When set and non-empty, a redirectUri not on the list is refused. When
+   *  unset/empty, any redirectUri is accepted (backward compatible). */
+  allowedRedirectUris?: string[];
   enabled: boolean;
   updatedAt: string;
 }

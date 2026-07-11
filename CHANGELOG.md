@@ -22,6 +22,9 @@ session surface, and a container CVE scan — all fixed:
   to the browser. Sign-in now sets a short-lived HttpOnly nonce cookie and the
   callback requires it to match the signed state, so a forged/replayed callback
   delivered to a victim fails closed.
+- **SSO redirect_uri allowlist (MEDIUM):** an identity provider may now declare
+  `allowedRedirectUris`; when set, `POST /web/sso/start` refuses any redirect
+  URI not on the exact-match list (server-side redirect pinning).
 - **Grant-shape normalization:** a `projectId:'*'` grant that also carries an
   `orgUnitId` is now treated as unit-scoped (never instance-wide super-admin)
   everywhere, matching the scope engine.
@@ -31,6 +34,31 @@ session surface, and a container CVE scan — all fixed:
   removed from the runtime layer (the server runs `node` directly). The image
   ships no perl/npm and scans **0 critical / 0 high**, down from 1 critical /
   20 high on the previous debian base; size 488 MB → 318 MB.
+
+### Unified web UI (opt-in)
+
+One role-based browser app for the hosted server — developers author specs
+visually, admins additionally get control-plane pages, all gated by the
+Phase-6 grant/role model. A browser session resolves to a Principal like a
+bearer token, so the UI reuses the existing scoped API with no new
+authorization surface. Enable with `webUiEnabled: true` in the instance
+exposure policy (default **off**).
+
+- **View** — an embedded live architecture canvas per authorized project
+  (the same engine as `wairon diagram --format canvas`).
+- **Specs (authoring)** — a component index + structured inspector that reads
+  and edits specs over the existing `/mcp` data plane (`sdd_get_spec` /
+  `sdd_update_spec`) and runs `sdd_validate_tree`, with write affordances
+  disabled for read-only sessions (Phase-6b `mcp:read`/`mcp:write` enforced
+  server-side).
+- **Admin (control pages)** — session-scoped `/web/admin/*` routes over the
+  existing Phase-6 scoped control-plane functions: pending approvals (with
+  approve/reject), the scoped user directory, the landscape (units / projects
+  / relations), and the instance health report. Every view filters to the
+  caller's grants; a viewer session is refused (403), never leaked.
+- Security: the SSO session surface passed an adversarial review; the login
+  CSRF and redirect_uri findings (above) are fixed. Sessions are HttpOnly,
+  `SameSite=Lax`, with a custom-header CSRF gate on cookie-auth mutations.
 
 ### Hosting server (self-hosted)
 
