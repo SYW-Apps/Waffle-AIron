@@ -428,11 +428,20 @@ function clearSessionCookie(secure: boolean): string {
 /**
  * Serve the unified web UI client application shell for the requested path. No
  * orchestrator call; the app then drives every feature by calling existing scoped
- * endpoints with the session cookie as its credential.
+ * endpoints (`/web/context`, `/web/graph`, `/web/sso/start`, `/web/logout[-all]`)
+ * with the HttpOnly session cookie as its credential plus the X-Wairon-Web CSRF
+ * header.
  *
- * WAVE 3: a minimal, self-contained placeholder shell that proves the wiring —
- * it fetches /web/context and can request /web/graph with the X-Wairon-Web header.
- * Wave 4 replaces this with the real canvas-styled client.
+ * WAVE 4: the real interactive, role-aware, level-of-detail spec canvas. One
+ * self-contained HTML document — all CSS + JS inline, zero external assets. It
+ * reuses the exported architecture-canvas deep-space --syw-* theme (see
+ * src/core/canvas.ts) so the live client reads as a sibling of the exported
+ * canvas: hierarchical layered layout by parentId, pan/zoom, expand/collapse,
+ * edges styled by edgeKind, node colour by kind, status + issue-count overlays,
+ * and a resizable side panel derived entirely from the loaded WebGraphModel.
+ *
+ * The whole page is a single template string on purpose (it is large). The inline
+ * script avoids template literals / `$`+`{` so it embeds cleanly here.
  */
 export function serveApp(_path: string): string {
   return `<!doctype html>
@@ -440,37 +449,534 @@ export function serveApp(_path: string): string {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Wairon</title>
-</head>
-<body>
-<main>
-<h1>Wairon</h1>
-<p id="status">Loading context…</p>
-<pre id="context"></pre>
-<pre id="graph"></pre>
-</main>
-<script>
-// The session cookie is HttpOnly (server-read), so the client attaches only the
-// custom header the CSRF gate requires on same-origin fetches.
-const WEB_HEADER = { 'X-Wairon-Web': '1' };
-async function boot() {
-  try {
-    const ctxRes = await fetch('/web/context', { headers: WEB_HEADER, credentials: 'same-origin' });
-    if (!ctxRes.ok) { document.getElementById('status').textContent = 'Not signed in.'; return; }
-    const ctx = await ctxRes.json();
-    document.getElementById('status').textContent = 'Signed in as ' + (ctx.subject && ctx.subject.userId);
-    document.getElementById('context').textContent = JSON.stringify(ctx, null, 2);
-    const first = (ctx.visibleProjectIds || [])[0];
-    const q = first
-      ? '/web/graph?tier=project&projectId=' + encodeURIComponent(first) + '&level=3'
-      : '/web/graph?tier=landscape&level=2';
-    const gRes = await fetch(q, { headers: WEB_HEADER, credentials: 'same-origin' });
-    if (gRes.ok) document.getElementById('graph').textContent = JSON.stringify(await gRes.json(), null, 2);
-  } catch (e) {
-    document.getElementById('status').textContent = 'Error: ' + e;
-  }
+<title>wairon — spec canvas</title>
+<style>
+/* ==========================================================================
+   Wairon unified web UI — interactive level-of-detail spec canvas.
+   Self-contained (all CSS + JS inline, no external assets). The --syw-* theme
+   block is copied verbatim from src/core/canvas.ts so this live client looks
+   like a sibling of the exported architecture canvas.
+   ========================================================================== */
+:root {
+  --syw-cyan: #22ddff;
+  --syw-purple: #8b5cf6;
+  --syw-yellow: #ddff22;
+  --syw-amber: #f59e0b;
+  --syw-bg: #0a0a0f;
+  --syw-deep-space: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%);
+  --syw-surface: rgba(13, 27, 42, 0.95);
+  --syw-primary-gradient: linear-gradient(135deg, #22ddff 0%, #8b5cf6 100%);
+  --syw-secondary-gradient: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  --syw-surface-gradient: linear-gradient(135deg, rgba(13, 27, 42, 0.95) 0%, rgba(27, 38, 59, 0.98) 100%);
+  --syw-glow: 0 0 20px rgba(34, 221, 255, 0.3);
+  --syw-deep-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
-boot();
+body[data-theme="syw"] {
+  --bg: var(--syw-bg);
+  --chrome: #0e1a2b;
+  --chrome-border: rgba(34, 221, 255, 0.22);
+  --ink: #e8ecf3;
+  --dim: #9db0c7;
+  --line: rgba(255,255,255,0.12);
+  --input-bg: rgba(255,255,255,0.07);
+  --hover-bg: rgba(34, 221, 255, 0.12);
+  --accent: var(--syw-cyan);
+  --card: rgba(255,255,255,0.05);
+  --danger: #ff6b81; --warn: #f59e0b;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin:0; background:var(--bg); background-image:var(--syw-deep-space); background-attachment:fixed; color:var(--ink); font:13px/1.45 "Inter", system-ui, "Segoe UI", sans-serif; overflow:hidden; }
+.syw-gradient-text { background:var(--syw-primary-gradient); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+button { font:inherit; }
+[hidden] { display:none !important; }
+
+/* ---- boot + login ---- */
+#boot { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; color:var(--dim); }
+#login { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; padding:20px; }
+#login .card { width:min(400px, 92vw); background:var(--syw-surface-gradient); border:1px solid var(--chrome-border); border-radius:16px; box-shadow:var(--syw-deep-shadow); padding:30px 28px; }
+#login h1 { margin:0 0 4px; font-size:30px; font-weight:800; letter-spacing:.02em; }
+#login .sub { color:var(--dim); margin:0 0 22px; font-size:13px; }
+#login label { display:block; color:var(--dim); font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; margin:0 0 6px; }
+#login input { width:100%; padding:10px 12px; border:1px solid var(--chrome-border); border-radius:9px; background:var(--input-bg); color:var(--ink); font:inherit; margin-bottom:16px; }
+#login input:focus { outline:none; border-color:var(--accent); box-shadow:var(--syw-glow); }
+.btn-primary { width:100%; border:none; border-radius:10px; padding:11px 14px; font-weight:700; color:#04121b; background:var(--syw-primary-gradient); cursor:pointer; }
+.btn-primary:hover { box-shadow:var(--syw-glow); }
+#login .err { color:var(--danger); font-size:12px; min-height:16px; margin-top:10px; }
+
+/* ---- app chrome ---- */
+#app { display:flex; flex-direction:column; height:100vh; }
+header { display:flex; align-items:center; gap:10px; padding:0 14px; height:52px; background:var(--chrome); border-bottom:1px solid var(--chrome-border); position:relative; z-index:20; flex:0 0 auto; }
+header .brand { font-weight:800; font-size:17px; letter-spacing:.02em; }
+.spacer { flex:1; }
+.seg { display:flex; border:1px solid var(--chrome-border); border-radius:8px; overflow:hidden; }
+.seg button { border:none; background:transparent; color:var(--dim); padding:5px 11px; cursor:pointer; font-size:12px; }
+.seg button.active { background:var(--accent); color:#04121b; font-weight:700; }
+.tbtn { border:1px solid var(--chrome-border); background:var(--input-bg); color:var(--ink); padding:6px 11px; border-radius:8px; cursor:pointer; font-size:12px; white-space:nowrap; }
+.tbtn:hover { background:var(--hover-bg); border-color:var(--accent); }
+.ctl { display:flex; align-items:center; gap:7px; color:var(--dim); font-size:12px; white-space:nowrap; }
+.ctl select { appearance:none; -webkit-appearance:none; background:var(--input-bg); color:var(--ink); border:1px solid var(--chrome-border); border-radius:8px; padding:6px 12px; font:inherit; font-size:12px; color-scheme:dark; max-width:180px; }
+.ctl input[type=range] { accent-color:var(--accent); width:110px; }
+.badge-admin { background:var(--syw-secondary-gradient); color:#2a1a02; font-weight:800; font-size:10px; text-transform:uppercase; letter-spacing:.06em; padding:2px 8px; border-radius:20px; }
+.ro { color:var(--dim); font-size:11px; border:1px solid var(--line); border-radius:20px; padding:2px 8px; }
+.dropdown { position:relative; }
+.dropdown .menu { display:none; position:absolute; right:0; top:calc(100% + 6px); background:var(--chrome); border:1px solid var(--chrome-border); border-radius:10px; box-shadow:var(--syw-deep-shadow); min-width:210px; padding:6px; z-index:120; }
+.dropdown.open .menu { display:block; }
+.dropdown .menu button { display:block; width:100%; text-align:left; border:none; background:transparent; color:var(--ink); padding:9px 10px; border-radius:7px; cursor:pointer; font-size:12.5px; }
+.dropdown .menu button:hover { background:var(--hover-bg); }
+.acct { display:flex; align-items:center; gap:8px; }
+.acct .who { font-size:12.5px; color:var(--ink); max-width:170px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* ---- stage / canvas / panel ---- */
+#wrap { display:flex; flex:1; min-height:0; }
+#stage { flex:1; min-width:0; position:relative; overflow:hidden; }
+#cv { position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:grab; display:block; }
+body.panning #cv { cursor:grabbing; }
+.legend { position:absolute; left:12px; bottom:12px; background:var(--chrome); border:1px solid var(--chrome-border); border-radius:10px; padding:8px 11px; font-size:11px; color:var(--dim); z-index:5; pointer-events:none; max-width:66vw; }
+.legend .sw { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; vertical-align:-1px; border:1.5px solid; }
+.overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; padding:24px; z-index:6; pointer-events:none; }
+.overlay .box { max-width:440px; background:var(--syw-surface-gradient); border:1px solid var(--chrome-border); border-radius:14px; padding:22px 24px; box-shadow:var(--syw-deep-shadow); pointer-events:auto; }
+.overlay.err .box { border-color:var(--danger); }
+.overlay h3 { margin:0 0 6px; font-size:15px; }
+.overlay p { margin:0; color:var(--dim); font-size:12.5px; word-break:break-word; }
+.overlay .tbtn { margin-top:14px; }
+
+#panelResizer { flex:0 0 7px; cursor:col-resize; background:var(--chrome); border-left:1px solid var(--chrome-border); border-right:1px solid var(--line); position:relative; }
+#panelResizer::after { content:''; position:absolute; top:50%; left:50%; width:2px; height:48px; transform:translate(-50%, -50%); border-radius:2px; background:var(--dim); opacity:.45; }
+#panelResizer:hover::after, body.resizing-panel #panelResizer::after { background:var(--accent); opacity:1; }
+#panel { width:var(--panel-width, 360px); flex:0 0 var(--panel-width, 360px); border-left:1px solid var(--chrome-border); background:var(--chrome); overflow-y:auto; }
+body.panel-closed #panel, body.panel-closed #panelResizer { display:none; }
+body.resizing-panel { cursor:col-resize; user-select:none; }
+#panel .head { padding:16px 18px 12px; border-bottom:1px solid var(--line); }
+#panel .head h2 { font-size:16px; margin:0 0 8px; word-break:break-word; }
+#panel .body { padding:12px 18px 40px; }
+.kv { display:flex; gap:8px; font-size:12px; margin:3px 0; color:var(--dim); }
+.kv span { min-width:56px; }
+.kv b { color:var(--ink); font-weight:600; word-break:break-all; }
+.pill { display:inline-block; padding:2px 9px; border-radius:11px; font-size:11px; border:1px solid var(--chrome-border); margin:0 4px 6px 0; background:var(--input-bg); color:var(--ink); }
+.sec { margin-top:16px; }
+.sec h4 { margin:0 0 7px; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); }
+.chip { display:inline-block; padding:3px 10px; border-radius:8px; font-size:11.5px; border:1px solid var(--chrome-border); margin:0 5px 6px 0; background:var(--card); color:var(--ink); cursor:pointer; }
+.chip:hover { border-color:var(--accent); background:var(--hover-bg); }
+.chip .k { color:var(--dim); font-size:10px; margin-right:5px; }
+.muted { color:var(--dim); font-size:12px; }
+
+/* ---- graph (inline SVG) ---- */
+.edge { fill:none; stroke:rgba(255,255,255,0.26); stroke-width:1.5; }
+.e-owns { stroke:#a78bfa; stroke-dasharray:6 5; stroke-width:1.4; }
+.e-depends { stroke:#22ddff; stroke-width:1.6; }
+.gnode { cursor:pointer; }
+.gnode .box { stroke-width:1.6; }
+.gnode .lbl { font-size:11px; font-family:"Inter", system-ui, sans-serif; dominant-baseline:middle; text-anchor:middle; pointer-events:none; }
+.k-unit .box { fill:#0d2b4d; stroke:#22ddff; } .k-unit .lbl { fill:#d8f6ff; }
+.k-project .box { fill:#26300a; stroke:#ddff22; } .k-project .lbl { fill:#f2ffcc; }
+.k-subsystem .box { fill:#2a2052; stroke:#a78bfa; } .k-subsystem .lbl { fill:#eae2ff; }
+.k-component .box { fill:#0f3323; stroke:#34d399; } .k-component .lbl { fill:#d3f8e6; }
+.k-interface .box { fill:#3a2c10; stroke:#f59e0b; } .k-interface .lbl { fill:#ffe9c2; }
+.k-type .box { fill:#321a3d; stroke:#c084fc; } .k-type .lbl { fill:#f0dcff; }
+.s-draft .box { stroke-dasharray:5 4; opacity:.92; }
+.s-complete .box { stroke-width:2.6; }
+.gnode.sel .box { stroke:var(--syw-yellow); stroke-width:2.8; filter:drop-shadow(0 0 6px rgba(221,255,34,.55)); }
+.toggle { cursor:pointer; }
+.toggle circle { fill:var(--chrome); stroke:var(--accent); stroke-width:1.4; }
+.toggle text { fill:var(--accent); font-size:13px; text-anchor:middle; dominant-baseline:central; pointer-events:none; font-weight:700; }
+.badge circle { fill:var(--warn); stroke:#1a1204; stroke-width:1; }
+.badge text { fill:#1a1204; font-size:9px; font-weight:800; text-anchor:middle; dominant-baseline:central; pointer-events:none; }
+
+@media (max-width: 820px) {
+  header { overflow-x:auto; }
+  #panel { position:absolute; top:0; right:0; bottom:0; width:min(var(--panel-width,320px), calc(100vw - 44px)); flex-basis:auto; box-shadow:var(--syw-deep-shadow); z-index:10; }
+  #panelResizer { position:absolute; top:0; bottom:0; right:min(var(--panel-width,320px), calc(100vw - 44px)); z-index:11; }
+}
+</style>
+</head>
+<body data-theme="syw">
+<div id="boot">Loading…</div>
+
+<!-- ============================ LOGIN SCREEN ============================ -->
+<div id="login" hidden>
+  <div class="card">
+    <h1 class="syw-gradient-text">wairon</h1>
+    <p class="sub">Spec-driven architecture canvas</p>
+    <label for="pid">Identity provider</label>
+    <input id="pid" value="default" spellcheck="false" autocomplete="off" />
+    <button class="btn-primary" id="signinBtn">Sign in with SSO</button>
+    <div class="err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- ============================ APPLICATION ============================ -->
+<div id="app" hidden>
+  <header>
+    <span class="brand syw-gradient-text">wairon</span>
+    <div class="seg" id="tierSeg" title="Landscape overview or a single project">
+      <button data-tier="landscape">Landscape</button>
+      <button data-tier="project">Project</button>
+    </div>
+    <div class="ctl" id="projCtl"><span>Project</span><select id="projSel"></select></div>
+    <div class="ctl" title="Level of detail (0 = coarse, 3 = interfaces/types)"><span>Detail</span><input id="levelRange" type="range" min="0" max="3" step="1" /><b id="levelVal" style="color:var(--ink)">3</b></div>
+    <span class="spacer"></span>
+    <button class="tbtn" id="fitBtn" title="Fit the graph to view">Fit</button>
+    <button class="tbtn" id="panelToggle" title="Show or hide the details panel">Details</button>
+    <span class="ro" id="roBadge" hidden title="Your grants are read-only">read-only</span>
+    <div class="dropdown acct" id="acctDd">
+      <span class="badge-admin" id="adminBadge" hidden>admin</span>
+      <button class="tbtn" id="acctBtn"><span class="who" id="whoLbl">&hellip;</span> &#9662;</button>
+      <div class="menu">
+        <button id="signout">Sign out</button>
+        <button id="signoutAll">Sign out everywhere</button>
+      </div>
+    </div>
+  </header>
+  <div id="wrap">
+    <div id="stage">
+      <svg id="cv"><defs><marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#22ddff"/></marker></defs><g id="scene"></g></svg>
+      <div class="legend" id="legend"></div>
+      <div class="overlay" id="overlay" hidden><div class="box"><h3 id="ovTitle"></h3><p id="ovMsg"></p><button class="tbtn" id="ovBtn" hidden></button></div></div>
+    </div>
+    <div id="panelResizer" title="Drag to resize the details panel"></div>
+    <div id="panel"><div class="body muted" style="padding:22px 18px">Select a node to inspect it.</div></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // Every request rides the HttpOnly session cookie (attached automatically) plus
+  // the X-Wairon-Web header the CSRF gate requires on cookie-auth mutations.
+  var WEB = { 'X-Wairon-Web': '1' };
+  function api(path, opts) {
+    opts = opts || {};
+    opts.credentials = 'same-origin';
+    opts.headers = Object.assign({}, opts.headers || {}, WEB);
+    return fetch(path, opts);
+  }
+  function $(id) { return document.getElementById(id); }
+
+  // ---- screens ------------------------------------------------------------
+  function showBoot() { $('boot').hidden = false; $('login').hidden = true; $('app').hidden = true; }
+  function showLogin(msg) { $('boot').hidden = true; $('app').hidden = true; $('login').hidden = false; $('loginErr').textContent = msg || ''; }
+  function showApp() { $('boot').hidden = true; $('login').hidden = true; $('app').hidden = false; }
+
+  // ---- state --------------------------------------------------------------
+  var ctx = null;
+  var state = { tier: 'landscape', projectId: '', level: 2 };
+  var graph = null;
+  var collapsed = {};
+  var selectedId = null;
+  var view = { x: 0, y: 0, k: 1 };
+  var pos = {};
+  var nodesById = {}, childrenByParent = {}, parentOf = {}, roots = [];
+  var NW = 182, NH = 42, HW = NW / 2, HH = NH / 2, COL = 232, ROW = 64, PADX = 48, PADY = 44;
+  var STRUCT = { contains: 1, owns: 1, publishes: 1, shared_with: 1 };
+
+  // ---- boot ---------------------------------------------------------------
+  function boot() {
+    showBoot();
+    api('/web/context').then(function (r) {
+      if (r.status === 401) { showLogin(''); return null; }
+      if (!r.ok) throw new Error('context ' + r.status);
+      return r.json();
+    }).then(function (c) { if (c) { ctx = c; startApp(); } })
+      .catch(function () { showLogin('Could not reach the server. Try signing in.'); });
+  }
+
+  // ---- login --------------------------------------------------------------
+  // WAVE-4 LIMITATION: there is no public "list providers" endpoint (provider
+  // config is admin-only), so the login screen takes a provider-id text input
+  // defaulted to 'default'. A public enabled-provider-id list is a future add.
+  $('signinBtn').addEventListener('click', function () {
+    var pid = ($('pid').value || '').trim() || 'default';
+    $('loginErr').textContent = '';
+    api('/web/sso/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ providerId: pid, redirectUri: location.origin + '/web/sso/callback' }),
+    }).then(function (r) {
+      if (!r.ok) return r.text().then(function (t) { throw new Error(t || ('sign-in failed (' + r.status + ')')); });
+      return r.json();
+    }).then(function (d) { location.href = d.url; })
+      .catch(function (e) { $('loginErr').textContent = (e && e.message) || 'Sign-in failed.'; });
+  });
+  $('pid').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('signinBtn').click(); });
+
+  // ---- app start ----------------------------------------------------------
+  function startApp() {
+    showApp();
+    $('whoLbl').textContent = (ctx.subject && ctx.subject.userId) || 'signed in';
+    $('adminBadge').hidden = !ctx.isAdmin;
+    // Role-aware: when the caller cannot author, show a read-only marker (there
+    // are no write affordances server-side yet — this only avoids implying write).
+    $('roBadge').hidden = !!ctx.canWriteProjects;
+    var sel = $('projSel'); sel.innerHTML = '';
+    (ctx.visibleProjectIds || []).forEach(function (pid) {
+      var o = document.createElement('option'); o.value = pid; o.textContent = pid; sel.appendChild(o);
+    });
+    // Default: project tier on the first visible project at level 3 if any, else
+    // landscape at level 2 (mirrors the wave-3 placeholder's default choice).
+    if ((ctx.visibleProjectIds || []).length) { state.tier = 'project'; state.projectId = ctx.visibleProjectIds[0]; state.level = 3; }
+    else { state.tier = 'landscape'; state.projectId = ''; state.level = 2; }
+    sel.value = state.projectId;
+    $('levelRange').value = String(state.level); $('levelVal').textContent = String(state.level);
+    syncControls();
+    loadGraph();
+  }
+
+  function syncControls() {
+    Array.prototype.forEach.call(document.querySelectorAll('#tierSeg button'), function (b) {
+      b.classList.toggle('active', b.getAttribute('data-tier') === state.tier);
+    });
+    var hasProjects = (ctx.visibleProjectIds || []).length > 0;
+    $('projCtl').style.display = (state.tier === 'project' && hasProjects) ? 'flex' : 'none';
+  }
+
+  // ---- controls -----------------------------------------------------------
+  Array.prototype.forEach.call(document.querySelectorAll('#tierSeg button'), function (b) {
+    b.addEventListener('click', function () {
+      state.tier = b.getAttribute('data-tier');
+      if (state.tier === 'project' && !state.projectId && (ctx.visibleProjectIds || []).length) {
+        state.projectId = ctx.visibleProjectIds[0]; $('projSel').value = state.projectId;
+      }
+      syncControls(); loadGraph();
+    });
+  });
+  $('projSel').addEventListener('change', function () { state.projectId = $('projSel').value; loadGraph(); });
+  $('levelRange').addEventListener('input', function () { state.level = Number($('levelRange').value); $('levelVal').textContent = String(state.level); });
+  $('levelRange').addEventListener('change', function () { state.level = Number($('levelRange').value); loadGraph(); });
+  $('fitBtn').addEventListener('click', fitView);
+
+  // account menu
+  $('acctBtn').addEventListener('click', function (e) { e.stopPropagation(); $('acctDd').classList.toggle('open'); });
+  document.addEventListener('click', function () { $('acctDd').classList.remove('open'); });
+  $('signout').addEventListener('click', function () { doLogout('/web/logout'); });
+  $('signoutAll').addEventListener('click', function () { doLogout('/web/logout-all'); });
+  function doLogout(path) { api(path, { method: 'POST' }).then(function () { location.reload(); }).catch(function () { location.reload(); }); }
+
+  // panel toggle + resize (mirrors the canvas.ts resizable side panel)
+  $('panelToggle').addEventListener('click', function () { document.body.classList.toggle('panel-closed'); setTimeout(applyTransform, 40); });
+  (function () {
+    var r = $('panelResizer'); var PMIN = 260, PMAX = 560;
+    r.addEventListener('mousedown', function (ev) {
+      ev.preventDefault(); document.body.classList.add('resizing-panel'); document.body.classList.remove('panel-closed');
+      function mv(m) { var w = Math.max(PMIN, Math.min(PMAX, window.innerWidth - m.clientX)); document.documentElement.style.setProperty('--panel-width', w + 'px'); applyTransform(); }
+      function up() { document.body.classList.remove('resizing-panel'); document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); }
+      document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+    });
+  })();
+
+  // ---- graph fetch --------------------------------------------------------
+  function loadGraph() {
+    var q = '/web/graph?tier=' + encodeURIComponent(state.tier) + '&level=' + encodeURIComponent(state.level);
+    if (state.tier === 'project') q += '&projectId=' + encodeURIComponent(state.projectId || '');
+    overlay('Loading graph\\u2026', '', null, false);
+    api(q).then(function (r) {
+      if (r.status === 401) { showLogin(''); return null; }
+      if (r.status === 403) throw new Error('You are not authorized to view this scope.');
+      if (!r.ok) throw new Error('Graph request failed (' + r.status + ').');
+      return r.json();
+    }).then(function (g) {
+      if (!g) return;
+      graph = g; collapsed = {}; selectedId = null; buildIndex();
+      if (!graph.nodes.length) { renderEmpty(); return; }
+      hideOverlay(); layout(); renderGraph(); fitView(); renderPanel();
+    }).catch(function (e) { renderError((e && e.message) || 'Something went wrong loading the graph.'); });
+  }
+
+  // ---- indexing / hierarchy ----------------------------------------------
+  function buildIndex() {
+    nodesById = {}; childrenByParent = {}; parentOf = {}; roots = [];
+    graph.nodes.forEach(function (n) { nodesById[n.id] = n; });
+    // A node's structural parent is its explicit parentId when present, else the
+    // source of the first structural edge (contains/owns/publishes/shared_with)
+    // pointing at it — so both tiers get a hierarchy even when parentId is unset.
+    var edgeParent = {};
+    graph.edges.forEach(function (e) {
+      if (STRUCT[e.edgeKind] && nodesById[e.from] && nodesById[e.to] && edgeParent[e.to] === undefined) edgeParent[e.to] = e.from;
+    });
+    graph.nodes.forEach(function (n) {
+      var p = (n.parentId && nodesById[n.parentId]) ? n.parentId : (edgeParent[n.id] !== undefined ? edgeParent[n.id] : null);
+      if (p === n.id) p = null;
+      parentOf[n.id] = p;
+      if (p === null) roots.push(n); else (childrenByParent[p] = childrenByParent[p] || []).push(n.id);
+    });
+  }
+  function ancestors(id) { var out = [], p = parentOf[id], guard = 0; while (p && guard++ < 999) { out.push(p); p = parentOf[p]; } return out; }
+  function hasChildren(id) { return (childrenByParent[id] || []).length > 0; }
+  function isVisible(id) { var a = ancestors(id); for (var i = 0; i < a.length; i++) if (collapsed[a[i]]) return false; return true; }
+
+  // ---- layout (tidy left-to-right layered tree by containment) -----------
+  function layout() {
+    pos = {}; var yCur = { v: PADY }; var seen = {};
+    function place(id, depth) {
+      if (seen[id]) return; seen[id] = true;
+      var kids = collapsed[id] ? [] : (childrenByParent[id] || []);
+      var x = PADX + depth * COL;
+      if (!kids.length) { pos[id] = { x: x, y: yCur.v }; yCur.v += ROW; return; }
+      var ys = [];
+      kids.forEach(function (k) { place(k, depth + 1); if (pos[k]) ys.push(pos[k].y); });
+      if (ys.length) pos[id] = { x: x, y: (ys[0] + ys[ys.length - 1]) / 2 };
+      else { pos[id] = { x: x, y: yCur.v }; yCur.v += ROW; }
+    }
+    roots.forEach(function (r) { place(r.id, 0); });
+    graph.nodes.forEach(function (n) { if (!pos[n.id] && isVisible(n.id)) { pos[n.id] = { x: PADX, y: yCur.v }; yCur.v += ROW; } });
+  }
+
+  // ---- render helpers -----------------------------------------------------
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function trunc(s, n) { s = String(s == null ? '' : s); return s.length > n ? s.slice(0, n - 1) + '\\u2026' : s; }
+  function borderPt(cx, cy, tx, ty) {
+    var dx = tx - cx, dy = ty - cy; if (!dx && !dy) return { x: cx, y: cy };
+    var sx = dx ? HW / Math.abs(dx) : Infinity, sy = dy ? HH / Math.abs(dy) : Infinity, s = Math.min(sx, sy);
+    return { x: cx + dx * s, y: cy + dy * s };
+  }
+
+  function renderGraph() {
+    var vis = {}; graph.nodes.forEach(function (n) { if (isVisible(n.id) && pos[n.id]) vis[n.id] = true; });
+    // A huge transparent backdrop guarantees a pan hit-target anywhere.
+    var svg = '<rect x="-50000" y="-50000" width="100000" height="100000" fill="transparent"/>';
+    // Edges: contains = solid structural, owns/publishes/shared_with = dashed,
+    // depends_on (and other collaborator kinds) = arrowed.
+    graph.edges.forEach(function (e) {
+      if (!vis[e.from] || !vis[e.to]) return;
+      var a = pos[e.from], b = pos[e.to]; if (!a || !b) return;
+      var p1 = borderPt(a.x, a.y, b.x, b.y), p2 = borderPt(b.x, b.y, a.x, a.y);
+      var cls = 'edge', mk = '';
+      if (e.edgeKind === 'owns' || e.edgeKind === 'publishes' || e.edgeKind === 'shared_with') cls = 'edge e-owns';
+      else if (e.edgeKind !== 'contains') { cls = 'edge e-depends'; mk = ' marker-end="url(#arw)"'; }
+      svg += '<line class="' + cls + '" x1="' + p1.x.toFixed(1) + '" y1="' + p1.y.toFixed(1) + '" x2="' + p2.x.toFixed(1) + '" y2="' + p2.y.toFixed(1) + '"' + mk + '/>';
+    });
+    // Nodes.
+    graph.nodes.forEach(function (n) {
+      if (!vis[n.id]) return; var p = pos[n.id];
+      var cls = 'gnode k-' + esc(n.kind) + (n.status ? ' s-' + esc(n.status) : '') + (n.id === selectedId ? ' sel' : '');
+      var x = p.x - HW, y = p.y - HH;
+      svg += '<g class="' + cls + '" data-node="' + esc(n.id) + '">';
+      svg += '<rect class="box" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + NW + '" height="' + NH + '" rx="9"/>';
+      svg += '<text class="lbl" x="' + p.x.toFixed(1) + '" y="' + p.y.toFixed(1) + '">' + esc(trunc(n.label || n.id, 24)) + '</text>';
+      if (n.issueCount) {
+        var bx = x + NW - 7, by = y + 7;
+        svg += '<g class="badge"><circle cx="' + bx.toFixed(1) + '" cy="' + by.toFixed(1) + '" r="9"/><text x="' + bx.toFixed(1) + '" y="' + by.toFixed(1) + '">' + esc(n.issueCount > 99 ? '99+' : String(n.issueCount)) + '</text></g>';
+      }
+      if (hasChildren(n.id)) {
+        var tx = x + NW, ty = p.y;
+        svg += '<g class="toggle" data-toggle="' + esc(n.id) + '"><circle cx="' + tx.toFixed(1) + '" cy="' + ty.toFixed(1) + '" r="9"/><text x="' + tx.toFixed(1) + '" y="' + ty.toFixed(1) + '">' + (collapsed[n.id] ? '+' : '\\u2212') + '</text></g>';
+      }
+      svg += '</g>';
+    });
+    $('scene').innerHTML = svg;
+    applyTransform();
+    renderLegend();
+  }
+
+  function renderLegend() {
+    var kinds = [['unit', '#22ddff', '#0d2b4d'], ['project', '#ddff22', '#26300a'], ['subsystem', '#a78bfa', '#2a2052'], ['component', '#34d399', '#0f3323'], ['interface', '#f59e0b', '#3a2c10'], ['type', '#c084fc', '#321a3d']];
+    var present = {}; graph.nodes.forEach(function (n) { present[n.kind] = true; });
+    var html = kinds.filter(function (k) { return present[k[0]]; }).map(function (k) {
+      return '<span class="sw" style="background:' + k[2] + ';border-color:' + k[1] + '"></span>' + k[0];
+    }).join('&nbsp; ');
+    html += '<br><span style="opacity:.85">\\u2014 contains&nbsp; &nbsp;\\u00b7\\u00b7 owns&nbsp; &nbsp;\\u2192 depends</span>';
+    $('legend').innerHTML = html;
+  }
+
+  // ---- selection + side panel --------------------------------------------
+  function selectNode(id) { selectedId = id; renderGraph(); renderPanel(); }
+  function revealAndSelect(id) {
+    if (!nodesById[id]) return;
+    ancestors(id).forEach(function (a) { collapsed[a] = false; });
+    layout(); selectedId = id; renderGraph(); renderPanel();
+  }
+  function chip(id, khint) { var n = nodesById[id]; var k = khint || (n ? n.kind : '?'); return '<span class="chip" data-goto="' + esc(id) + '"><span class="k">' + esc(k) + '</span>' + esc(n ? (n.label || id) : id) + '</span>'; }
+  function section(title, ids) {
+    if (!ids.length) return '<div class="sec"><h4>' + esc(title) + '</h4><span class="muted">none</span></div>';
+    return '<div class="sec"><h4>' + esc(title) + '</h4>' + ids.map(function (id) { return chip(id); }).join('') + '</div>';
+  }
+  function relSection(title, pairs) {
+    return '<div class="sec"><h4>' + esc(title) + '</h4>' + pairs.map(function (pk) { var a = pk.split('|'); return chip(a[0], a[1]); }).join('') + '</div>';
+  }
+  function renderPanel() {
+    var panel = $('panel');
+    if (!selectedId || !nodesById[selectedId]) { panel.innerHTML = '<div class="body muted" style="padding:22px 18px">Select a node to inspect it.</div>'; return; }
+    var n = nodesById[selectedId];
+    var owns = [], deps = [], rel = [], parent = parentOf[n.id];
+    graph.edges.forEach(function (e) {
+      if (e.from !== n.id) return;
+      if (e.edgeKind === 'owns') owns.push(e.to);
+      else if (e.edgeKind === 'depends_on') deps.push(e.to);
+      else if (e.edgeKind === 'consumes' || e.edgeKind === 'mirrors' || e.edgeKind === 'publishes' || e.edgeKind === 'shared_with') rel.push(e.to + '|' + e.edgeKind);
+    });
+    var h = '<div class="head"><h2>' + esc(n.label || n.id) + '</h2>';
+    h += '<span class="pill">' + esc(n.kind) + '</span>';
+    if (n.status) h += '<span class="pill">' + esc(n.status) + '</span>';
+    if (n.issueCount) h += '<span class="pill" style="border-color:var(--warn);color:var(--warn)">\\u26a0 ' + esc(String(n.issueCount)) + '</span>';
+    h += '</div><div class="body">';
+    h += '<div class="kv"><span>id</span><b>' + esc(n.id) + '</b></div>';
+    h += '<div class="kv"><span>level</span><b>' + esc(String(n.level)) + '</b></div>';
+    if (n.projectId) h += '<div class="kv"><span>project</span><b>' + esc(n.projectId) + '</b></div>';
+    h += section('Contained by', parent ? [parent] : []);
+    h += section('Owns', owns);
+    h += section('Depends on', deps);
+    if (rel.length) h += relSection('Related', rel);
+    h += '</div>';
+    panel.innerHTML = h;
+    Array.prototype.forEach.call(panel.querySelectorAll('[data-goto]'), function (c) {
+      c.addEventListener('click', function () { revealAndSelect(c.getAttribute('data-goto')); });
+    });
+  }
+
+  // ---- overlays (loading / empty / error) --------------------------------
+  function overlay(title, msg, btn, isErr) {
+    var o = $('overlay'); o.hidden = false; o.className = 'overlay' + (isErr ? ' err' : '');
+    $('ovTitle').textContent = title; $('ovMsg').textContent = msg || '';
+    var b = $('ovBtn');
+    if (btn) { b.hidden = false; b.textContent = btn.label; b.onclick = btn.fn; } else { b.hidden = true; b.onclick = null; }
+  }
+  function hideOverlay() { $('overlay').hidden = true; }
+  function renderEmpty() { $('scene').innerHTML = ''; $('legend').innerHTML = ''; renderPanel(); overlay('Nothing in scope', 'There are no nodes to show for this tier and level yet.', { label: 'Reload', fn: loadGraph }, false); }
+  function renderError(msg) { $('scene').innerHTML = ''; $('legend').innerHTML = ''; overlay('Could not load the graph', msg, { label: 'Retry', fn: loadGraph }, true); }
+
+  // ---- pan / zoom ---------------------------------------------------------
+  function applyTransform() { $('scene').setAttribute('transform', 'translate(' + view.x.toFixed(2) + ',' + view.y.toFixed(2) + ') scale(' + view.k.toFixed(4) + ')'); }
+  function bounds() {
+    var xs = [], ys = [];
+    graph.nodes.forEach(function (n) { if (pos[n.id] && isVisible(n.id)) { xs.push(pos[n.id].x); ys.push(pos[n.id].y); } });
+    if (!xs.length) return null;
+    return { minx: Math.min.apply(null, xs) - HW, maxx: Math.max.apply(null, xs) + HW, miny: Math.min.apply(null, ys) - HH, maxy: Math.max.apply(null, ys) + HH };
+  }
+  function fitView() {
+    if (!graph) return; var b = bounds(); if (!b) return;
+    var rect = $('cv').getBoundingClientRect();
+    var w = (b.maxx - b.minx) + 80, h = (b.maxy - b.miny) + 80;
+    var k = Math.min(rect.width / w, rect.height / h); k = Math.max(0.15, Math.min(1.4, k || 1));
+    view.k = k; view.x = rect.width / 2 - ((b.minx + b.maxx) / 2) * k; view.y = rect.height / 2 - ((b.miny + b.maxy) / 2) * k;
+    applyTransform();
+  }
+  var cv = $('cv');
+  cv.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    var rect = cv.getBoundingClientRect(); var mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    var f = Math.exp(-e.deltaY * 0.0015); var nk = Math.max(0.15, Math.min(3, view.k * f));
+    var wx = (mx - view.x) / view.k, wy = (my - view.y) / view.k;
+    view.k = nk; view.x = mx - wx * nk; view.y = my - wy * nk; applyTransform();
+  }, { passive: false });
+  cv.addEventListener('mousedown', function (e) {
+    if (e.target.closest && (e.target.closest('[data-node]') || e.target.closest('[data-toggle]'))) return;
+    var sx = e.clientX, sy = e.clientY, ox = view.x, oy = view.y; document.body.classList.add('panning');
+    function mv(ev) { view.x = ox + (ev.clientX - sx); view.y = oy + (ev.clientY - sy); applyTransform(); }
+    function up() { document.body.classList.remove('panning'); document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); }
+    document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+  });
+  // Click: expand/collapse a node's subtree, or select a node.
+  cv.addEventListener('click', function (e) {
+    var tg = e.target.closest ? e.target.closest('[data-toggle]') : null;
+    if (tg) { var tid = tg.getAttribute('data-toggle'); collapsed[tid] = !collapsed[tid]; layout(); renderGraph(); return; }
+    var nd = e.target.closest ? e.target.closest('[data-node]') : null;
+    if (nd) selectNode(nd.getAttribute('data-node'));
+  });
+  window.addEventListener('resize', function () { applyTransform(); });
+
+  boot();
+})();
 </script>
 </body>
 </html>`;

@@ -13,6 +13,7 @@ import {
   signOutEverywhere,
   getCurrentContext,
   getGraph,
+  serveApp,
 } from '../../src/server/web.js';
 import { signSsoState, verifySsoState } from '../../src/server/auth.js';
 import { ForbiddenError, UnauthenticatedError } from '../../src/server/identity.js';
@@ -497,6 +498,55 @@ describe('web graph orchestrator (sdd_host)', () => {
 
   it('rejects an absent/expired session before any tier work', () => {
     expect(() => getGraph(cfg, 'ws_missing', 'landscape', '', 0)).toThrow(UnauthenticatedError);
+  });
+});
+
+// ── Web portal: client app shell (serveApp, Phase 7 wave 4) ──────────────────
+
+describe('web portal client app shell (sdd_host)', () => {
+  const html = serveApp('/');
+
+  it('returns exactly one self-contained HTML document', () => {
+    expect(html.trimStart().slice(0, 15).toLowerCase()).toContain('<!doctype html');
+    // A single document — not concatenated shells.
+    expect((html.match(/<!doctype html/gi) || []).length).toBe(1);
+    expect((html.match(/<\/html>/gi) || []).length).toBe(1);
+    // Inline only: exactly one <script> and one <style>, both in-document.
+    expect((html.match(/<script/gi) || []).length).toBe(1);
+    expect((html.match(/<style/gi) || []).length).toBe(1);
+  });
+
+  it('wires every same-origin endpoint the client drives', () => {
+    expect(html).toContain('/web/context');
+    expect(html).toContain('/web/graph');
+    expect(html).toContain('/web/sso/start');
+    expect(html).toContain('/web/logout');
+    expect(html).toContain('/web/logout-all');
+    // CSRF header + cookie-attaching credentials mode on every fetch.
+    expect(html).toContain('X-Wairon-Web');
+    expect(html).toContain("credentials");
+    expect(html).toContain('same-origin');
+  });
+
+  it('reuses the exported canvas deep-space --syw-* theme and colours nodes by kind', () => {
+    expect(html).toContain('--syw-deep-space');
+    expect(html).toContain('--syw-primary-gradient');
+    expect(html).toContain('#22ddff'); // cyan
+    expect(html).toContain('#8b5cf6'); // purple
+    expect(html).toContain('#ddff22'); // yellow accent
+    // Level-of-detail + interaction affordances are present.
+    expect(html).toContain('data-tier');
+    expect(html).toContain('data-node');
+    expect(html).toContain('data-toggle');
+  });
+
+  it('references no external http(s):// assets — everything is inline', () => {
+    // No external asset loads (CDN scripts, stylesheets, fonts, images, imports).
+    expect(html).not.toMatch(/(?:src|href)\s*=\s*["']https?:/i);
+    expect(html).not.toMatch(/@import\s+(?:url\()?["']?https?:/i);
+    expect(html).not.toMatch(/url\(\s*["']?https?:/i);
+    // And no bare http(s) URL anywhere in the served document.
+    expect(html).not.toMatch(/https?:\/\//i);
   });
 });
 
