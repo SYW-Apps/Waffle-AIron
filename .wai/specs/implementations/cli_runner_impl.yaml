@@ -375,6 +375,62 @@ methods:
       - stepNumber: 3
         description: Print confirmation and a reminder to re-validate
         type: local
+  - name: runSurface
+    narrative:
+      - stepNumber: 1
+        description: Route on the surface action
+        type: switch
+        'on': action
+        cases:
+          - value: export
+            step: 2
+          - value: import
+            step: 4
+          - value: list
+            step: 6
+          - value: generate-children
+            step: 8
+        defaultStep: 10
+      - stepNumber: 2
+        description: Export the own surface (audience/format/out from options)
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: exportSurface
+      - stepNumber: 3
+        description: Print the export result
+        type: return
+        outcome: exported
+      - stepNumber: 4
+        description: Import the foreign surface (source/origin from options)
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: importSurface
+      - stepNumber: 5
+        description: Print the imported snapshot summary
+        type: return
+        outcome: imported
+      - stepNumber: 6
+        description: List the stored snapshots
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: listSnapshots
+      - stepNumber: 7
+        description: Print the snapshot table
+        type: return
+        outcome: listed
+      - stepNumber: 8
+        description: Generate parent snapshots into the chained children
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: generateChildSnapshots
+      - stepNumber: 9
+        description: Print the written child paths
+        type: return
+        outcome: generated
+      - stepNumber: 10
+        description: Unknown surface action
+        type: throw
+        error: UnknownSurfaceActionError
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-05T18:45:30.626Z'
+updatedAt: '2026-07-10T23:16:18.296Z'

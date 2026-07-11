@@ -1,0 +1,59 @@
+id: openapi_codec_impl
+name: OpenAPI Codec Implementation
+description: Snapshot ↔ OpenAPI 3.1 conversion.
+contract: iopenapi_codec
+methods:
+  - name: toOpenApi
+    narrative:
+      - stepNumber: 1
+        description: Select the snapshot's HTTP-transport entries (REST endpoints)
+        type: local
+      - stepNumber: 2
+        description: >-
+          Map each contract method to an OpenAPI operation: endpoint method+path, params to
+          parameters/requestBody, returns to responses, guarantees and effect noted as extensions
+        type: local
+      - stepNumber: 3
+        description: Render the embedded type closure as JSON-Schema component schemas
+        type: local
+      - stepNumber: 4
+        description: Emit the info block with project identity, version or StateId, and generatedAt
+        type: local
+      - stepNumber: 5
+        description: Return the serialized OpenAPI 3.1 document
+        type: return
+        outcome: OpenAPI document
+  - name: fromOpenApi
+    narrative:
+      - stepNumber: 1
+        description: Parse and structurally validate the OpenAPI document
+        type: local
+      - stepNumber: 2
+        description: Document is not valid OpenAPI
+        type: branch
+        condition: parse or structural validation failed
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the import with the parse errors
+        type: throw
+        error: InvalidSurfaceDocumentError
+      - stepNumber: 4
+        description: >-
+          Map operations to contract methods: parameters/requestBody to structured params, responses
+          to returns, method+path to endpoints
+        type: local
+      - stepNumber: 5
+        description: Derive the type closure from component schemas
+        type: local
+      - stepNumber: 6
+        description: >-
+          Assemble the snapshot with origin authored, external audience, and version from the info
+          block
+        type: local
+      - stepNumber: 7
+        description: Return the authored snapshot
+        type: return
+        outcome: SurfaceSnapshot
+status: complete
+createdAt: '2026-07-10T23:15:26.486Z'
+updatedAt: '2026-07-11T09:04:02.847Z'

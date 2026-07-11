@@ -1,0 +1,45 @@
+kind: value-object
+id: surface_snapshot
+name: SurfaceSnapshot
+description: >-
+  The portable public-surface artifact of one project: identity + provenance + the audience-filtered
+  contract entries + the transitive type closure. One format, three origins — generated (own
+  parent/child family, written at generate/lock), exchanged (another wairon project or tenant,
+  relation/grant-gated), authored (an external 3rd-party system, hand-declared or imported from
+  OpenAPI). Consumers validate adapter edges against it and detect staleness via the embedded
+  StateId/version.
+fields:
+  - name: projectName
+    type: string
+    description: Producing project/system name — the snapshot's identity for resolution.
+    optional: false
+    key: primary
+  - name: origin
+    type: string
+    description: 'Provenance: generated | exchanged | authored.'
+    optional: false
+  - name: stateId
+    type: string
+    description: >-
+      Producing spec tree's StateId at generation time — staleness detection for wairon-produced
+      snapshots.
+    optional: true
+  - name: version
+    type: string
+    description: Contract version for authored/3rd-party surfaces that have no StateId.
+    optional: true
+  - name: generatedAt
+    type: string
+    description: ISO-8601 production timestamp.
+    optional: false
+  - name: interfaces
+    type: SurfaceContractEntry[]
+    description: The exported contract entries, already audience-filtered by the producer.
+    optional: false
+  - name: types
+    type: SurfaceTypeDef[]
+    description: Transitive type closure of every exported signature — the snapshot is self-contained.
+    optional: false
+methods: []
+createdAt: '2026-07-10T23:11:45.776Z'
+updatedAt: '2026-07-10T23:11:45.885Z'

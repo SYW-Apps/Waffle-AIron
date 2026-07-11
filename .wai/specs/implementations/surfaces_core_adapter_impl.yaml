@@ -1,0 +1,43 @@
+id: surfaces_core_adapter_impl
+name: Surfaces Core Adapter Implementation
+description: Spec-tree reads forwarded to the core portal.
+contract: isurfaces_core_adapter
+methods:
+  - name: loadSystemSpec
+    narrative:
+      - stepNumber: 1
+        description: Call loadSystemSpec on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadSystemSpec
+  - name: loadSubsystemSpecs
+    narrative:
+      - stepNumber: 1
+        description: Call loadSubsystemSpecs on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadSubsystemSpecs
+  - name: loadComponentSpecs
+    narrative:
+      - stepNumber: 1
+        description: Call loadComponentSpecs on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadComponentSpecs
+  - name: loadInterfaceSpecs
+    narrative:
+      - stepNumber: 1
+        description: Call loadInterfaceSpecs on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadInterfaceSpecs
+  - name: loadTypeSpecs
+    narrative:
+      - stepNumber: 1
+        description: Call loadTypeSpecs on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadTypeSpecs
+status: complete
+createdAt: '2026-07-10T23:15:53.589Z'
+updatedAt: '2026-07-11T09:04:02.878Z'

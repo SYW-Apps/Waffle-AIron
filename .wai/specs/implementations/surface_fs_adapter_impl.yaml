@@ -1,0 +1,27 @@
+id: surface_fs_adapter_impl
+name: Surface FS Adapter Implementation
+description: Own-aggregate snapshot file I/O.
+contract: isurface_fs_adapter
+methods:
+  - name: readAllSnapshots
+    narrative: []
+    detail: intent
+    intent: >-
+      Reads and schema-parses every YAML file under .wai/surfaces/ into SurfaceSnapshot values,
+      returning an empty list when the directory is absent. A malformed file is surfaced as a
+      loader-style issue and skipped rather than aborting the whole read.
+  - name: writeSnapshot
+    narrative: []
+    detail: intent
+    intent: >-
+      Serializes the snapshot to YAML and writes it to .wai/surfaces/<projectName>.yaml, creating
+      the directory when missing and overwriting an existing file atomically.
+  - name: deleteSnapshot
+    narrative: []
+    detail: intent
+    intent: >-
+      Removes .wai/surfaces/<projectName>.yaml and reports whether a file existed; cleans up an
+      emptied surfaces directory.
+status: complete
+createdAt: '2026-07-10T23:15:41.510Z'
+updatedAt: '2026-07-11T09:04:02.910Z'

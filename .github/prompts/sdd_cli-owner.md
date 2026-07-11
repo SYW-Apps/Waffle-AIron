@@ -14,6 +14,7 @@ You own and decide on everything within:
 .wai/specs/components/cli_producer_adapter.yaml
 .wai/specs/components/cli_runner.yaml
 .wai/specs/components/cli_skills_adapter.yaml
+.wai/specs/components/cli_surfaces_client_adapter.yaml
 .wai/specs/components/cli_validator_adapter.yaml
 src/commands/index.ts
 src/commands/host.ts

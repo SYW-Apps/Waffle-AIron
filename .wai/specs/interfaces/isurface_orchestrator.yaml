@@ -1,0 +1,51 @@
+id: isurface_orchestrator
+name: Surface Orchestrator Interface
+description: Workflow contract behind the surface portal — same five operations, owning the control flow.
+component: surface_orchestrator
+methods:
+  - name: exportSurface
+    description: Own-surface projection workflow with optional codec rendering and file output.
+    signature: 'exportSurface(maxAudience: string, format: string, outPath?: string): SurfaceSnapshot'
+    returns: SurfaceSnapshot
+    params:
+      - name: maxAudience
+        type: string
+      - name: format
+        type: string
+      - name: outPath
+        type: string
+        optional: true
+  - name: importSurface
+    description: 'Foreign-document import workflow: read, decode (native or OpenAPI), stamp origin, persist.'
+    signature: 'importSurface(sourcePath: string, origin: string): SurfaceSnapshot'
+    returns: SurfaceSnapshot
+    params:
+      - name: sourcePath
+        type: string
+      - name: origin
+        type: string
+  - name: listSnapshots
+    description: All stored snapshots.
+    signature: 'listSnapshots(): SurfaceSnapshot[]'
+    returns: SurfaceSnapshot[]
+  - name: getSnapshot
+    description: Stored snapshot by producing project name.
+    signature: 'getSnapshot(projectName: string): SurfaceSnapshot | null'
+    returns: SurfaceSnapshot | null
+    params:
+      - name: projectName
+        type: string
+  - name: generateChildSnapshots
+    description: Project and deliver the family-scoped parent surface into each chained child.
+    signature: 'generateChildSnapshots(): string[]'
+    returns: string[]
+  - name: removeSnapshot
+    description: Remove a stored surface snapshot through the repository.
+    signature: 'removeSnapshot(projectName: string): boolean'
+    returns: boolean
+    params:
+      - name: projectName
+        type: string
+status: complete
+createdAt: '2026-07-10T23:13:22.438Z'
+updatedAt: '2026-07-11T09:04:02.551Z'

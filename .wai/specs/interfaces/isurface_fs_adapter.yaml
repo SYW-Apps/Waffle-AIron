@@ -1,0 +1,26 @@
+id: isurface_fs_adapter
+name: Surface FS Adapter Interface
+description: File I/O for this project's own .wai/surfaces/ aggregate.
+component: surface_fs_adapter
+methods:
+  - name: readAllSnapshots
+    description: Parse every snapshot file under .wai/surfaces/ (missing dir yields empty).
+    signature: 'readAllSnapshots(): SurfaceSnapshot[]'
+    returns: SurfaceSnapshot[]
+  - name: writeSnapshot
+    description: Write/overwrite one snapshot file named by producing project.
+    signature: 'writeSnapshot(snapshot: SurfaceSnapshot): void'
+    returns: void
+    params:
+      - name: snapshot
+        type: SurfaceSnapshot
+  - name: deleteSnapshot
+    description: Remove a snapshot file.
+    signature: 'deleteSnapshot(projectName: string): boolean'
+    returns: boolean
+    params:
+      - name: projectName
+        type: string
+status: complete
+createdAt: '2026-07-10T23:13:41.939Z'
+updatedAt: '2026-07-11T09:04:02.482Z'

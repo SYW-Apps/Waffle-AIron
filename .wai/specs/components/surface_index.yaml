@@ -1,0 +1,11 @@
+id: surface_index
+name: Surface Index
+description: 'Read-path projection over the surface store: lookup by producing project and by origin.'
+subsystem: sdd_surfaces
+componentType: Index
+owns: []
+dependsOn:
+  - surface_store
+status: complete
+createdAt: '2026-07-10T23:12:20.857Z'
+updatedAt: '2026-07-11T09:04:02.101Z'

@@ -1,0 +1,28 @@
+id: iopenapi_codec
+name: OpenAPI Codec Interface
+description: Bidirectional conversion between surface snapshots and OpenAPI 3.1 documents.
+component: openapi_codec
+methods:
+  - name: toOpenApi
+    description: >-
+      Render a snapshot's HTTP-transport entries as an OpenAPI 3.1 document; the type closure
+      becomes JSON-Schema components; provenance (project, version/StateId) lands in the info block.
+    signature: 'toOpenApi(snapshot: SurfaceSnapshot): string'
+    returns: string
+    params:
+      - name: snapshot
+        type: SurfaceSnapshot
+  - name: fromOpenApi
+    description: >-
+      Decode a 3rd-party OpenAPI document into an authored-origin snapshot: operations become
+      contract methods with endpoints, component schemas become the type closure.
+    signature: 'fromOpenApi(document: string, projectName: string): SurfaceSnapshot'
+    returns: SurfaceSnapshot
+    params:
+      - name: document
+        type: string
+      - name: projectName
+        type: string
+status: complete
+createdAt: '2026-07-10T23:13:57.188Z'
+updatedAt: '2026-07-11T09:04:02.417Z'

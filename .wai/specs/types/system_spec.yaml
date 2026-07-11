@@ -37,10 +37,11 @@ fields:
   - name: publicInterfaces
     type: SystemPublicInterface[]
     description: >-
-      Optional L0 public surfaces exposed outside this system/project. Each entry must point to an
-      existing subsystem public interface and is the only surface eligible for cross-project
-      relations.
+      The project's gateway surface: L0 entries intentionally exported beyond the project, each
+      backed by a subsystem-published Portal and carrying an audience ceiling. Cross-PROJECT
+      consumption may only target these entries (never subsystem internals); the surface projector
+      snapshots them at contract grade.
     optional: true
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-08T21:11:49.003Z'
+updatedAt: '2026-07-10T23:12:00.493Z'

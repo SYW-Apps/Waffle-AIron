@@ -38,7 +38,13 @@ fields:
     optional: false
   - name: audience
     type: string
-    description: 'Intended audience: "project", "department", "instance", "partner", or "external".'
+    description: >-
+      Exposure ceiling, ascending reach: "project" (family-internal — exported only into own chained
+      children, never beyond), "department" (owning org-unit subtree), "instance" (whole hosted
+      instance), "partner" (grant-gated cross-tenant), "external" (publicly consumable /
+      3rd-party-facing). The surface projector filters snapshot entries by this ceiling; org-unit
+      grants (Stage 2) then decide direction WITHIN the ceiling — effective visibility is the
+      intersection.
     optional: false
   - name: authPolicy
     type: string
@@ -54,4 +60,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-07-08T21:10:42.862Z'
-updatedAt: '2026-07-08T21:10:42.867Z'
+updatedAt: '2026-07-10T23:11:58.309Z'

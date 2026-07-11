@@ -1,0 +1,24 @@
+id: sdd_surfaces
+name: SDD Public Surface Exchange
+description: >-
+  Portable, contract-grade public-surface snapshots: projects the system's L0 surface
+  (audience-filtered, with full L3 contracts, dispatch tables, and the transitive type closure) into
+  exchangeable artifacts; generates parent-surface snapshots into chained child projects; imports
+  exchanged or authored (3rd-party) surfaces — OpenAPI as the first codec — so adapters can validate
+  against declared external contracts instead of trusting prose.
+parentSystem: Waffle-AIron
+publicInterfaces:
+  - type: Custom
+    details: >-
+      Surface export/import/query front door consumed in-process by the CLI, validator, and core
+      flows.
+    component: surface_portal
+lifecycle:
+  - phase: init
+    component: surface_repository
+    method: hydrate
+    description: Rebuild the snapshot ram-projection from the .wai/surfaces/ files when the subsystem comes up.
+trustedLinks: []
+status: complete
+createdAt: '2026-07-10T23:11:28.081Z'
+updatedAt: '2026-07-11T09:04:01.924Z'

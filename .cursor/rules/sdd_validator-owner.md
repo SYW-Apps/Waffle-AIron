@@ -12,6 +12,7 @@ You own and decide on everything within:
 .wai/specs/components/spec_validator.yaml
 .wai/specs/components/validator_core_adapter.yaml
 .wai/specs/components/validator_portal.yaml
+.wai/specs/components/validator_surfaces_adapter.yaml
 src/core/validation.ts
 ```
 

@@ -1,0 +1,65 @@
+id: isurface_portal
+name: Surface Portal Interface
+description: >-
+  Front-door contract of the surface-exchange subsystem: export, import, query, and child-generation
+  operations.
+component: surface_portal
+methods:
+  - name: exportSurface
+    description: >-
+      Project the own tree's L0 gateway surface (entries at or below the audience ceiling) into a
+      contract-grade snapshot; optionally render it through a codec format (native | openapi) and
+      write it to an output path.
+    signature: 'exportSurface(maxAudience: string, format: string, outPath?: string): SurfaceSnapshot'
+    returns: SurfaceSnapshot
+    params:
+      - name: maxAudience
+        type: string
+        description: 'Audience ceiling: project | department | instance | partner | external'
+      - name: format
+        type: string
+        description: native | openapi
+      - name: outPath
+        type: string
+        optional: true
+  - name: importSurface
+    description: >-
+      Import a foreign surface document (native snapshot YAML or OpenAPI) and store it with the
+      given origin (exchanged | authored).
+    signature: 'importSurface(sourcePath: string, origin: string): SurfaceSnapshot'
+    returns: SurfaceSnapshot
+    params:
+      - name: sourcePath
+        type: string
+      - name: origin
+        type: string
+        description: exchanged | authored
+  - name: listSnapshots
+    description: >-
+      All stored surface snapshots available to this project (imported plus received
+      parent-generated).
+    signature: 'listSnapshots(): SurfaceSnapshot[]'
+    returns: SurfaceSnapshot[]
+  - name: getSnapshot
+    description: The stored snapshot produced by the named project, or null.
+    signature: 'getSnapshot(projectName: string): SurfaceSnapshot | null'
+    returns: SurfaceSnapshot | null
+    params:
+      - name: projectName
+        type: string
+  - name: generateChildSnapshots
+    description: >-
+      Write a family-scoped parent-surface snapshot into every chained child project's
+      .wai/surfaces/, so children can validate cross-tree references standalone.
+    signature: 'generateChildSnapshots(): string[]'
+    returns: string[]
+  - name: removeSnapshot
+    description: Remove a stored surface snapshot (file and projection).
+    signature: 'removeSnapshot(projectName: string): boolean'
+    returns: boolean
+    params:
+      - name: projectName
+        type: string
+status: complete
+createdAt: '2026-07-10T23:13:16.280Z'
+updatedAt: '2026-07-11T09:04:02.587Z'

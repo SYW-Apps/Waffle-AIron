@@ -1,0 +1,14 @@
+id: surface_projector
+name: Surface Projector
+description: >-
+  Derives contract-grade snapshots from the loaded spec tree: filters L0 gateway entries by audience
+  ceiling, resolves each to its subsystem-published Portal with the full L3 contract and dispatch
+  table, and computes the transitive type closure so the snapshot is self-contained.
+subsystem: sdd_surfaces
+componentType: Specialist
+owns: []
+dependsOn:
+  - surfaces_core_adapter
+status: complete
+createdAt: '2026-07-10T23:12:25.556Z'
+updatedAt: '2026-07-11T09:04:02.195Z'

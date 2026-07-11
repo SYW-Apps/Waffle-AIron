@@ -1,0 +1,122 @@
+id: surface_orchestrator_impl
+name: Surface Orchestrator Implementation
+description: >-
+  Surface-exchange workflows: projection, codec rendering, import, child delivery, and consumer
+  queries.
+contract: isurface_orchestrator
+methods:
+  - name: exportSurface
+    narrative:
+      - stepNumber: 1
+        description: Project the own gateway surface at the requested audience ceiling
+        type: call
+        targetComponent: surface_projector
+        targetMethod: projectOwnSurface
+      - stepNumber: 2
+        description: OpenAPI rendering requested
+        type: branch
+        condition: format is openapi
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Render the snapshot as an OpenAPI 3.1 document
+        type: call
+        targetComponent: openapi_codec
+        targetMethod: toOpenApi
+      - stepNumber: 4
+        description: An output path was given
+        type: branch
+        condition: outPath provided
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Write the snapshot (or rendered document) to the output path
+        type: call
+        targetComponent: surface_transfer_adapter
+        targetMethod: writeSnapshotTo
+      - stepNumber: 6
+        description: Return the projected snapshot
+        type: return
+        outcome: SurfaceSnapshot
+  - name: importSurface
+    narrative:
+      - stepNumber: 1
+        description: Read the foreign document from the source path
+        type: call
+        targetComponent: surface_transfer_adapter
+        targetMethod: readDocument
+      - stepNumber: 2
+        description: The document is an OpenAPI spec
+        type: branch
+        condition: document parses as OpenAPI
+        onFalseStep: 5
+      - stepNumber: 3
+        description: Decode the OpenAPI document into an authored snapshot
+        type: call
+        targetComponent: openapi_codec
+        targetMethod: fromOpenApi
+      - stepNumber: 4
+        description: Continue at persistence
+        type: jump
+        toStep: 6
+      - stepNumber: 5
+        description: Parse the native surface-snapshot YAML and stamp the requested origin
+        type: local
+      - stepNumber: 6
+        description: Persist the imported snapshot into the repository
+        type: call
+        targetComponent: surface_repository
+        targetMethod: saveSnapshot
+      - stepNumber: 7
+        description: Return the imported snapshot
+        type: return
+        outcome: SurfaceSnapshot
+  - name: listSnapshots
+    narrative:
+      - stepNumber: 1
+        description: Read all stored snapshots from the repository
+        type: call
+        targetComponent: surface_repository
+        targetMethod: listSnapshots
+  - name: getSnapshot
+    narrative:
+      - stepNumber: 1
+        description: Read the named snapshot from the repository
+        type: call
+        targetComponent: surface_repository
+        targetMethod: getSnapshot
+  - name: generateChildSnapshots
+    narrative:
+      - stepNumber: 1
+        description: Load the subsystem specs to find chained children
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 2
+        description: For each subsystem with a projectPath (chained child)
+        type: loop
+        loopKind: forEach
+        over: chained child subsystems
+        endStep: 4
+      - stepNumber: 3
+        description: Project the family-scoped parent surface for this child
+        type: call
+        targetComponent: surface_projector
+        targetMethod: projectChildSurface
+      - stepNumber: 4
+        description: Write the snapshot into the child project's .wai/surfaces/
+        type: call
+        targetComponent: surface_transfer_adapter
+        targetMethod: writeSnapshotTo
+      - stepNumber: 5
+        description: Return the written child snapshot paths
+        type: return
+        outcome: written paths
+  - name: removeSnapshot
+    narrative:
+      - stepNumber: 1
+        description: Remove the snapshot through the repository
+        type: call
+        targetComponent: surface_repository
+        targetMethod: removeSnapshot
+status: complete
+createdAt: '2026-07-10T23:15:01.940Z'
+updatedAt: '2026-07-11T09:04:02.973Z'

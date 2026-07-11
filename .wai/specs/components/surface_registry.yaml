@@ -1,0 +1,14 @@
+id: surface_registry
+name: Surface Registry
+description: >-
+  Write path (CUD) for the surface-snapshot aggregate: upserts/deletes snapshots in the store and
+  persists them through the fs adapter.
+subsystem: sdd_surfaces
+componentType: Registry
+owns: []
+dependsOn:
+  - surface_store
+  - surface_fs_adapter
+status: complete
+createdAt: '2026-07-10T23:12:19.544Z'
+updatedAt: '2026-07-11T09:04:02.228Z'

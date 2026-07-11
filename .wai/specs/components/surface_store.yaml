@@ -1,0 +1,13 @@
+id: surface_store
+name: Surface Store
+description: >-
+  Authoritative in-memory holding of the parsed surface snapshots. A ram-projection: rebuilt from
+  the snapshot files through the fs adapter, never restored from its own state.
+subsystem: sdd_surfaces
+componentType: Store
+owns: []
+dependsOn: []
+durability: ram-projection
+status: complete
+createdAt: '2026-07-10T23:12:17.571Z'
+updatedAt: '2026-07-11T09:04:02.292Z'

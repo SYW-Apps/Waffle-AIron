@@ -8,6 +8,7 @@ componentType: Specialist
 owns: []
 dependsOn:
   - validator_core_adapter
+  - validator_surfaces_adapter
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-07-09T15:42:21.512Z'
+updatedAt: '2026-07-10T23:12:54.612Z'
