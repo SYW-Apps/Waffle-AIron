@@ -2,7 +2,8 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import * as path from 'path';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { runWithProjectRoot } from '../utils/fs.js';
-import { authenticate, verifyViewToken } from './auth.js';
+import { authenticate, authenticateSession, verifyViewToken } from './auth.js';
+import { WEB_SESSION_PREFIX } from './websessions.js';
 import { resolveProjectRoot, existingProjectRoot } from './projects.js';
 import { createScopedServer, hostCore } from './adapters.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
@@ -349,17 +350,28 @@ export function dispatchSelfServiceTool(
   return { jsonrpc: '2.0', id, result };
 }
 
-/** Authenticate → resolve+bind project scope → dispatch the sdd_* call. */
+/** Authenticate → resolve+bind project scope → dispatch the sdd_* call.
+ *
+ * The `credential` argument is the auth bridge: http.ts passes
+ * `bearerToken(req) ?? sessionCookieValue(req)` so a browser web session drives
+ * /mcp (spec authoring) with no bearer. When omitted, the credential is the bearer
+ * token exactly as before (unchanged for every existing caller). A ws_-prefixed
+ * session id resolves through the session bridge; anything else resolves as a
+ * stored bearer token (the master credential is deliberately NOT accepted here). */
 export async function handleMcpRequest(
   cfg: HostConfig,
   req: IncomingMessage,
   res: ServerResponse,
   body: unknown,
+  credential?: string | null,
 ): Promise<void> {
-  const credential = bearerToken(req);
+  const cred = credential !== undefined ? credential : bearerToken(req);
   let principal: Principal;
   if (cfg.authEnabled) {
-    principal = authenticate(cfg.dataDir, credential);
+    principal =
+      cred && cred.startsWith(WEB_SESSION_PREFIX)
+        ? authenticateSession(cfg.dataDir, cred)
+        : authenticate(cfg.dataDir, cred);
     if (!principal.authenticated) {
       sendJson(res, 401, { error: 'unauthorized' });
       return;
@@ -392,7 +404,7 @@ export async function handleMcpRequest(
     // landscape discovery tools are handled here, bypassing the scoped sdd_* MCP
     // server. The response still flows through the SAME best-effort audit path
     // (auditToolCall) the scoped dispatch uses.
-    const dispatchedResponse = dispatchSelfServiceTool(cfg, credential, projectId, body);
+    const dispatchedResponse = dispatchSelfServiceTool(cfg, cred, projectId, body);
     if (dispatchedResponse !== undefined) {
       sendJson(res, 200, dispatchedResponse);
       auditToolCall(cfg.dataDir, principal, projectId, body, deriveMcpOutcome(dispatchedResponse));

@@ -556,6 +556,10 @@ export interface HostExposurePolicy {
   allowedNetworks?: string[];
   /** Whether the operations (health/usage/quota) control-plane API is served over HTTP. */
   operationsApiEnabled: boolean;
+  /** Whether the unified browser web UI (SSO sign-in + live level-of-detail graph)
+   *  is served over HTTP on the DATA-plane listener. A NEW public surface, so it is
+   *  OPT-IN: false in the compatible default — existing instances are unaffected. */
+  webUiEnabled: boolean;
 }
 
 /** Resolved runtime configuration for the hosting server. */

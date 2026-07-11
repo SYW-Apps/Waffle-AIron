@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
 import { handleMcpRequest, handleViewDiagram, sendJson, bearerToken } from './request.js';
+import { handleWebRequest, sessionCookieValue } from './web.js';
 import * as admin from './admin.js';
 import * as packs from './packs.js';
 import * as identity from './identity.js';
@@ -94,8 +95,23 @@ function diagramFileName(format: string): string {
 }
 
 // ── Data plane ────────────────────────────────────────────────────────────
+//
+// The data-plane auth bridge: a credential is `bearerToken(req) ?? the wairon_session
+// cookie`, so a browser session drives /mcp exactly like a bearer. CSRF defense:
+// SameSite=Lax already blocks the cookie on cross-site POSTs, and — for a
+// COOKIE-authenticated state-changing request (POST /mcp, POST /web/logout,
+// POST /web/logout-all) — we additionally REQUIRE the custom `X-Wairon-Web: 1`
+// header (a cross-site HTML form cannot set it; a same-origin fetch can). BEARER
+// requests carry no ambient cookie and are EXEMPT; GET requests are exempt; the SSO
+// callback (a GET top-level nav) is protected by the signed SSO state.
 
-function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResponse): void {
+/** True when the request carries the custom `X-Wairon-Web: 1` CSRF header. */
+function webCsrfHeaderPresent(req: IncomingMessage): boolean {
+  const h = req.headers['x-wairon-web'];
+  return (Array.isArray(h) ? h[0] : h) === '1';
+}
+
+export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResponse): void {
   const url = new URL(req.url ?? '/', 'http://localhost');
   if (req.method === 'GET' && url.pathname === '/healthz') {
     sendJson(res, 200, { ok: true });
@@ -116,9 +132,23 @@ function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResponse): 
     handleViewDiagram(cfg, req, res);
     return;
   }
+
+  // Auth bridge: prefer a bearer; fall back to the session cookie. A request is
+  // "cookie-authenticated" only when there is no bearer but there IS a session
+  // cookie (an ambient credential a cross-site request could ride).
+  const bearer = bearerToken(req);
+  const cookie = sessionCookieValue(req);
+  const credential = bearer ?? cookie;
+  const cookieAuth = !bearer && !!cookie;
+
   if (req.method === 'POST' && url.pathname === '/mcp') {
+    // CSRF: a cookie-authenticated mutation must carry the custom header.
+    if (cookieAuth && !webCsrfHeaderPresent(req)) {
+      sendJson(res, 403, { error: 'missing X-Wairon-Web header' });
+      return;
+    }
     readBody(req)
-      .then((body) => handleMcpRequest(cfg, req, res, body))
+      .then((body) => handleMcpRequest(cfg, req, res, body, credential))
       .catch((err) => {
         if (res.headersSent) return;
         if (err instanceof PayloadTooLargeError) {
@@ -129,6 +159,42 @@ function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResponse): 
       });
     return;
   }
+
+  // Unified web UI (opt-in): the app shell at '/' and the thin /web/* routes.
+  const isWebPath =
+    url.pathname === '/' || url.pathname === '/web' || url.pathname.startsWith('/web/');
+  if (isWebPath) {
+    const exposure = resolveExposurePolicy(cfg);
+    // OPT-IN: every /web path and the app shell answer 404 unless enabled — so an
+    // existing instance (compatible default) is entirely unaffected.
+    if (!exposure.webUiEnabled) {
+      sendJson(res, 404, { error: 'not found' });
+      return;
+    }
+    // CSRF: cookie-authenticated state-changing web routes require the header.
+    const isCookieMutation =
+      req.method === 'POST' &&
+      (url.pathname === '/web/logout' || url.pathname === '/web/logout-all');
+    if (isCookieMutation && cookieAuth && !webCsrfHeaderPresent(req)) {
+      sendJson(res, 403, { error: 'missing X-Wairon-Web header' });
+      return;
+    }
+    const secureCookie = exposure.requireTls;
+    const proceed = (body: unknown): Promise<void> =>
+      handleWebRequest(cfg, req, res, body, url, { sessionId: credential, secureCookie });
+    (req.method === 'POST' ? readBody(req) : Promise.resolve(undefined))
+      .then(proceed)
+      .catch((err) => {
+        if (res.headersSent) return;
+        if (err instanceof PayloadTooLargeError) {
+          sendJson(res, 413, { error: err.message });
+        } else {
+          sendJson(res, 500, { error: String(err) });
+        }
+      });
+    return;
+  }
+
   sendJson(res, 404, { error: 'not found' });
 }
 
@@ -156,6 +222,10 @@ const COMPATIBLE_DEFAULT_EXPOSURE: HostExposurePolicy = {
   cliControlEnabled: true,
   requireTls: true,
   operationsApiEnabled: true,
+  // The unified web UI is a NEW public surface on the data plane, so it is
+  // OPT-IN: false here keeps existing instances unaffected (every /web path and
+  // the app shell answer 404 until an operator turns it on).
+  webUiEnabled: false,
 };
 
 /** Read an optional <dataDir>/exposure-policy.json override (a partial policy);

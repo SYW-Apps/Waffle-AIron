@@ -193,12 +193,13 @@ function buildAuditEvent(
 /** The audit actor for the unauthenticated login-start step: no user is resolved
  *  yet (the provider hasn't spoken), so the action is attributed to an anonymous
  *  local service identity — the provider it targets is carried on the event target. */
-const ANONYMOUS_SSO_ACTOR: PrincipalSubject = { userId: 'anonymous', kind: 'service', issuer: 'local' };
+export const ANONYMOUS_SSO_ACTOR: PrincipalSubject = { userId: 'anonymous', kind: 'service', issuer: 'local' };
 
 /** Build a redacted audit event for an actor SUBJECT directly (category 'auth'),
  *  for the unauthenticated SSO login pair (start/complete) which carries no
- *  Principal. Mirrors buildAuditEvent but takes the resolved subject as the actor. */
-function buildSsoAuditEvent(
+ *  Principal. Mirrors buildAuditEvent but takes the resolved subject as the actor.
+ *  Exported so the web plane (web.ts) builds its web sign-in / sign-out events. */
+export function buildSsoAuditEvent(
   actor: PrincipalSubject,
   action: string,
   level: string,
@@ -217,8 +218,9 @@ function buildSsoAuditEvent(
 }
 
 /** Append a redacted audit event, best-effort: a failure is recorded as a server
- *  diagnostic and swallowed so an append can never fail the primary action. */
-function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
+ *  diagnostic and swallowed so an append can never fail the primary action.
+ *  Exported so the web plane (web.ts) reuses the same best-effort append path. */
+export function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
   try {
     appendAuditEvent(cfg.dataDir, event, resolveAuditPolicy(cfg));
   } catch (err) {
@@ -656,16 +658,18 @@ export function setUserStatus(
 // unauthenticated by design — no caller credential is required or accepted; trust
 // derives entirely from the signed state plus the provider code exchange.
 
-/** The signed SSO state payload bound on start and re-derived on completion. */
-interface SsoStatePayload {
+/** The signed SSO state payload bound on start and re-derived on completion.
+ *  Exported so the web plane (web.ts) signs/verifies the identical payload shape. */
+export interface SsoStatePayload {
   providerId: string;
   nonce: string;
   redirectUri: string;
 }
 
 /** Resolve one ENABLED identity provider by id, or throw a login-rejecting error
- *  (unknown id or a disabled provider both reject identically). */
-function resolveEnabledProvider(cfg: HostConfig, providerId: string): IdentityProviderConfig {
+ *  (unknown id or a disabled provider both reject identically). Exported so the
+ *  web plane (web.ts) reuses the exact same provider resolution + rejection. */
+export function resolveEnabledProvider(cfg: HostConfig, providerId: string): IdentityProviderConfig {
   const provider = listIdentityProviderRecords(cfg.dataDir).find((p) => p.id === providerId);
   if (!provider || !provider.enabled) {
     throw new Error(`unknown or disabled identity provider "${providerId}"`);
