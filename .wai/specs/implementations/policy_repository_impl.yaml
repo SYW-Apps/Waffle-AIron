@@ -27,6 +27,7 @@ methods:
         type: call
         targetComponent: policy_index
         targetMethod: listIdentityProviders
+    symbol: listIdentityProviderRecords
   - name: upsertIdentityProvider
     narrative:
       - stepNumber: 1
@@ -34,6 +35,7 @@ methods:
         type: call
         targetComponent: policy_registry
         targetMethod: upsertIdentityProvider
+    symbol: upsertIdentityProviderRecord
   - name: removeIdentityProvider
     narrative:
       - stepNumber: 1
@@ -41,7 +43,8 @@ methods:
         type: call
         targetComponent: policy_registry
         targetMethod: removeIdentityProvider
+    symbol: removeIdentityProviderRecord
 detail: calls-only
 status: complete
 createdAt: '2026-07-09T20:47:51.139Z'
-updatedAt: '2026-07-10T08:16:36.587Z'
+updatedAt: '2026-07-11T19:14:22.736Z'

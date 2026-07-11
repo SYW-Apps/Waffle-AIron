@@ -1,0 +1,51 @@
+id: source_analysis_adapter_impl
+name: Source Analysis Adapter Implementation
+description: >-
+  Tiered source-file analysis with zero mandatory parser dependencies. The TypeScript compiler is
+  this component's bound technology, but the binding is opportunistic: dynamically resolved from the
+  analyzed project's node_modules first, wairon's own installation second, and simply absent
+  otherwise — pattern-table and generic-scan tiers keep conformance functional (at a recorded lower
+  grade) on hosted checkouts without node_modules and on any language.
+contract: isource_analysis_adapter
+sourcePath: src/core/source-analysis.ts
+technologies:
+  - typescript-compiler
+methods:
+  - name: buildCodeModel
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Deduplicate the distinct sourcePaths across all implementations and resolve each against
+          the project root, classifying absolute or parent-escaping paths as escaped (containment,
+          mirroring the projectPath rule) and nonexistent files as missing
+        type: local
+      - stepNumber: 2
+        description: Read each remaining file as text, classifying binary or unreadable content as unreadable
+        type: local
+      - stepNumber: 3
+        description: >-
+          Select the analyzer per file: exact AST when the TypeScript compiler module resolves
+          dynamically for ts/js (analyzed project's node_modules first, wairon's own installation
+          second, never bundled); else the file language's declarative pattern table (built-in
+          tables merged under extension-pack registrations); else the generic word-boundary scan
+        type: local
+      - stepNumber: 4
+        description: >-
+          Extract per-file facts: declaration-tier names (named declarations at any nesting depth,
+          destructuring bindings, object-literal keys, import bindings, export specifiers with
+          export-* barrels chased through relative specifiers using a visited set), weak anchors
+          (exact string literals and property-access references), exported names, and import module
+          specifiers
+        type: local
+      - stepNumber: 5
+        description: >-
+          Degrade any file whose exact analysis throws to the generic scan, recording the grade per
+          file — a single file never aborts the run
+        type: local
+      - stepNumber: 6
+        description: Return the assembled CodeModel (per-file facts plus the resolved project root)
+        type: return
+        outcome: CodeModel
+status: complete
+createdAt: '2026-07-11T17:52:15.266Z'
+updatedAt: '2026-07-11T19:14:23.286Z'

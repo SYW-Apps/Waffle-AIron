@@ -13,6 +13,7 @@ methods:
         type: call
         targetComponent: skills_portal
         targetMethod: listResources
+    symbol: listSkillResources
   - name: readResource
     narrative:
       - stepNumber: 1
@@ -20,6 +21,7 @@ methods:
         type: call
         targetComponent: skills_portal
         targetMethod: readResource
+    symbol: readSkillResource
 status: complete
 createdAt: '2026-07-10T12:21:52.237Z'
-updatedAt: '2026-07-10T12:25:03.935Z'
+updatedAt: '2026-07-11T19:14:22.033Z'

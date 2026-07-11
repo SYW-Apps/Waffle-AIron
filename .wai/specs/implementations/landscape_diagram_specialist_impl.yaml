@@ -82,7 +82,8 @@ methods:
         description: Return the assembled LandscapeGraphModel (nodes, edges, generatedAt, scope).
         type: return
         outcome: landscape graph model
+    symbol: buildLandscapeGraph
 detail: full
 status: complete
 createdAt: '2026-07-09T22:08:53.561Z'
-updatedAt: '2026-07-09T22:13:43.681Z'
+updatedAt: '2026-07-11T19:14:22.310Z'

@@ -239,6 +239,11 @@ createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);
 
+    // The clean tree also honors structural conformance: the claimed
+    // sourcePath exists and realizes the contract method.
+    fs.mkdirSync(path.join(proj.tempDir, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(proj.tempDir, 'src', 'comp-a.ts'), 'export function doSomething(): void {}\n');
+
     proj.activate();
     try {
       const res = validateSddTree();

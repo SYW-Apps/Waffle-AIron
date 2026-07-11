@@ -11,6 +11,7 @@ methods:
         type: call
         targetComponent: admin_portal
         targetMethod: createProject
+    symbol: runHostProject
   - name: destroyProject
     narrative:
       - stepNumber: 1
@@ -18,6 +19,7 @@ methods:
         type: call
         targetComponent: admin_portal
         targetMethod: destroyProject
+    symbol: runHostProject
   - name: listProjects
     narrative:
       - stepNumber: 1
@@ -25,6 +27,7 @@ methods:
         type: call
         targetComponent: admin_portal
         targetMethod: listProjects
+    symbol: runHostProject
   - name: mintKey
     narrative:
       - stepNumber: 1
@@ -32,6 +35,7 @@ methods:
         type: call
         targetComponent: admin_portal
         targetMethod: mintKey
+    symbol: runHostKey
   - name: revokeKey
     narrative:
       - stepNumber: 1
@@ -39,6 +43,7 @@ methods:
         type: call
         targetComponent: admin_portal
         targetMethod: revokeKey
+    symbol: runHostKey
   - name: listKeys
     narrative:
       - stepNumber: 1
@@ -46,6 +51,7 @@ methods:
         type: call
         targetComponent: admin_portal
         targetMethod: listKeys
+    symbol: runHostKey
   - name: lockProject
     narrative:
       - stepNumber: 1
@@ -53,6 +59,7 @@ methods:
         type: call
         targetComponent: admin_portal
         targetMethod: lockProject
+    symbol: runHostLock
   - name: promoteProject
     narrative:
       - stepNumber: 1
@@ -60,6 +67,7 @@ methods:
         type: call
         targetComponent: admin_portal
         targetMethod: promoteProject
+    symbol: runHostPromote
 status: complete
 createdAt: '2026-07-04T12:53:10.615Z'
-updatedAt: '2026-07-04T13:06:22.926Z'
+updatedAt: '2026-07-11T19:14:22.419Z'

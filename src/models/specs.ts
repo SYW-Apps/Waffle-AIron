@@ -474,6 +474,18 @@ export type NarrativeStep = z.infer<typeof NarrativeStepSchema>;
 export const NarrativeDetailSchema = z.enum(['full', 'calls-only', 'intent']);
 export type NarrativeDetail = z.infer<typeof NarrativeDetailSchema>;
 
+/**
+ * The structural-conformance dial — declared per method (or per spec as a
+ * default), mirroring the narrative detail dial. Absent = the component
+ * stereotype's default (Portal → anchored, everything else → declared).
+ * `declared` requires a declaration-tier anchor for each contract method in
+ * the sourcePath file; `anchored` also accepts exact string-literal
+ * occurrences (tool/route registrations); `off` skips method checks for
+ * generated/vendored code (the sourcePath existence check always applies).
+ */
+export const ConformanceTierSchema = z.enum(['declared', 'anchored', 'off']);
+export type ConformanceTier = z.infer<typeof ConformanceTierSchema>;
+
 export const MethodImplementationSchema = z.object({
   name: z.string(), // Must match a method name in the L3 interface contract
   narrative: z.array(NarrativeStepSchema).default([]), // Level 5 Narrative
@@ -485,6 +497,14 @@ export const MethodImplementationSchema = z.object({
    * failure behavior stated here or in the contract's guarantees.
    */
   intent: z.string().optional(),
+  /** Conformance tier for THIS method (overrides the spec-level default). */
+  conformance: ConformanceTierSchema.optional(),
+  /**
+   * The code-level name realizing this contract method in the sourcePath
+   * file, when it legitimately differs from the intent-language contract
+   * name — e.g. a store's `put` realized by `saveSnapshot`.
+   */
+  symbol: z.string().optional(),
 });
 
 export type MethodImplementation = z.infer<typeof MethodImplementationSchema>;
@@ -507,6 +527,8 @@ export const ImplementationSpecSchema = z.object({
   methods: z.array(MethodImplementationSchema).default([]),
   /** Spec-level narrative detail default for all methods (each may override). */
   detail: NarrativeDetailSchema.optional(),
+  /** Spec-level structural-conformance tier default (each method may override). */
+  conformance: ConformanceTierSchema.optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
   status: SpecStatusSchema.optional().default('complete'),

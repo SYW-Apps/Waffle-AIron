@@ -19,7 +19,8 @@ methods:
       Return every configured identity provider from the store's current in-memory collection, or an
       empty list when none has been configured. Read-only over the store's reference; never fails on
       lookups — absence is an empty list, not an error.
+    symbol: listIdentityProviderRecords
 detail: intent
 status: complete
 createdAt: '2026-07-09T20:47:47.802Z'
-updatedAt: '2026-07-10T08:16:49.573Z'
+updatedAt: '2026-07-11T19:14:22.639Z'

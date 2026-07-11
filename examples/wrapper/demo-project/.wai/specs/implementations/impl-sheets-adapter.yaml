@@ -16,3 +16,7 @@ methods:
     intent: Appends the serialized values as a new row at the end of the backing Google Sheets range, creating the sheet tab when it is missing.
 createdAt: '2026-07-03T12:00:00Z'
 updatedAt: '2026-07-03T12:00:00Z'
+lint:
+  allow:
+    - code: MISSING_SOURCE_PATH
+      reason: Spec-only demo project — the flowops automation ships no source checkout in this example.

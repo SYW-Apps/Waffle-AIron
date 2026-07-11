@@ -1,0 +1,55 @@
+kind: value-object
+id: source_file_facts
+name: SourceFileFacts
+description: >-
+  Pure analysis facts for one resolved L4 sourcePath — the unit of the CodeModel. Name sets are
+  anchor tiers for realization checking: declaredNames satisfy the 'declared' conformance tier,
+  anchoredNames additionally satisfy the 'anchored' tier. Carries the analysis grade so findings can
+  state how confident the analysis was (exact AST vs pattern table vs generic scan).
+subsystem: sdd_validator
+fields:
+  - name: path
+    type: string
+    description: Project-relative resolved source path (the key many implementations may share, N:1)
+    optional: false
+  - name: status
+    type: string
+    description: >-
+      analyzed | missing (sourcePath resolves to no file) | escaped (absolute or parent-escaping
+      path, refused by containment) | unreadable (binary or read failure)
+    optional: false
+  - name: language
+    type: string
+    description: Effective language the file was analyzed as (from extension + language tables)
+    optional: true
+  - name: analysisGrade
+    type: string
+    description: >-
+      exact (AST) | pattern (declarative per-language pattern table) | generic (word-boundary scan)
+      — carried onto finding messages
+    optional: true
+  - name: declaredNames
+    type: string[]
+    description: >-
+      Declaration-tier anchors: named declarations at any nesting depth, destructuring bindings,
+      object-literal keys, import bindings, and export specifiers (export-* barrels chased through
+      relative specifiers with a visited set)
+    optional: false
+  - name: anchoredNames
+    type: string[]
+    description: >-
+      Weaker anchors: exact string-literal occurrences (tool/route registrations) and
+      property-access references (forwarding through a namespace, e.g. specs.loadComponentSpecs) —
+      satisfy only the 'anchored' conformance tier
+    optional: false
+  - name: exportedNames
+    type: string[]
+    description: Exported bindings of the file (Level 2 dependency-conformance and UNDECLARED_EXPORT fuel)
+    optional: false
+  - name: imports
+    type: string[]
+    description: Import/require module specifiers found in the file (Level 2 dependency-conformance fuel)
+    optional: false
+methods: []
+createdAt: '2026-07-11T17:51:42.278Z'
+updatedAt: '2026-07-11T19:14:23.250Z'

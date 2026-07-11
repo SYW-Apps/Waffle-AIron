@@ -9,6 +9,7 @@ owns: []
 dependsOn:
   - validator_core_adapter
   - validator_surfaces_adapter
+  - source_analysis_adapter
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-07-10T23:12:54.612Z'
+updatedAt: '2026-07-11T17:52:29.410Z'

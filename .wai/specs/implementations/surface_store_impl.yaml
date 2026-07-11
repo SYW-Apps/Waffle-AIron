@@ -2,6 +2,7 @@ id: surface_store_impl
 name: Surface Store Implementation
 description: In-memory snapshot projection.
 contract: isurface_store
+sourcePath: src/core/surfaces.ts
 methods:
   - name: put
     narrative: []
@@ -10,22 +11,26 @@ methods:
       Holds or replaces the parsed snapshot keyed by its producing project name in the in-memory
       map. A ram-projection: the map is rebuilt from the snapshot files on demand, never restored
       from its own state; putting never touches disk.
+    symbol: saveSnapshot
   - name: get
     narrative: []
     detail: intent
     intent: >-
       Returns the held snapshot for the producing project name, or null when none is held. Never
       performs I/O.
+    symbol: getSnapshot
   - name: list
     narrative: []
     detail: intent
     intent: Returns every held snapshot in stable insertion order. Never performs I/O.
+    symbol: listSnapshots
   - name: remove
     narrative: []
     detail: intent
     intent: >-
       Drops the held snapshot for the project and reports whether one was held. Never touches disk —
       file deletion is the registry's write path through the fs adapter.
+    symbol: removeSnapshot
 status: complete
 createdAt: '2026-07-10T23:15:30.692Z'
-updatedAt: '2026-07-11T09:04:03.128Z'
+updatedAt: '2026-07-11T19:14:23.029Z'

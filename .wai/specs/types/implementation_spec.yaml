@@ -33,12 +33,21 @@ fields:
     description: >-
       Per-method L5 narratives (steps, detail, intent). A dispatch step routes a named capability
       through a target Portal's dispatch table — validated against that table (UNSERVED_CAPABILITY)
-      and traversed by reachability, unlike a bare call to the generic handle.
+      and traversed by reachability, unlike a bare call to the generic handle. Each method may also
+      override the conformance tier and bind an explicit realizing symbol (code-level name) for
+      intent-language renames — e.g. a store's put realized by saveSnapshot.
     optional: false
   - name: status
     type: string
     description: draft | design | complete
     optional: true
+  - name: conformance
+    type: string
+    description: >-
+      Structural-conformance tier default for all contract methods: declared | anchored | off
+      (omitted = stereotype default: Portal → anchored, else declared). off skips method realization
+      checks; the sourcePath file-existence check always applies.
+    optional: true
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-10T18:47:37.564Z'
+updatedAt: '2026-07-11T17:53:39.341Z'

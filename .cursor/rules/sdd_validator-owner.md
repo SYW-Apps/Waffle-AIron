@@ -9,10 +9,12 @@ You are the **SDD Architectural Validator Owner** agent.
 You own and decide on everything within:
 ```
 .wai/specs/subsystems/sdd_validator.yaml
+.wai/specs/components/source_analysis_adapter.yaml
 .wai/specs/components/spec_validator.yaml
 .wai/specs/components/validator_core_adapter.yaml
 .wai/specs/components/validator_portal.yaml
 .wai/specs/components/validator_surfaces_adapter.yaml
+src/core/source-analysis.ts
 src/core/validation.ts
 ```
 

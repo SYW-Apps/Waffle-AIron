@@ -2,6 +2,7 @@ id: surface_projector_impl
 name: Surface Projector Implementation
 description: Contract-grade projection with audience filtering and type-closure computation.
 contract: isurface_projector
+sourcePath: src/core/surfaces.ts
 methods:
   - name: projectOwnSurface
     narrative:
@@ -69,4 +70,4 @@ methods:
         outcome: SurfaceSnapshot
 status: complete
 createdAt: '2026-07-10T23:15:11.894Z'
-updatedAt: '2026-07-11T09:04:03.036Z'
+updatedAt: '2026-07-11T18:45:03.920Z'

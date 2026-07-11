@@ -15,6 +15,7 @@ methods:
       set durably via write-temp-then-rename so a crash never truncates the file, then push the new
       set into the store with replaceAll and return the stored record. When persistence fails, no
       in-memory state changes and the storage error propagates to the caller.
+    symbol: registryUpsert
   - name: setStatus
     narrative: []
     intent: >-
@@ -22,6 +23,7 @@ methods:
       (active, suspended, deactivated) while preserving identity, grant, and audit-history fields
       untouched, stamp updatedAt, then persist and swap exactly as upsert does. Invalid status
       values are rejected before any mutation.
+    symbol: registrySetStatus
   - name: replaceGrants
     narrative: []
     intent: >-
@@ -29,7 +31,8 @@ methods:
       wholesale with the supplied set (no merging; the caller has already computed and authorized
       the final grant state), stamp updatedAt, then persist and swap exactly as upsert does. The
       registry performs no authorization itself.
+    symbol: registryReplaceGrants
 detail: intent
 status: complete
 createdAt: '2026-07-09T17:30:03.044Z'
-updatedAt: '2026-07-09T17:43:55.400Z'
+updatedAt: '2026-07-11T19:14:22.918Z'

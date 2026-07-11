@@ -239,6 +239,7 @@ methods:
         description: Return the MCP response
         type: return
         outcome: MCP response
+    symbol: handleMcpRequest
   - name: viewDiagram
     narrative:
       - stepNumber: 1
@@ -264,6 +265,7 @@ methods:
         description: Return the canvas HTML response
         type: return
         outcome: canvas html response
+    symbol: handleViewDiagram
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-07-11T12:04:36.043Z'
+updatedAt: '2026-07-11T19:14:22.151Z'

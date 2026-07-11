@@ -2,6 +2,7 @@ id: surfaces_core_adapter_impl
 name: Surfaces Core Adapter Implementation
 description: Spec-tree reads forwarded to the core portal.
 contract: isurfaces_core_adapter
+sourcePath: src/core/surfaces.ts
 methods:
   - name: loadSystemSpec
     narrative:
@@ -40,4 +41,4 @@ methods:
         targetMethod: loadTypeSpecs
 status: complete
 createdAt: '2026-07-10T23:15:53.589Z'
-updatedAt: '2026-07-11T09:04:02.878Z'
+updatedAt: '2026-07-11T18:45:04.872Z'

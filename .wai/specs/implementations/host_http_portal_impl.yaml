@@ -16,11 +16,13 @@ methods:
       - stepNumber: 1
         description: Return a 200 liveness response
         type: local
+    symbol: /healthz
   - name: readyz
     narrative:
       - stepNumber: 1
         description: Report ready (200) when the data directory is writable, else 503
         type: local
+    symbol: /readyz
   - name: viewDiagram
     narrative:
       - stepNumber: 1
@@ -28,6 +30,7 @@ methods:
         type: call
         targetComponent: host_request_orchestrator
         targetMethod: viewDiagram
+    symbol: /view/diagram
 status: complete
 createdAt: '2026-07-04T12:53:08.334Z'
-updatedAt: '2026-07-04T16:01:25.293Z'
+updatedAt: '2026-07-11T19:14:22.235Z'

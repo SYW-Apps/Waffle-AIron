@@ -48,9 +48,18 @@ methods:
         targetComponent: validator_surfaces_adapter
         targetMethod: loadSurfaceSnapshots
       - stepNumber: 9
+        description: >-
+          Build the source code model via the source analysis adapter — every distinct L4 sourcePath
+          resolved and containment-checked within the project root, analyzed at the best available
+          grade (exact | pattern | generic); the structural-conformance rules consume it purely from
+          the rule context (the surface-snapshots injection pattern)
+        type: call
+        targetComponent: source_analysis_adapter
+        targetMethod: buildCodeModel
+      - stepNumber: 10
         description: Integrate Zod schema loader errors
         type: local
-      - stepNumber: 10
+      - stepNumber: 11
         description: >-
           Round-trip serializability: the registered roundtrip-serialization rule dry-runs every
           in-scope spec through the writer relativization + schema pipeline via the core adapter (no
@@ -59,19 +68,22 @@ methods:
         type: call
         targetComponent: validator_core_adapter
         targetMethod: dryRunSerializeSpecs
-      - stepNumber: 11
+      - stepNumber: 12
         description: Load project extensions and compose the active validation rule sequence
         type: local
-      - stepNumber: 12
+      - stepNumber: 13
         description: >-
           Run hierarchy, namespace-hygiene, round-trip, type-reference, contract (incl. cross-tree
-          ref recognition), narrative, boundary, graph, naming, documentation, complexity, and
+          ref recognition), narrative, boundary, graph, naming, documentation, complexity,
           semantic-edge rules (dispatch-table capability contracts and guarantee backing, dispatch-
           and lifecycle-rooted reachability, durability round-trip hydration with a non-flooded boot
           graph, untyped cross-subsystem seams with dispatch-table exemption, prose-claim
-          realization)
+          realization), and structural-conformance rules (sourcePaths resolve within the project
+          root to real files; every contract method is realized in its file at the implementation's
+          conformance tier — declared | anchored | off — honoring per-method symbol overrides, with
+          analysis grade carried on findings)
         type: local
-      - stepNumber: 13
+      - stepNumber: 14
         description: Return the aggregated validation result
         type: return
         outcome: ValidationResult
@@ -137,6 +149,11 @@ methods:
         targetComponent: validator_surfaces_adapter
         targetMethod: loadSurfaceSnapshots
       - stepNumber: 9
+        description: Build the source code model via the source analysis adapter, identical to validateSddTree
+        type: call
+        targetComponent: source_analysis_adapter
+        targetMethod: buildCodeModel
+      - stepNumber: 10
         description: >-
           Round-trip serializability: the registered roundtrip-serialization rule dry-runs every
           in-scope spec through the writer pipeline via the core adapter, identical to
@@ -144,19 +161,19 @@ methods:
         type: call
         targetComponent: validator_core_adapter
         targetMethod: dryRunSerializeSpecs
-      - stepNumber: 10
+      - stepNumber: 11
         description: Treat every spec as complete (suppress the draft severity relaxation), mutating nothing
         type: local
-      - stepNumber: 11
+      - stepNumber: 12
         description: >-
           Run the same active rule sequence as validateSddTree at full strictness, including
           namespace-hygiene, round-trip, naming, documentation, complexity, and the semantic-edge
           rules
         type: local
-      - stepNumber: 12
+      - stepNumber: 13
         description: Return the as-complete validation result
         type: return
         outcome: as-complete ValidationResult
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-10T23:16:21.437Z'
+updatedAt: '2026-07-11T17:52:50.077Z'

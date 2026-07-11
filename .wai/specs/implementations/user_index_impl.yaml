@@ -11,12 +11,14 @@ methods:
     intent: >-
       Return the store's record whose id matches exactly, or null when absent. Read-only over the
       store's current references; never fails on lookups — absence is a null result, not an error.
+    symbol: indexGetById
   - name: findByExternalSubject
     narrative: []
     intent: >-
       Return the single record whose identity binding matches both the issuer and the external
       subject id exactly, or null when no user is bound to that provider identity. Comparison is
       exact and case-sensitive because provider subjects are opaque identifiers.
+    symbol: indexFindByExternalSubject
   - name: list
     narrative: []
     intent: >-
@@ -24,7 +26,8 @@ methods:
       — a project filter matches users holding at least one grant scoped to that project or an
       instance-wide grant — sorted by id for stable pagination. An empty result is a normal outcome,
       never an error.
+    symbol: indexList
 detail: intent
 status: complete
 createdAt: '2026-07-09T17:30:13.144Z'
-updatedAt: '2026-07-09T17:43:56.406Z'
+updatedAt: '2026-07-11T19:14:22.881Z'

@@ -9,15 +9,19 @@ methods:
     intent: >-
       Reads .wai/producers.json for the bound project and returns the config entry for the target,
       or null when absent.
+    symbol: readProducerConfig
   - name: write
     narrative: []
     intent: Upserts the ProducerConfig into .wai/producers.json (keyed by target) and writes atomically.
+    symbol: writeProducerConfig
   - name: clear
     narrative: []
     intent: Removes the target's entry from .wai/producers.json. Idempotent when absent.
+    symbol: clearProducerConfig
   - name: list
     narrative: []
     intent: Returns all ProducerConfig entries from .wai/producers.json.
+    symbol: listProducerConfigs
 status: complete
 createdAt: '2026-07-04T17:39:10.593Z'
-updatedAt: '2026-07-04T17:42:04.249Z'
+updatedAt: '2026-07-11T19:14:22.773Z'

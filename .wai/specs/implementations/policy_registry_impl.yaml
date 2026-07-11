@@ -28,6 +28,7 @@ methods:
       and return the stored config. The config carries only a clientSecretRef into the host secret
       mechanism; the registry writes the reference and never a raw client secret. A persistence
       failure leaves the previous collection intact and surfaces as a storage error.
+    symbol: upsertIdentityProviderRecord
   - name: removeIdentityProvider
     narrative: []
     intent: >-
@@ -36,7 +37,8 @@ methods:
       identity-providers.json via write-temp-then-rename, refresh the store's in-memory collection,
       and return once removed. A persistence failure leaves the previous collection intact and
       surfaces as a storage error. Authorization is enforced by the orchestrator, not here.
+    symbol: removeIdentityProviderRecord
 detail: intent
 status: complete
 createdAt: '2026-07-09T20:47:44.803Z'
-updatedAt: '2026-07-10T08:16:48.087Z'
+updatedAt: '2026-07-11T19:14:22.675Z'

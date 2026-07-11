@@ -41,6 +41,7 @@ methods:
         description: Return the StateId
         type: return
         outcome: StateId
+    symbol: computeStateId
 status: complete
 createdAt: '2026-07-04T12:54:31.981Z'
-updatedAt: '2026-07-04T13:06:23.031Z'
+updatedAt: '2026-07-11T19:14:22.383Z'

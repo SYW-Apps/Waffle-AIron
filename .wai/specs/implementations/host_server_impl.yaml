@@ -38,6 +38,7 @@ methods:
         description: Return the running server handle
         type: return
         outcome: running
+    symbol: startHostServer
   - name: stop
     narrative:
       - stepNumber: 1
@@ -50,6 +51,8 @@ methods:
         description: Return once stopped
         type: return
         outcome: stopped
+    conformance: anchored
+    symbol: close
 status: complete
 createdAt: '2026-07-04T12:54:36.977Z'
-updatedAt: '2026-07-10T11:25:42.157Z'
+updatedAt: '2026-07-11T19:14:22.190Z'

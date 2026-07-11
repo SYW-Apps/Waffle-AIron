@@ -53,6 +53,7 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: dryRunSerializeSpecs
+    conformance: 'off'
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-10T18:48:05.664Z'
+updatedAt: '2026-07-11T19:14:22.114Z'

@@ -45,6 +45,7 @@ methods:
         type: call
         targetComponent: web_orchestrator
         targetMethod: getCurrentContext
+    symbol: getCurrentContext
   - name: getGraph
     narrative:
       - stepNumber: 1
@@ -70,6 +71,7 @@ methods:
         type: call
         targetComponent: web_orchestrator
         targetMethod: startDevSession
+    symbol: startDevSession
   - name: serveProjectCanvas
     narrative:
       - stepNumber: 1
@@ -79,7 +81,8 @@ methods:
         type: call
         targetComponent: web_orchestrator
         targetMethod: getProjectCanvas
+    symbol: getWebProjectCanvas
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-07-11T16:37:19.488Z'
+updatedAt: '2026-07-11T19:14:22.346Z'

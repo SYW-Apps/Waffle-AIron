@@ -2,6 +2,7 @@ id: surface_transfer_adapter_impl
 name: Surface Transfer Adapter Implementation
 description: Cross-location surface file exchange.
 contract: isurface_transfer_adapter
+sourcePath: src/core/surfaces.ts
 methods:
   - name: writeSnapshotTo
     narrative: []
@@ -12,6 +13,7 @@ methods:
       there; when a pre-rendered document body is supplied (e.g. OpenAPI), writes that body instead
       of native YAML. Creates missing directories, overwrites atomically, and returns the written
       path. Refuses path traversal outside the workspace family.
+    symbol: exportSurface
   - name: readDocument
     narrative: []
     detail: intent
@@ -19,6 +21,7 @@ methods:
       Reads the foreign surface document at the source path as UTF-8 text without interpreting it
       (decoding is the codec's or orchestrator's concern); fails with a clear not-found error naming
       the path.
+    symbol: importSurface
 status: complete
 createdAt: '2026-07-10T23:15:58.334Z'
-updatedAt: '2026-07-11T09:04:03.161Z'
+updatedAt: '2026-07-11T19:14:23.211Z'

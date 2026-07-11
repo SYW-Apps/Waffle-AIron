@@ -30,7 +30,9 @@ import { languageRule } from './language.js';
 import { technologyRule } from './technology.js';
 import { namingRule } from './naming.js';
 import { complexityRule } from './complexity.js';
+import { structuralConformanceRule } from './conformance.js';
 import { lintAllowsRule } from './lint-allows.js';
+import { emptyCodeModel, CodeModel } from '../source-analysis.js';
 
 export * from './types.js';
 export * from './type-analysis.js';
@@ -66,6 +68,9 @@ export const SDD_RULES: SddRule[] = [
   durabilityRule,
   untypedSeamRule,
   proseClaimRule,
+  // Code↔spec: structural conformance consumes the injected CodeModel (built
+  // by the source analysis adapter next to the surface snapshots).
+  structuralConformanceRule,
   couplingRule,
   languageRule,
   technologyRule,
@@ -99,6 +104,13 @@ const COMPLETENESS_RULES = new Set([
   'ORPHANED_SUBSYSTEM',
   'PUBLIC_INTERFACE_UNBOUND',
   'PUBLIC_INTERFACE_TYPE_MISMATCH',
+  // Structural conformance: a draft tree is allowed to name code that does
+  // not exist yet — the findings gate only once the specs claim completeness.
+  'MISSING_SOURCE_PATH',
+  'MISSING_SOURCE_FILE',
+  'SOURCE_PATH_ESCAPES_ROOT',
+  'UNREALIZED_METHOD',
+  'CONFORMANCE_ANALYSIS_SKIPPED',
 ]);
 
 export interface ScopeFilterOptions {
@@ -161,6 +173,8 @@ export interface BuildContextOptions {
   extensions?: LoadedExtensions;
   /** Stored surface snapshots for cross-tree/remote reference resolution. */
   surfaceSnapshots?: import('../../models/index.js').SurfaceSnapshot[];
+  /** Source-code model for structural conformance; empty when not built. */
+  codeModel?: CodeModel;
   /** Collector the context's addIssue pushes into. */
   issues: ValidationIssue[];
 }
@@ -340,6 +354,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     isSpecInScope,
     ext: { profiles: extensions.profiles, languages: extensions.languages },
     surfaceSnapshots: opts.surfaceSnapshots ?? [],
+    codeModel: opts.codeModel ?? emptyCodeModel(),
     lintAllows,
     knownIssueCodes,
     addIssue,

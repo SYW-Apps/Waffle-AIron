@@ -41,6 +41,7 @@ methods:
         type: call
         targetComponent: identity_orchestrator
         targetMethod: queryAuditEvents
+    symbol: queryAuditEvents
   - name: pruneAuditEvents
     narrative:
       - stepNumber: 1
@@ -107,4 +108,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-09T17:41:06.029Z'
-updatedAt: '2026-07-10T08:18:43.259Z'
+updatedAt: '2026-07-11T19:14:22.273Z'

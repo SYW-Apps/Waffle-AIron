@@ -12,3 +12,7 @@ methods:
     intent: Writes the record through the store, overwriting an existing row with the same id; storage failures surface to the caller unchanged.
 createdAt: '2026-07-03T12:00:00Z'
 updatedAt: '2026-07-03T12:00:00Z'
+lint:
+  allow:
+    - code: MISSING_SOURCE_PATH
+      reason: Spec-only demo project — the flowops automation ships no source checkout in this example.

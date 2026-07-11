@@ -14,6 +14,7 @@ methods:
       yields an empty set (first boot is not an error); an unreadable file or structurally invalid
       JSON fails with a storage error naming the offending path so the operator can repair or remove
       it — the store never silently discards persisted users.
+    symbol: loadStore
   - name: replaceAll
     narrative: []
     intent: >-
@@ -24,4 +25,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-07-09T17:29:51.432Z'
-updatedAt: '2026-07-09T17:43:54.398Z'
+updatedAt: '2026-07-11T19:14:22.993Z'

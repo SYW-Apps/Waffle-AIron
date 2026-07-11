@@ -2,6 +2,7 @@ id: visibility_specialist_impl
 name: Visibility Specialist Implementation
 description: Pure unit-graph visibility resolution.
 contract: ivisibility_specialist
+sourcePath: src/server/visibility.ts
 methods:
   - name: resolveVisibility
     narrative:
@@ -68,4 +69,4 @@ methods:
         outcome: department | instance | partner | null
 status: complete
 createdAt: '2026-07-11T09:37:36.149Z'
-updatedAt: '2026-07-11T10:05:10.902Z'
+updatedAt: '2026-07-11T18:45:11.879Z'

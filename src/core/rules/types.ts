@@ -9,6 +9,7 @@ import {
   SurfaceSnapshot,
 } from '../../models/index.js';
 import type { ProfileDef, LanguagePackDef } from '../extensions.js';
+import type { CodeModel } from '../source-analysis.js';
 
 // ---------------------------------------------------------------------------
 // Rule registry contracts
@@ -70,6 +71,14 @@ export interface RuleContext {
   interfacesByComponent: Map<string, InterfaceSpec[]>;
   /** Stored surface snapshots (.wai/surfaces/) — declared contracts that unresolved cross-tree/remote references validate against. */
   surfaceSnapshots: SurfaceSnapshot[];
+  /**
+   * The pure source-code model (per-sourcePath declaration/export/import/
+   * anchor facts) built by the source analysis adapter — what the
+   * structural-conformance family checks realization against. Empty when the
+   * context was built without one (the family then only reports missing
+   * sourcePaths, never file-level findings).
+   */
+  codeModel: CodeModel;
   /** Implementations grouped by their contract interface id. */
   implementationsByContract: Map<string, ImplementationSpec[]>;
 

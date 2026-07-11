@@ -2,7 +2,7 @@ id: admin_portal_impl
 name: Admin Portal Implementation
 description: 'Control-plane HTTP boundary: forwards each admin operation to the admin orchestrator.'
 contract: iadmin_portal
-sourcePath: src/server/admin.ts
+sourcePath: src/server/http.ts
 methods:
   - name: createProject
     narrative:
@@ -193,6 +193,7 @@ methods:
         type: call
         targetComponent: self_service_orchestrator
         targetMethod: listPendingRequests
+    symbol: listPendingRequests
   - name: decideApproval
     narrative:
       - stepNumber: 1
@@ -200,6 +201,7 @@ methods:
         type: call
         targetComponent: self_service_orchestrator
         targetMethod: decideRequest
+    symbol: decideRequest
   - name: executeApproval
     narrative:
       - stepNumber: 1
@@ -207,6 +209,7 @@ methods:
         type: call
         targetComponent: self_service_orchestrator
         targetMethod: executeApprovedRequest
+    symbol: executeApprovedRequest
 status: complete
 createdAt: '2026-07-04T12:53:08.445Z'
-updatedAt: '2026-07-09T19:24:49.212Z'
+updatedAt: '2026-07-11T19:14:21.871Z'

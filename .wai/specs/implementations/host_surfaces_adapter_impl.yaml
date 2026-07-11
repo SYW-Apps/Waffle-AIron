@@ -2,6 +2,7 @@ id: host_surfaces_adapter_impl
 name: Host Surfaces Adapter Implementation
 description: Bound-project surface generation forwarded to the surface portal.
 contract: ihost_surfaces_adapter
+sourcePath: src/server/adapters.ts
 methods:
   - name: exportBoundSurface
     narrative:
@@ -12,4 +13,4 @@ methods:
         targetMethod: exportSurface
 status: complete
 createdAt: '2026-07-11T09:48:59.060Z'
-updatedAt: '2026-07-11T10:05:10.870Z'
+updatedAt: '2026-07-11T18:45:12.719Z'

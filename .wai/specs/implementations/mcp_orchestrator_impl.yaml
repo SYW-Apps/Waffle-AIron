@@ -14,6 +14,7 @@ methods:
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: saveSystemSpec
+    symbol: sdd_initialize_system
   - name: addComponent
     narrative:
       - stepNumber: 1
@@ -26,6 +27,7 @@ methods:
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: saveComponentSpec
+    symbol: sdd_add_component
   - name: defineInterface
     narrative:
       - stepNumber: 1
@@ -38,6 +40,7 @@ methods:
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: saveInterfaceSpec
+    symbol: sdd_define_interface
   - name: writeNarrative
     narrative:
       - stepNumber: 1
@@ -50,6 +53,7 @@ methods:
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: saveImplementationSpec
+    symbol: sdd_write_narrative
   - name: validateTree
     narrative:
       - stepNumber: 1
@@ -57,6 +61,7 @@ methods:
         type: call
         targetComponent: mcp_validator_adapter
         targetMethod: validateSddTree
+    symbol: sdd_validate_tree
   - name: getStatus
     narrative:
       - stepNumber: 1
@@ -82,6 +87,7 @@ methods:
       - stepNumber: 5
         description: Compose the hierarchical completeness report
         type: local
+    symbol: sdd_get_status
   - name: addSubsystem
     narrative:
       - stepNumber: 1
@@ -111,6 +117,7 @@ methods:
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: saveSubsystemSpec
+    symbol: sdd_add_subsystem
   - name: moveSubsystemProject
     narrative:
       - stepNumber: 1
@@ -154,6 +161,7 @@ methods:
         type: call
         targetComponent: mcp_skills_adapter
         targetMethod: listResources
+    symbol: registerSkillResources
   - name: readResource
     narrative:
       - stepNumber: 1
@@ -161,6 +169,8 @@ methods:
         type: call
         targetComponent: mcp_skills_adapter
         targetMethod: readResource
+    symbol: registerSkillResources
+conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-07-10T12:22:05.404Z'
+updatedAt: '2026-07-11T19:14:21.957Z'
