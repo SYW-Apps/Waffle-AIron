@@ -87,6 +87,17 @@ methods:
     params:
       - name: sessionId
         type: string
+  - name: startDevSession
+    description: >-
+      Mint (or reuse) the local-developer session for the single-project dev server and return its
+      id. REFUSED unless the server is in local developer mode (cfg.devMode) — this is the only
+      unauthenticated session-minting path and it exists solely for `wairon dev` (loopback, auth
+      off). The session is bound to a synthetic local-developer subject with a grant on the one
+      local project (never an instance-wide grant), so a leaked dev session is scoped to that one
+      local project.
+    signature: 'startDevSession(): string'
+    returns: string
+    params: []
 status: complete
 createdAt: '2026-07-11T11:33:17.127Z'
-updatedAt: '2026-07-11T12:25:29.251Z'
+updatedAt: '2026-07-11T15:57:37.653Z'

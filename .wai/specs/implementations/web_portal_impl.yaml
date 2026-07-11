@@ -61,7 +61,16 @@ methods:
         type: call
         targetComponent: web_orchestrator
         targetMethod: signOutEverywhere
+  - name: devLogin
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the web orchestrator to mint or reuse the local-developer session; the portal
+          then sets the session cookie from the returned id and redirects to the app root
+        type: call
+        targetComponent: web_orchestrator
+        targetMethod: startDevSession
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-07-11T12:25:49.008Z'
+updatedAt: '2026-07-11T15:58:51.668Z'

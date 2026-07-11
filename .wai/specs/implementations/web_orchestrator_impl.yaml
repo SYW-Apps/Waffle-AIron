@@ -129,8 +129,10 @@ methods:
           Derive the capability flags from the principal's grants — isAdmin when a grant is
           instance-wide ('*'), canWriteProjects when any grant carries a write permission (mcp:write
           or project:create), visibleProjectIds from the specific projectIds named in the grants,
-          visibleUnitIds from the orgUnitIds named in the grants — and assemble the WebContext
-          (subject, grants, and the derived flags)
+          visibleUnitIds from the orgUnitIds named in the grants — set local to whether the server
+          is the local developer server (cfg.devMode), which signals the client to hide the
+          tenancy/login chrome — and assemble the WebContext (subject, grants, the derived flags,
+          and local)
         type: local
       - stepNumber: 4
         description: Return the session-principal context
@@ -315,7 +317,53 @@ methods:
         description: Return (all of the principal's sessions revoked).
         type: return
         outcome: all sessions revoked
+  - name: startDevSession
+    narrative:
+      - stepNumber: 1
+        description: >-
+          If the server is NOT in local developer mode (cfg.devMode is false), reject — this path
+          must never mint a session in a hosted deployment
+        type: branch
+        condition: cfg.devMode is false
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Reject the dev-session mint outside local developer mode
+        type: throw
+        error: dev session is only available under wairon dev (devMode)
+      - stepNumber: 3
+        description: >-
+          List existing sessions for the synthetic local-developer subject through the web session
+          repository (so the dev server reuses one session rather than churning the store on every
+          cookieless hit)
+        type: call
+        targetComponent: web_session_repository
+        targetMethod: listBySubject
+      - stepNumber: 4
+        description: 'If a local-developer session already exists, reuse it: return its id'
+        type: branch
+        condition: a local-developer session already exists
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Return the existing local-developer session id
+        type: return
+        outcome: existing dev session id
+      - stepNumber: 6
+        description: >-
+          Build a new WebSession bound to the synthetic local-developer subject with a single grant
+          on the one local project (mcp:read + mcp:write on the local project id — never an
+          instance-wide '*' grant), expiresAt = now + the session TTL
+        type: local
+      - stepNumber: 7
+        description: Persist the new local-developer session through the web session repository
+        type: call
+        targetComponent: web_session_repository
+        targetMethod: create
+      - stepNumber: 8
+        description: Return the new local-developer session id
+        type: return
+        outcome: new dev session id
+    detail: full
 detail: full
 status: complete
 createdAt: '2026-07-11T11:36:44.225Z'
-updatedAt: '2026-07-11T12:25:39.509Z'
+updatedAt: '2026-07-11T15:57:43.879Z'

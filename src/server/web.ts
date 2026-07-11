@@ -29,6 +29,7 @@ import type {
   HostConfig,
   HostedUserRecord,
   LandscapeGraphModel,
+  PrincipalSubject,
   WebContext,
   WebGraphModel,
   WebGraphNode,
@@ -71,6 +72,25 @@ const WEB_SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 /** The write permissions that make a caller a project author in the web client. */
 const WRITE_PERMISSIONS = ['mcp:write', 'project:create'];
+
+// ── Local developer server (`wairon dev`) conventions ────────────────────────
+//
+// The single-project dev server auto-signs a synthetic local-developer identity
+// into a session scoped to exactly ONE local project (never instance-wide), so a
+// leaked dev session can only touch that one local tree. These constants are the
+// sole source of those conventions (subject id, project id, session lifetime).
+
+/** The synthetic identity behind the local dev session: a service principal issued
+ *  locally. Its userId is the subject key startDevSession lists/reuses by. */
+const DEV_SUBJECT: PrincipalSubject = { userId: 'local-dev', kind: 'service', issuer: 'local' };
+
+/** The fixed hosted-project id the dev server registers the cwd under. */
+const DEV_PROJECT_ID = 'local';
+
+/** Dev session lifetime — long enough to span a working session and repeated
+ *  `wairon dev` restarts (the dev data dir is stable per cwd, so the session is
+ *  reused rather than churned), yet still bounded. */
+const DEV_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // ── Web Orchestrator ─────────────────────────────────────────────────────────
 
@@ -207,7 +227,49 @@ export function getCurrentContext(cfg: HostConfig, sessionId: string): WebContex
     canWriteProjects,
     visibleProjectIds,
     visibleUnitIds,
+    // local signals the reused client to hide the tenancy/login chrome. It is the
+    // server posture (cfg.devMode), never a session/grant property — only the local
+    // developer server sets it, so the hosted UI always sees local=false.
+    local: !!cfg.devMode,
   }; // step 4
+}
+
+/**
+ * Mint (or reuse) the local-developer session for the single-project dev server and
+ * return its id. REFUSED unless the server is in local developer mode (cfg.devMode)
+ * — this is the ONLY unauthenticated session-minting path and it exists solely for
+ * `wairon dev` (loopback, auth off). The session is bound to a synthetic
+ * local-developer subject with a grant on the ONE local project (never an
+ * instance-wide '*' grant), so a leaked dev session is scoped to that one local
+ * project. Reuses an existing dev session rather than churning the store on every
+ * cookieless hit.
+ */
+export function startDevSession(cfg: HostConfig): string {
+  // steps 1–2: never mint a dev session in a hosted deployment.
+  if (!cfg.devMode) {
+    throw new Error('dev session is only available under wairon dev (devMode)');
+  }
+
+  // step 3: list existing sessions for the synthetic local-developer subject.
+  const existing = listWebSessionsBySubject(cfg.dataDir, DEV_SUBJECT.userId);
+
+  // steps 4–5: reuse an existing dev session (no churn).
+  if (existing.length > 0) {
+    return existing[0].id;
+  }
+
+  // step 6: build a new session bound to the local-developer subject with a single
+  // PROJECT-SCOPED grant on the one local project (never instance-wide '*').
+  const session: WebSession = {
+    id: '', // web_session_repository mints a ws_-prefixed id
+    subject: DEV_SUBJECT,
+    grants: [{ projectId: DEV_PROJECT_ID, permissions: ['mcp:read', 'mcp:write'] }],
+    createdAt: '', // stamped by the registry
+    expiresAt: new Date(Date.now() + DEV_SESSION_TTL_MS).toISOString(),
+  };
+  const stored = createWebSession(cfg.dataDir, session); // step 7
+
+  return stored.id; // step 8
 }
 
 /**
@@ -415,8 +477,9 @@ export function sessionCookieValue(req: IncomingMessage): string | null {
 }
 
 /** The Set-Cookie value that installs the session cookie: HttpOnly + SameSite=Lax +
- *  Path=/, plus Secure when the effective exposure requires TLS. */
-function setSessionCookie(sessionId: string, secure: boolean): string {
+ *  Path=/, plus Secure when the effective exposure requires TLS. Exported so the
+ *  HTTP layer can install the cookie inline on the dev auto-login path. */
+export function setSessionCookie(sessionId: string, secure: boolean): string {
   return `${WEB_SESSION_COOKIE}=${sessionId}; HttpOnly; SameSite=Lax; Path=/${secure ? '; Secure' : ''}`;
 }
 
@@ -704,11 +767,21 @@ body.resizing-panel { cursor:col-resize; user-select:none; }
   // ---- app start ----------------------------------------------------------
   function startApp() {
     showApp();
+    // LOCAL DEV MODE (ctx.local, from wairon dev): the SAME reused client hides every
+    // tenancy/login/account affordance and pins to the single local project. The
+    // canvas, LOD slider, side panel, and pan/zoom stay byte-for-byte identical.
+    var isLocal = !!(ctx && ctx.local);
+    if (isLocal) {
+      $('tierSeg').hidden = true;    // no Landscape/Project tier toggle — project tier only
+      $('acctDd').hidden = true;     // no account menu / sign-out / sign-out-everywhere
+      $('adminBadge').hidden = true; // no admin badge
+      $('roBadge').hidden = true;    // no tenancy read-only marker
+    }
     $('whoLbl').textContent = (ctx.subject && ctx.subject.userId) || 'signed in';
-    $('adminBadge').hidden = !ctx.isAdmin;
+    if (!isLocal) $('adminBadge').hidden = !ctx.isAdmin;
     // Role-aware: when the caller cannot author, show a read-only marker (there
     // are no write affordances server-side yet — this only avoids implying write).
-    $('roBadge').hidden = !!ctx.canWriteProjects;
+    if (!isLocal) $('roBadge').hidden = !!ctx.canWriteProjects;
     var sel = $('projSel'); sel.innerHTML = '';
     (ctx.visibleProjectIds || []).forEach(function (pid) {
       var o = document.createElement('option'); o.value = pid; o.textContent = pid; sel.appendChild(o);
@@ -728,7 +801,9 @@ body.resizing-panel { cursor:col-resize; user-select:none; }
       b.classList.toggle('active', b.getAttribute('data-tier') === state.tier);
     });
     var hasProjects = (ctx.visibleProjectIds || []).length > 0;
-    $('projCtl').style.display = (state.tier === 'project' && hasProjects) ? 'flex' : 'none';
+    // In local dev mode the project picker is hidden (there is only the one local project).
+    var local = !!(ctx && ctx.local);
+    $('projCtl').style.display = (!local && state.tier === 'project' && hasProjects) ? 'flex' : 'none';
   }
 
   // ---- controls -----------------------------------------------------------
@@ -1007,6 +1082,20 @@ export async function handleWebRequest(
     if (req.method === 'GET' && url.pathname === '/') {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       res.end(serveApp(url.pathname));
+      return;
+    }
+
+    // GET /web/dev-login — DEV MODE ONLY. Mint/reuse the local-developer session,
+    // set the cookie, and land on '/'. http.ts mounts this route only under devMode
+    // (it 404s otherwise), and startDevSession itself refuses outside devMode, so it
+    // can never establish a session in a hosted deployment.
+    if (req.method === 'GET' && parts.length === 2 && parts[1] === 'dev-login') {
+      const devSessionId = startDevSession(cfg);
+      res.writeHead(302, {
+        'set-cookie': setSessionCookie(devSessionId, ctx.secureCookie),
+        location: '/',
+      });
+      res.end();
       return;
     }
 

@@ -111,6 +111,19 @@ methods:
       transport: HTTP
       method: POST
       path: /web/logout-all
+  - name: devLogin
+    description: >-
+      Establish the local-developer session for the single-project dev server (DEV MODE ONLY):
+      forward to the web orchestrator to mint or reuse it, set the session cookie, and return. The
+      dev HTTP layer invokes this transparently on a cookieless request so the REUSED client shows
+      no login screen. The route is mounted only under devMode, so it is absent in the hosted UI.
+    signature: 'devLogin(): void'
+    returns: void
+    params: []
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/dev-login
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-07-11T12:25:44.601Z'
+updatedAt: '2026-07-11T15:58:49.893Z'

@@ -48,6 +48,14 @@ fields:
       it does not yet block or throttle project, token, or MCP usage. Actual enforcement in the data
       plane is a future integration and out of scope for now.
     optional: true
+  - name: devMode
+    type: boolean
+    description: >-
+      True only when the server runs as the local single-project developer server (`wairon dev`):
+      loopback-bound, auth off, the one project = the current working directory. NEVER set by the
+      hosted `serve` command, so the dev-only auto-session path can never appear in a real
+      deployment.
+    optional: true
 methods: []
 createdAt: '2026-07-04T12:58:10.758Z'
-updatedAt: '2026-07-10T11:21:04.876Z'
+updatedAt: '2026-07-11T15:56:20.491Z'

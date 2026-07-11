@@ -1,0 +1,292 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import * as http from 'node:http';
+import type { AddressInfo } from 'node:net';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { startDevSession, getCurrentContext, serveApp } from '../../src/server/web.js';
+import {
+  registerLocalDevProject,
+  listProjectRecords,
+  resolveProjectRoot,
+} from '../../src/server/projects.js';
+import {
+  createWebSession,
+  getWebSessionById,
+  listWebSessionsBySubject,
+} from '../../src/server/websessions.js';
+import { routeData } from '../../src/server/http.js';
+import type { HostConfig, Principal } from '../../src/server/types.js';
+
+// ---------------------------------------------------------------------------
+// wairon dev — local single-project developer server (sdd_host).
+//
+// The dev server REUSES the whole hosted web pipeline (web_orchestrator,
+// web_graph_orchestrator, the auth bridge, serveApp) pointed at the local cwd,
+// auto-signed-in, single-project, with no login/tenancy chrome. These tests pin
+// the security-critical gating: startDevSession refuses outside devMode and mints
+// only a PROJECT-SCOPED session; the devMode HTTP path auto-logs-in on a cookieless
+// GET; and the hosted (devMode off) path 404s /web/dev-login and sets no cookie.
+// ---------------------------------------------------------------------------
+
+function baseCfg(dataDir: string, over: Partial<HostConfig> = {}): HostConfig {
+  return { host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: true, ...over };
+}
+
+// ── startDevSession + getCurrentContext (unit) ───────────────────────────────
+
+describe('local dev session (startDevSession) (sdd_host)', () => {
+  let dataDir: string;
+  let devCfg: HostConfig;
+  let hostedCfg: HostConfig;
+
+  beforeEach(() => {
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-dev-unit-'));
+    devCfg = baseCfg(dataDir, { authEnabled: false, devMode: true });
+    hostedCfg = baseCfg(dataDir);
+  });
+  afterEach(() => {
+    try {
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    } catch {
+      /* windows file locks */
+    }
+  });
+
+  it('refuses to mint outside local developer mode (devMode false → throws, mints nothing)', () => {
+    expect(() => startDevSession(hostedCfg)).toThrow(/dev session is only available under wairon dev/i);
+    expect(listWebSessionsBySubject(dataDir, 'local-dev')).toHaveLength(0);
+  });
+
+  it('mints a project-scoped local session and REUSES it on a second call (same id, no churn)', () => {
+    const id1 = startDevSession(devCfg);
+    expect(id1).toMatch(/^ws_[0-9a-f]+$/);
+
+    const id2 = startDevSession(devCfg);
+    expect(id2).toBe(id1);
+    // Exactly one dev session persisted — reuse, not churn.
+    expect(listWebSessionsBySubject(dataDir, 'local-dev')).toHaveLength(1);
+
+    const s = getWebSessionById(dataDir, id1)!;
+    expect(s.subject).toEqual({ userId: 'local-dev', kind: 'service', issuer: 'local' });
+    // PROJECT-SCOPED grant on 'local' — never an instance-wide '*' grant.
+    expect(s.grants).toEqual([{ projectId: 'local', permissions: ['mcp:read', 'mcp:write'] }]);
+    expect(s.grants.some((g) => g.projectId === '*')).toBe(false);
+    expect(Date.parse(s.expiresAt)).toBeGreaterThan(Date.now());
+  });
+
+  it('getCurrentContext returns local:true under devMode, with the single local project', () => {
+    const id = startDevSession(devCfg);
+    const ctx = getCurrentContext(devCfg, id);
+    expect(ctx.local).toBe(true);
+    expect(ctx.isAdmin).toBe(false);
+    expect(ctx.canWriteProjects).toBe(true); // mcp:write on 'local'
+    expect(ctx.visibleProjectIds).toEqual(['local']);
+  });
+
+  it('getCurrentContext leaves local falsy when the server is NOT in dev mode', () => {
+    const s = createWebSession(dataDir, {
+      id: '',
+      subject: { userId: 'u-1', kind: 'human', issuer: 'local' },
+      grants: [{ projectId: 'proj-a', permissions: ['mcp:read'] }],
+      createdAt: '',
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+    });
+    const ctx = getCurrentContext(hostedCfg, s.id);
+    expect(ctx.local).toBeFalsy();
+  });
+});
+
+// ── registerLocalDevProject (projects registry) ──────────────────────────────
+
+describe('registerLocalDevProject (sdd_host)', () => {
+  let dataDir: string;
+  let cwd: string;
+
+  beforeEach(() => {
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-dev-proj-'));
+    cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-dev-cwd-'));
+  });
+  afterEach(() => {
+    for (const d of [dataDir, cwd]) {
+      try {
+        fs.rmSync(d, { recursive: true, force: true });
+      } catch {
+        /* windows file locks */
+      }
+    }
+  });
+
+  it('persists a local record at the given cwd (not under dataDir/projects); resolveProjectRoot returns it', () => {
+    const rec = registerLocalDevProject(dataDir, 'local', cwd);
+    expect(rec.id).toBe('local');
+    expect(rec.rootPath).toBe(cwd);
+    expect(rec.status).toBe('active');
+    // The rootPath is the arbitrary cwd — NOT forced under <dataDir>/projects.
+    expect(rec.rootPath.startsWith(path.join(dataDir, 'projects'))).toBe(false);
+
+    // Persisted, and idempotent (a second call upserts — no duplicate, createdAt preserved).
+    expect(listProjectRecords(dataDir).filter((r) => r.id === 'local')).toHaveLength(1);
+    const again = registerLocalDevProject(dataDir, 'local', cwd);
+    expect(again.createdAt).toBe(rec.createdAt);
+    expect(listProjectRecords(dataDir).filter((r) => r.id === 'local')).toHaveLength(1);
+
+    // resolveProjectRoot resolves 'local' → the cwd for a 'local'-scoped principal…
+    const principal: Principal = { tokenId: '', role: 'editor', projects: ['local'], authenticated: true };
+    expect(resolveProjectRoot(dataDir, principal, 'local')).toBe(cwd);
+    // …and without a selector for that single-project principal.
+    expect(resolveProjectRoot(dataDir, principal)).toBe(cwd);
+  });
+});
+
+// ── dev-mode HTTP wiring (routeData) ─────────────────────────────────────────
+
+describe('dev-mode HTTP wiring (routeData) (sdd_host)', () => {
+  let dataDir: string;
+  let server: http.Server | undefined;
+  let port: number;
+  const savedEnv = { ...process.env };
+
+  function startServer(cfg: HostConfig): Promise<void> {
+    server = http.createServer((req, res) => routeData(cfg, req, res));
+    return new Promise((resolve) =>
+      server!.listen(0, '127.0.0.1', () => {
+        port = (server!.address() as AddressInfo).port;
+        resolve();
+      }),
+    );
+  }
+
+  interface RawResponse {
+    status: number;
+    headers: http.IncomingHttpHeaders;
+    body: string;
+  }
+  function raw(opts: { method: string; path: string; headers?: Record<string, string> }): Promise<RawResponse> {
+    return new Promise((resolve, reject) => {
+      const req = http.request(
+        { host: '127.0.0.1', port, method: opts.method, path: opts.path, headers: opts.headers },
+        (res) => {
+          let data = '';
+          res.on('data', (c) => (data += c));
+          res.on('end', () => resolve({ status: res.statusCode ?? 0, headers: res.headers, body: data }));
+        },
+      );
+      req.on('error', reject);
+      req.end();
+    });
+  }
+
+  beforeEach(() => {
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-dev-http-'));
+  });
+  afterEach(async () => {
+    if (server) {
+      server.closeAllConnections?.();
+      await new Promise<void>((resolve) => server!.close(() => resolve()));
+      server = undefined;
+    }
+    process.env = { ...savedEnv };
+    try {
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    } catch {
+      /* windows file locks */
+    }
+  });
+
+  /** A dev cfg with NO exposurePolicy at all — proving devMode ALONE forces the web UI on. */
+  function devCfg(): HostConfig {
+    return baseCfg(dataDir, { authEnabled: false, devMode: true });
+  }
+
+  it('devMode: a cookieless GET / establishes the dev session (Set-Cookie ws_) and serves the reused client', async () => {
+    await startServer(devCfg());
+
+    const shell = await raw({ method: 'GET', path: '/' });
+    expect(shell.status).toBe(200);
+    expect(shell.headers['content-type']).toMatch(/text\/html/);
+    expect(shell.body).toContain('/web/context'); // the reused client app shell
+
+    const setCookie = String(shell.headers['set-cookie']?.[0] ?? '');
+    expect(setCookie).toMatch(/^wairon_session=ws_[0-9a-f]+/);
+    const sessionId = /wairon_session=(ws_[0-9a-f]+)/.exec(setCookie)![1];
+
+    // Exactly one local-dev session was auto-established.
+    expect(listWebSessionsBySubject(dataDir, 'local-dev')).toHaveLength(1);
+
+    // The cookie authenticates /web/context, which is signed-in and LOCAL.
+    const ctx = await raw({ method: 'GET', path: '/web/context', headers: { cookie: `wairon_session=${sessionId}` } });
+    expect(ctx.status).toBe(200);
+    const parsed = JSON.parse(ctx.body);
+    expect(parsed.local).toBe(true);
+    expect(parsed.subject.userId).toBe('local-dev');
+    expect(parsed.visibleProjectIds).toEqual(['local']);
+  });
+
+  it('devMode: a cookieless GET /web/context auto-logs-in inline (the client never sees a 401)', async () => {
+    await startServer(devCfg());
+    const ctx = await raw({ method: 'GET', path: '/web/context' });
+    expect(ctx.status).toBe(200); // NOT 401
+    expect(String(ctx.headers['set-cookie']?.[0] ?? '')).toMatch(/^wairon_session=ws_/);
+    expect(JSON.parse(ctx.body).local).toBe(true);
+  });
+
+  it('devMode: GET /web/dev-login mints/reuses the session, sets the cookie, and 302s to /', async () => {
+    await startServer(devCfg());
+    const res = await raw({ method: 'GET', path: '/web/dev-login' });
+    expect(res.status).toBe(302);
+    expect(res.headers['location']).toBe('/');
+    expect(String(res.headers['set-cookie']?.[0] ?? '')).toMatch(/^wairon_session=ws_/);
+    expect(listWebSessionsBySubject(dataDir, 'local-dev')).toHaveLength(1);
+  });
+
+  it('HOSTED (devMode off): /web/dev-login 404s and NO session cookie is ever set — even with the web UI enabled', async () => {
+    // Enable the normal hosted web UI, so this isolates the dev-only behavior (not the opt-in gate).
+    fs.writeFileSync(
+      path.join(dataDir, 'exposure-policy.json'),
+      JSON.stringify({ webUiEnabled: true, requireTls: false }),
+    );
+    await startServer(baseCfg(dataDir)); // devMode undefined
+
+    const dl = await raw({ method: 'GET', path: '/web/dev-login' });
+    expect(dl.status).toBe(404);
+    expect(dl.headers['set-cookie']).toBeUndefined();
+
+    // The hosted app shell still serves, but with NO auto-login cookie.
+    const shell = await raw({ method: 'GET', path: '/' });
+    expect(shell.status).toBe(200);
+    expect(shell.headers['set-cookie']).toBeUndefined();
+
+    // A cookieless /web/context is a normal 401 in hosted mode (no auto-session).
+    const ctx = await raw({ method: 'GET', path: '/web/context' });
+    expect(ctx.status).toBe(401);
+    expect(ctx.headers['set-cookie']).toBeUndefined();
+
+    // Nothing was minted the whole time.
+    expect(listWebSessionsBySubject(dataDir, 'local-dev')).toHaveLength(0);
+  });
+});
+
+// ── the dev UI reuses the ONE web client (serveApp) ──────────────────────────
+
+describe('dev mode reuses the single web client (serveApp) (sdd_host)', () => {
+  const html = serveApp('/');
+
+  it('is exactly one self-contained document — the client is reused, not forked', () => {
+    expect((html.match(/<!doctype html/gi) || []).length).toBe(1);
+    expect((html.match(/<\/html>/gi) || []).length).toBe(1);
+    expect((html.match(/<script/gi) || []).length).toBe(1);
+    expect((html.match(/<style/gi) || []).length).toBe(1);
+  });
+
+  it('drives the local-mode chrome from the fetched context (ctx.local) inside the ONE client', () => {
+    expect(html).toContain('ctx.local'); // the conditional dev chrome, not a second UI
+    // The same reused endpoints remain present (no forked client).
+    expect(html).toContain('/web/context');
+    expect(html).toContain('/web/graph');
+  });
+
+  it('references no external http(s):// assets — everything stays inline', () => {
+    expect(html).not.toMatch(/https?:\/\//i);
+  });
+});

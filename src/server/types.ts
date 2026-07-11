@@ -521,6 +521,11 @@ export interface WebContext {
   canWriteProjects: boolean;
   visibleProjectIds: string[];
   visibleUnitIds: string[];
+  /** True when this context comes from the local developer server (`wairon dev`):
+   *  the SAME reused client hides the tenancy/login/account chrome (Landscape tier,
+   *  project picker, sign-out, admin badge) and renders the single local project
+   *  only. Absent/false in the hosted multi-tenant UI. */
+  local?: boolean;
 }
 
 /** A registered hosted project mapped to its isolated .wai/ root. */
@@ -576,6 +581,11 @@ export interface HostConfig {
   /** Advisory (observe/warn) resource quota policy; a disabled default is
    *  resolved when omitted. Never blocks or throttles in this draft. */
   quotaPolicy?: ResourceQuotaPolicy;
+  /** True only when the server runs as the local single-project developer server
+   *  (`wairon dev`): loopback-bound, auth off, the one project = the current
+   *  working directory. NEVER set by the hosted `serve` command, so the dev-only
+   *  auto-session path can never appear in a real deployment. */
+  devMode?: boolean;
 }
 
 /** Outcome of a gated promote — never an actual merge. */

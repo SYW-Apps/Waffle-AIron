@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
 import { handleMcpRequest, handleViewDiagram, sendJson, bearerToken } from './request.js';
-import { handleWebRequest, sessionCookieValue } from './web.js';
+import { handleWebRequest, sessionCookieValue, startDevSession, setSessionCookie } from './web.js';
 import * as admin from './admin.js';
 import * as packs from './packs.js';
 import * as identity from './identity.js';
@@ -165,9 +165,20 @@ export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResp
     url.pathname === '/' || url.pathname === '/web' || url.pathname.startsWith('/web/');
   if (isWebPath) {
     const exposure = resolveExposurePolicy(cfg);
-    // OPT-IN: every /web path and the app shell answer 404 unless enabled — so an
-    // existing instance (compatible default) is entirely unaffected.
-    if (!exposure.webUiEnabled) {
+    // LOCAL DEV MODE (`wairon dev`, strictly cfg.devMode): the web UI is always on,
+    // regardless of the exposure policy — the dev server is loopback-bound with auth
+    // off. In every other (hosted) mode NOTHING here changes: devMode is never set by
+    // `serve`, so this whole branch of dev behavior is entirely absent in production.
+    const devMode = cfg.devMode === true;
+    // OPT-IN (hosted): every /web path and the app shell answer 404 unless enabled —
+    // so an existing instance (compatible default) is entirely unaffected.
+    if (!exposure.webUiEnabled && !devMode) {
+      sendJson(res, 404, { error: 'not found' });
+      return;
+    }
+    // /web/dev-login is a DEV-ONLY route: in any non-devMode server it does not exist
+    // (404), so the hosted UI never exposes the unauthenticated dev-session mint.
+    if (url.pathname === '/web/dev-login' && !devMode) {
       sendJson(res, 404, { error: 'not found' });
       return;
     }
@@ -180,8 +191,21 @@ export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResp
       return;
     }
     const secureCookie = exposure.requireTls;
+
+    // DEV auto-login (strictly devMode): on a cookieless GET, transparently establish
+    // the local-developer session and install the cookie inline BEFORE dispatch, so
+    // the REUSED client lands signed-in and never sees a 401 / login screen. Excludes
+    // /web/dev-login itself (that route mints + redirects on its own). Never runs in
+    // hosted mode — so a hosted server sets no session cookie here.
+    let sessionCredential = credential;
+    if (devMode && req.method === 'GET' && !cookie && url.pathname !== '/web/dev-login') {
+      const devSessionId = startDevSession(cfg);
+      res.setHeader('set-cookie', setSessionCookie(devSessionId, secureCookie));
+      sessionCredential = devSessionId;
+    }
+
     const proceed = (body: unknown): Promise<void> =>
-      handleWebRequest(cfg, req, res, body, url, { sessionId: credential, secureCookie });
+      handleWebRequest(cfg, req, res, body, url, { sessionId: sessionCredential, secureCookie });
     (req.method === 'POST' ? readBody(req) : Promise.resolve(undefined))
       .then(proceed)
       .catch((err) => {

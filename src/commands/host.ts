@@ -1,6 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import * as crypto from 'crypto';
+import { spawn } from 'child_process';
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
 import { WaironError } from '../utils/errors.js';
@@ -8,7 +10,8 @@ import * as admin from '../server/admin.js';
 import * as packs from '../server/packs.js';
 import { AdminAuthError, LockValidationError } from '../server/admin.js';
 import { startHostServer } from '../server/http.js';
-import type { HostConfig, Role } from '../server/types.js';
+import { registerLocalDevProject } from '../server/projects.js';
+import type { HostConfig, HostExposurePolicy, Role } from '../server/types.js';
 
 // ---------------------------------------------------------------------------
 // CLI Host Client Adapter + host command runners (sdd_cli → sdd_host)
@@ -38,6 +41,7 @@ export interface HostOptions {
   value?: string;
   name?: string;
   file?: string;
+  open?: boolean;
 }
 
 function resolveHostConfig(options: HostOptions): HostConfig {
@@ -89,6 +93,108 @@ export async function runServe(options: HostOptions = {}): Promise<void> {
   logger.info(`  data dir:    ${chalk.gray(cfg.dataDir)}`);
   logger.blank();
   logger.info('Press Ctrl+C to stop.');
+  await new Promise<void>((resolve) => {
+    const shutdown = () => {
+      logger.info('Shutting down…');
+      handle!.close();
+      resolve();
+    };
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
+  });
+}
+
+// ── wairon dev ────────────────────────────────────────────────────────────────
+//
+// The local single-project developer server: serves the SAME hosted web UI
+// (src/server/web.ts serveApp) pointed at the CURRENT project (the cwd's .wai/),
+// auto-signed-in, single-project, with no login screen and no tenancy chrome. It
+// REUSES the whole hosted web pipeline (web_orchestrator, web_graph_orchestrator,
+// the auth bridge, serveApp) — this is NOT a forked/second UI. Loopback ONLY, auth
+// off, dev-only. The developer keeps this open while an agent edits specs and
+// refreshes to see the live graph (validator issues overlay as ⚠ badges).
+
+/** Best-effort, cross-platform browser open. Never fatal: a headless box has no
+ *  browser, so any failure is swallowed and the printed URL stands. */
+function openBrowser(url: string): void {
+  try {
+    const platform = process.platform;
+    const cmd = platform === 'win32' ? 'cmd' : platform === 'darwin' ? 'open' : 'xdg-open';
+    const args = platform === 'win32' ? ['/c', 'start', '', url] : [url];
+    const child = spawn(cmd, args, { stdio: 'ignore', detached: true });
+    child.on('error', () => {
+      /* no browser available — best-effort */
+    });
+    child.unref();
+  } catch {
+    /* opening a browser is best-effort and never fatal */
+  }
+}
+
+export async function runDev(options: HostOptions = {}): Promise<void> {
+  const cwd = process.cwd();
+  // The dev server serves the CURRENT project: a .wai/ must be present.
+  if (!fs.existsSync(path.join(cwd, '.wai'))) {
+    throw new WaironError(
+      'No .wai/ found in the current directory. Run `wairon dev` from a wairon project root (or run `wairon init` first).',
+    );
+  }
+
+  // Ephemeral, per-cwd dev data dir under the OS temp dir — NOT the project's own
+  // .wai. A deterministic hash of the cwd keeps it stable across restarts (so the
+  // dev session is reused, not churned) while isolating unrelated projects.
+  const hash = crypto.createHash('sha256').update(cwd).digest('hex').slice(0, 16);
+  const dataDir = path.join(os.tmpdir(), 'wairon-dev', hash);
+  fs.mkdirSync(dataDir, { recursive: true });
+
+  // Register the cwd as the single local project 'local' (idempotent upsert). Its
+  // rootPath is the cwd itself, so resolveProjectRoot('local') → the cwd, and the
+  // whole hosted graph pipeline resolves against the developer's own .wai/ tree.
+  registerLocalDevProject(dataDir, 'local', cwd);
+
+  const port = options.port ? Number(options.port) : 8080;
+  // A permissive-but-loopback exposure: the web UI on, TLS not required (plain http
+  // on 127.0.0.1). devMode independently forces the web UI on in http.ts, so this is
+  // belt-and-suspenders; requireTls:false keeps the dev cookie non-Secure over http.
+  const exposurePolicy: HostExposurePolicy = {
+    adminApiMode: 'local_only',
+    adminUiEnabled: true,
+    identityApiEnabled: true,
+    landscapeApiEnabled: true,
+    projectPolicyApiEnabled: true,
+    cliControlEnabled: true,
+    requireTls: false,
+    operationsApiEnabled: true,
+    webUiEnabled: true,
+  };
+  const cfg: HostConfig = {
+    host: '127.0.0.1',
+    port,
+    adminHost: '127.0.0.1',
+    adminPort: port + 1,
+    dataDir,
+    authEnabled: false,
+    devMode: true,
+    exposurePolicy,
+  };
+
+  let handle;
+  try {
+    handle = startHostServer(cfg);
+  } catch (e) {
+    throw new WaironError(e instanceof Error ? e.message : String(e));
+  }
+
+  const url = `http://127.0.0.1:${port}`;
+  logger.success('wairon dev server started (local, single-project, no login).');
+  logger.info(`  open:      ${chalk.cyan(url)}`);
+  logger.info(`  project:   ${chalk.gray(cwd)}  ${chalk.gray('(served as "local")')}`);
+  logger.info(`  data dir:  ${chalk.gray(dataDir)}  ${chalk.gray('(ephemeral)')}`);
+  logger.blank();
+  logger.info('An agent edits specs; refresh the page to see the live graph. Press Ctrl+C to stop.');
+
+  if (options.open) openBrowser(url);
+
   await new Promise<void>((resolve) => {
     const shutdown = () => {
       logger.info('Shutting down…');
