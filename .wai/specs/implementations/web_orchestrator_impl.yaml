@@ -363,7 +363,17 @@ methods:
         type: return
         outcome: new dev session id
     detail: full
+  - name: getProjectCanvas
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Delegate to the web graph orchestrator, which authenticates the session, scopes the
+          project, and renders the interactive canvas
+        type: call
+        targetComponent: web_graph_orchestrator
+        targetMethod: getProjectCanvas
+    detail: calls-only
 detail: full
 status: complete
 createdAt: '2026-07-11T11:36:44.225Z'
-updatedAt: '2026-07-11T15:57:43.879Z'
+updatedAt: '2026-07-11T16:37:15.159Z'

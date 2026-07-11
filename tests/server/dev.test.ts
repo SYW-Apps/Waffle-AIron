@@ -281,9 +281,10 @@ describe('dev mode reuses the single web client (serveApp) (sdd_host)', () => {
 
   it('drives the local-mode chrome from the fetched context (ctx.local) inside the ONE client', () => {
     expect(html).toContain('ctx.local'); // the conditional dev chrome, not a second UI
-    // The same reused endpoints remain present (no forked client).
+    // The same reused endpoints remain present (no forked client). The dev canvas is
+    // the SAME embedded canvas route the hosted shell uses, scoped to the local project.
     expect(html).toContain('/web/context');
-    expect(html).toContain('/web/graph');
+    expect(html).toContain('/web/canvas');
   });
 
   it('references no external http(s):// assets — everything stays inline', () => {

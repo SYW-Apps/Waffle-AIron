@@ -29,6 +29,22 @@ methods:
         optional: true
       - name: level
         type: number
+  - name: getProjectCanvas
+    description: >-
+      Render the interactive architecture canvas (the full renderCanvasHtml canvas — Cytoscape
+      layout, edge routing, type-ERD and database views, search, and the resizable details sidebar)
+      for ONE authorized project as a self-contained HTML string. Resolve the session to a
+      Principal, resolve and bind the requested project's isolated root within the principal's
+      authorized set (cross-project access is Forbidden), and render the canvas over the bound spec
+      tree via the host core adapter. This is how the web UI reuses the SAME canvas engine as the
+      static `wairon diagram --format canvas` export instead of a second renderer.
+    signature: 'getProjectCanvas(sessionId: string, projectId: string): string'
+    returns: string
+    params:
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
 status: complete
 createdAt: '2026-07-11T11:33:03.119Z'
-updatedAt: '2026-07-11T11:44:34.171Z'
+updatedAt: '2026-07-11T16:37:06.153Z'

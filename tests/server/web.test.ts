@@ -13,6 +13,7 @@ import {
   signOutEverywhere,
   getCurrentContext,
   getGraph,
+  getProjectCanvas,
   serveApp,
 } from '../../src/server/web.js';
 import { signSsoState, verifySsoState } from '../../src/server/auth.js';
@@ -499,6 +500,32 @@ describe('web graph orchestrator (sdd_host)', () => {
   it('rejects an absent/expired session before any tier work', () => {
     expect(() => getGraph(cfg, 'ws_missing', 'landscape', '', 0)).toThrow(UnauthenticatedError);
   });
+
+  // ── getProjectCanvas: the REAL renderCanvasHtml canvas, scoped per project ──
+
+  it('getProjectCanvas returns the real interactive canvas HTML for an authorized project', () => {
+    const rec = createProjectRecord(dataDir, 'proj-a');
+    seedProjectTree(rec.rootPath);
+    const s = session([{ projectId: 'proj-a', permissions: ['mcp:read'] }]);
+
+    const cv = getProjectCanvas(cfg, s.id, 'proj-a');
+    // The SAME renderCanvasHtml output as the static `wairon diagram --format canvas`
+    // export: a self-contained document whose title is "<system> — architecture canvas".
+    expect(cv.toLowerCase()).toContain('<!doctype html');
+    expect(cv).toContain('architecture canvas');
+    // It rendered THIS bound project's spec tree (the seeded system name is present).
+    expect(cv).toContain('GraphSys');
+  });
+
+  it('getProjectCanvas throws Forbidden for a cross-project / unknown project id', () => {
+    createProjectRecord(dataDir, 'proj-a');
+    const s = session([{ projectId: 'proj-a', permissions: ['mcp:read'] }]);
+    expect(() => getProjectCanvas(cfg, s.id, 'proj-b')).toThrow(ForbiddenError);
+  });
+
+  it('getProjectCanvas rejects an absent/expired session before any project work', () => {
+    expect(() => getProjectCanvas(cfg, 'ws_missing', 'proj-a')).toThrow(UnauthenticatedError);
+  });
 });
 
 // ── Web portal: client app shell (serveApp, Phase 7 wave 4) ──────────────────
@@ -518,7 +545,7 @@ describe('web portal client app shell (sdd_host)', () => {
 
   it('wires every same-origin endpoint the client drives', () => {
     expect(html).toContain('/web/context');
-    expect(html).toContain('/web/graph');
+    expect(html).toContain('/web/canvas'); // the embedded real canvas, per project
     expect(html).toContain('/web/sso/start');
     expect(html).toContain('/web/logout');
     expect(html).toContain('/web/logout-all');
@@ -528,16 +555,27 @@ describe('web portal client app shell (sdd_host)', () => {
     expect(html).toContain('same-origin');
   });
 
-  it('reuses the exported canvas deep-space --syw-* theme and colours nodes by kind', () => {
+  it('reuses the exported canvas --syw-* theme and embeds the REAL canvas via a same-origin iframe', () => {
     expect(html).toContain('--syw-deep-space');
     expect(html).toContain('--syw-primary-gradient');
     expect(html).toContain('#22ddff'); // cyan
     expect(html).toContain('#8b5cf6'); // purple
-    expect(html).toContain('#ddff22'); // yellow accent
-    // Level-of-detail + interaction affordances are present.
-    expect(html).toContain('data-tier');
-    expect(html).toContain('data-node');
-    expect(html).toContain('data-toggle');
+    // The shell embeds the SAME canvas engine via a per-project iframe — it does
+    // NOT re-render a graph itself.
+    expect(html).toContain('<iframe');
+    expect(html).toContain('/web/canvas?projectId=');
+  });
+
+  it('has dropped the wave-4 from-scratch SVG renderer and the LOD slider entirely', () => {
+    // No trace of the hand-rolled layout/renderer, the level-of-detail slider, or
+    // the project-view use of /web/graph — the iframe IS the canvas now.
+    expect(html).not.toContain('data-tier');
+    expect(html).not.toContain('data-node');
+    expect(html).not.toContain('data-toggle');
+    expect(html).not.toContain('levelRange');
+    expect(html).not.toContain('renderGraph');
+    expect(html).not.toContain('borderPt');
+    expect(html).not.toContain('/web/graph');
   });
 
   it('references no external http(s):// assets — everything is inline', () => {
@@ -763,5 +801,41 @@ describe('web portal HTTP mount (sdd_host)', () => {
       body: rpc('sdd_get_status'),
     });
     expect(ok.status).toBe(200);
+  }, 20_000);
+
+  it('GET /web/canvas serves an authorized project canvas (200 text/html) and forbids an out-of-scope project (403)', async () => {
+    enableWebUi();
+    const rec = createProjectRecord(dataDir, 'proj-a');
+    // Seed a minimal real project tree so the canvas renders over actual specs.
+    fs.mkdirSync(path.join(rec.rootPath, '.wai', 'specs'), { recursive: true });
+    runWithProjectRoot(rec.rootPath, () => provisionProject('CanvasSys'));
+    invalidateSpecCache();
+
+    const s = createWebSession(dataDir, {
+      id: '',
+      subject: SUBJECT,
+      grants: [{ projectId: 'proj-a', permissions: ['mcp:read'] }],
+      createdAt: '',
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+    });
+
+    // Authorized: 200 with the SAME renderCanvasHtml document the static export emits.
+    const okCv = await raw({
+      method: 'GET',
+      path: '/web/canvas?projectId=proj-a',
+      headers: { cookie: `wairon_session=${s.id}` },
+    });
+    expect(okCv.status).toBe(200);
+    expect(okCv.headers['content-type']).toMatch(/text\/html/);
+    expect(okCv.body.toLowerCase()).toContain('<!doctype html');
+    expect(okCv.body).toContain('architecture canvas');
+
+    // Out-of-scope project → 403 (no existence leak), never a rendered canvas.
+    const forbidden = await raw({
+      method: 'GET',
+      path: '/web/canvas?projectId=proj-b',
+      headers: { cookie: `wairon_session=${s.id}` },
+    });
+    expect(forbidden.status).toBe(403);
   }, 20_000);
 });

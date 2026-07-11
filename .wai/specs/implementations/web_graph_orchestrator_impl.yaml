@@ -89,6 +89,39 @@ methods:
         type: throw
         error: unsupported graph tier
     detail: full
+  - name: getProjectCanvas
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the browser session to a Principal through the single auth authority's session
+          bridge (rejects an expired or absent session as unauthenticated)
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateSession
+      - stepNumber: 2
+        description: >-
+          Resolve and bind the requested project's isolated root within the principal's authorized
+          set through the project registry (rejects cross-project access, so an out-of-scope or
+          unknown project is Forbidden)
+        type: call
+        targetComponent: project_registry
+        targetMethod: resolveRoot
+      - stepNumber: 3
+        description: Bind the resolved target project root for the canvas render that follows
+        type: local
+      - stepNumber: 4
+        description: >-
+          Render the interactive architecture canvas ('canvas' format — the full Cytoscape canvas
+          with edge routing, type-ERD/database views, search, and the details sidebar) over the
+          bound project's spec tree via the host core adapter
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: renderDiagram
+      - stepNumber: 5
+        description: Return the self-contained canvas HTML
+        type: return
+        outcome: project canvas html
+    detail: full
 status: complete
 createdAt: '2026-07-11T11:36:12.720Z'
-updatedAt: '2026-07-11T11:44:41.411Z'
+updatedAt: '2026-07-11T16:37:13.355Z'

@@ -124,6 +124,21 @@ methods:
       transport: HTTP
       method: GET
       path: /web/dev-login
+  - name: serveProjectCanvas
+    description: >-
+      Serve one authorized project's interactive architecture canvas as HTML to the browser — the
+      web UI shell embeds it per selected project (an iframe over this route), reusing the SAME
+      canvas engine as the static export. Forwards to the web orchestrator's getProjectCanvas;
+      session-cookie authenticated, so cross-project access is Forbidden.
+    signature: 'serveProjectCanvas(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/canvas
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-07-11T15:58:49.893Z'
+updatedAt: '2026-07-11T16:37:18.124Z'

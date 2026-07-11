@@ -98,6 +98,18 @@ methods:
     signature: 'startDevSession(): string'
     returns: string
     params: []
+  - name: getProjectCanvas
+    description: >-
+      Return the interactive architecture canvas HTML for the requested project by delegating to the
+      web graph orchestrator, which authenticates the session and scopes the result to the
+      principal's authorized projects.
+    signature: 'getProjectCanvas(sessionId: string, projectId: string): string'
+    returns: string
+    params:
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
 status: complete
 createdAt: '2026-07-11T11:33:17.127Z'
-updatedAt: '2026-07-11T15:57:37.653Z'
+updatedAt: '2026-07-11T16:37:13.443Z'

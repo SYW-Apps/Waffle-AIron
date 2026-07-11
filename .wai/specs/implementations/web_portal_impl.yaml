@@ -70,7 +70,16 @@ methods:
         type: call
         targetComponent: web_orchestrator
         targetMethod: startDevSession
+  - name: serveProjectCanvas
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the web orchestrator's getProjectCanvas and return the canvas HTML with an HTML
+          content type
+        type: call
+        targetComponent: web_orchestrator
+        targetMethod: getProjectCanvas
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-07-11T15:58:51.668Z'
+updatedAt: '2026-07-11T16:37:19.488Z'
