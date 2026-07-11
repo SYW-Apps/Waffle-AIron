@@ -13,6 +13,7 @@ owns: []
 dependsOn:
   - auth_specialist
   - pack_registry
+  - project_registry
 status: complete
 createdAt: '2026-07-04T18:46:35.024Z'
-updatedAt: '2026-07-04T18:47:23.787Z'
+updatedAt: '2026-07-11T20:29:49.926Z'

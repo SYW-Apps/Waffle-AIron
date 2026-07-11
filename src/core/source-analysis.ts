@@ -40,8 +40,15 @@ export interface SourceFileFacts {
   anchoredNames: string[];
   /** Exported bindings (Level 2 dependency-conformance and UNDECLARED_EXPORT fuel). */
   exportedNames: string[];
-  /** Import/require module specifiers (Level 2 dependency-conformance fuel). */
+  /**
+   * Runtime import/require module specifiers (dependency-conformance fuel).
+   * Type-only imports and export-from specifiers are excluded — type coupling
+   * is allowed by default, and re-exporting is surface republication, not
+   * collaboration.
+   */
   imports: string[];
+  /** Module specifiers of export-from declarations (surface republication). */
+  reexports: string[];
 }
 
 export interface CodeModel {
@@ -252,6 +259,7 @@ function analyzeWithPatterns(text: string, patterns: LanguagePatterns): Omit<Sou
     anchoredNames: [...anchors],
     exportedNames: [...exported],
     imports: [...imports],
+    reexports: [],
   };
 }
 
@@ -269,6 +277,7 @@ function analyzeGeneric(text: string): Omit<SourceFileFacts, 'path' | 'status' |
     anchoredNames: [...anchors],
     exportedNames: [],
     imports: [],
+    reexports: [],
   };
 }
 
@@ -304,6 +313,8 @@ interface ExactFacts {
   anchors: Set<string>;
   exported: Set<string>;
   imports: Set<string>;
+  /** All export-from specifiers (named and star). */
+  reexports: Set<string>;
   /** Relative export-* specifiers to chase for barrel re-exports. */
   starExports: string[];
 }
@@ -314,6 +325,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const anchors = new Set<string>();
   const exported = new Set<string>();
   const imports = new Set<string>();
+  const reexports = new Set<string>();
   const starExports: string[] = [];
 
   const addBindingNames = (name: import('typescript').BindingName): void => {
@@ -361,8 +373,11 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     } else if (ts.isShorthandPropertyAssignment(node)) {
       declared.add(node.name.text);
     } else if (ts.isImportDeclaration(node)) {
-      if (ts.isStringLiteral(node.moduleSpecifier)) imports.add(node.moduleSpecifier.text);
       const clause = node.importClause;
+      // Type-only imports never form a dependency edge (type coupling is
+      // allowed by default) — but their bindings still anchor declarations.
+      const typeOnly = clause?.isTypeOnly ?? false;
+      if (!typeOnly && ts.isStringLiteral(node.moduleSpecifier)) imports.add(node.moduleSpecifier.text);
       if (clause?.name) declared.add(clause.name.text);
       if (clause?.namedBindings) {
         if (ts.isNamespaceImport(clause.namedBindings)) declared.add(clause.namedBindings.name.text);
@@ -370,7 +385,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
       }
     } else if (ts.isExportDeclaration(node)) {
       const spec = node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier) ? node.moduleSpecifier.text : undefined;
-      if (spec) imports.add(spec);
+      if (spec) reexports.add(spec);
       if (node.exportClause && ts.isNamedExports(node.exportClause)) {
         for (const el of node.exportClause.elements) {
           declared.add(el.name.text);
@@ -400,7 +415,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   };
   visit(sf);
 
-  return { declared, anchors, exported, imports, starExports };
+  return { declared, anchors, exported, imports, reexports, starExports };
 }
 
 /** Resolve a relative export-* specifier to a real file (.js → .ts mapping, index files). */
@@ -485,7 +500,7 @@ export function buildCodeModel(implementations: ImplementationSpec[], projectRoo
     if (!sourcePath || seen.has(sourcePath)) continue;
     seen.add(sourcePath);
 
-    const empty = { declaredNames: [], anchoredNames: [], exportedNames: [], imports: [] };
+    const empty = { declaredNames: [], anchoredNames: [], exportedNames: [], imports: [], reexports: [] };
 
     // Containment: sourcePaths are project-relative — absolute paths and
     // parent-directory escapes never touch the filesystem (mirrors the
@@ -535,6 +550,7 @@ export function buildCodeModel(implementations: ImplementationSpec[], projectRoo
             anchoredNames: [...facts.anchors],
             exportedNames: [...facts.exported],
             imports: [...facts.imports],
+            reexports: [...facts.reexports],
           };
         } catch {
           analyzed = analyzeGeneric(text);

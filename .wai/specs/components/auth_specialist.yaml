@@ -12,6 +12,7 @@ owns: []
 dependsOn:
   - credential_registry
   - web_session_repository
+  - secret_registry
 status: complete
 createdAt: '2026-07-04T12:33:41.835Z'
-updatedAt: '2026-07-11T11:32:00.840Z'
+updatedAt: '2026-07-11T20:29:41.257Z'

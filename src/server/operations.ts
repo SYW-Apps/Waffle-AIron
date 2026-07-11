@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { authenticateCredential } from './auth.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { listProjectRecords } from './projects.js';
-import { sendJson } from './request.js';
+import { sendJson } from './httpio.js';
 import { resolveScopeFor } from './scope.js';
 import * as packs from './packs.js';
 import { listProjectRelations } from './relations.js';

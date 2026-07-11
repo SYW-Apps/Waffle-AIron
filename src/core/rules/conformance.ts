@@ -35,7 +35,7 @@ function stereotypeDefaultTier(componentType: string): ConformanceTier {
   return componentType === 'Portal' ? 'anchored' : 'declared';
 }
 
-function isInChainedSubproject(subsystemId: string, ctx: RuleContext): boolean {
+export function isInChainedSubproject(subsystemId: string, ctx: RuleContext): boolean {
   const segments = subsystemId.split('::');
   let prefix = '';
   for (const segment of segments) {

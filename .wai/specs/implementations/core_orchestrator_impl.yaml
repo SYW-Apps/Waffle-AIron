@@ -422,6 +422,13 @@ methods:
         targetComponent: diagram_specialist
         targetMethod: buildGraphModel
     detail: calls-only
+lint:
+  allow:
+    - code: UNREALIZED_DEPENDENCY
+      reason: >-
+        The lock/state-hash forwarding methods are realized in sibling core modules (provision.ts,
+        lockfile.ts, statehash.ts) — specs.ts itself never imports them; same split-file facade
+        documented on the structural-conformance per-method offs.
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-11T19:14:22.071Z'
+updatedAt: '2026-07-11T20:30:14.728Z'

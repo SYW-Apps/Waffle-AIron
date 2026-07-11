@@ -8,7 +8,7 @@ import {
   expirePendingApprovals,
 } from './approvals.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
-import { UnauthenticatedError, ForbiddenError } from './identity.js';
+import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { executeApprovedLock, executeApprovedPromote } from './admin.js';
 import { evaluateInitRequest, executeApprovedInit } from './policy.js';
 import { isValidProjectId, listProjectRecords, existingProjectRoot } from './projects.js';

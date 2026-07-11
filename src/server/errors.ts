@@ -17,3 +17,14 @@ export class ForbiddenError extends Error {
     this.name = 'ForbiddenError';
   }
 }
+
+/** Raised on the admin plane for a missing/insufficient admin credential (maps to 403). */
+export class AdminAuthError extends Error {
+  // A default message covers a missing/unauthenticated credential; the scoped
+  // project-lifecycle methods pass a specific reason for a scope denial (an
+  // authenticated caller lacking authority). Both map to 403 on the admin plane.
+  constructor(message = 'Forbidden: a valid admin credential is required.') {
+    super(message);
+    this.name = 'AdminAuthError';
+  }
+}

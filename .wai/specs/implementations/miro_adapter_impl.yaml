@@ -22,6 +22,13 @@ methods:
       - stepNumber: 4
         description: Create a connector per edge between the mapped node shapes
         type: local
+lint:
+  allow:
+    - code: UNDECLARED_DEPENDENCY
+      reason: >-
+        Uses the shared secrets utility (utils/secrets.ts) which is spec-homed under sdd_host's
+        secret_registry — placement debt: shared infrastructure candidate, not a sanctioned
+        cross-subsystem reach.
 status: complete
 createdAt: '2026-07-04T18:04:20.025Z'
-updatedAt: '2026-07-04T18:06:52.474Z'
+updatedAt: '2026-07-11T20:30:07.610Z'

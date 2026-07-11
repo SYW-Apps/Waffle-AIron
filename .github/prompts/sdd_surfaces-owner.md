@@ -20,6 +20,8 @@ You own and decide on everything within:
 .wai/specs/components/surface_repository.yaml
 .wai/specs/components/surface_store.yaml
 .wai/specs/components/surface_transfer_adapter.yaml
+src/core/openapi.ts
+src/core/surfaces.ts
 ```
 
 ## Responsibilities

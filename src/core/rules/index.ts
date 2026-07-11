@@ -31,6 +31,7 @@ import { technologyRule } from './technology.js';
 import { namingRule } from './naming.js';
 import { complexityRule } from './complexity.js';
 import { structuralConformanceRule } from './conformance.js';
+import { dependencyConformanceRule } from './dependency-conformance.js';
 import { lintAllowsRule } from './lint-allows.js';
 import { emptyCodeModel, CodeModel } from '../source-analysis.js';
 
@@ -69,8 +70,10 @@ export const SDD_RULES: SddRule[] = [
   untypedSeamRule,
   proseClaimRule,
   // Code↔spec: structural conformance consumes the injected CodeModel (built
-  // by the source analysis adapter next to the surface snapshots).
+  // by the source analysis adapter next to the surface snapshots); dependency
+  // conformance lifts its import edges onto the declared dependsOn/owns graph.
   structuralConformanceRule,
+  dependencyConformanceRule,
   couplingRule,
   languageRule,
   technologyRule,
@@ -111,6 +114,8 @@ const COMPLETENESS_RULES = new Set([
   'SOURCE_PATH_ESCAPES_ROOT',
   'UNREALIZED_METHOD',
   'CONFORMANCE_ANALYSIS_SKIPPED',
+  'UNDECLARED_DEPENDENCY',
+  'UNREALIZED_DEPENDENCY',
 ]);
 
 export interface ScopeFilterOptions {

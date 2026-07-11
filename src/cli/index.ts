@@ -4,34 +4,26 @@ import { Command } from 'commander';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import { logger, setLogLevel } from '../utils/logger.js';
 import { WaironError } from '../utils/errors.js';
+// The runner imports each command adapter module DIRECTLY (not through the
+// commands barrel) so the physical import graph mirrors the declared
+// cli_runner → adapter edges (dependency conformance).
+import { runAliasesList, runAliasesEnable, runAliasesDisable } from '../commands/aliases.js';
+import { runInit } from '../commands/init.js';
+import { runGenerate } from '../commands/generate.js';
+import { runLock } from '../commands/lock.js';
+import { runValidate } from '../commands/validate.js';
+import { runList } from '../commands/list.js';
+import { runShow } from '../commands/show.js';
+import { runMcpServe, runMcpInstall, runMcpStatus } from '../commands/mcp.js';
+import { runUpdate, cleanStaleBinary } from '../commands/update.js';
+import { runStatus } from '../commands/status.js';
+import { runDomainsList, runDomainsScan, runDomainsAdd, runDomainsRemove } from '../commands/domains.js';
+import { runSkillsList, runSkillsInstall } from '../commands/skills.js';
+import { runDoctor } from '../commands/doctor.js';
+import { runDiagram } from '../commands/diagram.js';
+import { runRulesList } from '../commands/rules.js';
+import { runPacksAdd, runPacksList, runPacksRemove } from '../commands/packs.js';
 import {
-  runAliasesList,
-  runAliasesEnable,
-  runAliasesDisable,
-  runInit,
-  runGenerate,
-  runLock,
-  runValidate,
-  runList,
-  runShow,
-  runMcpServe,
-  runMcpInstall,
-  runMcpStatus,
-  runUpdate,
-  runStatus,
-  cleanStaleBinary,
-  runDomainsList,
-  runDomainsScan,
-  runDomainsAdd,
-  runDomainsRemove,
-  runSkillsList,
-  runSkillsInstall,
-  runDoctor,
-  runDiagram,
-  runRulesList,
-  runPacksAdd,
-  runPacksList,
-  runPacksRemove,
   runServe,
   runDev,
   runHostProject,
@@ -42,13 +34,15 @@ import {
   runHostProducer,
   runHostSecret,
   runHostPacks,
-  runProduce,
-  runSurface,
+} from '../commands/host.js';
+import { runProduce } from '../commands/produce.js';
+import { runSurface } from '../commands/surface.js';
+import {
   runSubsystemAdd,
   runSubsystemMove,
   runSubsystemExternalize,
   runSubsystemInternalize,
-} from '../commands/index.js';
+} from '../commands/subsystem.js';
 
 // Clean up any .old binary left over from a previous Windows self-update
 cleanStaleBinary();

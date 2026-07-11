@@ -468,6 +468,10 @@ export interface IdentityProviderConfig {
   updatedAt: string;
 }
 
+/** Reserved prefix marking a session id as a first-class web-session
+ *  credential — transport and auth code brand-check credentials against it. */
+export const WEB_SESSION_PREFIX = 'ws_';
+
 /** A durable browser session for the hosted web UI. The session id (reserved
  *  prefix) is itself a first-class credential — it resolves to a Principal via
  *  authenticateCredential exactly like a bearer token, so the browser reuses

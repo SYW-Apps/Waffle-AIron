@@ -16,11 +16,12 @@ You own and decide on everything within:
 .wai/specs/components/cli_skills_adapter.yaml
 .wai/specs/components/cli_surfaces_client_adapter.yaml
 .wai/specs/components/cli_validator_adapter.yaml
-src/commands/index.ts
+src/commands/subsystem.ts
 src/commands/host.ts
 src/commands/produce.ts
 src/cli/index.ts
 src/commands/skills.ts
+src/commands/surface.ts
 src/commands/validate.ts
 ```
 

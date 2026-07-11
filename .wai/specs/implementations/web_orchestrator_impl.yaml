@@ -374,6 +374,12 @@ methods:
         targetMethod: getProjectCanvas
     detail: calls-only
 detail: full
+lint:
+  allow:
+    - code: UNREALIZED_DEPENDENCY
+      reason: >-
+        policy_repository/audit_repository gating lands with web UI slices 2–3 (in flight) — the
+        declared edges are design-ahead, not stale.
 status: complete
 createdAt: '2026-07-11T11:36:44.225Z'
-updatedAt: '2026-07-11T16:37:15.159Z'
+updatedAt: '2026-07-11T20:30:16.623Z'

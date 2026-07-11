@@ -8,7 +8,8 @@ description: >-
 subsystem: sdd_host
 componentType: Specialist
 owns: []
-dependsOn: []
+dependsOn:
+  - organization_repository
 status: complete
 createdAt: '2026-07-10T17:12:45.388Z'
-updatedAt: '2026-07-10T17:15:01.825Z'
+updatedAt: '2026-07-11T20:29:42.946Z'

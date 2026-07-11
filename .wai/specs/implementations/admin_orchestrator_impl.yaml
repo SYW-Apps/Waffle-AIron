@@ -867,6 +867,12 @@ methods:
         description: Return the promote result
         type: return
         outcome: promote result
+lint:
+  allow:
+    - code: UNDECLARED_DEPENDENCY
+      reason: >-
+        admin.ts reads the state id via computeStateId directly instead of routing through
+        host_core_adapter — documented shortcut on the lock/promote path; refactor candidate.
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-07-10T17:28:05.511Z'
+updatedAt: '2026-07-11T20:30:00.419Z'

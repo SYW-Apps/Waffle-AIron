@@ -33,7 +33,7 @@ import { listProjectRecords } from './projects.js';
 import { removeAllWebSessionsForSubject } from './websessions.js';
 import { listOrganizationUnits } from './organization.js';
 import { resolveScopeFor, permits } from './scope.js';
-import { sendJson } from './request.js';
+import { sendJson } from './httpio.js';
 import type {
   ApiKeyRecord,
   AuditEvent,

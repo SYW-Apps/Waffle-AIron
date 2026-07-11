@@ -3,7 +3,7 @@ import { runWithProjectRoot } from '../utils/fs.js';
 import { readYamlFile } from '../utils/yaml.js';
 import { AI_PATHS } from '../config/loader.js';
 import { authenticateCredential } from './auth.js';
-import { UnauthenticatedError, ForbiddenError } from './identity.js';
+import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import { resolveProjectRoot, listProjectRecords } from './projects.js';
 import { hostCore } from './adapters.js';
@@ -24,7 +24,7 @@ import {
   getPublicSurfaceSnapshot,
   findPublicInterface,
 } from './surfaces.js';
-import { sendJson } from './request.js';
+import { sendJson } from './httpio.js';
 import { resolveScope, resolveScopeFor, permits } from './scope.js';
 import { resolveVisibility, isVisible, audienceDistance, audienceCovers } from './visibility.js';
 import { hostSurfaces } from './adapters.js';

@@ -42,15 +42,10 @@ import type {
 // StateId re-check.
 // ---------------------------------------------------------------------------
 
-export class AdminAuthError extends Error {
-  // A default message covers a missing/unauthenticated credential; the scoped
-  // project-lifecycle methods pass a specific reason for a scope denial (an
-  // authenticated caller lacking authority). Both map to 403 on the admin plane.
-  constructor(message = 'Forbidden: a valid admin credential is required.') {
-    super(message);
-    this.name = 'AdminAuthError';
-  }
-}
+// AdminAuthError lives with the shared control-plane errors; republished here
+// as the historical import site for the admin plane's consumers.
+import { AdminAuthError } from './errors.js';
+export { AdminAuthError } from './errors.js';
 
 export class LockValidationError extends Error {
   constructor(public readonly errors: { code: string; message: string; specId?: string }[]) {

@@ -236,6 +236,12 @@ methods:
         description: Return the advisory quota-annotated usage snapshots scoped to the caller
         type: return
         outcome: advisory quota-annotated usage snapshots
+lint:
+  allow:
+    - code: UNREALIZED_DEPENDENCY
+      reason: >-
+        Organization data is gathered inside scope_specialist's resolveScopeFor in code rather than
+        by this orchestrator directly — narrative-level realignment pending (Level 3 territory).
 status: complete
 createdAt: '2026-07-10T11:27:00.178Z'
-updatedAt: '2026-07-11T10:13:57.380Z'
+updatedAt: '2026-07-11T20:30:18.506Z'

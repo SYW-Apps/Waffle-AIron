@@ -512,6 +512,12 @@ methods:
         description: Return the execution outcome summary
         type: return
         outcome: execution outcome summary
+lint:
+  allow:
+    - code: UNREALIZED_DEPENDENCY
+      reason: >-
+        Organization data is gathered inside scope_specialist's resolveScopeFor in code rather than
+        by this orchestrator directly — narrative-level realignment pending (Level 3 territory).
 status: complete
 createdAt: '2026-07-09T19:32:43.183Z'
-updatedAt: '2026-07-10T17:26:21.802Z'
+updatedAt: '2026-07-11T20:30:19.803Z'

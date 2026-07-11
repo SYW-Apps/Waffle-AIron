@@ -22,6 +22,13 @@ methods:
           Create the DocPage tree under it: each page's markdown body converted to Notion blocks,
           child pages recursively
         type: local
+lint:
+  allow:
+    - code: UNDECLARED_DEPENDENCY
+      reason: >-
+        Uses the shared secrets utility (utils/secrets.ts) which is spec-homed under sdd_host's
+        secret_registry — placement debt: shared infrastructure candidate, not a sanctioned
+        cross-subsystem reach.
 status: complete
 createdAt: '2026-07-04T17:39:24.124Z'
-updatedAt: '2026-07-04T17:42:04.235Z'
+updatedAt: '2026-07-11T20:30:07.851Z'

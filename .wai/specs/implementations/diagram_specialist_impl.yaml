@@ -140,6 +140,13 @@ methods:
         type: return
         outcome: web graph model
     detail: full
+lint:
+  allow:
+    - code: UNDECLARED_DEPENDENCY
+      reason: >-
+        The canvas issue overlay invokes validateSddTree directly; the proper shape is issues passed
+        in by the caller — cross-subsystem refactor candidate (diagram_specialist is sdd_core, the
+        validator is sdd_validator).
 status: complete
 createdAt: '2026-07-04T15:59:34.318Z'
-updatedAt: '2026-07-11T11:34:20.784Z'
+updatedAt: '2026-07-11T20:30:06.716Z'

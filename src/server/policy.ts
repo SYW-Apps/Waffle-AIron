@@ -10,7 +10,7 @@ import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { executeApprovedCreate } from './admin.js';
 import { resolveProjectRoot } from './projects.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
-import { sendJson } from './request.js';
+import { sendJson } from './httpio.js';
 import * as packs from './packs.js';
 import type {
   AuditEvent,

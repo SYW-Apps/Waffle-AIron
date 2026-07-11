@@ -24,6 +24,7 @@ dependsOn:
   - audit_repository
   - organization_repository
   - scope_specialist
+  - project_registry
 status: complete
 createdAt: '2026-07-09T07:19:31.526Z'
-updatedAt: '2026-07-10T17:13:29.876Z'
+updatedAt: '2026-07-11T20:29:43.709Z'

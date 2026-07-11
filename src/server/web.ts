@@ -7,10 +7,9 @@ import {
   tryAppendAudit,
   buildSsoAuditEvent,
   ANONYMOUS_SSO_ACTOR,
-  UnauthenticatedError,
-  ForbiddenError,
   type SsoStatePayload,
 } from './identity.js';
+import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { findUserByExternalSubject, upsertUser } from './users.js';
 import {
   createWebSession,
@@ -23,7 +22,7 @@ import { resolveProjectRoot } from './projects.js';
 import { runWithProjectRoot } from '../utils/fs.js';
 import { hostCore, validateProjectAsComplete } from './adapters.js';
 import { generateLandscape } from './landscape.js';
-import { sendJson } from './request.js';
+import { sendJson } from './httpio.js';
 import type { ValidationIssue } from '../core/validation.js';
 import type {
   HostConfig,

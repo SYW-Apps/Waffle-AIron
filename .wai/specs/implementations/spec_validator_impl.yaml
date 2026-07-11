@@ -78,10 +78,14 @@ methods:
           semantic-edge rules (dispatch-table capability contracts and guarantee backing, dispatch-
           and lifecycle-rooted reachability, durability round-trip hydration with a non-flooded boot
           graph, untyped cross-subsystem seams with dispatch-table exemption, prose-claim
-          realization), and structural-conformance rules (sourcePaths resolve within the project
-          root to real files; every contract method is realized in its file at the implementation's
+          realization), structural-conformance rules (sourcePaths resolve within the project root to
+          real files; every contract method is realized in its file at the implementation's
           conformance tier — declared | anchored | off — honoring per-method symbol overrides, with
-          analysis grade carried on findings)
+          analysis grade carried on findings), and dependency-conformance rules (runtime imports
+          between component-mapped files must be justified by declared dependsOn/owns edges — or,
+          across subsystems, by a declared edge to the target subsystem's published surface —
+          UNDECLARED_DEPENDENCY; declared collaborator edges with no realizing import between
+          exactly-analyzed files surface as UNREALIZED_DEPENDENCY)
         type: local
       - stepNumber: 14
         description: Return the aggregated validation result
@@ -176,4 +180,4 @@ methods:
         outcome: as-complete ValidationResult
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-11T17:52:50.077Z'
+updatedAt: '2026-07-11T19:48:29.962Z'

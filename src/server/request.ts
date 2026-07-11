@@ -3,7 +3,7 @@ import * as path from 'path';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { runWithProjectRoot } from '../utils/fs.js';
 import { authenticate, authenticateSession, verifyViewToken } from './auth.js';
-import { WEB_SESSION_PREFIX } from './websessions.js';
+import { WEB_SESSION_PREFIX } from './types.js';
 import { resolveProjectRoot, existingProjectRoot } from './projects.js';
 import { createScopedServer, hostCore } from './adapters.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
@@ -37,17 +37,9 @@ import type {
 // bound project's .wai/ tree with no other changes.
 // ---------------------------------------------------------------------------
 
-export function bearerToken(req: IncomingMessage): string | null {
-  const h = req.headers['authorization'];
-  if (!h) return null;
-  const m = /^Bearer\s+(.+)$/i.exec(Array.isArray(h) ? h[0] : h);
-  return m ? m[1].trim() : null;
-}
-
-export function sendJson(res: ServerResponse, status: number, body: unknown): void {
-  res.writeHead(status, { 'content-type': 'application/json' });
-  res.end(JSON.stringify(body));
-}
+import { bearerToken, sendJson } from './httpio.js';
+// Historical import site for these helpers — republish them.
+export { bearerToken, sendJson } from './httpio.js';
 
 function projectSelector(req: IncomingMessage): string | null {
   const h = req.headers['x-wairon-project'];

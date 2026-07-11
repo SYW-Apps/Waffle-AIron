@@ -21,6 +21,7 @@ dependsOn:
   - web_session_repository
   - audit_repository
   - web_graph_orchestrator
+  - identity_orchestrator
 status: complete
 createdAt: '2026-07-11T11:31:49.793Z'
-updatedAt: '2026-07-11T11:44:28.706Z'
+updatedAt: '2026-07-11T20:29:51.333Z'

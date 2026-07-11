@@ -48,8 +48,18 @@ fields:
     optional: false
   - name: imports
     type: string[]
-    description: Import/require module specifiers found in the file (Level 2 dependency-conformance fuel)
+    description: >-
+      Runtime import/require module specifiers found in the file (dependency-conformance fuel).
+      Type-only imports are excluded — type coupling is allowed by default and never forms a
+      dependency edge.
+    optional: false
+  - name: reexports
+    type: string[]
+    description: >-
+      Module specifiers of export-from declarations — surface republication, not collaboration:
+      never accused as an undeclared dependency, but realizes a declared forwarding edge (a portal
+      barrel republishing its orchestrator).
     optional: false
 methods: []
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-07-11T19:14:23.250Z'
+updatedAt: '2026-07-11T20:29:53.999Z'

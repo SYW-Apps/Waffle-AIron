@@ -79,13 +79,13 @@ You own and decide on everything within:
 .wai/specs/components/web_session_repository.yaml
 .wai/specs/components/web_session_store.yaml
 src/server/admin.ts
+src/server/http.ts
 src/server/approvals.ts
 src/server/audit.ts
 src/server/auth.ts
 src/server/credentials.ts
 src/server/operations.ts
 src/server/adapters.ts
-src/server/http.ts
 src/server/request.ts
 src/server/identity.ts
 src/server/idp.ts
@@ -100,6 +100,7 @@ src/server/scope.ts
 src/utils/secrets.ts
 src/server/selfservice.ts
 src/server/users.ts
+src/server/visibility.ts
 src/server/web.ts
 src/server/websessions.ts
 ```

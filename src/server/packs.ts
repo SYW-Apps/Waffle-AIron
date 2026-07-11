@@ -11,7 +11,7 @@ import {
   type PackScope,
 } from '../core/extensions.js';
 import { authenticateMaster } from './auth.js';
-import { AdminAuthError } from './admin.js';
+import { AdminAuthError } from './errors.js';
 import { existingProjectRoot } from './projects.js';
 import type { HostConfig, PackDescriptor, ProjectPackReference, ProjectProfileSelection } from './types.js';
 
