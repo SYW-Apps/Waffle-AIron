@@ -9,7 +9,10 @@
 # ---------------------------------------------------------------------------
 
 # ---- build ----
-FROM node:20-bookworm-slim AS build
+# Alpine base: musl + a minimal package set means far fewer OS-package CVEs than
+# debian bookworm (no perl/pam/expat shipped), and wairon's runtime is pure JS
+# (no native production deps), so musl is a non-issue.
+FROM node:24-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -18,7 +21,7 @@ COPY src ./src
 RUN npm run build
 
 # ---- runtime ----
-FROM node:20-bookworm-slim AS runtime
+FROM node:24-alpine AS runtime
 ARG VERSION=dev
 ARG REVISION=unknown
 ARG CREATED=unknown
@@ -39,19 +42,30 @@ LABEL org.opencontainers.image.title="wairon" \
       org.opencontainers.image.created="${CREATED}" \
       org.opencontainers.image.licenses="MIT"
 WORKDIR /app
-# git is required for git-backed projects (wairon host git …); ca-certificates for HTTPS remotes.
-RUN apt-get update \
- && apt-get install -y --no-install-recommends git ca-certificates \
- && rm -rf /var/lib/apt/lists/*
+# git is required for git-backed projects (wairon host git …); ca-certificates for
+# HTTPS remotes. On alpine, `git` installs WITHOUT the perl-based subpackage, so no
+# perl lands in the image (clone/fetch/commit/push — all wairon uses — need no perl).
+# `apk upgrade` pulls any alpine security fixes into the base layer.
+RUN apk upgrade --no-cache \
+ && apk add --no-cache git ca-certificates
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+# Install production deps, then REMOVE npm itself: the runtime only ever runs
+# `node dist/cli/index.js` (CMD, healthcheck, and the wairon/wai symlinks all
+# invoke node directly), so npm is build-time only. Deleting its bundled
+# node_modules eliminates the base image's vendored tar/minimatch (and their
+# CVEs) and shrinks the attack surface. Done in ONE layer so npm is gone from
+# the final filesystem, not just shadowed.
+RUN npm ci --omit=dev \
+ && npm cache clean --force \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx ~/.npm
 COPY --from=build /app/dist ./dist
 
 # Put `wairon` (and `wai`) on PATH so the admin control plane is reachable via
 # `docker exec <container> wairon host …` without exposing the admin port.
 RUN ln -s /app/dist/cli/index.js /usr/local/bin/wairon \
  && ln -s /app/dist/cli/index.js /usr/local/bin/wai \
- && useradd --system --uid 10001 --create-home --home-dir /home/wairon wairon \
+ && addgroup -S wairon \
+ && adduser -S -u 10001 -G wairon -h /home/wairon wairon \
  && mkdir -p /data /opt/wairon/packs \
  && chown -R wairon:wairon /data
 
