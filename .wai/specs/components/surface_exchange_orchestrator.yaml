@@ -23,6 +23,6 @@ dependsOn:
   - host_surfaces_adapter
   - project_registry
   - scope_specialist
-status: draft
+status: complete
 createdAt: '2026-07-11T12:02:27.573Z'
-updatedAt: '2026-07-11T12:02:27.575Z'
+updatedAt: '2026-07-11T12:09:30.052Z'

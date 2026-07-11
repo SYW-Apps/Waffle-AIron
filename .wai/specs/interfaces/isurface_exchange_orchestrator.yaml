@@ -96,6 +96,6 @@ methods:
         description: native | openapi
       - name: maxAudience
         type: string
-status: draft
+status: complete
 createdAt: '2026-07-11T12:02:52.785Z'
-updatedAt: '2026-07-11T12:02:52.787Z'
+updatedAt: '2026-07-11T12:09:30.091Z'

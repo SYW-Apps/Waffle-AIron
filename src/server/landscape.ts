@@ -52,24 +52,34 @@ import type {
 import type { SurfaceSnapshot } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
-// Landscape Orchestrator + Diagram Specialist + Portal (sdd_host) — Phase 4
+// Landscape Orchestrator + Surface Exchange Orchestrator + Diagram Specialist
+// + Portal (sdd_host)
 //
-// Hosted-instance landscape workflows: organization-unit administration, project
-// placement, public-surface snapshot refresh, cross-project relation management,
-// landscape graph generation, and the two data-plane MCP discovery workflows.
-// Every credential-bearing method authenticates through the single auth authority
-// (auth_specialist) and authorizes by Principal grants — landscape:manage or
-// instance-admin for writes, landscape:read (or manage/admin) for control-plane
-// reads. Reachability for discovery is DIRECTIONAL and RELATIONS-ONLY: a target
-// is reachable from the current project only through an ACTIVE relation whose
-// sourceProjectId is the current project — placements confer none and there is no
-// transitive closure. Cross-project reads never touch target private specs; they
-// read only the stored redacted public-surface snapshots. Audit appends
-// (unit.upsert, project.place, relation.upsert, relation.remove, surface.refresh —
-// all info) are best-effort and never fail the primary action; control-plane reads
-// and MCP discovery are not audited (the data-plane mcp.tool.call append covers
-// discovery). Exported as plain functions so both the HTTP portal and any
-// in-process caller (the request orchestrator's MCP dispatch) reach the same logic.
+// TWO orchestrators realize in this module — two workflows, two components:
+//
+// 1. landscape_orchestrator — ADMINISTRATION: organization-unit administration,
+//    project placement, public-surface snapshot refresh, cross-project relation
+//    management (visibility-gated once organization units exist), and landscape
+//    graph generation. Writes require landscape:manage (or instance-admin);
+//    control-plane reads require landscape:read (or higher) and filter to the
+//    caller's scope. Audit appends (unit.upsert, project.place, relation.upsert,
+//    relation.remove, surface.refresh — all info) are best-effort and never fail
+//    the primary action.
+//
+// 2. surface_exchange_orchestrator — CONSUMER-FACING EXCHANGE: the four
+//    data-plane MCP workflows (sdd_landscape_list_reachable_projects,
+//    _list_reachable_project_interfaces, _list_visible_surfaces,
+//    _get_project_surface) plus the operator surface-artifact download.
+//    Relations-only reachability stays DIRECTIONAL (an ACTIVE relation whose
+//    sourceProjectId is the current project; placements confer none, no
+//    transitive closure); visibility-based discovery resolves the unit graph
+//    (visibility.ts) and audience-filters everything it returns. Consumer
+//    reads are not audited (the data-plane mcp.tool.call append covers them).
+//
+// Cross-project reads never touch target private specs: they read stored
+// redacted snapshots, or generate audience-filtered artifacts as trusted
+// intermediary. Exported as plain functions so both the HTTP portal and the
+// request orchestrator's MCP dispatch reach the same logic.
 // ---------------------------------------------------------------------------
 
 const LANDSCAPE_MANAGE_PERMISSION = 'landscape:manage';
@@ -172,13 +182,15 @@ function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
 
 // ── redaction helpers for the public-surface snapshot ────────────────────────
 //
-// The L0 SystemSpec.publicInterfaces field is NOT modeled by the SystemSpec zod
-// schema, so loadSystemSpec() strips it. We read the raw .wai/specs/.index.yaml
-// for that optional field directly (mirroring how policy.ts reads the un-schema'd
-// profileSelection), tolerating its absence, and project each entry into a
-// redacted PublicInterfaceSummary carrying ONLY safe scalar/name content — never
-// component ids, narratives, implementations, root paths, secrets, or non-public
-// types.
+// SystemSpec.publicInterfaces IS schema-modeled since Phase 7 Stage 1, but the
+// schema deliberately carries only the gateway CORE fields — the catalog
+// extras some trees author inline (methods/endpoints/publicTypes name lists)
+// are not modeled and would be stripped by loadSystemSpec(). The snapshot
+// builder therefore still reads the raw .wai/specs/.index.yaml, tolerating
+// absence and legacy shapes, and projects each entry into a redacted
+// PublicInterfaceSummary carrying ONLY safe scalar/name content — never
+// component ids, narratives, implementations, root paths, secrets, or
+// non-public types.
 
 /** One raw, un-schema'd L0 public-interface entry as authored in the system spec.
  *  Every field is optional and read leniently. */

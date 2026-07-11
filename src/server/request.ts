@@ -135,7 +135,7 @@ export function auditToolCall(
   }
 }
 
-// ── Data-plane self-service + landscape discovery dispatch (steps 10–24) ─────
+// ── Data-plane self-service + surface-exchange dispatch (steps 10–28) ────────
 
 /** The four approval-backed self-service tools the data plane handles directly,
  *  bypassing the scoped sdd_* MCP server. Every other tool falls through to it. */
@@ -146,8 +146,8 @@ const SELF_SERVICE_TOOLS = new Set<string>([
   'sdd_host_get_approval_status',
 ]);
 
-/** The two hosted landscape discovery tools the data plane handles directly,
- *  routing them to the landscape orchestrator with currentProjectId = the BOUND
+/** The four hosted landscape tools the data plane handles directly, routing
+ *  them to the surface exchange orchestrator with currentProjectId = the BOUND
  *  project (never a project id taken from the tool arguments). */
 const LANDSCAPE_DISCOVERY_TOOLS = new Set<string>([
   'sdd_landscape_list_reachable_projects',

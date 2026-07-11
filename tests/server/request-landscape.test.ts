@@ -20,12 +20,13 @@ import type {
 } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
-// Host Request Orchestrator — data-plane landscape discovery dispatch (sdd_host).
+// Host Request Orchestrator — data-plane surface-exchange dispatch (sdd_host).
 //
-// Steps 10–24 of handleRequest: after the project root is resolved and bound, a
-// `tools/call` for one of the two hosted landscape discovery tools
-// (sdd_landscape_list_reachable_projects / _list_reachable_project_interfaces) is
-// dispatched to the landscape orchestrator with currentProjectId = the BOUND
+// Steps 10–28 of handleRequest: after the project root is resolved and bound, a
+// `tools/call` for one of the four hosted landscape tools
+// (sdd_landscape_list_reachable_projects / _list_reachable_project_interfaces /
+// _list_visible_surfaces / _get_project_surface) is dispatched to the surface
+// exchange orchestrator with currentProjectId = the BOUND
 // project — never a project id from the arguments — then shaped into the standard
 // MCP tool-result envelope and audited through the SAME best-effort path the
 // scoped dispatch uses. Reachability is DIRECTIONAL and RELATIONS-ONLY, and

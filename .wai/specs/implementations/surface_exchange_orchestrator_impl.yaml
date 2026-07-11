@@ -272,6 +272,6 @@ methods:
         description: Return the typed downloadable artifact (body, content type, filename)
         type: return
         outcome: SurfaceArtifact
-status: draft
+status: complete
 createdAt: '2026-07-11T12:03:31.491Z'
-updatedAt: '2026-07-11T12:03:31.493Z'
+updatedAt: '2026-07-11T12:09:30.127Z'

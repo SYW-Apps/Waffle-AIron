@@ -26,7 +26,8 @@ import type {
 //
 // The slim read-only operations plane: instance health, resource usage, and
 // advisory (observe/warn) quota reporting. The two specialists are PURE — they
-// reason only over the hosted project records the orchestrator supplies and do
+// reason only over the inputs the orchestrator supplies (project records, pack
+// listings, relations + target snapshots for relation health) and do
 // no I/O of their own (per diagnostics_specialist / quota_specialist). The
 // orchestrator authenticates through the single auth authority and authorizes by
 // Principal grants (operations:read, or an instance-wide admin grant); it lists
