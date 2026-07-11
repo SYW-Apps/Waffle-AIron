@@ -24,7 +24,31 @@ globalRequirements:
   - >-
     Export structured workflow skills to local AI agent configurations on project initialization and
     generation.
+publicInterfaces:
+  - id: hosted-mcp-data-plane
+    name: Hosted MCP Data Plane
+    subsystem: sdd_host
+    component: host_http_portal
+    type: REST
+    details: >-
+      Streamable HTTP MCP endpoint exposing the sdd_* tool surface request-scoped to the
+      authenticated project, plus discovery and self-service tools. The consumable surface of a
+      wairon deployment.
+    audience: external
+    authPolicy: project-scoped API key or user-bound token (Authorization bearer)
+    stability: stable
+  - id: hosted-admin-api
+    name: Hosted Admin API
+    subsystem: sdd_host
+    component: admin_portal
+    type: REST
+    details: >-
+      Exposure-policy-controlled control plane for project/key/pack/producer/secret/git lifecycle
+      and privileged lock/promote. Operator-facing within a deployment.
+    audience: instance
+    authPolicy: master credential or scoped admin grants; disabled over HTTP by default
+    stability: stable
 databases: []
 targetLanguage: typescript
 createdAt: '2026-06-10T20:23:00.000Z'
-updatedAt: '2026-07-11T09:37:10.086Z'
+updatedAt: '2026-07-11T10:49:24.699Z'
