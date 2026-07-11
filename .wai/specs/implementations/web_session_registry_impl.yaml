@@ -1,0 +1,39 @@
+id: web_session_registry_impl
+name: Web Session Registry Implementation
+description: >-
+  Write path for browser sessions: mutates the session set, persists it durably to the sessions
+  file, then refreshes the owned store. Never touches the index (the index projects over the store's
+  references).
+contract: iweb_session_registry
+sourcePath: src/server/websessions.ts
+methods:
+  - name: create
+    narrative: []
+    intent: >-
+      Stamp the new session's id (when absent), createdAt, expiresAt, and initial lastSeenAt, insert
+      it into the current session set, persist the complete set durably via write-temp-then-rename
+      so a crash never truncates the file, then push the new set into the store with replaceAll and
+      return the stored session. When persistence fails, no in-memory state changes and the storage
+      error propagates.
+  - name: touch
+    narrative: []
+    intent: >-
+      Locate the session by id — a missing id is a silent no-op — update only its lastSeenAt to the
+      supplied timestamp while preserving every other field, then persist and swap exactly as create
+      does.
+  - name: remove
+    narrative: []
+    intent: >-
+      Drop the session with the given id from the set — a missing id is a silent no-op — then
+      persist the reduced set durably and swap it into the store. Used on sign-out and for
+      correlated revocation.
+  - name: pruneExpired
+    narrative: []
+    intent: >-
+      Remove every session whose expiresAt is at or before the supplied instant, persist the reduced
+      set durably and swap it into the store, and return the number of sessions removed. A no-op
+      returns zero without rewriting unchanged state.
+detail: intent
+status: complete
+createdAt: '2026-07-11T11:34:56.490Z'
+updatedAt: '2026-07-11T11:44:41.026Z'

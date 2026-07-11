@@ -6,10 +6,14 @@ description: >-
   over HTTP, reusing the sdd_* tool surface unchanged plus explicit discovery and approval-backed
   self-service tools) from exposure-policy-controlled control planes: the admin API, the
   identity/audit API with headless SSO onboarding, the project-policy API, the hosted landscape API,
-  and the read-only operations API — plus a deferred draft browser admin UI and local-only control
-  surface. Each hosted project is a wholly separate .wai/ tree under the data root; this is NOT
-  subsystem/projectPath chaining. Auth is default-on and control-plane exposure is configurable via
-  HostExposurePolicy, so operators may keep network admin APIs disabled while still managing the
+  and the read-only operations API — plus a unified role-based browser web UI (a thin server plane:
+  browser-session storage, the session-as-credential auth bridge, the web app shell, and a live
+  level-of-detail JSON graph endpoint; every page is a client view that reuses the existing scoped
+  data plane and control-plane portals authenticated by the browser session, so role-based UI is
+  simply the client rendering what the session principal's grants allow) and a deferred local-only
+  control surface. Each hosted project is a wholly separate .wai/ tree under the data root; this is
+  NOT subsystem/projectPath chaining. Auth is default-on and control-plane exposure is configurable
+  via HostExposurePolicy, so operators may keep network admin APIs disabled while still managing the
   instance locally. The hosted server is distributed as an immutable container image for
   self-hosting; operators update by pulling and redeploying the image while preserving the data
   volume, and extension packs ship baked into extended images (built FROM the base image) as the
@@ -54,11 +58,16 @@ publicInterfaces:
     interface: iproject_policy_portal
   - type: REST
     details: >-
-      Optional draft browser admin UI with SSO-backed sessions for professional hosted operations.
-      Deferred pending real-usage evidence; it would delegate to identity, project policy,
-      landscape, audit, and existing admin workflows according to grants.
-    component: admin_ui_portal
-    interface: iadmin_ui_portal
+      Unified role-based browser web UI (REST/HTTP), exposure-gated by
+      HostExposurePolicy.adminUiEnabled (the browser web UI flag; a rename to webUiEnabled is noted
+      for a future revision). Serves the client app shell and static assets at the root and thin
+      session/SSO/context/graph endpoints under /web. A browser session resolves to a Principal
+      exactly like a bearer token, so the served app reuses every existing scoped surface — the /mcp
+      data plane and the identity/landscape/operations/policy control-plane portals — authenticated
+      by the session cookie; the client renders only what the session principal's grants allow. No
+      per-page server endpoints are added.
+    component: web_portal
+    interface: iweb_portal
   - type: Custom
     details: >-
       Draft local-only CLI/container control surface for operators who disable or restrict HTTP
@@ -77,4 +86,4 @@ publicInterfaces:
 trustedLinks: []
 status: complete
 createdAt: '2026-07-04T12:33:06.563Z'
-updatedAt: '2026-07-10T12:36:15.851Z'
+updatedAt: '2026-07-11T11:37:43.332Z'

@@ -11,6 +11,7 @@ componentType: Specialist
 owns: []
 dependsOn:
   - credential_registry
+  - web_session_repository
 status: complete
 createdAt: '2026-07-04T12:33:41.835Z'
-updatedAt: '2026-07-09T17:39:13.302Z'
+updatedAt: '2026-07-11T11:32:00.840Z'

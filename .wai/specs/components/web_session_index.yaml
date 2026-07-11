@@ -1,0 +1,13 @@
+id: web_session_index
+name: Web Session Index
+description: >-
+  Read-path projection over browser sessions: lookup by session id and listing all sessions for a
+  given user subject (for correlated revocation), without owning writes.
+subsystem: sdd_host
+componentType: Index
+owns: []
+dependsOn:
+  - web_session_store
+status: complete
+createdAt: '2026-07-11T11:31:36.502Z'
+updatedAt: '2026-07-11T11:44:26.139Z'

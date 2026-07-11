@@ -1,0 +1,94 @@
+id: web_graph_orchestrator_impl
+name: Web Graph Orchestrator Implementation
+description: >-
+  Serves the unified web UI's live level-of-detail graph. Authenticates the browser session to a
+  Principal, then reshapes the already-scoped hosted landscape or projects one authorized project's
+  spec tree at the requested detail level with validator issues overlaid.
+contract: iweb_graph_orchestrator
+sourcePath: src/server/web.ts
+methods:
+  - name: getGraph
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the browser session to a Principal through the single auth authority's session
+          bridge (rejects an expired or absent session as unauthenticated)
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateSession
+      - stepNumber: 2
+        description: Dispatch on the requested graph tier
+        type: switch
+        'on': tier
+        cases:
+          - value: landscape
+            step: 3
+          - value: project
+            step: 6
+        defaultStep: 12
+      - stepNumber: 3
+        description: >-
+          Landscape tier: delegate to the landscape orchestrator's already-scoped landscape
+          generation, presenting the session id as the credential (the auth bridge: a session
+          resolves to a Principal exactly like a bearer token) and the requested scope; the
+          landscape orchestrator applies its own landscape:read scoping and returns only in-scope
+          units and projects
+        type: call
+        targetComponent: landscape_orchestrator
+        targetMethod: generateLandscape
+      - stepNumber: 4
+        description: >-
+          Reshape the returned LandscapeGraphModel into a WebGraphModel: tier 'landscape', map each
+          LandscapeNode to a WebGraphNode (orgUnit->kind 'unit' at level 0, project->kind 'project'
+          at level 0, publicInterface->kind 'interface' at level 2; carry id, label, projectId, the
+          unit's parent as parentId, and status), reuse the LandscapeEdges as-is, keep only nodes
+          within the requested detail level, set level = the requested level, generatedAt = now,
+          scope = 'instance'
+        type: local
+      - stepNumber: 5
+        description: Return the landscape-tier web graph model
+        type: return
+        outcome: landscape web graph model
+      - stepNumber: 6
+        description: >-
+          Project tier: resolve and bind the requested project's isolated root within the
+          principal's authorized set through the project registry (rejects cross-project access, so
+          an out-of-scope project is Forbidden)
+        type: call
+        targetComponent: project_registry
+        targetMethod: resolveRoot
+      - stepNumber: 7
+        description: Bind the resolved target project root for the host-core reads that follow
+        type: local
+      - stepNumber: 8
+        description: >-
+          Project the bound project's spec tree into a level-filtered WebGraphModel via the host
+          core adapter
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: buildProjectGraph
+      - stepNumber: 9
+        description: >-
+          Run the as-complete conformance gate over the bound project to gather its current
+          validator issues
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: validateAsComplete
+      - stepNumber: 10
+        description: >-
+          Overlay the validation issues onto the project graph's nodes as per-node issueCounts
+          (grouping each issue by the component/spec id it references), and stamp tier 'project',
+          scope = the project id, level = the requested level, generatedAt = now
+        type: local
+      - stepNumber: 11
+        description: Return the project-tier web graph model with issue counts overlaid
+        type: return
+        outcome: project web graph model
+      - stepNumber: 12
+        description: Reject an unsupported graph tier
+        type: throw
+        error: unsupported graph tier
+    detail: full
+status: complete
+createdAt: '2026-07-11T11:36:12.720Z'
+updatedAt: '2026-07-11T11:44:41.411Z'

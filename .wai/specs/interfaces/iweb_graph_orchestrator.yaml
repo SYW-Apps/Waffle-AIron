@@ -1,0 +1,34 @@
+id: iweb_graph_orchestrator
+name: Web Graph Orchestrator Interface
+description: >-
+  Contract for the unified web UI's live level-of-detail graph. Authenticates the session to a
+  Principal through the single auth authority, then serves either the landscape tier (reshaped from
+  the already-scoped landscape orchestrator) or the project tier (one authorized project's spec
+  tree, level-filtered, with validator issues overlaid).
+component: web_graph_orchestrator
+methods:
+  - name: getGraph
+    description: >-
+      Resolve the session to a Principal (rejecting an expired/absent session as unauthenticated).
+      For tier 'landscape', delegate to the landscape orchestrator's already-scoped landscape
+      generation (presenting the session id as the credential per the auth bridge) and reshape the
+      LandscapeGraphModel into a level-of-detail WebGraphModel. For tier 'project', resolve and bind
+      the requested project's isolated root within the principal's authorized set through the
+      project registry (rejecting cross-project access), project its spec tree at the requested
+      level via the host core adapter, overlay validator issues as per-node issue counts, and return
+      it. An unknown tier is rejected.
+    signature: 'getGraph(sessionId: string, tier: string, projectId: string, level: number): WebGraphModel'
+    returns: WebGraphModel
+    params:
+      - name: sessionId
+        type: string
+      - name: tier
+        type: string
+      - name: projectId
+        type: string
+        optional: true
+      - name: level
+        type: number
+status: complete
+createdAt: '2026-07-11T11:33:03.119Z'
+updatedAt: '2026-07-11T11:44:34.171Z'

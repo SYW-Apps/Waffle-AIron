@@ -1,0 +1,27 @@
+id: web_session_store_impl
+name: Web Session Store Implementation
+description: >-
+  Authoritative in-memory holder of the browser-session set, file-backed under the server data root
+  (websessions.json), mirroring the user store's storage convention.
+contract: iweb_session_store
+sourcePath: src/server/websessions.ts
+methods:
+  - name: load
+    narrative: []
+    intent: >-
+      Read the persisted browser-session set from the sessions file under the server data root and
+      hold it as the authoritative in-memory representation, returning the loaded sessions. A
+      missing file yields an empty set (first boot is not an error); an unreadable file or
+      structurally invalid JSON fails with a storage error naming the offending path so the operator
+      can repair or remove it — the store never silently discards persisted sessions.
+  - name: replaceAll
+    narrative: []
+    intent: >-
+      Swap the authoritative in-memory session set to the supplied complete set in one assignment,
+      only ever called by the owned registry after durable persistence has succeeded. Never
+      partially applies; the previous set stays intact if the swap cannot complete, so readers via
+      the index never observe a half-written state.
+detail: intent
+status: complete
+createdAt: '2026-07-11T11:34:49.983Z'
+updatedAt: '2026-07-11T11:44:40.761Z'

@@ -60,6 +60,14 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: loadSubsystemSpecs
+  - name: buildProjectGraph
+    narrative:
+      - stepNumber: 1
+        description: Forward the project-graph projection to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: buildProjectGraph
+    detail: calls-only
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-07-09T22:06:42.370Z'
+updatedAt: '2026-07-11T11:34:25.486Z'

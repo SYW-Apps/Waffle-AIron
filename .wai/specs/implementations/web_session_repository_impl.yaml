@@ -1,0 +1,54 @@
+id: web_session_repository_impl
+name: Web Session Repository Implementation
+description: >-
+  Facade over the owned web session store, registry, and index. Every method is pure 1:1 forwarding
+  — reads go to the index, writes go to the registry; no logic lives here.
+contract: iweb_session_repository
+sourcePath: src/server/websessions.ts
+methods:
+  - name: create
+    narrative:
+      - stepNumber: 1
+        description: Forward to the web session registry
+        type: call
+        targetComponent: web_session_registry
+        targetMethod: create
+  - name: touch
+    narrative:
+      - stepNumber: 1
+        description: Forward to the web session registry
+        type: call
+        targetComponent: web_session_registry
+        targetMethod: touch
+  - name: remove
+    narrative:
+      - stepNumber: 1
+        description: Forward to the web session registry
+        type: call
+        targetComponent: web_session_registry
+        targetMethod: remove
+  - name: pruneExpired
+    narrative:
+      - stepNumber: 1
+        description: Forward to the web session registry
+        type: call
+        targetComponent: web_session_registry
+        targetMethod: pruneExpired
+  - name: getById
+    narrative:
+      - stepNumber: 1
+        description: Forward to the web session index
+        type: call
+        targetComponent: web_session_index
+        targetMethod: getById
+  - name: listBySubject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the web session index
+        type: call
+        targetComponent: web_session_index
+        targetMethod: listBySubject
+detail: calls-only
+status: complete
+createdAt: '2026-07-11T11:35:06.198Z'
+updatedAt: '2026-07-11T11:44:41.316Z'

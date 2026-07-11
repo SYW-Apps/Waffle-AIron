@@ -1,0 +1,43 @@
+kind: value-object
+id: web_graph_model
+name: WebGraphModel
+description: >-
+  A level-of-detail (LOD) graph payload served live (as JSON) to the unified web UI. It projects
+  EITHER the hosted-instance landscape (units + projects, reshaped from a LandscapeGraphModel) or
+  one project's spec tree (subsystems/components/interfaces/types, level-filtered), so the client
+  renders progressively deeper detail without re-fetching. Reuses LandscapeEdge for its edge shape.
+  Built only from data the session principal is authorized to see.
+fields:
+  - name: tier
+    type: string
+    description: >-
+      Which projection this payload represents: "landscape" (units + projects across the instance)
+      or "project" (one project's spec tree).
+    optional: false
+  - name: nodes
+    type: WebGraphNode[]
+    description: The LOD nodes included up to the requested detail level.
+    optional: false
+  - name: edges
+    type: LandscapeEdge[]
+    description: >-
+      Edges between the included nodes (contains/owns/depends_on/publishes/consumes/mirrors),
+      reusing the LandscapeEdge shape.
+    optional: false
+  - name: level
+    type: number
+    description: The maximum node detail level included in this payload (the client-requested depth).
+    optional: false
+  - name: generatedAt
+    type: string
+    description: ISO-8601 generation timestamp.
+    optional: false
+  - name: scope
+    type: string
+    description: >-
+      What the graph was scoped to: "instance" for the landscape tier, or the hosted project id for
+      the project tier.
+    optional: true
+methods: []
+createdAt: '2026-07-11T11:31:14.595Z'
+updatedAt: '2026-07-11T11:31:14.641Z'

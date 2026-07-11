@@ -1,0 +1,58 @@
+id: web_portal_impl
+name: Web Portal Implementation
+description: >-
+  Browser-facing HTTP boundary for the unified web UI: serves the client app shell/static assets at
+  the root and forwards the thin session/SSO/context/graph routes to the web orchestrator.
+  Session-cookie authenticated; the served app reuses every existing scoped endpoint with the
+  session as its credential, so there are no per-page server endpoints here.
+contract: iweb_portal
+sourcePath: src/server/web.ts
+methods:
+  - name: serveApp
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Return the bundled unified web UI client app shell / static asset for the requested path;
+          the app then drives every feature by calling existing endpoints with the session cookie
+        type: local
+  - name: startSignIn
+    narrative:
+      - stepNumber: 1
+        description: Forward to the web orchestrator
+        type: call
+        targetComponent: web_orchestrator
+        targetMethod: startSignIn
+  - name: completeSignIn
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the web orchestrator to create the session; the portal then sets the session
+          cookie from the returned session id
+        type: call
+        targetComponent: web_orchestrator
+        targetMethod: completeSignIn
+  - name: signOut
+    narrative:
+      - stepNumber: 1
+        description: Forward to the web orchestrator; the portal then clears the session cookie
+        type: call
+        targetComponent: web_orchestrator
+        targetMethod: signOut
+  - name: getContext
+    narrative:
+      - stepNumber: 1
+        description: Forward to the web orchestrator's getCurrentContext
+        type: call
+        targetComponent: web_orchestrator
+        targetMethod: getCurrentContext
+  - name: getGraph
+    narrative:
+      - stepNumber: 1
+        description: Forward to the web orchestrator's getGraph
+        type: call
+        targetComponent: web_orchestrator
+        targetMethod: getGraph
+detail: calls-only
+status: complete
+createdAt: '2026-07-11T11:36:51.270Z'
+updatedAt: '2026-07-11T11:44:42.439Z'

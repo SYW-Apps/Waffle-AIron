@@ -1,0 +1,13 @@
+id: web_session_store
+name: Web Session Store
+description: >-
+  Authoritative in-memory holder of the unified web UI's browser sessions, file-backed under the
+  hosted data root (mirroring the user/credential store convention). Owns state only, no workflow
+  decisions; it is the state holder behind the web session repository.
+subsystem: sdd_host
+componentType: Store
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-07-11T11:31:31.537Z'
+updatedAt: '2026-07-11T11:44:24.132Z'

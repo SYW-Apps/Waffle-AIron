@@ -1,0 +1,64 @@
+id: iweb_session_repository
+name: Web Session Repository Interface
+description: >-
+  Facade contract for durable browser-session state. The auth specialist and web orchestrators
+  depend on this contract instead of the private store, registry, or index. Pure 1:1 forwarding:
+  create/touch/remove/pruneExpired to the registry; getById/listBySubject to the index. No logic
+  lives on this facade.
+component: web_session_repository
+methods:
+  - name: create
+    description: Forward to the registry to persist a new browser session and return the stored session.
+    signature: 'create(session: WebSession): WebSession'
+    returns: WebSession
+    params:
+      - name: session
+        type: WebSession
+    guarantees:
+      - atomic
+  - name: touch
+    description: Forward to the registry to update one session's lastSeenAt activity timestamp.
+    signature: 'touch(id: string, lastSeenAt: string): void'
+    returns: void
+    params:
+      - name: id
+        type: string
+      - name: lastSeenAt
+        type: string
+    guarantees:
+      - atomic
+  - name: remove
+    description: Forward to the registry to remove one session by id (sign-out).
+    signature: 'remove(id: string): void'
+    returns: void
+    params:
+      - name: id
+        type: string
+    guarantees:
+      - atomic
+  - name: pruneExpired
+    description: Forward to the registry to delete expired sessions and return the number removed.
+    signature: 'pruneExpired(now: string): number'
+    returns: number
+    params:
+      - name: now
+        type: string
+    guarantees:
+      - atomic
+  - name: getById
+    description: Forward to the index and return one browser session by id or null when absent.
+    signature: 'getById(id: string): WebSession | null'
+    returns: WebSession | null
+    params:
+      - name: id
+        type: string
+  - name: listBySubject
+    description: Forward to the index and return every browser session belonging to the given user id.
+    signature: 'listBySubject(userId: string): WebSession[]'
+    returns: WebSession[]
+    params:
+      - name: userId
+        type: string
+status: complete
+createdAt: '2026-07-11T11:32:56.623Z'
+updatedAt: '2026-07-11T11:44:33.167Z'

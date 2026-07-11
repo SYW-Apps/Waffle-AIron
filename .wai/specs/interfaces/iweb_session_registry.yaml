@@ -1,0 +1,54 @@
+id: iweb_session_registry
+name: Web Session Registry Interface
+description: >-
+  Private write-path contract for browser sessions. All persisted session changes go through this
+  registry, which persists the complete set durably then refreshes the owned store.
+component: web_session_registry
+methods:
+  - name: create
+    description: >-
+      Persist a new browser session (stamping id/createdAt/expiresAt as needed) and return the
+      stored session.
+    signature: 'create(session: WebSession): WebSession'
+    returns: WebSession
+    params:
+      - name: session
+        type: WebSession
+    guarantees:
+      - atomic
+  - name: touch
+    description: >-
+      Update one session's lastSeenAt activity timestamp, preserving all other fields; a missing id
+      is a no-op.
+    signature: 'touch(id: string, lastSeenAt: string): void'
+    returns: void
+    params:
+      - name: id
+        type: string
+      - name: lastSeenAt
+        type: string
+    guarantees:
+      - atomic
+  - name: remove
+    description: Remove one session by id (sign-out); a missing id is a no-op.
+    signature: 'remove(id: string): void'
+    returns: void
+    params:
+      - name: id
+        type: string
+    guarantees:
+      - atomic
+  - name: pruneExpired
+    description: >-
+      Delete every session whose expiresAt is at or before the supplied instant and return the
+      number removed.
+    signature: 'pruneExpired(now: string): number'
+    returns: number
+    params:
+      - name: now
+        type: string
+    guarantees:
+      - atomic
+status: complete
+createdAt: '2026-07-11T11:32:46.115Z'
+updatedAt: '2026-07-11T11:44:31.732Z'

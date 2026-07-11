@@ -1,0 +1,14 @@
+id: web_session_registry
+name: Web Session Registry
+description: >-
+  Write-path component for browser sessions: creates a new session, touches last-seen activity,
+  removes a session on sign-out, and prunes expired sessions. All persisted session changes go
+  through this registry, which persists the complete set durably then refreshes the owned store.
+subsystem: sdd_host
+componentType: Registry
+owns: []
+dependsOn:
+  - web_session_store
+status: complete
+createdAt: '2026-07-11T11:31:34.002Z'
+updatedAt: '2026-07-11T11:44:25.192Z'

@@ -1,0 +1,82 @@
+id: iweb_orchestrator
+name: Web Orchestrator Interface
+description: >-
+  Contract for the unified web UI's server-side shell: SSO sign-in (unauthenticated start/complete,
+  trust anchored by the signed SSO state and the provider code exchange), browser-session lifecycle,
+  the session-principal context projection, and the live graph entry point. Creating and resolving
+  sessions is the auth bridge that lets the served client app reuse every existing scoped endpoint
+  with the session cookie as its credential.
+component: web_orchestrator
+methods:
+  - name: startSignIn
+    description: >-
+      Begin a browser SSO sign-in: resolve the enabled identity-provider configuration through the
+      policy repository, generate a nonce, sign an SSO state binding providerId, nonce, and
+      redirectUri via the single signing authority, build the provider authorization URL through the
+      identity provider adapter, append a best-effort web.signin.start (info) audit event, and
+      return the authorization URL. Unauthenticated by nature; no caller credential is required or
+      accepted.
+    signature: 'startSignIn(providerId: string, redirectUri: string): string'
+    returns: string
+    params:
+      - name: providerId
+        type: string
+      - name: redirectUri
+        type: string
+  - name: completeSignIn
+    description: >-
+      Complete a browser SSO sign-in: verify the signed SSO state via the single signing authority
+      (a tampered/expired state is rejected), resolve the bound identity-provider configuration,
+      exchange the authorization code and resolve the external subject through the provider adapter,
+      look up the hosted user by issuer + external subject, provision a first-login active user with
+      empty grants when absent, create a browser session bound to the resolved subject and the
+      user's current grants through the web session repository, append a best-effort web.signin
+      (security) audit event, and return the new session id (which the portal sets as the session
+      cookie). Unauthenticated by nature.
+    signature: 'completeSignIn(state: string, code: string): string'
+    returns: string
+    params:
+      - name: state
+        type: string
+      - name: code
+        type: string
+  - name: signOut
+    description: >-
+      End a browser session: remove it through the web session repository and append a best-effort
+      web.signout (info) audit event.
+    signature: 'signOut(sessionId: string): void'
+    returns: void
+    params:
+      - name: sessionId
+        type: string
+  - name: getCurrentContext
+    description: >-
+      Resolve the session to a Principal via the single auth authority, then return the principal's
+      subject, grants, and derived capability flags (isAdmin from an instance-wide grant,
+      canWriteProjects from any write permission, and the project/unit ids named in the grants) so
+      the client renders role-appropriately. Reads only; not audited.
+    signature: 'getCurrentContext(sessionId: string): WebContext'
+    returns: WebContext
+    params:
+      - name: sessionId
+        type: string
+  - name: getGraph
+    description: >-
+      Return the live level-of-detail graph for the requested tier (landscape or project) and detail
+      level by delegating to the web graph orchestrator, which authenticates the session and scopes
+      the result.
+    signature: 'getGraph(sessionId: string, tier: string, projectId: string, level: number): WebGraphModel'
+    returns: WebGraphModel
+    params:
+      - name: sessionId
+        type: string
+      - name: tier
+        type: string
+      - name: projectId
+        type: string
+        optional: true
+      - name: level
+        type: number
+status: complete
+createdAt: '2026-07-11T11:33:17.127Z'
+updatedAt: '2026-07-11T11:44:35.225Z'

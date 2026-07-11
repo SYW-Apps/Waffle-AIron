@@ -1,0 +1,23 @@
+id: web_portal
+name: Web Portal
+description: >-
+  Browser-facing HTTP entrypoint for the unified role-based web UI. Serves the client app shell and
+  its static assets at the root, and exposes the thin session/SSO/context/graph endpoints under /web
+  that back the app. It authenticates browser requests by a session cookie whose value the single
+  auth authority resolves to a Principal (authenticateSession); because a session resolves to a
+  Principal exactly like a bearer token, the served client app reuses every EXISTING endpoint — the
+  scoped /mcp data plane and the identity/landscape/operations/policy control-plane portals —
+  presenting the session as its credential. There are therefore NO new server endpoints per page:
+  the page UIs (authoring, approvals, users, audit, policy, landscape) are all client views over the
+  existing surfaces. Forwards each of its own routes to the web orchestrator; served by the host
+  server and exposure-gated by HostExposurePolicy.adminUiEnabled (the browser web UI flag).
+subsystem: sdd_host
+componentType: Portal
+owns: []
+dependsOn:
+  - host_server
+  - web_orchestrator
+portalType: HTTP_API
+status: complete
+createdAt: '2026-07-11T11:31:55.624Z'
+updatedAt: '2026-07-11T11:44:29.675Z'

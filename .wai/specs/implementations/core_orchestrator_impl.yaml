@@ -399,6 +399,14 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: dryRunSerializeSpecs
+  - name: buildProjectGraph
+    narrative:
+      - stepNumber: 1
+        description: Forward to the diagram specialist's pure graph projection
+        type: call
+        targetComponent: diagram_specialist
+        targetMethod: buildGraphModel
+    detail: calls-only
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-10T18:48:08.998Z'
+updatedAt: '2026-07-11T11:34:21.987Z'
