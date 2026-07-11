@@ -52,7 +52,16 @@ methods:
         type: call
         targetComponent: web_orchestrator
         targetMethod: getGraph
+  - name: signOutEverywhere
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the web orchestrator to revoke all of the caller's sessions, then clear the
+          current session cookie in the response.
+        type: call
+        targetComponent: web_orchestrator
+        targetMethod: signOutEverywhere
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-07-11T11:44:42.439Z'
+updatedAt: '2026-07-11T12:25:49.008Z'

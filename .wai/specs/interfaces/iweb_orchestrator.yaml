@@ -77,6 +77,16 @@ methods:
         optional: true
       - name: level
         type: number
+  - name: signOutEverywhere
+    description: >-
+      Revoke every browser session belonging to the caller's principal (sign out on all
+      devices/tabs): resolve the presented session to a Principal, then remove all of that subject's
+      sessions. Idempotent; audited at security level.
+    signature: 'signOutEverywhere(sessionId: string): void'
+    returns: void
+    params:
+      - name: sessionId
+        type: string
 status: complete
 createdAt: '2026-07-11T11:33:17.127Z'
-updatedAt: '2026-07-11T11:44:35.225Z'
+updatedAt: '2026-07-11T12:25:29.251Z'

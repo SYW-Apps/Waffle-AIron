@@ -98,6 +98,19 @@ methods:
       transport: HTTP
       method: GET
       path: /web/graph
+  - name: signOutEverywhere
+    description: >-
+      Sign the caller out of ALL their browser sessions (all devices/tabs). Forwards to the web
+      orchestrator; clears the current session cookie too.
+    signature: 'signOutEverywhere(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/logout-all
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-07-11T11:44:36.166Z'
+updatedAt: '2026-07-11T12:25:44.601Z'
