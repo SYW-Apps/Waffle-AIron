@@ -30,6 +30,15 @@ of one flat pile at the top:
   subproject rather than implementing its internals.
 - `wairon generate` (and the exporters) now write relative to the bound project
   root, so running it from a subdirectory targets the project, not the cwd.
+- **`generate` now reconciles its output dirs** — it prunes agent files that are
+  no longer in the topology (a removed component's orphaned agent, or the old
+  flat pile after the switch to layered) so the on-disk set actually shrinks
+  instead of accumulating. Every generated file carries a `wairon:managed`
+  marker; pruning only ever removes wairon-owned files (that marker, or the
+  generated `-owner`/`-implementer`/`-architect` naming), **never a
+  hand-authored agent**. Scoped runs (`--domain`/`--root`) never prune (they
+  wrote only part of the set); `--no-prune` disables it entirely. The cascade
+  reconciles each layer's own dir.
 
 ### Chained subprojects: self-initialize + doctor backfill (new)
 

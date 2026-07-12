@@ -249,3 +249,42 @@ describe('layered agent topology', () => {
     expect(childIds).toContain('childsub-owner');
   });
 });
+
+describe('stale-agent reconciliation (pruneStaleAgents)', () => {
+  let dir: string;
+  afterEach(() => {
+    if (dir) fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('prunes wairon-owned files no longer in the topology but never hand-authored ones', async () => {
+    const { pruneStaleAgents } = await import('../../src/commands/generate.js');
+    const { WAIRON_MANAGED_MARKER } = await import('../../src/exporters/base.js');
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-prune-'));
+
+    const w = (name: string, body: string) => {
+      const p = path.join(dir, name);
+      fs.writeFileSync(p, body);
+      return path.resolve(p);
+    };
+
+    // The freshly-generated set (kept):
+    const current = w('current-owner.md', `<!-- ${WAIRON_MANAGED_MARKER} -->\nkeep`);
+    // Stale but wairon-owned by NAMING (migration of a pre-marker flat file):
+    w('old-implementer.md', 'no marker but a wairon-generated name');
+    // Stale and wairon-owned by MARKER (odd name, but clearly ours):
+    w('renamed.md', `<!-- ${WAIRON_MANAGED_MARKER} -->\nours`);
+    // Hand-authored — neither marker nor wairon naming (must survive):
+    w('my-notes.md', 'a human wrote this');
+    // Non-markdown — ignored entirely:
+    w('keep.txt', 'data');
+
+    const pruned = pruneStaleAgents(new Set([current]));
+
+    expect(pruned).toBe(2);
+    expect(fs.existsSync(current)).toBe(true);                          // in the set
+    expect(fs.existsSync(path.join(dir, 'old-implementer.md'))).toBe(false); // pruned by name
+    expect(fs.existsSync(path.join(dir, 'renamed.md'))).toBe(false);        // pruned by marker
+    expect(fs.existsSync(path.join(dir, 'my-notes.md'))).toBe(true);        // hand-authored, kept
+    expect(fs.existsSync(path.join(dir, 'keep.txt'))).toBe(true);           // not .md, kept
+  });
+});
