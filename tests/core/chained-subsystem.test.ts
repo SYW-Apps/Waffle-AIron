@@ -14,7 +14,10 @@ import {
   moveSubsystemProject,
   backfillChainedSubprojectConfigs,
   findChainingSubprojectsMissingConfig,
+  listDirectChainedSubprojects,
+  provisionProject,
 } from '../../src/core/provision.js';
+import { resolveAgentTopology } from '../../src/core/agent_resolver.js';
 import type { SubsystemSpec } from '../../src/models/index.js';
 
 const now = new Date().toISOString();
@@ -176,5 +179,73 @@ describe('moveSubsystemProject', () => {
     createChainedSubsystem(subsystemSpec('billing', 'packages/billing'), 'billing');
     fs.mkdirSync(path.join(rootDir, 'services', 'billing'), { recursive: true });
     expect(() => moveSubsystemProject('billing', 'services/billing')).toThrow(/already exists/);
+  });
+});
+
+describe('layered agent topology', () => {
+  let rootDir: string;
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    if (rootDir) fs.rmSync(rootDir, { recursive: true, force: true });
+  });
+
+  it('resolveAgentTopology generates only the current layer; a chained subproject collapses to ONE delegate', () => {
+    rootDir = makeRoot();
+    provisionProject('root-system');
+    saveSubsystemSpec(subsystemSpec('local-a'));            // a normal local subsystem
+    createChainedSubsystem(subsystemSpec('child', 'child'), 'child'); // a chained subproject
+    // Give the child internal subsystems — they must NOT appear in the parent layer.
+    setProjectRoot(path.join(rootDir, 'child'));
+    invalidateSpecCache();
+    saveSubsystemSpec({ ...subsystemSpec('childsub'), parentSystem: 'child' });
+    setProjectRoot(rootDir);
+    invalidateSpecCache();
+
+    const ids = resolveAgentTopology().map(a => a.id);
+    expect(ids).toContain('local-a-owner');
+    expect(ids).toContain('child-owner');        // the subproject delegate
+    expect(ids).not.toContain('childsub-owner'); // the child's internals stay in the child layer
+    // Nothing federated (::-namespaced) leaks into this layer.
+    expect(ids.every(id => !id.includes('::'))).toBe(true);
+
+    const delegate = resolveAgentTopology().find(a => a.id === 'child-owner')!;
+    expect(delegate.tags).toContain('delegate');
+    expect(delegate.description).toMatch(/chained subproject/i);
+  });
+
+  // The end-to-end file-writing cascade (each layer generated into its own
+  // .claude/agents via runGenerate) is verified live through the CLI; here we
+  // cover its building blocks — direct-subproject discovery (what the cascade
+  // walks) and per-layer topology (what each layer writes) — without loadRegistry
+  // (a lazy require inside the loader↔agent_resolver cycle that vitest cannot
+  // resolve at call time).
+  it('cascade building blocks: direct subprojects are discovered, and each layer resolves its OWN topology', () => {
+    rootDir = makeRoot();
+    provisionProject('root-system');
+    createChainedSubsystem(subsystemSpec('child', 'child'), 'child');
+    const childDir = path.join(rootDir, 'child');
+    setProjectRoot(childDir);
+    invalidateSpecCache();
+    saveSubsystemSpec({ ...subsystemSpec('childsub'), parentSystem: 'child' });
+    setProjectRoot(rootDir);
+    invalidateSpecCache();
+
+    // The cascade walks the DIRECT chained subprojects (one level).
+    const direct = listDirectChainedSubprojects(rootDir);
+    const childEntry = direct.find(d => path.resolve(d.dir) === path.resolve(childDir));
+    expect(childEntry).toBeDefined();
+    expect(childEntry!.subsystemId).toBe('child');
+
+    // Root layer writes the delegate, NOT the child's internal owner.
+    const rootIds = resolveAgentTopology().map(a => a.id);
+    expect(rootIds).toContain('child-owner');
+    expect(rootIds).not.toContain('childsub-owner');
+
+    // Child layer (resolved in the child's own root) writes its OWN owner.
+    setProjectRoot(childDir);
+    invalidateSpecCache();
+    const childIds = resolveAgentTopology().map(a => a.id);
+    expect(childIds).toContain('childsub-owner');
   });
 });

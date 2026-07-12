@@ -92,6 +92,7 @@ program
   .option('--domain <id>', 'limit to agents in a single domain')
   .option('--domains <ids>', 'limit to a comma-separated list of domain ids')
   .option('--root', 'only generate root-level agents')
+  .option('--no-recurse', 'only generate this project\'s layer; do not cascade into chained subprojects')
   .option('--dry-run', 'preview what would be generated without writing files')
   .action(async (opts) => {
     await runGenerate({
@@ -99,6 +100,8 @@ program
       domain: opts.domain,
       domains: opts.domains,
       root: opts.root,
+      // commander maps --no-recurse to opts.recurse === false
+      recurse: opts.recurse,
       dryRun: opts.dryRun,
     });
   });

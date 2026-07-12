@@ -170,6 +170,40 @@ function walkChainedSubprojects(
   walk(projectRoot);
 }
 
+/**
+ * The DIRECT chained subprojects of a project (one level — the projectPath
+ * subsystems declared in THIS project's own spec tree, not those nested deeper
+ * inside a child). Each entry is the resolved child dir + the mounting subsystem
+ * id. Used by layered `wairon generate` to cascade one level at a time (each
+ * child then lists its own direct subprojects), so every layer is generated in
+ * its own .wai without the parent enumerating the whole deep tree.
+ */
+export function listDirectChainedSubprojects(projectRoot: string): { dir: string; subsystemId: string }[] {
+  const out: { dir: string; subsystemId: string }[] = [];
+  const specsDir = aiPathsAt(projectRoot).specsDir();
+  if (!fs.existsSync(specsDir)) return out;
+  for (const file of listFilesRecursive(specsDir, '.yaml')) {
+    let raw: unknown;
+    try {
+      raw = readYamlFile(file);
+    } catch {
+      continue;
+    }
+    if (!(raw && typeof raw === 'object' && 'parentSystem' in raw)) continue;
+    const pp = (raw as { projectPath?: unknown }).projectPath;
+    if (typeof pp !== 'string' || pp.trim() === '') continue;
+    let dir: string;
+    try {
+      dir = assertContainedProjectPath(projectRoot, pp);
+    } catch {
+      continue;
+    }
+    const id = (raw as { id?: unknown }).id;
+    out.push({ dir, subsystemId: typeof id === 'string' ? id : path.basename(dir) });
+  }
+  return out;
+}
+
 /** True when a child dir has a spec tree but no project.yaml (un-runnable standalone). */
 function childHasSpecsButNoConfig(childDir: string): boolean {
   return fs.existsSync(aiPathsAt(childDir).specsDir()) && !fs.existsSync(aiPathsAt(childDir).projectConfig());
