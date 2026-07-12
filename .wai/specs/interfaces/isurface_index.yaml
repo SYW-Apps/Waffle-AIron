@@ -1,0 +1,19 @@
+id: isurface_index
+name: Surface Index Interface
+description: Read-path lookups over the surface store.
+component: surface_index
+methods:
+  - name: byProject
+    description: Snapshot produced by the named project, or null.
+    signature: 'byProject(projectName: string): SurfaceSnapshot | null'
+    returns: SurfaceSnapshot | null
+    params:
+      - name: projectName
+        type: string
+  - name: all
+    description: Every held snapshot.
+    signature: 'all(): SurfaceSnapshot[]'
+    returns: SurfaceSnapshot[]
+status: complete
+createdAt: '2026-07-10T23:13:38.422Z'
+updatedAt: '2026-07-11T09:04:02.514Z'

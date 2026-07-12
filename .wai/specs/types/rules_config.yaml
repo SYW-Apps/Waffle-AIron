@@ -6,19 +6,35 @@ fields:
   - name: noOverlappingOwnership
     type: boolean
     description: Two agents may not own the same path
+    optional: false
   - name: requireOwnedPaths
     type: boolean
     description: Non-meta agents must declare ownedPaths
+    optional: false
   - name: metaAgentTags
     type: string[]
     description: Tags exempting an agent from ownership requirements
+    optional: false
   - name: enforceReproducibility
     type: boolean
     description: Generated files must be reproducible from the registry
+    optional: false
   - name: sddRuleSeverity
     type: object
     description: Per-code severity overrides for the SDD conformance rules
     optional: true
+  - name: naming
+    type: NamingRuleConfig
+    description: Naming convention enforcement rules applied by the linter
+    optional: true
+  - name: complexity
+    type: ComplexityRuleConfig
+    description: Complexity threshold rules applied by the linter
+    optional: true
+  - name: documentation
+    type: DocumentationRuleConfig
+    description: Documentation completeness rules applied by the linter
+    optional: true
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-03T00:00:00.000Z'
+updatedAt: '2026-07-06T20:47:37.237Z'

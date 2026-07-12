@@ -118,6 +118,26 @@ methods:
       the child project, and rewrite references.
     signature: 'internalizeSubsystem(subsystemId: string): void'
     returns: void
+  - name: loadTypeSpecs
+    description: Loads type specs
+    signature: 'loadTypeSpecs(): TypeSpec[]'
+    returns: TypeSpec[]
+  - name: dryRunSerializeSpecs
+    description: >-
+      Re-serialize every loaded spec in memory through the exact save-path pipeline (relativization
+      + writer schema, no I/O) and return the refusal issues (ROUNDTRIP_SERIALIZATION). Accepts an
+      optional scope predicate so scoped validation skips out-of-scope specs before serializing.
+    signature: 'dryRunSerializeSpecs(include?: (specId: string) => boolean): ValidationIssue[]'
+    returns: ValidationIssue[]
+  - name: buildProjectGraph
+    description: >-
+      Project the current project's spec tree into a level-filtered WebGraphModel and return it (the
+      live JSON graph the hosting server serves to the web UI).
+    signature: 'buildProjectGraph(level: number): WebGraphModel'
+    returns: WebGraphModel
+    params:
+      - name: level
+        type: number
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-05T18:44:41.590Z'
+updatedAt: '2026-07-11T11:32:17.242Z'

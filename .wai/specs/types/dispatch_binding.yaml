@@ -1,0 +1,29 @@
+kind: value-object
+id: dispatch_binding
+name: DispatchBinding
+description: >-
+  One entry of a generic-dispatch Portal's machine-readable dispatch table: maps a runtime
+  capability name to the component.method that serves it. Makes dynamic dispatch visible to the
+  static walker — validated against the target interface (UNSERVED_CAPABILITY) and traversed by
+  unused-detection, replacing blanket lint-allows on dispatch-invisible methods.
+fields:
+  - name: capability
+    type: string
+    description: Capability name exactly as dispatched at runtime (e.g. "shadow_module.get")
+    optional: false
+    key: primary
+  - name: component
+    type: string
+    description: Component id serving this capability (local, super::-relative, or ::-absolute)
+    optional: false
+  - name: method
+    type: string
+    description: Method name on the serving component's interface
+    optional: false
+  - name: description
+    type: string
+    description: What this capability does, for the dispatch narrative
+    optional: true
+methods: []
+createdAt: '2026-07-10T18:47:25.258Z'
+updatedAt: '2026-07-10T18:47:25.267Z'

@@ -1,44 +1,59 @@
-schemaVersion: "1.0.0"
-id: "validator_core_adapter_impl"
-name: "Validator Core Adapter Implementation"
-description: "Concrete implementation forwarding validator load calls to core portal."
-contract: "ivalidator_core_adapter"
-sourcePath: "src/core/validation.ts"
+id: validator_core_adapter_impl
+name: Validator Core Adapter Implementation
+description: Concrete implementation forwarding validator load calls to core portal.
+contract: ivalidator_core_adapter
+sourcePath: src/core/validation.ts
 methods:
-  - name: "loadSystemSpec"
+  - name: loadSystemSpec
     narrative:
       - stepNumber: 1
-        description: "Call loadSystemSpec on core portal"
-        type: "call"
-        targetComponent: "core_portal"
-        targetMethod: "loadSystemSpec"
-  - name: "loadSubsystemSpecs"
+        description: Call loadSystemSpec on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadSystemSpec
+  - name: loadSubsystemSpecs
     narrative:
       - stepNumber: 1
-        description: "Call loadSubsystemSpecs on core portal"
-        type: "call"
-        targetComponent: "core_portal"
-        targetMethod: "loadSubsystemSpecs"
-  - name: "loadComponentSpecs"
+        description: Call loadSubsystemSpecs on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadSubsystemSpecs
+  - name: loadComponentSpecs
     narrative:
       - stepNumber: 1
-        description: "Call loadComponentSpecs on core portal"
-        type: "call"
-        targetComponent: "core_portal"
-        targetMethod: "loadComponentSpecs"
-  - name: "loadInterfaceSpecs"
+        description: Call loadComponentSpecs on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadComponentSpecs
+  - name: loadInterfaceSpecs
     narrative:
       - stepNumber: 1
-        description: "Call loadInterfaceSpecs on core portal"
-        type: "call"
-        targetComponent: "core_portal"
-        targetMethod: "loadInterfaceSpecs"
-  - name: "loadImplementationSpecs"
+        description: Call loadInterfaceSpecs on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadInterfaceSpecs
+  - name: loadImplementationSpecs
     narrative:
       - stepNumber: 1
-        description: "Call loadImplementationSpecs on core portal"
-        type: "call"
-        targetComponent: "core_portal"
-        targetMethod: "loadImplementationSpecs"
-createdAt: "2026-06-19T12:00:00Z"
-updatedAt: "2026-06-19T12:00:00Z"
+        description: Call loadImplementationSpecs on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadImplementationSpecs
+  - name: loadTypeSpecs
+    narrative:
+      - stepNumber: 1
+        description: Call loadTypeSpecs on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadTypeSpecs
+  - name: dryRunSerializeSpecs
+    narrative:
+      - stepNumber: 1
+        description: Call dryRunSerializeSpecs on core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: dryRunSerializeSpecs
+    conformance: 'off'
+status: complete
+createdAt: '2026-06-19T12:00:00Z'
+updatedAt: '2026-07-11T19:14:22.114Z'

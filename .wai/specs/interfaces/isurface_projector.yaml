@@ -1,0 +1,27 @@
+id: isurface_projector
+name: Surface Projector Interface
+description: Contract-grade snapshot derivation from the loaded spec tree.
+component: surface_projector
+methods:
+  - name: projectOwnSurface
+    description: >-
+      Project the own tree's L0 gateway entries at or below the audience ceiling into a
+      self-contained contract-grade snapshot (full L3 contracts, dispatch tables, transitive type
+      closure, StateId provenance).
+    signature: 'projectOwnSurface(maxAudience: string): SurfaceSnapshot'
+    returns: SurfaceSnapshot
+    params:
+      - name: maxAudience
+        type: string
+  - name: projectChildSurface
+    description: >-
+      Project the parent surface a chained child may see: the family ceiling (a chained child is
+      part of the system family, so project-audience entries are included).
+    signature: 'projectChildSurface(childSubsystemId: string): SurfaceSnapshot'
+    returns: SurfaceSnapshot
+    params:
+      - name: childSubsystemId
+        type: string
+status: complete
+createdAt: '2026-07-10T23:13:52.676Z'
+updatedAt: '2026-07-11T09:04:02.621Z'

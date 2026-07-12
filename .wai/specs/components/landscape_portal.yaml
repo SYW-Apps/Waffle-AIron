@@ -1,0 +1,16 @@
+id: landscape_portal
+name: Landscape Portal
+description: >-
+  Draft control-plane HTTP entrypoint for hosted organization hierarchy, project placement,
+  cross-project relation management, public-surface snapshots, and landscape graph retrieval.
+subsystem: sdd_host
+componentType: Portal
+owns: []
+dependsOn:
+  - host_server
+  - landscape_orchestrator
+  - surface_exchange_orchestrator
+portalType: HTTP_API
+status: complete
+createdAt: '2026-07-08T21:13:01.910Z'
+updatedAt: '2026-07-11T12:04:12.691Z'

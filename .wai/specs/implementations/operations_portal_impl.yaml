@@ -1,0 +1,33 @@
+id: operations_portal_impl
+name: Operations Portal Implementation
+description: >-
+  Control-plane HTTP boundary for read-only hosted operations: forwards each health, usage, and
+  quota request to the operations orchestrator.
+contract: ioperations_portal
+sourcePath: src/server/operations.ts
+methods:
+  - name: getHealthReport
+    narrative:
+      - stepNumber: 1
+        description: Forward to the operations orchestrator
+        type: call
+        targetComponent: operations_orchestrator
+        targetMethod: getHealthReport
+  - name: getUsage
+    narrative:
+      - stepNumber: 1
+        description: Forward to the operations orchestrator
+        type: call
+        targetComponent: operations_orchestrator
+        targetMethod: getUsage
+  - name: evaluateQuota
+    narrative:
+      - stepNumber: 1
+        description: Forward to the operations orchestrator
+        type: call
+        targetComponent: operations_orchestrator
+        targetMethod: evaluateQuota
+detail: calls-only
+status: complete
+createdAt: '2026-07-10T11:27:04.719Z'
+updatedAt: '2026-07-10T11:27:34.167Z'

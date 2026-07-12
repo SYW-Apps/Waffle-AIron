@@ -1,0 +1,28 @@
+id: ipublic_surface_index
+name: Public Surface Index Interface
+description: >-
+  Private read-path contract over the redacted public-surface snapshots: whole-snapshot lookup by
+  project and single redacted interface lookup by system interface id.
+component: public_surface_index
+methods:
+  - name: getSnapshot
+    description: Return the current public-surface snapshot for a project, or null when none exists.
+    signature: 'getSnapshot(projectId: string): ProjectPublicSurfaceSnapshot | null'
+    returns: ProjectPublicSurfaceSnapshot | null
+    params:
+      - name: projectId
+        type: string
+  - name: findInterface
+    description: >-
+      Return one redacted public interface summary from a project's snapshot by system interface id,
+      or null when the project has no snapshot or no such interface.
+    signature: 'findInterface(projectId: string, systemInterfaceId: string): PublicInterfaceSummary | null'
+    returns: PublicInterfaceSummary | null
+    params:
+      - name: projectId
+        type: string
+      - name: systemInterfaceId
+        type: string
+status: complete
+createdAt: '2026-07-09T22:06:11.683Z'
+updatedAt: '2026-07-09T22:13:26.030Z'

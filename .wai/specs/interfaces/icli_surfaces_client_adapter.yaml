@@ -1,0 +1,37 @@
+id: icli_surfaces_client_adapter
+name: CLI Surfaces Client Adapter Interface
+description: CLI-side forwarding of surface commands to the surface portal.
+component: cli_surfaces_client_adapter
+methods:
+  - name: exportSurface
+    description: Forward export to the surface portal.
+    signature: 'exportSurface(maxAudience: string, format: string, outPath?: string): SurfaceSnapshot'
+    returns: SurfaceSnapshot
+    params:
+      - name: maxAudience
+        type: string
+      - name: format
+        type: string
+      - name: outPath
+        type: string
+        optional: true
+  - name: importSurface
+    description: Forward import to the surface portal.
+    signature: 'importSurface(sourcePath: string, origin: string): SurfaceSnapshot'
+    returns: SurfaceSnapshot
+    params:
+      - name: sourcePath
+        type: string
+      - name: origin
+        type: string
+  - name: listSnapshots
+    description: Forward list to the surface portal.
+    signature: 'listSnapshots(): SurfaceSnapshot[]'
+    returns: SurfaceSnapshot[]
+  - name: generateChildSnapshots
+    description: Forward child-snapshot generation to the surface portal.
+    signature: 'generateChildSnapshots(): string[]'
+    returns: string[]
+status: complete
+createdAt: '2026-07-10T23:14:13.266Z'
+updatedAt: '2026-07-11T09:04:02.386Z'

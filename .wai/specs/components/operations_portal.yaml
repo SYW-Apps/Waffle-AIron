@@ -1,0 +1,16 @@
+id: operations_portal
+name: Operations Portal
+description: >-
+  Control-plane HTTP entrypoint for read-only operational insight: instance health, resource usage,
+  and advisory quota reporting. Exposure is governed by HostExposurePolicy; durable backups are
+  handled out-of-band via platform data-volume snapshots, not this surface.
+subsystem: sdd_host
+componentType: Portal
+owns: []
+dependsOn:
+  - host_server
+  - operations_orchestrator
+portalType: HTTP_API
+status: complete
+createdAt: '2026-07-09T09:09:32.066Z'
+updatedAt: '2026-07-10T11:27:25.586Z'

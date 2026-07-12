@@ -1,0 +1,101 @@
+id: isurface_exchange_orchestrator
+name: Surface Exchange Orchestrator Interface
+description: >-
+  Consumer-facing surface exchange: reachability + visibility discovery, contract-grade consumer
+  fetch, and operator artifact export.
+component: surface_exchange_orchestrator
+methods:
+  - name: listReachableProjectsForMcp
+    description: >-
+      MCP tool workflow `sdd_landscape_list_reachable_projects`: authenticate the caller through the
+      single auth authority, then return only the projects reachable from currentProjectId.
+      Reachability is DIRECTIONAL and RELATIONS-ONLY: exactly the projects with an ACTIVE relation
+      whose sourceProjectId is currentProjectId; placements confer none, no transitive closure. Each
+      ReachableProjectRef carries the relation ids, kinds, and target public interface ids.
+    signature: >-
+      listReachableProjectsForMcp(credential: string, currentProjectId: string):
+      ReachableProjectRef[]
+    returns: ReachableProjectRef[]
+    params:
+      - name: credential
+        type: string
+      - name: currentProjectId
+        type: string
+  - name: listReachableProjectInterfacesForMcp
+    description: >-
+      MCP tool workflow `sdd_landscape_list_reachable_project_interfaces`: authenticate the caller,
+      reject any target outside the reachable set (no ACTIVE relation is Forbidden). When the
+      instance defines organization units, entries are AUDIENCE-FILTERED to those whose ceiling
+      covers the observer's unit-graph distance (department | instance | partner); a unit-less
+      instance keeps all entries (legacy). Never private components, narratives, implementations,
+      root paths, secrets, or non-public types; no snapshot yields an empty list (private by
+      default).
+    signature: >-
+      listReachableProjectInterfacesForMcp(credential: string, currentProjectId: string,
+      targetProjectId: string): PublicInterfaceSummary[]
+    returns: PublicInterfaceSummary[]
+    params:
+      - name: credential
+        type: string
+      - name: currentProjectId
+        type: string
+      - name: targetProjectId
+        type: string
+  - name: listVisibleSurfaces
+    description: >-
+      Discovery catalog for one observer project: authenticate the credential, resolve the
+      observer's unit-graph visibility (open-within-tenant subtree, closed groups hidden, exposeTo
+      grants honored, cross-tenant grant-only), and return each visible target with its audience
+      distance and the redacted catalog summaries whose ceiling covers that distance. Also the
+      data-plane MCP tool sdd_landscape_list_visible_surfaces (currentProjectId = the BOUND
+      project). Reads are not audited.
+    signature: 'listVisibleSurfaces(credential: string, currentProjectId: string): VisibleSurfaceEntry[]'
+    returns: VisibleSurfaceEntry[]
+    params:
+      - name: credential
+        type: string
+      - name: currentProjectId
+        type: string
+  - name: getProjectSurfaceForMcp
+    description: >-
+      MCP tool workflow `sdd_landscape_get_project_surface` — the CONSUMER path of the surface
+      exchange: authenticate; when organization units exist, gate by unit-graph visibility
+      (invisible target is Forbidden) with the observer's audience distance as the ceiling; a
+      unit-less instance falls back to relations-only reachability with an instance-grade ceiling.
+      Generate the target's CONTRACT-GRADE snapshot at that ceiling (server as trusted intermediary)
+      and return it stamped origin exchanged — ready for `wairon surface import`.
+    signature: >-
+      getProjectSurfaceForMcp(credential: string, currentProjectId: string, targetProjectId:
+      string): SurfaceSnapshot
+    returns: SurfaceSnapshot
+    params:
+      - name: credential
+        type: string
+      - name: currentProjectId
+        type: string
+      - name: targetProjectId
+        type: string
+  - name: exportProjectSurface
+    description: >-
+      Generate-and-download a project's surface artifact on request — the diagram pattern (Swagger
+      UI SERVING is out of scope; this only renders the document). Requires landscape:manage scope
+      over the project (contract grade exposes full method contracts). Resolve and bind the target
+      root, generate the audience-filtered artifact (native snapshot YAML or OpenAPI 3.1 JSON), and
+      return the typed downloadable artifact.
+    signature: >-
+      exportProjectSurface(credential: string, projectId: string, format: string, maxAudience:
+      string): SurfaceArtifact
+    returns: SurfaceArtifact
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+      - name: format
+        type: string
+        description: native | openapi
+      - name: maxAudience
+        type: string
+status: complete
+createdAt: '2026-07-11T12:02:52.785Z'
+updatedAt: '2026-07-11T12:09:30.091Z'

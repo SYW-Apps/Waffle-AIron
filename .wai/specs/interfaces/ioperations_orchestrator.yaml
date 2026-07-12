@@ -1,0 +1,58 @@
+id: ioperations_orchestrator
+name: Operations Orchestrator Interface
+description: >-
+  Contract for hosted read-only operational insight: instance health, resource usage, and advisory
+  quota evaluation. All methods authenticate the caller and authorize operations read; none perform
+  writes.
+component: operations_orchestrator
+methods:
+  - name: getHealthReport
+    description: >-
+      Authenticate the caller, authorize operations read by an instance-wide OR unit-scoped
+      operations:read grant; results are filtered to the caller's scope. Resolve the caller's
+      operations:read scope, narrow the hosted project records to the in-scope projects (a
+      super-admin sees all), list both server-global pack tiers and read each in-scope project's
+      pack/profile references, then assemble a redacted instance health report (diagnostic checks —
+      including pack-shadowing and missing-pack-references — plus usage snapshots) via the
+      diagnostics specialist. Read-only; performs no writes and no audit.
+    signature: 'getHealthReport(credential: string, scope: string): InstanceHealthReport'
+    returns: InstanceHealthReport
+    params:
+      - name: credential
+        type: string
+      - name: scope
+        type: string
+        optional: true
+  - name: getUsage
+    description: >-
+      Authenticate the caller, authorize operations read by an instance-wide OR unit-scoped
+      operations:read grant; results are filtered to the caller's scope. Resolve the caller's
+      operations:read scope, narrow the hosted project records to the in-scope projects (a
+      super-admin sees all), and return redacted resource usage snapshots. Read-only.
+    signature: 'getUsage(credential: string, scope: string): ResourceUsageSnapshot[]'
+    returns: ResourceUsageSnapshot[]
+    params:
+      - name: credential
+        type: string
+      - name: scope
+        type: string
+        optional: true
+  - name: evaluateQuota
+    description: >-
+      Authenticate the caller, authorize operations read by an instance-wide OR unit-scoped
+      operations:read grant; results are filtered to the caller's scope. Resolve the caller's
+      operations:read scope, collect usage snapshots for the in-scope projects (a super-admin sees
+      all), and evaluate them against the advisory ResourceQuotaPolicy (resolved from host config,
+      secure default when unset), returning snapshots annotated with observe/warn advisory quota
+      messages. Advisory only — never blocks or throttles.
+    signature: 'evaluateQuota(credential: string, scope: string): ResourceUsageSnapshot[]'
+    returns: ResourceUsageSnapshot[]
+    params:
+      - name: credential
+        type: string
+      - name: scope
+        type: string
+        optional: true
+status: complete
+createdAt: '2026-07-09T09:10:20.273Z'
+updatedAt: '2026-07-10T17:18:45.456Z'

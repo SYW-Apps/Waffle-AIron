@@ -3,8 +3,8 @@ id: hosted_project_record
 name: HostedProjectRecord
 description: >-
   A registered hosted project: maps a project id to its fully-isolated .wai/ root under the data
-  directory. This is the isolation unit for request scoping — wholly separate from
-  subsystem/projectPath chaining.
+  directory. This is the isolation unit for request scoping, wholly separate from
+  subsystem/projectPath chaining, and may be owned or created by a user identity.
 subsystem: sdd_host
 fields:
   - name: id
@@ -23,6 +23,46 @@ fields:
     type: string
     description: ISO-8601 provisioning timestamp
     optional: false
+  - name: displayName
+    type: string
+    description: Human-readable project name for hosted UI, token administration, and audit views.
+    optional: true
+  - name: description
+    type: string
+    description: >-
+      Short hosted-instance description of the project; not a replacement for the project's own L0
+      spec.
+    optional: true
+  - name: createdBySubject
+    type: PrincipalSubject
+    description: Identity that provisioned the hosted project.
+    optional: true
+  - name: ownerSubject
+    type: PrincipalSubject
+    description: Primary responsible identity for project administration.
+    optional: true
+  - name: tags
+    type: string[]
+    description: Optional instance-level tags for filtering projects in hosted UI and audit views.
+    optional: true
+  - name: environment
+    type: string
+    description: Optional environment label such as "development", "staging", or "production".
+    optional: true
+  - name: ownerUnitId
+    type: string
+    description: Primary organization unit responsible for this hosted project, if one is assigned.
+    optional: true
+  - name: placementIds
+    type: string[]
+    description: ProjectPlacement ids that place or share this project across hosted organization units.
+    optional: true
+  - name: mcpServerDisplayName
+    type: string
+    description: >-
+      Optional MCP server display name for clients that cannot override server names. Defaults to
+      "Wairon - <displayName or id>" when omitted.
+    optional: true
 methods: []
 createdAt: '2026-07-04T12:44:18.571Z'
-updatedAt: '2026-07-04T12:44:18.579Z'
+updatedAt: '2026-07-08T22:04:21.517Z'

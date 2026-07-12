@@ -1,0 +1,24 @@
+id: iuser_store
+name: User Store Interface
+description: >-
+  Private store contract for hosted user records. The store owns state only; callers should use
+  user_repository unless they are the owned registry or index.
+component: user_store
+methods:
+  - name: load
+    description: Load all persisted hosted user records into the authoritative store representation.
+    signature: 'load(): HostedUserRecord[]'
+    returns: HostedUserRecord[]
+    params: []
+  - name: replaceAll
+    description: >-
+      Replace the store contents with the supplied complete user-record set after persistence has
+      succeeded.
+    signature: 'replaceAll(records: HostedUserRecord[]): void'
+    returns: void
+    params:
+      - name: records
+        type: HostedUserRecord[]
+status: complete
+createdAt: '2026-07-08T20:16:02.168Z'
+updatedAt: '2026-07-09T17:43:40.812Z'

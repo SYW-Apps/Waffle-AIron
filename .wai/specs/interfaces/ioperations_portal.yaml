@@ -1,0 +1,52 @@
+id: ioperations_portal
+name: Operations Portal Interface
+description: >-
+  Control-plane HTTP contract for read-only hosted operational insight: health, usage, and advisory
+  quota reporting. Exposure is governed by HostExposurePolicy.
+component: operations_portal
+methods:
+  - name: getHealthReport
+    description: Return a redacted operational health report.
+    signature: 'getHealthReport(credential: string, scope: string): InstanceHealthReport'
+    returns: InstanceHealthReport
+    params:
+      - name: credential
+        type: string
+      - name: scope
+        type: string
+        optional: true
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /operations/health
+  - name: getUsage
+    description: Return redacted resource usage snapshots.
+    signature: 'getUsage(credential: string, scope: string): ResourceUsageSnapshot[]'
+    returns: ResourceUsageSnapshot[]
+    params:
+      - name: credential
+        type: string
+      - name: scope
+        type: string
+        optional: true
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /operations/usage
+  - name: evaluateQuota
+    description: Return resource usage snapshots annotated with advisory (observe/warn) quota observations.
+    signature: 'evaluateQuota(credential: string, scope: string): ResourceUsageSnapshot[]'
+    returns: ResourceUsageSnapshot[]
+    params:
+      - name: credential
+        type: string
+      - name: scope
+        type: string
+        optional: true
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /operations/quota
+status: complete
+createdAt: '2026-07-09T09:10:34.177Z'
+updatedAt: '2026-07-10T11:27:29.221Z'

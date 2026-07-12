@@ -1,0 +1,37 @@
+id: isurface_store
+name: Surface Store Interface
+description: Authoritative in-memory snapshot state (ram-projection rebuilt from files).
+component: surface_store
+methods:
+  - name: put
+    description: Hold or replace a parsed snapshot keyed by producing project.
+    signature: 'put(snapshot: SurfaceSnapshot): void'
+    returns: void
+    params:
+      - name: snapshot
+        type: SurfaceSnapshot
+    effect: write
+  - name: get
+    description: Held snapshot by project name, or null.
+    signature: 'get(projectName: string): SurfaceSnapshot | null'
+    returns: SurfaceSnapshot | null
+    params:
+      - name: projectName
+        type: string
+    effect: read
+  - name: list
+    description: All held snapshots.
+    signature: 'list(): SurfaceSnapshot[]'
+    returns: SurfaceSnapshot[]
+    effect: read
+  - name: remove
+    description: Drop the held snapshot for a project.
+    signature: 'remove(projectName: string): boolean'
+    returns: boolean
+    params:
+      - name: projectName
+        type: string
+    effect: write
+status: complete
+createdAt: '2026-07-10T23:13:31.819Z'
+updatedAt: '2026-07-11T09:04:02.719Z'

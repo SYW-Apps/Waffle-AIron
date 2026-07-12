@@ -1,0 +1,15 @@
+id: user_index
+name: User Index
+description: >-
+  Read-path projection over hosted users, supporting lookup by Wairon user id, external subject,
+  status, and project grant without owning writes.
+subsystem: sdd_host
+componentType: Index
+owns: []
+dependsOn:
+  - user_store
+lint:
+  allow: []
+status: complete
+createdAt: '2026-07-08T20:14:40.372Z'
+updatedAt: '2026-07-10T08:19:21.803Z'

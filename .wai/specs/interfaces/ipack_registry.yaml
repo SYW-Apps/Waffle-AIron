@@ -2,20 +2,29 @@ id: ipack_registry
 name: Pack Registry Interface
 description: >-
   Contract for the hosted extension-pack store: list, install (declarative-only), and remove packs
-  at server-global scope and at a bound project's scope. Installs validate the content as a
-  declarative pack (profiles + language/platform tables) and refuse programmatic/code packs; probing
-  never throws for a bad pack (the error rides on its descriptor).
+  at server-global scope and at a bound project's scope, plus a read of a project's declared
+  pack/profile references for operational drift checks. Server-global discovery merges two tiers —
+  the immutable image-layer directory (WAIRON_IMAGE_PACKS_DIR) and the mutable instance directory
+  (WAIRON_PACKS_DIR) — with the instance pack winning on a name collision and the shadowed image
+  pack surfaced as drift; install and remove touch only the mutable instance tier. Installs validate
+  the content as a declarative pack (profiles + language/platform tables) and refuse
+  programmatic/code packs; probing never throws for a bad pack (the error rides on its descriptor).
 component: pack_registry
 methods:
   - name: listGlobalPacks
-    description: Probe every pack in the server-global packs directory.
+    description: >-
+      Probe every pack across both server-global tiers — the immutable image-layer directory and the
+      mutable instance directory — and return their union as descriptors, each tagged with its tier;
+      an image pack shadowed by a same-named instance pack is marked shadowed (the instance copy is
+      the effective one), so drift is visible in the listing.
     signature: 'listGlobalPacks(): PackDescriptor[]'
     returns: PackDescriptor[]
     params: []
   - name: installGlobalPack
     description: >-
-      Validate the content as a declarative pack and write it as <name>.yaml into the server-global
-      packs directory; reject programmatic/code content. Returns its probe.
+      Validate the content as a declarative pack and write it as <name>.yaml into the MUTABLE
+      instance packs directory (WAIRON_PACKS_DIR); the immutable image-layer directory is never
+      written. Reject programmatic/code content. Returns its probe (tier 'instance').
     signature: 'installGlobalPack(name: string, content: string): PackDescriptor'
     returns: PackDescriptor
     params:
@@ -26,7 +35,11 @@ methods:
         type: string
         description: Declarative pack YAML text
   - name: removeGlobalPack
-    description: Delete the named pack from the server-global packs directory.
+    description: >-
+      Delete the named pack from the MUTABLE instance packs directory; image-layer packs are
+      immutable and cannot be removed here (removing a pack that exists only in the image tier is an
+      error). Removing an instance pack that shadowed a same-named image pack re-exposes the image
+      pack. Removal intentionally invalidates projects that still reference the pack.
     signature: 'removeGlobalPack(name: string): void'
     returns: void
     params:
@@ -60,6 +73,18 @@ methods:
     params:
       - name: name
         type: string
+  - name: readProjectReferences
+    description: >-
+      Read a given hosted project's declared pack/profile references (its registered extension packs
+      unioned with the required/default packs and the profile ids recorded in its profile selection)
+      from its .wai/project.yaml, for operational drift checks. Never throws for a missing/empty
+      config; returns a ProjectPackReference carrying no filesystem paths.
+    signature: 'readProjectReferences(rootPath: string): ProjectPackReference'
+    returns: ProjectPackReference
+    params:
+      - name: rootPath
+        type: string
+        description: Absolute filesystem root of the project's isolated .wai/ tree.
 status: complete
 createdAt: '2026-07-04T18:42:41.273Z'
-updatedAt: '2026-07-04T18:47:58.708Z'
+updatedAt: '2026-07-10T12:36:30.695Z'

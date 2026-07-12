@@ -66,6 +66,28 @@ export function revokeCredential(dataDir: string, id: string): void {
   save(dataDir, load(dataDir).filter((r) => r.id !== id));
 }
 
+/**
+ * Revoke (stamp revokedAt with the current time) every non-revoked credential
+ * whose ownerSubject.userId matches ownerUserId, persist the store once, and
+ * return the number of records newly revoked. Idempotent — records already
+ * carrying a revokedAt (and records without an owner subject) are skipped and not
+ * counted; an owner with no active credentials revokes nothing and returns 0.
+ * Backs the identity deactivation flow so authenticate() rejects the user's tokens.
+ */
+export function revokeAllForOwner(dataDir: string, ownerUserId: string): number {
+  const records = load(dataDir);
+  const now = new Date().toISOString();
+  let revoked = 0;
+  for (const rec of records) {
+    if (rec.ownerSubject?.userId === ownerUserId && !rec.revokedAt) {
+      rec.revokedAt = now;
+      revoked += 1;
+    }
+  }
+  if (revoked > 0) save(dataDir, records);
+  return revoked;
+}
+
 /** List credentials authorized for a project (or all, for the wildcard). */
 export function listCredentials(dataDir: string, project: string): ApiKeyRecord[] {
   return load(dataDir).filter(

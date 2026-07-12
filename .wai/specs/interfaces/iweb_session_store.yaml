@@ -1,0 +1,26 @@
+id: iweb_session_store
+name: Web Session Store Interface
+description: >-
+  Private store contract for browser sessions. The store owns state only; callers should use
+  web_session_repository unless they are the owned registry or index.
+component: web_session_store
+methods:
+  - name: load
+    description: >-
+      Load all persisted browser sessions into the authoritative store representation and return
+      them.
+    signature: 'load(): WebSession[]'
+    returns: WebSession[]
+    params: []
+  - name: replaceAll
+    description: >-
+      Replace the store contents with the supplied complete session set after persistence has
+      succeeded.
+    signature: 'replaceAll(sessions: WebSession[]): void'
+    returns: void
+    params:
+      - name: sessions
+        type: WebSession[]
+status: complete
+createdAt: '2026-07-11T11:32:40.618Z'
+updatedAt: '2026-07-11T11:44:30.722Z'

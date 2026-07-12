@@ -1,0 +1,37 @@
+kind: value-object
+id: project_init_request
+name: ProjectInitRequest
+description: >-
+  Hosted project initialization request used by self-service, admin UI, CLI, or MCP-assisted setup.
+  It captures project identity plus explicit profile selection without exposing raw filesystem
+  paths.
+fields:
+  - name: id
+    type: string
+    description: URL-safe hosted project id.
+    optional: false
+  - name: displayName
+    type: string
+    description: Human-readable project name.
+    optional: true
+  - name: description
+    type: string
+    description: Hosted-instance project description.
+    optional: true
+  - name: ownerUnitId
+    type: string
+    description: Optional organization unit that owns the project.
+    optional: true
+  - name: environment
+    type: string
+    description: Optional environment label such as "development", "staging", or "production".
+    optional: true
+  - name: profileSelection
+    type: ProjectProfileSelection
+    description: >-
+      Explicit profile and pack selection for the project. Required when instance policy requires
+      profile selection.
+    optional: true
+methods: []
+createdAt: '2026-07-08T21:58:47.944Z'
+updatedAt: '2026-07-08T21:58:47.971Z'

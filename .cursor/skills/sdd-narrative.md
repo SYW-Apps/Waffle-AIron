@@ -30,6 +30,7 @@ You must read, respect, and update `.wai/phased_design.md` (specifically Stage 5
    - Step types:
      - `local`: internal logic (calculations, state mapping).
      - `call`: call to another component (`targetComponent` + `targetMethod`).
+     - `dispatch`: a capability routed through a generic-dispatch Portal's dispatch table (`targetComponent` = the Portal, `capability` = the routed name). Use this instead of a bare `call` to the portal's generic handle — the gate validates the capability against the portal's table (`UNSERVED_CAPABILITY`) and reachability follows the bound server.
      - `branch`: if/else — `condition` + `onFalseStep` (true continues at `onTrueStep` or the next step). Chain else-ifs by targeting another branch step.
      - `switch`: `on` + `cases: [{value, step}]` + optional `defaultStep`.
      - `loop`: header step; body = next step through `endStep`. `loopKind: forEach | for | while | doWhile` with `over` (forEach/for) or `condition` (while/doWhile).

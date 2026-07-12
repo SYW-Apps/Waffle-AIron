@@ -1,6 +1,11 @@
 id: core_orchestrator_impl
 name: Core Orchestrator Implementation
-description: Concrete implementation forwarding to registry loader.
+description: >-
+  Concrete implementation of the Core Orchestrator: spec tree read/write workflows in
+  src/core/specs.ts. Provisioning, chained-subsystem, lock, state-hash, and diagram forwarding
+  methods are realized in sibling core modules (provision.ts, lockfile.ts, statehash.ts, diagram.ts)
+  republished by the core portal barrel — their structural-conformance method checks are dialed off
+  under the single-sourcePath Level 1 model; Level 2 dependency conformance will cover the edges.
 contract: icore_orchestrator
 sourcePath: src/core/specs.ts
 methods:
@@ -115,6 +120,7 @@ methods:
       - stepNumber: 3
         description: Write the default project.yaml config at the bound project root
         type: local
+    conformance: 'off'
   - name: computeStateId
     narrative:
       - stepNumber: 1
@@ -122,6 +128,7 @@ methods:
         type: call
         targetComponent: state_hash_specialist
         targetMethod: hashSpecTree
+    conformance: 'off'
   - name: readLockRecord
     narrative:
       - stepNumber: 1
@@ -129,6 +136,7 @@ methods:
         type: call
         targetComponent: lock_registry
         targetMethod: read
+    conformance: 'off'
   - name: writeLockRecord
     narrative:
       - stepNumber: 1
@@ -136,6 +144,7 @@ methods:
         type: call
         targetComponent: lock_registry
         targetMethod: write
+    conformance: 'off'
   - name: promoteAllComplete
     narrative:
       - stepNumber: 1
@@ -202,6 +211,7 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: saveImplementationSpec
+    conformance: 'off'
   - name: renderDiagram
     narrative:
       - stepNumber: 1
@@ -209,6 +219,7 @@ methods:
         type: call
         targetComponent: diagram_specialist
         targetMethod: renderDiagram
+    conformance: 'off'
   - name: createChainedSubsystem
     narrative:
       - stepNumber: 1
@@ -231,21 +242,35 @@ methods:
           subsystem.projectPath
         type: local
       - stepNumber: 5
+        description: >-
+          Containment guard: reject a projectPath that escapes the owning project. The child project
+          directory must resolve to a location strictly within the bound project root
+        type: branch
+        condition: >-
+          the resolved child project directory is not contained within the bound project root (an
+          absolute path or a ../-escaping projectPath)
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Reject a projectPath that resolves outside the project root
+        type: throw
+        error: projectPath must resolve within the project root
+      - stepNumber: 7
         description: Skip scaffolding when the child directory is already an initialized wairon project
         type: branch
         condition: the child directory already contains an initialized wairon project
-        onTrueStep: 7
-        onFalseStep: 6
-      - stepNumber: 6
+        onTrueStep: 9
+        onFalseStep: 8
+      - stepNumber: 8
         description: >-
           Scope the project root to the child directory, provision an isolated child project named
           projectName (default project.yaml + bootstrap L0 system spec), then restore the parent
           root scope
         type: local
-      - stepNumber: 7
+      - stepNumber: 9
         description: Chained subsystem wired and child project ensured
         type: return
         outcome: chained subsystem created
+    conformance: 'off'
   - name: moveSubsystemProject
     narrative:
       - stepNumber: 1
@@ -273,6 +298,7 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: saveSubsystemSpec
+    conformance: 'off'
   - name: externalizeSubsystem
     narrative:
       - stepNumber: 1
@@ -321,6 +347,7 @@ methods:
         description: Subsystem externalized into a standalone subproject
         type: return
         outcome: externalized
+    conformance: 'off'
   - name: internalizeSubsystem
     narrative:
       - stepNumber: 1
@@ -372,6 +399,36 @@ methods:
         description: Subsystem internalized back into the parent tree
         type: return
         outcome: internalized
+    conformance: 'off'
+  - name: loadTypeSpecs
+    narrative:
+      - stepNumber: 1
+        description: Call loadTypeSpecs on spec loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpecs
+  - name: dryRunSerializeSpecs
+    narrative:
+      - stepNumber: 1
+        description: Delegate the in-memory round-trip serialization check to spec loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: dryRunSerializeSpecs
+  - name: buildProjectGraph
+    narrative:
+      - stepNumber: 1
+        description: Forward to the diagram specialist's pure graph projection
+        type: call
+        targetComponent: diagram_specialist
+        targetMethod: buildGraphModel
+    detail: calls-only
+lint:
+  allow:
+    - code: UNREALIZED_DEPENDENCY
+      reason: >-
+        The lock/state-hash forwarding methods are realized in sibling core modules (provision.ts,
+        lockfile.ts, statehash.ts) — specs.ts itself never imports them; same split-file facade
+        documented on the structural-conformance per-method offs.
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-05T18:45:17.703Z'
+updatedAt: '2026-07-11T20:30:14.728Z'

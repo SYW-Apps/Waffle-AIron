@@ -6,8 +6,10 @@ import {
   ImplementationSpec,
   TypeSpec,
   RulesConfig,
+  SurfaceSnapshot,
 } from '../../models/index.js';
 import type { ProfileDef, LanguagePackDef } from '../extensions.js';
+import type { CodeModel } from '../source-analysis.js';
 
 // ---------------------------------------------------------------------------
 // Rule registry contracts
@@ -65,9 +67,25 @@ export interface RuleContext {
   interfaceIds: Set<string>;
   /** Per-subsystem published component ids (its public surface). */
   publicSet: Map<string, Set<string>>;
+  /** Interfaces grouped by owning component id — the shared read path for a component's contract methods (rules and the reachability walker must agree on this enumeration). */
+  interfacesByComponent: Map<string, InterfaceSpec[]>;
+  /** Stored surface snapshots (.wai/surfaces/) — declared contracts that unresolved cross-tree/remote references validate against. */
+  surfaceSnapshots: SurfaceSnapshot[];
+  /**
+   * The pure source-code model (per-sourcePath declaration/export/import/
+   * anchor facts) built by the source analysis adapter — what the
+   * structural-conformance family checks realization against. Empty when the
+   * context was built without one (the family then only reports missing
+   * sourcePaths, never file-level findings).
+   */
+  codeModel: CodeModel;
+  /** Implementations grouped by their contract interface id. */
+  implementationsByContract: Map<string, ImplementationSpec[]>;
 
   /** True when the spec (or its ancestors) is in draft/design status. */
   isComponentDraft(compId: string): boolean;
+  /** True when the implementation, its contract, or the contract's component is in draft/design status — the shared draft recipe for implementation-scoped findings. */
+  isImplementationDraft(impl: ImplementationSpec): boolean;
   /** The architectural profile governing a component (subsystem override, else project type). */
   getComponentProfile(compId: string): ArchProfile;
   /** Whether a type reference resolves against builtins, generics, or defined types. */

@@ -1,0 +1,42 @@
+id: skills_resource_specialist_impl
+name: Skills Resource Specialist Implementation
+description: >-
+  Resolves the four built-in SDD skills into MCP-safe descriptors and reads their markdown content
+  from Wairon's packaged skill templates (the same templates skills_exporter copies to the
+  filesystem).
+contract: iskills_resource_specialist
+sourcePath: src/core/skills.ts
+methods:
+  - name: listSkillResources
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Enumerate Wairon's four packaged built-in SDD skill templates: sdd-architect, sdd-auditor,
+          sdd-implement, sdd-narrative.
+        type: local
+      - stepNumber: 2
+        description: >-
+          Build one SkillResourceDescriptor per skill (id, name, description, version, resourceUri,
+          defaultForHostedMcp), mirroring the templates skills_exporter copies to the filesystem.
+        type: local
+      - stepNumber: 3
+        description: Return the descriptor list.
+        type: return
+        outcome: skill resource descriptors
+    detail: full
+  - name: readSkillResource
+    narrative:
+      - stepNumber: 1
+        description: Resolve the requested resourceId to its packaged skill template markdown file.
+        type: local
+      - stepNumber: 2
+        description: Read the skill template's markdown content from Wairon's packaged templates.
+        type: local
+      - stepNumber: 3
+        description: Return the skill content as text.
+        type: return
+        outcome: skill markdown content
+    detail: full
+status: complete
+createdAt: '2026-07-10T12:20:56.185Z'
+updatedAt: '2026-07-10T12:24:00.876Z'

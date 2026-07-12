@@ -9,11 +9,13 @@ methods:
     intent: >-
       Reads .wai/lock.json for the bound project and returns the parsed LockRecord, or null when the
       file is absent or unreadable.
+    symbol: readLockRecord
   - name: write
     narrative: []
     intent: >-
       Serializes the LockRecord and writes it atomically to .wai/lock.json for the bound project,
       overwriting any prior record.
+    symbol: writeLockRecord
 status: complete
 createdAt: '2026-07-04T12:53:38.524Z'
-updatedAt: '2026-07-04T13:06:23.012Z'
+updatedAt: '2026-07-11T19:14:22.567Z'

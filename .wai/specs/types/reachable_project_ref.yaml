@@ -1,0 +1,29 @@
+kind: value-object
+id: reachable_project_ref
+name: ReachableProjectRef
+description: >-
+  Minimal MCP-safe reference to another hosted project reachable from the caller's current project
+  through an active cross-project relation. This deliberately exposes only routing-safe metadata,
+  not private specs, organization placement, root paths, or full landscape details.
+fields:
+  - name: projectId
+    type: string
+    description: Reachable hosted project id.
+    optional: false
+  - name: relationIds
+    type: string[]
+    description: Cross-project relation ids that make the target reachable from the current project.
+    optional: false
+  - name: relationKinds
+    type: string[]
+    description: Relation kinds visible to the caller, such as "consumes" or "depends_on".
+    optional: false
+  - name: publicInterfaceIds
+    type: string[]
+    description: >-
+      Target system public interface ids reachable through those relations. The caller must request
+      interface details separately.
+    optional: false
+methods: []
+createdAt: '2026-07-08T21:55:00.785Z'
+updatedAt: '2026-07-08T21:55:00.794Z'

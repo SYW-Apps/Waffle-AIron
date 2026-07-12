@@ -1,0 +1,44 @@
+id: policy_registry_impl
+name: Policy Registry Implementation
+description: >-
+  Write path for the active hosted instance pack/profile policy and the identity-provider (SSO)
+  configuration collection: stamp updatedAt server-side, persist the affected record/collection
+  durably, and refresh the store. Owns no authorization; pack-policy writes own no updatedBy
+  stamping.
+contract: ipolicy_registry
+sourcePath: src/server/policy.ts
+methods:
+  - name: setPackPolicy
+    narrative: []
+    intent: >-
+      Stamp updatedAt to the current server time on the supplied policy — preserving the
+      orchestrator-supplied updatedBy and the caller's pack/profile lists and enforcement posture
+      verbatim — then persist it as the single active record via write-temp-then-rename, refresh the
+      store with replaceActive, and return the stored policy. A persistence failure leaves the
+      previous record intact and surfaces as a storage error. Authorization is enforced by the
+      orchestrator, not here; the registry owns only server-side stamping and durable replacement of
+      the one active record.
+  - name: upsertIdentityProvider
+    narrative: []
+    intent: >-
+      Stamp updatedAt to the current server time on the supplied identity-provider config —
+      preserving its id, provider metadata, and clientSecretRef verbatim — then insert or replace it
+      by id within the identity-provider collection, persist the whole collection as
+      identity-providers.json via write-temp-then-rename, refresh the store's in-memory collection,
+      and return the stored config. The config carries only a clientSecretRef into the host secret
+      mechanism; the registry writes the reference and never a raw client secret. A persistence
+      failure leaves the previous collection intact and surfaces as a storage error.
+    symbol: upsertIdentityProviderRecord
+  - name: removeIdentityProvider
+    narrative: []
+    intent: >-
+      Reject with a not-found error when no identity-provider configuration in the collection has
+      the supplied id; otherwise drop it from the collection, persist the reduced collection as
+      identity-providers.json via write-temp-then-rename, refresh the store's in-memory collection,
+      and return once removed. A persistence failure leaves the previous collection intact and
+      surfaces as a storage error. Authorization is enforced by the orchestrator, not here.
+    symbol: removeIdentityProviderRecord
+detail: intent
+status: complete
+createdAt: '2026-07-09T20:47:44.803Z'
+updatedAt: '2026-07-11T19:14:22.675Z'

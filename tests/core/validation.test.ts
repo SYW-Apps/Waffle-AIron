@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateRegistry, validateProjectConfig, validateSddTree } from '../../src/core/validation.js';
+import { validateRegistry, validateProjectConfig, validateSddTree, validateAsComplete } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { createEmptyRegistry } from '../../src/models/registry.js';
 import { createAgentRecord } from '../../src/models/agent.js';
@@ -238,6 +238,11 @@ methods:
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);
+
+    // The clean tree also honors structural conformance: the claimed
+    // sourcePath exists and realizes the contract method.
+    fs.mkdirSync(path.join(proj.tempDir, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(proj.tempDir, 'src', 'comp-a.ts'), 'export function doSomething(): void {}\n');
 
     proj.activate();
     try {
@@ -806,6 +811,73 @@ updatedAt: '2026-06-10T22:00:00Z'
       expect(res.valid).toBe(true);
       expect(res.issues.some(i => i.code === 'MISSING_ENDPOINT' && i.severity === 'warning')).toBe(true);
       expect(res.issues.some(i => i.code === 'DRAFT_COMPONENT_WARNING')).toBe(true);
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('marks UNUSED_COMPONENT/DRAFT_COMPONENT_WARNING with draftContext for draft specs but not complete ones', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: Subsystem A description
+parentSystem: TestSystem
+status: complete
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    // A draft Store — unused (no portal/observer/narrative reaches it).
+    proj.writeSpec('component', 'draft-store', `
+schemaVersion: 1.0.0
+id: draft-store
+name: DraftStore
+description: A draft, unused store
+subsystem: sub-a
+componentType: Store
+status: draft
+dependsOn: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    // A complete Store — also unused, but its unusedness is a real gap.
+    proj.writeSpec('component', 'complete-store', `
+schemaVersion: 1.0.0
+id: complete-store
+name: CompleteStore
+description: A complete, unused store
+subsystem: sub-a
+componentType: Store
+status: complete
+dependsOn: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+    proj.activate();
+    try {
+      const res = validateSddTree();
+
+      const draftUnused = res.issues.find(i => i.code === 'UNUSED_COMPONENT' && i.specId === 'draft-store');
+      const completeUnused = res.issues.find(i => i.code === 'UNUSED_COMPONENT' && i.specId === 'complete-store');
+      expect(draftUnused?.draftContext).toBe(true);
+      // Complete component: the flag is absent (falsy) so the --ci gate keeps it fatal.
+      expect(completeUnused).toBeDefined();
+      expect(completeUnused?.draftContext).toBeFalsy();
+
+      // The draft warning that exists purely to surface the draft is flagged too.
+      const draftWarn = res.issues.find(i => i.code === 'DRAFT_COMPONENT_WARNING' && i.specId === 'draft-store');
+      expect(draftWarn?.draftContext).toBe(true);
+      // The complete component never raises a draft warning.
+      expect(res.issues.some(i => i.code === 'DRAFT_COMPONENT_WARNING' && i.specId === 'complete-store')).toBe(false);
     } finally {
       proj.cleanup();
     }
@@ -2421,6 +2493,88 @@ updatedAt: '2026-06-10T22:00:00Z'
       expect(undef.some(i => i.message.includes('WeirdProseToken'))).toBe(false);
       // And LedgerEntry counts as referenced (no UNUSED_TYPE for it)
       expect(res.issues.find(i => i.code === 'UNUSED_TYPE' && i.specId === 'ledger-entry')).toBeUndefined();
+    } finally {
+      proj.cleanup();
+    }
+  });
+
+  it('validateAsComplete genuinely flips draft statuses for the rules (regression: the flip was lost to the cache clear)', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: Subsystem A description
+parentSystem: TestSystem
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('component', 'comp-a', `
+schemaVersion: 1.0.0
+id: comp-a
+name: ComponentA
+description: Component A description
+subsystem: sub-a
+componentType: Observer
+dependsOn: []
+status: draft
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('interface', 'icomp-a', `
+schemaVersion: 1.0.0
+id: icomp-a
+name: InterfaceA
+description: Interface A description
+component: comp-a
+methods:
+  - name: doSomething
+    description: Do something
+    signature: "doSomething(): Promise<void>"
+    returns: "Promise<void>"
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('implementation', 'impl-a', `
+schemaVersion: 1.0.0
+id: impl-a
+name: ImplementationA
+description: Implementation A description
+contract: icomp-a
+sourcePath: src/comp-a.ts
+methods:
+  - name: doSomething
+    narrative:
+      - stepNumber: 1
+        description: Local work step
+        type: local
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+
+    proj.activate();
+    try {
+      // A normal validate sees the draft and warns about it.
+      const normal = validateSddTree();
+      expect(normal.issues.some(i => i.code === 'DRAFT_COMPONENT_WARNING' && i.specId === 'comp-a')).toBe(true);
+
+      // The as-complete gate must see NO drafts. Validation starts by
+      // invalidating the spec cache, so a flip applied to objects loaded
+      // beforehand is silently discarded — the regression this guards: the
+      // draft warning would survive and lock would gate on nothing extra.
+      const asComplete = validateAsComplete();
+      expect(asComplete.issues.some(i => i.code === 'DRAFT_COMPONENT_WARNING')).toBe(false);
+
+      // And the flip must not leak into the shared cache afterwards.
+      const after = validateSddTree();
+      expect(after.issues.some(i => i.code === 'DRAFT_COMPONENT_WARNING' && i.specId === 'comp-a')).toBe(true);
     } finally {
       proj.cleanup();
     }

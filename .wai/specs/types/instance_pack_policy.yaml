@@ -1,0 +1,56 @@
+kind: entity
+id: instance_pack_policy
+name: InstancePackPolicy
+description: >-
+  Hosted-instance policy controlling which extension packs and profiles are available, defaulted,
+  required, or blocked for projects. This policy does not install executable code; it governs
+  declarative pack/profile enforcement around project initialization and reconciliation.
+subsystem: sdd_host
+fields:
+  - name: id
+    type: string
+    description: Stable policy id, usually "default" for the hosted instance.
+    optional: false
+  - name: requiredGlobalPacks
+    type: string[]
+    description: Server-global declarative packs that must be active for every project using global packs.
+    optional: false
+  - name: defaultProjectPacks
+    type: string[]
+    description: >-
+      Declarative project packs applied to newly initialized projects unless policy or caller opts
+      out.
+    optional: false
+  - name: allowedProfileIds
+    type: string[]
+    description: >-
+      Profile ids users may select during project initialization. Empty means any profile
+      contributed by allowed packs is selectable.
+    optional: true
+  - name: requiredProfileIds
+    type: string[]
+    description: Profile ids automatically applied to every new project.
+    optional: true
+  - name: blockedPackNames
+    type: string[]
+    description: Pack names that must not be installed or activated through hosted project workflows.
+    optional: true
+  - name: requireProfileSelection
+    type: boolean
+    description: Whether hosted project initialization must ask for and record an explicit profile selection.
+    optional: false
+  - name: enforcementMode
+    type: string
+    description: 'Enforcement posture: "warn", "block", or "auto_reconcile".'
+    optional: false
+  - name: updatedAt
+    type: string
+    description: ISO-8601 policy update timestamp.
+    optional: false
+  - name: updatedBy
+    type: PrincipalSubject
+    description: Identity that last changed the policy.
+    optional: true
+methods: []
+createdAt: '2026-07-08T21:58:41.777Z'
+updatedAt: '2026-07-08T21:58:41.805Z'

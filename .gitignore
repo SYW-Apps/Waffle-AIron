@@ -30,3 +30,5 @@ wairon.exe
 # Rust
 .cargo
 target/
+
+STATE.md

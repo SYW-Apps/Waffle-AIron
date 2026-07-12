@@ -1,0 +1,15 @@
+id: audit_index
+name: Audit Index
+description: >-
+  Read-path projection over hosted audit events for admin-only filtering by actor, token id, project
+  id, category, action, outcome, level, and time range.
+subsystem: sdd_host
+componentType: Index
+owns: []
+dependsOn:
+  - audit_store
+lint:
+  allow: []
+status: complete
+createdAt: '2026-07-08T20:14:55.863Z'
+updatedAt: '2026-07-10T08:19:23.458Z'

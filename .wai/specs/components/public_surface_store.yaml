@@ -1,0 +1,12 @@
+id: public_surface_store
+name: Public Surface Store
+description: >-
+  Authoritative in-memory representation of exported project public-surface snapshots loaded from
+  the hosted data root. It stores redacted snapshots only, never full private project specs.
+subsystem: sdd_host
+componentType: Store
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-07-08T21:12:36.807Z'
+updatedAt: '2026-07-09T22:13:07.500Z'

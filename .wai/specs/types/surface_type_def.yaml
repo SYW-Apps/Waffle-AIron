@@ -1,0 +1,30 @@
+kind: value-object
+id: surface_type_def
+name: SurfaceTypeDef
+description: >-
+  A self-contained type definition embedded in a surface snapshot — the member of the transitive
+  type closure of the exported contracts, so a consumer can resolve every param/return/field
+  reference without access to the producing project's tree.
+fields:
+  - name: id
+    type: string
+    description: Type id as referenced by the exported signatures.
+    optional: false
+    key: primary
+  - name: name
+    type: string
+    description: Human-readable type name.
+    optional: false
+  - name: kind
+    type: string
+    description: entity | value-object.
+    optional: false
+  - name: fields
+    type: object[]
+    description: >-
+      Data fields (name, type, optional, description) — types reference each other within the
+      closure.
+    optional: false
+methods: []
+createdAt: '2026-07-10T23:11:32.022Z'
+updatedAt: '2026-07-10T23:11:32.135Z'

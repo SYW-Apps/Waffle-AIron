@@ -1,0 +1,56 @@
+kind: value-object
+id: type_spec
+name: TypeSpec
+description: L3 data type specification for entities and value objects loaded from the types spec tree.
+fields:
+  - name: kind
+    type: string
+    description: 'Type category: entity or value-object'
+    optional: false
+  - name: id
+    type: string
+    description: Stable type identifier
+    optional: false
+  - name: name
+    type: string
+    description: Human-readable type name
+    optional: false
+  - name: description
+    type: string
+    description: Optional type description
+    optional: true
+  - name: subsystem
+    type: string
+    description: Owning subsystem id for entity types
+    optional: true
+  - name: group
+    type: string
+    description: Optional logical group id
+    optional: true
+  - name: fields
+    type: object[]
+    description: Data fields declared by this type
+    optional: false
+  - name: methods
+    type: object[]
+    description: Pure intrinsic methods declared by this type
+    optional: false
+  - name: componentClass
+    type: string
+    description: Optional component id that implements or owns this logical entity
+    optional: true
+  - name: database
+    type: string
+    description: Optional database id for table-schema types
+    optional: true
+  - name: table
+    type: string
+    description: Optional table name for database schema types
+    optional: true
+  - name: linkedEntity
+    type: string
+    description: Optional logical entity id represented by a table-schema type
+    optional: true
+methods: []
+createdAt: '2026-07-06T21:22:25.911Z'
+updatedAt: '2026-07-06T21:22:25.916Z'

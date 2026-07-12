@@ -1,0 +1,52 @@
+id: iorganization_repository
+name: Organization Repository Interface
+description: Facade contract for hosted organization units and project placements.
+component: organization_repository
+methods:
+  - name: upsertUnit
+    description: Create or update one organization unit.
+    signature: 'upsertUnit(unit: OrganizationUnitRecord): OrganizationUnitRecord'
+    returns: OrganizationUnitRecord
+    params:
+      - name: unit
+        type: OrganizationUnitRecord
+    guarantees:
+      - atomic
+  - name: listUnits
+    description: List organization units, optionally below a parent unit.
+    signature: 'listUnits(parentId: string): OrganizationUnitRecord[]'
+    returns: OrganizationUnitRecord[]
+    params:
+      - name: parentId
+        type: string
+        optional: true
+  - name: placeProject
+    description: Create or update a project placement inside an organization unit.
+    signature: 'placeProject(placement: ProjectPlacement): ProjectPlacement'
+    returns: ProjectPlacement
+    params:
+      - name: placement
+        type: ProjectPlacement
+    guarantees:
+      - atomic
+  - name: listPlacements
+    description: List project placements by project id or organization unit id.
+    signature: 'listPlacements(projectId: string, unitId: string): ProjectPlacement[]'
+    returns: ProjectPlacement[]
+    params:
+      - name: projectId
+        type: string
+        optional: true
+      - name: unitId
+        type: string
+        optional: true
+  - name: getUnit
+    description: Return one organization unit by id, or null when absent.
+    signature: 'getUnit(id: string): OrganizationUnitRecord | null'
+    returns: OrganizationUnitRecord | null
+    params:
+      - name: id
+        type: string
+status: complete
+createdAt: '2026-07-08T21:13:09.955Z'
+updatedAt: '2026-07-09T22:17:20.540Z'

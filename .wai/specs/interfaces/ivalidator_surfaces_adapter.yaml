@@ -1,0 +1,12 @@
+id: ivalidator_surfaces_adapter
+name: Validator Surfaces Adapter Interface
+description: Surface-snapshot loading for validation-time resolution of cross-tree and remote references.
+component: validator_surfaces_adapter
+methods:
+  - name: loadSurfaceSnapshots
+    description: All surface snapshots available to this project, via the surface portal.
+    signature: 'loadSurfaceSnapshots(): SurfaceSnapshot[]'
+    returns: SurfaceSnapshot[]
+status: complete
+createdAt: '2026-07-10T23:14:09.299Z'
+updatedAt: '2026-07-11T09:04:02.783Z'

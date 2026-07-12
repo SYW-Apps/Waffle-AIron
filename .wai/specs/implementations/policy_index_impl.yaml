@@ -1,0 +1,26 @@
+id: policy_index_impl
+name: Policy Index Implementation
+description: >-
+  Read-path projection over the policy store's single active record. Shares the store's reference;
+  never mutates, never goes stale, never fails on reads.
+contract: ipolicy_index
+sourcePath: src/server/policy.ts
+methods:
+  - name: getPackPolicy
+    narrative: []
+    intent: >-
+      Return the store's active instance pack/profile policy, or null when none has ever been
+      configured. Read-only over the store's current reference; never fails on lookups — absence is
+      a null result, not an error, which the orchestrator resolves to the documented permissive
+      default.
+  - name: listIdentityProviders
+    narrative: []
+    intent: >-
+      Return every configured identity provider from the store's current in-memory collection, or an
+      empty list when none has been configured. Read-only over the store's reference; never fails on
+      lookups — absence is an empty list, not an error.
+    symbol: listIdentityProviderRecords
+detail: intent
+status: complete
+createdAt: '2026-07-09T20:47:47.802Z'
+updatedAt: '2026-07-11T19:14:22.639Z'

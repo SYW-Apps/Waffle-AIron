@@ -7,6 +7,7 @@ import { readYamlFile } from '../utils/yaml.js';
 import { getProjectRoot } from '../utils/fs.js';
 import { loadProjectConfig } from '../config/loader.js';
 import type { SddRule } from './rules/types.js';
+import { RulesConfigSchema } from '../models/project.js';
 
 // ---------------------------------------------------------------------------
 // Extension packs — wairon's plugin surface.
@@ -40,6 +41,7 @@ export const ProfileDefSchema = z.object({
   family: z.enum(['backend-like', 'frontend-like', 'neutral']).default('neutral'),
   forbiddenStereotypes: z.array(z.object({ types: z.array(z.string()).min(1), reason: z.string().min(1) })).default([]),
   discouragedStereotypes: z.array(z.object({ types: z.array(z.string()).min(1), reason: z.string().min(1) })).default([]),
+  rules: RulesConfigSchema.partial().optional(),
 });
 export type ProfileDef = z.infer<typeof ProfileDefSchema>;
 

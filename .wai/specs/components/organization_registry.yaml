@@ -1,0 +1,13 @@
+id: organization_registry
+name: Organization Registry
+description: >-
+  Write-path component for hosted organization units and project placements: create, update,
+  archive, and assign projects to units. It never modifies project spec trees.
+subsystem: sdd_host
+componentType: Registry
+owns: []
+dependsOn:
+  - organization_store
+status: complete
+createdAt: '2026-07-08T21:12:05.617Z'
+updatedAt: '2026-07-09T22:13:01.019Z'

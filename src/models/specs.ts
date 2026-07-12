@@ -26,12 +26,78 @@ export const RequirementItemSchema = z.union([
 ]);
 export type RequirementItem = z.infer<typeof RequirementItemSchema>;
 
+export const DatabaseSpecSchema = z.object({
+  id: SpecIdSchema,
+  name: z.string(),
+  engine: z.string(), // e.g. "postgresql", "mysql", "sqlite", "redis"
+  description: z.string().optional(),
+  tables: z.array(SpecIdSchema).optional(),
+});
+export type DatabaseSpec = z.infer<typeof DatabaseSpecSchema>;
+
+export const DiagramConfigSchema = z.object({
+  lineStyle: z.enum(['bezier', 'straight', 'taxi']).optional(),
+  defaultView: z.enum(['architecture', 'types', 'databases']).optional(),
+  showDatabases: z.boolean().optional(),
+});
+export type DiagramConfig = z.infer<typeof DiagramConfigSchema>;
+
+/**
+ * Ascending audience reach for L0 gateway entries. An entry travels only as
+ * far as its audience allows: project (family-internal — exported only into
+ * own chained children), department (owning org-unit subtree), instance
+ * (whole hosted instance), partner (grant-gated cross-tenant), external
+ * (publicly consumable / 3rd-party-facing).
+ */
+export const SURFACE_AUDIENCES = ['project', 'department', 'instance', 'partner', 'external'] as const;
+export const SurfaceAudienceSchema = z.enum(SURFACE_AUDIENCES);
+export type SurfaceAudience = z.infer<typeof SurfaceAudienceSchema>;
+
+/**
+ * One entry of the project's L0 gateway surface — the ONLY thing another
+ * project may consume. Fields are lenient (existing trees authored this
+ * un-schema'd); the surface projector applies defaults where sensible.
+ */
+export const SystemPublicInterfaceSchema = z.object({
+  /** Stable public interface id within the system. */
+  id: z.string().optional(),
+  name: z.string().optional(),
+  /** Subsystem publishing the backing L1 public interface. */
+  subsystem: z.string().optional(),
+  /** Portal (or compatible published component) backing this entry. */
+  component: z.string().optional(),
+  /** Optional L3 interface id backing the surface. */
+  interface: z.string().optional(),
+  /** Surface kind: REST, GraphQL, MessageBus, RPC, or Custom. */
+  type: z.string().optional(),
+  details: z.string().optional(),
+  /** Exposure ceiling (see SurfaceAudienceSchema). Defaults to 'instance' at projection time. */
+  audience: z.string().optional(),
+  authPolicy: z.string().optional(),
+  version: z.string().optional(),
+  stability: z.string().optional(),
+});
+export type SystemPublicInterface = z.infer<typeof SystemPublicInterfaceSchema>;
+
 export const SystemSpecSchema = z.object({
   schemaVersion: z.string().default('1.0.0'),
   name: z.string(),
   vision: z.string(),
   boundaries: z.array(BoundaryItemSchema).default([]),
   globalRequirements: z.array(RequirementItemSchema).default([]),
+  /**
+   * The project's gateway surface: entries intentionally exported beyond the
+   * project, each backed by a subsystem-published Portal and carrying an
+   * audience ceiling. Cross-PROJECT consumption may only target these.
+   */
+  publicInterfaces: z.array(SystemPublicInterfaceSchema).optional(),
+  /**
+   * System-level databases. Enables database table mapping, PK/FK views,
+   * and isolated ERD schemas.
+   */
+  databases: z.array(DatabaseSpecSchema).default([]),
+  /** Optional defaults for the interactive diagram canvas. */
+  diagram: DiagramConfigSchema.optional(),
   /**
    * Default implementation language for the whole system (e.g. "typescript",
    * "rust", "python"). Subsystems may override. Drives language-aware
@@ -99,12 +165,34 @@ export const LintConfigSchema = z.object({
 });
 export type LintConfig = z.infer<typeof LintConfigSchema>;
 
+/**
+ * A declared lifecycle flow root: a component.method the runtime invokes at a
+ * lifecycle phase (init/shutdown). Reachability analysis (unused-detection,
+ * durability round-trip) treats these as entrypoints alongside Portals,
+ * Observers, and published components — boot-time wiring like hydration and
+ * environment provisioning becomes statically checkable instead of a blanket
+ * lint-allow ("called at startup, invisible to the walker").
+ */
+export const LifecycleEntrypointSchema = z.object({
+  /** Which lifecycle flow this roots. */
+  phase: z.enum(['init', 'shutdown']),
+  /** Component id whose method the runtime invokes at this phase. */
+  component: z.string(),
+  /** Method name on that component's interface. */
+  method: z.string(),
+  /** What this lifecycle flow establishes or tears down. */
+  description: z.string().optional(),
+});
+export type LifecycleEntrypoint = z.infer<typeof LifecycleEntrypointSchema>;
+
 export const SubsystemSpecSchema = z.object({
   id: SpecIdSchema,
   name: z.string(),
   description: z.string(),
   parentSystem: z.string(), // References L0 System Name or file
   publicInterfaces: z.array(PublicInterfaceSchema).default([]),
+  /** Declared init/shutdown flow roots (see LifecycleEntrypointSchema). */
+  lifecycle: z.array(LifecycleEntrypointSchema).optional(),
   /**
    * Optional subsystem profile override (e.g. for fullstack systems). Open
    * string: built-ins are backend, frontend-reactive, frontend-controller,
@@ -156,6 +244,37 @@ export const PATTERN_TYPES: ReadonlySet<ComponentType> = new Set(['Repository', 
 export const PortalTypeSchema = z.enum(['HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'Custom']);
 export type PortalType = z.infer<typeof PortalTypeSchema>;
 
+/**
+ * One entry of a generic-dispatch Portal's machine-readable dispatch table:
+ * maps a runtime capability name to the component.method serving it. Makes
+ * dynamic dispatch visible to the static walker — each binding is validated
+ * against the serving component's interface (UNSERVED_CAPABILITY) and
+ * traversed by unused-detection, so a portal with a table no longer needs
+ * "invisible to the static walker" lint-allows (which then go stale and are
+ * flagged by the stale-allow audit).
+ */
+export const DispatchBindingSchema = z.object({
+  /** Capability name exactly as dispatched at runtime (e.g. "shadow_module.get"). */
+  capability: z.string().min(1),
+  /** Component id serving this capability (local, super::-relative, or ::-absolute). */
+  component: z.string(),
+  /** Method name on the serving component's interface. */
+  method: z.string(),
+  /** What this capability does. */
+  description: z.string().optional(),
+});
+export type DispatchBinding = z.infer<typeof DispatchBindingSchema>;
+
+/**
+ * Store durability declaration. `durable` promises the state survives restart:
+ * the durability round-trip rule then requires a hydration read-back (a read-
+ * effect contract method) reachable from a declared lifecycle init entrypoint
+ * (MISSING_HYDRATION otherwise). `ram-projection` declares the state is
+ * rebuilt, not restored — exempt from the round-trip requirement.
+ */
+export const DurabilitySchema = z.enum(['ram-projection', 'durable']);
+export type Durability = z.infer<typeof DurabilitySchema>;
+
 export const ComponentSpecSchema = z.object({
   id: SpecIdSchema,
   name: z.string(),
@@ -168,6 +287,10 @@ export const ComponentSpecSchema = z.object({
   dependsOn: z.array(z.string()).default([]),
   portalType: PortalTypeSchema.optional(),
   basePath: z.string().optional(),
+  /** Portal-only: capability → component.method dispatch table (see DispatchBindingSchema). */
+  dispatch: z.array(DispatchBindingSchema).optional(),
+  /** Store-only: whether held state survives restart (see DurabilitySchema). */
+  durability: DurabilitySchema.optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
   status: SpecStatusSchema.optional().default('complete'),
@@ -245,6 +368,12 @@ export const MethodSignatureSchema = z.object({
    * actually delivered is implementation correctness (implementer tests), not a static check.
    */
   guarantees: z.array(GuaranteeSchema).optional(),
+  /**
+   * State-effect direction of this method on its component's held state. Required on a
+   * durable Store's contract methods so the durability round-trip rule can pair external
+   * writes with hydration read-backs (MISSING_HYDRATION); optional elsewhere.
+   */
+  effect: z.enum(['read', 'write']).optional(),
 });
 
 export type MethodSignature = z.infer<typeof MethodSignatureSchema>;
@@ -276,15 +405,16 @@ export type InterfaceSpec = z.infer<typeof InterfaceSpecSchema>;
 // by the narrative-flow validation rule, not the schema.
 // ---------------------------------------------------------------------------
 export const NarrativeStepTypeSchema = z.enum([
-  'local',   // in-component work
-  'call',    // cross-component call (targetComponent/targetMethod)
-  'branch',  // if/else: condition + onTrueStep (default next) / onFalseStep
-  'switch',  // multiway dispatch: on + cases[{value, step}] + defaultStep
-  'loop',    // header step; body = next..endStep; loopKind picks the form
-  'try',     // guarded region: body = next..endStep; catches[{error, step}] + finallyStep
-  'jump',    // unconditional goto (break / continue / rejoin-after-catch)
-  'return',  // terminator (happy or handled-failure exit)
-  'throw',   // error terminator: this path raises/propagates
+  'local',    // in-component work
+  'call',     // cross-component call (targetComponent/targetMethod)
+  'dispatch', // capability routed through a generic Portal's dispatch table (targetComponent + capability)
+  'branch',   // if/else: condition + onTrueStep (default next) / onFalseStep
+  'switch',   // multiway dispatch: on + cases[{value, step}] + defaultStep
+  'loop',     // header step; body = next..endStep; loopKind picks the form
+  'try',      // guarded region: body = next..endStep; catches[{error, step}] + finallyStep
+  'jump',     // unconditional goto (break / continue / rejoin-after-catch)
+  'return',   // terminator (happy or handled-failure exit)
+  'throw',    // error terminator: this path raises/propagates
 ]);
 export type NarrativeStepType = z.infer<typeof NarrativeStepTypeSchema>;
 
@@ -307,8 +437,9 @@ export const NarrativeStepSchema = z.object({
   stepNumber: z.number().int().positive(),
   description: z.string(),
   type: NarrativeStepTypeSchema,
-  targetComponent: z.string().optional(), // Required if type is 'call', references L2 Component id
+  targetComponent: z.string().optional(), // Required if type is 'call' or 'dispatch', references L2 Component id
   targetMethod: z.string().optional(),    // Required if type is 'call', references Method name on target interface
+  capability: z.string().optional(),      // Required if type is 'dispatch': the capability routed through the target Portal's dispatch table
   assertsGuarantees: z.array(GuaranteeSchema).optional(),
 
   // --- flow config (per type; validated by the narrative-flow rule) ---------
@@ -343,6 +474,18 @@ export type NarrativeStep = z.infer<typeof NarrativeStepSchema>;
 export const NarrativeDetailSchema = z.enum(['full', 'calls-only', 'intent']);
 export type NarrativeDetail = z.infer<typeof NarrativeDetailSchema>;
 
+/**
+ * The structural-conformance dial — declared per method (or per spec as a
+ * default), mirroring the narrative detail dial. Absent = the component
+ * stereotype's default (Portal → anchored, everything else → declared).
+ * `declared` requires a declaration-tier anchor for each contract method in
+ * the sourcePath file; `anchored` also accepts exact string-literal
+ * occurrences (tool/route registrations); `off` skips method checks for
+ * generated/vendored code (the sourcePath existence check always applies).
+ */
+export const ConformanceTierSchema = z.enum(['declared', 'anchored', 'off']);
+export type ConformanceTier = z.infer<typeof ConformanceTierSchema>;
+
 export const MethodImplementationSchema = z.object({
   name: z.string(), // Must match a method name in the L3 interface contract
   narrative: z.array(NarrativeStepSchema).default([]), // Level 5 Narrative
@@ -354,6 +497,14 @@ export const MethodImplementationSchema = z.object({
    * failure behavior stated here or in the contract's guarantees.
    */
   intent: z.string().optional(),
+  /** Conformance tier for THIS method (overrides the spec-level default). */
+  conformance: ConformanceTierSchema.optional(),
+  /**
+   * The code-level name realizing this contract method in the sourcePath
+   * file, when it legitimately differs from the intent-language contract
+   * name — e.g. a store's `put` realized by `saveSnapshot`.
+   */
+  symbol: z.string().optional(),
 });
 
 export type MethodImplementation = z.infer<typeof MethodImplementationSchema>;
@@ -376,6 +527,8 @@ export const ImplementationSpecSchema = z.object({
   methods: z.array(MethodImplementationSchema).default([]),
   /** Spec-level narrative detail default for all methods (each may override). */
   detail: NarrativeDetailSchema.optional(),
+  /** Spec-level structural-conformance tier default (each method may override). */
+  conformance: ConformanceTierSchema.optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
   status: SpecStatusSchema.optional().default('complete'),
@@ -398,13 +551,17 @@ export const TypeFieldSchema = z.object({
   description: z.string().optional(),
   optional: z.boolean().default(false),
   /**
-   * Identity marker for ERD / later schema derivation: 'primary' (PK) or
-   * 'unique'. Foreign-key markers are NOT declared — they are derived from
-   * the field's type referencing another defined type. These are logical
-   * system types, not a flattened database schema; storage mapping stays
-   * downstream (EF-style).
+   * Identity marker for ERD / database schema derivation:
+   * - 'primary' (PK)
+   * - 'unique' (UK)
+   * - 'foreign' (FK)
    */
-  key: z.enum(['primary', 'unique']).optional(),
+  key: z.enum(['primary', 'unique', 'foreign']).optional(),
+  /**
+   * For foreign keys, the referenced type/table ID (e.g. "billing.Invoice")
+   * and optionally field (e.g. "billing.Invoice.id").
+   */
+  references: z.string().optional(),
 });
 export type TypeField = z.infer<typeof TypeFieldSchema>;
 
@@ -429,12 +586,89 @@ export const TypeSpecSchema = z.object({
   fields: z.array(TypeFieldSchema).default([]),
   /** Pure intrinsic behaviour only — anything needing a collaborator belongs on a component. */
   methods: z.array(TypeMethodSchema).default([]),
+  /**
+   * Linked Component ID if this system entity is implemented as a class Component
+   * (e.g., a Store or Registry that owns this entity's lifecycle and methods).
+   */
+  componentClass: z.string().optional(),
+  /**
+   * The database ID this schema belongs to (marks it as a database table schema).
+   */
+  database: z.string().optional(),
+  /**
+   * The database table name for this schema (e.g., "users").
+   */
+  table: z.string().optional(),
+  /**
+   * If this type is a database table schema, the ID of the corresponding
+   * logical system entity type it maps to.
+   */
+  linkedEntity: z.string().optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
 export type TypeSpec = z.infer<typeof TypeSpecSchema>;
+
+// ---------------------------------------------------------------------------
+// Surface snapshots — the portable, contract-grade public-surface artifact
+// (Public Surface Exchange). One format, three origins: generated (own
+// parent/child family), exchanged (another wairon project), authored (an
+// external 3rd-party system, hand-declared or imported from OpenAPI).
+// ---------------------------------------------------------------------------
+
+export const SurfaceOriginSchema = z.enum(['generated', 'exchanged', 'authored']);
+export type SurfaceOrigin = z.infer<typeof SurfaceOriginSchema>;
+
+/** A self-contained type definition embedded in a snapshot (closure member). */
+export const SurfaceTypeDefSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  kind: z.string().default('value-object'),
+  fields: z.array(z.object({
+    name: z.string(),
+    type: z.string(),
+    description: z.string().optional(),
+    optional: z.boolean().optional(),
+  })).default([]),
+});
+export type SurfaceTypeDef = z.infer<typeof SurfaceTypeDefSchema>;
+
+/** One exported interface at CONTRACT grade — full methods + dispatch table. */
+export const SurfaceContractEntrySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  /** Exposure level of the L0 entry (see SurfaceAudienceSchema). */
+  audience: z.string().default('instance'),
+  /** Transport kind: REST, GraphQL, MessageBus, RPC, or Custom. */
+  type: z.string().default('Custom'),
+  /** Local name of the backing Portal in the producing project. */
+  component: z.string(),
+  /** Full contract methods (params, returns, guarantees, effect, endpoint). */
+  methods: z.array(MethodSignatureSchema).default([]),
+  /** The backing portal's capability dispatch table, when generic-dispatch. */
+  dispatch: z.array(DispatchBindingSchema).optional(),
+  details: z.string().default(''),
+  version: z.string().optional(),
+  stability: z.string().optional(),
+});
+export type SurfaceContractEntry = z.infer<typeof SurfaceContractEntrySchema>;
+
+export const SurfaceSnapshotSchema = z.object({
+  /** Producing project/system name — the snapshot's resolution identity. */
+  projectName: z.string(),
+  origin: SurfaceOriginSchema,
+  /** Producing spec tree's StateId at generation time (wairon-produced snapshots). */
+  stateId: z.string().optional(),
+  /** Contract version for authored/3rd-party surfaces without a StateId. */
+  version: z.string().optional(),
+  generatedAt: z.string(),
+  interfaces: z.array(SurfaceContractEntrySchema).default([]),
+  /** Transitive type closure of every exported signature — self-contained. */
+  types: z.array(SurfaceTypeDefSchema).default([]),
+});
+export type SurfaceSnapshot = z.infer<typeof SurfaceSnapshotSchema>;
 
 export const GroupSpecSchema = z.object({
   kind: z.literal('group'),
@@ -445,4 +679,3 @@ export const GroupSpecSchema = z.object({
   updatedAt: z.string().datetime(),
 });
 export type GroupSpec = z.infer<typeof GroupSpecSchema>;
-

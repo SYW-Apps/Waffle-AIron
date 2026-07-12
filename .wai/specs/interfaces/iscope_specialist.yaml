@@ -1,0 +1,47 @@
+id: iscope_specialist
+name: Scope Specialist Interface
+description: >-
+  Pure authorization-scope resolution contract. Given a principal's grants and the organization data
+  the caller has already gathered (units and placements), it computes which hosted projects and
+  organization units are in scope for a required permission, or signals instance-wide super-admin.
+  It performs no I/O and never authenticates — the calling orchestrator has already authenticated
+  the principal and gathered the org data.
+component: scope_specialist
+methods:
+  - name: resolveScope
+    description: >-
+      Pure: compute the caller's authorization scope for a required permission. A grant whose
+      projectId is '*' and that carries the permission (or the '*' permission wildcard) yields
+      all=true (instance-wide super-admin, no filtering). Otherwise, for each grant that carries the
+      permission: when it has an orgUnitId, add that unit plus all its recursive descendant units
+      (walked via parentId) to the unit scope and add the projectId of every placement whose unitId
+      falls in that subtree to the project scope; when it names a specific projectId, add that
+      projectId directly. The scope is the deduplicated union across all grants. Takes no credential
+      — authentication and org-data gathering are the caller's responsibility.
+    signature: >-
+      resolveScope(grants: ProjectGrant[], permission: string, units: OrganizationUnitRecord[],
+      placements: ProjectPlacement[]): ScopeResolution
+    returns: ScopeResolution
+    params:
+      - name: grants
+        type: ProjectGrant[]
+      - name: permission
+        type: string
+      - name: units
+        type: OrganizationUnitRecord[]
+      - name: placements
+        type: ProjectPlacement[]
+  - name: permits
+    description: >-
+      Pure point check for a write action against a resolved scope: returns true when the scope is
+      instance-wide (all=true) or its projectIds include the given project id, otherwise false.
+    signature: 'permits(scope: ScopeResolution, projectId: string): boolean'
+    returns: boolean
+    params:
+      - name: scope
+        type: ScopeResolution
+      - name: projectId
+        type: string
+status: complete
+createdAt: '2026-07-10T17:12:57.981Z'
+updatedAt: '2026-07-10T22:59:16.562Z'

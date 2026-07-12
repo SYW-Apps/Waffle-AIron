@@ -1,69 +1,311 @@
 id: admin_orchestrator_impl
 name: Admin Orchestrator Implementation
 description: >-
-  Control-plane workflows: master-credential auth then project/key lifecycle, git-aware
-  lock/promote, diagrams, and git backing.
+  Control-plane workflows: credential auth then project/key lifecycle, git-aware lock/promote,
+  diagrams, and git backing. Project create/destroy/lock/promote are scope-aware (a super-admin via
+  the master credential or an instance-wide grant, or a unit-scoped admin holding the matching
+  capability for an organization unit); the remaining key/git/producer/secret/diagram workflows stay
+  master-credential-only.
 contract: iadmin_orchestrator
 sourcePath: src/server/admin.ts
 methods:
   - name: createProject
     narrative:
       - stepNumber: 1
-        description: Authenticate the master credential
+        description: >-
+          Authenticate the caller credential (bootstrap master — which resolves to an instance-wide
+          super-admin — or a user-bound token)
         type: call
         targetComponent: auth_specialist
-        targetMethod: authenticateMaster
+        targetMethod: authenticateCredential
       - stepNumber: 2
-        description: If not an admin principal, reject
-        type: branch
-        condition: not an admin principal
-        onFalseStep: 4
+        description: Gather all organization units to resolve the caller's project-create scope
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listUnits
       - stepNumber: 3
-        description: Return 403 Forbidden
-        type: return
-        outcome: 403 Forbidden
+        description: Gather all project placements
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listPlacements
       - stepNumber: 4
+        description: Resolve the caller's project:create scope over the organization tree
+        type: call
+        targetComponent: scope_specialist
+        targetMethod: resolveScope
+      - stepNumber: 5
+        description: >-
+          If the caller has no project-create authority (scope.all is false and the scope is empty —
+          no in-scope units), deny
+        type: branch
+        condition: scope.all is false and the scope is empty (no in-scope units)
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Reject the project creation
+        type: throw
+        error: Forbidden — creating a project requires project:create authority
+      - stepNumber: 7
+        description: >-
+          A unit-scoped creator must target an in-scope unit: if scope.all is false and the provided
+          unitId is missing or not in scope.unitIds, reject. A super-admin (scope.all) skips this
+          check.
+        type: branch
+        condition: scope.all is false and (unitId is missing or not in scope.unitIds)
+        onTrueStep: 8
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Reject the unit-scoped creation without an in-scope target unit
+        type: throw
+        error: >-
+          Forbidden — a unit-scoped project creator must target an organization unit within their
+          scope
+      - stepNumber: 9
         description: Allocate and register the project
         type: call
         targetComponent: project_registry
         targetMethod: create
-      - stepNumber: 5
+      - stepNumber: 10
         description: Bind the new project's isolated root
         type: local
-      - stepNumber: 6
+      - stepNumber: 11
         description: Bootstrap the isolated spec tree
         type: call
         targetComponent: host_core_adapter
         targetMethod: provisionProject
-      - stepNumber: 7
+      - stepNumber: 12
+        description: >-
+          If a target unitId was provided, auto-place the new project in that organization unit;
+          otherwise skip placement (a super-admin may create without placing)
+        type: branch
+        condition: a target unitId was provided
+        onTrueStep: 13
+        onFalseStep: 14
+      - stepNumber: 13
+        description: Place the newly created project in the target organization unit
+        type: call
+        targetComponent: organization_repository
+        targetMethod: placeProject
+      - stepNumber: 14
         description: Return the created project record
         type: return
         outcome: created project record
   - name: destroyProject
     narrative:
       - stepNumber: 1
-        description: Authenticate the master credential
+        description: Authenticate the caller credential (bootstrap master or a user-bound token)
         type: call
         targetComponent: auth_specialist
-        targetMethod: authenticateMaster
+        targetMethod: authenticateCredential
       - stepNumber: 2
-        description: If not an admin principal, reject
-        type: branch
-        condition: not an admin principal
-        onFalseStep: 4
+        description: Gather all organization units to resolve the caller's project-destroy scope
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listUnits
       - stepNumber: 3
-        description: Return 403 Forbidden
-        type: return
-        outcome: 403 Forbidden
+        description: Gather all project placements
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listPlacements
       - stepNumber: 4
+        description: Resolve the caller's project:destroy scope over the organization tree
+        type: call
+        targetComponent: scope_specialist
+        targetMethod: resolveScope
+      - stepNumber: 5
+        description: Point-check the caller's project:destroy scope against the target project id
+        type: call
+        targetComponent: scope_specialist
+        targetMethod: permits
+      - stepNumber: 6
+        description: If the caller's scope does not permit the target project, deny
+        type: branch
+        condition: the scope does not permit the target project (permits returned false)
+        onTrueStep: 7
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Reject the project destruction
+        type: throw
+        error: Forbidden — destroying a project requires project:destroy scope over it
+      - stepNumber: 8
         description: Deregister the project and remove its tree
         type: call
         targetComponent: project_registry
         targetMethod: remove
-      - stepNumber: 5
+      - stepNumber: 9
         description: Return once destroyed
         type: return
         outcome: destroyed
+  - name: lockProject
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential (bootstrap master or a user-bound token)
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Gather all organization units to resolve the caller's lock scope
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listUnits
+      - stepNumber: 3
+        description: Gather all project placements
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listPlacements
+      - stepNumber: 4
+        description: Resolve the caller's lock:create scope over the organization tree
+        type: call
+        targetComponent: scope_specialist
+        targetMethod: resolveScope
+      - stepNumber: 5
+        description: Point-check the caller's lock:create scope against the target project id
+        type: call
+        targetComponent: scope_specialist
+        targetMethod: permits
+      - stepNumber: 6
+        description: If the caller's scope does not permit the target project, deny
+        type: branch
+        condition: the scope does not permit the target project (permits returned false)
+        onTrueStep: 7
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Reject the lock
+        type: throw
+        error: Forbidden — locking a project requires lock:create scope over it
+      - stepNumber: 8
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 9
+        description: Sync the default branch into the working branch (no-op for native projects)
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: sync
+      - stepNumber: 10
+        description: Validate the tree as-complete
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: validateAsComplete
+      - stepNumber: 11
+        description: If validation reports errors, refuse to lock
+        type: branch
+        condition: result reports errors
+        onTrueStep: 12
+        onFalseStep: 13
+      - stepNumber: 12
+        description: Return cannot-lock with the validation errors
+        type: return
+        outcome: cannot lock — validation failed
+      - stepNumber: 13
+        description: Promote every spec to complete
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: promoteAllComplete
+      - stepNumber: 14
+        description: Compute the validated StateId
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: computeStateId
+      - stepNumber: 15
+        description: >-
+          Publish to git: commit the promoted working tree and push, returning the commit + compare
+          URL (no-op for native projects)
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: publish
+      - stepNumber: 16
+        description: >-
+          Assemble a LockRecord (stateId, lockedAt, lockedBy, validatorVersion, validationResult,
+          status ready, plus commitSha/compareUrl when git-backed)
+        type: local
+      - stepNumber: 17
+        description: Persist the lock record
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: writeLockRecord
+      - stepNumber: 18
+        description: Return the lock record (with the compare URL to open the PR when git-backed)
+        type: return
+        outcome: lock record
+  - name: promoteProject
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential (bootstrap master or a user-bound token)
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Gather all organization units to resolve the caller's promote scope
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listUnits
+      - stepNumber: 3
+        description: Gather all project placements
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listPlacements
+      - stepNumber: 4
+        description: Resolve the caller's promote:mark-ready scope over the organization tree
+        type: call
+        targetComponent: scope_specialist
+        targetMethod: resolveScope
+      - stepNumber: 5
+        description: Point-check the caller's promote:mark-ready scope against the target project id
+        type: call
+        targetComponent: scope_specialist
+        targetMethod: permits
+      - stepNumber: 6
+        description: If the caller's scope does not permit the target project, deny
+        type: branch
+        condition: the scope does not permit the target project (permits returned false)
+        onTrueStep: 7
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Reject the promotion
+        type: throw
+        error: Forbidden — promoting a project requires promote:mark-ready scope over it
+      - stepNumber: 8
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 9
+        description: Read the current lock record
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: readLockRecord
+      - stepNumber: 10
+        description: If no lock record exists, refuse
+        type: branch
+        condition: no lock record exists
+        onTrueStep: 11
+        onFalseStep: 12
+      - stepNumber: 11
+        description: Return not-locked
+        type: return
+        outcome: not locked — lock first
+      - stepNumber: 12
+        description: Recompute the current StateId
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: computeStateId
+      - stepNumber: 13
+        description: If the current StateId differs from the lock's StateId, refuse as stale
+        type: branch
+        condition: current StateId differs from the lock's StateId
+        onTrueStep: 14
+        onFalseStep: 15
+      - stepNumber: 14
+        description: Return stale-lock
+        type: return
+        outcome: stale lock — re-lock required
+      - stepNumber: 15
+        description: >-
+          Mark the change-set ready for promotion (the human merges the PR when git-backed); never
+          merge here
+        type: local
+      - stepNumber: 16
+        description: Return the promote result
+        type: return
+        outcome: promote result
   - name: listProjects
     narrative:
       - stepNumber: 1
@@ -169,131 +411,6 @@ methods:
         description: Return the key list
         type: return
         outcome: key list
-  - name: lockProject
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the master credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateMaster
-      - stepNumber: 2
-        description: If not an admin principal, reject
-        type: branch
-        condition: not an admin principal
-        onFalseStep: 4
-      - stepNumber: 3
-        description: Return 403 Forbidden
-        type: return
-        outcome: 403 Forbidden
-      - stepNumber: 4
-        description: Bind the project's isolated root
-        type: local
-      - stepNumber: 5
-        description: Sync the default branch into the working branch (no-op for native projects)
-        type: call
-        targetComponent: host_git_adapter
-        targetMethod: sync
-      - stepNumber: 6
-        description: Validate the tree as-complete
-        type: call
-        targetComponent: host_validator_adapter
-        targetMethod: validateAsComplete
-      - stepNumber: 7
-        description: If validation reports errors, refuse to lock
-        type: branch
-        condition: result reports errors
-        onFalseStep: 9
-      - stepNumber: 8
-        description: Return cannot-lock with the validation errors
-        type: return
-        outcome: cannot lock — validation failed
-      - stepNumber: 9
-        description: Promote every spec to complete
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: promoteAllComplete
-      - stepNumber: 10
-        description: Compute the validated StateId
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: computeStateId
-      - stepNumber: 11
-        description: >-
-          Publish to git: commit the promoted working tree and push, returning the commit + compare
-          URL (no-op for native projects)
-        type: call
-        targetComponent: host_git_adapter
-        targetMethod: publish
-      - stepNumber: 12
-        description: >-
-          Assemble a LockRecord (stateId, lockedAt, lockedBy, validatorVersion, validationResult,
-          status ready, plus commitSha/compareUrl when git-backed)
-        type: local
-      - stepNumber: 13
-        description: Persist the lock record
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: writeLockRecord
-      - stepNumber: 14
-        description: Return the lock record (with the compare URL to open the PR when git-backed)
-        type: return
-        outcome: lock record
-  - name: promoteProject
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the master credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateMaster
-      - stepNumber: 2
-        description: If not an admin principal, reject
-        type: branch
-        condition: not an admin principal
-        onFalseStep: 4
-      - stepNumber: 3
-        description: Return 403 Forbidden
-        type: return
-        outcome: 403 Forbidden
-      - stepNumber: 4
-        description: Bind the project's isolated root
-        type: local
-      - stepNumber: 5
-        description: Read the current lock record
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: readLockRecord
-      - stepNumber: 6
-        description: If no lock record exists, refuse
-        type: branch
-        condition: no lock record exists
-        onFalseStep: 8
-      - stepNumber: 7
-        description: Return not-locked
-        type: return
-        outcome: not locked — lock first
-      - stepNumber: 8
-        description: Recompute the current StateId
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: computeStateId
-      - stepNumber: 9
-        description: If the current StateId differs from the lock's StateId, refuse as stale
-        type: branch
-        condition: current StateId differs from the lock's StateId
-        onFalseStep: 11
-      - stepNumber: 10
-        description: Return stale-lock
-        type: return
-        outcome: stale lock — re-lock required
-      - stepNumber: 11
-        description: >-
-          Mark the change-set ready for promotion (the human merges the PR when git-backed); never
-          merge here
-        type: local
-      - stepNumber: 12
-        description: Return the promote result
-        type: return
-        outcome: promote result
   - name: generateDiagram
     narrative:
       - stepNumber: 1
@@ -634,6 +751,128 @@ methods:
         description: Return the secret key names
         type: return
         outcome: secret keys
+  - name: executeApprovedCreate
+    narrative:
+      - stepNumber: 1
+        description: Allocate and register the project
+        type: call
+        targetComponent: project_registry
+        targetMethod: create
+      - stepNumber: 2
+        description: Bind the new project's isolated root
+        type: local
+      - stepNumber: 3
+        description: Bootstrap the isolated spec tree
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: provisionProject
+      - stepNumber: 4
+        description: Return the created project record
+        type: return
+        outcome: created project record
+  - name: executeApprovedLock
+    narrative:
+      - stepNumber: 1
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 2
+        description: Sync the default branch into the working branch (no-op for native projects)
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: sync
+      - stepNumber: 3
+        description: Validate the tree as-complete
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: validateAsComplete
+      - stepNumber: 4
+        description: If validation reports errors, refuse to lock
+        type: branch
+        condition: result reports errors
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Return cannot-lock with the validation errors
+        type: return
+        outcome: cannot lock — validation failed
+      - stepNumber: 6
+        description: Promote every spec to complete
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: promoteAllComplete
+      - stepNumber: 7
+        description: Compute the validated StateId
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: computeStateId
+      - stepNumber: 8
+        description: >-
+          Publish to git: commit the promoted working tree and push, returning the commit + compare
+          URL (no-op for native projects)
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: publish
+      - stepNumber: 9
+        description: >-
+          Assemble a LockRecord (stateId, lockedAt, lockedBy, validatorVersion, validationResult,
+          status ready, plus commitSha/compareUrl when git-backed)
+        type: local
+      - stepNumber: 10
+        description: Persist the lock record
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: writeLockRecord
+      - stepNumber: 11
+        description: Return the lock record (with the compare URL to open the PR when git-backed)
+        type: return
+        outcome: lock record
+  - name: executeApprovedPromote
+    narrative:
+      - stepNumber: 1
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 2
+        description: Read the current lock record
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: readLockRecord
+      - stepNumber: 3
+        description: If no lock record exists, refuse
+        type: branch
+        condition: no lock record exists
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Return not-locked
+        type: return
+        outcome: not locked — lock first
+      - stepNumber: 5
+        description: Recompute the current StateId
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: computeStateId
+      - stepNumber: 6
+        description: If the current StateId differs from the lock's StateId, refuse as stale
+        type: branch
+        condition: current StateId differs from the lock's StateId
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Return stale-lock
+        type: return
+        outcome: stale lock — re-lock required
+      - stepNumber: 8
+        description: >-
+          Mark the change-set ready for promotion (the human merges the PR when git-backed); never
+          merge here
+        type: local
+      - stepNumber: 9
+        description: Return the promote result
+        type: return
+        outcome: promote result
+lint:
+  allow:
+    - code: UNDECLARED_DEPENDENCY
+      reason: >-
+        admin.ts reads the state id via computeStateId directly instead of routing through
+        host_core_adapter — documented shortcut on the lock/promote path; refactor candidate.
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-07-04T18:46:28.079Z'
+updatedAt: '2026-07-11T20:30:00.419Z'

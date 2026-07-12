@@ -1,0 +1,22 @@
+id: public_surface_registry_impl
+name: Public Surface Registry Implementation
+description: >-
+  Write path for redacted public-surface snapshots: server-side timestamp stamping and durable
+  single-per-project replacement. Preserves the orchestrator-redacted interfaces verbatim; performs
+  no redaction or authorization.
+contract: ipublic_surface_registry
+sourcePath: src/server/surfaces.ts
+methods:
+  - name: replaceSnapshot
+    narrative: []
+    intent: >-
+      Replace the snapshot for its projectId in the persisted set (one snapshot per project),
+      stamping exportedAt to the current server time while preserving the orchestrator-supplied
+      redacted interfaces, systemName, stateId, and exportedBy verbatim. Persist via
+      write-temp-then-rename, refresh the store, and return the stored snapshot. Persistence
+      failures leave the previous set intact. Redaction and authorization are enforced by the
+      orchestrator, not here.
+detail: intent
+status: complete
+createdAt: '2026-07-09T22:08:17.769Z'
+updatedAt: '2026-07-09T22:13:40.683Z'

@@ -1,0 +1,50 @@
+kind: value-object
+id: audit_query
+name: AuditQuery
+description: >-
+  Admin-only filter for reading hosted audit events. Each field narrows the query; omitted fields
+  are unrestricted within the caller's authorization.
+fields:
+  - name: projectId
+    type: string
+    description: Project id to filter on.
+    optional: true
+  - name: actorUserId
+    type: string
+    description: Actor user id to filter on.
+    optional: true
+  - name: tokenId
+    type: string
+    description: Credential id to filter on.
+    optional: true
+  - name: category
+    type: string
+    description: Audit category to filter on.
+    optional: true
+  - name: action
+    type: string
+    description: Canonical action name to filter on.
+    optional: true
+  - name: outcome
+    type: string
+    description: Outcome to filter on.
+    optional: true
+  - name: minimumLevel
+    type: string
+    description: Minimum event level to return.
+    optional: true
+  - name: from
+    type: string
+    description: Inclusive ISO-8601 lower timestamp bound.
+    optional: true
+  - name: to
+    type: string
+    description: Exclusive ISO-8601 upper timestamp bound.
+    optional: true
+  - name: limit
+    type: number
+    description: Maximum number of events to return.
+    optional: true
+methods: []
+createdAt: '2026-07-08T20:15:42.045Z'
+updatedAt: '2026-07-08T20:15:42.073Z'

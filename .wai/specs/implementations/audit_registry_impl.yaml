@@ -1,0 +1,31 @@
+id: audit_registry_impl
+name: Audit Registry Implementation
+description: >-
+  Write path for the durable audit log: policy-filtered append and retention pruning. Owns redaction
+  enforcement — no event carrying raw secrets ever reaches disk.
+contract: iaudit_registry
+sourcePath: src/server/audit.ts
+methods:
+  - name: append
+    narrative: []
+    intent: >-
+      Apply the retention policy's capture filter first — events whose level or category the policy
+      excludes are dropped without touching disk (a silent, successful no-op). Validate the
+      surviving event is redacted: reject with a validation error any event whose metadata or target
+      smells like a raw bearer token, secret value, or full spec body, and truncate oversize
+      metadata to the policy's size cap. Then stamp the event id and timestamp if absent, append it
+      to the persisted event set via write-temp-then-rename, and refresh the store with replaceAll.
+      Persistence failures surface as storage errors to the caller — hot-path callers are
+      responsible for treating append failure as non-blocking per the repository's contract.
+  - name: prune
+    narrative: []
+    intent: >-
+      Select the events whose age at the supplied now-timestamp exceeds the retention window their
+      level and category map to under the policy, rewrite the persisted set without them via
+      write-temp-then-rename, refresh the store, and return the removed count. A policy with no
+      matching windows prunes nothing and returns zero; persistence failures leave the previous set
+      fully intact.
+detail: intent
+status: complete
+createdAt: '2026-07-09T17:30:50.941Z'
+updatedAt: '2026-07-09T17:43:51.898Z'

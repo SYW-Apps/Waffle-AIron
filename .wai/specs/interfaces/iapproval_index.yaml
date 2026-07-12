@@ -1,0 +1,38 @@
+id: iapproval_index
+name: Approval Index Interface
+description: Private read-path contract for hosted approval-request lookups and pending-decision queues.
+component: approval_index
+methods:
+  - name: getById
+    description: Return one approval request by id, or null when absent.
+    signature: 'getById(id: string): ApprovalRequest | null'
+    returns: ApprovalRequest | null
+    params:
+      - name: id
+        type: string
+  - name: list
+    description: >-
+      List approval requests filtered by any populated combination of status, project, requester,
+      and action kind.
+    signature: >-
+      list(status: string, projectId: string, requestedByUserId: string, kind: string):
+      ApprovalRequest[]
+    returns: ApprovalRequest[]
+    params:
+      - name: status
+        type: string
+        optional: true
+      - name: projectId
+        type: string
+        optional: true
+      - name: requestedByUserId
+        type: string
+        optional: true
+      - name: kind
+        type: string
+        optional: true
+      - name: requestedBy
+        type: string
+status: complete
+createdAt: '2026-07-09T19:30:42.416Z'
+updatedAt: '2026-07-09T19:36:51.082Z'

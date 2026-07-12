@@ -1,0 +1,226 @@
+id: iidentity_orchestrator
+name: Identity Orchestrator Interface
+description: >-
+  Contract for hosted identity workflows behind the identity portal: headless SSO login
+  (unauthenticated start/complete with first-login user provisioning), plus credential-authenticated
+  management of users, grants, user-bound MCP/API tokens, identity-provider (SSO) configuration, and
+  admin-only audit read/count. Follows the control-plane house pattern: every credential-bearing
+  method authenticates via the auth specialist before any effect. The SSO start/complete pair
+  carries no credential and derives trust entirely from the signed SSO state and the provider code
+  exchange.
+component: identity_orchestrator
+methods:
+  - name: mintToken
+    description: >-
+      Authenticate the caller, then authorize token delegation strictly against the caller's OWN
+      scope: gather the organization units and placements and, for each requested grant, require the
+      caller to itself cover the requested target for every requested permission — either an
+      instance-wide admin grant, or a scope (resolved via the scope specialist, expanding
+      unit-scoped grants across each unit's recursive subtree) whose projectIds cover a requested
+      specific projectId and whose unitIds cover a requested orgUnitId. Merely holding key:manage
+      does NOT permit delegating arbitrary permissions. Validate the requested projects/units exist,
+      mint a user-bound MCP/API token, persist only its hashed credential record with owner/grant
+      metadata, and append a redacted audit event. Returns the plaintext token exactly once.
+    signature: 'mintToken(credential: string, request: TokenMintRequest): string'
+    returns: string
+    params:
+      - name: credential
+        type: string
+      - name: request
+        type: TokenMintRequest
+  - name: revokeToken
+    description: >-
+      Authenticate the caller, authorize key management for the token's owner and project scope,
+      revoke the credential record, and append a redacted audit event.
+    signature: 'revokeToken(credential: string, tokenId: string): void'
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: tokenId
+        type: string
+  - name: replaceUserGrants
+    description: >-
+      Authenticate the caller, authorize grant administration by an instance-wide OR unit-scoped
+      user:admin grant: gather org units/placements, resolve the caller's user:admin scope, and
+      require the scope to permit the target user's home unit; a non-super-admin caller may not
+      assign grants exceeding their own authority (no instance-wide '*' and no project/unit outside
+      their scope — privilege-escalation guard). Replace the user's grants wholesale through the
+      user repository, and append a redacted audit event.
+    signature: >-
+      replaceUserGrants(credential: string, userId: string, grants: ProjectGrant[]):
+      HostedUserRecord
+    returns: HostedUserRecord
+    params:
+      - name: credential
+        type: string
+      - name: userId
+        type: string
+      - name: grants
+        type: ProjectGrant[]
+    guarantees:
+      - atomic
+  - name: listUsers
+    description: >-
+      Authenticate the caller, authorize user administration by an instance-wide OR unit-scoped
+      user:admin grant; results are filtered to the caller's scope. Resolve the caller's user:admin
+      scope over the organization tree and list hosted users, keeping only those whose home unit is
+      within scope.unitIds (a super-admin sees all), optionally narrowed to one project's grant
+      holders.
+    signature: 'listUsers(credential: string, project: string): HostedUserRecord[]'
+    returns: HostedUserRecord[]
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+        optional: true
+  - name: queryAuditEvents
+    description: >-
+      Authenticate the caller, authorize audit read access by an instance-wide OR unit-scoped
+      audit:read grant; results are filtered to the caller's scope. Resolve the caller's audit:read
+      scope, constrain the audit query to the in-scope projects (a super-admin reads instance-wide),
+      and return the redacted audit events.
+    signature: 'queryAuditEvents(credential: string, query: AuditQuery): AuditEvent[]'
+    returns: AuditEvent[]
+    params:
+      - name: credential
+        type: string
+      - name: query
+        type: AuditQuery
+  - name: pruneAuditEvents
+    description: >-
+      Authenticate the caller, authorize admin-only audit administration, apply the instance's
+      active retention policy, append a redacted audit event for the prune itself, and return the
+      number of events removed.
+    signature: 'pruneAuditEvents(credential: string): number'
+    returns: number
+    params:
+      - name: credential
+        type: string
+  - name: upsertUser
+    description: >-
+      Authenticate the caller, authorize user administration by an instance-wide OR unit-scoped
+      user:admin grant; the caller's scope must permit the target user's home unit (both the
+      incoming and, on update, the existing home unit). Create or update the hosted user through the
+      user repository, and append a redacted audit event distinguishing creation from update.
+    signature: 'upsertUser(credential: string, record: HostedUserRecord): HostedUserRecord'
+    returns: HostedUserRecord
+    params:
+      - name: credential
+        type: string
+      - name: record
+        type: HostedUserRecord
+    guarantees:
+      - atomic
+  - name: setUserStatus
+    description: >-
+      Authenticate the caller, authorize user administration by an instance-wide OR unit-scoped
+      user:admin grant; the caller's scope must permit the target user's home unit. Then set the
+      user's lifecycle status through the user repository. When the new status is not 'active'
+      (deactivation), revoke ALL of the user's credentials via credential_registry.revokeAllForOwner
+      so existing tokens can no longer authenticate, and append a security-level 'user.deactivate'
+      audit event including the revoked-token count; the user record is retained for audit
+      provenance. Returning a user to 'active' does NOT auto-restore any revoked tokens. For a
+      status change that keeps the user active, append the ordinary 'user.status.set' event.
+    signature: 'setUserStatus(credential: string, userId: string, status: string): HostedUserRecord'
+    returns: HostedUserRecord
+    params:
+      - name: credential
+        type: string
+      - name: userId
+        type: string
+      - name: status
+        type: string
+    guarantees:
+      - atomic
+  - name: startSsoLogin
+    description: >-
+      Begin a headless SSO login: resolve the enabled identity-provider configuration through the
+      policy repository, generate a nonce, sign an SSO state binding providerId, nonce, and
+      redirectUri via the auth specialist, build the provider authorization URL through the identity
+      provider adapter, append a best-effort sso.start (info) audit event, and return the
+      authorization URL. Starting a login is unauthenticated by nature — no caller credential is
+      required or accepted; the signed state is the only integrity anchor carried into the callback.
+    signature: 'startSsoLogin(providerId: string, redirectUri: string): string'
+    returns: string
+    params:
+      - name: providerId
+        type: string
+      - name: redirectUri
+        type: string
+  - name: completeSsoLogin
+    description: >-
+      Complete a headless SSO login: verify the signed SSO state via the auth specialist (a tampered
+      or expired state is rejected), resolve the bound identity-provider configuration, exchange the
+      authorization code and resolve the external subject through the provider adapter, look up the
+      hosted user by issuer + external subject, provision a first-login active user record with
+      empty grants when absent (an admin assigns grants afterwards), mint a user-bound MCP/API token
+      for the resolved user persisting only its hashed credential record, append a best-effort
+      sso.login (security) audit event, and return the plaintext token exactly once. Inlines
+      first-login provisioning — there is no separate resolve-or-create method. Unauthenticated by
+      nature: no caller credential is required or accepted.
+    signature: 'completeSsoLogin(state: string, code: string): string'
+    returns: string
+    params:
+      - name: state
+        type: string
+      - name: code
+        type: string
+  - name: listIdentityProviders
+    description: >-
+      Authenticate the caller, authorize instance-admin-only identity-provider administration, and
+      return every configured identity provider by forwarding to the policy repository. Not audited
+      (a read).
+    signature: 'listIdentityProviders(credential: string): IdentityProviderConfig[]'
+    returns: IdentityProviderConfig[]
+    params:
+      - name: credential
+        type: string
+  - name: upsertIdentityProvider
+    description: >-
+      Authenticate the caller, authorize instance-admin-only identity-provider administration,
+      create or update one identity-provider configuration through the policy repository, append a
+      redacted idp.upsert (security) audit event, and return the stored config. The config carries a
+      clientSecretRef, never a raw secret.
+    signature: >-
+      upsertIdentityProvider(credential: string, config: IdentityProviderConfig):
+      IdentityProviderConfig
+    returns: IdentityProviderConfig
+    params:
+      - name: credential
+        type: string
+      - name: config
+        type: IdentityProviderConfig
+    guarantees:
+      - atomic
+  - name: removeIdentityProvider
+    description: >-
+      Authenticate the caller, authorize instance-admin-only identity-provider administration,
+      remove one identity-provider configuration by id through the policy repository (an unknown id
+      is rejected), and append a redacted idp.remove (security) audit event.
+    signature: 'removeIdentityProvider(credential: string, id: string): void'
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: id
+        type: string
+    guarantees:
+      - atomic
+  - name: countAuditEvents
+    description: >-
+      Authenticate the caller, authorize audit read access by an instance-wide OR unit-scoped
+      audit:read grant; the count is scoped to the caller. Resolve the caller's audit:read scope,
+      constrain the query to the in-scope projects (a super-admin counts instance-wide), and return
+      the count of redacted audit events. Not audited (a read).
+    signature: 'countAuditEvents(credential: string, query: AuditQuery): number'
+    returns: number
+    params:
+      - name: credential
+        type: string
+      - name: query
+        type: AuditQuery
+status: complete
+createdAt: '2026-07-08T20:17:23.976Z'
+updatedAt: '2026-07-10T17:18:03.055Z'

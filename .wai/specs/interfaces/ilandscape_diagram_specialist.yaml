@@ -1,0 +1,30 @@
+id: ilandscape_diagram_specialist
+name: Landscape Diagram Specialist Interface
+description: >-
+  Contract for projecting hosted organization, project, public-surface, and relation records into a
+  landscape graph.
+component: landscape_diagram_specialist
+methods:
+  - name: buildGraph
+    description: >-
+      Build a hosted-instance landscape graph from authorized organization units, projects,
+      placements, snapshots, and relations.
+    signature: >-
+      buildGraph(units: OrganizationUnitRecord[], projects: HostedProjectRecord[], placements:
+      ProjectPlacement[], snapshots: ProjectPublicSurfaceSnapshot[], relations:
+      ProjectRelationRecord[]): LandscapeGraphModel
+    returns: LandscapeGraphModel
+    params:
+      - name: units
+        type: OrganizationUnitRecord[]
+      - name: projects
+        type: HostedProjectRecord[]
+      - name: placements
+        type: ProjectPlacement[]
+      - name: snapshots
+        type: ProjectPublicSurfaceSnapshot[]
+      - name: relations
+        type: ProjectRelationRecord[]
+status: complete
+createdAt: '2026-07-08T21:13:30.746Z'
+updatedAt: '2026-07-09T22:13:28.046Z'

@@ -1,0 +1,78 @@
+id: identity_provider_adapter_impl
+name: Identity Provider Adapter Implementation
+description: >-
+  Provider-neutral OIDC/SSO adapter: assembles authorization URLs, exchanges authorization codes for
+  provider tokens over HTTPS, and verifies provider identity metadata into a Wairon
+  PrincipalSubject. Performs external provider I/O only; never persists or logs raw provider tokens
+  or client secrets.
+contract: iidentity_provider_adapter
+sourcePath: src/server/idp.ts
+methods:
+  - name: buildAuthorizationUrl
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the provider's authorization endpoint from the config — OIDC discovery over
+          config.issuerUrl when applicable, otherwise the providerType default
+        type: local
+      - stepNumber: 2
+        description: >-
+          Assemble the authorization URL with client_id (config.clientId), response_type=code, the
+          supplied redirectUri, the opaque state, and the requested scopes
+        type: local
+      - stepNumber: 3
+        description: Return the provider authorization URL
+        type: return
+        outcome: provider authorization URL
+  - name: exchangeCode
+    narrative:
+      - stepNumber: 1
+        description: Resolve the provider's token endpoint from the config's OIDC discovery metadata
+        type: local
+      - stepNumber: 2
+        description: >-
+          POST the authorization code to the token endpoint over HTTPS — client_id
+          (config.clientId), the client secret resolved from config.clientSecretRef via the host
+          secret mechanism, the supplied redirectUri, and grant_type=authorization_code — never
+          logging the raw code, client secret, or returned provider tokens
+        type: local
+      - stepNumber: 3
+        description: >-
+          Summarize the provider response into redacted serialized metadata (issuer, subject, and
+          verified claims) that carries no raw provider tokens or client secret
+        type: local
+      - stepNumber: 4
+        description: Return the redacted provider response summary
+        type: return
+        outcome: redacted provider response summary
+  - name: resolveSubject
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Verify the provider identity metadata — validate the ID token signature against the
+          provider JWKS and check issuer, audience, and expiry (or verify through the userinfo
+          endpoint)
+        type: local
+      - stepNumber: 2
+        description: If the provider identity metadata fails verification, reject
+        type: branch
+        condition: the provider identity metadata fails verification
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject unverifiable provider identity metadata
+        type: throw
+        error: invalid provider identity metadata
+      - stepNumber: 4
+        description: >-
+          Map the verified claims to a Wairon PrincipalSubject (issuer = the provider issuer,
+          externalSubject = the provider subject, kind human, displayName and email from verified
+          claims); never copy raw provider tokens or secrets
+        type: local
+      - stepNumber: 5
+        description: Return the resolved PrincipalSubject
+        type: return
+        outcome: resolved PrincipalSubject
+detail: calls-only
+status: complete
+createdAt: '2026-07-10T08:19:10.907Z'
+updatedAt: '2026-07-10T08:19:17.698Z'

@@ -1,0 +1,89 @@
+id: landscape_diagram_specialist_impl
+name: Landscape Diagram Specialist Implementation
+description: >-
+  Pure projection of already-authorized hosted organization units, projects, placements, redacted
+  public-surface snapshots, and cross-project relations into a LandscapeGraphModel. No I/O, no
+  authorization, no project-root or private-spec access — every input is supplied by the
+  orchestrator.
+contract: ilandscape_diagram_specialist
+sourcePath: src/server/landscape.ts
+methods:
+  - name: buildGraph
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Initialize empty node and edge collections, capture the generation timestamp
+          (generatedAt), and default the graph scope to 'instance'.
+        type: local
+      - stepNumber: 2
+        description: For each supplied organization unit
+        type: loop
+        loopKind: forEach
+        over: the supplied organization units
+        endStep: 3
+      - stepNumber: 3
+        description: >-
+          Append an orgUnit LandscapeNode (id, label = unit.name, nodeKind 'orgUnit', unitId =
+          unit.id, status = unit.status); when the unit has a parentId, append a 'contains'
+          LandscapeEdge from the parent unit node to this unit node.
+        type: local
+      - stepNumber: 4
+        description: For each supplied hosted project
+        type: loop
+        loopKind: forEach
+        over: the supplied hosted projects
+        endStep: 5
+      - stepNumber: 5
+        description: >-
+          Append a project LandscapeNode (id, label = the project name or id, nodeKind 'project',
+          projectId = the project id).
+        type: local
+      - stepNumber: 6
+        description: For each supplied project placement
+        type: loop
+        loopKind: forEach
+        over: the supplied project placements
+        endStep: 7
+      - stepNumber: 7
+        description: >-
+          Append a placement LandscapeEdge from the placement's organization unit node to the placed
+          project node, choosing edgeKind by role ('owns' for owner, 'shared_with' for shared,
+          otherwise 'contains') and labeling it with the placement role.
+        type: local
+      - stepNumber: 8
+        description: For each supplied public-surface snapshot
+        type: loop
+        loopKind: forEach
+        over: the supplied public-surface snapshots
+        endStep: 9
+      - stepNumber: 9
+        description: >-
+          For the snapshot's project, append a publicInterface LandscapeNode per redacted interface
+          summary (nodeKind 'publicInterface', projectId, publicInterfaceId = summary.id, label =
+          summary.name) and a 'publishes' LandscapeEdge from the project node to each
+          publicInterface node.
+        type: local
+      - stepNumber: 10
+        description: For each supplied cross-project relation
+        type: loop
+        loopKind: forEach
+        over: the supplied cross-project relations
+        endStep: 11
+      - stepNumber: 11
+        description: >-
+          Append a cross-project LandscapeEdge from the relation's source project node to the target
+          project's referenced publicInterface node (falling back to the target project node when
+          that interface node is absent), mapping edgeKind from relation.kind (consumes->'consumes',
+          depends_on->'depends_on', mirrors->'mirrors', publishes_to->'publishes', otherwise
+          'consumes'), setting relationId = relation.id, and labeling it with the relation kind and
+          target system interface id.
+        type: local
+      - stepNumber: 12
+        description: Return the assembled LandscapeGraphModel (nodes, edges, generatedAt, scope).
+        type: return
+        outcome: landscape graph model
+    symbol: buildLandscapeGraph
+detail: full
+status: complete
+createdAt: '2026-07-09T22:08:53.561Z'
+updatedAt: '2026-07-11T19:14:22.310Z'

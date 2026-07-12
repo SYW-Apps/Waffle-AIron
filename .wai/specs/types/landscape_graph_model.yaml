@@ -1,0 +1,27 @@
+kind: value-object
+id: landscape_graph_model
+name: LandscapeGraphModel
+description: >-
+  Hosted-instance landscape projection across organization units, projects, and system public
+  interfaces. It is built from hosted registries and public-surface snapshots, not from private
+  project specs.
+fields:
+  - name: nodes
+    type: LandscapeNode[]
+    description: Organization unit, project, and public-interface nodes.
+    optional: false
+  - name: edges
+    type: LandscapeEdge[]
+    description: Hierarchy, placement, publication, and relation edges.
+    optional: false
+  - name: generatedAt
+    type: string
+    description: ISO-8601 generation timestamp.
+    optional: false
+  - name: scope
+    type: string
+    description: Scope used to generate the graph, such as an organization unit id, project id, or "instance".
+    optional: true
+methods: []
+createdAt: '2026-07-08T21:11:44.223Z'
+updatedAt: '2026-07-08T21:11:44.257Z'

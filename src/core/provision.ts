@@ -12,6 +12,7 @@ import {
   collectPromotableSpecs,
   applySpecStatus,
   invalidateSpecCache,
+  assertContainedProjectPath,
 } from './specs.js';
 import { saveProjectConfig, aiPathsAt } from '../config/loader.js';
 import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive } from '../utils/fs.js';
@@ -60,6 +61,7 @@ export function provisionProject(name: string): void {
     vision: `Core vision for ${name}`,
     boundaries: [],
     globalRequirements: [],
+    databases: [],
     createdAt: now,
     updatedAt: now,
   });
@@ -100,8 +102,11 @@ export function createChainedSubsystem(subsystem: SubsystemSpec, projectName: st
   // 1. Persist the parent L1 subsystem spec (with projectPath) at the parent root.
   saveSubsystemSpec({ ...subsystem, projectPath });
 
-  // 2. Resolve the child project directory relative to the bound (parent) root.
-  const childDir = path.resolve(getProjectRoot(), projectPath);
+  // 2. Resolve + contain the child project directory relative to the bound
+  //    (parent) root. Fix B2: reject an absolute or ../-escaping projectPath so
+  //    a chained subproject can never scaffold, load, or execute code outside
+  //    its parent. Throws before any child scaffolding below.
+  const childDir = assertContainedProjectPath(getProjectRoot(), projectPath);
 
   // 3. Scaffold the child project unless it is already initialized (idempotent).
   const alreadyInitialized = fs.existsSync(aiPathsAt(childDir).projectConfig());
@@ -133,8 +138,11 @@ export function moveSubsystemProject(subsystemId: string, newProjectPath: string
 
   const nextPath = toPosixPath(newProjectPath);
   const root = getProjectRoot();
-  const oldDir = path.resolve(root, sub.projectPath);
-  const newDir = path.resolve(root, nextPath);
+  // Fix B2: contain BOTH the persisted source and the new target within the
+  // bound root before any on-disk relocation or spec write; absolute/../-escaping
+  // paths are rejected (the source is attacker-influenced via set-project-path).
+  const oldDir = assertContainedProjectPath(root, sub.projectPath);
+  const newDir = assertContainedProjectPath(root, nextPath);
 
   if (oldDir !== newDir) {
     if (!fs.existsSync(oldDir)) {
@@ -194,7 +202,9 @@ export function externalizeSubsystem(subsystemId: string, projectPath: string): 
   }
 
   const relPath = toPosixPath(projectPath);
-  const childDir = path.resolve(parentRoot, relPath);
+  // Fix B2: contain the child project within the parent root before provisioning
+  // or moving any specs; absolute/../-escaping projectPaths are rejected.
+  const childDir = assertContainedProjectPath(parentRoot, relPath);
   const childFooDir = path.join(childDir, '.wai', 'specs', subsystemId);
   if (fs.existsSync(childFooDir)) {
     throw new WaironError(`target already contains a "${subsystemId}" subsystem: ${childFooDir}`);
@@ -255,7 +265,10 @@ export function internalizeSubsystem(subsystemId: string): void {
 
   const parentRoot = getProjectRoot();
   const parentSpecsDir = aiPathsAt(parentRoot).specsDir();
-  const childDir = path.resolve(parentRoot, foo.projectPath);
+  // Fix B2: the PERSISTED projectPath is attacker-influenced (a prior
+  // set-project-path). Contain it before resolving — otherwise the fs.rmSync of
+  // childWai below could delete a directory outside the bound project root.
+  const childDir = assertContainedProjectPath(parentRoot, foo.projectPath);
   const childWai = path.join(childDir, '.wai');
   const childFooDir = path.join(childDir, '.wai', 'specs', subsystemId);
   if (!fs.existsSync(childFooDir)) {
@@ -344,6 +357,27 @@ function rewriteRefsInDir(specsDir: string, renameMap: Map<string, string>, excl
       if (next.some((v: string, i: number) => v !== raw.dependsOn[i])) {
         raw.dependsOn = next;
         changed = true;
+      }
+      // A Portal's dispatch table carries component refs of its own.
+      if (Array.isArray(raw.dispatch)) {
+        for (const b of raw.dispatch) {
+          const nc = remap(b.component);
+          if (nc !== b.component) {
+            b.component = nc;
+            changed = true;
+          }
+        }
+      }
+    } else if ('parentSystem' in raw && Array.isArray(raw.lifecycle)) {
+      // Subsystem index: lifecycle entrypoints name components (same-subsystem
+      // by rule, but rewrite defensively so a legacy/misdeclared tree can't
+      // silently dangle across a migration).
+      for (const le of raw.lifecycle) {
+        const nc = remap(le.component);
+        if (nc !== le.component) {
+          le.component = nc;
+          changed = true;
+        }
       }
     } else if ('component' in raw && Array.isArray(raw.methods)) {
       for (const m of raw.methods) {

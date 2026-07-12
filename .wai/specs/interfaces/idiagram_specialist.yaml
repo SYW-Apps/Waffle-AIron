@@ -10,6 +10,20 @@ methods:
       offline).
     signature: 'renderDiagram(format: string): string'
     returns: string
+  - name: buildGraphModel
+    description: >-
+      PURE projection of the current project's spec tree into a level-of-detail WebGraphModel
+      (project tier): load the specs via the loader and emit nodes from L0/L1 outward, including
+      subsystems at level 1, components at level 2, and interfaces/types at level 3, keeping only
+      nodes whose level is at or below the requested detail level, with containment/dependency edges
+      between the included nodes. Distinct from renderDiagram, which stays the static HTML/diagram
+      export; this returns a live JSON graph model for the web UI. No I/O beyond the loader; no
+      authorization.
+    signature: 'buildGraphModel(level: number): WebGraphModel'
+    returns: WebGraphModel
+    params:
+      - name: level
+        type: number
 status: complete
 createdAt: '2026-07-04T15:59:08.698Z'
-updatedAt: '2026-07-04T16:04:17.856Z'
+updatedAt: '2026-07-11T11:32:12.911Z'

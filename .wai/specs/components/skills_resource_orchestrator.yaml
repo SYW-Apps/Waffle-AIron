@@ -1,0 +1,17 @@
+id: skills_resource_orchestrator
+name: Skills Resource Orchestrator
+description: >-
+  Owns the MCP-resource workflow for Wairon's built-in SDD skills: lists them as MCP resource
+  descriptors and reads a single skill's content for publication over the MCP protocol, rejecting
+  unknown resource ids. It resolves the underlying skill documents through the Skills Resource
+  Specialist. The MCP server publishes this surface as read-only MCP resources (reached from sdd_mcp
+  through the skills portal), so cloud-only agents that cannot receive filesystem-exported skills
+  can list and fetch the SDD guidance.
+subsystem: sdd_skills
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - skills_resource_specialist
+status: complete
+createdAt: '2026-07-08T22:02:30.528Z'
+updatedAt: '2026-07-10T12:21:07.094Z'

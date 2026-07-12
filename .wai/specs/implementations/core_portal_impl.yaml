@@ -179,6 +179,28 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: internalizeSubsystem
+  - name: loadTypeSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward loadTypeSpecs call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadTypeSpecs
+  - name: dryRunSerializeSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward dryRunSerializeSpecs call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: dryRunSerializeSpecs
+  - name: buildProjectGraph
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: buildProjectGraph
+    detail: calls-only
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-05T18:45:20.207Z'
+updatedAt: '2026-07-11T11:34:23.986Z'

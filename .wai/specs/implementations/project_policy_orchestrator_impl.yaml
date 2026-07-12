@@ -1,0 +1,476 @@
+id: project_policy_orchestrator_impl
+name: Project Policy Orchestrator Implementation
+description: >-
+  Profile-aware project initialization and pack/profile policy enforcement. Credential-bearing
+  methods authenticate the caller and authorize by Principal grants; two pre-authorized entries
+  (executeApprovedInit, evaluateInitRequest) perform no authentication because the self-service
+  approval chain has already authorized them and are never portal-exposed. A null active policy
+  resolves to the documented permissive default (empty pack lists, requireProfileSelection false,
+  enforcementMode 'warn'). Audit appends are best-effort and never fail the primary action.
+contract: iproject_policy_orchestrator
+sourcePath: src/server/policy.ts
+methods:
+  - name: initializeProjectWithProfile
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential (bootstrap or user-bound token)
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: If the caller holds neither a project:create grant nor an instance-admin grant, deny
+        type: branch
+        condition: the caller holds neither a project:create grant nor an instance-admin grant
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the initialization
+        type: throw
+        error: Forbidden — creating a project requires a project:create grant or an instance-admin grant
+      - stepNumber: 4
+        description: Read the active instance pack/profile policy (or null when none has ever been configured)
+        type: call
+        targetComponent: policy_repository
+        targetMethod: getPackPolicy
+      - stepNumber: 5
+        description: >-
+          When no policy has been configured (null), substitute the documented permissive default
+          (empty requiredGlobalPacks/defaultProjectPacks, requireProfileSelection false,
+          enforcementMode 'warn') as the effective policy
+        type: local
+      - stepNumber: 6
+        description: >-
+          Evaluate the request against the effective policy: detect a missing required profile
+          selection, requested blocked packs, and unknown profile ids, collecting any violations
+        type: local
+      - stepNumber: 7
+        description: >-
+          If the effective policy enforces (enforcementMode 'block') and the evaluation found
+          violations, reject
+        type: branch
+        condition: >-
+          the effective policy enforces (enforcementMode 'block') and the evaluation found
+          violations
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Reject the non-compliant initialization
+        type: throw
+        error: policy violation — project initialization rejected under the active pack policy
+      - stepNumber: 9
+        description: Create the hosted project via the admin plane's pre-authorized create entry
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: executeApprovedCreate
+      - stepNumber: 10
+        description: Bind the created project's isolated root for pack application
+        type: local
+      - stepNumber: 11
+        description: >-
+          Assemble the effective declarative pack set from the policy (requiredGlobalPacks then
+          defaultProjectPacks), resolving each pack's declarative content from the server-global
+          pack set
+        type: local
+      - stepNumber: 12
+        description: For each required/default declarative pack in the assembled set
+        type: loop
+        loopKind: forEach
+        over: the assembled required/default declarative packs
+        endStep: 13
+      - stepNumber: 13
+        description: >-
+          Vendor and register the declarative pack into the bound project (the registry rejects code
+          packs)
+        type: call
+        targetComponent: pack_registry
+        targetMethod: installProjectPack
+      - stepNumber: 14
+        description: >-
+          Record the resolved ProjectProfileSelection (the request's selected profile ids plus the
+          policy's required profile ids and required/default pack names, stamped selectedBy from the
+          caller and selectedAt) into the project's config
+        type: local
+      - stepNumber: 15
+        description: Append a redacted audit event without letting a failure fail the initialization
+        type: try
+        endStep: 17
+        catches:
+          - error: audit append failure
+            step: 18
+      - stepNumber: 16
+        description: Append the redacted project.init.policy audit event under the active retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 17
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 19
+      - stepNumber: 18
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 19
+        description: Return the created hosted project record
+        type: return
+        outcome: created hosted project record
+  - name: executeApprovedInit
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the active instance pack/profile policy (or null when none has ever been configured);
+          this entry performs no authentication — the self-service approval chain has already
+          authorized it
+        type: call
+        targetComponent: policy_repository
+        targetMethod: getPackPolicy
+      - stepNumber: 2
+        description: >-
+          When no policy has been configured (null), substitute the documented permissive default
+          (empty pack lists, requireProfileSelection false, enforcementMode 'warn') as the effective
+          policy
+        type: local
+      - stepNumber: 3
+        description: >-
+          Evaluate the request against the effective policy: detect a missing required profile
+          selection, requested blocked packs, and unknown profile ids, collecting any violations
+        type: local
+      - stepNumber: 4
+        description: >-
+          If the effective policy enforces (enforcementMode 'block') and the evaluation found
+          violations, reject
+        type: branch
+        condition: >-
+          the effective policy enforces (enforcementMode 'block') and the evaluation found
+          violations
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Reject the non-compliant initialization
+        type: throw
+        error: policy violation — project initialization rejected under the active pack policy
+      - stepNumber: 6
+        description: Create the hosted project via the admin plane's pre-authorized create entry
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: executeApprovedCreate
+      - stepNumber: 7
+        description: Bind the created project's isolated root for pack application
+        type: local
+      - stepNumber: 8
+        description: >-
+          Assemble the effective declarative pack set from the policy (requiredGlobalPacks then
+          defaultProjectPacks), resolving each pack's declarative content from the server-global
+          pack set
+        type: local
+      - stepNumber: 9
+        description: For each required/default declarative pack in the assembled set
+        type: loop
+        loopKind: forEach
+        over: the assembled required/default declarative packs
+        endStep: 10
+      - stepNumber: 10
+        description: >-
+          Vendor and register the declarative pack into the bound project (the registry rejects code
+          packs)
+        type: call
+        targetComponent: pack_registry
+        targetMethod: installProjectPack
+      - stepNumber: 11
+        description: >-
+          Record the resolved ProjectProfileSelection (the request's selected profile ids plus the
+          policy's required profile ids and required/default pack names, stamped selectedBy from the
+          request and selectedAt) into the project's config
+        type: local
+      - stepNumber: 12
+        description: Append a redacted audit event without letting a failure fail the initialization
+        type: try
+        endStep: 14
+        catches:
+          - error: audit append failure
+            step: 15
+      - stepNumber: 13
+        description: Append the redacted project.init.policy audit event under the active retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 14
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 16
+      - stepNumber: 15
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 16
+        description: Return the created hosted project record
+        type: return
+        outcome: created hosted project record
+  - name: evaluateInitRequest
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the active instance pack/profile policy (or null when none has ever been configured);
+          this entry performs no authentication — the caller authenticated upstream
+        type: call
+        targetComponent: policy_repository
+        targetMethod: getPackPolicy
+      - stepNumber: 2
+        description: >-
+          When no policy has been configured (null), substitute the documented permissive default
+          (empty pack lists, requireProfileSelection false, enforcementMode 'warn') as the effective
+          policy
+        type: local
+      - stepNumber: 3
+        description: >-
+          Evaluate the ProjectInitRequest against the effective policy: flag a missing required
+          profile selection (when requireProfileSelection is set and the request omits it),
+          requested blocked packs, and profile ids not permitted by allowedProfileIds; build a
+          PolicyEvaluationResult with the compliance flag, missing/blocked lists, and human-readable
+          messages. No side effects.
+        type: local
+      - stepNumber: 4
+        description: Return the policy evaluation result
+        type: return
+        outcome: policy evaluation result
+  - name: evaluateProjectPolicy
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          If the caller holds neither a grant covering the project (mcp:write for the project or an
+          instance-wide wildcard) nor an instance-admin grant, deny
+        type: branch
+        condition: >-
+          the caller holds neither a grant covering the project (mcp:write for the project or an
+          instance-wide wildcard) nor an instance-admin grant
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the evaluation
+        type: throw
+        error: >-
+          Forbidden — evaluating a project's policy requires a grant covering the project or an
+          instance-admin grant
+      - stepNumber: 4
+        description: >-
+          Resolve and bind the target project's isolated root within the principal's authorized set
+          (rejects cross-project access)
+        type: call
+        targetComponent: project_registry
+        targetMethod: resolveRoot
+      - stepNumber: 5
+        description: Read the active instance pack/profile policy (or null when none has ever been configured)
+        type: call
+        targetComponent: policy_repository
+        targetMethod: getPackPolicy
+      - stepNumber: 6
+        description: >-
+          When no policy has been configured (null), substitute the documented permissive default as
+          the effective policy
+        type: local
+      - stepNumber: 7
+        description: Probe the bound project's active declarative packs
+        type: call
+        targetComponent: pack_registry
+        targetMethod: listProjectPacks
+      - stepNumber: 8
+        description: >-
+          Evaluate the project's active packs and recorded profile selection against the effective
+          policy, building a PolicyEvaluationResult (missing required/default packs, blocked packs
+          present, missing required profile ids, and human-readable messages). No side effects.
+        type: local
+      - stepNumber: 9
+        description: Return the policy evaluation result
+        type: return
+        outcome: policy evaluation result
+  - name: reconcileProjectPolicy
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          If the caller holds neither a grant covering the project (mcp:write for the project or an
+          instance-wide wildcard) nor an instance-admin grant, deny
+        type: branch
+        condition: >-
+          the caller holds neither a grant covering the project (mcp:write for the project or an
+          instance-wide wildcard) nor an instance-admin grant
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the reconciliation
+        type: throw
+        error: >-
+          Forbidden — reconciling a project's policy requires a grant covering the project or an
+          instance-admin grant
+      - stepNumber: 4
+        description: >-
+          Resolve and bind the target project's isolated root within the principal's authorized set
+          (rejects cross-project access)
+        type: call
+        targetComponent: project_registry
+        targetMethod: resolveRoot
+      - stepNumber: 5
+        description: Read the active instance pack/profile policy (or null when none has ever been configured)
+        type: call
+        targetComponent: policy_repository
+        targetMethod: getPackPolicy
+      - stepNumber: 6
+        description: >-
+          When no policy has been configured (null), substitute the documented permissive default as
+          the effective policy
+        type: local
+      - stepNumber: 7
+        description: Probe the bound project's active declarative packs
+        type: call
+        targetComponent: pack_registry
+        targetMethod: listProjectPacks
+      - stepNumber: 8
+        description: >-
+          Evaluate the project against the effective policy, computing the missing required/default
+          declarative packs
+        type: local
+      - stepNumber: 9
+        description: >-
+          If the effective policy permits auto-reconciliation (enforcementMode 'auto_reconcile') and
+          required/default packs are missing, apply them; otherwise skip to building the result
+        type: branch
+        condition: >-
+          the effective policy permits auto-reconciliation (enforcementMode 'auto_reconcile') and
+          required/default packs are missing
+        onFalseStep: 13
+      - stepNumber: 10
+        description: >-
+          Assemble the missing required/default declarative packs with their content from the
+          server-global pack set
+        type: local
+      - stepNumber: 11
+        description: For each missing required/default declarative pack
+        type: loop
+        loopKind: forEach
+        over: the missing required/default declarative packs
+        endStep: 12
+      - stepNumber: 12
+        description: >-
+          Vendor and register the missing declarative pack into the bound project (the registry
+          rejects code packs)
+        type: call
+        targetComponent: pack_registry
+        targetMethod: installProjectPack
+      - stepNumber: 13
+        description: >-
+          Build the PolicyEvaluationResult reflecting the post-reconciliation compliance state,
+          remaining gaps, and human-readable messages
+        type: local
+      - stepNumber: 14
+        description: Append a redacted audit event without letting a failure fail the reconciliation
+        type: try
+        endStep: 16
+        catches:
+          - error: audit append failure
+            step: 17
+      - stepNumber: 15
+        description: Append the redacted policy.reconcile audit event under the active retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 16
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 18
+      - stepNumber: 17
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 18
+        description: Return the policy evaluation result
+        type: return
+        outcome: policy evaluation result
+  - name: getPackPolicy
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Authenticate the caller credential — any authenticated principal may read the policy so
+          agents can see what initialization requires
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Read the active instance pack/profile policy (or null when none has ever been configured)
+        type: call
+        targetComponent: policy_repository
+        targetMethod: getPackPolicy
+      - stepNumber: 3
+        description: >-
+          If no policy has ever been configured (the repository returned null), substitute the
+          documented permissive default; otherwise return the stored policy
+        type: branch
+        condition: no policy has ever been configured (the repository returned null)
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Substitute the documented permissive default policy (empty
+          requiredGlobalPacks/defaultProjectPacks, requireProfileSelection false, enforcementMode
+          'warn')
+        type: local
+      - stepNumber: 5
+        description: Return the active instance pack/profile policy
+        type: return
+        outcome: the active instance pack/profile policy
+  - name: setPackPolicy
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: If the caller holds neither a policy:manage grant nor an instance-admin grant, deny
+        type: branch
+        condition: the caller holds neither a policy:manage grant nor an instance-admin grant
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the policy administration
+        type: throw
+        error: >-
+          Forbidden — policy administration requires a policy:manage grant or an instance-admin
+          grant
+      - stepNumber: 4
+        description: >-
+          Stamp updatedBy on the supplied policy from the authenticated caller's principal subject
+          (the registry stamps updatedAt)
+        type: local
+      - stepNumber: 5
+        description: Persist the replacement active pack/profile policy wholesale through the repository
+        type: call
+        targetComponent: policy_repository
+        targetMethod: setPackPolicy
+      - stepNumber: 6
+        description: Append a redacted audit event without letting a failure fail the policy change
+        type: try
+        endStep: 8
+        catches:
+          - error: audit append failure
+            step: 9
+      - stepNumber: 7
+        description: >-
+          Append the redacted policy.set audit event at security level under the active retention
+          policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 8
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 10
+      - stepNumber: 9
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 10
+        description: Return the stored policy
+        type: return
+        outcome: the stored policy
+detail: full
+status: complete
+createdAt: '2026-07-09T20:50:11.443Z'
+updatedAt: '2026-07-09T20:53:18.401Z'

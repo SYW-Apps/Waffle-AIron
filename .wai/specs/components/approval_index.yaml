@@ -1,0 +1,13 @@
+id: approval_index
+name: Approval Index
+description: >-
+  Read-path projection over hosted approval requests, supporting lookup by id, requester, project,
+  status, action kind, and pending decision queues.
+subsystem: sdd_host
+componentType: Index
+owns: []
+dependsOn:
+  - approval_store
+status: complete
+createdAt: '2026-07-09T07:19:15.593Z'
+updatedAt: '2026-07-09T19:32:54.746Z'

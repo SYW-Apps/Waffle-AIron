@@ -1,0 +1,15 @@
+id: skills_resource_specialist
+name: Skills Resource Specialist
+description: >-
+  Resolves Wairon's four built-in SDD skills (sdd-architect, sdd-auditor, sdd-implement,
+  sdd-narrative) into MCP-readable skill resources: it lists their MCP-safe descriptors and reads
+  each skill's markdown content directly from the packaged skill templates, mirroring the templates
+  skills_exporter copies to the filesystem. This lets cloud-only MCP agents, which cannot receive
+  filesystem-exported skills, read the SDD guidance over the MCP protocol.
+subsystem: sdd_skills
+componentType: Specialist
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-07-08T22:01:27.596Z'
+updatedAt: '2026-07-10T12:20:48.056Z'

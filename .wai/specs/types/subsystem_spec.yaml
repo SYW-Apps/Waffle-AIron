@@ -6,34 +6,50 @@ fields:
   - name: id
     type: string
     description: Stable subsystem identifier
+    optional: false
     key: primary
   - name: name
     type: string
     description: Human-readable subsystem name
+    optional: false
   - name: description
     type: string
     description: What this subsystem is responsible for
+    optional: false
   - name: parentSystem
     type: string
     description: Name of the owning L0 system
+    optional: false
   - name: targetLanguage
     type: string
     description: Language override for this subsystem
     optional: true
   - name: projectPath
     type: string
-    description: Subproject root for chained/namespaced spec trees
+    description: >-
+      Subproject root for chained/namespaced spec trees. MUST be a relative path that resolves
+      strictly within the owning project's root; absolute paths and ../-escaping paths are rejected
+      so a subproject is always contained by its parent.
     optional: true
   - name: publicInterfaces
     type: object[]
     description: 'Published surface: type + details + realizing component'
+    optional: false
   - name: trustedLinks
     type: object[]
     description: 'Acknowledged mutual couplings: subsystem + reason'
+    optional: false
   - name: status
     type: string
     description: draft | design | complete
     optional: true
+  - name: lifecycle
+    type: LifecycleEntrypoint[]
+    description: >-
+      Declared init/shutdown flow roots. Reachability analysis (unused-detection, durability
+      round-trip hydration) treats these as entrypoints alongside Portals, Observers, and published
+      components.
+    optional: true
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-03T00:00:00.000Z'
+updatedAt: '2026-07-10T18:47:34.461Z'

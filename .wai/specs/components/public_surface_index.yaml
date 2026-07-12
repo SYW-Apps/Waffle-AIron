@@ -1,0 +1,13 @@
+id: public_surface_index
+name: Public Surface Index
+description: >-
+  Read-path projection over public-surface snapshots, supporting lookup by project, system public
+  interface id, version, and audience.
+subsystem: sdd_host
+componentType: Index
+owns: []
+dependsOn:
+  - public_surface_store
+status: complete
+createdAt: '2026-07-08T21:12:43.527Z'
+updatedAt: '2026-07-09T22:13:09.007Z'

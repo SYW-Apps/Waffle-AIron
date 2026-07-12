@@ -1,0 +1,1299 @@
+import * as crypto from 'crypto';
+import type { IncomingMessage, ServerResponse } from 'http';
+import { signSsoState, verifySsoState, authenticateSession } from './auth.js';
+import { buildAuthorizationUrl, exchangeCode, resolveSubject } from './idp.js';
+import {
+  resolveEnabledProvider,
+  tryAppendAudit,
+  buildSsoAuditEvent,
+  ANONYMOUS_SSO_ACTOR,
+  listUsers,
+  type SsoStatePayload,
+} from './identity.js';
+import { assertAllowedRedirectUri } from './idp.js';
+import { getHealthReport, getUsage } from './operations.js';
+import { listPendingRequests, decideRequest } from './selfservice.js';
+import { UnauthenticatedError, ForbiddenError } from './errors.js';
+import { findUserByExternalSubject, upsertUser } from './users.js';
+import {
+  createWebSession,
+  removeWebSession,
+  pruneExpiredWebSessions,
+  touchWebSession,
+  listWebSessionsBySubject,
+} from './websessions.js';
+import { resolveProjectRoot } from './projects.js';
+import { runWithProjectRoot } from '../utils/fs.js';
+import { hostCore, validateProjectAsComplete } from './adapters.js';
+import { generateLandscape } from './landscape.js';
+import { sendJson } from './httpio.js';
+import type { ValidationIssue } from '../core/validation.js';
+import type {
+  ApprovalDecision,
+  HostConfig,
+  HostedUserRecord,
+  LandscapeGraphModel,
+  PrincipalSubject,
+  WebContext,
+  WebGraphModel,
+  WebGraphNode,
+  WebSession,
+} from './types.js';
+
+// ---------------------------------------------------------------------------
+// Web Orchestrator + Web Graph Orchestrator + Web Portal (sdd_host)
+//
+// THREE components realize in this module (all sharing sourcePath src/server/web.ts):
+//
+// 1. web_orchestrator — the unified web UI's server-side shell: SSO sign-in
+//    start/complete (unauthenticated, trust anchored by the signed SSO state and
+//    the provider code exchange), browser-session lifecycle (create on sign-in,
+//    remove on sign-out, opportunistic expired-session GC), the session-principal
+//    context projection, and the graph entry point delegated to the graph
+//    orchestrator. MULTI-DEVICE: prior sessions are left intact on sign-in, so one
+//    principal may hold concurrent sessions; each is independently revocable, and
+//    signOutEverywhere revokes them all. Audit appends are best-effort.
+//
+// 2. web_graph_orchestrator — the live level-of-detail graph: authenticate the
+//    browser session to a Principal, then either reshape the already-scoped hosted
+//    landscape (landscape tier) or project one authorized project's spec tree at
+//    the requested detail level with validator issues overlaid (project tier).
+//
+// 3. web_portal — the browser-facing HTTP boundary: serves the client app shell at
+//    the root and forwards the thin session/SSO/context/graph routes. The session
+//    is the auth bridge — the served client reuses every scoped endpoint (e.g.
+//    /mcp) with the session cookie in place of a bearer token.
+//
+// The SSO start/complete pair mirrors identity.ts's headless SSO login EXACTLY,
+// with one difference: instead of minting an ApiKeyRecord token, sign-in creates a
+// durable WebSession (whose id is itself a first-class credential). Every reusable
+// helper is imported from identity.ts / auth.ts / idp.ts (never duplicated).
+// ---------------------------------------------------------------------------
+
+/** Browser session lifetime: long enough for a working session, short enough to
+ *  bound a stolen cookie. The auth specialist rejects a session past its expiry. */
+const WEB_SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
+
+/** The write permissions that make a caller a project author in the web client. */
+const WRITE_PERMISSIONS = ['mcp:write', 'project:create'];
+
+// ── Local developer server (`wairon dev`) conventions ────────────────────────
+//
+// The single-project dev server auto-signs a synthetic local-developer identity
+// into a session scoped to exactly ONE local project (never instance-wide), so a
+// leaked dev session can only touch that one local tree. These constants are the
+// sole source of those conventions (subject id, project id, session lifetime).
+
+/** The synthetic identity behind the local dev session: a service principal issued
+ *  locally. Its userId is the subject key startDevSession lists/reuses by. */
+const DEV_SUBJECT: PrincipalSubject = { userId: 'local-dev', kind: 'service', issuer: 'local' };
+
+/** The fixed hosted-project id the dev server registers the cwd under. */
+const DEV_PROJECT_ID = 'local';
+
+/** Dev session lifetime — long enough to span a working session and repeated
+ *  `wairon dev` restarts (the dev data dir is stable per cwd, so the session is
+ *  reused rather than churned), yet still bounded. */
+const DEV_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+// ── Web Orchestrator ─────────────────────────────────────────────────────────
+
+/**
+ * Begin a browser SSO sign-in: resolve the enabled provider, generate a nonce,
+ * sign an SSO state binding providerId + nonce + redirectUri, build the provider
+ * authorization URL, append a best-effort web.signin.start (info) audit event, and
+ * return the authorization URL together with the nonce. The caller (the HTTP
+ * portal) installs the nonce as a short-lived HttpOnly cookie so the callback can
+ * prove the completing browser is the one that started — defeating login CSRF.
+ * Unauthenticated by nature — no caller credential.
+ */
+export function startSignIn(cfg: HostConfig, providerId: string, redirectUri: string): { url: string; nonce: string } {
+  const provider = resolveEnabledProvider(cfg, providerId); // steps 1–4 (throws on unknown/disabled)
+
+  // Pin the redirect URI to the provider's server-side allowlist (when configured)
+  // — the callback destination must never be attacker-chosen (open-redirect /
+  // code-delivery hardening on top of the nonce-cookie login-CSRF defense).
+  assertAllowedRedirectUri(provider, redirectUri);
+
+  const nonce = crypto.randomBytes(16).toString('hex'); // step 5
+  const payload: SsoStatePayload = { providerId, nonce, redirectUri };
+  const state = signSsoState(JSON.stringify(payload)); // step 6
+  const url = buildAuthorizationUrl(provider, state, redirectUri); // step 7
+
+  // steps 8–11: best-effort append (tryAppendAudit wraps the try/jump/catch).
+  tryAppendAudit(cfg, buildSsoAuditEvent(ANONYMOUS_SSO_ACTOR, 'web.signin.start', 'info', { target: providerId }));
+
+  return { url, nonce }; // step 12
+}
+
+/**
+ * Complete a browser SSO sign-in: verify the signed state (tampered/expired is
+ * rejected), resolve the bound enabled provider, exchange the code and resolve the
+ * external subject, look up the hosted user by issuer + external subject, provision
+ * a first-login active user with EMPTY grants when absent, reject re-login for an
+ * existing deactivated user before creating a session, create a browser session
+ * bound to the resolved subject and the user's CURRENT grants (prior sessions left
+ * intact — multi-device), append a best-effort web.signin (security) audit event,
+ * and return the new session id. Unauthenticated by nature — no caller credential.
+ * `expectedNonce` is the value of the browser's SSO-nonce cookie: it MUST equal
+ * the nonce inside the signed state, proving the completing browser is the one
+ * that started the flow (login-CSRF defense). Async: exchangeCode does provider
+ * network I/O.
+ */
+export async function completeSignIn(cfg: HostConfig, state: string, code: string, expectedNonce: string | null): Promise<string> {
+  // Verify + parse the signed state (throws on a tampered or expired state).
+  const payload = JSON.parse(verifySsoState(state)) as SsoStatePayload; // steps 1–2
+  const { providerId, redirectUri } = payload;
+
+  // Bind the completing browser to the initiating one: the state's nonce must
+  // match the HttpOnly nonce cookie. A forged/replayed callback delivered to a
+  // victim carries no matching cookie (an attacker cannot set it), so it fails
+  // closed — the login-CSRF vector.
+  if (!nonceMatches(payload.nonce, expectedNonce)) {
+    throw new ForbiddenError('SSO state does not match this browser — restart sign-in');
+  }
+
+  const provider = resolveEnabledProvider(cfg, providerId); // steps 3–6
+
+  // Exchange the code (network I/O) and resolve the external subject, never
+  // leaking raw provider tokens across the boundary.
+  const summary = await exchangeCode(provider, code, redirectUri); // step 7
+  const subject = resolveSubject(provider, summary); // step 8
+
+  // Look up the hosted user by issuer + external subject; provision on first login.
+  let user = findUserByExternalSubject(cfg.dataDir, subject.issuer, subject.externalSubject ?? ''); // step 9
+  if (!user) {
+    // step 10 → 11
+    const provisioned: HostedUserRecord = {
+      id: subject.userId,
+      subject,
+      status: 'active',
+      grants: [], // first-login: empty — an admin assigns grants afterwards
+      createdAt: new Date().toISOString(),
+    };
+    user = upsertUser(cfg.dataDir, provisioned); // step 12
+  }
+
+  // Reject re-login for a deactivated user before creating a session. A freshly
+  // provisioned first-login record is always active, so only an existing
+  // deactivated user is rejected here.
+  if (user.status !== 'active') {
+    // steps 13–14
+    throw new ForbiddenError('deactivated user may not sign in');
+  }
+
+  // Build the new WebSession (the repository mints the reserved-prefix id and
+  // stamps createdAt/lastSeenAt). Grants = the user's CURRENT grants. Prior
+  // sessions are LEFT INTACT so one principal may hold concurrent sessions.
+  const session: WebSession = {
+    id: '', // web_session_repository mints a ws_-prefixed id
+    subject: user.subject,
+    grants: user.grants,
+    createdAt: '', // stamped by the registry
+    expiresAt: new Date(Date.now() + WEB_SESSION_TTL_MS).toISOString(),
+    providerId,
+  }; // step 15
+  const stored = createWebSession(cfg.dataDir, session); // step 16
+
+  // steps 17–20: best-effort security-level append. The actor carries WHO signed
+  // in; the target is the providerId (the session id is a secret credential and
+  // must never be logged — the audit sink rejects credential-shaped targets).
+  tryAppendAudit(cfg, buildSsoAuditEvent(user.subject, 'web.signin', 'security', { target: providerId }));
+
+  return stored.id; // step 21 (the portal sets it as the session cookie)
+}
+
+/**
+ * End a browser session: remove it by id, opportunistically prune all
+ * already-expired sessions (housekeeping on the sign-out write path), and append a
+ * best-effort web.signout (info) audit event. Never resolves the session (the id is
+ * a secret credential), so the event carries no raw session id.
+ */
+export function signOut(cfg: HostConfig, sessionId: string): void {
+  removeWebSession(cfg.dataDir, sessionId); // step 1
+  pruneExpiredWebSessions(cfg.dataDir, new Date().toISOString()); // step 2
+
+  // steps 3–6: best-effort append.
+  tryAppendAudit(cfg, buildSsoAuditEvent(ANONYMOUS_SSO_ACTOR, 'web.signout', 'info'));
+  // step 7: return once removed.
+}
+
+/**
+ * Resolve the session to a Principal via the single auth authority's session
+ * bridge (an expired/absent session is rejected), record activity by touching
+ * lastSeenAt to now, then derive the capability flags and assemble the WebContext.
+ * Reads only; not audited.
+ */
+export function getCurrentContext(cfg: HostConfig, sessionId: string): WebContext {
+  const principal = authenticateSession(cfg.dataDir, sessionId); // step 1
+  if (!principal.authenticated) throw new UnauthenticatedError();
+
+  touchWebSession(cfg.dataDir, sessionId, new Date().toISOString()); // step 2
+
+  // step 3: derive the capability flags from the principal's grants.
+  const grants = principal.grants ?? [];
+  // Instance admin = a genuine '*' grant, not a unit-scoped '*'+orgUnitId one.
+  const isAdmin = grants.some((g) => g.projectId === '*' && !g.orgUnitId);
+  // A write permission — or the '*' wildcard (which the permission model treats as
+  // covering every permission) — makes the caller a project author.
+  const canWriteProjects = grants.some(
+    (g) => g.permissions.includes('*') || WRITE_PERMISSIONS.some((p) => g.permissions.includes(p)),
+  );
+  const visibleProjectIds = [...new Set(grants.filter((g) => g.projectId !== '*').map((g) => g.projectId))];
+  const visibleUnitIds = [
+    ...new Set(grants.filter((g) => g.orgUnitId !== undefined && g.orgUnitId !== '').map((g) => g.orgUnitId as string)),
+  ];
+
+  return {
+    subject: principal.subject ?? { userId: principal.tokenId, kind: 'service', issuer: 'local' },
+    grants,
+    isAdmin,
+    canWriteProjects,
+    visibleProjectIds,
+    visibleUnitIds,
+    // local signals the reused client to hide the tenancy/login chrome. It is the
+    // server posture (cfg.devMode), never a session/grant property — only the local
+    // developer server sets it, so the hosted UI always sees local=false.
+    local: !!cfg.devMode,
+  }; // step 4
+}
+
+/**
+ * Mint (or reuse) the local-developer session for the single-project dev server and
+ * return its id. REFUSED unless the server is in local developer mode (cfg.devMode)
+ * — this is the ONLY unauthenticated session-minting path and it exists solely for
+ * `wairon dev` (loopback, auth off). The session is bound to a synthetic
+ * local-developer subject with a grant on the ONE local project (never an
+ * instance-wide '*' grant), so a leaked dev session is scoped to that one local
+ * project. Reuses an existing dev session rather than churning the store on every
+ * cookieless hit.
+ */
+export function startDevSession(cfg: HostConfig): string {
+  // steps 1–2: never mint a dev session in a hosted deployment.
+  if (!cfg.devMode) {
+    throw new Error('dev session is only available under wairon dev (devMode)');
+  }
+
+  // step 3: list existing sessions for the synthetic local-developer subject.
+  const existing = listWebSessionsBySubject(cfg.dataDir, DEV_SUBJECT.userId);
+
+  // steps 4–5: reuse an existing dev session (no churn).
+  if (existing.length > 0) {
+    return existing[0].id;
+  }
+
+  // step 6: build a new session bound to the local-developer subject with a single
+  // PROJECT-SCOPED grant on the one local project (never instance-wide '*').
+  const session: WebSession = {
+    id: '', // web_session_repository mints a ws_-prefixed id
+    subject: DEV_SUBJECT,
+    grants: [{ projectId: DEV_PROJECT_ID, permissions: ['mcp:read', 'mcp:write'] }],
+    createdAt: '', // stamped by the registry
+    expiresAt: new Date(Date.now() + DEV_SESSION_TTL_MS).toISOString(),
+  };
+  const stored = createWebSession(cfg.dataDir, session); // step 7
+
+  return stored.id; // step 8
+}
+
+/**
+ * Return the live level-of-detail graph for the requested tier and detail level by
+ * delegating to the web graph orchestrator, which authenticates the session and
+ * scopes the result.
+ */
+export function getGraph(
+  cfg: HostConfig,
+  sessionId: string,
+  tier: string,
+  projectId: string,
+  level: number,
+): WebGraphModel {
+  return getWebGraph(cfg, sessionId, tier, projectId, level); // step 1 (delegate)
+}
+
+/**
+ * Return the interactive architecture canvas HTML for the requested project by
+ * delegating to the web graph orchestrator, which authenticates the session and
+ * scopes the result to the principal's authorized projects.
+ */
+export function getProjectCanvas(cfg: HostConfig, sessionId: string, projectId: string): string {
+  return getWebProjectCanvas(cfg, sessionId, projectId); // step 1 (delegate)
+}
+
+/**
+ * Revoke every browser session belonging to the caller's principal (sign out on
+ * all devices/tabs): resolve the presented session to a Principal (an expired or
+ * absent session yields an unauthenticated principal → idempotent no-op), remove
+ * all of that subject's sessions, and append a best-effort web.signout.all
+ * (security) audit event.
+ */
+export function signOutEverywhere(cfg: HostConfig, sessionId: string): void {
+  const principal = authenticateSession(cfg.dataDir, sessionId); // step 1
+  if (!principal.authenticated) {
+    // steps 2–3: nothing to revoke.
+    return;
+  }
+
+  const subject = principal.subject ?? { userId: principal.tokenId, kind: 'service', issuer: 'local' };
+  const sessions = listWebSessionsBySubject(cfg.dataDir, subject.userId); // step 4
+  for (const session of sessions) {
+    // steps 5–6
+    removeWebSession(cfg.dataDir, session.id);
+  }
+
+  // steps 7–10: best-effort security-level append. The actor carries the subject;
+  // no session id is logged (the audit sink rejects credential-shaped targets).
+  tryAppendAudit(cfg, buildSsoAuditEvent(subject, 'web.signout.all', 'security'));
+  // step 11: return, all of the principal's sessions revoked.
+}
+
+// ── Web Graph Orchestrator ─────────────────────────────────────────────────────
+
+/**
+ * Resolve the session to a Principal (rejecting an expired/absent session as
+ * unauthenticated). For tier 'landscape', delegate to the landscape orchestrator's
+ * already-scoped generation (presenting the session id as the credential per the
+ * auth bridge) and reshape the LandscapeGraphModel into a level-of-detail
+ * WebGraphModel. For tier 'project', resolve+bind the requested project's isolated
+ * root within the principal's authorized set (cross-project → Forbidden), project
+ * its spec tree at the requested level, overlay validator issues as per-node issue
+ * counts, and return it. An unknown tier is rejected.
+ */
+export function getWebGraph(
+  cfg: HostConfig,
+  sessionId: string,
+  tier: string,
+  projectId: string,
+  level: number,
+): WebGraphModel {
+  const principal = authenticateSession(cfg.dataDir, sessionId); // step 1
+  if (!principal.authenticated) throw new UnauthenticatedError();
+
+  switch (tier) {
+    // step 2
+    case 'landscape': {
+      // step 3: present the session id as the credential (the auth bridge — a
+      // session resolves to a Principal exactly like a bearer). The landscape
+      // orchestrator applies its own landscape:read scoping.
+      const landscape = generateLandscape(cfg, sessionId, 'instance');
+      return reshapeLandscapeGraph(landscape, level); // steps 4–5
+    }
+    case 'project': {
+      // step 6: resolve+bind within the principal's authorized set (an out-of-scope
+      // project resolves to null → Forbidden, no existence leak).
+      const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
+      if (!root) {
+        throw new ForbiddenError('project not authorized or unknown');
+      }
+      // steps 7–11: bind the root for the host-core reads that follow.
+      return runWithProjectRoot(root, () => {
+        const graph = hostCore.buildProjectGraph(level); // step 8
+        const validation = validateProjectAsComplete(); // step 9
+        return overlayProjectIssues(graph, validation.issues, projectId, level); // steps 10–11
+      });
+    }
+    default:
+      throw new Error('unsupported graph tier'); // step 12
+  }
+}
+
+/**
+ * Render ONE authorized project's interactive architecture canvas as a
+ * self-contained HTML string, reusing the SAME engine as the static
+ * `wairon diagram --format canvas` export (renderCanvasHtml: Cytoscape layout,
+ * edge routing, type-ERD/database views, search, resizable details sidebar) —
+ * NOT a second renderer. Resolve the session to a Principal (an expired/absent
+ * session is unauthenticated), resolve+bind the requested project's isolated root
+ * within the principal's authorized set (an out-of-scope or unknown project
+ * resolves to null → Forbidden, no existence leak), then render the 'canvas'
+ * diagram over the bound spec tree via the host core adapter.
+ */
+export function getWebProjectCanvas(cfg: HostConfig, sessionId: string, projectId: string): string {
+  const principal = authenticateSession(cfg.dataDir, sessionId); // step 1
+  if (!principal.authenticated) throw new UnauthenticatedError();
+
+  // step 2: resolve+bind within the principal's authorized set.
+  const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
+  if (!root) {
+    throw new ForbiddenError('project not authorized or unknown');
+  }
+
+  // steps 3–5: bind the root and render the interactive canvas over the bound tree.
+  return runWithProjectRoot(root, () => hostCore.renderDiagram('canvas'));
+}
+
+/**
+ * Reshape an already-scoped LandscapeGraphModel into a level-of-detail
+ * WebGraphModel: orgUnit → kind 'unit' at level 0 (carrying its parent unit as
+ * parentId, derived from the hierarchy edges), project → kind 'project' at level 0,
+ * publicInterface → kind 'interface' at level 2. Reuse the landscape edges as-is,
+ * keep only nodes at or below the requested detail level, drop any edge whose
+ * endpoint was filtered out, and stamp tier 'landscape', scope 'instance'.
+ */
+function reshapeLandscapeGraph(model: LandscapeGraphModel, level: number): WebGraphModel {
+  const unitNodeIds = new Set(model.nodes.filter((n) => n.nodeKind === 'orgUnit').map((n) => n.id));
+  // A unit's parent is the source of the hierarchy ('contains') edge whose target
+  // is that unit and whose source is itself a unit node.
+  const parentOf = new Map<string, string>();
+  for (const e of model.edges) {
+    if (unitNodeIds.has(e.to) && unitNodeIds.has(e.from)) parentOf.set(e.to, e.from);
+  }
+
+  const nodes: WebGraphNode[] = [];
+  for (const n of model.nodes) {
+    let kind: string;
+    let nodeLevel: number;
+    if (n.nodeKind === 'orgUnit') {
+      kind = 'unit';
+      nodeLevel = 0;
+    } else if (n.nodeKind === 'project') {
+      kind = 'project';
+      nodeLevel = 0;
+    } else if (n.nodeKind === 'publicInterface') {
+      kind = 'interface';
+      nodeLevel = 2;
+    } else {
+      continue; // an unrecognized landscape node kind is not projected
+    }
+    const node: WebGraphNode = { id: n.id, label: n.label, kind, level: nodeLevel };
+    if (n.projectId !== undefined) node.projectId = n.projectId;
+    if (n.status !== undefined) node.status = n.status;
+    const parentId = parentOf.get(n.id);
+    if (parentId !== undefined) node.parentId = parentId;
+    nodes.push(node);
+  }
+
+  const kept = nodes.filter((n) => n.level <= level);
+  const keptIds = new Set(kept.map((n) => n.id));
+  const edges = model.edges.filter((e) => keptIds.has(e.from) && keptIds.has(e.to));
+
+  return {
+    tier: 'landscape',
+    nodes: kept,
+    edges,
+    level,
+    generatedAt: new Date().toISOString(),
+    scope: 'instance',
+  };
+}
+
+/**
+ * Overlay validator issues onto a project graph's nodes as per-node issueCounts,
+ * grouping each issue by the component/spec id it references, and stamp tier
+ * 'project', scope = the project id, level = the requested level, generatedAt = now.
+ */
+function overlayProjectIssues(
+  graph: WebGraphModel,
+  issues: ValidationIssue[],
+  projectId: string,
+  level: number,
+): WebGraphModel {
+  const counts = new Map<string, number>();
+  for (const issue of issues) {
+    const id = issue.specId;
+    if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  const nodes = graph.nodes.map((n) => {
+    const count = counts.get(n.id);
+    return count !== undefined ? { ...n, issueCount: count } : n;
+  });
+  return {
+    ...graph,
+    nodes,
+    tier: 'project',
+    scope: projectId,
+    level,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+// ── Web Portal (HTTP, DATA plane) ──────────────────────────────────────────────
+//
+// Browser-facing boundary. Serves the client app shell at the root and forwards the
+// thin session/SSO/context/graph routes to the orchestrator. Rides the DATA-plane
+// listener (gated by exposure.webUiEnabled in http.ts). The cookie/CSRF/exposure
+// security decisions live in http.ts (routeData); this handler owns the route
+// dispatch, cookie management on the response, and its own error → status mapping.
+
+/** The browser cookie carrying the session id (a first-class credential). It is
+ *  HttpOnly, so client JS cannot read it — the server reads it from the Cookie
+ *  header as the auth bridge. */
+export const WEB_SESSION_COOKIE = 'wairon_session';
+
+/** Read the wairon_session cookie (a ws_-prefixed session id) from the request's
+ *  Cookie header, or null when absent. */
+export function sessionCookieValue(req: IncomingMessage): string | null {
+  const header = req.headers['cookie'];
+  if (!header) return null;
+  const raw = Array.isArray(header) ? header.join(';') : header;
+  for (const part of raw.split(';')) {
+    const eq = part.indexOf('=');
+    if (eq === -1) continue;
+    if (part.slice(0, eq).trim() === WEB_SESSION_COOKIE) return part.slice(eq + 1).trim();
+  }
+  return null;
+}
+
+/** The Set-Cookie value that installs the session cookie: HttpOnly + SameSite=Lax +
+ *  Path=/, plus Secure when the effective exposure requires TLS. Exported so the
+ *  HTTP layer can install the cookie inline on the dev auto-login path. */
+export function setSessionCookie(sessionId: string, secure: boolean): string {
+  return `${WEB_SESSION_COOKIE}=${sessionId}; HttpOnly; SameSite=Lax; Path=/${secure ? '; Secure' : ''}`;
+}
+
+/** The Set-Cookie value that clears the session cookie (Max-Age=0). */
+function clearSessionCookie(secure: boolean): string {
+  return `${WEB_SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secure ? '; Secure' : ''}`;
+}
+
+/** Short-lived cookie binding the browser that STARTED an SSO flow to the one that
+ *  COMPLETES it — the callback requires the cookie's nonce to equal the nonce inside
+ *  the signed state, which defeats login CSRF (an attacker cannot set this HttpOnly
+ *  cookie in the victim's browser). Lives only for the ~10-min SSO round-trip. */
+export const WEB_SSO_NONCE_COOKIE = 'wairon_sso_nonce';
+const SSO_NONCE_MAX_AGE_S = 600;
+
+function ssoNonceCookieValue(req: IncomingMessage): string | null {
+  const header = req.headers['cookie'];
+  if (!header) return null;
+  const raw = Array.isArray(header) ? header.join(';') : header;
+  for (const part of raw.split(';')) {
+    const eq = part.indexOf('=');
+    if (eq === -1) continue;
+    if (part.slice(0, eq).trim() === WEB_SSO_NONCE_COOKIE) return part.slice(eq + 1).trim();
+  }
+  return null;
+}
+
+function setNonceCookie(nonce: string, secure: boolean): string {
+  return `${WEB_SSO_NONCE_COOKIE}=${nonce}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SSO_NONCE_MAX_AGE_S}${secure ? '; Secure' : ''}`;
+}
+
+function clearNonceCookie(secure: boolean): string {
+  return `${WEB_SSO_NONCE_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secure ? '; Secure' : ''}`;
+}
+
+/** Constant-time equality for the two hex nonces (absent cookie fails closed). */
+function nonceMatches(a: string | null, b: string | null): boolean {
+  if (!a || !b || a.length !== b.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
+
+/**
+ * Serve the unified web UI client application shell for the requested path. No
+ * orchestrator call; the shell is a THIN host that boots the session context and
+ * then embeds the REAL architecture canvas per project via a same-origin iframe.
+ *
+ * The canvas is NOT reimplemented here: the shell points an <iframe> at
+ * GET /web/canvas?projectId=…, which renders the exported renderCanvasHtml canvas
+ * (Cytoscape layout, edge routing, type-ERD/database views, search, resizable
+ * details sidebar) over the selected project's spec tree — the SAME engine as the
+ * static `wairon diagram --format canvas` export, not a second renderer. The shell
+ * owns only the boot/login flow, the project picker, and the account menu, and it
+ * reuses the exported canvas deep-space --syw-* theme so it reads as a sibling of
+ * the embedded canvas.
+ *
+ * One self-contained HTML document — all CSS + JS inline, zero external assets
+ * (the iframe loads a same-origin route). The inline script avoids template
+ * literals / `$`+`{` so it embeds cleanly in this outer template string. Every
+ * fetch keeps credentials:'same-origin' plus the X-Wairon-Web CSRF header.
+ *
+ * LOCAL DEV (ctx.local, from `wairon dev`): the ENTIRE top bar is hidden (no
+ * picker, no account menu) and the single local project's canvas fills the
+ * viewport with no chrome.
+ */
+export function serveApp(_path: string): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>wairon — spec canvas</title>
+<style>
+/* ==========================================================================
+   Wairon unified web UI shell — a thin host around the real architecture canvas.
+   Self-contained (all CSS + JS inline, no external assets). The --syw-* theme
+   block is copied verbatim from src/core/canvas.ts so the shell reads as a
+   sibling of the embedded canvas (which the iframe loads from /web/canvas).
+   ========================================================================== */
+:root {
+  --syw-cyan: #22ddff;
+  --syw-purple: #8b5cf6;
+  --syw-yellow: #ddff22;
+  --syw-amber: #f59e0b;
+  --syw-bg: #0a0a0f;
+  --syw-deep-space: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%);
+  --syw-surface: rgba(13, 27, 42, 0.95);
+  --syw-primary-gradient: linear-gradient(135deg, #22ddff 0%, #8b5cf6 100%);
+  --syw-secondary-gradient: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  --syw-surface-gradient: linear-gradient(135deg, rgba(13, 27, 42, 0.95) 0%, rgba(27, 38, 59, 0.98) 100%);
+  --syw-glow: 0 0 20px rgba(34, 221, 255, 0.3);
+  --syw-deep-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+body[data-theme="syw"] {
+  --bg: var(--syw-bg);
+  --chrome: #0e1a2b;
+  --chrome-border: rgba(34, 221, 255, 0.22);
+  --ink: #e8ecf3;
+  --dim: #9db0c7;
+  --line: rgba(255,255,255,0.12);
+  --input-bg: rgba(255,255,255,0.07);
+  --hover-bg: rgba(34, 221, 255, 0.12);
+  --accent: var(--syw-cyan);
+  --card: rgba(255,255,255,0.05);
+  --danger: #ff6b81; --warn: #f59e0b;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin:0; background:var(--bg); background-image:var(--syw-deep-space); background-attachment:fixed; color:var(--ink); font:13px/1.45 "Inter", system-ui, "Segoe UI", sans-serif; overflow:hidden; }
+.syw-gradient-text { background:var(--syw-primary-gradient); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+button { font:inherit; }
+[hidden] { display:none !important; }
+
+/* ---- boot + login ---- */
+#boot { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; color:var(--dim); }
+#login { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; padding:20px; }
+#login .card { width:min(400px, 92vw); background:var(--syw-surface-gradient); border:1px solid var(--chrome-border); border-radius:16px; box-shadow:var(--syw-deep-shadow); padding:30px 28px; }
+#login h1 { margin:0 0 4px; font-size:30px; font-weight:800; letter-spacing:.02em; }
+#login .sub { color:var(--dim); margin:0 0 22px; font-size:13px; }
+#login label { display:block; color:var(--dim); font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; margin:0 0 6px; }
+#login input { width:100%; padding:10px 12px; border:1px solid var(--chrome-border); border-radius:9px; background:var(--input-bg); color:var(--ink); font:inherit; margin-bottom:16px; }
+#login input:focus { outline:none; border-color:var(--accent); box-shadow:var(--syw-glow); }
+.btn-primary { width:100%; border:none; border-radius:10px; padding:11px 14px; font-weight:700; color:#04121b; background:var(--syw-primary-gradient); cursor:pointer; }
+.btn-primary:hover { box-shadow:var(--syw-glow); }
+#login .err { color:var(--danger); font-size:12px; min-height:16px; margin-top:10px; }
+
+/* ---- app chrome (top bar) ---- */
+#app { display:flex; flex-direction:column; height:100vh; }
+header { display:flex; align-items:center; gap:10px; padding:0 14px; height:52px; background:var(--chrome); border-bottom:1px solid var(--chrome-border); position:relative; z-index:20; flex:0 0 auto; }
+header .brand { font-weight:800; font-size:17px; letter-spacing:.02em; }
+.spacer { flex:1; }
+.tbtn { border:1px solid var(--chrome-border); background:var(--input-bg); color:var(--ink); padding:6px 11px; border-radius:8px; cursor:pointer; font-size:12px; white-space:nowrap; }
+.tbtn:hover { background:var(--hover-bg); border-color:var(--accent); }
+.ctl { display:flex; align-items:center; gap:7px; color:var(--dim); font-size:12px; white-space:nowrap; }
+.ctl select { appearance:none; -webkit-appearance:none; background:var(--input-bg); color:var(--ink); border:1px solid var(--chrome-border); border-radius:8px; padding:6px 12px; font:inherit; font-size:12px; color-scheme:dark; max-width:220px; }
+.badge-admin { background:var(--syw-secondary-gradient); color:#2a1a02; font-weight:800; font-size:10px; text-transform:uppercase; letter-spacing:.06em; padding:2px 8px; border-radius:20px; }
+.ro { color:var(--dim); font-size:11px; border:1px solid var(--line); border-radius:20px; padding:2px 8px; }
+.dropdown { position:relative; }
+.dropdown .menu { display:none; position:absolute; right:0; top:calc(100% + 6px); background:var(--chrome); border:1px solid var(--chrome-border); border-radius:10px; box-shadow:var(--syw-deep-shadow); min-width:210px; padding:6px; z-index:120; }
+.dropdown.open .menu { display:block; }
+.dropdown .menu button { display:block; width:100%; text-align:left; border:none; background:transparent; color:var(--ink); padding:9px 10px; border-radius:7px; cursor:pointer; font-size:12.5px; }
+.dropdown .menu button:hover { background:var(--hover-bg); }
+.acct { display:flex; align-items:center; gap:8px; }
+.acct .who { font-size:12.5px; color:var(--ink); max-width:170px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* ---- stage / embedded canvas (the iframe IS the canvas) ---- */
+#wrap { flex:1; min-height:0; position:relative; }
+#cv { position:absolute; inset:0; width:100%; height:100%; border:0; display:block; background:var(--bg); }
+.empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; padding:24px; color:var(--dim); }
+.empty .box { max-width:420px; background:var(--syw-surface-gradient); border:1px solid var(--chrome-border); border-radius:14px; padding:22px 24px; box-shadow:var(--syw-deep-shadow); }
+.empty h3 { margin:0 0 6px; font-size:15px; color:var(--ink); }
+.empty p { margin:0; font-size:12.5px; color:var(--dim); }
+
+/* ---- primary nav (Canvas / Specs / Admin) ---- */
+nav.tabs { display:flex; gap:2px; }
+nav.tabs button { border:none; background:transparent; color:var(--dim); padding:7px 13px; border-radius:8px; cursor:pointer; font-size:12.5px; font-weight:600; }
+nav.tabs button:hover { background:var(--hover-bg); color:var(--ink); }
+nav.tabs button.active { background:var(--hover-bg); color:var(--accent); }
+.view { position:absolute; inset:0; display:none; }
+.view.active { display:block; }
+
+/* ---- specs (authoring) view: list | inspector split ---- */
+.split { display:flex; height:100%; }
+.pane-l { width:300px; flex:0 0 auto; border-right:1px solid var(--chrome-border); overflow:auto; background:rgba(0,0,0,.15); }
+.pane-r { flex:1; min-width:0; overflow:auto; padding:16px 20px; }
+.pane-hd { padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); position:sticky; top:0; background:var(--chrome); border-bottom:1px solid var(--line); display:flex; align-items:center; gap:8px; }
+.speclist { list-style:none; margin:0; padding:6px; }
+.speclist li { padding:7px 10px; border-radius:7px; cursor:pointer; font-size:12.5px; color:var(--ink); display:flex; align-items:center; gap:8px; }
+.speclist li:hover { background:var(--hover-bg); }
+.speclist li.sel { background:var(--hover-bg); color:var(--accent); }
+.speclist .kind { font-size:10px; color:var(--dim); border:1px solid var(--line); border-radius:12px; padding:0 6px; flex:0 0 auto; }
+.insp h2 { margin:0 0 2px; font-size:18px; }
+.insp .meta { color:var(--dim); font-size:12px; margin:0 0 16px; }
+.insp label { display:block; color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.05em; margin:14px 0 5px; }
+.insp textarea, .insp input[type=text] { width:100%; background:var(--input-bg); color:var(--ink); border:1px solid var(--chrome-border); border-radius:9px; padding:9px 11px; font:inherit; }
+.insp textarea { min-height:96px; resize:vertical; }
+.insp textarea:focus, .insp input:focus { outline:none; border-color:var(--accent); box-shadow:var(--syw-glow); }
+.insp textarea:disabled, .insp input:disabled { opacity:.6; cursor:not-allowed; }
+.rowbtns { display:flex; gap:8px; margin-top:14px; align-items:center; }
+.json { background:rgba(0,0,0,.28); border:1px solid var(--line); border-radius:9px; padding:12px; font:11.5px/1.5 "SFMono-Regular",Consolas,monospace; color:var(--dim); white-space:pre; overflow:auto; max-height:360px; }
+.msg { font-size:12px; min-height:16px; }
+.msg.ok { color:var(--syw-cyan); } .msg.bad { color:var(--danger); }
+
+/* ---- admin view ---- */
+.admin-wrap { height:100%; display:flex; flex-direction:column; }
+.subtabs { display:flex; gap:2px; padding:8px 14px; border-bottom:1px solid var(--chrome-border); background:var(--chrome); flex:0 0 auto; }
+.subtabs button { border:1px solid transparent; background:transparent; color:var(--dim); padding:6px 12px; border-radius:8px; cursor:pointer; font-size:12px; font-weight:600; }
+.subtabs button.active { background:var(--hover-bg); color:var(--accent); border-color:var(--chrome-border); }
+.admin-body { flex:1; min-height:0; overflow:auto; padding:16px 20px; }
+.apanel { display:none; } .apanel.active { display:block; }
+table.grid { width:100%; border-collapse:collapse; font-size:12.5px; }
+table.grid th { text-align:left; color:var(--dim); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em; padding:8px 10px; border-bottom:1px solid var(--chrome-border); position:sticky; top:0; background:var(--chrome); }
+table.grid td { padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+table.grid tr:hover td { background:rgba(255,255,255,.03); }
+.pill { display:inline-block; font-size:10.5px; padding:1px 8px; border-radius:12px; border:1px solid var(--line); }
+.pill.ok { color:#7ee787; border-color:rgba(126,231,135,.4); } .pill.warn { color:var(--warn); border-color:rgba(245,158,11,.4); } .pill.bad { color:var(--danger); border-color:rgba(255,107,129,.4); }
+.mini { border:1px solid var(--chrome-border); background:var(--input-bg); color:var(--ink); padding:4px 9px; border-radius:7px; cursor:pointer; font-size:11.5px; }
+.mini:hover { background:var(--hover-bg); border-color:var(--accent); }
+.mini.danger:hover { border-color:var(--danger); color:var(--danger); }
+.hint { color:var(--dim); font-size:12px; padding:14px 4px; }
+.cards { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:16px; }
+.stat { background:var(--syw-surface-gradient); border:1px solid var(--chrome-border); border-radius:12px; padding:14px 18px; min-width:150px; }
+.stat .k { color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
+.stat .v { font-size:22px; font-weight:800; margin-top:3px; }
+</style>
+</head>
+<body data-theme="syw">
+<div id="boot">Loading…</div>
+
+<!-- ============================ LOGIN SCREEN ============================ -->
+<div id="login" hidden>
+  <div class="card">
+    <h1 class="syw-gradient-text">wairon</h1>
+    <p class="sub">Spec-driven architecture canvas</p>
+    <label for="pid">Identity provider</label>
+    <input id="pid" value="default" spellcheck="false" autocomplete="off" />
+    <button class="btn-primary" id="signinBtn">Sign in with SSO</button>
+    <div class="err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- ============================ APPLICATION ============================ -->
+<div id="app" hidden>
+  <header id="topbar">
+    <span class="brand syw-gradient-text">wairon</span>
+    <nav class="tabs" id="navTabs">
+      <button data-view="canvas" class="active">Canvas</button>
+      <button data-view="specs">Specs</button>
+      <button data-view="admin" id="navAdmin" hidden>Admin</button>
+    </nav>
+    <div class="ctl" id="projCtl"><span>Project</span><select id="projSel"></select></div>
+    <span class="spacer"></span>
+    <span class="ro" id="roBadge" hidden title="Your grants are read-only">read-only</span>
+    <div class="dropdown acct" id="acctDd">
+      <span class="badge-admin" id="adminBadge" hidden>admin</span>
+      <button class="tbtn" id="acctBtn"><span class="who" id="whoLbl">&hellip;</span> &#9662;</button>
+      <div class="menu">
+        <button id="signout">Sign out</button>
+        <button id="signoutAll">Sign out everywhere</button>
+      </div>
+    </div>
+  </header>
+  <div id="wrap">
+    <!-- Canvas view (existing embedded architecture canvas) -->
+    <div class="view active" id="view-canvas">
+      <iframe id="cv" title="Architecture canvas" referrerpolicy="same-origin"></iframe>
+      <div class="empty" id="empty" hidden><div class="box"><h3>No project in scope</h3><p>There are no projects you can view yet.</p></div></div>
+    </div>
+
+    <!-- Specs view (authoring over /mcp) -->
+    <div class="view" id="view-specs">
+      <div class="split">
+        <div class="pane-l">
+          <div class="pane-hd"><span id="specsProj">specs</span><span class="spacer" style="flex:1"></span><button class="mini" id="btnValidate">Validate</button></div>
+          <ul class="speclist" id="specList"></ul>
+        </div>
+        <div class="pane-r">
+          <div class="insp" id="insp"><div class="hint">Select a component on the left to inspect and edit its specification.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Admin view (control-plane pages) -->
+    <div class="view" id="view-admin">
+      <div class="admin-wrap">
+        <div class="subtabs" id="adminSubtabs">
+          <button data-panel="approvals" class="active">Approvals</button>
+          <button data-panel="users">Users</button>
+          <button data-panel="landscape">Landscape</button>
+          <button data-panel="health">Health</button>
+        </div>
+        <div class="admin-body">
+          <div class="apanel active" id="ap-approvals"><div class="hint">Loading…</div></div>
+          <div class="apanel" id="ap-users"><div class="hint">Loading…</div></div>
+          <div class="apanel" id="ap-landscape"><div class="hint">Loading…</div></div>
+          <div class="apanel" id="ap-health"><div class="hint">Loading…</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // Every request rides the HttpOnly session cookie (attached automatically) plus
+  // the X-Wairon-Web header the CSRF gate requires on cookie-auth mutations.
+  var WEB = { 'X-Wairon-Web': '1' };
+  function api(path, opts) {
+    opts = opts || {};
+    opts.credentials = 'same-origin';
+    opts.headers = Object.assign({}, opts.headers || {}, WEB);
+    return fetch(path, opts);
+  }
+  function $(id) { return document.getElementById(id); }
+
+  // ---- screens ------------------------------------------------------------
+  function showBoot() { $('boot').hidden = false; $('login').hidden = true; $('app').hidden = true; }
+  function showLogin(msg) { $('boot').hidden = true; $('app').hidden = true; $('login').hidden = false; $('loginErr').textContent = msg || ''; }
+  function showApp() { $('boot').hidden = true; $('login').hidden = true; $('app').hidden = false; }
+
+  // ---- state --------------------------------------------------------------
+  var ctx = null;
+  var selectedProjectId = '';
+
+  // ---- boot ---------------------------------------------------------------
+  function boot() {
+    showBoot();
+    api('/web/context').then(function (r) {
+      if (r.status === 401) { showLogin(''); return null; }
+      if (!r.ok) throw new Error('context ' + r.status);
+      return r.json();
+    }).then(function (c) { if (c) { ctx = c; startApp(); } })
+      .catch(function () { showLogin('Could not reach the server. Try signing in.'); });
+  }
+
+  // ---- login --------------------------------------------------------------
+  // There is no public "list providers" endpoint (provider config is admin-only),
+  // so the login screen takes a provider-id text input defaulted to 'default'.
+  $('signinBtn').addEventListener('click', function () {
+    var pid = ($('pid').value || '').trim() || 'default';
+    $('loginErr').textContent = '';
+    api('/web/sso/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ providerId: pid, redirectUri: location.origin + '/web/sso/callback' }),
+    }).then(function (r) {
+      if (!r.ok) return r.text().then(function (t) { throw new Error(t || ('sign-in failed (' + r.status + ')')); });
+      return r.json();
+    }).then(function (d) { location.href = d.url; })
+      .catch(function (e) { $('loginErr').textContent = (e && e.message) || 'Sign-in failed.'; });
+  });
+  $('pid').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('signinBtn').click(); });
+
+  // ---- app start ----------------------------------------------------------
+  function startApp() {
+    showApp();
+    // LOCAL DEV MODE (ctx.local, from wairon dev): hide the ENTIRE top bar — no
+    // project picker, no account menu — and let the single local project's canvas
+    // fill the viewport with no chrome.
+    var isLocal = !!(ctx && ctx.local);
+    $('topbar').hidden = isLocal;
+    $('whoLbl').textContent = (ctx.subject && ctx.subject.userId) || 'signed in';
+    $('adminBadge').hidden = !ctx.isAdmin;
+    $('navAdmin').hidden = !ctx.isAdmin;      // the Admin tab appears only for admins
+    // Role-aware: developers who cannot author see a read-only marker AND the spec
+    // editor's write affordances are disabled (below).
+    $('roBadge').hidden = !!ctx.canWriteProjects;
+
+    var pids = ctx.visibleProjectIds || [];
+    var sel = $('projSel'); sel.innerHTML = '';
+    pids.forEach(function (pid) {
+      var o = document.createElement('option'); o.value = pid; o.textContent = pid; sel.appendChild(o);
+    });
+    // Default the selection to the first visible project.
+    selectedProjectId = pids.length ? pids[0] : '';
+    sel.value = selectedProjectId;
+    // Hide the picker when there is nothing to choose (or in local single-project mode).
+    $('projCtl').style.display = (!isLocal && pids.length > 0) ? 'flex' : 'none';
+    setView('canvas');
+    loadCanvas();
+  }
+
+  // ---- small helpers ------------------------------------------------------
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  // One JSON-RPC tool call over the existing /mcp data plane, bound to the selected
+  // project. The session cookie authenticates; Phase-6b grants authorize (a
+  // read-only session is refused write tools server-side). Returns the tool's parsed
+  // JSON result, or throws with the tool's error text.
+  function mcp(name, args) {
+    return api('/mcp?project=' + encodeURIComponent(selectedProjectId), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: name, arguments: args || {} } }),
+    }).then(function (r) {
+      if (r.status === 401) throw new Error('Session expired — sign in again.');
+      if (r.status === 403) throw new Error('Not permitted for this project.');
+      return r.json();
+    }).then(function (env) {
+      var result = env && env.result;
+      var text = result && result.content && result.content[0] && result.content[0].text;
+      if (result && result.isError) throw new Error(text || 'tool error');
+      if (env && env.error) throw new Error(env.error.message || 'rpc error');
+      try { return text ? JSON.parse(text) : null; } catch (e) { return text; }
+    });
+  }
+
+  // ---- primary tabs -------------------------------------------------------
+  var currentView = 'canvas';
+  function setView(name) {
+    currentView = name;
+    ['canvas', 'specs', 'admin'].forEach(function (v) {
+      var el = $('view-' + v); if (el) el.classList.toggle('active', v === name);
+    });
+    Array.prototype.forEach.call($('navTabs').children, function (b) {
+      b.classList.toggle('active', b.getAttribute('data-view') === name);
+    });
+    if (name === 'specs') loadSpecList();
+    if (name === 'admin') loadAdminPanel(currentPanel);
+  }
+  Array.prototype.forEach.call($('navTabs').children, function (b) {
+    b.addEventListener('click', function () {
+      var v = b.getAttribute('data-view');
+      if (v === 'admin' && !(ctx && ctx.isAdmin)) return;
+      setView(v);
+    });
+  });
+
+  // ---- embedded canvas ----------------------------------------------------
+  function loadCanvas() {
+    if (!selectedProjectId) { $('cv').hidden = true; $('empty').hidden = false; return; }
+    $('empty').hidden = true; $('cv').hidden = false;
+    $('cv').src = '/web/canvas?projectId=' + encodeURIComponent(selectedProjectId);
+  }
+
+  // ---- specs view (authoring over /mcp) -----------------------------------
+  var selectedSpec = null; // { kind, id }
+  function loadSpecList() {
+    $('specsProj').textContent = selectedProjectId || 'no project';
+    var list = $('specList'); list.innerHTML = '<li class="hint">Loading…</li>';
+    if (!selectedProjectId) { list.innerHTML = '<li class="hint">No project selected.</li>'; return; }
+    // The live project graph is the component index — list subsystems + components.
+    api('/web/graph?tier=project&projectId=' + encodeURIComponent(selectedProjectId) + '&level=3')
+      .then(function (r) { if (!r.ok) throw new Error('graph ' + r.status); return r.json(); })
+      .then(function (g) {
+        var nodes = (g.nodes || []).filter(function (n) { return n.kind === 'component' || n.kind === 'subsystem'; });
+        nodes.sort(function (a, b) { return (a.kind + a.label).localeCompare(b.kind + b.label); });
+        if (!nodes.length) { list.innerHTML = '<li class="hint">No components yet.</li>'; return; }
+        list.innerHTML = '';
+        nodes.forEach(function (n) {
+          var li = document.createElement('li');
+          li.innerHTML = '<span class="kind">' + esc(n.kind) + '</span><span>' + esc(n.label || n.id) + '</span>'
+            + (n.issueCount ? ' <span class="pill bad" title="validation issues">' + n.issueCount + '</span>' : '');
+          li.addEventListener('click', function () {
+            Array.prototype.forEach.call(list.children, function (x) { x.classList.remove('sel'); });
+            li.classList.add('sel');
+            selectSpec(n.kind === 'subsystem' ? 'subsystem' : 'component', n.id);
+          });
+          list.appendChild(li);
+        });
+      })
+      .catch(function (e) { list.innerHTML = '<li class="hint bad">' + esc(e.message) + '</li>'; });
+  }
+  function selectSpec(kind, id) {
+    selectedSpec = { kind: kind, id: id };
+    var insp = $('insp'); insp.innerHTML = '<div class="hint">Loading ' + esc(id) + '…</div>';
+    mcp('sdd_get_spec', { kind: kind, id: id }).then(function (spec) {
+      var canWrite = !!(ctx && ctx.canWriteProjects);
+      var desc = (spec && spec.description) || '';
+      insp.innerHTML =
+        '<h2>' + esc((spec && spec.name) || id) + '</h2>'
+        + '<p class="meta">' + esc(kind) + ' · ' + esc(id) + (spec && spec.componentType ? ' · ' + esc(spec.componentType) : '') + '</p>'
+        + '<label>Description</label>'
+        + '<textarea id="fDesc"' + (canWrite ? '' : ' disabled') + '>' + esc(desc) + '</textarea>'
+        + '<div class="rowbtns">'
+        + (canWrite ? '<button class="btn-primary" style="width:auto" id="fSave">Save</button>' : '<span class="ro">read-only — your grants cannot author</span>')
+        + '<span class="msg" id="fMsg"></span></div>'
+        + '<label>Full specification</label>'
+        + '<div class="json">' + esc(JSON.stringify(spec, null, 2)) + '</div>';
+      if (canWrite) $('fSave').addEventListener('click', saveSpec);
+    }).catch(function (e) { insp.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+  }
+  function saveSpec() {
+    if (!selectedSpec) return;
+    var msg = $('fMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
+    mcp('sdd_update_spec', { kind: selectedSpec.kind, id: selectedSpec.id, delta: { description: $('fDesc').value } })
+      .then(function () { msg.className = 'msg ok'; msg.textContent = 'Saved.'; loadSpecList(); })
+      .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+  }
+  $('btnValidate').addEventListener('click', function () {
+    var insp = $('insp'); insp.innerHTML = '<div class="hint">Validating…</div>';
+    mcp('sdd_validate_tree', {}).then(function (res) {
+      var issues = (res && res.issues) || [];
+      var errs = issues.filter(function (i) { return i.severity === 'error'; }).length;
+      var warns = issues.length - errs;
+      var html = '<h2>Validation</h2><p class="meta">' + (issues.length ? (errs + ' error(s), ' + warns + ' warning(s)') : 'clean — no findings') + '</p>';
+      if (issues.length) {
+        html += '<table class="grid"><thead><tr><th>Severity</th><th>Code</th><th>Spec</th><th>Message</th></tr></thead><tbody>';
+        issues.slice(0, 200).forEach(function (i) {
+          var cls = i.severity === 'error' ? 'bad' : 'warn';
+          html += '<tr><td><span class="pill ' + cls + '">' + esc(i.severity) + '</span></td><td>' + esc(i.code) + '</td><td>' + esc(i.specId || '') + '</td><td>' + esc(i.message) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+      insp.innerHTML = html;
+    }).catch(function (e) { insp.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+  });
+
+  // ---- admin view (control-plane pages) -----------------------------------
+  var currentPanel = 'approvals';
+  Array.prototype.forEach.call($('adminSubtabs').children, function (b) {
+    b.addEventListener('click', function () {
+      currentPanel = b.getAttribute('data-panel');
+      Array.prototype.forEach.call($('adminSubtabs').children, function (x) { x.classList.toggle('active', x === b); });
+      ['approvals', 'users', 'landscape', 'health'].forEach(function (p) { $('ap-' + p).classList.toggle('active', p === currentPanel); });
+      loadAdminPanel(currentPanel);
+    });
+  });
+  function adminGet(path) {
+    return api('/web/admin/' + path).then(function (r) {
+      if (r.status === 403) throw new Error('Your grants do not cover this control-plane view.');
+      if (!r.ok) throw new Error(path + ' ' + r.status);
+      return r.json();
+    });
+  }
+  function loadAdminPanel(panel) {
+    var el = $('ap-' + panel); if (!el) return;
+    el.innerHTML = '<div class="hint">Loading…</div>';
+    if (panel === 'approvals') {
+      adminGet('approvals').then(function (d) {
+        var rows = d.requests || [];
+        if (!rows.length) { el.innerHTML = '<div class="hint">No pending approval requests in your scope.</div>'; return; }
+        var html = '<table class="grid"><thead><tr><th>Kind</th><th>Project</th><th>Requested by</th><th>Summary</th><th></th></tr></thead><tbody>';
+        rows.forEach(function (r) {
+          html += '<tr><td>' + esc(r.kind) + '</td><td>' + esc(r.projectId || '—') + '</td><td>' + esc(r.requestedBy && r.requestedBy.userId) + '</td><td>' + esc(r.summary || '') + '</td>'
+            + '<td style="white-space:nowrap"><button class="mini" data-approve="' + esc(r.id) + '">Approve</button> <button class="mini danger" data-reject="' + esc(r.id) + '">Reject</button></td></tr>';
+        });
+        html += '</tbody></table>';
+        el.innerHTML = html;
+        Array.prototype.forEach.call(el.querySelectorAll('[data-approve]'), function (b) { b.addEventListener('click', function () { decide(b.getAttribute('data-approve'), true); }); });
+        Array.prototype.forEach.call(el.querySelectorAll('[data-reject]'), function (b) { b.addEventListener('click', function () { decide(b.getAttribute('data-reject'), false); }); });
+      }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+    } else if (panel === 'users') {
+      adminGet('users').then(function (d) {
+        var rows = d.users || [];
+        if (!rows.length) { el.innerHTML = '<div class="hint">No users in your scope.</div>'; return; }
+        var html = '<table class="grid"><thead><tr><th>User</th><th>Status</th><th>Unit</th><th>Grants</th></tr></thead><tbody>';
+        rows.forEach(function (u) {
+          var st = u.status === 'active' ? 'ok' : 'warn';
+          var grants = (u.grants || []).map(function (g) { return esc(g.projectId) + ':' + esc((g.permissions || []).join('/')); }).join(', ');
+          html += '<tr><td>' + esc(u.subject && u.subject.userId) + '</td><td><span class="pill ' + st + '">' + esc(u.status) + '</span></td><td>' + esc(u.unitId || '—') + '</td><td>' + (grants || '<span class="hint">none</span>') + '</td></tr>';
+        });
+        el.innerHTML = html + '</tbody></table>';
+      }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+    } else if (panel === 'landscape') {
+      adminGet('landscape').then(function (g) {
+        var units = (g.nodes || []).filter(function (n) { return n.nodeKind === 'unit'; });
+        var projs = (g.nodes || []).filter(function (n) { return n.nodeKind === 'project'; });
+        var html = '<div class="cards"><div class="stat"><div class="k">Org units</div><div class="v">' + units.length + '</div></div>'
+          + '<div class="stat"><div class="k">Projects</div><div class="v">' + projs.length + '</div></div>'
+          + '<div class="stat"><div class="k">Relations</div><div class="v">' + ((g.edges || []).length) + '</div></div></div>';
+        html += '<table class="grid"><thead><tr><th>Node</th><th>Kind</th><th>Status</th></tr></thead><tbody>';
+        (g.nodes || []).forEach(function (n) { html += '<tr><td>' + esc(n.label || n.id) + '</td><td>' + esc(n.nodeKind) + '</td><td>' + esc(n.status || '—') + '</td></tr>'; });
+        el.innerHTML = html + '</tbody></table>';
+      }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+    } else if (panel === 'health') {
+      adminGet('health').then(function (h) {
+        var st = h.status === 'ok' ? 'ok' : (h.status === 'degraded' ? 'warn' : 'bad');
+        var html = '<div class="cards"><div class="stat"><div class="k">Instance status</div><div class="v"><span class="pill ' + st + '">' + esc(h.status) + '</span></div></div></div>';
+        html += '<table class="grid"><thead><tr><th>Check</th><th>Status</th><th>Detail</th></tr></thead><tbody>';
+        (h.checks || []).forEach(function (c) {
+          var cs = c.status === 'pass' ? 'ok' : (c.status === 'warn' ? 'warn' : 'bad');
+          html += '<tr><td>' + esc(c.id) + '</td><td><span class="pill ' + cs + '">' + esc(c.status) + '</span></td><td>' + esc(c.message) + '</td></tr>';
+        });
+        el.innerHTML = html + '</tbody></table>';
+      }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+    }
+  }
+  function decide(requestId, approved) {
+    api('/web/admin/approvals/decide', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ requestId: requestId, approved: approved }),
+    }).then(function (r) {
+      if (!r.ok) return r.json().then(function (j) { throw new Error((j && j.error) || ('decide ' + r.status)); });
+      loadAdminPanel('approvals');
+    }).catch(function (e) { alert(e.message); });
+  }
+
+  // ---- controls -----------------------------------------------------------
+  $('projSel').addEventListener('change', function () {
+    selectedProjectId = $('projSel').value;
+    loadCanvas();
+    if (currentView === 'specs') loadSpecList();
+  });
+
+  // account menu (sign out this device / everywhere)
+  $('acctBtn').addEventListener('click', function (e) { e.stopPropagation(); $('acctDd').classList.toggle('open'); });
+  document.addEventListener('click', function () { $('acctDd').classList.remove('open'); });
+  $('signout').addEventListener('click', function () { doLogout('/web/logout'); });
+  $('signoutAll').addEventListener('click', function () { doLogout('/web/logout-all'); });
+  function doLogout(path) { api(path, { method: 'POST' }).then(function () { location.reload(); }).catch(function () { location.reload(); }); }
+
+  boot();
+})();
+</script>
+</body>
+</html>`;
+}
+
+/**
+ * Route one web UI request to the orchestrator and write the HTTP response,
+ * managing the session cookie on the response. Owns its own error → status mapping
+ * (401 unauthenticated, 403 forbidden, 404 unknown, 400 otherwise) so a fault never
+ * escapes as an unhandled rejection. Called by http.ts (routeData) after gating on
+ * exposure.webUiEnabled, extracting the credential, and enforcing CSRF. `body` is
+ * the parsed request body; `ctx.sessionId` is the resolved credential (cookie or
+ * bearer) presented for session-scoped routes; `ctx.secureCookie` decides Secure.
+ */
+export async function handleWebRequest(
+  cfg: HostConfig,
+  req: IncomingMessage,
+  res: ServerResponse,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  body: any,
+  url: URL,
+  ctx: { sessionId: string | null; secureCookie: boolean },
+): Promise<void> {
+  const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent); // ['web', ...] or []
+  const sessionId = ctx.sessionId ?? '';
+  try {
+    // GET / — the client app shell.
+    if (req.method === 'GET' && url.pathname === '/') {
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(serveApp(url.pathname));
+      return;
+    }
+
+    // GET /web/dev-login — DEV MODE ONLY. Mint/reuse the local-developer session,
+    // set the cookie, and land on '/'. http.ts mounts this route only under devMode
+    // (it 404s otherwise), and startDevSession itself refuses outside devMode, so it
+    // can never establish a session in a hosted deployment.
+    if (req.method === 'GET' && parts.length === 2 && parts[1] === 'dev-login') {
+      const devSessionId = startDevSession(cfg);
+      res.writeHead(302, {
+        'set-cookie': setSessionCookie(devSessionId, ctx.secureCookie),
+        location: '/',
+      });
+      res.end();
+      return;
+    }
+
+    // POST /web/sso/start  { providerId, redirectUri } → { url }; also installs the
+    // short-lived HttpOnly nonce cookie that binds this browser to the flow.
+    if (req.method === 'POST' && parts.length === 3 && parts[1] === 'sso' && parts[2] === 'start') {
+      const started = startSignIn(cfg, body?.providerId as string, body?.redirectUri as string);
+      res.writeHead(200, {
+        'content-type': 'application/json',
+        'set-cookie': setNonceCookie(started.nonce, ctx.secureCookie),
+      });
+      res.end(JSON.stringify({ url: started.url }));
+      return;
+    }
+
+    // GET /web/sso/callback?state=&code= → require the nonce cookie to match the
+    // signed state, then set the session cookie, clear the nonce cookie, land on /.
+    if (req.method === 'GET' && parts.length === 3 && parts[1] === 'sso' && parts[2] === 'callback') {
+      const newSessionId = await completeSignIn(
+        cfg,
+        url.searchParams.get('state') ?? '',
+        url.searchParams.get('code') ?? '',
+        ssoNonceCookieValue(req),
+      );
+      res.writeHead(302, {
+        'set-cookie': [setSessionCookie(newSessionId, ctx.secureCookie), clearNonceCookie(ctx.secureCookie)],
+        location: '/',
+      });
+      res.end();
+      return;
+    }
+
+    // POST /web/logout → end this session and clear the cookie.
+    if (req.method === 'POST' && parts.length === 2 && parts[1] === 'logout') {
+      signOut(cfg, sessionId);
+      res.writeHead(200, { 'content-type': 'application/json', 'set-cookie': clearSessionCookie(ctx.secureCookie) });
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    // POST /web/logout-all → revoke all of the caller's sessions and clear the cookie.
+    if (req.method === 'POST' && parts.length === 2 && parts[1] === 'logout-all') {
+      signOutEverywhere(cfg, sessionId);
+      res.writeHead(200, { 'content-type': 'application/json', 'set-cookie': clearSessionCookie(ctx.secureCookie) });
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    // GET /web/context → the session-principal context.
+    if (req.method === 'GET' && parts.length === 2 && parts[1] === 'context') {
+      return sendJson(res, 200, getCurrentContext(cfg, sessionId));
+    }
+
+    // GET /web/graph?tier=&projectId=&level= → the level-of-detail graph.
+    if (req.method === 'GET' && parts.length === 2 && parts[1] === 'graph') {
+      const tier = url.searchParams.get('tier') ?? 'landscape';
+      const projectId = url.searchParams.get('projectId') ?? '';
+      const level = Number(url.searchParams.get('level') ?? '0');
+      return sendJson(res, 200, getGraph(cfg, sessionId, tier, projectId, level));
+    }
+
+    // GET /web/canvas?projectId= → one authorized project's interactive canvas HTML.
+    // The web UI shell embeds this per selected project via a same-origin iframe,
+    // reusing the SAME canvas engine as the static export. Cross-project → 403.
+    if (req.method === 'GET' && parts.length === 2 && parts[1] === 'canvas') {
+      const projectId = url.searchParams.get('projectId') ?? '';
+      const canvasHtml = getProjectCanvas(cfg, sessionId, projectId);
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(canvasHtml);
+      return;
+    }
+
+    // ── Admin control-plane, session-scoped (slice 3) ────────────────────────
+    // These reuse the EXISTING Phase-6 scoped control-plane functions, passing the
+    // browser session id as the credential (a ws_ session resolves to a Principal
+    // exactly like a bearer token). Each function authenticates and FILTERS to the
+    // caller's grants — a viewer session gets an empty/forbidden result, never
+    // another tenant's data. No new authorization surface, just a browser-reachable
+    // route onto the same scoped reads the admin API already exposes.
+    if (parts.length >= 2 && parts[1] === 'admin') {
+      // GET /web/admin/users — scoped user directory (user:admin scope).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'users') {
+        return sendJson(res, 200, { users: listUsers(cfg, sessionId) });
+      }
+      // GET /web/admin/landscape — the org-unit + project + relation graph (landscape:read).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'landscape') {
+        return sendJson(res, 200, generateLandscape(cfg, sessionId));
+      }
+      // GET /web/admin/health — instance health report (operations:read).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'health') {
+        return sendJson(res, 200, getHealthReport(cfg, sessionId));
+      }
+      // GET /web/admin/usage — resource usage snapshots (operations:read).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'usage') {
+        return sendJson(res, 200, { usage: getUsage(cfg, sessionId) });
+      }
+      // GET /web/admin/approvals — pending approval requests in the caller's scope
+      // (approval:decide).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'approvals') {
+        return sendJson(res, 200, { requests: listPendingRequests(cfg, sessionId) });
+      }
+      // POST /web/admin/approvals/decide { requestId, approved, reason } — decide a
+      // pending request. decidedBy is server-authoritative (the session principal);
+      // self-approval is refused inside decideRequest.
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'approvals' && parts[3] === 'decide') {
+        const decision: ApprovalDecision = {
+          requestId: String(body?.requestId ?? ''),
+          approved: body?.approved === true,
+          reason: typeof body?.reason === 'string' ? body.reason : undefined,
+          decidedBy: { userId: '', kind: 'human', issuer: 'local' }, // overridden server-side
+          decidedAt: '', // set server-side
+        };
+        return sendJson(res, 200, decideRequest(cfg, sessionId, decision));
+      }
+    }
+
+    sendJson(res, 404, { error: 'not found' });
+  } catch (err) {
+    if (err instanceof UnauthenticatedError) return sendJson(res, 401, { error: 'unauthorized' });
+    if (err instanceof ForbiddenError) return sendJson(res, 403, { error: 'forbidden' });
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/unsupported graph tier/i.test(msg)) return sendJson(res, 400, { error: msg });
+    if (/not found|unknown/i.test(msg)) return sendJson(res, 404, { error: msg });
+    return sendJson(res, 400, { error: msg });
+  }
+}

@@ -1,0 +1,51 @@
+id: surface_portal_impl
+name: Surface Portal Implementation
+description: Pure 1:1 forwarding of surface operations to the orchestrator.
+contract: isurface_portal
+sourcePath: src/core/surfaces.ts
+methods:
+  - name: exportSurface
+    narrative:
+      - stepNumber: 1
+        description: Forward exportSurface to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: exportSurface
+  - name: importSurface
+    narrative:
+      - stepNumber: 1
+        description: Forward importSurface to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: importSurface
+  - name: listSnapshots
+    narrative:
+      - stepNumber: 1
+        description: Forward listSnapshots to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: listSnapshots
+  - name: getSnapshot
+    narrative:
+      - stepNumber: 1
+        description: Forward getSnapshot to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: getSnapshot
+  - name: generateChildSnapshots
+    narrative:
+      - stepNumber: 1
+        description: Forward generateChildSnapshots to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: generateChildSnapshots
+  - name: removeSnapshot
+    narrative:
+      - stepNumber: 1
+        description: Forward removeSnapshot to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: removeSnapshot
+status: complete
+createdAt: '2026-07-10T23:14:37.431Z'
+updatedAt: '2026-07-11T18:44:23.796Z'

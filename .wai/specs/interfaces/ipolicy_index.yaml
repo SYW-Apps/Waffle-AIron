@@ -1,0 +1,26 @@
+id: ipolicy_index
+name: Policy Index Interface
+description: >-
+  Private read-path contract over the policy store's active record. Shares the store's reference;
+  never mutates, never goes stale, never fails on reads.
+component: policy_index
+methods:
+  - name: getPackPolicy
+    description: >-
+      Return the store's active instance pack/profile policy, or null when none has ever been
+      configured. Read-only over the store's current reference; absence is a null result, never an
+      error.
+    signature: 'getPackPolicy(): InstancePackPolicy | null'
+    returns: InstancePackPolicy | null
+    params: []
+  - name: listIdentityProviders
+    description: >-
+      Return every configured identity provider from the store's current reference, or an empty list
+      when none has been configured. Read-only over the store's reference; never mutates, never goes
+      stale, never fails on reads — absence is an empty list, not an error.
+    signature: 'listIdentityProviders(): IdentityProviderConfig[]'
+    returns: IdentityProviderConfig[]
+    params: []
+status: complete
+createdAt: '2026-07-09T20:46:22.136Z'
+updatedAt: '2026-07-10T08:16:29.309Z'

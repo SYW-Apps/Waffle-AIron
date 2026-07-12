@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { ensureDir, fromProjectRoot } from '../utils/fs.js';
+import { WAIRON_VERSION } from '../config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // SDD skills export
@@ -144,4 +145,104 @@ export function activeTargetTypes(): string[] {
   return config.targets
     .filter((t: { enabled?: boolean }) => !('enabled' in t) || t.enabled)
     .map((t: string | { type: string }) => (typeof t === 'string' ? t : t.type));
+}
+
+// ---------------------------------------------------------------------------
+// SDD skills as MCP resources
+//
+// Cloud-only agents cannot receive the filesystem-exported skills above, so the
+// MCP server also publishes the four built-in SDD skills as read-only MCP
+// resources. The functions below resolve the SAME packaged templates that
+// exportSddSkills copies to disk (src/templates/skills/*.md) into MCP-safe
+// descriptors and markdown content.
+//
+// Layering (folded into this module, mirroring exportSddSkills):
+//   skills_resource_specialist  → listSkillResources / readSkillResource (pure)
+//   skills_resource_orchestrator→ validation + dispatch (inside readResource)
+//   skills_portal               → listResources / readResource (adapter entry)
+// ---------------------------------------------------------------------------
+
+/** MCP resource URI scheme for a built-in SDD skill (e.g. wairon-skill://sdd-architect). */
+const SKILL_RESOURCE_SCHEME = 'wairon-skill';
+
+/**
+ * The four packaged SDD skills published as MCP resources, in a stable
+ * (alphabetical) order. Derived from SKILL_NAMES so the resource set can never
+ * drift from the export source of truth.
+ */
+const RESOURCE_SKILL_IDS: string[] = [...SKILL_NAMES].sort();
+
+/** MCP-safe descriptor for a Wairon-provided built-in skill resource. */
+export interface SkillResourceDescriptor {
+  /** Stable skill resource id, such as "sdd-architect". */
+  id: string;
+  /** Human-readable skill name. */
+  name: string;
+  /** Short description of when an agent should use the skill. */
+  description: string;
+  /** Skill content version / Wairon version that provides it. */
+  version?: string;
+  /** MCP resource URI used to fetch the skill content. */
+  resourceUri: string;
+  /** Whether hosted MCP advertises this skill by default. */
+  defaultForHostedMcp: boolean;
+}
+
+/** Thrown when a skill resource id is not one of the built-in SDD skills. */
+export class SkillResourceNotFoundError extends Error {
+  constructor(resourceId: string) {
+    super(`Unknown SDD skill resource id: "${resourceId}".`);
+    this.name = 'SkillResourceNotFoundError';
+  }
+}
+
+/** Parse a skill template's YAML frontmatter for its name and description. */
+function readSkillFrontmatter(name: string): { name: string; description: string } {
+  const raw = fs.readFileSync(skillTemplatePath(name), 'utf-8');
+  const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(raw);
+  const block = match ? match[1] : '';
+  const field = (key: string): string => {
+    const m = new RegExp(`^${key}:\\s*(.*)$`, 'm').exec(block);
+    return m ? m[1].trim() : '';
+  };
+  return { name: field('name') || name, description: field('description') };
+}
+
+// ── skills_resource_specialist ─────────────────────────────────────────────
+
+/** List the four built-in SDD skills as MCP-safe resource descriptors. */
+export function listSkillResources(): SkillResourceDescriptor[] {
+  return RESOURCE_SKILL_IDS.map((id) => {
+    const fm = readSkillFrontmatter(id);
+    return {
+      id,
+      name: fm.name,
+      description: fm.description,
+      version: WAIRON_VERSION,
+      resourceUri: `${SKILL_RESOURCE_SCHEME}://${id}`,
+      defaultForHostedMcp: true,
+    };
+  });
+}
+
+/** Read one built-in skill's markdown content from the packaged templates. */
+export function readSkillResource(resourceId: string): string {
+  return fs.readFileSync(skillTemplatePath(resourceId), 'utf-8');
+}
+
+// ── skills_resource_orchestrator → skills_portal ───────────────────────────
+
+/** Portal: list the built-in SDD skills as MCP resource descriptors. */
+export function listResources(): SkillResourceDescriptor[] {
+  return listSkillResources();
+}
+
+/**
+ * Portal: read one built-in SDD skill's content by MCP resource id. Rejects an
+ * unknown id — validated against the listed descriptors — before reading.
+ */
+export function readResource(resourceId: string): string {
+  const known = listSkillResources().some((d) => d.id === resourceId);
+  if (!known) throw new SkillResourceNotFoundError(resourceId);
+  return readSkillResource(resourceId);
 }

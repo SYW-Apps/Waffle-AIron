@@ -2,7 +2,13 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { RootsListChangedNotificationSchema } from '@modelcontextprotocol/sdk/types.js';
+import {
+  RootsListChangedNotificationSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
+  McpError,
+  ErrorCode,
+} from '@modelcontextprotocol/sdk/types.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -10,6 +16,11 @@ import { setProjectRoot } from '../utils/fs.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import type { ValidationIssue } from '../core/validation.js';
 import { EndpointSchema, type Endpoint, type SubsystemSpec } from '../models/specs.js';
+import {
+  listResources as coreListSkillResources,
+  readResource as coreReadSkillResource,
+  type SkillResourceDescriptor,
+} from '../core/skills.js';
 
 // ---------------------------------------------------------------------------
 // wairon MCP Server
@@ -43,6 +54,7 @@ function requireProvision() {
 }
 
 
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -63,21 +75,153 @@ function errText(message: string): CallToolResult {
 // when inputSchema contains ZodOptional / ZodDefault / ZodString.describe() wrappers,
 // because the SDK's generic chain recurses beyond TS's limit. This helper breaks the
 // inference chain while preserving typed callback args via the explicit <Args> param.
+// ---------------------------------------------------------------------------
+// Build freshness — the stale-server guard.
+//
+// A long-running MCP server keeps the Zod schemas it was started with; after a
+// rebuild, writes through the OLD process silently STRIP any field a newer
+// schema added (this destroyed data twice before this guard existed). The
+// server stamps its own entry file at startup and, once the file on disk
+// changes, appends a loud warning to every tool result until restarted.
+// ---------------------------------------------------------------------------
+
+export interface BuildStamp {
+  path: string;
+  mtimeMs: number;
+  size: number;
+}
+
+/** Stamp a build entry file; null when it cannot be stat'd (e.g. pkg snapshot fs). */
+export function captureBuildStamp(entryPath: string): BuildStamp | null {
+  try {
+    const s = fs.statSync(entryPath);
+    return { path: entryPath, mtimeMs: s.mtimeMs, size: s.size };
+  } catch {
+    return null;
+  }
+}
+
+/** True once the stamped entry file changed on disk (rebuild/update since start). */
+export function isBuildStale(stamp: BuildStamp | null): boolean {
+  if (!stamp) return false;
+  try {
+    const s = fs.statSync(stamp.path);
+    return s.mtimeMs !== stamp.mtimeMs || s.size !== stamp.size;
+  } catch {
+    return false;
+  }
+}
+
+const SERVER_BUILD_STAMP = captureBuildStamp(__filename);
+
+const STALE_SERVER_WARNING =
+  '\n\n⚠ STALE SERVER: the wairon build on disk changed after this MCP server started. '
+  + 'Restart the MCP session (e.g. /mcp reconnect) before further spec edits — writes through '
+  + 'a stale server can silently drop fields introduced by newer schemas.';
+
+function withStaleWarning(result: CallToolResult): CallToolResult {
+  if (!isBuildStale(SERVER_BUILD_STAMP)) return result;
+  const first = result.content?.[0];
+  if (first && first.type === 'text') {
+    return {
+      ...result,
+      content: [{ ...first, text: `${first.text}${STALE_SERVER_WARNING}` }, ...result.content.slice(1)],
+    };
+  }
+  return result;
+}
+
 function reg<Args extends Record<string, unknown>>(
   server: McpServer,
   name: string,
   config: { description: string; inputSchema?: Record<string, z.ZodTypeAny> },
   cb: (args: Args) => CallToolResult,
 ): void {
+  const guarded = (args: Args): CallToolResult => withStaleWarning(cb(args));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (server as any).registerTool(name, config, cb as any);
+  (server as any).registerTool(name, config, guarded as any);
+}
+
+// ---------------------------------------------------------------------------
+// Built-in SDD skill resources (mcp_skills_adapter + SDK registration)
+//
+// The MCP server publishes the four built-in SDD skills as read-only MCP
+// resources so cloud-only agents (which cannot receive the filesystem-exported
+// skills) can still discover and pull them. mcp_skills_adapter is the sanctioned
+// cross-subsystem hop into the sdd_skills portal.
+// ---------------------------------------------------------------------------
+
+const SKILL_RESOURCE_MIME = 'text/markdown';
+
+// mcp_skills_adapter — thin forwarders across the boundary into the skills
+// portal. Statically imported (not lazily required like the project-root-
+// sensitive core adapters) because the skills templates resolve relative to the
+// package, independent of the request-scoped project root.
+function listSkillResources(): SkillResourceDescriptor[] {
+  return coreListSkillResources();
+}
+function readSkillResource(resourceId: string): string {
+  return coreReadSkillResource(resourceId);
+}
+
+/** Resolve an MCP resource URI (wairon-skill://<id>) back to its skill id. */
+function skillIdFromResourceUri(uri: string): string {
+  try {
+    const u = new URL(uri);
+    return u.host || u.pathname.replace(/^\/+/, '') || uri;
+  } catch {
+    return uri;
+  }
+}
+
+/**
+ * Register the resources/list + resources/read endpoints on the SDK server so
+ * both the stdio server and the hosted per-project scoped server (which reuse
+ * this same factory) publish the built-in SDD skills automatically. Reads
+ * dispatch through the skills adapter to the resource workflow; an unknown URI
+ * surfaces the not-found message as an MCP error.
+ */
+function registerSkillResources(server: McpServer): void {
+  server.server.registerCapabilities({ resources: {} });
+
+  server.server.setRequestHandler(ListResourcesRequestSchema, () => ({
+    resources: listSkillResources().map((d) => ({
+      uri: d.resourceUri,
+      name: d.name,
+      description: d.description,
+      mimeType: SKILL_RESOURCE_MIME,
+    })),
+  }));
+
+  server.server.setRequestHandler(ReadResourceRequestSchema, (request) => {
+    const uri = request.params.uri;
+    try {
+      const content = readSkillResource(skillIdFromResourceUri(uri));
+      return { contents: [{ uri, mimeType: SKILL_RESOURCE_MIME, text: content }] };
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      throw new McpError(ErrorCode.InvalidParams, message);
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
 // Server factory
 // ---------------------------------------------------------------------------
 
-export function createMcpServer(): McpServer {
+export interface McpServerOptions {
+  /**
+   * Advertise the hosted data-plane tools (self-service approvals + landscape
+   * discovery/exchange) in tools/list. Their EXECUTION is intercepted by the
+   * hosting request orchestrator BEFORE any call reaches this server — the
+   * registrations here exist so MCP clients can DISCOVER the tools; the stub
+   * handlers only fire outside a hosted request, where the tools are
+   * unsupported by design. Never set for the local stdio server.
+   */
+  hostedTools?: boolean;
+}
+
+export function createMcpServer(options: McpServerOptions = {}): McpServer {
   const server = new McpServer({
     name: 'wairon',
     version: WAIRON_VERSION,
@@ -219,6 +363,7 @@ export function createMcpServer(): McpServer {
           vision,
           boundaries: boundaries ?? [],
           globalRequirements: globalRequirements ?? [],
+          databases: [],
           ...(targetLanguage ? { targetLanguage } : {}),
           createdAt: now,
           updatedAt: now,
@@ -230,7 +375,7 @@ export function createMcpServer(): McpServer {
     },
   );
 
-  reg<{ id: string; name: string; description: string; publicInterfaces?: { type: 'REST' | 'GraphQL' | 'MessageBus' | 'RPC' | 'Custom'; details: string; component?: string; interface?: string }[]; projectPath?: string; targetLanguage?: string; trustedLinks?: { subsystem: string; reason: string }[] }>(server,
+  reg<{ id: string; name: string; description: string; publicInterfaces?: { type: 'REST' | 'GraphQL' | 'MessageBus' | 'RPC' | 'Custom'; details: string; component?: string; interface?: string }[]; projectPath?: string; targetLanguage?: string; profile?: string; trustedLinks?: { subsystem: string; reason: string }[]; lifecycle?: { phase: 'init' | 'shutdown'; component: string; method: string; description?: string }[] }>(server,
     'sdd_add_subsystem',
     {
       description: 'Add an L1 Subsystem / Service under the system boundary. publicInterfaces should bind each entry to the component that realizes it (the subsystem\'s published surface); if components do not exist yet, add them later with sdd_set_public_interfaces.',
@@ -246,13 +391,20 @@ export function createMcpServer(): McpServer {
         })).optional().describe('Public entrypoints exposed by this subsystem, each bound to a realizing component'),
         projectPath: z.string().optional().describe('Relative path to external project root for subsystem chaining'),
         targetLanguage: z.string().optional().describe('Override of the system-level targetLanguage for this subsystem'),
+        profile: z.string().optional().describe('Architectural profile override for this subsystem (built-ins: backend, frontend-reactive, frontend-controller, lowlevel-os, game-ecs, realtime-embedded, plc-cyclic; extension packs may add more — unknown names get UNKNOWN_PROFILE)'),
         trustedLinks: z.array(z.object({
           subsystem: z.string().describe('Peer subsystem id'),
           reason: z.string().describe('Why the coupling is sanctioned (e.g. "dispatch latency fast lane")'),
         })).optional().describe('Sanctioned tight couplings with peers — required to acknowledge a mutual subsystem dependency; the Adapter → published Portal shape still applies.'),
+        lifecycle: z.array(z.object({
+          phase: z.enum(['init', 'shutdown']).describe('Which lifecycle flow this roots'),
+          component: z.string().describe('Component id whose method the runtime invokes at this phase'),
+          method: z.string().describe('Method name on that component\'s interface'),
+          description: z.string().optional(),
+        })).optional().describe('Declared init/shutdown flow roots — reachability entrypoints alongside Portals/Observers; required for durable-Store hydration checks (MISSING_HYDRATION).'),
       },
     },
-    ({ id, name, description, publicInterfaces, projectPath, targetLanguage, trustedLinks }) => {
+    ({ id, name, description, publicInterfaces, projectPath, targetLanguage, profile, trustedLinks, lifecycle }) => {
       try {
         const { loadSystemSpec, saveSubsystemSpec } = requireSpecs();
         const system = loadSystemSpec();
@@ -266,6 +418,8 @@ export function createMcpServer(): McpServer {
           publicInterfaces: publicInterfaces ?? [],
           projectPath,
           ...(targetLanguage ? { targetLanguage } : {}),
+          ...(profile ? { profile } : {}),
+          ...(lifecycle ? { lifecycle } : {}),
           trustedLinks: trustedLinks ?? [],
           status: 'draft',
           createdAt: now,
@@ -402,7 +556,7 @@ export function createMcpServer(): McpServer {
     },
   );
 
-  reg<{ id: string; name: string; description: string; subsystem: string; componentType: 'Portal' | 'Orchestrator' | 'Supervisor' | 'Actor' | 'Store' | 'Index' | 'Registry' | 'Adapter' | 'Observer' | 'Specialist' | 'Repository' | 'Gateway'; owns?: string[]; dependsOn?: string[]; portalType?: 'HTTP_API' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'CLI' | 'NamedPipe' | 'IPC' | 'Custom' }>(server,
+  reg<{ id: string; name: string; description: string; subsystem: string; componentType: 'Portal' | 'Orchestrator' | 'Supervisor' | 'Actor' | 'Store' | 'Index' | 'Registry' | 'Adapter' | 'Observer' | 'Specialist' | 'Repository' | 'Gateway'; owns?: string[]; dependsOn?: string[]; portalType?: 'HTTP_API' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'CLI' | 'NamedPipe' | 'IPC' | 'Custom'; basePath?: string; dispatch?: { capability: string; component: string; method: string; description?: string }[]; durability?: 'ram-projection' | 'durable' }>(server,
     'sdd_add_component',
     {
       description: 'Add an L2 Component under a subsystem. componentType is a building block (Portal, Orchestrator, Supervisor, Actor, Store, Index, Registry, Adapter, Observer, Specialist) or a pattern (Repository, Gateway). Patterns set "owns" (their private member blocks); all components set "dependsOn" (collaborators — facades or standalone blocks).',
@@ -415,9 +569,17 @@ export function createMcpServer(): McpServer {
         owns: z.array(z.string()).optional().describe('Member block ids privately owned by this component (patterns only)'),
         dependsOn: z.array(z.string()).optional().describe('IDs of other components this collaborates with (facades or standalone blocks)'),
         portalType: z.enum(['HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'Custom']).optional().describe('Required when componentType is Portal'),
+        basePath: z.string().optional().describe('Portal-only: base path/prefix all the portal\'s endpoints mount under (UNEXPECTED_PORTAL_FIELD on non-Portals)'),
+        dispatch: z.array(z.object({
+          capability: z.string().describe('Capability name exactly as dispatched at runtime (e.g. "shadow_module.get")'),
+          component: z.string().describe('Component id serving this capability (must also appear under dependsOn/owns)'),
+          method: z.string().describe('Method name on the serving component\'s interface'),
+          description: z.string().optional(),
+        })).optional().describe('Portal-only: capability → component.method dispatch table for generic-handle portals. Gives the reachability walker real edges and is validated against target interfaces (UNSERVED_CAPABILITY).'),
+        durability: z.enum(['ram-projection', 'durable']).optional().describe('Store-only: durable state requires a hydration read-back reachable from a lifecycle init entrypoint (MISSING_HYDRATION); ram-projection declares rebuilt-not-restored state.'),
       },
     },
-    ({ id, name, description, subsystem, componentType, owns, dependsOn, portalType }) => {
+    ({ id, name, description, subsystem, componentType, owns, dependsOn, portalType, basePath, dispatch, durability }) => {
       try {
         const { loadSubsystemSpec, saveComponentSpec } = requireSpecs();
         const sub = loadSubsystemSpec(subsystem);
@@ -432,6 +594,9 @@ export function createMcpServer(): McpServer {
           owns: owns ?? [],
           dependsOn: dependsOn ?? [],
           ...(portalType ? { portalType } : {}),
+          ...(basePath ? { basePath } : {}),
+          ...(dispatch ? { dispatch } : {}),
+          ...(durability ? { durability } : {}),
           status: 'draft',
           createdAt: now,
           updatedAt: now,
@@ -443,7 +608,7 @@ export function createMcpServer(): McpServer {
     },
   );
 
-  reg<{ id: string; name: string; description: string; component: string; methods?: { name: string; description: string; signature: string; returns: string; params?: { name: string; type: string; description?: string; optional?: boolean }[]; guarantees?: ('idempotent' | 'atomic' | 'transactional' | 'exactly-once')[] }[] }>(server,
+  reg<{ id: string; name: string; description: string; component: string; methods?: { name: string; description: string; signature: string; returns: string; params?: { name: string; type: string; description?: string; optional?: boolean }[]; guarantees?: ('idempotent' | 'atomic' | 'transactional' | 'exactly-once')[]; effect?: 'read' | 'write' }[] }>(server,
     'sdd_define_interface',
     {
       description: 'Define an L3 Contract / Interface with method signatures for a component. Prefer supplying structured `params` per method — they are the authoritative source for type checking (the free-form signature string then becomes display-only and is never heuristically parsed).',
@@ -464,6 +629,7 @@ export function createMcpServer(): McpServer {
             optional: z.boolean().optional(),
           })).optional().describe('Structured parameters — authoritative for type checking (the prose signature becomes display-only). Strongly preferred.'),
           guarantees: z.array(z.enum(['idempotent', 'atomic', 'transactional', 'exactly-once'])).optional().describe('Semantic guarantees the method promises (combinable); any guarantee a narrative step asserts must be declared here'),
+          effect: z.enum(['read', 'write']).optional().describe('State-effect direction on the component\'s held state — required on a durable Store\'s contract methods so the durability round-trip rule can pair writes with hydration read-backs'),
         })).optional().describe('List of method signature contracts'),
       },
     },
@@ -565,9 +731,11 @@ export function createMcpServer(): McpServer {
   const narrativeStepInput = z.object({
     stepNumber: stepNo().optional().describe('Defaults to the 1-based array position — jump fields reference these numbers'),
     description: z.string(),
-    type: z.enum(['local', 'call', 'branch', 'switch', 'loop', 'try', 'jump', 'return', 'throw']),
-    targetComponent: z.string().optional().describe('call: L2 component id'),
+    type: z.enum(['local', 'call', 'dispatch', 'branch', 'switch', 'loop', 'try', 'jump', 'return', 'throw']),
+    targetComponent: z.string().optional().describe('call/dispatch: L2 component id (for dispatch, the Portal routed through)'),
     targetMethod: z.string().optional().describe('call: method name on the target'),
+    capability: z.string().optional().describe('dispatch: the capability routed through the target Portal\'s dispatch table (validated against it — UNSERVED_CAPABILITY)'),
+    assertsGuarantees: z.array(z.enum(['idempotent', 'atomic', 'transactional', 'exactly-once'])).optional().describe('Semantic guarantees this step relies on — each must be declared in the called method\'s L3 guarantees (NARRATIVE_SEMANTIC_UNBACKED otherwise)'),
     condition: z.string().optional().describe('branch / while / doWhile'),
     onTrueStep: stepNo().optional().describe('branch: default = next step'),
     onFalseStep: stepNo().optional().describe('branch: required'),
@@ -586,10 +754,11 @@ export function createMcpServer(): McpServer {
   type NarrativeStepIn = z.infer<typeof narrativeStepInput>;
   const detailEnum = z.enum(['full', 'calls-only', 'intent']);
 
-  reg<{ id: string; name: string; description: string; contract: string; sourcePath?: string; technologies?: string[]; detail?: 'full' | 'calls-only' | 'intent'; methods?: { name: string; detail?: 'full' | 'calls-only' | 'intent'; intent?: string; narrative?: NarrativeStepIn[] }[] }>(server,
+  const conformanceEnum = z.enum(['declared', 'anchored', 'off']);
+  reg<{ id: string; name: string; description: string; contract: string; sourcePath?: string; technologies?: string[]; detail?: 'full' | 'calls-only' | 'intent'; conformance?: 'declared' | 'anchored' | 'off'; methods?: { name: string; detail?: 'full' | 'calls-only' | 'intent'; intent?: string; conformance?: 'declared' | 'anchored' | 'off'; symbol?: string; narrative?: NarrativeStepIn[] }[] }>(server,
     'sdd_write_narrative',
     {
-      description: 'Write L4 Concrete Implementation spec containing L5 method narratives. Narratives are a FLAT ordered step list; flow steps (branch/switch/loop/try/jump/return/throw) jump by step number — blocks are just skipped regions. Detail dial per method: full (narrative required) | calls-only (call choreography suffices) | intent (prose instead of steps); omitted = stereotype default (Portal/Observer/Adapter: calls-only, Store/Index/Registry: intent, else full).',
+      description: 'Write L4 Concrete Implementation spec containing L5 method narratives. Narratives are a FLAT ordered step list; flow steps (branch/switch/loop/try/jump/return/throw) jump by step number — blocks are just skipped regions. Detail dial per method: full (narrative required) | calls-only (call choreography suffices) | intent (prose instead of steps); omitted = stereotype default (Portal/Observer/Adapter: calls-only, Store/Index/Registry: intent, else full). Conformance dial per method or spec: declared | anchored | off — how strictly structural conformance requires contract methods to be realized in the sourcePath file (omitted = Portal: anchored, else declared).',
       inputSchema: {
         id: z.string().describe('Lowercase identifier, e.g. "vfs_storage"'),
         name: z.string().describe('Human-readable implementation name'),
@@ -598,15 +767,18 @@ export function createMcpServer(): McpServer {
         sourcePath: z.string().optional().describe('Optional: target source code file path relative to project root'),
         technologies: z.array(z.string()).optional().describe('External technologies this implementation binds to (e.g. ["mysql"]) — declares this component\'s ownership tree as the technology\'s home; references outside it are flagged (TECH_LEAKAGE) and contract identifiers must stay intent-language. Only for Adapter/Store/Registry/Index components.'),
         detail: detailEnum.optional().describe('Spec-level narrative detail default for all methods'),
+        conformance: conformanceEnum.optional().describe('Spec-level structural-conformance tier default: declared | anchored | off (omitted = stereotype default: Portal → anchored, else declared)'),
         methods: z.array(z.object({
           name: z.string(),
           detail: detailEnum.optional().describe('Detail level for this method (overrides the spec default)'),
           intent: z.string().optional().describe('detail: intent — behavioral prose (what it does and how it fails); substitute for a narrative'),
+          conformance: conformanceEnum.optional().describe('Conformance tier for this method (overrides the spec default)'),
+          symbol: z.string().optional().describe('Code-level name realizing this contract method in the sourcePath file, when it legitimately differs from the intent-language contract name (e.g. put realized by saveSnapshot)'),
           narrative: z.array(narrativeStepInput).optional(),
         })).optional().describe('Method implementations containing L5 narratives'),
       },
     },
-    ({ id, name, description, contract, sourcePath, technologies, detail, methods }) => {
+    ({ id, name, description, contract, sourcePath, technologies, detail, conformance, methods }) => {
       try {
         const { loadInterfaceSpec, saveImplementationSpec } = requireSpecs();
         const intf = loadInterfaceSpec(contract);
@@ -620,6 +792,7 @@ export function createMcpServer(): McpServer {
           sourcePath,
           technologies,
           detail,
+          conformance,
           methods: (methods ?? []).map(m => ({
             ...m,
             narrative: (m.narrative ?? []).map((s, i) => ({ ...s, stepNumber: s.stepNumber ?? i + 1 })),
@@ -635,7 +808,7 @@ export function createMcpServer(): McpServer {
     },
   );
 
-  reg<{ kind: 'entity' | 'value-object'; id: string; name: string; description?: string; subsystem?: string; group?: string; fields?: { name: string; type: string; description?: string; optional?: boolean; key?: 'primary' | 'unique' }[]; methods?: { name: string; signature: string; returns: string; description?: string }[] }>(server,
+  reg<{ kind: 'entity' | 'value-object'; id: string; name: string; description?: string; subsystem?: string; group?: string; fields?: { name: string; type: string; description?: string; optional?: boolean; key?: 'primary' | 'unique' | 'foreign'; references?: string }[]; methods?: { name: string; signature: string; returns: string; description?: string }[]; componentClass?: string; database?: string; table?: string; linkedEntity?: string }>(server,
     'sdd_add_type',
     {
       description: 'Define an entity or value-object type (the data components operate on). Entities are owned by a subsystem; shared value objects omit subsystem (system-level). Fields are data; methods are PURE intrinsic behaviour only — anything needing a collaborator belongs on a component, taking the entity as an argument.',
@@ -646,11 +819,22 @@ export function createMcpServer(): McpServer {
         description: z.string().optional(),
         subsystem: z.string().optional().describe('Owning subsystem id; omit for a system-level shared value object'),
         group: z.string().optional().describe('Optional logical group ID to organize this type in subfolders'),
-        fields: z.array(z.object({ name: z.string(), type: z.string(), description: z.string().optional(), optional: z.boolean().optional(), key: z.enum(['primary', 'unique']).optional().describe('Identity marker (PK/unique) for ERD and later schema derivation; FK is derived from the type reference') })).optional().describe('Data fields (type is a primitive or a qualified type id, e.g. "billing.Invoice")'),
+        fields: z.array(z.object({
+          name: z.string(),
+          type: z.string(),
+          description: z.string().optional(),
+          optional: z.boolean().optional(),
+          key: z.enum(['primary', 'unique', 'foreign']).optional().describe('Identity marker (PK/unique/FK) for ERD and database schema derivation'),
+          references: z.string().optional().describe('For foreign keys, the referenced type/table id and optional field, e.g. "invoice.id"'),
+        })).optional().describe('Data fields (type is a primitive or a qualified type id, e.g. "billing.Invoice")'),
         methods: z.array(z.object({ name: z.string(), signature: z.string(), returns: z.string(), description: z.string().optional() })).optional().describe('Pure intrinsic methods only'),
+        componentClass: z.string().optional().describe('Optional component id that implements or owns this logical entity'),
+        database: z.string().optional().describe('Optional database id for table-schema types'),
+        table: z.string().optional().describe('Optional database table name for table-schema types'),
+        linkedEntity: z.string().optional().describe('Optional logical entity id represented by this table-schema type'),
       },
     },
-    ({ kind, id, name, description, subsystem, group, fields, methods }) => {
+    ({ kind, id, name, description, subsystem, group, fields, methods, componentClass, database, table, linkedEntity }) => {
       try {
         const { saveTypeSpec } = requireSpecs();
         const now = new Date().toISOString();
@@ -661,8 +845,19 @@ export function createMcpServer(): McpServer {
           ...(description ? { description } : {}),
           ...(subsystem ? { subsystem } : {}),
           ...(group ? { group } : {}),
-          fields: (fields ?? []).map((f) => ({ name: f.name, type: f.type, description: f.description, optional: f.optional ?? false })),
+          fields: (fields ?? []).map((f) => ({
+            name: f.name,
+            type: f.type,
+            description: f.description,
+            optional: f.optional ?? false,
+            ...(f.key ? { key: f.key } : {}),
+            ...(f.references ? { references: f.references } : {}),
+          })),
           methods: methods ?? [],
+          ...(componentClass ? { componentClass } : {}),
+          ...(database ? { database } : {}),
+          ...(table ? { table } : {}),
+          ...(linkedEntity ? { linkedEntity } : {}),
           createdAt: now,
           updatedAt: now,
         });
@@ -704,13 +899,13 @@ export function createMcpServer(): McpServer {
     },
   );
 
-  reg<{ kind: 'subsystem' | 'component' | 'interface' | 'implementation' | 'type'; id: string }>(server,
+  reg<{ kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type'; id: string }>(server,
     'sdd_get_spec',
     {
       description: 'Get/read the parsed JSON contents of a specific spec from the spec tree. Returns structural contents without file system path searching.',
       inputSchema: {
-        kind: z.enum(['subsystem', 'component', 'interface', 'implementation', 'type']).describe('The kind of specification'),
-        id: z.string().describe('The identifier of the spec to fetch'),
+        kind: z.enum(['system', 'subsystem', 'component', 'interface', 'implementation', 'type']).describe('The kind of specification'),
+        id: z.string().describe('The identifier of the spec to fetch (the L0 system spec is a singleton — pass the system name or "system")'),
       },
     },
     ({ kind, id }) => {
@@ -718,6 +913,7 @@ export function createMcpServer(): McpServer {
         const specs = requireSpecs();
         let result: unknown = null;
         switch (kind) {
+          case 'system':         result = specs.loadSystemSpec(); break;
           case 'subsystem':      result = specs.loadSubsystemSpec(id); break;
           case 'component':      result = specs.loadComponentSpec(id); break;
           case 'interface':      result = specs.loadInterfaceSpec(id); break;
@@ -760,21 +956,22 @@ export function createMcpServer(): McpServer {
     }
   );
 
-  reg<{ kind: 'subsystem' | 'component' | 'interface' | 'implementation' | 'type'; id: string; delta: Record<string, any> }>(server,
+  reg<{ kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type'; id: string; delta: Record<string, any> }>(server,
     'sdd_update_spec',
     {
       description: 'Update/patch an existing SDD specification (subsystem, component, interface, implementation, or type) using a granular delta. Updates fields, appends/merges array elements, or inserts/deletes narrative steps.',
       inputSchema: {
-        kind: z.enum(['subsystem', 'component', 'interface', 'implementation', 'type']).describe('The spec kind to update'),
+        kind: z.enum(['system', 'subsystem', 'component', 'interface', 'implementation', 'type']).describe('The spec kind to update (system = the singleton L0 — vision, boundaries, globalRequirements, databases, and publicInterfaces: the project gateway surface, each entry {id, name, subsystem, component, type, details, audience: project|department|instance|partner|external}; id is informational)'),
         id: z.string().describe('The ID of the spec to update (namespaced if needed)'),
-        delta: z.record(z.any()).describe('The partial fields to merge into the spec. For arrays (like methods or fields), elements are matched by "name" (or "id") and merged/upserted. Add "action: \'delete\'" (or "remove: true") to delete a named element. For narrative steps, match by "stepNumber" and use "action: \'insert\'" (shifts subsequent steps up) or "action: \'delete\'" (shifts subsequent steps down and removes it). Renumbering RELOCATES every flow jump field (onTrueStep/onFalseStep/cases.step/defaultStep/endStep/catches.step/finallyStep/toStep) in the same narrative; deleting a step that is a jump target is rejected until the referrers are retargeted. Per-spec lint suppression: set "lint: { allow: [{ code, reason }] }" to silence a WARNING code on this spec only (errors always surface; stale allows are flagged).'),
+        delta: z.record(z.any()).describe('The partial fields to merge into the spec. For arrays (like methods or fields), elements are matched by "name" (or "id") and merged/upserted. Add "action: \'delete\'" (or "remove: true") to delete a named element. Dispatch tables upsert by "capability" and lifecycle entrypoints by phase+component+method (use "action: \'delete\'" to remove an entry). For narrative steps, match by "stepNumber" and use "action: \'insert\'" (shifts subsequent steps up) or "action: \'delete\'" (shifts subsequent steps down and removes it). Renumbering RELOCATES every flow jump field (onTrueStep/onFalseStep/cases.step/defaultStep/endStep/catches.step/finallyStep/toStep) in the same narrative; deleting a step that is a jump target is rejected until the referrers are retargeted. Inserting AT a jump target relocates those jumps past the inserted step by default (a NOTICE is returned) — add "captureJumps": true on the inserted step to retarget entry jumps onto it (loop/try endStep region tails always relocate with the body and are never captured). Reference ids in deltas may use LOCAL names — they are qualified against the spec\'s namespace exactly as the loader would. Per-spec lint suppression: set "lint: { allow: [{ code, reason }] }" to silence a WARNING code on this spec only (errors always surface; stale allows are flagged).'),
       },
     },
     ({ kind, id, delta }) => {
       try {
         const specs = requireSpecs();
-        specs.updateSpec(kind, id, delta);
-        return text(`Successfully updated ${kind} spec "${id}".`);
+        const notices = specs.updateSpec(kind, id, delta);
+        const noticeBlock = notices.length ? `\n\nNOTICE:\n- ${notices.join('\n- ')}` : '';
+        return text(`Successfully updated ${kind} spec "${id}".${noticeBlock}`);
       } catch (e) {
         return errText(String(e));
       }
@@ -802,6 +999,57 @@ export function createMcpServer(): McpServer {
       }
     },
   );
+
+  // ── Built-in SDD skills as read-only MCP resources ────────────────────────
+  registerSkillResources(server);
+
+  // ── Hosted data-plane tool ADVERTISEMENT (discovery only) ─────────────────
+  // Execution is intercepted upstream by the hosting request orchestrator;
+  // these registrations make the tools visible in tools/list so agents can
+  // find them. The handlers only fire outside a hosted request.
+  if (options.hostedTools) {
+    const hostedStub = (): CallToolResult =>
+      errText('This hosted tool is dispatched by the hosting data plane before reaching the MCP server; it is unavailable outside a hosted request.');
+
+    reg<Record<string, never>>(server, 'sdd_host_request_project_lock', {
+      description: 'Hosted self-service: create an approval request to LOCK the bound project (validate-as-complete gate + commit-scoped lock record). Returns the approval request for tracking; an admin decides it.',
+      inputSchema: {},
+    }, hostedStub);
+    reg<Record<string, never>>(server, 'sdd_host_request_project_promotion', {
+      description: 'Hosted self-service: create an approval request to PROMOTE the bound, locked project after a StateId re-check. Returns the approval request; an admin decides it.',
+      inputSchema: {},
+    }, hostedStub);
+    reg<{ id: string }>(server, 'sdd_host_request_project_initialization', {
+      description: 'Hosted self-service: create an approval request to initialize a new hosted project (optionally into an organization unit, with a profile selection). Returns the approval request; an admin decides it.',
+      inputSchema: {
+        id: z.string().describe('Requested project id'),
+        displayName: z.string().optional(),
+        description: z.string().optional(),
+        ownerUnitId: z.string().optional().describe('Organization unit to place the project in'),
+        environment: z.string().optional(),
+      },
+    }, hostedStub);
+    reg<{ requestId: string }>(server, 'sdd_host_get_approval_status', {
+      description: 'Hosted self-service: read the status of one of your approval requests.',
+      inputSchema: { requestId: z.string() },
+    }, hostedStub);
+    reg<Record<string, never>>(server, 'sdd_landscape_list_reachable_projects', {
+      description: 'Hosted landscape: the projects reachable from the BOUND project through ACTIVE cross-project relations (directional, relations-only), each with the relation ids/kinds and target public interface ids.',
+      inputSchema: {},
+    }, hostedStub);
+    reg<{ projectId: string }>(server, 'sdd_landscape_list_reachable_project_interfaces', {
+      description: 'Hosted landscape: redacted, audience-filtered public interface summaries of one reachable target project (Forbidden outside the reachable set; private by default).',
+      inputSchema: { projectId: z.string().describe('The reachable target project id') },
+    }, hostedStub);
+    reg<Record<string, never>>(server, 'sdd_landscape_list_visible_surfaces', {
+      description: 'Hosted landscape: the visibility-resolved discovery catalog for the BOUND project — every target the organization unit graph exposes to it (open-within-tenant, closed groups hidden, exposeTo grants honored), with audience distance and audience-filtered summaries. No relation required.',
+      inputSchema: {},
+    }, hostedStub);
+    reg<{ projectId: string }>(server, 'sdd_landscape_get_project_surface', {
+      description: 'Hosted landscape: fetch a visible target project\'s CONTRACT-GRADE surface snapshot (full method contracts, dispatch tables, type closure) at your audience-distance ceiling, origin "exchanged" — save it under .wai/surfaces/ (wairon surface import) so your adapters validate against the declared contract.',
+      inputSchema: { projectId: z.string().describe('The visible target project id') },
+    }, hostedStub);
+  }
 
   return server;
 }

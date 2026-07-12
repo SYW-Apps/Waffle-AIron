@@ -1,0 +1,52 @@
+id: ivisibility_specialist
+name: Visibility Specialist Interface
+description: Pure surface-visibility computation over the organization graph.
+component: visibility_specialist
+methods:
+  - name: resolveVisibility
+    description: >-
+      Compute the observer project's visibility view: its unit membership (placement units +
+      ancestors), then every target project with a placement in a unit visible to it — same-subtree
+      always; same-tenant other-subtree when no closed posture intervenes on the path; cross-tenant
+      only via an exposeTo grant chain — each tagged with its audience distance (department |
+      instance | partner) and the granting unit. Pure: no I/O, deterministic over its inputs.
+    signature: >-
+      resolveVisibility(observerProjectId: string, units: OrganizationUnitRecord[], placements:
+      ProjectPlacement[]): VisibilityResolution
+    returns: VisibilityResolution
+    params:
+      - name: observerProjectId
+        type: string
+      - name: units
+        type: OrganizationUnitRecord[]
+      - name: placements
+        type: ProjectPlacement[]
+    guarantees:
+      - idempotent
+  - name: isVisible
+    description: 'Point check: whether the resolution includes the target project.'
+    signature: 'isVisible(resolution: VisibilityResolution, targetProjectId: string): boolean'
+    returns: boolean
+    params:
+      - name: resolution
+        type: VisibilityResolution
+      - name: targetProjectId
+        type: string
+    guarantees:
+      - idempotent
+  - name: audienceDistance
+    description: >-
+      The audience distance class of a visible target (department | instance | partner), or null
+      when not visible — the value entry-level audience ceilings are intersected with.
+    signature: 'audienceDistance(resolution: VisibilityResolution, targetProjectId: string): string | null'
+    returns: string | null
+    params:
+      - name: resolution
+        type: VisibilityResolution
+      - name: targetProjectId
+        type: string
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-07-11T09:37:26.241Z'
+updatedAt: '2026-07-11T10:05:10.837Z'

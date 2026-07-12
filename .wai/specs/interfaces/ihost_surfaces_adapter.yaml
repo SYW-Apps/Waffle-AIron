@@ -1,0 +1,19 @@
+id: ihost_surfaces_adapter
+name: Host Surfaces Adapter Interface
+description: Surface-artifact generation for the currently bound hosted project.
+component: host_surfaces_adapter
+methods:
+  - name: exportBoundSurface
+    description: >-
+      Project the bound project's L0 gateway surface at the audience ceiling via the surface portal;
+      when format is openapi the result also carries the rendered OpenAPI 3.1 document.
+    signature: 'exportBoundSurface(maxAudience: string, format: string): SurfaceExportResult'
+    returns: SurfaceExportResult
+    params:
+      - name: maxAudience
+        type: string
+      - name: format
+        type: string
+status: complete
+createdAt: '2026-07-11T09:48:46.778Z'
+updatedAt: '2026-07-11T10:05:10.805Z'

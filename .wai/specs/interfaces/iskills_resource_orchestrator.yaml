@@ -1,0 +1,25 @@
+id: iskills_resource_orchestrator
+name: Skills Resource Orchestrator Interface
+description: >-
+  MCP-resource workflow contract for the built-in SDD skills: list resources and read one resource's
+  content (shaped for MCP registration), rejecting unknown ids.
+component: skills_resource_orchestrator
+methods:
+  - name: listResources
+    description: >-
+      List the built-in SDD skills as MCP resource descriptors for advertisement to connected
+      agents.
+    signature: 'listResources(): SkillResourceDescriptor[]'
+    returns: SkillResourceDescriptor[]
+    params: []
+  - name: readResource
+    description: Read one built-in SDD skill's content by MCP resource id, rejecting an unknown id.
+    signature: 'readResource(resourceId: string): string'
+    returns: string
+    params:
+      - name: resourceId
+        type: string
+        description: The MCP resource id / skill id to read.
+status: complete
+createdAt: '2026-07-08T22:02:40.411Z'
+updatedAt: '2026-07-10T12:21:10.081Z'

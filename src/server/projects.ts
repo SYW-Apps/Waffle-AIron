@@ -73,6 +73,38 @@ export function createProjectRecord(dataDir: string, id: string): HostedProjectR
   return record;
 }
 
+/**
+ * Register the current working directory as the single local dev project under a
+ * caller-supplied rootPath. Unlike createProjectRecord — which FORCES the isolated
+ * root under <dataDir>/projects/<id> — the dev server's one project IS the
+ * developer's own tree (an arbitrary path outside dataDir), so the rootPath is
+ * supplied verbatim and no directory is created. Idempotent: upserts by id (a
+ * pre-existing record's createdAt is preserved), so restarting `wairon dev` over
+ * the same tree reuses the record instead of churning it. resolveProjectRoot then
+ * returns this rootPath for a principal scoped to the id, so the whole hosted graph
+ * pipeline resolves the id → the cwd unchanged. The id must be a valid project id.
+ */
+export function registerLocalDevProject(
+  dataDir: string,
+  id: string,
+  rootPath: string,
+): HostedProjectRecord {
+  if (!isValidProjectId(id)) {
+    throw new Error(`Invalid project id "${id}" (allowed: lowercase letters, digits, hyphen).`);
+  }
+  const records = load(dataDir);
+  const existing = records.find((r) => r.id === id);
+  const record: HostedProjectRecord = {
+    id,
+    rootPath,
+    status: 'active',
+    createdAt: existing?.createdAt ?? new Date().toISOString(),
+  };
+  const next = existing ? records.map((r) => (r.id === id ? record : r)) : [...records, record];
+  save(dataDir, next);
+  return record;
+}
+
 /** All hosted-project records. */
 export function listProjectRecords(dataDir: string): HostedProjectRecord[] {
   return load(dataDir);

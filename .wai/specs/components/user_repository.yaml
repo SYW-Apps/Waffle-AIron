@@ -1,0 +1,17 @@
+id: user_repository
+name: User Repository
+description: >-
+  Facade for durable hosted user and service-principal state. Coordinates the private store, write
+  registry, and read index while exposing a single dependency target to hosted workflows.
+subsystem: sdd_host
+componentType: Repository
+owns:
+  - user_store
+  - user_registry
+  - user_index
+dependsOn: []
+lint:
+  allow: []
+status: complete
+createdAt: '2026-07-08T20:14:43.867Z'
+updatedAt: '2026-07-10T08:19:21.268Z'

@@ -1,0 +1,50 @@
+kind: entity
+id: web_session
+name: WebSession
+description: >-
+  A durable browser session for the unified web UI: a cookie session id resolves to a fully-derived
+  Principal. Created on SSO sign-in and deleted on sign-out, it expires at expiresAt. It stores the
+  resolved PrincipalSubject and the server-derived ProjectGrant set so the session resolves to a
+  Principal WITHOUT any token lookup — the session id is itself a first-class credential the single
+  auth authority accepts (the auth bridge). Raw external identity tokens are never stored here; only
+  a secret reference or a user-bound credential id may be represented.
+subsystem: sdd_host
+fields:
+  - name: id
+    type: string
+    description: Stable session id.
+    optional: false
+  - name: subject
+    type: PrincipalSubject
+    description: Resolved identity for the session.
+    optional: false
+  - name: grants
+    type: ProjectGrant[]
+    description: Server-derived grants available to this session.
+    optional: false
+  - name: createdAt
+    type: string
+    description: ISO-8601 creation timestamp.
+    optional: false
+  - name: expiresAt
+    type: string
+    description: ISO-8601 expiry timestamp.
+    optional: false
+  - name: lastSeenAt
+    type: string
+    description: ISO-8601 last activity timestamp.
+    optional: true
+  - name: providerId
+    type: string
+    description: IdentityProviderConfig id used for sign-in.
+    optional: true
+  - name: tokenId
+    type: string
+    description: >-
+      Optional id of a user-bound credential this session is associated with, for correlated
+      revocation; never a raw token. Left unset when the session itself is the credential (subject +
+      grants resolve the Principal directly).
+    optional: true
+methods: []
+createdAt: '2026-07-08T22:00:22.213Z'
+updatedAt: '2026-07-11T11:30:59.605Z'

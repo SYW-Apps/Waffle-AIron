@@ -1,0 +1,19 @@
+id: surface_orchestrator
+name: Surface Orchestrator
+description: >-
+  Owns the surface-exchange workflows: project the own tree into an audience-filtered snapshot
+  (optionally rendered via a codec and written out), import exchanged/authored surfaces (native YAML
+  or OpenAPI), serve stored snapshots to consumers, and generate parent-surface snapshots into every
+  chained child project.
+subsystem: sdd_surfaces
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - surface_repository
+  - surface_projector
+  - openapi_codec
+  - surfaces_core_adapter
+  - surface_transfer_adapter
+status: complete
+createdAt: '2026-07-10T23:12:12.860Z'
+updatedAt: '2026-07-11T09:04:02.132Z'

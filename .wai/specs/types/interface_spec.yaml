@@ -6,23 +6,31 @@ fields:
   - name: id
     type: string
     description: Interface id (i-prefixed)
+    optional: false
     key: primary
   - name: name
     type: string
     description: Human-readable contract name
+    optional: false
   - name: description
     type: string
     description: What the contract covers
+    optional: false
   - name: component
     type: string
     description: L2 component realizing this contract
+    optional: false
   - name: methods
     type: object[]
-    description: 'Method signatures: name, params, returns, guarantees, endpoint'
+    description: >-
+      Method signatures: name, params, returns, guarantees, endpoint, effect (read | write —
+      required on a durable Store's contract methods so the durability round-trip rule can pair
+      external writes with hydration read-backs)
+    optional: false
   - name: status
     type: string
     description: draft | design | complete
     optional: true
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-03T00:00:00.000Z'
+updatedAt: '2026-07-10T18:47:36.202Z'

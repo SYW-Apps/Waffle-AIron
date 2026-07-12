@@ -1,0 +1,34 @@
+id: public_surface_repository_impl
+name: Public Surface Repository Implementation
+description: >-
+  Facade over the owned public-surface store, registry, and index. Pure 1:1 forwarding —
+  replaceSnapshot goes to the registry, getSnapshot/findInterface go to the index; no logic lives
+  here.
+contract: ipublic_surface_repository
+sourcePath: src/server/surfaces.ts
+methods:
+  - name: replaceSnapshot
+    narrative:
+      - stepNumber: 1
+        description: Forward to the public surface registry
+        type: call
+        targetComponent: public_surface_registry
+        targetMethod: replaceSnapshot
+  - name: getSnapshot
+    narrative:
+      - stepNumber: 1
+        description: Forward to the public surface index
+        type: call
+        targetComponent: public_surface_index
+        targetMethod: getSnapshot
+  - name: findInterface
+    narrative:
+      - stepNumber: 1
+        description: Forward to the public surface index
+        type: call
+        targetComponent: public_surface_index
+        targetMethod: findInterface
+detail: calls-only
+status: complete
+createdAt: '2026-07-09T22:08:25.014Z'
+updatedAt: '2026-07-09T22:13:42.683Z'

@@ -9,14 +9,17 @@ methods:
     intent: >-
       Reads .wai/git.json for the bound project and returns the parsed GitConfig, or null when
       absent/unreadable.
+    symbol: readGitConfig
   - name: write
     narrative: []
     intent: >-
       Serializes the GitConfig and writes it atomically to .wai/git.json for the bound project,
       overwriting any prior config.
+    symbol: writeGitConfig
   - name: clear
     narrative: []
     intent: Removes .wai/git.json for the bound project. Idempotent when already absent.
+    symbol: clearGitConfig
 status: complete
 createdAt: '2026-07-04T16:33:31.726Z'
-updatedAt: '2026-07-04T16:37:37.316Z'
+updatedAt: '2026-07-11T19:14:22.530Z'

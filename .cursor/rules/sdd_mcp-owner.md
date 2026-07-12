@@ -13,6 +13,7 @@ You own and decide on everything within:
 .wai/specs/components/mcp_orchestrator.yaml
 .wai/specs/components/mcp_portal.yaml
 .wai/specs/components/mcp_server.yaml
+.wai/specs/components/mcp_skills_adapter.yaml
 .wai/specs/components/mcp_validator_adapter.yaml
 src/mcp/server.ts
 ```

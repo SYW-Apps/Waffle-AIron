@@ -1,0 +1,36 @@
+kind: entity
+id: project_public_surface_snapshot
+name: ProjectPublicSurfaceSnapshot
+description: >-
+  Hosted-instance projection of one project's declared L0 public surfaces at a specific state. Other
+  projects and landscape diagrams read this snapshot instead of reading the target project's private
+  spec tree.
+subsystem: sdd_host
+fields:
+  - name: projectId
+    type: string
+    description: Hosted project id this snapshot belongs to.
+    optional: false
+  - name: stateId
+    type: StateId
+    description: Spec-tree state id the snapshot was exported from.
+    optional: false
+  - name: systemName
+    type: string
+    description: L0 system name from the project.
+    optional: false
+  - name: interfaces
+    type: PublicInterfaceSummary[]
+    description: Redacted summaries of declared L0 system public interfaces.
+    optional: false
+  - name: exportedAt
+    type: string
+    description: ISO-8601 timestamp when the snapshot was produced.
+    optional: false
+  - name: exportedBy
+    type: PrincipalSubject
+    description: Identity that refreshed or approved the snapshot, when available.
+    optional: true
+methods: []
+createdAt: '2026-07-08T21:11:02.889Z'
+updatedAt: '2026-07-08T21:11:02.929Z'

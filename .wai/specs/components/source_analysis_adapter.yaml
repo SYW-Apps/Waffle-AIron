@@ -1,0 +1,18 @@
+id: source_analysis_adapter
+name: Source Analysis Adapter
+description: >-
+  The validator subsystem's only source-code I/O: resolves every distinct L4 sourcePath inside the
+  project root, reads the source files, and produces the pure CodeModel (per-file
+  declaration/export/import/string-anchor facts with an analysis grade) that the
+  structural-conformance rule family consumes. Tiered, dependency-lean analysis: exact AST when the
+  TypeScript compiler module resolves dynamically (analyzed project's node_modules first, wairon's
+  own installation second — never bundled); else the language's declarative pattern table (built-in
+  or extension-pack registered); else a generic word-boundary scan as the universal floor. Pure
+  output, no caching; per-file failures degrade that file's grade and never abort the run.
+subsystem: sdd_validator
+componentType: Adapter
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-07-11T17:51:33.812Z'
+updatedAt: '2026-07-11T18:39:35.811Z'

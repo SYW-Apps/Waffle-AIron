@@ -1,0 +1,54 @@
+id: surface_registry_impl
+name: Surface Registry Implementation
+description: Snapshot aggregate write path.
+contract: isurface_registry
+sourcePath: src/core/surfaces.ts
+methods:
+  - name: upsertSnapshot
+    narrative:
+      - stepNumber: 1
+        description: Persist the snapshot file under .wai/surfaces/
+        type: call
+        targetComponent: surface_fs_adapter
+        targetMethod: writeSnapshot
+      - stepNumber: 2
+        description: Reflect the snapshot into the store projection
+        type: call
+        targetComponent: surface_store
+        targetMethod: put
+    symbol: saveSnapshot
+  - name: deleteSnapshot
+    narrative:
+      - stepNumber: 1
+        description: Delete the snapshot file
+        type: call
+        targetComponent: surface_fs_adapter
+        targetMethod: deleteSnapshot
+      - stepNumber: 2
+        description: Drop the snapshot from the store projection
+        type: call
+        targetComponent: surface_store
+        targetMethod: remove
+    symbol: removeSnapshot
+  - name: hydrateFromFiles
+    narrative:
+      - stepNumber: 1
+        description: Read and parse every persisted snapshot file
+        type: call
+        targetComponent: surface_fs_adapter
+        targetMethod: readAllSnapshots
+      - stepNumber: 2
+        description: For each parsed snapshot
+        type: loop
+        loopKind: forEach
+        over: parsed snapshots
+        endStep: 3
+      - stepNumber: 3
+        description: Load the snapshot into the store projection
+        type: call
+        targetComponent: surface_store
+        targetMethod: put
+    symbol: loadSurfaceSnapshots
+status: complete
+createdAt: '2026-07-10T23:15:34.448Z'
+updatedAt: '2026-07-11T19:14:23.066Z'

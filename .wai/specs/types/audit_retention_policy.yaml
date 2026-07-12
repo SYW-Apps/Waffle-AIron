@@ -1,0 +1,41 @@
+kind: value-object
+id: audit_retention_policy
+name: AuditRetentionPolicy
+description: >-
+  Instance-level policy for audit capture and retention. The policy controls event volume and
+  pruning while preserving the rule that raw secrets and full spec payloads are never written to
+  audit storage.
+fields:
+  - name: enabled
+    type: boolean
+    description: Whether durable audit storage is enabled for the hosted instance.
+    optional: false
+  - name: minimumLevel
+    type: string
+    description: 'Lowest event level persisted: "debug", "info", "warning", "error", or "security".'
+    optional: false
+  - name: retentionDays
+    type: number
+    description: Default number of days to retain persisted audit events before pruning.
+    optional: false
+  - name: securityRetentionDays
+    type: number
+    description: >-
+      Retention period for security-sensitive events such as denied access, token changes, project
+      deletion, lock, and promotion.
+    optional: true
+  - name: includeReadEvents
+    type: boolean
+    description: >-
+      Whether low-risk read-only MCP and admin reads are persisted in addition to write/security
+      events.
+    optional: false
+  - name: metadataMode
+    type: string
+    description: >-
+      Metadata capture posture: "minimal" or "diagnostic". Both modes must redact raw tokens,
+      secrets, and full spec contents.
+    optional: false
+methods: []
+createdAt: '2026-07-08T19:34:42.339Z'
+updatedAt: '2026-07-08T19:34:42.369Z'

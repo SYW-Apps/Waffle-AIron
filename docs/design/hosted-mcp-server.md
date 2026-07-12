@@ -199,6 +199,36 @@ docker compose exec wairon wairon host packs list
 docker compose exec wairon wairon packs add /data/incoming/acme-rules.cjs --global
 ```
 
+#### Extension packs on hosted instances — bake, don't shell in
+
+Server-global packs come from **two tiers**, merged at discovery time:
+
+- **Image tier** (`WAIRON_IMAGE_PACKS_DIR` = `/opt/wairon/packs`) — immutable,
+  baked into the layer, read-only at runtime. This is the **recommended** channel:
+  build an extension image FROM the published base and `COPY` your packs in, so the
+  set is versioned, reviewable, and reproducible across every replica.
+- **Instance tier** (`WAIRON_PACKS_DIR` = `$WAIRON_DATA_DIR/packs`) — mutable, on
+  the `/data` volume. The `install` / `remove` admin surface writes here (never the
+  image tier), for **local, dev, and emergency** hotfixes without a rebuild.
+
+A minimal extension image:
+
+```dockerfile
+FROM ghcr.io/syw-apps/wairon:2.x
+# packs/ holds declarative or rule packs; they land in the immutable image tier.
+COPY packs/ /opt/wairon/packs/
+```
+
+Redeploying that image keeps the `/data` volume, so instance-tier installs and all
+project state survive the swap. **Instance packs shadow image packs** on a name
+collision — the instance copy is the effective one, and the shadowed image pack
+surfaces as **drift** in `GET /operations/health` (the `pack-shadowing` check), so
+an emergency override is never silent. Removing an instance pack re-exposes the
+image pack of the same name; removing a pack that a project still references
+**intentionally invalidates** that project — the fallout is visible in the health
+report (`missing-pack-references`) and in the project's own validation. Bake the
+durable doctrine into the image tier and treat instance installs as temporary.
+
 ### Runtime secrets — no restart
 
 Integration tokens resolve **data-dir store → env**, so an integration can be
@@ -215,10 +245,13 @@ docker compose exec wairon wairon host secret set --key notion-token --value sec
 
 ```sh
 # 1. a master admin credential (kept out of git)
-echo "WAIRON_ADMIN_TOKEN=$(openssl rand -hex 32)" > .env
+cp .env.example .env
+# then replace WAIRON_ADMIN_TOKEN with:
+#   openssl rand -hex 32
 
-# 2. build & run (data plane published on :8080; admin stays internal)
-docker compose up -d --build
+# 2. pull & run (data plane published on :8080; admin stays internal)
+docker compose pull
+docker compose up -d
 curl -fsS http://localhost:8080/healthz          # → {"ok":true}
 
 # 3. provision a project and mint an editor key — via docker exec (safest path)
@@ -233,6 +266,19 @@ needs no project selector.
 
 ### 5.2 Dockerfile / compose
 
+The default compose file pulls the official hosted-server image:
+
+```sh
+ghcr.io/syw-apps/wairon:stable
+```
+
+Use the development override only when you intentionally want to build from this
+checkout:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+```
+
 Both live at the repo root ([`Dockerfile`](../../Dockerfile),
 [`docker-compose.yml`](../../docker-compose.yml)). The image is a multi-stage
 Node 20 build; `/data` is a volume; `wairon` is on `PATH` so `docker exec …
@@ -241,6 +287,39 @@ wairon host …` administers without exposing the admin port.
 > A distroless variant is possible later (`npm run build:binary` already produces
 > a pkg `node20-linux-x64` binary → copy into `gcr.io/distroless/cc-debian12`).
 > The Node image is the maintainable default.
+
+### 5.2.1 Published images
+
+Release tags publish multi-arch images to GitHub Container Registry:
+
+| Release tag | Image tags |
+|---|---|
+| `v2.3.0` | `ghcr.io/syw-apps/wairon:2.3.0`, `ghcr.io/syw-apps/wairon:stable` |
+| `v2.3.0-beta.1` | `ghcr.io/syw-apps/wairon:2.3.0-beta.1`, `ghcr.io/syw-apps/wairon:beta` |
+| `v2.3.0-preview.1` | `ghcr.io/syw-apps/wairon:2.3.0-preview.1`, `ghcr.io/syw-apps/wairon:preview` |
+
+The GHCR workflow uses GitHub Actions' built-in `GITHUB_TOKEN` with
+`packages: write`; no repository secret is required for GHCR. After the first
+publish, make the package public in GitHub's package settings if external users
+must pull it without authentication. Publishing to Docker Hub is intentionally
+not wired by default. To add Docker Hub later, create `DOCKERHUB_USERNAME` and
+`DOCKERHUB_TOKEN` repository secrets, then add a second login and tag set in the
+Docker workflow.
+
+No `:latest` tag is published — deliberately. Pick a channel or pin a version;
+there is no implicit "newest" alias to drift onto by accident.
+
+Note the release cadence when choosing between a channel and a pin: releases are
+auto-tagged from `main` (every merge bumps a version and publishes), so `:stable`
+moves with every merge to `main`, not on a deliberate release cut. For controlled
+rollouts, pin an exact version:
+
+```yaml
+image: ghcr.io/syw-apps/wairon:2.3.0
+```
+
+Use `stable`, `beta`, or `preview` only when you explicitly want that channel to
+move as releases land.
 
 ### 5.3 Administering
 
@@ -273,6 +352,44 @@ Two equivalent paths to the same control-plane logic:
   NFS / GCS FUSE) — the FS must survive restarts.
 - Never expose `:8080` (or `:8081`) publicly without TLS + auth.
 
+### 5.6 Updating and rollback
+
+Do not run `wairon update` inside the hosted container. The container image is
+the unit of deployment; update by replacing the container while keeping `/data`
+mounted.
+
+Recommended manual update:
+
+```sh
+# 1. snapshot/back up the /data volume first
+
+# 2. pull the current channel image
+docker compose pull
+
+# 3. recreate the container against the same named volume
+docker compose up -d
+
+# 4. verify readiness
+curl -fsS http://localhost:8080/readyz
+```
+
+Rollback is a compose image tag change plus recreate:
+
+```yaml
+services:
+  wairon:
+    image: ghcr.io/syw-apps/wairon:2.3.0
+```
+
+```sh
+docker compose pull
+docker compose up -d
+```
+
+Auto-updaters such as Watchtower or Diun are optional. Prefer notification-only
+or staged rollouts for production, because the hosted server is the authority for
+project specs and API keys.
+
 ---
 
 ## 6. Configuration reference
@@ -284,7 +401,8 @@ Two equivalent paths to the same control-plane logic:
 | Admin-plane bind host | `--admin-host` | — | `127.0.0.1` |
 | Admin-plane port | `--admin-port` | — | `8081` |
 | Data root | `--data-dir` | `WAIRON_DATA_DIR` | `~/.wairon/data` |
-| Server-global packs dir | — | `WAIRON_PACKS_DIR` | `$WAIRON_DATA_DIR/packs` (persists on the volume) |
+| Server-global packs dir (instance tier, mutable) | — | `WAIRON_PACKS_DIR` | `$WAIRON_DATA_DIR/packs` (persists on the volume) |
+| Image-layer packs dir (immutable, baked) | — | `WAIRON_IMAGE_PACKS_DIR` | `/opt/wairon/packs` (empty in the base image; extension images `COPY` into it) |
 | Data-plane auth | `--no-auth` (off) | — | on |
 | Master credential | — | `WAIRON_ADMIN_TOKEN` | *(required unless `--no-auth`)* |
 | Diagram view-link signing key | — | `WAIRON_SIGNING_SECRET` | falls back to `WAIRON_ADMIN_TOKEN` |

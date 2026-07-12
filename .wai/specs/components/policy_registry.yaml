@@ -1,0 +1,13 @@
+id: policy_registry
+name: Policy Registry
+description: >-
+  Write-path component for hosted instance policies, including pack/profile enforcement posture.
+  Policy writes are admin-only and audited by the orchestrator that calls this registry.
+subsystem: sdd_host
+componentType: Registry
+owns: []
+dependsOn:
+  - policy_store
+status: complete
+createdAt: '2026-07-08T21:59:08.617Z'
+updatedAt: '2026-07-09T20:53:23.965Z'

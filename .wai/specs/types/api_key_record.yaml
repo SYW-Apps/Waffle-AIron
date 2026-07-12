@@ -2,8 +2,9 @@ kind: entity
 id: api_key_record
 name: ApiKeyRecord
 description: >-
-  A persisted API-key credential: the hashed bearer token bound server-side to a role and an
-  authorized project set. The plaintext key is shown once at mint time and never stored.
+  A persisted MCP/API credential: the hashed bearer token bound server-side to an owner identity,
+  project grants, and compatibility role/project projections. The plaintext key is shown once at
+  mint time and never stored.
 subsystem: sdd_host
 fields:
   - name: id
@@ -26,6 +27,30 @@ fields:
     type: string
     description: ISO-8601 mint timestamp
     optional: false
+  - name: ownerSubject
+    type: PrincipalSubject
+    description: Human or service identity that owns this token.
+    optional: true
+  - name: createdBySubject
+    type: PrincipalSubject
+    description: Identity that minted this token, useful when an admin creates a token for someone else.
+    optional: true
+  - name: grants
+    type: ProjectGrant[]
+    description: Precise project and instance permissions granted to this token.
+    optional: true
+  - name: label
+    type: string
+    description: Human-readable label for token administration and audit screens.
+    optional: true
+  - name: expiresAt
+    type: string
+    description: Optional ISO-8601 expiration timestamp.
+    optional: true
+  - name: revokedAt
+    type: string
+    description: ISO-8601 revocation timestamp when the token has been revoked instead of hard-deleted.
+    optional: true
 methods: []
 createdAt: '2026-07-04T12:44:18.552Z'
-updatedAt: '2026-07-04T12:44:18.561Z'
+updatedAt: '2026-07-08T19:35:06.980Z'

@@ -1,9 +1,13 @@
-id: "skills_orchestrator"
-name: "Skills Orchestrator"
-description: "Orchestrates skills exporting logic."
-subsystem: "sdd_skills"
-componentType: "Orchestrator"
+id: skills_orchestrator
+name: Skills Orchestrator
+description: >-
+  Orchestrates static skills exporting logic for local filesystem-based agent setups. MCP resource
+  publication for cloud-only agents is modeled separately in skills_resource_orchestrator.
+subsystem: sdd_skills
+componentType: Orchestrator
+owns: []
 dependsOn:
-  - "skills_exporter"
-createdAt: "2026-06-19T12:00:00Z"
-updatedAt: "2026-06-19T12:00:00Z"
+  - skills_exporter
+status: complete
+createdAt: '2026-06-19T12:00:00Z'
+updatedAt: '2026-07-08T22:02:22.648Z'

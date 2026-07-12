@@ -20,6 +20,7 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: resolveAgentTopology
+    symbol: loadRegistry
   - name: saveSystemSpec
     narrative:
       - stepNumber: 1
@@ -48,6 +49,7 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: loadSubsystemSpecs
+    symbol: loadSubsystemSpec
   - name: saveComponentSpec
     narrative:
       - stepNumber: 1
@@ -69,6 +71,7 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: loadComponentSpecs
+    symbol: loadComponentSpec
   - name: saveInterfaceSpec
     narrative:
       - stepNumber: 1
@@ -90,6 +93,7 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: loadInterfaceSpecs
+    symbol: loadInterfaceSpec
   - name: saveImplementationSpec
     narrative:
       - stepNumber: 1
@@ -104,6 +108,7 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: loadImplementationSpecs
+    symbol: loadImplementationSpec
   - name: createChainedSubsystem
     narrative:
       - stepNumber: 1
@@ -132,6 +137,7 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: internalizeSubsystem
+conformance: anchored
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-05T18:45:33.123Z'
+updatedAt: '2026-07-11T19:16:32.172Z'

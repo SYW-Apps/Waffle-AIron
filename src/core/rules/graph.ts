@@ -1,4 +1,4 @@
-import { SddRule } from './types.js';
+import { RuleContext, SddRule } from './types.js';
 import { BUILTIN_TYPES, extractTypeIdentifiers, extractTypeGenerics, methodTypeRefs, matchTypeRef } from './type-analysis.js';
 import { effectiveNarrativeDetail } from './narrative-detail.js';
 
@@ -61,106 +61,176 @@ export const cyclesRule: SddRule = {
   },
 };
 
+// Key with '#': component ids may themselves contain '::' (namespaced subprojects),
+// so '::' cannot separate component from method.
+export const methodKey = (compId: string, methodName: string): string => `${compId}#${methodName}`;
+
+/** A reachability seed: a specific method, or (methodName omitted) every contract method of the component. */
+export interface WalkSeed {
+  compId: string;
+  methodName?: string;
+}
+
+/**
+ * The shared narrative-graph walker: BFS over L5 execution edges from a seed
+ * set. Edges are `call` steps, `dispatch` steps (routed through the target
+ * Portal's dispatch table to the bound capability server), and every dispatch
+ * binding of a reached Portal (its declared served surface — the runtime
+ * dispatches into those bindings even though no static call names them).
+ * Used by unused-detection (roots: Portals/Observers/published components/
+ * lifecycle entrypoints) and by the durability round-trip rule (roots:
+ * lifecycle init flows only).
+ */
+export interface WalkOptions {
+  /**
+   * Whether reaching a Portal floods every binding of its dispatch table into
+   * the reachable set. TRUE for unused-detection (the table IS the portal's
+   * served surface). FALSE for the durability boot-graph: at boot only edges
+   * the init narratives actually take count — a capability merely *offered*
+   * by a reached portal is not a boot-time read. Explicit `dispatch` steps
+   * are followed either way.
+   */
+  followDispatchTables?: boolean;
+}
+
+export function walkNarrativeGraph(
+  ctx: RuleContext,
+  seeds: WalkSeed[],
+  opts: WalkOptions = {},
+): { reachedComponents: Set<string>; reachedMethods: Set<string> } {
+  const followDispatchTables = opts.followDispatchTables ?? true;
+  const reachedComponents = new Set<string>();
+  const reachedMethods = new Set<string>();
+  const queue: { compId: string; methodName: string }[] = [];
+
+  const enqueueMethod = (compId: string, methodName: string): void => {
+    const key = methodKey(compId, methodName);
+    if (!reachedMethods.has(key)) {
+      reachedMethods.add(key);
+      queue.push({ compId, methodName });
+    }
+  };
+
+  const reachComponent = (compId: string): void => {
+    if (reachedComponents.has(compId)) return;
+    reachedComponents.add(compId);
+    if (!followDispatchTables) return;
+    // A Portal's dispatch table IS its served surface: reaching the portal
+    // reaches every capability binding.
+    const comp = ctx.componentMap.get(compId);
+    for (const b of comp?.dispatch ?? []) {
+      if (ctx.componentMap.has(b.component)) {
+        reachComponent(b.component);
+        enqueueMethod(b.component, b.method);
+      }
+    }
+  };
+
+  const enqueueAllMethods = (compId: string): void => {
+    for (const intf of ctx.interfacesByComponent.get(compId) ?? []) {
+      for (const m of intf.methods) {
+        enqueueMethod(compId, m.name);
+      }
+    }
+  };
+
+  for (const seed of seeds) {
+    reachComponent(seed.compId);
+    if (seed.methodName) {
+      enqueueMethod(seed.compId, seed.methodName);
+    } else {
+      enqueueAllMethods(seed.compId);
+    }
+  }
+
+  while (queue.length > 0) {
+    const { compId, methodName } = queue.shift()!;
+
+    // The method may be implemented against any of the component's interfaces.
+    let methodImpl: (typeof ctx.implementations)[number]['methods'][number] | undefined;
+    let impl: (typeof ctx.implementations)[number] | undefined;
+    for (const intf of ctx.interfacesByComponent.get(compId) ?? []) {
+      for (const candidate of ctx.implementationsByContract.get(intf.id) ?? []) {
+        const m = candidate.methods.find(mm => mm.name === methodName);
+        if (m) { impl = candidate; methodImpl = m; break; }
+      }
+      if (impl) break;
+    }
+    if (!impl || !methodImpl) continue;
+
+    for (const step of methodImpl.narrative) {
+      if (step.type === 'call' && step.targetComponent && step.targetMethod) {
+        reachComponent(step.targetComponent);
+        enqueueMethod(step.targetComponent, step.targetMethod);
+      }
+      if (step.type === 'dispatch' && step.targetComponent) {
+        reachComponent(step.targetComponent);
+        const portal = ctx.componentMap.get(step.targetComponent);
+        const binding = portal?.dispatch?.find(b => b.capability === step.capability);
+        if (binding && ctx.componentMap.has(binding.component)) {
+          reachComponent(binding.component);
+          enqueueMethod(binding.component, binding.method);
+        }
+      }
+    }
+
+    // Detail-dial fallback: an intent/calls-only method with no narrative
+    // contributes no call edges, so walk its component's L2 dependsOn/owns
+    // at component granularity (all contract methods) instead — the lower
+    // declared fidelity must not false-positive its collaborators as
+    // unused. Full-detail methods get NO fallback: their missing narrative
+    // is a reported gap (MISSING_NARRATIVE) and unused-detection stays strong.
+    if (methodImpl.narrative.length === 0) {
+      const comp = ctx.componentMap.get(compId);
+      if (comp && effectiveNarrativeDetail(methodImpl, impl, comp).level !== 'full') {
+        for (const depId of [...comp.dependsOn, ...comp.owns]) {
+          if (!ctx.componentMap.has(depId)) continue;
+          reachComponent(depId);
+          enqueueAllMethods(depId);
+        }
+      }
+    }
+  }
+
+  return { reachedComponents, reachedMethods };
+}
+
 /**
  * Reachability analysis from entrypoints (Portals, Observers, published
- * components): unwired components/methods and unreferenced types are flagged.
+ * components, declared lifecycle flows): unwired components/methods and
+ * unreferenced types are flagged.
  */
 export const reachabilityRule: SddRule = {
   name: 'unused-detection',
   description:
-    'Walks the narrative call graph from every entrypoint (Portal/Observer/published component) and flags components and methods no execution chain reaches, plus types no field or signature references.',
+    'Walks the narrative execution graph (call steps, dispatch-table routing, lifecycle flows) from every entrypoint (Portal/Observer/published component/lifecycle entrypoint) and flags components and methods no execution chain reaches, plus types no field or signature references.',
   codes: [
     { code: 'UNUSED_COMPONENT', defaultSeverity: 'warning', summary: 'Component never reached by any narrative call chain' },
     { code: 'UNUSED_METHOD', defaultSeverity: 'warning', summary: 'Method never called by any narrative step' },
     { code: 'UNUSED_TYPE', defaultSeverity: 'warning', summary: 'Type never referenced by fields or signatures' },
   ],
   check(ctx) {
-    const reachedComponents = new Set<string>();
-    const reachedMethods = new Set<string>();
-    const queue: { compId: string; methodName: string }[] = [];
-
-    // Key with '#': component ids may themselves contain '::' (namespaced subprojects),
-    // so '::' cannot separate component from method.
-    const methodKey = (compId: string, methodName: string) => `${compId}#${methodName}`;
-
-    // Collect root entry points (Portals, Observers, and components backing public subsystem interfaces)
-    const rootComponents = new Set<string>();
+    // Collect root entry points: Portals, Observers, components backing public
+    // subsystem interfaces (all their methods), and declared lifecycle
+    // entrypoints (the specific init/shutdown method the runtime invokes).
+    const seeds: WalkSeed[] = [];
     for (const comp of ctx.components) {
       if (comp.componentType === 'Portal' || comp.componentType === 'Observer') {
-        rootComponents.add(comp.id);
+        seeds.push({ compId: comp.id });
       }
     }
     for (const sub of ctx.subsystems) {
       for (const pi of sub.publicInterfaces) {
         if (pi.component) {
-          rootComponents.add(pi.component);
+          seeds.push({ compId: pi.component });
         }
+      }
+      for (const le of sub.lifecycle ?? []) {
+        seeds.push({ compId: le.component, methodName: le.method });
       }
     }
 
-    // Initialize queue with methods of root components (across ALL their interfaces)
-    for (const compId of rootComponents) {
-      reachedComponents.add(compId);
-      for (const intf of ctx.interfaces.filter(i => i.component === compId)) {
-        for (const m of intf.methods) {
-          const key = methodKey(compId, m.name);
-          if (!reachedMethods.has(key)) {
-            reachedMethods.add(key);
-            queue.push({ compId, methodName: m.name });
-          }
-        }
-      }
-    }
-
-    // Traverse the call graph recursively
-    while (queue.length > 0) {
-      const { compId, methodName } = queue.shift()!;
-
-      // The method may be implemented against any of the component's interfaces.
-      const compInterfaceIds = new Set(ctx.interfaces.filter(i => i.component === compId).map(i => i.id));
-      const impl = ctx.implementations.find(
-        imp => compInterfaceIds.has(imp.contract) && imp.methods.some(m => m.name === methodName),
-      );
-      if (!impl) continue;
-
-      const methodImpl = impl.methods.find(m => m.name === methodName)!;
-
-      for (const step of methodImpl.narrative) {
-        if (step.type === 'call' && step.targetComponent && step.targetMethod) {
-          reachedComponents.add(step.targetComponent);
-          const targetKey = methodKey(step.targetComponent, step.targetMethod);
-          if (!reachedMethods.has(targetKey)) {
-            reachedMethods.add(targetKey);
-            queue.push({ compId: step.targetComponent, methodName: step.targetMethod });
-          }
-        }
-      }
-
-      // Detail-dial fallback: an intent/calls-only method with no narrative
-      // contributes no call edges, so walk its component's L2 dependsOn/owns
-      // at component granularity (all contract methods) instead — the lower
-      // declared fidelity must not false-positive its collaborators as
-      // unused. Full-detail methods get NO fallback: their missing narrative
-      // is a reported gap (MISSING_NARRATIVE) and unused-detection stays strong.
-      if (methodImpl.narrative.length === 0) {
-        const comp = ctx.componentMap.get(compId);
-        if (comp && effectiveNarrativeDetail(methodImpl, impl, comp).level !== 'full') {
-          for (const depId of [...comp.dependsOn, ...comp.owns]) {
-            if (!ctx.componentMap.has(depId)) continue;
-            reachedComponents.add(depId);
-            for (const intf of ctx.interfaces.filter(i => i.component === depId)) {
-              for (const m of intf.methods) {
-                const k = methodKey(depId, m.name);
-                if (!reachedMethods.has(k)) {
-                  reachedMethods.add(k);
-                  queue.push({ compId: depId, methodName: m.name });
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+    const { reachedComponents, reachedMethods } = walkNarrativeGraph(ctx, seeds);
 
     // Generate warnings for unused components
     for (const comp of ctx.components) {
@@ -176,7 +246,7 @@ export const reachabilityRule: SddRule = {
         );
       } else {
         // Warn about unused methods on this reached component (across ALL its interfaces)
-        for (const intf of ctx.interfaces.filter(i => i.component === comp.id)) {
+        for (const intf of ctx.interfacesByComponent.get(comp.id) ?? []) {
           for (const m of intf.methods) {
             if (!reachedMethods.has(methodKey(comp.id, m.name))) {
               const isDraftCtx = comp.status === 'draft' || comp.status === 'design' || intf.status === 'draft' || intf.status === 'design';

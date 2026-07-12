@@ -1,0 +1,38 @@
+kind: value-object
+id: resource_usage_snapshot
+name: ResourceUsageSnapshot
+description: >-
+  Point-in-time resource usage summary for a hosted project, user, token, or entire instance. Used
+  for quota evaluation, admin UI diagnostics, and audit-friendly operational reporting.
+fields:
+  - name: scope
+    type: string
+    description: Usage scope such as "instance", hosted project id, user id, or token id.
+    optional: false
+  - name: capturedAt
+    type: string
+    description: ISO-8601 capture timestamp.
+    optional: false
+  - name: projectCount
+    type: number
+    description: Number of active projects in scope, when applicable.
+    optional: true
+  - name: projectBytes
+    type: number
+    description: Approximate stored bytes in scope, when measurable.
+    optional: true
+  - name: mcpRequestsLastMinute
+    type: number
+    description: Recent MCP request count used for rate/quota enforcement.
+    optional: true
+  - name: auditEventsToday
+    type: number
+    description: Audit event count for the current day in scope, when available.
+    optional: true
+  - name: quotaMessages
+    type: string[]
+    description: Human-readable quota observations, warnings, or blocking reasons.
+    optional: false
+methods: []
+createdAt: '2026-07-09T09:08:18.133Z'
+updatedAt: '2026-07-09T09:08:18.171Z'

@@ -1,0 +1,15 @@
+id: quota_specialist
+name: Quota Specialist
+description: >-
+  Draft specialist that evaluates resource usage snapshots against ResourceQuotaPolicy and returns
+  observe/warn/block decisions without owning durable state. In this draft the evaluation is
+  advisory only: nothing in the data plane consults it, so even a 'block' outcome is observational
+  (observe/warn). Actual blocking or throttling enforcement requires a future data-plane integration
+  and is explicitly out of scope for now.
+subsystem: sdd_host
+componentType: Specialist
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-07-09T09:09:10.171Z'
+updatedAt: '2026-07-10T11:27:28.581Z'

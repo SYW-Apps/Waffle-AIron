@@ -1,10 +1,13 @@
-id: "skills_portal"
-name: "Skills Portal"
-description: "Inbound portal for the SDD skills subsystem."
-subsystem: "sdd_skills"
-componentType: "Portal"
-portalType: "Custom"
+id: skills_portal
+name: Skills Portal
+description: Inbound portal for the SDD skills subsystem.
+subsystem: sdd_skills
+componentType: Portal
+owns: []
 dependsOn:
-  - "skills_orchestrator"
-createdAt: "2026-06-19T12:00:00Z"
-updatedAt: "2026-06-19T12:00:00Z"
+  - skills_orchestrator
+  - skills_resource_orchestrator
+portalType: Custom
+status: complete
+createdAt: '2026-06-19T12:00:00Z'
+updatedAt: '2026-07-10T12:21:26.138Z'

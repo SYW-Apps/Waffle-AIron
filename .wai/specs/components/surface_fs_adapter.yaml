@@ -1,0 +1,12 @@
+id: surface_fs_adapter
+name: Surface FS Adapter
+description: >-
+  File I/O for this project's own snapshot files under .wai/surfaces/ — reads all on (re)build of
+  the store projection, writes/deletes on registry mutations.
+subsystem: sdd_surfaces
+componentType: Adapter
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-07-10T23:12:23.201Z'
+updatedAt: '2026-07-11T09:04:02.068Z'

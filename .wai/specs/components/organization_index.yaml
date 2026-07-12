@@ -1,0 +1,13 @@
+id: organization_index
+name: Organization Index
+description: >-
+  Read-path projection over hosted organization units and project placements, supporting hierarchy,
+  membership, and unit/project filtering.
+subsystem: sdd_host
+componentType: Index
+owns: []
+dependsOn:
+  - organization_store
+status: complete
+createdAt: '2026-07-08T21:12:09.873Z'
+updatedAt: '2026-07-09T22:13:02.003Z'

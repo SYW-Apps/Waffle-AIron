@@ -2,7 +2,7 @@ id: cli_core_adapter_impl
 name: CLI Core Adapter Implementation
 description: Concrete implementation forwarding spec loading requests to the core portal.
 contract: icli_core_adapter
-sourcePath: src/commands/index.ts
+sourcePath: src/commands/subsystem.ts
 methods:
   - name: loadSystemSpec
     narrative:
@@ -41,4 +41,4 @@ methods:
         targetMethod: internalizeSubsystem
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-05T18:45:21.947Z'
+updatedAt: '2026-07-11T19:14:21.824Z'

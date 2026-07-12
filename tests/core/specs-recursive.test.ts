@@ -31,7 +31,9 @@ describe('recursive subproject loading and namespacing', () => {
 
   it('correctly loads and namespaces child subprojects from projectPath', () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-root-'));
-    childDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-child-'));
+    // Fix B2: a chained subproject must live UNDER its parent root (nested), not
+    // as an escaping sibling — a ../-escaping projectPath is now rejected.
+    childDir = path.join(rootDir, 'packages', 'billing');
 
     // 1. Setup Root project
     fs.mkdirSync(path.join(rootDir, '.wai', 'specs'), { recursive: true });
@@ -138,7 +140,8 @@ describe('recursive subproject loading and namespacing', () => {
 
   it('correctly resolves paths and strips namespace prefixes when saving specs to subprojects', () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-root-write-'));
-    childDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-child-write-'));
+    // Fix B2: nested (contained) subproject, not an escaping sibling.
+    childDir = path.join(rootDir, 'packages', 'billing');
 
     // 1. Setup parent project structure
     fs.mkdirSync(path.join(rootDir, '.wai', 'specs'), { recursive: true });
@@ -290,8 +293,10 @@ describe('recursive subproject loading and namespacing', () => {
 
   it('correctly respects recursive and depth limits when scanning', () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-root-depth-'));
-    childDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-child-depth-'));
-    const grandchildDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-grandchild-depth-'));
+    // Fix B2: nested chain — child under root, grandchild under child — so every
+    // hop stays contained by the bound top root.
+    childDir = path.join(rootDir, 'packages', 'billing');
+    const grandchildDir = path.join(childDir, 'packages', 'invoice');
 
     // 1. Setup Root project
     fs.mkdirSync(path.join(rootDir, '.wai', 'specs'), { recursive: true });
@@ -397,7 +402,8 @@ describe('recursive subproject loading and namespacing', () => {
 
   it('correctly filters validation and status by scopeSubsystem', () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-root-scope-'));
-    childDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-child-scope-'));
+    // Fix B2: nested (contained) subproject, not an escaping sibling.
+    childDir = path.join(rootDir, 'packages', 'billing');
 
     // 1. Setup Root project
     fs.mkdirSync(path.join(rootDir, '.wai', 'specs'), { recursive: true });

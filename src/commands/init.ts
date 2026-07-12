@@ -504,6 +504,7 @@ async function executeInit(
       vision: `Core vision for ${projectName}`,
       boundaries: [],
       globalRequirements: [],
+      databases: [],
       createdAt: now,
       updatedAt: now,
     });
@@ -694,4 +695,3 @@ A new project initialized with Wairon.
 `;
   writeFile(AI_PATHS.contextProjectMd(), content);
 }
-

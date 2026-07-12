@@ -1,0 +1,26 @@
+id: public_surface_store_impl
+name: Public Surface Store Implementation
+description: >-
+  Authoritative in-memory holder of the redacted public-surface snapshot set (one per project),
+  file-backed under the server data root (public-surfaces.json).
+contract: ipublic_surface_store
+sourcePath: src/server/surfaces.ts
+methods:
+  - name: load
+    narrative: []
+    intent: >-
+      Read the persisted public-surface snapshot set, keyed by project id, from the
+      public-surfaces.json file under the hosted data root and hold it as the authoritative
+      in-memory representation, returning it. A missing file yields an empty set; an unreadable file
+      or structurally invalid JSON fails with a storage error naming the path.
+  - name: replaceAll
+    narrative: []
+    intent: >-
+      Swap the authoritative in-memory snapshot set to the supplied complete set in one assignment,
+      only ever called by the owned registry after durable persistence has succeeded. Never
+      partially applies, so concurrent snapshot reads through the index always observe a consistent
+      set.
+detail: intent
+status: complete
+createdAt: '2026-07-09T22:08:13.769Z'
+updatedAt: '2026-07-09T22:13:39.686Z'

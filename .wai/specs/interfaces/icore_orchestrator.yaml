@@ -92,14 +92,17 @@ methods:
       Create a chained subproject subsystem: persist the parent L1 subsystem spec (with projectPath)
       at the bound root, and scaffold an isolated child wairon project at that path when one does
       not already exist (idempotent wire-only when the child is already initialized). Throws if
-      projectPath is empty.
+      projectPath is empty, or if projectPath does not resolve to a location strictly within the
+      owning project root — absolute paths and ../-escaping paths are rejected so a chained
+      subproject is always contained by its parent.
     signature: 'createChainedSubsystem(subsystem: SubsystemSpec, projectName: string): void'
     returns: void
   - name: moveSubsystemProject
     description: >-
       Relocate an external subsystem's subproject: move its directory on disk from the current
       projectPath to newProjectPath and persist the updated link. Throws if the subsystem has no
-      projectPath (not an external subproject).
+      projectPath (not an external subproject), or if newProjectPath does not resolve strictly
+      within the owning project root (absolute or ../-escaping targets are rejected).
     signature: 'moveSubsystemProject(subsystemId: string, newProjectPath: string): void'
     returns: void
   - name: externalizeSubsystem
@@ -107,8 +110,9 @@ methods:
       Externalize an internal subsystem into a standalone subproject: provision a child wairon
       project at projectPath, move the subsystem's spec subtree (L1-L4 + types) there, reduce the
       parent entry to a projectPath mount, and rewrite cross-subsystem references to the new
-      namespaced ids. Throws if the subsystem is missing or already external. Source code is not
-      moved.
+      namespaced ids. Throws if the subsystem is missing or already external, or if projectPath does
+      not resolve strictly within the owning project root (absolute or ../-escaping paths are
+      rejected). Source code is not moved.
     signature: 'externalizeSubsystem(subsystemId: string, projectPath: string): void'
     returns: void
   - name: internalizeSubsystem
@@ -119,6 +123,25 @@ methods:
       is not a single flat subsystem.
     signature: 'internalizeSubsystem(subsystemId: string): void'
     returns: void
+  - name: loadTypeSpecs
+    description: Delegate loading type specs to spec loader
+    signature: 'loadTypeSpecs(): TypeSpec[]'
+    returns: TypeSpec[]
+  - name: dryRunSerializeSpecs
+    description: >-
+      Delegate the in-memory round-trip serialization check to spec loader (optionally
+      scope-filtered)
+    signature: 'dryRunSerializeSpecs(include?: (specId: string) => boolean): ValidationIssue[]'
+    returns: ValidationIssue[]
+  - name: buildProjectGraph
+    description: >-
+      Project the current project's spec tree into a level-filtered WebGraphModel for the web UI,
+      forwarded to the diagram specialist's pure graph projection.
+    signature: 'buildProjectGraph(level: number): WebGraphModel'
+    returns: WebGraphModel
+    params:
+      - name: level
+        type: number
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-05T18:44:38.567Z'
+updatedAt: '2026-07-11T11:32:14.771Z'

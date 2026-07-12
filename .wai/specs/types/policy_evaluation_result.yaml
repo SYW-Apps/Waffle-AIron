@@ -1,0 +1,35 @@
+kind: value-object
+id: policy_evaluation_result
+name: PolicyEvaluationResult
+description: >-
+  Result of evaluating a hosted project against instance pack/profile policy. Used before
+  initialization, lock, or reconciliation to decide whether the project is compliant, warning-only,
+  blocked, or needs automatic pack/profile changes.
+fields:
+  - name: compliant
+    type: boolean
+    description: Whether the project satisfies the active instance policy.
+    optional: false
+  - name: mode
+    type: string
+    description: 'Policy mode that produced the result: "warn", "block", or "auto_reconcile".'
+    optional: false
+  - name: missingPackNames
+    type: string[]
+    description: Required/default packs absent from the project or global scope.
+    optional: false
+  - name: blockedPackNames
+    type: string[]
+    description: Blocked packs found in the project or requested selection.
+    optional: false
+  - name: missingProfileIds
+    type: string[]
+    description: Required profile ids absent from the project selection.
+    optional: false
+  - name: messages
+    type: string[]
+    description: Human-readable warnings or blocking reasons.
+    optional: false
+methods: []
+createdAt: '2026-07-08T21:58:56.094Z'
+updatedAt: '2026-07-08T21:58:56.121Z'

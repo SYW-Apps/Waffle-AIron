@@ -1,0 +1,52 @@
+kind: value-object
+id: web_graph_node
+name: WebGraphNode
+description: >-
+  A single node in a level-of-detail (LOD) web graph payload for the unified web UI. Unifies the
+  hosted landscape tier (organization units, projects) and the project tier (subsystems, components,
+  interfaces, types) into one node shape the client renders at a chosen depth. Kept consistent with
+  LandscapeNode (landscape tier maps onto it) and the local GraphNode (project tier), adding only
+  the LOD/UI fields (level, parentId, issueCount).
+fields:
+  - name: id
+    type: string
+    description: Stable graph node id, unique within the payload.
+    optional: false
+  - name: label
+    type: string
+    description: Display label.
+    optional: false
+  - name: kind
+    type: string
+    description: 'Node kind: "unit" | "project" | "subsystem" | "component" | "interface" | "type".'
+    optional: false
+  - name: level
+    type: number
+    description: >-
+      Level-of-detail depth of this node: 0 = landscape/organization tier (units, projects), 1 =
+      subsystem, 2 = component (L2), 3 = interface/type (L3). The client shows nodes whose level is
+      at or below the requested detail level.
+    optional: false
+  - name: parentId
+    type: string
+    description: >-
+      Id of the containing node (unit->project, project->subsystem, subsystem->component,
+      component->interface), for hierarchical expand/collapse.
+    optional: true
+  - name: projectId
+    type: string
+    description: >-
+      Hosted project id this node belongs to, when it represents a project or one of its inner
+      specs.
+    optional: true
+  - name: status
+    type: string
+    description: Optional lifecycle/status label for filtering and styling (e.g. spec completeness).
+    optional: true
+  - name: issueCount
+    type: number
+    description: Number of validator issues overlaid onto this node (project tier), 0 or absent when clean.
+    optional: true
+methods: []
+createdAt: '2026-07-11T11:31:08.145Z'
+updatedAt: '2026-07-11T11:31:08.188Z'

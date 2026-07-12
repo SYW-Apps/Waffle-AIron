@@ -1,0 +1,13 @@
+id: policy_index
+name: Policy Index
+description: >-
+  Read-path projection over hosted instance policies, supporting lookup of the active pack/profile
+  policy and any future policy variants.
+subsystem: sdd_host
+componentType: Index
+owns: []
+dependsOn:
+  - policy_store
+status: complete
+createdAt: '2026-07-08T21:59:13.986Z'
+updatedAt: '2026-07-09T20:53:24.479Z'

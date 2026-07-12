@@ -1,4 +1,5 @@
 import { SddRule } from './types.js';
+import { resolveSurfaceRef } from './namespace.js';
 
 /**
  * The stereotype dependency matrix (intra-subsystem) and the bounded-context
@@ -11,6 +12,7 @@ export const stereotypeDepsRule: SddRule = {
     'Enforces the component-stereotype interaction matrix (Portal never reaches the data layer, Stores are depended upon, Adapters are sinks, Views stay passive, …) and the cross-subsystem shape: client Adapter → published remote Portal only.',
   codes: [
     { code: 'INVALID_DEPENDENCY_REFERENCE', defaultSeverity: 'error', summary: 'dependsOn names a non-existent component' },
+    { code: 'CROSS_TREE_REF_UNRESOLVED', defaultSeverity: 'warning', summary: 'Cross-tree dependsOn (super::/:: form) with no surface snapshot covering it' },
     { code: 'CROSS_SUBSYSTEM_NON_ADAPTER', defaultSeverity: 'error', summary: 'Non-Adapter component crossing a subsystem boundary' },
     { code: 'CROSS_SUBSYSTEM_PRIVATE_ACCESS', defaultSeverity: 'error', summary: 'Cross-subsystem dependency on an unpublished component' },
     { code: 'CROSS_SUBSYSTEM_TARGET_NON_PORTAL', defaultSeverity: 'error', summary: 'Cross-subsystem hop entering through a non-Portal' },
@@ -30,6 +32,33 @@ export const stereotypeDepsRule: SddRule = {
       for (const depId of dependencies) {
         const depComp = ctx.componentMap.get(depId);
         if (!depComp) {
+          // A cross-tree form (super::/::) in a standalone context: resolve
+          // against the stored surface snapshots — a hit is a DECLARED remote
+          // portal, and the cross-boundary shape rule (source must be an
+          // Adapter) applies exactly as it does for cross-subsystem deps.
+          if (depId.startsWith('::') || depId.startsWith('super::')) {
+            const resolved = resolveSurfaceRef(ctx, depId);
+            if (resolved) {
+              if (comp.componentType !== 'Adapter') {
+                ctx.addIssue(
+                  'error',
+                  'CROSS_SUBSYSTEM_NON_ADAPTER',
+                  `Boundary violation: ${comp.componentType} "${comp.id}" depends directly on "${depId}", a surface of project "${resolved.snapshot.projectName}". Only a local client Adapter may cross a project boundary — route this hop through an Adapter.`,
+                  comp.id,
+                  isDraftCtx,
+                );
+              }
+              continue;
+            }
+            ctx.addIssue(
+              'warning',
+              'CROSS_TREE_REF_UNRESOLVED',
+              `Component "${comp.id}" depends on cross-tree component "${depId}", and no surface snapshot covers it — validate from the parent project, or import/generate the producing project's surface.`,
+              comp.id,
+              isDraftCtx,
+            );
+            continue;
+          }
           ctx.addIssue(
             'error',
             'INVALID_DEPENDENCY_REFERENCE',

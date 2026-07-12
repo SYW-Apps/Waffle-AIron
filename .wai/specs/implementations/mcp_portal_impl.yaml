@@ -84,6 +84,22 @@ methods:
         type: call
         targetComponent: mcp_orchestrator
         targetMethod: internalizeSubsystem
+  - name: listResources
+    narrative:
+      - stepNumber: 1
+        description: Dispatch the MCP resources/list request to the resource workflow.
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: listResources
+    symbol: registerSkillResources
+  - name: readResource
+    narrative:
+      - stepNumber: 1
+        description: Dispatch the MCP resources/read request to the resource workflow.
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: readResource
+    symbol: registerSkillResources
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-05T18:45:38.858Z'
+updatedAt: '2026-07-11T19:14:21.995Z'

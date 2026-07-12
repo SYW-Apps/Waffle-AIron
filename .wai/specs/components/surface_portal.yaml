@@ -1,0 +1,14 @@
+id: surface_portal
+name: Surface Portal
+description: >-
+  Inbound front door of the surface-exchange subsystem: export, import, query, and child-generation
+  requests enter here and route to the orchestrator.
+subsystem: sdd_surfaces
+componentType: Portal
+owns: []
+dependsOn:
+  - surface_orchestrator
+portalType: Custom
+status: complete
+createdAt: '2026-07-10T23:12:10.221Z'
+updatedAt: '2026-07-11T09:04:02.163Z'

@@ -1,0 +1,20 @@
+id: audit_repository
+name: Audit Repository
+description: >-
+  Facade for durable hosted-instance audit storage. Hosted workflows depend on this repository to
+  append redacted events and admins depend on it to query audit history under retention policy.
+  Durable audit appends must never fail or block the primary user action; an append failure is
+  swallowed on the hot path and surfaced through diagnostics/health reporting instead of propagating
+  to the caller.
+subsystem: sdd_host
+componentType: Repository
+owns:
+  - audit_store
+  - audit_registry
+  - audit_index
+dependsOn: []
+lint:
+  allow: []
+status: complete
+createdAt: '2026-07-08T20:15:14.291Z'
+updatedAt: '2026-07-10T08:19:22.873Z'

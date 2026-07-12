@@ -1,0 +1,28 @@
+id: user_store_impl
+name: User Store Implementation
+description: >-
+  Authoritative in-memory holder of the hosted-user set, file-backed under the server data root
+  (users.json), mirroring the credential registry's storage convention.
+contract: iuser_store
+sourcePath: src/server/users.ts
+methods:
+  - name: load
+    narrative: []
+    intent: >-
+      Read the persisted hosted-user set from the users file under the server data root and hold it
+      as the authoritative in-memory representation, returning the loaded records. A missing file
+      yields an empty set (first boot is not an error); an unreadable file or structurally invalid
+      JSON fails with a storage error naming the offending path so the operator can repair or remove
+      it — the store never silently discards persisted users.
+    symbol: loadStore
+  - name: replaceAll
+    narrative: []
+    intent: >-
+      Swap the authoritative in-memory user set to the supplied complete record set in one
+      assignment, only ever called by the owned registry after durable persistence has succeeded.
+      Never partially applies; the previous set stays intact if the swap cannot complete, so readers
+      via the index never observe a half-written state.
+detail: intent
+status: complete
+createdAt: '2026-07-09T17:29:51.432Z'
+updatedAt: '2026-07-11T19:14:22.993Z'

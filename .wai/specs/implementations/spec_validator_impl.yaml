@@ -35,23 +35,62 @@ methods:
         targetComponent: validator_core_adapter
         targetMethod: loadImplementationSpecs
       - stepNumber: 7
+        description: Load type specs
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadTypeSpecs
+      - stepNumber: 8
+        description: >-
+          Load the available surface snapshots via the surfaces adapter — unresolved cross-tree and
+          remote adapter references resolve against them (SURFACE_STALE warning on StateId mismatch;
+          CROSS_TREE_REF_UNRESOLVED remains only for references no snapshot covers)
+        type: call
+        targetComponent: validator_surfaces_adapter
+        targetMethod: loadSurfaceSnapshots
+      - stepNumber: 9
+        description: >-
+          Build the source code model via the source analysis adapter — every distinct L4 sourcePath
+          resolved and containment-checked within the project root, analyzed at the best available
+          grade (exact | pattern | generic); the structural-conformance rules consume it purely from
+          the rule context (the surface-snapshots injection pattern)
+        type: call
+        targetComponent: source_analysis_adapter
+        targetMethod: buildCodeModel
+      - stepNumber: 10
         description: Integrate Zod schema loader errors
         type: local
-      - stepNumber: 8
-        description: Validate spec hierarchy and entity references
-        type: local
-      - stepNumber: 9
-        description: Validate method implementation signatures against contracts
-        type: local
-      - stepNumber: 10
-        description: Validate narrative call steps target declared dependencies
-        type: local
       - stepNumber: 11
-        description: Enforce architectural component type interaction boundaries
-        type: local
+        description: >-
+          Round-trip serializability: the registered roundtrip-serialization rule dry-runs every
+          in-scope spec through the writer relativization + schema pipeline via the core adapter (no
+          I/O), reporting ROUNDTRIP_SERIALIZATION errors so validate predicts every write lock would
+          refuse
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: dryRunSerializeSpecs
       - stepNumber: 12
-        description: Run DFS circular dependency cycle detection
+        description: Load project extensions and compose the active validation rule sequence
         type: local
+      - stepNumber: 13
+        description: >-
+          Run hierarchy, namespace-hygiene, round-trip, type-reference, contract (incl. cross-tree
+          ref recognition), narrative, boundary, graph, naming, documentation, complexity,
+          semantic-edge rules (dispatch-table capability contracts and guarantee backing, dispatch-
+          and lifecycle-rooted reachability, durability round-trip hydration with a non-flooded boot
+          graph, untyped cross-subsystem seams with dispatch-table exemption, prose-claim
+          realization), structural-conformance rules (sourcePaths resolve within the project root to
+          real files; every contract method is realized in its file at the implementation's
+          conformance tier — declared | anchored | off — honoring per-method symbol overrides, with
+          analysis grade carried on findings), and dependency-conformance rules (runtime imports
+          between component-mapped files must be justified by declared dependsOn/owns edges — or,
+          across subsystems, by a declared edge to the target subsystem's published surface —
+          UNDECLARED_DEPENDENCY; declared collaborator edges with no realizing import between
+          exactly-analyzed files surface as UNREALIZED_DEPENDENCY)
+        type: local
+      - stepNumber: 14
+        description: Return the aggregated validation result
+        type: return
+        outcome: ValidationResult
   - name: validateRegistry
     narrative:
       - stepNumber: 1
@@ -102,17 +141,43 @@ methods:
         targetComponent: validator_core_adapter
         targetMethod: loadImplementationSpecs
       - stepNumber: 7
-        description: Treat every spec as complete (suppress the draft severity relaxation), mutating nothing
-        type: local
+        description: Load type specs
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadTypeSpecs
       - stepNumber: 8
         description: >-
-          Run hierarchy, reference, contract-symmetry, narrative, boundary, and cycle rules at full
-          strictness
-        type: local
+          Load the available surface snapshots via the surfaces adapter, identical to
+          validateSddTree
+        type: call
+        targetComponent: validator_surfaces_adapter
+        targetMethod: loadSurfaceSnapshots
       - stepNumber: 9
+        description: Build the source code model via the source analysis adapter, identical to validateSddTree
+        type: call
+        targetComponent: source_analysis_adapter
+        targetMethod: buildCodeModel
+      - stepNumber: 10
+        description: >-
+          Round-trip serializability: the registered roundtrip-serialization rule dry-runs every
+          in-scope spec through the writer pipeline via the core adapter, identical to
+          validateSddTree
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: dryRunSerializeSpecs
+      - stepNumber: 11
+        description: Treat every spec as complete (suppress the draft severity relaxation), mutating nothing
+        type: local
+      - stepNumber: 12
+        description: >-
+          Run the same active rule sequence as validateSddTree at full strictness, including
+          namespace-hygiene, round-trip, naming, documentation, complexity, and the semantic-edge
+          rules
+        type: local
+      - stepNumber: 13
         description: Return the as-complete validation result
         type: return
         outcome: as-complete ValidationResult
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-04T12:56:10.354Z'
+updatedAt: '2026-07-11T19:48:29.962Z'

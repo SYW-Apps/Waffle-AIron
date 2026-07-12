@@ -1,0 +1,20 @@
+kind: value-object
+id: organization_state
+name: OrganizationState
+description: >-
+  The two authoritative hosted organization collections loaded together from the organization
+  store's backing file: organization units and project placements. Returned by the store's load so
+  callers observe a consistent pair, never one collection without the other.
+subsystem: sdd_host
+fields:
+  - name: units
+    type: OrganizationUnitRecord[]
+    description: All hosted organization unit records.
+    optional: false
+  - name: placements
+    type: ProjectPlacement[]
+    description: All hosted project placement records.
+    optional: false
+methods: []
+createdAt: '2026-07-09T22:05:31.307Z'
+updatedAt: '2026-07-09T22:05:31.311Z'

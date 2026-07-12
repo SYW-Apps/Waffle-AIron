@@ -1,8 +1,10 @@
 import { SddRule } from './types.js';
 import { splitNamespace } from '../specs.js';
 
-/** dependsOn count above which a component is flagged as doing too much. */
-const GOD_COMPONENT_THRESHOLD = 8;
+/** Default dependsOn count above which a component is flagged as doing too much.
+ *  Overridable per project via rules.complexity.maxComponentDependencies — the
+ *  same knob the EXCESSIVE_DEPENDENCIES rule reads, so both agree on the cap. */
+const DEFAULT_GOD_COMPONENT_THRESHOLD = 8;
 
 /**
  * Coupling health: mutual subsystem dependencies must be explicitly sanctioned
@@ -103,12 +105,13 @@ export const couplingRule: SddRule = {
     }
 
     // --- God component detection
+    const threshold = ctx.rules?.complexity?.maxComponentDependencies ?? DEFAULT_GOD_COMPONENT_THRESHOLD;
     for (const comp of ctx.components) {
-      if (comp.dependsOn.length > GOD_COMPONENT_THRESHOLD) {
+      if (comp.dependsOn.length > threshold) {
         ctx.addIssue(
           'warning',
           'GOD_COMPONENT',
-          `Component "${comp.id}" depends on ${comp.dependsOn.length} components (> ${GOD_COMPONENT_THRESHOLD}). That fan-out suggests it owns more than one responsibility — split the workflow, or group cohesive collaborators behind a pattern facade (Repository/Gateway).`,
+          `Component "${comp.id}" depends on ${comp.dependsOn.length} components (> ${threshold}). That fan-out suggests it owns more than one responsibility — split the workflow, or group cohesive collaborators behind a pattern facade (Repository/Gateway).`,
           comp.id,
           ctx.isComponentDraft(comp.id),
         );

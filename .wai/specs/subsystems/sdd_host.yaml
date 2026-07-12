@@ -2,27 +2,88 @@ id: sdd_host
 name: SDD Hosting Server
 description: >-
   Hosts wairon over streamable HTTP for many fully-isolated, independent wairon projects, scoping
-  every request to its authenticated project. Splits a public data plane (project-key-scoped MCP
-  over HTTP, reusing the sdd_* tool surface unchanged) from an admin control plane
-  (master-credential API + CLI) that owns project and API-key lifecycle plus the privileged,
-  state-scoped lock/promote flow. Each hosted project is a wholly separate .wai/ tree under the data
-  root; this is NOT subsystem/projectPath chaining. Auth is default-on and toggleable for trusted
-  networks.
+  every request to its authenticated project. Splits a public data plane (project-grant-scoped MCP
+  over HTTP, reusing the sdd_* tool surface unchanged plus explicit discovery and approval-backed
+  self-service tools) from exposure-policy-controlled control planes: the admin API, the
+  identity/audit API with headless SSO onboarding, the project-policy API, the hosted landscape API,
+  and the read-only operations API — plus a unified role-based browser web UI (a thin server plane:
+  browser-session storage, the session-as-credential auth bridge, the web app shell, and a live
+  level-of-detail JSON graph endpoint; every page is a client view that reuses the existing scoped
+  data plane and control-plane portals authenticated by the browser session, so role-based UI is
+  simply the client rendering what the session principal's grants allow) and a deferred local-only
+  control surface. Each hosted project is a wholly separate .wai/ tree under the data root; this is
+  NOT subsystem/projectPath chaining. Auth is default-on and control-plane exposure is configurable
+  via HostExposurePolicy, so operators may keep network admin APIs disabled while still managing the
+  instance locally. The hosted server is distributed as an immutable container image for
+  self-hosting; operators update by pulling and redeploying the image while preserving the data
+  volume, and extension packs ship baked into extended images (built FROM the base image) as the
+  primary hosted distribution channel; durable backups are platform data-volume snapshots.
 parentSystem: Waffle-AIron
 publicInterfaces:
   - type: REST
     details: >-
-      Streamable HTTP MCP endpoint (POST /mcp) exposing the sdd_* tool surface, request-scoped to
-      the authenticated project; plus /healthz and /readyz. The data-plane front door for remote MCP
-      clients.
+      Streamable HTTP MCP endpoint (POST /mcp) exposing the sdd_* tool surface request-scoped to the
+      authenticated project, plus hosted landscape discovery tools and approval-backed self-service
+      request tools. Discovery first lists only reachable external project ids, then returns
+      redacted public interface summaries for a selected reachable project. Self-service tools
+      create approval requests for privileged actions such as project initialization or locking
+      rather than executing them directly. Includes /healthz and /readyz.
     component: host_http_portal
   - type: REST
     details: >-
-      Control-plane admin API (separately bound, master-credential gated): project create/destroy,
-      API-key mint/rotate/revoke, and the privileged lock/promote actions. Reached by operators and
-      by the wairon CLI.
+      Control-plane admin API (separately bound and exposure-policy controlled): project lifecycle,
+      API-key lifecycle, pack management, producers, secrets, git backing, privileged lock/promote
+      actions, and the approval decision endpoints. Reached by operators and by the wairon CLI when
+      HTTP admin is enabled.
     component: admin_portal
+  - type: REST
+    details: >-
+      Identity/audit control-plane API for hosted users, project grants, user-bound MCP/API tokens,
+      admin-only redacted audit access, identity-provider configuration, and headless SSO onboarding
+      (start/callback minting a user-bound token shown once).
+    component: identity_portal
+    interface: iidentity_portal
+  - type: REST
+    details: >-
+      Hosted landscape control-plane API for organization hierarchy, project placement,
+      public-surface snapshots, cross-project relations, and landscape graph retrieval. It reads
+      public snapshots and hosted metadata only, never target project internals.
+    component: landscape_portal
+    interface: ilandscape_portal
+  - type: REST
+    details: >-
+      Project policy control-plane API for profile-aware project initialization, required/default
+      pack enforcement, policy evaluation, and allowed pack/profile reconciliation.
+    component: project_policy_portal
+    interface: iproject_policy_portal
+  - type: REST
+    details: >-
+      Unified role-based browser web UI (REST/HTTP), exposure-gated by
+      HostExposurePolicy.adminUiEnabled (the browser web UI flag; a rename to webUiEnabled is noted
+      for a future revision). Serves the client app shell and static assets at the root and thin
+      session/SSO/context/graph endpoints under /web. A browser session resolves to a Principal
+      exactly like a bearer token, so the served app reuses every existing scoped surface — the /mcp
+      data plane and the identity/landscape/operations/policy control-plane portals — authenticated
+      by the session cookie; the client renders only what the session principal's grants allow. No
+      per-page server endpoints are added.
+    component: web_portal
+    interface: iweb_portal
+  - type: Custom
+    details: >-
+      Draft local-only CLI/container control surface for operators who disable or restrict HTTP
+      control planes. Deferred pending exposure-policy-driven need; it would use the same audited
+      approval, policy, identity, landscape, and admin workflows through local process invocation.
+    component: local_control_portal
+    interface: ilocal_control_portal
+  - type: REST
+    details: >-
+      Operations control-plane API (read-only) for instance health reports, resource usage
+      snapshots, and advisory quota observations. Exposure is controlled by HostExposurePolicy;
+      durable backups are handled out-of-band via platform data-volume snapshots rather than this
+      API.
+    component: operations_portal
+    interface: ioperations_portal
 trustedLinks: []
 status: complete
 createdAt: '2026-07-04T12:33:06.563Z'
-updatedAt: '2026-07-04T13:06:22.432Z'
+updatedAt: '2026-07-11T11:37:43.332Z'

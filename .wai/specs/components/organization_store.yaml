@@ -1,0 +1,13 @@
+id: organization_store
+name: Organization Store
+description: >-
+  Authoritative in-memory representation of hosted organization units and project placements loaded
+  from the hosted data root. It is administrative instance state, not part of any project's SDD
+  subsystem tree.
+subsystem: sdd_host
+componentType: Store
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-07-08T21:12:01.828Z'
+updatedAt: '2026-07-09T22:13:00.498Z'

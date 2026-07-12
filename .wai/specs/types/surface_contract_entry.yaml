@@ -1,0 +1,59 @@
+kind: value-object
+id: surface_contract_entry
+name: SurfaceContractEntry
+description: >-
+  One exported interface of a surface snapshot at CONTRACT grade: the full method signatures
+  (structured params, returns, guarantees, effect, endpoints) and the portal's dispatch table —
+  everything a consumer's validator needs to verify an adapter edge, unlike the name-only catalog
+  grade used for landscape browsing.
+fields:
+  - name: id
+    type: string
+    description: Stable public interface id (matches the producing system's L0 entry).
+    optional: false
+    key: primary
+  - name: name
+    type: string
+    description: Human-readable surface name.
+    optional: false
+  - name: audience
+    type: string
+    description: >-
+      Exposure level from the L0 entry: project < department < instance < partner < external
+      (ascending reach).
+    optional: false
+  - name: type
+    type: string
+    description: 'Transport kind: REST, GraphQL, MessageBus, RPC, or Custom.'
+    optional: false
+  - name: component
+    type: string
+    description: Local name of the backing Portal in the producing project (informational for consumers).
+    optional: false
+  - name: methods
+    type: object[]
+    description: >-
+      Full contract methods: name, description, signature, params, returns, guarantees, effect,
+      endpoint.
+    optional: false
+  - name: dispatch
+    type: DispatchBinding[]
+    description: >-
+      The backing portal's capability dispatch table, when it is a generic-dispatch portal — carries
+      the per-capability typing.
+    optional: true
+  - name: details
+    type: string
+    description: Consumer-facing description of what is exposed and what remains private.
+    optional: false
+  - name: version
+    type: string
+    description: Public contract version, when declared.
+    optional: true
+  - name: stability
+    type: string
+    description: draft | stable | deprecated.
+    optional: true
+methods: []
+createdAt: '2026-07-10T23:11:38.492Z'
+updatedAt: '2026-07-10T23:11:38.601Z'

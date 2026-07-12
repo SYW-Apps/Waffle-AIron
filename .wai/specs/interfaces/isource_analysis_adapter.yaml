@@ -1,0 +1,35 @@
+id: isource_analysis_adapter
+name: Source Analysis Adapter Interface
+description: >-
+  Adapter contract for building the pure source-code model that structural conformance validates
+  against. Intent-language only — the parser technology is a swap seam declared on the L4. The
+  contract promises graceful degradation: analysis grade may vary per file, but a readable file
+  always yields facts and a failed file yields a classified non-analyzed entry; the run itself never
+  fails.
+component: source_analysis_adapter
+methods:
+  - name: buildCodeModel
+    description: >-
+      Resolve each distinct implementation sourcePath within the project root (absolute or
+      parent-escaping paths classify as escaped, nonexistent files as missing, binary/unreadable
+      content as unreadable), analyze every readable file with the best available analyzer — exact
+      AST when the TypeScript compiler module resolves dynamically for ts/js, else the language's
+      declarative pattern table (built-in or extension-pack registered), else the generic
+      word-boundary scan — and return per-file facts (declaration-tier names, string-literal and
+      property-access anchors, exported names, import specifiers) graded exact | pattern | generic.
+      Deterministic over file contents; a single file's analysis failure degrades that file, never
+      the run.
+    signature: 'buildCodeModel(implementations: ImplementationSpec[], projectRoot: string): CodeModel'
+    returns: CodeModel
+    params:
+      - name: implementations
+        type: ImplementationSpec[]
+        description: >-
+          The loaded L4 specs whose sourcePaths define the file set (deduplicated — N:1 sharing is
+          expected)
+      - name: projectRoot
+        type: string
+        description: The root all sourcePaths are resolved and containment-checked within
+status: complete
+createdAt: '2026-07-11T17:52:00.756Z'
+updatedAt: '2026-07-11T19:14:23.324Z'

@@ -1,0 +1,60 @@
+id: user_repository_impl
+name: User Repository Implementation
+description: >-
+  Facade over the owned user store, registry, and index. Every method is pure 1:1 forwarding — reads
+  go to the index, writes go to the registry; no logic lives here.
+contract: iuser_repository
+sourcePath: src/server/users.ts
+methods:
+  - name: getById
+    narrative:
+      - stepNumber: 1
+        description: Forward to the user index
+        type: call
+        targetComponent: user_index
+        targetMethod: getById
+    symbol: getUserById
+  - name: findByExternalSubject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the user index
+        type: call
+        targetComponent: user_index
+        targetMethod: findByExternalSubject
+    symbol: findUserByExternalSubject
+  - name: list
+    narrative:
+      - stepNumber: 1
+        description: Forward to the user index
+        type: call
+        targetComponent: user_index
+        targetMethod: list
+    symbol: listUsers
+  - name: upsert
+    narrative:
+      - stepNumber: 1
+        description: Forward to the user registry
+        type: call
+        targetComponent: user_registry
+        targetMethod: upsert
+    symbol: upsertUser
+  - name: setStatus
+    narrative:
+      - stepNumber: 1
+        description: Forward to the user registry
+        type: call
+        targetComponent: user_registry
+        targetMethod: setStatus
+    symbol: setUserStatus
+  - name: replaceGrants
+    narrative:
+      - stepNumber: 1
+        description: Forward to the user registry
+        type: call
+        targetComponent: user_registry
+        targetMethod: replaceGrants
+    symbol: replaceUserGrants
+detail: calls-only
+status: complete
+createdAt: '2026-07-09T17:30:25.703Z'
+updatedAt: '2026-07-11T19:14:22.956Z'

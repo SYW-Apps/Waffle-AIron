@@ -1,0 +1,28 @@
+id: isurfaces_core_adapter
+name: Surfaces Core Adapter Interface
+description: Spec-tree reads from the core subsystem's published portal for surface derivation.
+component: surfaces_core_adapter
+methods:
+  - name: loadSystemSpec
+    description: Loads the L0 system spec (incl. its gateway publicInterfaces).
+    signature: 'loadSystemSpec(): SystemSpec | null'
+    returns: SystemSpec | null
+  - name: loadSubsystemSpecs
+    description: Loads subsystem specs (public surfaces + chained mounts).
+    signature: 'loadSubsystemSpecs(): SubsystemSpec[]'
+    returns: SubsystemSpec[]
+  - name: loadComponentSpecs
+    description: Loads component specs (portals + dispatch tables).
+    signature: 'loadComponentSpecs(): ComponentSpec[]'
+    returns: ComponentSpec[]
+  - name: loadInterfaceSpecs
+    description: Loads interface specs (the contracts to export).
+    signature: 'loadInterfaceSpecs(): InterfaceSpec[]'
+    returns: InterfaceSpec[]
+  - name: loadTypeSpecs
+    description: Loads type specs (closure source).
+    signature: 'loadTypeSpecs(): TypeSpec[]'
+    returns: TypeSpec[]
+status: complete
+createdAt: '2026-07-10T23:14:05.167Z'
+updatedAt: '2026-07-11T09:04:02.449Z'

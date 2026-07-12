@@ -22,6 +22,8 @@ import {
   SpecStatus,
 } from '../models/index.js';
 import type { ValidationIssue } from './validation.js';
+import { buildGraphModel } from './diagram.js';
+import type { WebGraphModel } from '../server/types.js';
 
 // ---------------------------------------------------------------------------
 // Spec workspace
@@ -108,19 +110,56 @@ export function splitNamespace(qualifiedId: string): { prefix: string; localId: 
   return { prefix: parts.join('::'), localId };
 }
 
-function stripNamespacePrefixes(id: string, prefix: string): string {
+/**
+ * The exact inverse of `qualifyId`: turn an in-memory qualified id back into
+ * the relative form that re-qualifies to the same id when the file is loaded
+ * again from `prefix`'s namespace context.
+ *
+ * - `::`/`super::` forms are already relative — passed through.
+ * - Ids under `prefix` lose it (the local case).
+ * - Ids in a DIFFERENT namespace climb to the common ancestor with `super::`
+ *   hops, or anchor `::`-absolute when there is none. Never truncate to the
+ *   last segment: that re-qualifies into the LOCAL namespace on the next load
+ *   and silently corrupts the reference (the cross-tree targetComponent bug).
+ * - At the root context (empty prefix) qualified ids are already absolute in
+ *   the loading namespace and round-trip as-is.
+ */
+function relativizeId(id: string, prefix: string): string {
   if (id.startsWith('::') || id.startsWith('super::')) {
     return id;
   }
-  let local = id;
-  if (prefix && local.startsWith(`${prefix}::`)) {
-    local = local.slice(prefix.length + 2);
+  // Root context: in-memory ids are already absolute in the loading namespace
+  // and round-trip as-is.
+  if (!prefix) {
+    return id;
   }
-  if (local.includes('::')) {
-    const parts = local.split('::');
-    return parts[parts.length - 1];
+  if (id.startsWith(`${prefix}::`)) {
+    return id.slice(prefix.length + 2);
   }
-  return local;
+  // The mount namespace itself (a flat external subsystem's own id, e.g. a
+  // child component's `subsystem` field): stored bare, it resolves in BOTH
+  // load contexts — as the child's root subsystem standalone, and via the
+  // root-subsystem anchor when loaded through the parent.
+  if (id === prefix) {
+    return id.split('::').pop()!;
+  }
+  // NOT under the save prefix — including a BARE id, which in a prefixed
+  // context is a root-level reference (what qualifyId('super::x'/'::x')
+  // resolves to), never a local one: locals carry the prefix in memory.
+  // Emit super:: hops to the deepest common ancestor, or anchor ::-absolute
+  // when there is none (robust to the mount moving depth).
+  const prefixParts = prefix.split('::');
+  const idParts = id.split('::');
+  let common = 0;
+  while (common < prefixParts.length && common < idParts.length && prefixParts[common] === idParts[common]) {
+    common++;
+  }
+  // The id IS an ancestor namespace: step out one more hop so it can be named.
+  if (common === idParts.length) common--;
+  if (common === 0) {
+    return `::${id}`;
+  }
+  return `${'super::'.repeat(prefixParts.length - common)}${idParts.slice(common).join('::')}`;
 }
 
 /** True when `file` is the same as, or nested under, directory `dir`. */
@@ -128,6 +167,52 @@ function isWithin(dir: string, file: string): boolean {
   const d = path.resolve(dir);
   const f = path.resolve(file);
   return f === d || f.startsWith(d + path.sep);
+}
+
+// ---------------------------------------------------------------------------
+// projectPath chaining containment (Fix B2)
+//
+// A subsystem's `projectPath` is resolved with path.resolve, which honors
+// absolute paths and ../ traversal. Left unchecked, a chained subproject could
+// escape the bound project root and federate — and, via a code pack living
+// there, execute — another tenant's spec tree. The single invariant enforced
+// everywhere a projectPath is written or resolved: the child directory must
+// stay strictly within its owning project root. Empty/undefined projectPath is
+// not chaining and is never checked here (callers skip it).
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether a subproject's already-resolved child directory escapes `projectRoot`.
+ * `resolvedChildDir` is resolved by the caller because for multi-hop chains the
+ * resolution base is an intermediate parent, while the containment boundary is
+ * always the bound top root. An absolute `projectPath` or a `../`-escape fails.
+ */
+function projectPathEscapesRoot(
+  projectRoot: string,
+  projectPath: string,
+  resolvedChildDir: string,
+): boolean {
+  return path.isAbsolute(projectPath) || !isWithin(projectRoot, resolvedChildDir);
+}
+
+/**
+ * Assert a subsystem `projectPath` resolves strictly within `projectRoot`, and
+ * return the resolved absolute child directory. Throws a clear Error naming the
+ * offending path when `projectPath` is absolute or `../`-escapes the root.
+ * Applied on every write/setter path that persists a projectPath; the load-time
+ * loader uses projectPathEscapesRoot directly (it collects issues, not throws).
+ */
+export function assertContainedProjectPath(projectRoot: string, projectPath: string): string {
+  const root = path.resolve(projectRoot);
+  const resolved = path.resolve(root, projectPath);
+  if (projectPathEscapesRoot(root, projectPath, resolved)) {
+    throw new Error(
+      `projectPath "${projectPath}" must resolve within the project root "${root}", but resolves ` +
+        `to "${resolved}"; absolute paths and ../-escaping paths are rejected so a chained ` +
+        `subproject is always contained by its parent.`,
+    );
+  }
+  return resolved;
 }
 
 /**
@@ -161,13 +246,28 @@ function mergeMountRealizations(subs: SubsystemSpec[]): SubsystemSpec[] {
 }
 
 function stripNamespaceFromSubsystem(spec: SubsystemSpec, prefix: string): SubsystemSpec {
+  // MUST mirror the loader (scanSpecsForProject step 2): an external
+  // (projectPath) subsystem's members are qualified with the subsystem's own
+  // qualified id, not with its surrounding namespace — so they relativize
+  // against that same prefix. Deriving both from the subsystem id's namespace
+  // left a root-mounted external subsystem's members fully qualified on save,
+  // which the writer schema then refused (the lock-blocking asymmetry).
+  // A BARE member is already in load form (a freshly constructed spec that
+  // never went through scan qualification) and passes through untouched —
+  // subsystem members bind the subsystem's OWN components, never cross-tree.
+  const memberPrefix = spec.projectPath ? spec.id : prefix;
+  const relMember = (id: string): string => (id.includes('::') ? relativizeId(id, memberPrefix) : id);
   return {
     ...spec,
-    id: stripNamespacePrefixes(spec.id, prefix),
+    id: relativizeId(spec.id, prefix),
     publicInterfaces: spec.publicInterfaces.map(pi => ({
       ...pi,
-      component: pi.component ? stripNamespacePrefixes(pi.component, prefix) : undefined,
-      interface: pi.interface ? stripNamespacePrefixes(pi.interface, prefix) : undefined,
+      component: pi.component ? relMember(pi.component) : undefined,
+      interface: pi.interface ? relMember(pi.interface) : undefined,
+    })),
+    lifecycle: spec.lifecycle?.map(le => ({
+      ...le,
+      component: relMember(le.component),
     })),
   };
 }
@@ -175,31 +275,35 @@ function stripNamespaceFromSubsystem(spec: SubsystemSpec, prefix: string): Subsy
 function stripNamespaceFromComponent(spec: ComponentSpec, prefix: string): ComponentSpec {
   return {
     ...spec,
-    id: stripNamespacePrefixes(spec.id, prefix),
-    subsystem: stripNamespacePrefixes(spec.subsystem, prefix),
-    owns: spec.owns.map(o => stripNamespacePrefixes(o, prefix)),
-    dependsOn: spec.dependsOn.map(d => stripNamespacePrefixes(d, prefix)),
+    id: relativizeId(spec.id, prefix),
+    subsystem: relativizeId(spec.subsystem, prefix),
+    owns: spec.owns.map(o => relativizeId(o, prefix)),
+    dependsOn: spec.dependsOn.map(d => relativizeId(d, prefix)),
+    dispatch: spec.dispatch?.map(b => ({
+      ...b,
+      component: relativizeId(b.component, prefix),
+    })),
   };
 }
 
 function stripNamespaceFromInterface(spec: InterfaceSpec, prefix: string): InterfaceSpec {
   return {
     ...spec,
-    id: stripNamespacePrefixes(spec.id, prefix),
-    component: stripNamespacePrefixes(spec.component, prefix),
+    id: relativizeId(spec.id, prefix),
+    component: relativizeId(spec.component, prefix),
   };
 }
 
 function stripNamespaceFromImplementation(spec: ImplementationSpec, prefix: string): ImplementationSpec {
   return {
     ...spec,
-    id: stripNamespacePrefixes(spec.id, prefix),
-    contract: stripNamespacePrefixes(spec.contract, prefix),
+    id: relativizeId(spec.id, prefix),
+    contract: relativizeId(spec.contract, prefix),
     methods: spec.methods.map(m => ({
       ...m,
       narrative: m.narrative.map(step => ({
         ...step,
-        targetComponent: step.targetComponent ? stripNamespacePrefixes(step.targetComponent, prefix) : undefined,
+        targetComponent: step.targetComponent ? relativizeId(step.targetComponent, prefix) : undefined,
       })),
     })),
   };
@@ -208,15 +312,15 @@ function stripNamespaceFromImplementation(spec: ImplementationSpec, prefix: stri
 function stripNamespaceFromType(spec: TypeSpec, prefix: string): TypeSpec {
   return {
     ...spec,
-    id: stripNamespacePrefixes(spec.id, prefix),
-    subsystem: spec.subsystem ? stripNamespacePrefixes(spec.subsystem, prefix) : undefined,
+    id: relativizeId(spec.id, prefix),
+    subsystem: spec.subsystem ? relativizeId(spec.subsystem, prefix) : undefined,
   };
 }
 
 function stripNamespaceFromGroup(spec: GroupSpec, prefix: string): GroupSpec {
   return {
     ...spec,
-    id: stripNamespacePrefixes(spec.id, prefix),
+    id: relativizeId(spec.id, prefix),
   };
 }
 
@@ -269,11 +373,15 @@ function cleanEmptyDirs(filePath: string, specsRoot: string): void {
  * corrupt file that only surfaces on the next scan. Returns the parsed value
  * (with schema defaults applied).
  */
+/** One rendering for writer-schema refusals — shared by parseOrThrow and the dry-run so validate-time output is byte-comparable with the mid-write error it predicts. */
+function formatZodIssues(error: z.ZodError): string {
+  return error.issues.map(i => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');
+}
+
 function parseOrThrow<S extends z.ZodTypeAny>(schema: S, value: unknown, kind: string, id: string): z.infer<S> {
   const res = schema.safeParse(value);
   if (!res.success) {
-    const detail = res.error.issues.map(i => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');
-    throw new Error(`Refusing to write invalid ${kind} spec "${id}": ${detail}`);
+    throw new Error(`Refusing to write invalid ${kind} spec "${id}": ${formatZodIssues(res.error)}`);
   }
   return res.data;
 }
@@ -503,6 +611,10 @@ export class SpecWorkspace {
           component: p.component ? qualifyId(p.component, componentPrefix, this.rootSubsystems) : undefined,
           interface: p.interface ? qualifyId(p.interface, componentPrefix, this.rootSubsystems) : undefined,
         })),
+        lifecycle: sub.lifecycle?.map(le => ({
+          ...le,
+          component: qualifyId(le.component, componentPrefix, this.rootSubsystems),
+        })),
       };
     });
 
@@ -520,6 +632,10 @@ export class SpecWorkspace {
         subsystem: qualifyId(comp.subsystem, namespacePrefix, this.rootSubsystems),
         owns: comp.owns.map(o => qualifyId(o, namespacePrefix, this.rootSubsystems)),
         dependsOn: comp.dependsOn.map(d => qualifyId(d, namespacePrefix, this.rootSubsystems)),
+        dispatch: comp.dispatch?.map(b => ({
+          ...b,
+          component: qualifyId(b.component, namespacePrefix, this.rootSubsystems),
+        })),
       }));
 
       index.interfaces = index.interfaces.map(intf => ({
@@ -583,6 +699,23 @@ export class SpecWorkspace {
     if (currentDepth < maxDepth) {
       for (const subproj of localSubprojects) {
         const childDir = path.resolve(projectDir, subproj.projectPath);
+
+        // Containment guard (Fix B2) — THE critical read-time defense. The
+        // resolution base is the immediate parent (projectDir) so nested chains
+        // compose, but containment is always checked against this.rootDir, the
+        // workspace's bound root (the tenant project root when hosted). No hop,
+        // however deep, may escape it via an absolute or ../ projectPath. On a
+        // violation, surface a loader error and SKIP the child (do not recurse).
+        if (projectPathEscapesRoot(this.rootDir, subproj.projectPath, childDir)) {
+          this.loaderIssues.push({
+            severity: 'error',
+            code: 'PROJECTPATH_ESCAPE',
+            message: `Subproject path "${subproj.projectPath}" declared by subsystem "${subproj.subsystemId}" escapes the project root "${this.rootDir}" (resolves to "${childDir}"); absolute and ../-escaping projectPaths are rejected. Skipping this subproject.`,
+            specId: subproj.subsystemId,
+          });
+          continue;
+        }
+
         if (visitedDirs.has(childDir)) {
           this.loaderIssues.push({
             severity: 'error',
@@ -651,7 +784,21 @@ export class SpecWorkspace {
       const index = this.scanAll();
       const sub = index.subsystems.find((s) => s.id === currentPrefix);
       if (sub && sub.projectPath) {
-        currentDir = path.resolve(currentDir, sub.projectPath);
+        const nextDir = path.resolve(currentDir, sub.projectPath);
+        // Containment guard (Fix B2): never resolve a namespace into a directory
+        // that escapes the bound top root (this.rootDir). Surface a loader error
+        // and SKIP the escaping hop, leaving currentDir contained, rather than
+        // handing back an out-of-root directory for a save/lookup.
+        if (projectPathEscapesRoot(this.rootDir, sub.projectPath, nextDir)) {
+          this.loaderIssues.push({
+            severity: 'error',
+            code: 'PROJECTPATH_ESCAPE',
+            message: `Subproject path "${sub.projectPath}" declared by subsystem "${currentPrefix}" escapes the project root "${this.rootDir}" (resolves to "${nextDir}"); absolute and ../-escaping projectPaths are rejected. Skipping this subproject.`,
+            specId: currentPrefix,
+          });
+          continue;
+        }
+        currentDir = nextDir;
         resolvedAny = true;
       }
     }
@@ -662,15 +809,21 @@ export class SpecWorkspace {
     const parts = qualifiedId.split('::');
     if (parts.length <= 1) return null;
     const index = this.scanAll();
+    // The DEEPEST mount wins: for a nested chain a::b::x (both a and a::b are
+    // mounts), the file lives in b's tree, so ids relativize against a::b.
+    // Returning the first (shallowest) hit left one namespace level in the
+    // written ids, which the strict id schema then refused — every depth-2+
+    // spec became un-savable through the parent root.
+    let deepest: string | null = null;
     let currentPrefix = '';
     for (let i = 0; i < parts.length - 1; i++) {
       currentPrefix = currentPrefix ? `${currentPrefix}::${parts[i]}` : parts[i];
       const sub = index.subsystems.find(s => s.id === currentPrefix);
       if (sub && sub.projectPath) {
-        return currentPrefix;
+        deepest = currentPrefix;
       }
     }
-    return null;
+    return deepest;
   }
 
   // -------------------------------------------------------------------------
@@ -983,12 +1136,122 @@ export class SpecWorkspace {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Write-pipeline preparation — the single serialization path shared by the
+  // real saves and dryRunSerializeSpecs, so the round-trip check can never
+  // drift from what a write would actually do.
+  // ---------------------------------------------------------------------------
+
+  /**
+   * The namespace context a spec's file is written in: the deepest subproject
+   * mount containing the id, else the id's own namespace. THE single prefix
+   * derivation for the whole write pipeline — every prepare*ForWrite and every
+   * ancillary relativization must use this, never re-derive it inline, or the
+   * dry-run check and the real saves could drift apart.
+   */
+  writePrefixFor(qualifiedId: string): string {
+    return this.getSubprojectPrefix(qualifiedId) || splitNamespace(qualifiedId).prefix;
+  }
+
+  prepareSubsystemForWrite(spec: SubsystemSpec): SubsystemSpec {
+    const { prefix } = splitNamespace(spec.id);
+    return stripNamespaceFromSubsystem(spec, prefix);
+  }
+
+  prepareComponentForWrite(spec: ComponentSpec): ComponentSpec {
+    const prefix = this.writePrefixFor(spec.id);
+    return prefix ? stripNamespaceFromComponent(spec, prefix) : spec;
+  }
+
+  prepareInterfaceForWrite(spec: InterfaceSpec): InterfaceSpec {
+    const prefix = this.writePrefixFor(spec.id);
+    return prefix ? stripNamespaceFromInterface(spec, prefix) : spec;
+  }
+
+  prepareImplementationForWrite(spec: ImplementationSpec): ImplementationSpec {
+    const prefix = this.writePrefixFor(spec.id);
+    return prefix ? stripNamespaceFromImplementation(spec, prefix) : spec;
+  }
+
+  prepareTypeForWrite(spec: TypeSpec): TypeSpec {
+    const prefix = this.writePrefixFor(spec.id);
+    return prefix ? stripNamespaceFromType(spec, prefix) : spec;
+  }
+
+  prepareGroupForWrite(spec: GroupSpec): GroupSpec {
+    const prefix = this.writePrefixFor(spec.id);
+    return prefix ? stripNamespaceFromGroup(spec, prefix) : spec;
+  }
+
+  /**
+   * Re-serialize every loaded spec through the exact write pipeline the save
+   * paths use — same relativization, same schema — without touching disk.
+   * Returns one ROUNDTRIP_SERIALIZATION issue per spec the writer would
+   * refuse, so validate reports at validate time every refusal that lock's
+   * status promotion or any later save would otherwise raise mid-write.
+   * `include` (when given) skips out-of-scope specs BEFORE the expensive
+   * clone+parse, so scoped validation pays scoped cost.
+   */
+  dryRunSerializeSpecs(include?: (specId: string) => boolean): ValidationIssue[] {
+    const issues: ValidationIssue[] = [];
+    const index = this.scanAll();
+    const inScope = include ?? ((): boolean => true);
+
+    const check = (kind: string, id: string, result: z.SafeParseReturnType<unknown, unknown>): void => {
+      if (result.success) return;
+      issues.push({
+        severity: 'error',
+        code: 'ROUNDTRIP_SERIALIZATION',
+        message: `${kind} spec "${id}" cannot be re-serialized through the writer schema (any save or lock would refuse it): ${formatZodIssues(result.error)}`,
+        specId: id,
+      });
+    };
+
+    for (const sub of index.subsystems) {
+      if (!inScope(sub.id)) continue;
+      check('subsystem', sub.id, SubsystemSpecSchema.safeParse(this.prepareSubsystemForWrite(sub)));
+    }
+    for (const comp of index.components) {
+      if (!inScope(comp.id)) continue;
+      check('component', comp.id, ComponentSpecSchema.safeParse(this.prepareComponentForWrite(comp)));
+    }
+    for (const intf of index.interfaces) {
+      if (!inScope(intf.id)) continue;
+      check('interface', intf.id, InterfaceSpecSchema.safeParse(this.prepareInterfaceForWrite(intf)));
+    }
+    for (const impl of index.implementations) {
+      if (!inScope(impl.id)) continue;
+      check('implementation', impl.id, ImplementationSpecSchema.safeParse(this.prepareImplementationForWrite(impl)));
+    }
+    for (const t of index.types) {
+      if (!inScope(t.id)) continue;
+      check('type', t.id, TypeSpecSchema.safeParse(this.prepareTypeForWrite(t)));
+    }
+    for (const g of index.groups) {
+      if (!inScope(g.id)) continue;
+      check('group', g.id, GroupSpecSchema.safeParse(this.prepareGroupForWrite(g)));
+    }
+    return issues;
+  }
+
   saveSubsystemSpec(spec: SubsystemSpec): void {
     const p = this.getSubsystemPath(spec.id);
     ensureDir(path.dirname(p));
 
     const { prefix } = splitNamespace(spec.id);
-    let specToWrite = prefix ? stripNamespaceFromSubsystem(spec, prefix) : spec;
+    // Fix B2 (defense in depth): never persist an escaping projectPath, so no
+    // later code path can resolve+act on it. Only for a top-level (non-prefixed)
+    // subsystem, whose projectPath is relative to this.rootDir; a namespaced
+    // subsystem's projectPath is child-relative and is contained by the
+    // load-time guards (resolveSubprojectForNamespace + the recursive loader).
+    if (!prefix && spec.projectPath && spec.projectPath.trim() !== '') {
+      assertContainedProjectPath(this.rootDir, spec.projectPath);
+    }
+    // ALWAYS strip: an external subsystem's members carry the subsystem's own
+    // id prefix even when the subsystem itself is mounted at the root (empty
+    // prefix) — skipping the strip there wrote qualified member ids the
+    // schema refuses, blocking lock.
+    let specToWrite = this.prepareSubsystemForWrite(spec);
 
     if (prefix) {
       const childProj = this.resolveSubprojectForNamespace(prefix);
@@ -1062,9 +1325,7 @@ export class SpecWorkspace {
     const p = this.getComponentPath(spec.id, spec.subsystem);
     ensureDir(path.dirname(p));
 
-    const subprojPrefix = this.getSubprojectPrefix(spec.id);
-    const prefix = subprojPrefix || splitNamespace(spec.id).prefix;
-    const specToWrite = prefix ? stripNamespaceFromComponent(spec, prefix) : spec;
+    const specToWrite = this.prepareComponentForWrite(spec);
 
     const existing = this.loadComponentSpec(spec.id);
     if (existing) {
@@ -1164,9 +1425,7 @@ export class SpecWorkspace {
     const p = this.getInterfacePath(spec.id, spec.component);
     ensureDir(path.dirname(p));
 
-    const subprojPrefix = this.getSubprojectPrefix(spec.id);
-    const prefix = subprojPrefix || splitNamespace(spec.id).prefix;
-    const specToWrite = prefix ? stripNamespaceFromInterface(spec, prefix) : spec;
+    const specToWrite = this.prepareInterfaceForWrite(spec);
 
     const existing = this.loadInterfaceSpec(spec.id);
     if (existing) {
@@ -1230,9 +1489,7 @@ export class SpecWorkspace {
     const p = this.getImplementationPath(spec.id, spec.contract);
     ensureDir(path.dirname(p));
 
-    const subprojPrefix = this.getSubprojectPrefix(spec.id);
-    const prefix = subprojPrefix || splitNamespace(spec.id).prefix;
-    const specToWrite = prefix ? stripNamespaceFromImplementation(spec, prefix) : spec;
+    const specToWrite = this.prepareImplementationForWrite(spec);
 
     const existing = this.loadImplementationSpec(spec.id);
     if (existing) {
@@ -1273,14 +1530,12 @@ export class SpecWorkspace {
     const p = this.getTypePath(spec.id, spec.subsystem, group);
     ensureDir(path.dirname(p));
 
-    const subprojPrefix = this.getSubprojectPrefix(spec.id);
-    const prefix = subprojPrefix || splitNamespace(spec.id).prefix;
-    const specToWrite = prefix ? stripNamespaceFromType(spec, prefix) : spec;
+    const specToWrite = this.prepareTypeForWrite(spec);
 
     if (existing) {
       specToWrite.createdAt = existing.createdAt;
       if (!specToWrite.group && existing.group) {
-        specToWrite.group = stripNamespacePrefixes(existing.group, prefix);
+        specToWrite.group = relativizeId(existing.group, this.writePrefixFor(spec.id));
       }
     }
     specToWrite.updatedAt = new Date().toISOString();
@@ -1314,8 +1569,7 @@ export class SpecWorkspace {
     const p = this.getGroupPath(spec.id);
     ensureDir(path.dirname(p));
 
-    const { prefix } = splitNamespace(spec.id);
-    const specToWrite = prefix ? stripNamespaceFromGroup(spec, prefix) : spec;
+    const specToWrite = this.prepareGroupForWrite(spec);
 
     const existing = this.loadGroupSpec(spec.id);
     if (existing) {
@@ -1457,13 +1711,20 @@ export class SpecWorkspace {
   // Granular delta updates (sdd_update_spec)
   // -------------------------------------------------------------------------
 
+  /**
+   * Returns non-fatal notices about the merge (e.g. an insert whose position
+   * was a jump target, so the relocated jumps now bypass the inserted step) —
+   * empty when the merge had nothing to warn about.
+   */
   updateSpec(
-    kind: 'subsystem' | 'component' | 'interface' | 'implementation' | 'type',
+    kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type',
     id: string,
     delta: Record<string, any>
-  ): void {
+  ): string[] {
+    const notices: string[] = [];
     const result = (() => {
       switch (kind) {
+        case 'system':         return this.loadSystemSpec(); // singleton — id is informational
         case 'subsystem':      return this.loadSubsystemSpec(id);
         case 'component':      return this.loadComponentSpec(id);
         case 'interface':      return this.loadInterfaceSpec(id);
@@ -1476,17 +1737,32 @@ export class SpecWorkspace {
       throw new Error(`Spec of kind "${kind}" with ID "${id}" does not exist. Define it first.`);
     }
 
+    // The L0 is a singleton and its load ignores the id — reject a mismatched
+    // id loudly so a mis-selected kind can't silently rewrite the system spec.
+    if (kind === 'system' && id && id !== 'system' && id !== (result as SystemSpec).name) {
+      throw new Error(
+        `kind "system" targets the singleton L0 spec (system name "${(result as SystemSpec).name}") — pass id "system" or the system name, got "${id}". For a subsystem, use kind "subsystem".`,
+      );
+    }
+
     // Flow-step jump fields relocate with renumbering, exactly like an
     // assembler relocating addresses: inserts/deletes shift every jump field
     // in the SAME narrative that points at or beyond the mutation point.
     const JUMP_FIELDS = ['onTrueStep', 'onFalseStep', 'defaultStep', 'endStep', 'finallyStep', 'toStep'] as const;
     const JUMP_LIST_FIELDS = ['cases', 'catches'] as const;
 
-    const relocateJumps = (step: any, shiftFrom: number, deltaN: number): any => {
-      const hit = (v: number) => (deltaN > 0 ? v >= shiftFrom : v > shiftFrom);
+    // captureInsertTarget: ENTRY jumps pointing exactly at the insertion point
+    // stay put, so they land on the inserted step instead of following the
+    // shifted original ("execute this first" insert semantics). endStep is a
+    // region TAIL (last step of a loop/try body), not an entry: capturing it
+    // would shrink the region and evict its original last step, so it always
+    // relocates with the body.
+    const relocateJumps = (step: any, shiftFrom: number, deltaN: number, captureInsertTarget = false): any => {
+      const hit = (v: number, isRegionTail = false) =>
+        (deltaN > 0 ? ((captureInsertTarget && !isRegionTail) ? v > shiftFrom : v >= shiftFrom) : v > shiftFrom);
       const out = { ...step };
       for (const f of JUMP_FIELDS) {
-        if (typeof out[f] === 'number' && hit(out[f])) out[f] = out[f] + deltaN;
+        if (typeof out[f] === 'number' && hit(out[f], f === 'endStep')) out[f] = out[f] + deltaN;
       }
       for (const lf of JUMP_LIST_FIELDS) {
         if (Array.isArray(out[lf])) {
@@ -1537,13 +1813,31 @@ export class SpecWorkspace {
           }
         } else if (deltaStep.action === 'insert') {
           // The inserted step's own jump fields are taken as-is: they refer
-          // to the POST-insert numbering the author is creating.
+          // to the POST-insert numbering the author is creating. Existing
+          // jumps AT the insertion point follow their old referent to N+1 by
+          // default (assembler-style relocation) — captureJumps: true keeps
+          // them on N so they hit the inserted step first.
+          const capture = deltaStep.captureJumps === true;
+          if (!capture) {
+            const incoming = steps
+              .map(s => ({ n: s.stepNumber, refs: jumpRefsTo(s, stepNum) }))
+              .filter(r => r.refs.length > 0);
+            if (incoming.length) {
+              notices.push(
+                `Inserted step ${stepNum} was a jump target: `
+                + incoming.map(r => `step ${r.n} (${r.refs.join(', ')})`).join(', ')
+                + ` now target the shifted original step ${stepNum + 1} and BYPASS the inserted step — it is only reached by fall-through.`
+                + ` If those jumps should hit the new step first, insert with "captureJumps": true or retarget them.`,
+              );
+            }
+          }
           steps = steps.map(s => relocateJumps(
             s.stepNumber >= stepNum ? { ...s, stepNumber: s.stepNumber + 1 } : s,
             stepNum,
             1,
+            capture,
           ));
-          const { action, remove, ...cleanStep } = deltaStep;
+          const { action, remove, captureJumps, ...cleanStep } = deltaStep;
           steps.push(cleanStep);
         } else {
           const idx = steps.findIndex(s => s.stepNumber === stepNum);
@@ -1613,6 +1907,27 @@ export class SpecWorkspace {
       return merged;
     };
 
+    // Upsert-by-key for arrays whose elements have no `name`/`id`: dispatch
+    // bindings key on capability, lifecycle entrypoints on phase+component+
+    // method. Without this they fell to the wholesale-replace branch and a
+    // one-entry delta silently erased the rest of the table.
+    const mergeKeyedArray = (existing: any[], delta: any[], keyOf: (item: any) => string): any[] => {
+      const merged = [...existing];
+      for (const deltaItem of delta) {
+        const idx = merged.findIndex(item => keyOf(item) === keyOf(deltaItem));
+        if (idx !== -1) {
+          if (deltaItem.remove === true || deltaItem.action === 'delete') {
+            merged.splice(idx, 1);
+          } else {
+            merged[idx] = { ...merged[idx], ...deltaItem };
+          }
+        } else if (deltaItem.remove !== true && deltaItem.action !== 'delete') {
+          merged.push(deltaItem);
+        }
+      }
+      return merged.map(({ action, remove, ...item }) => item);
+    };
+
     const mergePublicInterfaces = (existing: any[], delta: any[]): any[] => {
       const merged = [...existing];
       for (const deltaItem of delta) {
@@ -1651,6 +1966,10 @@ export class SpecWorkspace {
           res.fields = mergeNamedArray(existing.fields, value);
         } else if (key === 'publicInterfaces' && Array.isArray(value) && Array.isArray(existing.publicInterfaces)) {
           res.publicInterfaces = mergePublicInterfaces(existing.publicInterfaces, value);
+        } else if (key === 'dispatch' && Array.isArray(value) && Array.isArray(existing.dispatch)) {
+          res.dispatch = mergeKeyedArray(existing.dispatch, value, b => String(b?.capability));
+        } else if (key === 'lifecycle' && Array.isArray(value) && Array.isArray(existing.lifecycle)) {
+          res.lifecycle = mergeKeyedArray(existing.lifecycle, value, le => `${le?.phase} ${le?.component} ${le?.method}`);
         } else if (Array.isArray(value)) {
           res[key] = value;
         } else if (typeof value === 'object' && typeof existing[key] === 'object' && existing[key] !== null) {
@@ -1662,7 +1981,72 @@ export class SpecWorkspace {
       return res;
     };
 
-    const mergedResult = mergeDelta(result, delta);
+    // Callers write DELTAS with LOCAL names (the natural form inside a
+    // namespace) while the loaded spec is fully qualified. Qualify the
+    // delta's id-bearing references BEFORE the merge, exactly as the loader
+    // would have — never after, because post-merge a bare id is ambiguous
+    // (a loaded root-level ref and a delta-local ref read identically).
+    // Only fields PRESENT in the delta are touched, so nothing new is merged.
+    const qualifyDeltaRefs = (d: Record<string, any>): Record<string, any> => {
+      if (kind === 'system') return d;
+      const prefix = this.writePrefixFor(id);
+      if (!prefix) return d;
+      const q = (ref: unknown): unknown =>
+        typeof ref === 'string' ? qualifyId(ref, prefix, this.rootSubsystems) : ref;
+      const out: Record<string, any> = { ...d };
+      switch (kind) {
+        case 'subsystem': {
+          const isExternal = !!(out.projectPath ?? (result as SubsystemSpec).projectPath);
+          const memberPrefix = isExternal ? id : prefix;
+          const qm = (ref: unknown): unknown =>
+            typeof ref === 'string' ? qualifyId(ref, memberPrefix, this.rootSubsystems) : ref;
+          if (Array.isArray(out.publicInterfaces)) {
+            out.publicInterfaces = out.publicInterfaces.map((pi: any) => ({
+              ...pi,
+              ...(typeof pi?.component === 'string' ? { component: qm(pi.component) } : {}),
+              ...(typeof pi?.interface === 'string' ? { interface: qm(pi.interface) } : {}),
+            }));
+          }
+          if (Array.isArray(out.lifecycle)) {
+            out.lifecycle = out.lifecycle.map((le: any) =>
+              (typeof le?.component === 'string' ? { ...le, component: qm(le.component) } : le));
+          }
+          break;
+        }
+        case 'component':
+          if (typeof out.subsystem === 'string') out.subsystem = q(out.subsystem);
+          if (Array.isArray(out.owns)) out.owns = out.owns.map(q);
+          if (Array.isArray(out.dependsOn)) out.dependsOn = out.dependsOn.map(q);
+          if (Array.isArray(out.dispatch)) {
+            out.dispatch = out.dispatch.map((b: any) =>
+              (typeof b?.component === 'string' ? { ...b, component: q(b.component) } : b));
+          }
+          break;
+        case 'interface':
+          if (typeof out.component === 'string') out.component = q(out.component);
+          break;
+        case 'implementation':
+          if (typeof out.contract === 'string') out.contract = q(out.contract);
+          if (Array.isArray(out.methods)) {
+            out.methods = out.methods.map((m: any) =>
+              (Array.isArray(m?.narrative)
+                ? {
+                  ...m,
+                  narrative: m.narrative.map((s: any) =>
+                    (typeof s?.targetComponent === 'string' ? { ...s, targetComponent: q(s.targetComponent) } : s)),
+                }
+                : m));
+          }
+          break;
+        case 'type':
+          if (typeof out.subsystem === 'string') out.subsystem = q(out.subsystem);
+          if (typeof out.group === 'string') out.group = q(out.group);
+          break;
+      }
+      return out;
+    };
+
+    const mergedResult = mergeDelta(result, qualifyDeltaRefs(delta));
     mergedResult.updatedAt = new Date().toISOString();
 
     // An explicit status in the delta is a deliberate change — allow demotion
@@ -1672,12 +2056,15 @@ export class SpecWorkspace {
     };
 
     switch (kind) {
+      case 'system':         this.saveSystemSpec(mergedResult); break;
       case 'subsystem':      this.saveSubsystemSpec(mergedResult); break;
       case 'component':      this.saveComponentSpec(mergedResult, opts); break;
       case 'interface':      this.saveInterfaceSpec(mergedResult, opts); break;
       case 'implementation': this.saveImplementationSpec(mergedResult, opts); break;
       case 'type':           this.saveTypeSpec(mergedResult); break;
     }
+
+    return notices;
   }
 }
 
@@ -1711,8 +2098,12 @@ function current(): SpecWorkspace {
  * must rescan rather than serve its stale index.
  */
 export function invalidateSpecCache(): void {
+  // Invalidate IN PLACE — never clear the registry. A caller holding a
+  // workspaceFor() reference (tests, the hosted server's per-project scopes)
+  // must keep receiving invalidations; evicting the instance orphaned such
+  // references on a permanently-stale index whose path lookups then
+  // mis-routed writes into specs/default fallbacks.
   for (const ws of workspaces.values()) ws.invalidate();
-  workspaces.clear();
 }
 
 export function getLoaderIssues(): ValidationIssue[] {
@@ -1848,6 +2239,17 @@ export function saveTypeSpec(spec: TypeSpec): void {
   current().saveTypeSpec(spec);
 }
 
+export function dryRunSerializeSpecs(include?: (specId: string) => boolean): ValidationIssue[] {
+  return current().dryRunSerializeSpecs(include);
+}
+
+/** Project the current project's spec tree into a level-filtered WebGraphModel,
+ *  forwarded to the diagram specialist's pure graph projection (core_orchestrator
+ *  → diagram_specialist). */
+export function buildProjectGraph(level: number): WebGraphModel {
+  return buildGraphModel(level);
+}
+
 export function deleteTypeSpec(id: string): boolean {
   return current().deleteTypeSpec(id);
 }
@@ -1892,9 +2294,9 @@ export function findLegacySpecFiles(): { path: string; expected: string }[] {
 }
 
 export function updateSpec(
-  kind: 'subsystem' | 'component' | 'interface' | 'implementation' | 'type',
+  kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type',
   id: string,
   delta: Record<string, any>
-): void {
-  current().updateSpec(kind, id, delta);
+): string[] {
+  return current().updateSpec(kind, id, delta);
 }

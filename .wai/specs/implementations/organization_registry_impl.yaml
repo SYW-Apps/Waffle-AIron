@@ -1,0 +1,31 @@
+id: organization_registry_impl
+name: Organization Registry Implementation
+description: >-
+  Write path for hosted organization units and project placements: id/timestamp stamping,
+  parent/unit referential validation, unit-tree cycle rejection, durable persistence, and store
+  refresh. Performs no authorization.
+contract: iorganization_registry
+sourcePath: src/server/organization.ts
+methods:
+  - name: upsertUnit
+    narrative: []
+    intent: >-
+      Stamp the new unit's id and createdAt on create (preserving both on update) and default status
+      to active, validate that parentId — when set — resolves to an existing unit, and reject any
+      change that would introduce a cycle in the unit tree (a unit reachable from itself through
+      parent links). Then rewrite the persisted unit collection via write-temp-then-rename, refresh
+      the store with replaceAll, and return the stored unit. Persistence failures leave the previous
+      collections intact and surface as storage errors. Authorization is enforced by the
+      orchestrator, not here.
+  - name: placeProject
+    narrative: []
+    intent: >-
+      Stamp the new placement's id and createdAt on create (preserving both on update) and validate
+      that the target unitId resolves to an existing organization unit — failing with a validation
+      error otherwise. Then rewrite the persisted placement collection via write-temp-then-rename,
+      refresh the store, and return the stored placement. Persistence failures leave the previous
+      collections intact. Authorization is enforced by the orchestrator, not here.
+detail: intent
+status: complete
+createdAt: '2026-07-09T22:07:46.272Z'
+updatedAt: '2026-07-09T22:13:33.327Z'

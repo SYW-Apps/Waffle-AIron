@@ -463,4 +463,44 @@ describe('canvas runtime (headless execution of the generated scripts)', () => {
     fire('dataCouplingToggle', 'change', { target: { checked: false } });
     expect(cy.edges().filter((e: any) => e.hasClass('datacoupling')).length).toBe(0);
   });
+
+  it('adds stronger Bezier routing metadata when a direct edge crosses another node box', () => {
+    const model = {
+      system: { name: 'RouteSys' },
+      generatedAt: now,
+      subsystems: [
+        { id: 'source', name: 'Source', description: 'd', trustedLinks: [] },
+        { id: 'middle', name: 'Middle', description: 'd', trustedLinks: [] },
+        { id: 'target', name: 'Target', description: 'd', trustedLinks: [] },
+      ],
+      components: [
+        { id: 'source-portal', name: 'Source Portal', description: 'd', subsystem: 'source', componentType: 'Portal', portalType: 'HTTP_API', public: true, owns: [], dependsOn: [], interfaces: [], narratives: [], intents: [] },
+        { id: 'middle-portal', name: 'Middle Portal', description: 'd', subsystem: 'middle', componentType: 'Portal', portalType: 'HTTP_API', public: true, owns: [], dependsOn: [], interfaces: [], narratives: [], intents: [] },
+        { id: 'target-portal', name: 'Target Portal', description: 'd', subsystem: 'target', componentType: 'Portal', portalType: 'HTTP_API', public: true, owns: [], dependsOn: [], interfaces: [], narratives: [], intents: [] },
+      ],
+      edges: [
+        { from: 'source-portal', to: 'target-portal', cross: true },
+        { from: 'source-portal', to: 'middle-portal', cross: true },
+        { from: 'middle-portal', to: 'target-portal', cross: true },
+      ],
+      types: [],
+      typeEdges: [],
+      dataEdges: [],
+      issues: [],
+    } as any;
+
+    const { cy } = bootCanvas(renderCanvasHtml(model));
+    const direct = cy.edges().filter((e: any) => e.source().id() === 's~source' && e.target().id() === 's~target');
+
+    expect(direct.length).toBe(1);
+    expect(direct[0].hasClass('routed')).toBe(true);
+    expect(Math.abs(direct[0].data('cpDist'))).toBeGreaterThan(120);
+    expect(direct[0].data('cpWeight')).toBe(0.5);
+    expect(Math.abs(direct[0].data('taxiTurn'))).toBeGreaterThan(70);
+
+    const taxiTurns = cy.edges()
+      .filter((e: any) => e.hasClass('routed'))
+      .map((e: any) => e.data('taxiTurn'));
+    expect(new Set(taxiTurns).size).toBeGreaterThan(1);
+  });
 });

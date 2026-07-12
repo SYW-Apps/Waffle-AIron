@@ -1,0 +1,141 @@
+id: ilandscape_portal
+name: Landscape Portal Interface
+description: >-
+  Draft control-plane HTTP contract for hosted organization hierarchy, project placement,
+  public-surface snapshots, cross-project relations, and landscape graph retrieval.
+component: landscape_portal
+methods:
+  - name: upsertUnit
+    description: Create or update one hosted organization unit.
+    signature: 'upsertUnit(credential: string, unit: OrganizationUnitRecord): OrganizationUnitRecord'
+    returns: OrganizationUnitRecord
+    params:
+      - name: credential
+        type: string
+      - name: unit
+        type: OrganizationUnitRecord
+    endpoint:
+      transport: HTTP
+      method: PUT
+      path: /landscape/units/{id}
+  - name: placeProject
+    description: Place or share one hosted project within an organization unit.
+    signature: 'placeProject(credential: string, placement: ProjectPlacement): ProjectPlacement'
+    returns: ProjectPlacement
+    params:
+      - name: credential
+        type: string
+      - name: placement
+        type: ProjectPlacement
+    endpoint:
+      transport: HTTP
+      method: PUT
+      path: /landscape/projects/{id}/placements/{unitId}
+  - name: refreshPublicSurface
+    description: Refresh and store one project's redacted public-surface snapshot.
+    signature: 'refreshPublicSurface(credential: string, projectId: string): ProjectPublicSurfaceSnapshot'
+    returns: ProjectPublicSurfaceSnapshot
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /landscape/projects/{id}/public-surface/refresh
+  - name: upsertRelation
+    description: Create or update one cross-project relation targeting a system public interface snapshot.
+    signature: 'upsertRelation(credential: string, relation: ProjectRelationRecord): ProjectRelationRecord'
+    returns: ProjectRelationRecord
+    params:
+      - name: credential
+        type: string
+      - name: relation
+        type: ProjectRelationRecord
+    endpoint:
+      transport: HTTP
+      method: PUT
+      path: /landscape/relations/{id}
+  - name: listRelations
+    description: List cross-project relations visible to the caller.
+    signature: 'listRelations(credential: string, projectId: string): ProjectRelationRecord[]'
+    returns: ProjectRelationRecord[]
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+        optional: true
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /landscape/relations
+  - name: generateLandscape
+    description: >-
+      Return a hosted-instance landscape graph built from organization records, projects,
+      public-surface snapshots, and cross-project relations.
+    signature: 'generateLandscape(credential: string, scope: string): LandscapeGraphModel'
+    returns: LandscapeGraphModel
+    params:
+      - name: credential
+        type: string
+      - name: scope
+        type: string
+        optional: true
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /landscape/graph
+  - name: removeRelation
+    description: Remove one cross-project relation by id.
+    signature: 'removeRelation(credential: string, id: string): void'
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: id
+        type: string
+    endpoint:
+      transport: HTTP
+      method: DELETE
+      path: /landscape/relations/{id}
+  - name: listVisibleSurfaces
+    description: >-
+      Visibility-resolved discovery catalog for one observer project (targets + audience-filtered
+      redacted summaries).
+    signature: 'listVisibleSurfaces(credential: string, currentProjectId: string): VisibleSurfaceEntry[]'
+    returns: VisibleSurfaceEntry[]
+    params:
+      - name: credential
+        type: string
+      - name: currentProjectId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /landscape/projects/{id}/visible-surfaces
+  - name: exportProjectSurface
+    description: >-
+      Generate-and-download one project's surface artifact (native snapshot YAML or OpenAPI 3.1
+      JSON) as an attachment — generation on request, never a served UI.
+    signature: >-
+      exportProjectSurface(credential: string, projectId: string, format: string, maxAudience:
+      string): SurfaceArtifact
+    returns: SurfaceArtifact
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+      - name: format
+        type: string
+      - name: maxAudience
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /landscape/projects/{id}/surface
+status: complete
+createdAt: '2026-07-08T21:13:58.131Z'
+updatedAt: '2026-07-11T12:04:19.905Z'

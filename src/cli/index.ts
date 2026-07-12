@@ -4,35 +4,28 @@ import { Command } from 'commander';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import { logger, setLogLevel } from '../utils/logger.js';
 import { WaironError } from '../utils/errors.js';
+// The runner imports each command adapter module DIRECTLY (not through the
+// commands barrel) so the physical import graph mirrors the declared
+// cli_runner → adapter edges (dependency conformance).
+import { runAliasesList, runAliasesEnable, runAliasesDisable } from '../commands/aliases.js';
+import { runInit } from '../commands/init.js';
+import { runGenerate } from '../commands/generate.js';
+import { runLock } from '../commands/lock.js';
+import { runValidate } from '../commands/validate.js';
+import { runList } from '../commands/list.js';
+import { runShow } from '../commands/show.js';
+import { runMcpServe, runMcpInstall, runMcpStatus } from '../commands/mcp.js';
+import { runUpdate, cleanStaleBinary } from '../commands/update.js';
+import { runStatus } from '../commands/status.js';
+import { runDomainsList, runDomainsScan, runDomainsAdd, runDomainsRemove } from '../commands/domains.js';
+import { runSkillsList, runSkillsInstall } from '../commands/skills.js';
+import { runDoctor } from '../commands/doctor.js';
+import { runDiagram } from '../commands/diagram.js';
+import { runRulesList } from '../commands/rules.js';
+import { runPacksAdd, runPacksList, runPacksRemove } from '../commands/packs.js';
 import {
-  runAliasesList,
-  runAliasesEnable,
-  runAliasesDisable,
-  runInit,
-  runGenerate,
-  runLock,
-  runValidate,
-  runList,
-  runShow,
-  runMcpServe,
-  runMcpInstall,
-  runMcpStatus,
-  runUpdate,
-  runStatus,
-  cleanStaleBinary,
-  runDomainsList,
-  runDomainsScan,
-  runDomainsAdd,
-  runDomainsRemove,
-  runSkillsList,
-  runSkillsInstall,
-  runDoctor,
-  runDiagram,
-  runRulesList,
-  runPacksAdd,
-  runPacksList,
-  runPacksRemove,
   runServe,
+  runDev,
   runHostProject,
   runHostKey,
   runHostLock,
@@ -41,12 +34,15 @@ import {
   runHostProducer,
   runHostSecret,
   runHostPacks,
-  runProduce,
+} from '../commands/host.js';
+import { runProduce } from '../commands/produce.js';
+import { runSurface } from '../commands/surface.js';
+import {
   runSubsystemAdd,
   runSubsystemMove,
   runSubsystemExternalize,
   runSubsystemInternalize,
-} from '../commands/index.js';
+} from '../commands/subsystem.js';
 
 // Clean up any .old binary left over from a previous Windows self-update
 cleanStaleBinary();
@@ -338,6 +334,28 @@ program
   });
 
 // ---------------------------------------------------------------------------
+// surface — Public Surface Exchange (sdd_surfaces)
+// ---------------------------------------------------------------------------
+
+program
+  .command('surface <action>')
+  .description('public surface exchange: export | import | list | generate-children')
+  .option('--audience <level>', 'export ceiling: project | department | instance | partner | external (default instance)')
+  .option('--format <fmt>', 'export format: native | openapi (default native)')
+  .option('--out <path>', 'export output path (else print)')
+  .option('--source <path>', 'import: the surface document (native snapshot YAML or OpenAPI)')
+  .option('--origin <origin>', 'import provenance: exchanged | authored (default authored)')
+  .action(async (action: string, opts) => {
+    await runSurface(action, {
+      audience: opts.audience,
+      format: opts.format,
+      out: opts.out,
+      source: opts.source,
+      origin: opts.origin,
+    });
+  });
+
+// ---------------------------------------------------------------------------
 // serve  — run the hosting server (sdd_host)
 // ---------------------------------------------------------------------------
 
@@ -359,6 +377,19 @@ program
       dataDir: opts.dataDir,
       noAuth: !opts.auth,
     });
+  });
+
+// ---------------------------------------------------------------------------
+// dev  — local single-project developer server (sdd_host)
+// ---------------------------------------------------------------------------
+
+program
+  .command('dev')
+  .description('Run a local single-project dev server: the wairon web UI over the current project, no login/tenancy (loopback, dev only)')
+  .option('--port <port>', 'web UI port (default 8080)')
+  .option('--open', 'open the dev server in your browser')
+  .action(async (opts) => {
+    await runDev({ port: opts.port, open: opts.open });
   });
 
 // ---------------------------------------------------------------------------

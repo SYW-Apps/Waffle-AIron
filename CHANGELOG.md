@@ -1,12 +1,71 @@
 # Changelog
 
-## Unreleased (0.2.0)
+## v4.0.0 (from v3.2.5)
 
-A large correctness + capability release. **No CLI commands, MCP tools, spec
-schema fields, or library APIs were removed or renamed** — everything below is
-additive or a bug fix. The one compatibility surface to review before
-upgrading a CI pipeline is the conformance gate (see *Compatibility &
-migration*).
+A large correctness + capability release, versioned **major** to signal two
+breaking *deployment/CI* changes to downstream consumers (the CLI, MCP tools,
+spec schema, and library APIs themselves are fully backward compatible — nothing
+was removed or renamed):
+
+1. **Stricter validation.** The new conformance gate makes `wairon validate`
+   stricter — a stale L4 `sourcePath` is now a hard error, and `validate --ci`
+   surfaces new warnings. A pipeline that was green may go red until the specs
+   are reconciled (see *Compatibility & migration*).
+2. **Container image rebased debian→alpine, npm removed.** Extension images
+   built `FROM` the wairon image must use `apk` (not `apt`) and cannot rely on a
+   bundled npm at runtime.
+
+### Security hardening (multi-tenant + web UI + image)
+
+Findings from an adversarial re-review of the authz core, the browser/SSO
+session surface, and a container CVE scan — all fixed:
+
+- **Data-plane batch bypass (HIGH):** a JSON-RPC *batch* body let a second,
+  unchecked tool call ride past the `mcp:read`/`mcp:write` permission gate
+  (which inspected only the first message) — a read-only token could smuggle a
+  write. The data plane now refuses multi-request batch bodies (`400`); one
+  tool call per request. Cross-tenant isolation was never affected.
+- **SSO login CSRF (HIGH):** the OIDC `state` nonce was signed but never bound
+  to the browser. Sign-in now sets a short-lived HttpOnly nonce cookie and the
+  callback requires it to match the signed state, so a forged/replayed callback
+  delivered to a victim fails closed.
+- **SSO redirect_uri allowlist (MEDIUM):** an identity provider may now declare
+  `allowedRedirectUris`; when set, `POST /web/sso/start` refuses any redirect
+  URI not on the exact-match list (server-side redirect pinning).
+- **Grant-shape normalization:** a `projectId:'*'` grant that also carries an
+  `orgUnitId` is now treated as unit-scoped (never instance-wide super-admin)
+  everywhere, matching the scope engine.
+- **Signing key fails closed:** an absent signing secret now throws instead of
+  signing/verifying with an empty HMAC key (only reachable under `--no-auth`).
+- **Container image:** rebased to `node:24-alpine`, `apk upgrade`, and npm
+  removed from the runtime layer (the server runs `node` directly). The image
+  ships no perl/npm and scans **0 critical / 0 high**, down from 1 critical /
+  20 high on the previous debian base; size 488 MB → 318 MB.
+
+### Unified web UI (opt-in)
+
+One role-based browser app for the hosted server — developers author specs
+visually, admins additionally get control-plane pages, all gated by the
+Phase-6 grant/role model. A browser session resolves to a Principal like a
+bearer token, so the UI reuses the existing scoped API with no new
+authorization surface. Enable with `webUiEnabled: true` in the instance
+exposure policy (default **off**).
+
+- **View** — an embedded live architecture canvas per authorized project
+  (the same engine as `wairon diagram --format canvas`).
+- **Specs (authoring)** — a component index + structured inspector that reads
+  and edits specs over the existing `/mcp` data plane (`sdd_get_spec` /
+  `sdd_update_spec`) and runs `sdd_validate_tree`, with write affordances
+  disabled for read-only sessions (Phase-6b `mcp:read`/`mcp:write` enforced
+  server-side).
+- **Admin (control pages)** — session-scoped `/web/admin/*` routes over the
+  existing Phase-6 scoped control-plane functions: pending approvals (with
+  approve/reject), the scoped user directory, the landscape (units / projects
+  / relations), and the instance health report. Every view filters to the
+  caller's grants; a viewer session is refused (403), never leaked.
+- Security: the SSO session surface passed an adversarial review; the login
+  CSRF and redirect_uri findings (above) are fixed. Sessions are HttpOnly,
+  `SameSite=Lax`, with a custom-header CSRF gate on cookie-auth mutations.
 
 ### Hosting server (self-hosted)
 
@@ -96,6 +155,43 @@ migration*).
   interfaces of a component and handles namespaced (subproject) component ids
   — previously invisible unused components/methods may now be reported
   (true positives).
+
+### Code↔spec conformance (new rule families)
+
+"Does the code match the specs?" is now part of `wairon validate` instead of
+a manual sweep. Two rule families, fed by a per-run source-code model built
+with **zero mandatory parser dependencies** (TypeScript compiler resolved
+dynamically from the analyzed project or the wairon install when available;
+declarative per-language pattern tables for 12 languages; a generic
+word-boundary scan as the universal floor — every finding carries its
+analysis grade `exact | pattern | generic`).
+
+- **`structural-conformance`** — every L4 `sourcePath` must resolve to a real
+  file inside the project root (`MISSING_SOURCE_FILE`,
+  `SOURCE_PATH_ESCAPES_ROOT` — *errors*), and every L3 contract method must be
+  realized in that file (`UNREALIZED_METHOD`, `MISSING_SOURCE_PATH`,
+  `CONFORMANCE_ANALYSIS_SKIPPED` — *warnings*). When TypeScript/JavaScript
+  files can only be analyzed below exact grade (no `typescript` resolvable
+  from the analyzed project or the wairon install), one
+  **`CONFORMANCE_DEGRADED`** warning per run makes the degradation visible —
+  install `typescript` in the analyzed project to restore exact analysis. Realization is tiered per
+  implementation via the new **conformance dial** (`conformance: declared |
+  anchored | off`, Portal defaults to `anchored`) with per-method overrides,
+  and intent-language renames are declared with the new per-method
+  **`symbol:`** mapping (`put` realized by `saveSnapshot`). Many
+  implementations sharing one file (N:1) is fully supported.
+- **`dependency-conformance`** — runtime imports between component-mapped
+  files must be justified by declared `dependsOn`/`owns` relations
+  (`UNDECLARED_DEPENDENCY`), and declared edges should leave an import trace
+  (`UNREALIZED_DEPENDENCY`) — both *warnings*. Type-only imports and
+  re-export barrels never accuse; cross-subsystem imports are sanctioned by a
+  declared edge to the target subsystem's published surface; portal↔server
+  mounting declared in the portal→server direction is recognized.
+- All conformance codes are **completeness-classed**: draft/design specs
+  downgrade to draft-waived warnings, so in-progress trees stay green while
+  complete specs gate.
+- Design record: `docs/design/code-spec-conformance.md` (includes the Level 3
+  call-graph↔narrative sketch).
 
 ### Spec schema (additive)
 
@@ -348,12 +444,26 @@ migration*).
 
 ### Compatibility & migration
 
-**Who is affected:** only projects running **`wairon validate --ci`**
-(warnings-as-errors) in a pipeline. Plain `wairon validate` is unaffected —
-all new rules default to *warning* severity (except `INVALID_TRUSTED_LINK`,
+**Who is affected:** projects running **`wairon validate --ci`**
+(warnings-as-errors) in a pipeline, plus one case that affects plain
+`wairon validate`: structural conformance makes a **stale `sourcePath` a hard
+error** (`MISSING_SOURCE_FILE` — the spec names code that does not exist;
+`SOURCE_PATH_ESCAPES_ROOT` for absolute/parent-escaping paths). Every other
+new rule defaults to *warning* severity (except `INVALID_TRUSTED_LINK`,
 which requires the new field to exist at all).
 
-After upgrading, run `wairon validate` locally and review new warnings:
+After upgrading, run `wairon validate` locally and review new findings:
+
+0. **`MISSING_SOURCE_FILE`** — fix the `sourcePath` to the real file (or
+   remove it while the implementation is still design-only; drafts are
+   waived). **`UNREALIZED_METHOD`** — if the code name legitimately differs
+   from the contract name, declare it: `methods: [{ name: put, symbol:
+   saveSnapshot }]`; for registration-style realization (route/tool string
+   tables) dial the implementation to `conformance: anchored`; for
+   generated/vendored code use `conformance: off`.
+   **`UNDECLARED_DEPENDENCY`** — declare the real collaboration on the
+   component that uses it, or route the cross-subsystem hop through the
+   target's published portal.
 
 1. **`MUTUAL_SUBSYSTEM_DEPENDENCY`** — if the mutual coupling is intentional
    (e.g. a latency fast lane bypassing the bus), declare it on either

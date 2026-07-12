@@ -1,0 +1,54 @@
+kind: value-object
+id: public_interface_summary
+name: PublicInterfaceSummary
+description: >-
+  Redacted contract summary exported from a project's system public interface for other projects and
+  landscape diagrams. It includes only public method and endpoint metadata plus public DTO names,
+  never private components, narratives, implementations, stores, root paths, secrets, or non-public
+  types.
+fields:
+  - name: id
+    type: string
+    description: System public interface id.
+    optional: false
+  - name: name
+    type: string
+    description: Public surface name.
+    optional: false
+  - name: type
+    type: string
+    description: 'Surface kind: REST, GraphQL, MessageBus, RPC, or Custom.'
+    optional: false
+  - name: audience
+    type: string
+    description: Declared audience for the surface.
+    optional: false
+  - name: version
+    type: string
+    description: Optional version exported by the project.
+    optional: true
+  - name: stability
+    type: string
+    description: Optional stability label exported by the project.
+    optional: true
+  - name: methods
+    type: string[]
+    description: Public method signatures or operation names safe to expose to consumers.
+    optional: false
+  - name: endpoints
+    type: string[]
+    description: >-
+      Redacted endpoint metadata safe to expose, such as method/path without secrets or host-private
+      roots.
+    optional: true
+  - name: publicTypes
+    type: string[]
+    description: Referenced public DTO/value-object type ids that are safe to expose to consumers.
+    optional: true
+  - name: details
+    type: string
+    description: Consumer-facing description copied from the system public interface.
+    optional: false
+methods: []
+createdAt: '2026-07-08T21:10:56.643Z'
+updatedAt: '2026-07-08T21:10:56.679Z'

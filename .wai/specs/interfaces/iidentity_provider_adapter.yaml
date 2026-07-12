@@ -1,0 +1,47 @@
+id: iidentity_provider_adapter
+name: Identity Provider Adapter Interface
+description: Provider-neutral adapter contract for OIDC/SSO sign-in and subject resolution.
+component: identity_provider_adapter
+methods:
+  - name: buildAuthorizationUrl
+    description: >-
+      Build a provider authorization URL for a browser sign-in flow using provider config and
+      redirect metadata.
+    signature: >-
+      buildAuthorizationUrl(config: IdentityProviderConfig, state: string, redirectUri: string):
+      string
+    returns: string
+    params:
+      - name: config
+        type: IdentityProviderConfig
+      - name: state
+        type: string
+      - name: redirectUri
+        type: string
+  - name: exchangeCode
+    description: >-
+      Exchange an authorization code for provider tokens and return a redacted provider response
+      summary as serialized metadata.
+    signature: 'exchangeCode(config: IdentityProviderConfig, code: string, redirectUri: string): string'
+    returns: string
+    params:
+      - name: config
+        type: IdentityProviderConfig
+      - name: code
+        type: string
+      - name: redirectUri
+        type: string
+  - name: resolveSubject
+    description: >-
+      Verify provider identity metadata and return a Wairon PrincipalSubject without leaking raw
+      provider tokens.
+    signature: 'resolveSubject(config: IdentityProviderConfig, providerMetadata: string): PrincipalSubject'
+    returns: PrincipalSubject
+    params:
+      - name: config
+        type: IdentityProviderConfig
+      - name: providerMetadata
+        type: string
+status: complete
+createdAt: '2026-07-08T22:00:47.217Z'
+updatedAt: '2026-07-10T08:19:17.093Z'

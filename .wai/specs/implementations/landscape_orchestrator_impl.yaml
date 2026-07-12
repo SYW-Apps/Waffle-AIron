@@ -1,0 +1,614 @@
+id: landscape_orchestrator_impl
+name: Landscape Orchestrator Implementation
+description: >-
+  Hosted-instance landscape ADMINISTRATION workflows: organization-unit administration, project
+  placement, public-surface snapshot refresh, cross-project relation management (visibility-gated
+  once organization units exist), and landscape graph generation. Control-plane methods authenticate
+  the credential, gather organization data, and resolve landscape scope (landscape:read for reads,
+  landscape:manage for writes) expanding unit-scoped grants across each unit's recursive subtree.
+  Cross-project reads never touch target private specs. Audit appends are best-effort.
+  Consumer-facing discovery/exchange workflows live on the surface exchange orchestrator.
+contract: ilandscape_orchestrator
+sourcePath: src/server/landscape.ts
+methods:
+  - name: upsertUnit
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Gather all organization units to resolve the caller's landscape-manage scope
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listUnits
+      - stepNumber: 3
+        description: Gather all project placements
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listPlacements
+      - stepNumber: 4
+        description: Resolve the caller's landscape:manage scope over the organization tree
+        type: call
+        targetComponent: scope_specialist
+        targetMethod: resolveScope
+      - stepNumber: 5
+        description: >-
+          Deny unless the caller's scope covers the target unit: scope.all is false and neither the
+          unit's id (when updating an existing unit) nor its parentId (when creating a child unit)
+          is in scope.unitIds. A super-admin (scope.all) may create top-level units freely.
+        type: branch
+        condition: scope.all is false and neither the unit's id nor its parentId is in scope.unitIds
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Reject the organization-unit administration
+        type: throw
+        error: >-
+          Forbidden — managing an organization unit requires landscape:manage scope over the unit or
+          its parent
+      - stepNumber: 7
+        description: >-
+          Create or update the organization unit (the registry stamps id/timestamps, validates
+          parentId existence, and rejects cycles)
+        type: call
+        targetComponent: organization_repository
+        targetMethod: upsertUnit
+      - stepNumber: 8
+        description: Append a redacted audit event without letting a failure fail the upsert
+        type: try
+        endStep: 10
+        catches:
+          - error: audit append failure
+            step: 11
+      - stepNumber: 9
+        description: Append the redacted unit.upsert audit event (info level) under the active retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 10
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 12
+      - stepNumber: 11
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 12
+        description: Return the stored organization unit
+        type: return
+        outcome: the stored organization unit
+  - name: placeProject
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Gather all organization units to resolve the caller's landscape-manage scope
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listUnits
+      - stepNumber: 3
+        description: Gather all project placements
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listPlacements
+      - stepNumber: 4
+        description: Resolve the caller's landscape:manage scope over the organization tree
+        type: call
+        targetComponent: scope_specialist
+        targetMethod: resolveScope
+      - stepNumber: 5
+        description: >-
+          Deny unless the caller's scope covers the target unit: scope.all is false and
+          placement.unitId is not in scope.unitIds. A super-admin (scope.all) may place into any
+          unit.
+        type: branch
+        condition: scope.all is false and placement.unitId is not in scope.unitIds
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Reject the project placement
+        type: throw
+        error: Forbidden — placing a project requires landscape:manage scope over the target unit
+      - stepNumber: 7
+        description: Load the target organization unit for the placement (placement.unitId)
+        type: call
+        targetComponent: organization_repository
+        targetMethod: getUnit
+      - stepNumber: 8
+        description: If the target organization unit does not exist, reject
+        type: branch
+        condition: the target organization unit does not exist
+        onTrueStep: 9
+        onFalseStep: 10
+      - stepNumber: 9
+        description: Reject the placement into a missing unit
+        type: throw
+        error: the target organization unit does not exist
+      - stepNumber: 10
+        description: >-
+          Place the hosted project in the organization unit (the registry stamps id, re-validates
+          unitId existence)
+        type: call
+        targetComponent: organization_repository
+        targetMethod: placeProject
+      - stepNumber: 11
+        description: Append a redacted audit event without letting a failure fail the placement
+        type: try
+        endStep: 13
+        catches:
+          - error: audit append failure
+            step: 14
+      - stepNumber: 12
+        description: >-
+          Append the redacted project.place audit event (info level) under the active retention
+          policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 13
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 15
+      - stepNumber: 14
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 15
+        description: Return the stored project placement
+        type: return
+        outcome: the stored project placement
+  - name: refreshPublicSurface
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Gather all organization units to resolve the caller's landscape-manage scope
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listUnits
+      - stepNumber: 3
+        description: Gather all project placements
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listPlacements
+      - stepNumber: 4
+        description: Resolve the caller's landscape:manage scope over the organization tree
+        type: call
+        targetComponent: scope_specialist
+        targetMethod: resolveScope
+      - stepNumber: 5
+        description: Point-check the caller's landscape:manage scope against the target projectId
+        type: call
+        targetComponent: scope_specialist
+        targetMethod: permits
+      - stepNumber: 6
+        description: If the caller's scope does not permit the target project, deny
+        type: branch
+        condition: the scope does not permit the target project (permits returned false)
+        onTrueStep: 7
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Reject the public-surface refresh
+        type: throw
+        error: >-
+          Forbidden — refreshing a project's public surface requires landscape:manage scope over the
+          project
+      - stepNumber: 8
+        description: >-
+          Resolve and bind the target project's isolated root within the principal's authorized set
+          (rejects cross-project access)
+        type: call
+        targetComponent: project_registry
+        targetMethod: resolveRoot
+      - stepNumber: 9
+        description: Bind the resolved target project root for host-core reads
+        type: local
+      - stepNumber: 10
+        description: Capture the target project's current spec-tree StateId for the snapshot
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: computeStateId
+      - stepNumber: 11
+        description: Read the target project's L0 system spec at the bound root
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: loadSystemSpec
+      - stepNumber: 12
+        description: Read the target project's L1 subsystem specs at the bound root
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 13
+        description: >-
+          Leniently read the L0 publicInterfaces (tolerating the optional/absent field), resolve
+          each against its referenced subsystem public interface, and build redacted
+          PublicInterfaceSummary entries — public method/endpoint metadata and public DTO names
+          only, never private components, narratives, implementations, root paths, secrets, or
+          non-public types; assemble the ProjectPublicSurfaceSnapshot (projectId, the captured
+          stateId, systemName, redacted interfaces, exportedBy from the caller's subject). A project
+          with no L0 public surfaces yields an empty interfaces list — private by default.
+        type: local
+      - stepNumber: 14
+        description: Replace the target project's redacted public-surface snapshot in the repository
+        type: call
+        targetComponent: public_surface_repository
+        targetMethod: replaceSnapshot
+      - stepNumber: 15
+        description: Append a redacted audit event without letting a failure fail the refresh
+        type: try
+        endStep: 17
+        catches:
+          - error: audit append failure
+            step: 18
+      - stepNumber: 16
+        description: >-
+          Append the redacted surface.refresh audit event (info level) under the active retention
+          policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 17
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 19
+      - stepNumber: 18
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 19
+        description: Return the stored public-surface snapshot
+        type: return
+        outcome: the stored public-surface snapshot
+  - name: upsertRelation
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Gather all organization units to resolve the caller's landscape-manage scope
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listUnits
+      - stepNumber: 3
+        description: Gather all project placements
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listPlacements
+      - stepNumber: 4
+        description: Resolve the caller's landscape:manage scope over the organization tree
+        type: call
+        targetComponent: scope_specialist
+        targetMethod: resolveScope
+      - stepNumber: 5
+        description: >-
+          Point-check the caller's landscape:manage scope against the relation's source project
+          (relation.sourceProjectId)
+        type: call
+        targetComponent: scope_specialist
+        targetMethod: permits
+      - stepNumber: 6
+        description: If the caller's scope does not permit the relation's source project, deny
+        type: branch
+        condition: the scope does not permit the relation's source project (permits returned false)
+        onTrueStep: 7
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Reject the relation management
+        type: throw
+        error: >-
+          Forbidden — managing a cross-project relation requires landscape:manage scope over its
+          source project
+      - stepNumber: 8
+        description: >-
+          Resolve the SOURCE project's surface-visibility view over the unit graph (postures,
+          exposeTo grants)
+        type: call
+        targetComponent: visibility_specialist
+        targetMethod: resolveVisibility
+      - stepNumber: 9
+        description: >-
+          Point-check whether the target project (relation.targetPublicInterface.projectId) is
+          visible to the source
+        type: call
+        targetComponent: visibility_specialist
+        targetMethod: isVisible
+      - stepNumber: 10
+        description: >-
+          If the target project's surface is not visible to the source, deny — a relation may only
+          consume a surface the unit graph exposes to it
+        type: branch
+        condition: the target project is not visible to the source (isVisible is false)
+        onTrueStep: 11
+        onFalseStep: 12
+      - stepNumber: 11
+        description: Reject the relation against an invisible target
+        type: throw
+        error: >-
+          Forbidden — the target project's surface is not exposed to the source project's
+          organization units
+      - stepNumber: 12
+        description: >-
+          Load the target project's public-surface snapshot
+          (relation.targetPublicInterface.projectId)
+        type: call
+        targetComponent: public_surface_repository
+        targetMethod: getSnapshot
+      - stepNumber: 13
+        description: If the target project has no stored public-surface snapshot, reject with guidance
+        type: branch
+        condition: the target project has no stored public-surface snapshot
+        onTrueStep: 14
+        onFalseStep: 15
+      - stepNumber: 14
+        description: Reject the relation against a target with no snapshot
+        type: throw
+        error: >-
+          the target project has no public-surface snapshot — run refreshPublicSurface for it before
+          creating a relation
+      - stepNumber: 15
+        description: >-
+          Resolve the referenced system public interface (targetPublicInterface.projectId,
+          targetPublicInterface.systemInterfaceId) within the snapshot
+        type: call
+        targetComponent: public_surface_repository
+        targetMethod: findInterface
+      - stepNumber: 16
+        description: If the referenced system public interface is absent from the target's snapshot, reject
+        type: branch
+        condition: the referenced system public interface is absent from the target's snapshot
+        onTrueStep: 17
+        onFalseStep: 18
+      - stepNumber: 17
+        description: Reject the relation against an unknown interface ref
+        type: throw
+        error: >-
+          unknown target public interface — a relation must target a system public interface present
+          in the target project's public-surface snapshot
+      - stepNumber: 18
+        description: Create or update the validated cross-project relation
+        type: call
+        targetComponent: project_relation_repository
+        targetMethod: upsert
+      - stepNumber: 19
+        description: Append a redacted audit event without letting a failure fail the relation write
+        type: try
+        endStep: 21
+        catches:
+          - error: audit append failure
+            step: 22
+      - stepNumber: 20
+        description: >-
+          Append the redacted relation.upsert audit event (info level) under the active retention
+          policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 21
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 23
+      - stepNumber: 22
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 23
+        description: Return the stored cross-project relation
+        type: return
+        outcome: the stored cross-project relation
+  - name: removeRelation
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Gather all organization units to resolve the caller's landscape-manage scope
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listUnits
+      - stepNumber: 3
+        description: Gather all project placements
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listPlacements
+      - stepNumber: 4
+        description: Resolve the caller's landscape:manage scope over the organization tree
+        type: call
+        targetComponent: scope_specialist
+        targetMethod: resolveScope
+      - stepNumber: 5
+        description: List cross-project relations to resolve the relation being removed by its id
+        type: call
+        targetComponent: project_relation_repository
+        targetMethod: list
+      - stepNumber: 6
+        description: >-
+          Find the relation whose id matches; its sourceProjectId is the point-check target (a
+          missing relation yields no target, which a scoped caller cannot cover — fail closed)
+        type: local
+      - stepNumber: 7
+        description: Point-check the caller's landscape:manage scope against the relation's source project
+        type: call
+        targetComponent: scope_specialist
+        targetMethod: permits
+      - stepNumber: 8
+        description: If the caller's scope does not permit the relation's source project, deny
+        type: branch
+        condition: the scope does not permit the relation's source project (permits returned false)
+        onTrueStep: 9
+        onFalseStep: 10
+      - stepNumber: 9
+        description: Reject the relation removal
+        type: throw
+        error: >-
+          Forbidden — removing a cross-project relation requires landscape:manage scope over its
+          source project
+      - stepNumber: 10
+        description: Remove the cross-project relation by id
+        type: call
+        targetComponent: project_relation_repository
+        targetMethod: remove
+      - stepNumber: 11
+        description: Append a redacted audit event without letting a failure fail the removal
+        type: try
+        endStep: 13
+        catches:
+          - error: audit append failure
+            step: 14
+      - stepNumber: 12
+        description: >-
+          Append the redacted relation.remove audit event (info level) under the active retention
+          policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 13
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 15
+      - stepNumber: 14
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 15
+        description: Return once the relation has been removed
+        type: return
+        outcome: the relation is removed
+  - name: listRelations
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Gather all organization units to resolve the caller's landscape-read scope
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listUnits
+      - stepNumber: 3
+        description: Gather all project placements
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listPlacements
+      - stepNumber: 4
+        description: >-
+          Resolve the caller's landscape:read scope over the organization tree (landscape:manage and
+          the instance-admin wildcard also satisfy landscape:read)
+        type: call
+        targetComponent: scope_specialist
+        targetMethod: resolveScope
+      - stepNumber: 5
+        description: >-
+          If the caller has no landscape-read scope (scope.all is false and the scope is empty),
+          deny
+        type: branch
+        condition: scope.all is false and the scope is empty (no in-scope projects and no in-scope units)
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Reject the relation listing
+        type: throw
+        error: Forbidden — listing cross-project relations requires landscape:read scope
+      - stepNumber: 7
+        description: List cross-project relations, optionally narrowed to the given project as source
+        type: call
+        targetComponent: project_relation_repository
+        targetMethod: list
+      - stepNumber: 8
+        description: >-
+          When scope.all is false, filter the relations to those whose source or target project is
+          in scope.projectIds; when scope.all is true, keep every relation
+        type: local
+      - stepNumber: 9
+        description: Return the cross-project relations scoped to the caller
+        type: return
+        outcome: the cross-project relations
+  - name: generateLandscape
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Gather all organization units (also used to resolve the caller's landscape-read scope)
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listUnits
+      - stepNumber: 3
+        description: Gather all project placements (also used to resolve scope)
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listPlacements
+      - stepNumber: 4
+        description: >-
+          Resolve the caller's landscape:read scope over the organization tree (landscape:manage and
+          the instance-admin wildcard also satisfy landscape:read)
+        type: call
+        targetComponent: scope_specialist
+        targetMethod: resolveScope
+      - stepNumber: 5
+        description: >-
+          If the caller has no landscape-read scope (scope.all is false and the scope is empty),
+          deny
+        type: branch
+        condition: scope.all is false and the scope is empty (no in-scope projects and no in-scope units)
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Reject the landscape generation
+        type: throw
+        error: Forbidden — generating the landscape requires landscape:read scope
+      - stepNumber: 7
+        description: Gather all hosted project records
+        type: call
+        targetComponent: project_registry
+        targetMethod: list
+      - stepNumber: 8
+        description: Gather all cross-project relations
+        type: call
+        targetComponent: project_relation_repository
+        targetMethod: list
+      - stepNumber: 9
+        description: >-
+          When scope.all is false, narrow the gathered projects, placements, and relations to the
+          in-scope projects (scope.projectIds) and in-scope units (scope.unitIds); when scope.all is
+          true, keep everything (instance-wide landscape)
+        type: local
+      - stepNumber: 10
+        description: Initialize an empty public-surface snapshot collection
+        type: local
+      - stepNumber: 11
+        description: For each in-scope hosted project
+        type: loop
+        loopKind: forEach
+        over: the in-scope hosted projects
+        endStep: 12
+      - stepNumber: 12
+        description: >-
+          Fetch the project's public-surface snapshot and, when present, add it to the snapshot
+          collection
+        type: call
+        targetComponent: public_surface_repository
+        targetMethod: getSnapshot
+      - stepNumber: 13
+        description: >-
+          Project the in-scope units, projects, placements, snapshots, and relations into a
+          LandscapeGraphModel
+        type: call
+        targetComponent: landscape_diagram_specialist
+        targetMethod: buildGraph
+      - stepNumber: 14
+        description: Return the landscape graph model scoped to the caller
+        type: return
+        outcome: the landscape graph model
+status: complete
+createdAt: '2026-07-09T22:10:36.787Z'
+updatedAt: '2026-07-11T12:03:46.687Z'

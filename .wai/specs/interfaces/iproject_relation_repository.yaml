@@ -1,0 +1,44 @@
+id: iproject_relation_repository
+name: Project Relation Repository Interface
+description: >-
+  Facade contract for cross-project relation state. Relations are hosted-instance metadata and may
+  target only exported system public interfaces.
+component: project_relation_repository
+methods:
+  - name: upsert
+    description: Create or update one cross-project relation after public-surface validation.
+    signature: 'upsert(record: ProjectRelationRecord): ProjectRelationRecord'
+    returns: ProjectRelationRecord
+    params:
+      - name: record
+        type: ProjectRelationRecord
+    guarantees:
+      - atomic
+  - name: remove
+    description: Mark a cross-project relation removed or delete it according to retention policy.
+    signature: 'remove(id: string): void'
+    returns: void
+    params:
+      - name: id
+        type: string
+  - name: list
+    description: >-
+      List cross-project relations by source project, target project, public interface, kind, or
+      status.
+    signature: >-
+      list(sourceProjectId: string, targetProjectId: string, status: string):
+      ProjectRelationRecord[]
+    returns: ProjectRelationRecord[]
+    params:
+      - name: sourceProjectId
+        type: string
+        optional: true
+      - name: targetProjectId
+        type: string
+        optional: true
+      - name: status
+        type: string
+        optional: true
+status: complete
+createdAt: '2026-07-08T21:13:16.884Z'
+updatedAt: '2026-07-09T22:13:23.028Z'

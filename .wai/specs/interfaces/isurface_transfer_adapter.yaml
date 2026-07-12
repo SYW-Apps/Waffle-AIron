@@ -1,0 +1,32 @@
+id: isurface_transfer_adapter
+name: Surface Transfer Adapter Interface
+description: >-
+  File exchange with locations OUTSIDE this project's own aggregate: child project deliveries,
+  rendered exports, and foreign-document reads.
+component: surface_transfer_adapter
+methods:
+  - name: writeSnapshotTo
+    description: >-
+      Write a snapshot (or rendered document) into a target directory or output path (e.g. a chained
+      child's .wai/surfaces/), returning the written path.
+    signature: 'writeSnapshotTo(targetPath: string, snapshot: SurfaceSnapshot, rendered?: string): string'
+    returns: string
+    params:
+      - name: targetPath
+        type: string
+      - name: snapshot
+        type: SurfaceSnapshot
+      - name: rendered
+        type: string
+        description: Pre-rendered document body (e.g. OpenAPI) to write instead of native YAML
+        optional: true
+  - name: readDocument
+    description: Read a foreign surface document (native snapshot YAML or OpenAPI JSON/YAML) from a path.
+    signature: 'readDocument(sourcePath: string): string'
+    returns: string
+    params:
+      - name: sourcePath
+        type: string
+status: complete
+createdAt: '2026-07-10T23:14:07.216Z'
+updatedAt: '2026-07-11T09:04:02.751Z'

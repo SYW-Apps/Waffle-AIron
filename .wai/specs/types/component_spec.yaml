@@ -6,19 +6,24 @@ fields:
   - name: id
     type: string
     description: Stable component identifier
+    optional: false
     key: primary
   - name: name
     type: string
     description: Human-readable component name
+    optional: false
   - name: description
     type: string
     description: What this component does
+    optional: false
   - name: subsystem
     type: string
     description: Owning subsystem id
+    optional: false
   - name: componentType
     type: string
     description: 'Stereotype: Portal, Orchestrator, Store, Adapter, …'
+    optional: false
   - name: portalType
     type: string
     description: Wire flavour when componentType is Portal (HTTP_API, gRPC, …)
@@ -26,13 +31,38 @@ fields:
   - name: owns
     type: string[]
     description: Private member component ids (pattern containment, one hop)
+    optional: false
   - name: dependsOn
     type: string[]
     description: Collaborator component ids
+    optional: false
   - name: status
     type: string
     description: draft | design | complete
     optional: true
+  - name: remoteInterfaces
+    type: RemotePublicInterfaceRef[]
+    description: >-
+      Optional remote project public surfaces consumed by this component. Valid only for Adapter
+      components; dependsOn remains local-only and must not point directly into another hosted
+      project.
+    optional: true
+  - name: dispatch
+    type: DispatchBinding[]
+    description: >-
+      Portal-only: machine-readable capability → component.method dispatch table for generic-handle
+      portals. Each entry is validated against the serving component's interface
+      (UNSERVED_CAPABILITY) and gives unused-detection real edges to walk — a portal with a dispatch
+      table no longer justifies 'invisible to the static walker' lint-allows, which the stale-allow
+      audit then expires automatically.
+    optional: true
+  - name: durability
+    type: string
+    description: >-
+      Store-only: ram-projection | durable. A durable Store's written state must have a hydration
+      read-back reachable from a declared lifecycle entrypoint (MISSING_HYDRATION); a ram-projection
+      declares it is rebuilt, not restored.
+    optional: true
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-03T00:00:00.000Z'
+updatedAt: '2026-07-10T18:47:32.943Z'

@@ -1,0 +1,26 @@
+id: iweb_session_index
+name: Web Session Index Interface
+description: >-
+  Private read-path contract for browser sessions, supporting lookup by session id and listing all
+  sessions for a user subject.
+component: web_session_index
+methods:
+  - name: getById
+    description: Return one browser session by id or null when absent.
+    signature: 'getById(id: string): WebSession | null'
+    returns: WebSession | null
+    params:
+      - name: id
+        type: string
+  - name: listBySubject
+    description: >-
+      Return every browser session belonging to the given Wairon user id (subject.userId), for
+      correlated revocation and account views.
+    signature: 'listBySubject(userId: string): WebSession[]'
+    returns: WebSession[]
+    params:
+      - name: userId
+        type: string
+status: complete
+createdAt: '2026-07-11T11:32:49.617Z'
+updatedAt: '2026-07-11T11:44:32.195Z'

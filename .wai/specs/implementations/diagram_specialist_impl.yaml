@@ -7,76 +7,146 @@ methods:
   - name: renderDiagram
     narrative:
       - stepNumber: 1
+        description: Load system spec
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSystemSpec
+      - stepNumber: 2
         description: Load subsystem specs
         type: call
         targetComponent: spec_loader
         targetMethod: loadSubsystemSpecs
-      - stepNumber: 2
+      - stepNumber: 3
         description: Load component specs
         type: call
         targetComponent: spec_loader
         targetMethod: loadComponentSpecs
-      - stepNumber: 3
+      - stepNumber: 4
         description: Load interface specs
         type: call
         targetComponent: spec_loader
         targetMethod: loadInterfaceSpecs
-      - stepNumber: 4
+      - stepNumber: 5
         description: Load implementation specs
         type: call
         targetComponent: spec_loader
         targetMethod: loadImplementationSpecs
-      - stepNumber: 5
-        description: >-
-          Build the architecture graph (subsystems, components, dependencies, owns, public surface)
-          from the loaded specs
-        type: local
       - stepNumber: 6
+        description: Load type specs used by the canvas type and database views
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpecs
+      - stepNumber: 7
+        description: Build the architecture, type ERD, and database canvas model from the loaded specs
+        type: local
+      - stepNumber: 8
         description: Dispatch on the requested format
         type: switch
         'on': format
         cases:
           - value: canvas
-            step: 7
-          - value: mermaid
             step: 9
-          - value: drawio
+          - value: mermaid
             step: 11
-          - value: excalidraw
+          - value: drawio
             step: 13
-        defaultStep: 15
-      - stepNumber: 7
-        description: Render the self-contained interactive canvas HTML
+          - value: excalidraw
+            step: 15
+        defaultStep: 17
+      - stepNumber: 9
+        description: >-
+          Render the self-contained interactive canvas HTML, including styled line-routing controls,
+          padded obstacle-aware curved edge routing, per-edge orthogonal lanes, and the
+          resizable/collapsible details sidebar
         type: local
-      - stepNumber: 8
+      - stepNumber: 10
         description: Return the canvas HTML
         type: return
         outcome: canvas html
-      - stepNumber: 9
+      - stepNumber: 11
         description: Render the Mermaid component diagram
         type: local
-      - stepNumber: 10
+      - stepNumber: 12
         description: Return the Mermaid markdown
         type: return
         outcome: mermaid
-      - stepNumber: 11
+      - stepNumber: 13
         description: Render the draw.io / diagrams.net XML
         type: local
-      - stepNumber: 12
+      - stepNumber: 14
         description: Return the draw.io XML
         type: return
         outcome: drawio
-      - stepNumber: 13
+      - stepNumber: 15
         description: Render the Excalidraw scene JSON
         type: local
-      - stepNumber: 14
+      - stepNumber: 16
         description: Return the Excalidraw scene
         type: return
         outcome: excalidraw
-      - stepNumber: 15
+      - stepNumber: 17
         description: Reject an unsupported format
         type: throw
         error: unsupported diagram format
+  - name: buildGraphModel
+    narrative:
+      - stepNumber: 1
+        description: Load the system spec
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSystemSpec
+      - stepNumber: 2
+        description: Load the subsystem specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 3
+        description: Load the component specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 4
+        description: Load the interface specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 5
+        description: Load the type specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpecs
+      - stepNumber: 6
+        description: >-
+          Build the WebGraphNode set from the loaded specs, tagging each with its level-of-detail
+          depth: subsystems at level 1 (parent = the project/system), components at level 2 (parent
+          = their subsystem), interfaces and types at level 3 (parent = their component), each
+          carrying kind, label, projectId context, and status. Keep only nodes whose level is at or
+          below the requested detail level (level 0 yields just the project/system root).
+        type: local
+      - stepNumber: 7
+        description: >-
+          Build the LandscapeEdge-shaped edges between the INCLUDED nodes only: containment edges
+          from a subsystem to its components (and project to subsystems), ownership edges from a
+          component to its owned member blocks, and depends_on edges from a component to its
+          collaborators; drop any edge whose endpoint was filtered out above the requested level.
+        type: local
+      - stepNumber: 8
+        description: >-
+          Assemble the WebGraphModel: tier 'project', the filtered nodes and edges, level = the
+          requested detail level, generatedAt = now, scope = the project/system name.
+        type: local
+      - stepNumber: 9
+        description: Return the project-tier web graph model
+        type: return
+        outcome: web graph model
+    detail: full
+lint:
+  allow:
+    - code: UNDECLARED_DEPENDENCY
+      reason: >-
+        The canvas issue overlay invokes validateSddTree directly; the proper shape is issues passed
+        in by the caller — cross-subsystem refactor candidate (diagram_specialist is sdd_core, the
+        validator is sdd_validator).
 status: complete
 createdAt: '2026-07-04T15:59:34.318Z'
-updatedAt: '2026-07-04T16:04:17.867Z'
+updatedAt: '2026-07-11T20:30:06.716Z'

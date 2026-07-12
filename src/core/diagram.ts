@@ -16,6 +16,9 @@ import { buildCanvasModel, renderCanvasHtml } from './canvas.js';
 import { generateDrawioXml, generateExcalidrawScene } from './diagram-export.js';
 import { validateSddTree, type ValidationIssue } from './validation.js';
 import { loadProjectConfig } from '../config/loader.js';
+// Pure interface types for the web UI graph payload. Type-only import: erased at
+// compile time, so this adds no runtime core→server coupling.
+import type { WebGraphModel, WebGraphNode, LandscapeEdge } from '../server/types.js';
 
 // ---------------------------------------------------------------------------
 // Diagram Specialist entrypoint (sdd_core diagram_specialist)
@@ -44,6 +47,99 @@ function diagramIssues(): ValidationIssue[] {
   } catch {
     return [];
   }
+}
+
+// ---------------------------------------------------------------------------
+// Live level-of-detail graph model (project tier)
+//
+// A PURE projection of the current (request-scoped) project's spec tree into a
+// WebGraphModel for the web UI — the live JSON sibling of renderDiagram's static
+// HTML/diagram export. It reuses buildCanvasModel's spec traversal, then tags
+// each node with its level-of-detail depth (subsystems 1, components 2,
+// interfaces/types 3), keeps only nodes at or below the requested level, and
+// wires containment/ownership/dependency edges between the surviving nodes
+// (dropping any edge whose endpoint was filtered out). No side effects.
+// ---------------------------------------------------------------------------
+
+export function buildGraphModel(level: number): WebGraphModel {
+  const model = buildCanvasModel();
+
+  // The project/system root is the apex of the graph (level 0): the whole
+  // project collapsed to a single node, off which every top-level subsystem
+  // hangs. Level 0 yields just this node.
+  const rootId = model.system.name;
+  const nodes: WebGraphNode[] = [
+    { id: rootId, label: model.system.name, kind: 'project', level: 0 },
+  ];
+  const candidates: LandscapeEdge[] = [];
+
+  // L1 — subsystems. A nested subsystem's parent is its owning subsystem (the
+  // id up to the last '::'); a top-level subsystem hangs off the project root.
+  // Each carries a containment edge from that parent (project → subsystem, or
+  // subsystem → nested subsystem).
+  for (const s of model.subsystems) {
+    const cut = s.id.lastIndexOf('::');
+    const parentId = cut >= 0 ? s.id.slice(0, cut) : rootId;
+    nodes.push({
+      id: s.id,
+      label: s.name,
+      kind: 'subsystem',
+      level: 1,
+      parentId,
+      ...(s.status ? { status: s.status } : {}),
+    });
+    candidates.push({ from: parentId, to: s.id, edgeKind: 'contains' });
+  }
+
+  // L2 — components (parent = their subsystem, with a containment edge).
+  for (const c of model.components) {
+    nodes.push({
+      id: c.id,
+      label: c.name,
+      kind: 'component',
+      level: 2,
+      parentId: c.subsystem,
+      ...(c.status ? { status: c.status } : {}),
+    });
+    candidates.push({ from: c.subsystem, to: c.id, edgeKind: 'contains' });
+  }
+
+  // L3 — interfaces (parent = their component, with an ownership edge) and types.
+  for (const c of model.components) {
+    for (const intf of c.interfaces) {
+      nodes.push({ id: intf.id, label: intf.name, kind: 'interface', level: 3, parentId: c.id });
+      candidates.push({ from: c.id, to: intf.id, edgeKind: 'owns' });
+    }
+  }
+  for (const t of model.types) {
+    nodes.push({
+      id: t.id,
+      label: t.name,
+      kind: 'type',
+      level: 3,
+      ...(t.subsystem ? { parentId: t.subsystem } : {}),
+    });
+  }
+
+  // Component → collaborator dependency edges.
+  for (const e of model.edges) {
+    candidates.push({ from: e.from, to: e.to, edgeKind: 'depends_on' });
+  }
+
+  // Keep only nodes at or below the requested detail level, then drop any edge
+  // whose endpoint was filtered out above that level.
+  const kept = nodes.filter(n => n.level <= level);
+  const keptIds = new Set(kept.map(n => n.id));
+  const edges = candidates.filter(e => keptIds.has(e.from) && keptIds.has(e.to));
+
+  return {
+    tier: 'project',
+    nodes: kept,
+    edges,
+    level,
+    generatedAt: new Date().toISOString(),
+    scope: model.system.name,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -403,6 +499,35 @@ export function generateSequenceDiagram(
         case 'throw':
           lines.push(`  Note over ${selfId}: ${escapeLabel(truncate(`⚡ throw${step.error ? ` ${step.error}` : ''}`, 70))}`);
           break;
+        case 'dispatch': {
+          if (!step.targetComponent) break;
+          const portal = componentById.get(step.targetComponent);
+          if (!portal) {
+            lines.push(`  Note over ${selfId}: ${escapeLabel(`dispatches via unknown "${step.targetComponent}"`)}`);
+            break;
+          }
+          const portalId = declare(portal);
+          lines.push(`  ${selfId}->>${portalId}: ${escapeLabel(`⟨${step.capability ?? '?'}⟩`)}`);
+          // Follow the table binding so the diagram shows the real server —
+          // and keep walking its narrative, exactly like a call step, so the
+          // downstream flow doesn't silently truncate at the dispatch hop.
+          const binding = portal.dispatch?.find(b => b.capability === step.capability);
+          const server = binding ? componentById.get(binding.component) : undefined;
+          if (binding && server) {
+            const serverId = declare(server);
+            const expandable = depth < maxDepth
+              && !!findMethodImpl(server.id, binding.method)
+              && server.id !== comp.id;
+            if (expandable) {
+              lines.push(`  ${portalId}->>+${serverId}: ${escapeLabel(binding.method)}()`);
+              walk(server, binding.method, depth + 1, nextStack);
+              lines.push(`  ${serverId}-->>-${portalId}: return`);
+            } else {
+              lines.push(`  ${portalId}->>${serverId}: ${escapeLabel(binding.method)}()`);
+            }
+          }
+          break;
+        }
         case 'call': {
           if (!step.targetComponent || !step.targetMethod) break;
           const target = componentById.get(step.targetComponent);

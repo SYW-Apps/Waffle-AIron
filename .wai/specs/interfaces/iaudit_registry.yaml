@@ -1,0 +1,26 @@
+id: iaudit_registry
+name: Audit Registry Interface
+description: Private write-path contract for appending and pruning hosted audit events.
+component: audit_registry
+methods:
+  - name: append
+    description: Append one redacted audit event to durable storage according to the active audit policy.
+    signature: 'append(event: AuditEvent, policy: AuditRetentionPolicy): void'
+    returns: void
+    params:
+      - name: event
+        type: AuditEvent
+      - name: policy
+        type: AuditRetentionPolicy
+  - name: prune
+    description: Delete events older than the retention window selected by level and category policy.
+    signature: 'prune(policy: AuditRetentionPolicy, now: string): number'
+    returns: number
+    params:
+      - name: policy
+        type: AuditRetentionPolicy
+      - name: now
+        type: string
+status: complete
+createdAt: '2026-07-08T20:16:48.659Z'
+updatedAt: '2026-07-09T17:43:38.342Z'

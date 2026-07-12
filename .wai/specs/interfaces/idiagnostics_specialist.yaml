@@ -1,0 +1,66 @@
+id: idiagnostics_specialist
+name: Diagnostics Specialist Interface
+description: >-
+  Contract for pure redacted hosted-instance diagnostics, usage derivation, and health report
+  assembly over supplied hosted project records. No I/O: the caller supplies the records.
+component: diagnostics_specialist
+methods:
+  - name: runChecks
+    description: >-
+      Derive redacted operational diagnostic checks purely from the supplied inputs:
+      project-registry consistency, per-project state presence, project-count sanity, pack
+      shadowing, missing pack references, and — when relation data is supplied — relation health (an
+      ACTIVE cross-project relation must target a project with a stored public-surface snapshot that
+      still exposes the referenced interface; missing snapshots or drifted interfaces produce a
+      warn). Pure: no I/O.
+    signature: >-
+      runChecks(projects: HostedProjectRecord[], imagePackNames: string[], instancePackNames:
+      string[], projectReferences: ProjectPackReference[], scope?: string, relations?:
+      ProjectRelationRecord[], relationSnapshots?: ProjectPublicSurfaceSnapshot[]):
+      DiagnosticCheckResult[]
+    returns: DiagnosticCheckResult[]
+    params:
+      - name: projects
+        type: HostedProjectRecord[]
+      - name: imagePackNames
+        type: string[]
+        description: Pack names present in the immutable image-layer tier (WAIRON_IMAGE_PACKS_DIR).
+      - name: instancePackNames
+        type: string[]
+        description: Pack names present in the mutable instance tier (WAIRON_PACKS_DIR).
+      - name: projectReferences
+        type: ProjectPackReference[]
+        description: >-
+          Per-project declared pack/profile references, so the check can flag references absent from
+          both tiers.
+      - name: scope
+        type: string
+        optional: true
+  - name: collectUsage
+    description: >-
+      Derive resource usage snapshots for the requested scope from the supplied hosted project
+      records, without exposing private specs or secrets.
+    signature: 'collectUsage(projects: HostedProjectRecord[], scope: string): ResourceUsageSnapshot[]'
+    returns: ResourceUsageSnapshot[]
+    params:
+      - name: projects
+        type: HostedProjectRecord[]
+      - name: scope
+        type: string
+        optional: true
+  - name: buildHealthReport
+    description: >-
+      Assemble an aggregated instance health report from diagnostic checks and usage snapshots,
+      computing the overall status.
+    signature: >-
+      buildHealthReport(checks: DiagnosticCheckResult[], usage: ResourceUsageSnapshot[]):
+      InstanceHealthReport
+    returns: InstanceHealthReport
+    params:
+      - name: checks
+        type: DiagnosticCheckResult[]
+      - name: usage
+        type: ResourceUsageSnapshot[]
+status: complete
+createdAt: '2026-07-09T09:10:04.195Z'
+updatedAt: '2026-07-11T10:13:18.303Z'

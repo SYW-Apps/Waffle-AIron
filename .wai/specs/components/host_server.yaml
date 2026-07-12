@@ -3,7 +3,10 @@ name: Host Server
 description: >-
   Supervisor for the HTTP listener lifecycle serving both the data-plane and admin-plane portals:
   binds host/port(s), accepts connections, manages graceful startup and shutdown. Owns the live
-  server processes; holds no domain logic and no persistence.
+  server processes; holds no domain logic and no persistence. It is also the control-plane
+  exposure-enforcement point: control-plane routers are mounted on the admin listener only as
+  permitted by the resolved HostExposurePolicy (secure default when unset), and a disabled surface
+  is not served.
 subsystem: sdd_host
 componentType: Supervisor
 owns: []
@@ -18,4 +21,4 @@ lint:
         this reachability gap is by design.
 status: complete
 createdAt: '2026-07-04T12:33:41.732Z'
-updatedAt: '2026-07-04T13:06:22.652Z'
+updatedAt: '2026-07-10T11:25:29.574Z'

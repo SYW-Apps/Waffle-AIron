@@ -1,22 +1,31 @@
 id: iauth_specialist
 name: Auth Specialist Interface
 description: >-
-  Contract for credential verification into a Principal. The single authentication authority;
-  performs no routing.
+  Contract for credential verification into a Principal. The single authentication authority; it
+  resolves the credential's subject, token id, role, authorized project set, and precise grants but
+  performs no workflow authorization routing.
 component: auth_specialist
 methods:
   - name: authenticate
     description: >-
       Verify a data-plane bearer token by constant-time comparison of its hash against stored
-      records; return the resolved Principal or reject as unauthenticated.
+      records; resolves the Principal's subject and grants from the credential record when present
+      (legacy records fall back to the role/projects projection) and rejects expired (expiresAt) or
+      revoked (revokedAt) records, or rejects as unauthenticated when no record matches.
     signature: 'authenticate(token: string): Principal'
     returns: Principal
+    params:
+      - name: token
+        type: string
   - name: authenticateMaster
     description: >-
-      Verify the control-plane master credential by constant-time comparison; return an admin
-      Principal or reject.
+      Verify the bootstrap/control-plane master credential by constant-time comparison; return an
+      administrative Principal (admin role over all projects) or reject.
     signature: 'authenticateMaster(credential: string): Principal'
     returns: Principal
+    params:
+      - name: credential
+        type: string
   - name: signViewToken
     description: >-
       Mint a short-lived HMAC-signed capability token for viewing one project's diagram in a browser
@@ -29,6 +38,52 @@ methods:
       rejecting.
     signature: 'verifyViewToken(token: string): ViewGrant'
     returns: ViewGrant
+  - name: authenticateCredential
+    description: >-
+      Verify a control-plane credential and resolve it to a Principal. Accepts three credential
+      kinds through this single authority: the bootstrap/master credential, a stored user-bound
+      bearer token, and a browser web-session id (reserved prefix) resolved via the
+      web_session_repository. Because a session resolves to the same Principal a token yields, every
+      existing scoped endpoint authenticates a browser session with no per-endpoint change. Rejects
+      expired/revoked tokens and expired/absent sessions as unauthenticated. Shares one
+      session-resolution helper with authenticateSession.
+    signature: 'authenticateCredential(credential: string): Principal'
+    returns: Principal
+    params:
+      - name: credential
+        type: string
+  - name: signSsoState
+    description: >-
+      Mint a short-lived HMAC-signed SSO state string binding an opaque login payload to an expiry,
+      using the single server signing authority (no bearer). Encodes the caller's payload and a
+      short-TTL expiry so the callback can detect tampering and replay.
+    signature: 'signSsoState(payload: string): string'
+    returns: string
+    params:
+      - name: payload
+        type: string
+  - name: verifySsoState
+    description: >-
+      Verify an SSO state string's signature and expiry (constant-time), returning the original
+      payload or rejecting a tampered or expired state.
+    signature: 'verifySsoState(state: string): string'
+    returns: string
+    params:
+      - name: state
+        type: string
+  - name: authenticateSession
+    description: >-
+      Resolve a browser session id to a Principal — the auth bridge that lets the unified web UI
+      reuse every existing endpoint with a session cookie in place of a bearer token. Look up the
+      session through the web session repository; reject an absent or expired session (past
+      expiresAt) as unauthenticated. Assemble the Principal directly from the session's stored
+      PrincipalSubject and server-derived grants (with the role/projects compatibility projection
+      derived from those grants) — no token record lookup. Performs no authorization routing itself.
+    signature: 'authenticateSession(sessionId: string): Principal'
+    returns: Principal
+    params:
+      - name: sessionId
+        type: string
 status: complete
 createdAt: '2026-07-04T12:49:50.542Z'
-updatedAt: '2026-07-04T16:00:15.418Z'
+updatedAt: '2026-07-11T11:51:12.005Z'

@@ -1,0 +1,47 @@
+kind: value-object
+id: web_context
+name: WebContext
+description: >-
+  The session principal's identity, grants, and derived capability flags returned to the unified web
+  UI so the client renders role-appropriately (role-based UI = the client shows only what these
+  grants allow). Purely a projection of the resolved Principal; asserts no authority the server does
+  not already enforce on every reused endpoint.
+fields:
+  - name: subject
+    type: PrincipalSubject
+    description: The resolved identity behind the session.
+    optional: false
+  - name: grants
+    type: ProjectGrant[]
+    description: The server-derived grants available to this session (the precise authorization basis).
+    optional: false
+  - name: isAdmin
+    type: boolean
+    description: True when the principal holds an instance-wide ('*') administrative grant.
+    optional: false
+  - name: canWriteProjects
+    type: boolean
+    description: >-
+      True when any grant carries a write permission (e.g. mcp:write or project:create), so the
+      client may show authoring affordances.
+    optional: false
+  - name: visibleProjectIds
+    type: string[]
+    description: >-
+      Hosted project ids named directly in the principal's grants (coarse client hint; the server
+      still enforces per-request scope).
+    optional: false
+  - name: visibleUnitIds
+    type: string[]
+    description: Organization unit ids named in the principal's unit-scoped grants (coarse client hint).
+    optional: false
+  - name: local
+    type: boolean
+    description: >-
+      True when this context comes from the local developer server (`wairon dev`): the SAME client
+      hides the tenancy/login/account chrome (Landscape tier, project picker, sign-out, admin badge)
+      and renders the single local project only. Absent/false in the hosted multi-tenant UI.
+    optional: true
+methods: []
+createdAt: '2026-07-11T11:31:20.576Z'
+updatedAt: '2026-07-11T15:56:22.534Z'

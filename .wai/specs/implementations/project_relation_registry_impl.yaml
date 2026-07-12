@@ -1,0 +1,28 @@
+id: project_relation_registry_impl
+name: Project Relation Registry Implementation
+description: >-
+  Write path for cross-project relations: id stamping, status defaulting, durable persistence, and
+  store refresh. Preserves orchestrator-supplied provenance and validated interface refs; performs
+  no authorization or public-surface validation.
+contract: iproject_relation_registry
+sourcePath: src/server/relations.ts
+methods:
+  - name: upsert
+    narrative: []
+    intent: >-
+      Stamp the relation's id on create while preserving the orchestrator-supplied createdAt and
+      createdBy, default status to active when unset, and leave the orchestrator-validated
+      targetPublicInterface untouched. Append or replace it in the persisted set via
+      write-temp-then-rename, refresh the store, and return the stored relation. Persistence
+      failures leave the previous set intact. Public-surface validation and authorization are
+      enforced by the orchestrator, not here.
+  - name: remove
+    narrative: []
+    intent: >-
+      Locate the relation by id and remove it from the persisted set (or mark it removed per
+      retention policy), then persist via write-temp-then-rename and refresh the store. A missing id
+      is a safe not-found; persistence failures leave the previous set intact.
+detail: intent
+status: complete
+createdAt: '2026-07-09T22:08:03.277Z'
+updatedAt: '2026-07-09T22:13:37.181Z'

@@ -1,0 +1,15 @@
+id: organization_repository
+name: Organization Repository
+description: >-
+  Facade for durable hosted organization hierarchy and project placement state. Hosted workflows
+  depend on this repository instead of private organization store, registry, or index blocks.
+subsystem: sdd_host
+componentType: Repository
+owns:
+  - organization_store
+  - organization_registry
+  - organization_index
+dependsOn: []
+status: complete
+createdAt: '2026-07-08T21:12:14.473Z'
+updatedAt: '2026-07-09T22:13:02.994Z'

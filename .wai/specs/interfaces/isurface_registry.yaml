@@ -1,0 +1,26 @@
+id: isurface_registry
+name: Surface Registry Interface
+description: 'Write path for the snapshot aggregate: mutations hit the store and persist through the fs adapter.'
+component: surface_registry
+methods:
+  - name: upsertSnapshot
+    description: Persist the snapshot file and update the store projection.
+    signature: 'upsertSnapshot(snapshot: SurfaceSnapshot): void'
+    returns: void
+    params:
+      - name: snapshot
+        type: SurfaceSnapshot
+  - name: deleteSnapshot
+    description: Delete the snapshot file and drop it from the store.
+    signature: 'deleteSnapshot(projectName: string): boolean'
+    returns: boolean
+    params:
+      - name: projectName
+        type: string
+  - name: hydrateFromFiles
+    description: Read every persisted snapshot file and load it into the store projection.
+    signature: 'hydrateFromFiles(): void'
+    returns: void
+status: complete
+createdAt: '2026-07-10T23:13:35.123Z'
+updatedAt: '2026-07-11T09:04:02.653Z'

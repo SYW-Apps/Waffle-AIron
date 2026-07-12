@@ -1,0 +1,12 @@
+id: approval_store
+name: Approval Store
+description: >-
+  Authoritative in-memory representation of hosted approval requests loaded from the data root.
+  Stores redacted privileged-action requests and decisions, never raw credentials or secrets.
+subsystem: sdd_host
+componentType: Store
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-07-09T07:19:05.554Z'
+updatedAt: '2026-07-09T19:32:53.245Z'

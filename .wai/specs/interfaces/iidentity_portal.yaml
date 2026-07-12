@@ -1,0 +1,203 @@
+id: iidentity_portal
+name: Identity Portal Interface
+description: >-
+  Control-plane HTTP contract for headless SSO login, user-bound token management, hosted user
+  grants, identity-provider (SSO) configuration, and admin-only audit access.
+component: identity_portal
+methods:
+  - name: mintToken
+    description: Mint a user-bound MCP/API token from a TokenMintRequest; plaintext is returned once.
+    signature: 'mintToken(credential: string, request: TokenMintRequest): string'
+    returns: string
+    params:
+      - name: credential
+        type: string
+      - name: request
+        type: TokenMintRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /identity/tokens
+  - name: revokeToken
+    description: Revoke one hosted MCP/API token by id after authorization.
+    signature: 'revokeToken(credential: string, tokenId: string): void'
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: tokenId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: DELETE
+      path: /identity/tokens/{id}
+  - name: listUsers
+    description: List hosted users or service principals, optionally filtered by project.
+    signature: 'listUsers(credential: string, project: string): HostedUserRecord[]'
+    returns: HostedUserRecord[]
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+        optional: true
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /identity/users
+  - name: replaceUserGrants
+    description: Replace one hosted user's project grants after authorization.
+    signature: >-
+      replaceUserGrants(credential: string, userId: string, grants: ProjectGrant[]):
+      HostedUserRecord
+    returns: HostedUserRecord
+    params:
+      - name: credential
+        type: string
+      - name: userId
+        type: string
+      - name: grants
+        type: ProjectGrant[]
+    endpoint:
+      transport: HTTP
+      method: PUT
+      path: /identity/users/{id}/grants
+  - name: listAuditEvents
+    description: Return admin-only redacted audit events matching the supplied query.
+    signature: 'listAuditEvents(credential: string, query: AuditQuery): AuditEvent[]'
+    returns: AuditEvent[]
+    params:
+      - name: credential
+        type: string
+      - name: query
+        type: AuditQuery
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /identity/audit/events
+  - name: pruneAuditEvents
+    description: Apply the active audit retention policy and return the number of events pruned.
+    signature: 'pruneAuditEvents(credential: string): number'
+    returns: number
+    params:
+      - name: credential
+        type: string
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /identity/audit/prune
+  - name: upsertUser
+    description: Create or update one hosted user or service principal after authorization.
+    signature: 'upsertUser(credential: string, record: HostedUserRecord): HostedUserRecord'
+    returns: HostedUserRecord
+    params:
+      - name: credential
+        type: string
+      - name: record
+        type: HostedUserRecord
+    endpoint:
+      transport: HTTP
+      method: PUT
+      path: /identity/users/{id}
+  - name: setUserStatus
+    description: Set one hosted user's lifecycle status after authorization.
+    signature: 'setUserStatus(credential: string, userId: string, status: string): HostedUserRecord'
+    returns: HostedUserRecord
+    params:
+      - name: credential
+        type: string
+      - name: userId
+        type: string
+      - name: status
+        type: string
+    endpoint:
+      transport: HTTP
+      method: PUT
+      path: /identity/users/{id}/status
+  - name: startSsoLogin
+    description: >-
+      Begin a headless SSO login for one provider and return the provider authorization URL.
+      Unauthenticated by nature — no caller credential.
+    signature: 'startSsoLogin(providerId: string, redirectUri: string): string'
+    returns: string
+    params:
+      - name: providerId
+        type: string
+      - name: redirectUri
+        type: string
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /identity/sso/start
+  - name: completeSsoLogin
+    description: >-
+      Complete a headless SSO login from the provider callback and return a user-bound token once.
+      Unauthenticated by nature — trust derives from the signed state and the code exchange.
+    signature: 'completeSsoLogin(state: string, code: string): string'
+    returns: string
+    params:
+      - name: state
+        type: string
+      - name: code
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /identity/sso/callback
+  - name: listIdentityProviders
+    description: List configured identity providers after instance-admin authorization.
+    signature: 'listIdentityProviders(credential: string): IdentityProviderConfig[]'
+    returns: IdentityProviderConfig[]
+    params:
+      - name: credential
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /identity/providers
+  - name: upsertIdentityProvider
+    description: Create or update one identity-provider configuration after instance-admin authorization.
+    signature: >-
+      upsertIdentityProvider(credential: string, config: IdentityProviderConfig):
+      IdentityProviderConfig
+    returns: IdentityProviderConfig
+    params:
+      - name: credential
+        type: string
+      - name: config
+        type: IdentityProviderConfig
+    endpoint:
+      transport: HTTP
+      method: PUT
+      path: /identity/providers/{id}
+  - name: removeIdentityProvider
+    description: Remove one identity-provider configuration by id after instance-admin authorization.
+    signature: 'removeIdentityProvider(credential: string, id: string): void'
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: id
+        type: string
+    endpoint:
+      transport: HTTP
+      method: DELETE
+      path: /identity/providers/{id}
+  - name: countAuditEvents
+    description: >-
+      Return the count of redacted audit events matching the supplied query after admin-only
+      authorization.
+    signature: 'countAuditEvents(credential: string, query: AuditQuery): number'
+    returns: number
+    params:
+      - name: credential
+        type: string
+      - name: query
+        type: AuditQuery
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /identity/audit/count
+status: complete
+createdAt: '2026-07-08T20:19:45.785Z'
+updatedAt: '2026-07-10T08:18:37.775Z'

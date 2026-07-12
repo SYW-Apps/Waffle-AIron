@@ -1,0 +1,27 @@
+id: audit_store_impl
+name: Audit Store Implementation
+description: >-
+  Authoritative in-memory holder of the redacted audit-event set, file-backed under the server data
+  root (audit-events.json).
+contract: iaudit_store
+sourcePath: src/server/audit.ts
+methods:
+  - name: load
+    narrative: []
+    intent: >-
+      Read the persisted audit-event set from the audit file under the server data root and hold it
+      as the authoritative in-memory representation, returning the loaded events. A missing file
+      yields an empty set; an unreadable file or structurally invalid JSON fails with a storage
+      error naming the path — the store never silently drops persisted audit history, because the
+      audit trail is the record of who did what.
+  - name: replaceAll
+    narrative: []
+    intent: >-
+      Swap the authoritative in-memory event set to the supplied complete set in one assignment,
+      only ever called by the owned registry after durable persistence has succeeded. Never
+      partially applies, so concurrent admin queries through the index always observe a consistent
+      event set.
+detail: intent
+status: complete
+createdAt: '2026-07-09T17:30:39.898Z'
+updatedAt: '2026-07-09T17:43:50.898Z'

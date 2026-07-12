@@ -1,0 +1,24 @@
+id: web_session_index_impl
+name: Web Session Index Implementation
+description: >-
+  Read path over browser sessions, projecting the store's session set for id lookup and per-subject
+  listing without owning writes.
+contract: iweb_session_index
+sourcePath: src/server/websessions.ts
+methods:
+  - name: getById
+    narrative: []
+    intent: >-
+      Return the browser session whose id matches from the store's authoritative set, or null when
+      none matches. A pure read; performs no expiry enforcement (the auth specialist rejects expired
+      sessions on resolution).
+  - name: listBySubject
+    narrative: []
+    intent: >-
+      Return every browser session in the store's set whose subject.userId equals the supplied user
+      id, for account views and correlated revocation. Returns an empty list when the user has no
+      sessions.
+detail: intent
+status: complete
+createdAt: '2026-07-11T11:35:00.991Z'
+updatedAt: '2026-07-11T11:44:41.182Z'

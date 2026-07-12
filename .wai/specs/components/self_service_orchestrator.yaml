@@ -1,0 +1,30 @@
+id: self_service_orchestrator
+name: Self-Service Orchestrator
+description: >-
+  Approval-backed self-service for project initialization, lock, and promotion requested over MCP or
+  CLI. Any authenticated principal may request initialization; lock/promote require a grant covering
+  the project. Project-init requests are evaluated against the active instance pack policy via the
+  policy orchestrator's pre-authorized evaluation before an approval is created — enforce-mode
+  violations reject immediately, warn-mode findings ride the approval summary. Every request creates
+  a pending ApprovalRequest and decisions surface through the admin portal until the admin UI lands.
+  Approved project-init execution dispatches to the policy orchestrator's pre-authorized init (which
+  enforces policy, provisions the project, applies required/default packs, and records the profile
+  selection); lock/promote execute on the admin plane. It records audit events and never lets an
+  MCP-connected agent execute a privileged action without an approval. A decision's decidedBy MUST
+  differ from the originating request's requestedBy and deciding requires an approval-capable grant;
+  self-approval is rejected.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - auth_specialist
+  - approval_repository
+  - admin_orchestrator
+  - project_policy_orchestrator
+  - audit_repository
+  - organization_repository
+  - scope_specialist
+  - project_registry
+status: complete
+createdAt: '2026-07-09T07:19:31.526Z'
+updatedAt: '2026-07-11T20:29:43.709Z'

@@ -1,0 +1,56 @@
+kind: entity
+id: organization_unit_record
+name: OrganizationUnitRecord
+description: >-
+  Hosted-instance organization node used to group projects outside the SDD subsystem hierarchy.
+  Units can represent business entities, departments, teams, portfolios, or other administrative
+  groups.
+subsystem: sdd_host
+fields:
+  - name: id
+    type: string
+    description: Stable organization unit id.
+    optional: false
+  - name: name
+    type: string
+    description: Human-readable unit name.
+    optional: false
+  - name: kind
+    type: string
+    description: 'Unit kind: "business_entity", "department", "team", "portfolio", or "group".'
+    optional: false
+  - name: parentId
+    type: string
+    description: Optional parent organization unit id.
+    optional: true
+  - name: status
+    type: string
+    description: 'Lifecycle status: "active", "archived", or "deleted".'
+    optional: false
+  - name: createdAt
+    type: string
+    description: ISO-8601 creation timestamp.
+    optional: false
+  - name: createdBy
+    type: PrincipalSubject
+    description: Identity that created the unit.
+    optional: true
+  - name: visibility
+    type: string
+    description: >-
+      Surface-visibility posture of this unit's subtree: "inherit" (default — take the parent's
+      posture; a root unit inherits "open"), "open" (placements visible throughout the owning tenant
+      subtree), or "closed" (placements hidden from everyone outside this unit's subtree except
+      units granted via exposeTo). Tenant ROOT units are always closed toward OTHER tenant roots —
+      cross-tenant visibility exists only through exposeTo grants (fail-closed).
+    optional: true
+  - name: exposeTo
+    type: string[]
+    description: >-
+      Organization unit ids granted visibility into this unit's subtree placements — the allow-list
+      that punches holes through a closed posture and the ONLY path across tenant roots. No
+      deny-lists: restrict by placing sensitive projects in a closed group instead.
+    optional: true
+methods: []
+createdAt: '2026-07-08T21:11:11.067Z'
+updatedAt: '2026-07-11T09:36:45.130Z'

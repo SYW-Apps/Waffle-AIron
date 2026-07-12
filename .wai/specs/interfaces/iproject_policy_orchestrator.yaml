@@ -1,0 +1,117 @@
+id: iproject_policy_orchestrator
+name: Project Policy Orchestrator Interface
+description: >-
+  Contract for profile-aware hosted project initialization and pack/profile policy enforcement.
+  Credential-bearing methods authenticate the caller and authorize by Principal grants; two
+  pre-authorized entries (executeApprovedInit, evaluateInitRequest) serve the self-service approval
+  chain and are never exposed on a portal. Identity-provider (SSO) configuration is deferred to
+  Phase 5.
+component: project_policy_orchestrator
+methods:
+  - name: initializeProjectWithProfile
+    description: >-
+      Authenticate the caller credential and authorize project creation via an INSTANCE-WIDE
+      project:create grant (projectId '*') or the instance-admin wildcard — a project-scoped grant
+      carrying project:create does NOT suffice — then perform the same profile-aware initialization
+      body as executeApprovedInit: validate the request against the active pack policy (throwing on
+      violations under an enforcing policy), create the hosted project, apply the instance's
+      required/default declarative packs via the pack registry, record the resolved profile
+      selection into the project's config, and audit the initialization. Returns the created hosted
+      project record.
+    signature: >-
+      initializeProjectWithProfile(credential: string, request: ProjectInitRequest):
+      HostedProjectRecord
+    returns: HostedProjectRecord
+    params:
+      - name: credential
+        type: string
+      - name: request
+        type: ProjectInitRequest
+    guarantees:
+      - atomic
+  - name: evaluateProjectPolicy
+    description: >-
+      Authenticate the caller credential and authorize by a grant covering the project (mcp:write
+      for the project or an instance-wide wildcard) or an instance-admin grant, resolve the hosted
+      project, and evaluate its active packs and recorded profile selection against the active
+      instance pack policy without side effects.
+    signature: 'evaluateProjectPolicy(credential: string, projectId: string): PolicyEvaluationResult'
+    returns: PolicyEvaluationResult
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+  - name: reconcileProjectPolicy
+    description: >-
+      Authenticate the caller credential and authorize by a grant covering the project (mcp:write
+      for the project or an instance-wide wildcard) or an instance-admin grant, evaluate the project
+      against the active instance pack policy, and — when the policy mode permits
+      auto-reconciliation — apply the allowed steps for missing required/default declarative packs,
+      auditing the reconciliation.
+    signature: 'reconcileProjectPolicy(credential: string, projectId: string): PolicyEvaluationResult'
+    returns: PolicyEvaluationResult
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+  - name: getPackPolicy
+    description: >-
+      Authenticate the caller credential (any authenticated principal may read the policy — agents
+      need to see what initialization requires) and return the active hosted instance pack/profile
+      policy, substituting the documented permissive default (empty pack lists,
+      requireProfileSelection false, enforcementMode 'warn') when none has ever been configured.
+    signature: 'getPackPolicy(credential: string): InstancePackPolicy'
+    returns: InstancePackPolicy
+    params:
+      - name: credential
+        type: string
+  - name: setPackPolicy
+    description: >-
+      Authenticate the caller credential and authorize policy administration via an INSTANCE-WIDE
+      policy:manage grant (projectId '*') or the instance-admin wildcard — a project-scoped
+      policy:manage grant does NOT suffice — stamp updatedBy from the authenticated caller, replace
+      the active pack/profile policy wholesale through the repository, and audit the change at
+      security level.
+    signature: 'setPackPolicy(credential: string, policy: InstancePackPolicy): InstancePackPolicy'
+    returns: InstancePackPolicy
+    params:
+      - name: credential
+        type: string
+      - name: policy
+        type: InstancePackPolicy
+    guarantees:
+      - atomic
+  - name: executeApprovedInit
+    description: >-
+      Pre-authorized entry for the self-service approval workflow: performs NO authentication — the
+      caller (self_service_orchestrator) has already enforced approval-based authorization; never
+      exposed on any portal. Validates the request against the active pack policy (under an
+      enforcing policy, throws on violations), creates the hosted project via
+      admin_orchestrator.executeApprovedCreate, applies the instance's requiredGlobalPacks and
+      defaultProjectPacks as declarative packs via the pack registry, records the resolved
+      ProjectProfileSelection into the project's config, and audits 'project.init.policy'. This is
+      the single initialization body shared by the gated portal path (initializeProjectWithProfile)
+      and approval execution.
+    signature: 'executeApprovedInit(request: ProjectInitRequest): HostedProjectRecord'
+    returns: HostedProjectRecord
+    params:
+      - name: request
+        type: ProjectInitRequest
+  - name: evaluateInitRequest
+    description: >-
+      Pure pre-creation policy evaluation with no side effects and no authentication (the caller
+      authenticated upstream): read the active pack policy (or the documented permissive default
+      when unset) and evaluate the ProjectInitRequest against it — flagging a missing required
+      profile selection, requested blocked packs, and unknown profile ids — returning a
+      PolicyEvaluationResult. Used by self-service to gate a project-init request before an approval
+      is created; never exposed on any portal.
+    signature: 'evaluateInitRequest(request: ProjectInitRequest): PolicyEvaluationResult'
+    returns: PolicyEvaluationResult
+    params:
+      - name: request
+        type: ProjectInitRequest
+status: complete
+createdAt: '2026-07-08T21:59:46.667Z'
+updatedAt: '2026-07-10T15:15:57.724Z'

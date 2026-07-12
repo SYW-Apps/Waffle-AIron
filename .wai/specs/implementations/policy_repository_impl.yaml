@@ -1,0 +1,50 @@
+id: policy_repository_impl
+name: Policy Repository Implementation
+description: >-
+  Facade over the owned policy store, registry, and index. Pure 1:1 forwarding — getPackPolicy goes
+  to the index, setPackPolicy goes to the registry; no logic lives here.
+contract: ipolicy_repository
+sourcePath: src/server/policy.ts
+methods:
+  - name: getPackPolicy
+    narrative:
+      - stepNumber: 1
+        description: Forward to the policy index
+        type: call
+        targetComponent: policy_index
+        targetMethod: getPackPolicy
+  - name: setPackPolicy
+    narrative:
+      - stepNumber: 1
+        description: Forward to the policy registry
+        type: call
+        targetComponent: policy_registry
+        targetMethod: setPackPolicy
+  - name: listIdentityProviders
+    narrative:
+      - stepNumber: 1
+        description: Forward to the policy index
+        type: call
+        targetComponent: policy_index
+        targetMethod: listIdentityProviders
+    symbol: listIdentityProviderRecords
+  - name: upsertIdentityProvider
+    narrative:
+      - stepNumber: 1
+        description: Forward to the policy registry
+        type: call
+        targetComponent: policy_registry
+        targetMethod: upsertIdentityProvider
+    symbol: upsertIdentityProviderRecord
+  - name: removeIdentityProvider
+    narrative:
+      - stepNumber: 1
+        description: Forward to the policy registry
+        type: call
+        targetComponent: policy_registry
+        targetMethod: removeIdentityProvider
+    symbol: removeIdentityProviderRecord
+detail: calls-only
+status: complete
+createdAt: '2026-07-09T20:47:51.139Z'
+updatedAt: '2026-07-11T19:14:22.736Z'

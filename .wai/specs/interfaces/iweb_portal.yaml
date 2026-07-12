@@ -1,0 +1,144 @@
+id: iweb_portal
+name: Web Portal Interface
+description: >-
+  Browser-facing HTTP contract for the unified web UI. Serves the client app shell/static assets at
+  the root and the thin session/SSO/context/graph endpoints under /web. Session-cookie
+  authenticated; the served app reuses every existing scoped endpoint with the session as its
+  credential, so no per-page server endpoints exist here. Each route forwards to the web
+  orchestrator.
+component: web_portal
+methods:
+  - name: serveApp
+    description: >-
+      Serve the unified web UI client application shell and its bundled static assets for the
+      requested path (single-page app entry). No orchestrator call; the app then drives every
+      feature by calling existing endpoints with the session cookie.
+    signature: 'serveApp(path: string): string'
+    returns: string
+    params:
+      - name: path
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /
+  - name: startSignIn
+    description: >-
+      Begin a browser SSO sign-in, forwarding to the web orchestrator, and hand back the provider
+      authorization URL for the browser to follow.
+    signature: 'startSignIn(providerId: string, redirectUri: string): string'
+    returns: string
+    params:
+      - name: providerId
+        type: string
+      - name: redirectUri
+        type: string
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/sso/start
+  - name: completeSignIn
+    description: >-
+      Handle the SSO provider callback, forwarding to the web orchestrator to create the session,
+      then set the session cookie and return the new session id.
+    signature: 'completeSignIn(state: string, code: string): string'
+    returns: string
+    params:
+      - name: state
+        type: string
+      - name: code
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/sso/callback
+  - name: signOut
+    description: >-
+      End the current browser session, forwarding to the web orchestrator, and clear the session
+      cookie.
+    signature: 'signOut(sessionId: string): void'
+    returns: void
+    params:
+      - name: sessionId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/logout
+  - name: getContext
+    description: >-
+      Return the session-principal context (subject, grants, capability flags) by forwarding to the
+      web orchestrator's getCurrentContext, for the client to render role-appropriately.
+    signature: 'getContext(sessionId: string): WebContext'
+    returns: WebContext
+    params:
+      - name: sessionId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/context
+  - name: getGraph
+    description: >-
+      Return the live level-of-detail graph for the requested tier/project/level by forwarding to
+      the web orchestrator's getGraph.
+    signature: 'getGraph(sessionId: string, tier: string, projectId: string, level: number): WebGraphModel'
+    returns: WebGraphModel
+    params:
+      - name: sessionId
+        type: string
+      - name: tier
+        type: string
+      - name: projectId
+        type: string
+        optional: true
+      - name: level
+        type: number
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/graph
+  - name: signOutEverywhere
+    description: >-
+      Sign the caller out of ALL their browser sessions (all devices/tabs). Forwards to the web
+      orchestrator; clears the current session cookie too.
+    signature: 'signOutEverywhere(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/logout-all
+  - name: devLogin
+    description: >-
+      Establish the local-developer session for the single-project dev server (DEV MODE ONLY):
+      forward to the web orchestrator to mint or reuse it, set the session cookie, and return. The
+      dev HTTP layer invokes this transparently on a cookieless request so the REUSED client shows
+      no login screen. The route is mounted only under devMode, so it is absent in the hosted UI.
+    signature: 'devLogin(): void'
+    returns: void
+    params: []
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/dev-login
+  - name: serveProjectCanvas
+    description: >-
+      Serve one authorized project's interactive architecture canvas as HTML to the browser — the
+      web UI shell embeds it per selected project (an iframe over this route), reusing the SAME
+      canvas engine as the static export. Forwards to the web orchestrator's getProjectCanvas;
+      session-cookie authenticated, so cross-project access is Forbidden.
+    signature: 'serveProjectCanvas(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/canvas
+status: complete
+createdAt: '2026-07-11T11:33:26.673Z'
+updatedAt: '2026-07-11T16:37:18.124Z'

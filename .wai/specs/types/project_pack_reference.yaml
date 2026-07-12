@@ -1,0 +1,27 @@
+kind: value-object
+id: project_pack_reference
+name: ProjectPackReference
+description: >-
+  A hosted project's declared extension-pack and profile references, gathered for operational drift
+  checks. Lists the pack names the project references (its registered extension packs plus any
+  instance required/default pack names recorded in its profile selection) and the profile ids it
+  selected, so diagnostics can flag references that resolve in neither the image nor the instance
+  pack tier. Carries no filesystem paths, so it is safe for redacted diagnostics.
+fields:
+  - name: projectId
+    type: string
+    description: Hosted project id these references belong to.
+    optional: false
+  - name: packNames
+    type: string[]
+    description: >-
+      Pack names the project references: its registered extension packs (extensions.packs) unioned
+      with any required/default pack names recorded in its profile selection.
+    optional: false
+  - name: profileIds
+    type: string[]
+    description: Architectural profile ids the project selected in its recorded profile selection, if any.
+    optional: true
+methods: []
+createdAt: '2026-07-10T12:35:57.474Z'
+updatedAt: '2026-07-10T12:35:57.480Z'

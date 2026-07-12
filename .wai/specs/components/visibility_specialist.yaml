@@ -1,0 +1,17 @@
+id: visibility_specialist
+name: Visibility Specialist
+description: >-
+  Pure surface-visibility resolution over the organization graph (no I/O, no authorization side
+  effects — the visibility sibling of the scope specialist): given the unit tree (with visibility
+  postures and exposeTo grants) and the project placements, computes which projects' public surfaces
+  an observer project may discover and at what audience distance. Semantics: within a tenant subtree
+  open-unless-closed; a closed unit hides its subtree placements from everyone outside it except
+  units granted via exposeTo; tenant roots are always closed toward other tenant roots (cross-tenant
+  visibility ONLY via exposeTo — fail-closed); no deny-lists.
+subsystem: sdd_host
+componentType: Specialist
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-07-11T09:37:05.981Z'
+updatedAt: '2026-07-11T10:05:10.771Z'

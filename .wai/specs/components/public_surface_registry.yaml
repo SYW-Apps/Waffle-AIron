@@ -1,0 +1,13 @@
+id: public_surface_registry
+name: Public Surface Registry
+description: >-
+  Write-path component for replacing one project's redacted public-surface snapshot after validation
+  confirms every exported system interface maps to an L1 public interface.
+subsystem: sdd_host
+componentType: Registry
+owns: []
+dependsOn:
+  - public_surface_store
+status: complete
+createdAt: '2026-07-08T21:12:40.169Z'
+updatedAt: '2026-07-09T22:13:08.492Z'

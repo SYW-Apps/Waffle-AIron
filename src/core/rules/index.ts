@@ -23,10 +23,17 @@ import { patternsRule } from './patterns.js';
 import { profilesRule } from './profiles.js';
 import { publicSurfaceRule } from './public-surface.js';
 import { cyclesRule, reachabilityRule } from './graph.js';
+import { dispatchRule, lifecycleRule, durabilityRule, untypedSeamRule, proseClaimRule } from './semantic-edges.js';
+import { roundtripRule, namespaceHygieneRule, surfaceFreshnessRule } from './namespace.js';
 import { couplingRule } from './coupling.js';
 import { languageRule } from './language.js';
 import { technologyRule } from './technology.js';
+import { namingRule } from './naming.js';
+import { complexityRule } from './complexity.js';
+import { structuralConformanceRule } from './conformance.js';
+import { dependencyConformanceRule } from './dependency-conformance.js';
 import { lintAllowsRule } from './lint-allows.js';
+import { emptyCodeModel, CodeModel } from '../source-analysis.js';
 
 export * from './types.js';
 export * from './type-analysis.js';
@@ -38,6 +45,11 @@ export * from './type-analysis.js';
 
 export const SDD_RULES: SddRule[] = [
   hierarchyRule,
+  // Namespace integrity right after hierarchy: unresolvable/unwritable ids
+  // explain many downstream findings, so surface them early in the list.
+  namespaceHygieneRule,
+  roundtripRule,
+  surfaceFreshnessRule,
   typeReferencesRule,
   contractsRule,
   narrativeFlowRule,
@@ -48,10 +60,25 @@ export const SDD_RULES: SddRule[] = [
   profilesRule,
   publicSurfaceRule,
   cyclesRule,
+  // Semantic-edge family: dispatch/lifecycle validity BEFORE reachability so a
+  // reader sees the broken edge finding next to the unused-detection fallout
+  // it explains.
+  dispatchRule,
+  lifecycleRule,
   reachabilityRule,
+  durabilityRule,
+  untypedSeamRule,
+  proseClaimRule,
+  // Code↔spec: structural conformance consumes the injected CodeModel (built
+  // by the source analysis adapter next to the surface snapshots); dependency
+  // conformance lifts its import edges onto the declared dependsOn/owns graph.
+  structuralConformanceRule,
+  dependencyConformanceRule,
   couplingRule,
   languageRule,
   technologyRule,
+  namingRule,
+  complexityRule,
   // MUST run last: it audits which lint.allow entries the earlier rules
   // actually consumed (stale/unknown allows).
   lintAllowsRule,
@@ -80,6 +107,15 @@ const COMPLETENESS_RULES = new Set([
   'ORPHANED_SUBSYSTEM',
   'PUBLIC_INTERFACE_UNBOUND',
   'PUBLIC_INTERFACE_TYPE_MISMATCH',
+  // Structural conformance: a draft tree is allowed to name code that does
+  // not exist yet — the findings gate only once the specs claim completeness.
+  'MISSING_SOURCE_PATH',
+  'MISSING_SOURCE_FILE',
+  'SOURCE_PATH_ESCAPES_ROOT',
+  'UNREALIZED_METHOD',
+  'CONFORMANCE_ANALYSIS_SKIPPED',
+  'UNDECLARED_DEPENDENCY',
+  'UNREALIZED_DEPENDENCY',
 ]);
 
 export interface ScopeFilterOptions {
@@ -140,6 +176,10 @@ export interface BuildContextOptions {
   scopeSubsystem?: string;
   /** Loaded extension packs (pack profiles/languages/rules); empty when absent. */
   extensions?: LoadedExtensions;
+  /** Stored surface snapshots for cross-tree/remote reference resolution. */
+  surfaceSnapshots?: import('../../models/index.js').SurfaceSnapshot[];
+  /** Source-code model for structural conformance; empty when not built. */
+  codeModel?: CodeModel;
   /** Collector the context's addIssue pushes into. */
   issues: ValidationIssue[];
 }
@@ -153,6 +193,19 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
   const subsystemIds = new Set(subsystems.map(s => s.id));
   const componentIds = new Set(components.map(c => c.id));
   const interfaceIds = new Set(interfaces.map(i => i.id));
+
+  const interfacesByComponent = new Map<string, InterfaceSpec[]>();
+  for (const intf of interfaces) {
+    const list = interfacesByComponent.get(intf.component);
+    if (list) list.push(intf);
+    else interfacesByComponent.set(intf.component, [intf]);
+  }
+  const implementationsByContract = new Map<string, ImplementationSpec[]>();
+  for (const impl of implementations) {
+    const list = implementationsByContract.get(impl.contract);
+    if (list) list.push(impl);
+    else implementationsByContract.set(impl.contract, [impl]);
+  }
 
   // A subsystem's published public surface: the component ids bound via its
   // publicInterfaces. Cross-subsystem dependencies may only target these.
@@ -175,6 +228,13 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     if (sub && (sub.status === 'draft' || sub.status === 'design')) return true;
 
     return false;
+  };
+
+  const isImplementationDraft = (impl: ImplementationSpec): boolean => {
+    if (impl.status === 'draft' || impl.status === 'design') return true;
+    const contract = interfaceMap.get(impl.contract);
+    if (!contract) return false;
+    return contract.status === 'draft' || contract.status === 'design' || isComponentDraft(contract.component);
   };
 
   const getComponentProfile = (compId: string): ArchProfile => {
@@ -267,7 +327,10 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
         if (severity === 'warning') return;
       }
     }
-    issues.push({ severity, code, message, specId });
+    // Carry the draft/design provenance onto the issue (only when true, to keep
+    // issues clean) so command-level policy can classify draft-related warnings
+    // without re-deriving spec status. The rule stays fully emitted/visible.
+    issues.push({ severity, code, message, specId, ...(isDraftContext ? { draftContext: true } : {}) });
   };
 
   return {
@@ -286,12 +349,17 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     componentIds,
     interfaceIds,
     publicSet,
+    interfacesByComponent,
+    implementationsByContract,
     isComponentDraft,
+    isImplementationDraft,
     getComponentProfile,
     isTypeResolved,
     targetLanguageFor,
     isSpecInScope,
     ext: { profiles: extensions.profiles, languages: extensions.languages },
+    surfaceSnapshots: opts.surfaceSnapshots ?? [],
+    codeModel: opts.codeModel ?? emptyCodeModel(),
     lintAllows,
     knownIssueCodes,
     addIssue,

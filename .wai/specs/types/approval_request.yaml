@@ -1,0 +1,72 @@
+kind: entity
+id: approval_request
+name: ApprovalRequest
+description: >-
+  Durable request for a privileged hosted action initiated by a user, CLI, UI, or MCP-connected
+  agent. The request records intent and payload summary, then waits for an authorized user/admin
+  decision before the privileged workflow executes.
+subsystem: sdd_host
+fields:
+  - name: id
+    type: string
+    description: Stable approval request id.
+    optional: false
+  - name: kind
+    type: string
+    description: >-
+      Requested action kind, such as "project:init", "project:lock", "project:promote",
+      "token:mint", "pack:install", or "policy:change".
+    optional: false
+  - name: status
+    type: string
+    description: 'Lifecycle status: "pending", "approved", "denied", "expired", "completed", or "cancelled".'
+    optional: false
+  - name: requestedBy
+    type: PrincipalSubject
+    description: Identity that requested the action, including MCP token owner or service principal.
+    optional: false
+  - name: requestedTokenId
+    type: string
+    description: Credential id used to request the action, when the request came through MCP or HTTP auth.
+    optional: true
+  - name: projectId
+    type: string
+    description: Hosted project affected by the request, if project-scoped.
+    optional: true
+  - name: summary
+    type: string
+    description: Human-readable redacted summary of the requested action for approval UI/CLI.
+    optional: false
+  - name: payloadType
+    type: string
+    description: Redacted payload type identifier, such as ProjectInitRequest or TokenMintRequest.
+    optional: true
+  - name: payload
+    type: string
+    description: >-
+      Small redacted serialized payload required to execute the approved action. Must never contain
+      raw secrets or bearer tokens.
+    optional: true
+  - name: createdAt
+    type: string
+    description: ISO-8601 request creation timestamp.
+    optional: false
+  - name: expiresAt
+    type: string
+    description: ISO-8601 timestamp after which pending approval is invalid.
+    optional: true
+  - name: decidedAt
+    type: string
+    description: ISO-8601 decision timestamp.
+    optional: true
+  - name: decidedBy
+    type: PrincipalSubject
+    description: Identity that approved or denied the request.
+    optional: true
+  - name: decisionReason
+    type: string
+    description: Optional reason supplied when approving or denying the request.
+    optional: true
+methods: []
+createdAt: '2026-07-09T07:18:44.031Z'
+updatedAt: '2026-07-09T07:18:45.199Z'

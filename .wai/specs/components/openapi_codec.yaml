@@ -1,0 +1,13 @@
+id: openapi_codec
+name: OpenAPI Codec
+description: >-
+  Bidirectional codec between surface snapshots and OpenAPI 3.1 documents: exports the
+  HTTP-transport entries of a snapshot as an OpenAPI spec (types rendered as JSON-Schema
+  components), and imports a 3rd-party OpenAPI document into an authored-origin snapshot.
+subsystem: sdd_surfaces
+componentType: Specialist
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-07-10T23:12:27.905Z'
+updatedAt: '2026-07-11T09:04:02.004Z'

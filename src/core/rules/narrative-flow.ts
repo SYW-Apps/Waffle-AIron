@@ -38,10 +38,7 @@ export const narrativeFlowRule: SddRule = {
   ],
   check(ctx) {
     for (const impl of ctx.implementations) {
-      const contract = ctx.interfaceMap.get(impl.contract);
-      const isDraftCtx =
-        impl.status === 'draft' || impl.status === 'design'
-        || (contract ? (contract.status === 'draft' || contract.status === 'design' || ctx.isComponentDraft(contract.component)) : false);
+      const isDraftCtx = ctx.isImplementationDraft(impl);
 
       for (const implMethod of impl.methods) {
         const steps = implMethod.narrative;
@@ -69,7 +66,8 @@ export const narrativeFlowRule: SddRule = {
         for (const s of steps) {
           switch (s.type) {
             case 'local':
-            case 'call': {
+            case 'call':
+            case 'dispatch': {
               const extra = flowConfigOn(s);
               if (extra.length) malformed(`step ${s.stepNumber} (${s.type}) carries flow config (${extra.join(', ')}) — use a flow step type instead.`);
               break;
@@ -136,6 +134,7 @@ export const narrativeFlowRule: SddRule = {
           switch (s.type) {
             case 'local':
             case 'call':
+            case 'dispatch':
               succ.push(nextOf(n));
               break;
             case 'branch':
@@ -250,7 +249,7 @@ export const narrativeFlowRule: SddRule = {
           if (s.finallyStep !== undefined) handlerStarts.add(s.finallyStep);
           const last = byNum.get(s.endStep);
           const nxt = nextOf(s.endStep);
-          if (last && (last.type === 'local' || last.type === 'call') && nxt !== undefined && handlerStarts.has(nxt)) {
+          if (last && (last.type === 'local' || last.type === 'call' || last.type === 'dispatch') && nxt !== undefined && handlerStarts.has(nxt)) {
             ctx.addIssue(
               'warning',
               'FALLTHROUGH_INTO_HANDLER',

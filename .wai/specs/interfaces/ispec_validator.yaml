@@ -1,6 +1,14 @@
 id: ispec_validator
 name: Spec Validator Interface
-description: Interface contract for validating spec tree hierarchies, registry ownerships, and project configs.
+description: >-
+  Interface contract for validating spec tree hierarchies, registry ownerships, project configs,
+  subsystem boundaries, semantic wiring edges (dispatch-table capability contracts, dispatch- and
+  lifecycle-rooted reachability, durability round-trip hydration, typed cross-subsystem seams,
+  prose-claim realization), writer round-trip serializability, structural code↔spec conformance (L4
+  sourcePaths resolve to real files within the project root; contract methods are realized in those
+  files at each implementation's conformance tier), and dependency conformance (the runtime import
+  graph between component-mapped files must match declared dependsOn/owns edges, with
+  cross-subsystem imports justified by a declared edge to the target subsystem's published surface).
 component: spec_validator
 methods:
   - name: validateSddTree
@@ -23,4 +31,4 @@ methods:
     returns: ValidationResult
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-04T12:48:23.630Z'
+updatedAt: '2026-07-11T19:48:32.898Z'

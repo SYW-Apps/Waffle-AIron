@@ -1,0 +1,32 @@
+id: iproject_relation_registry
+name: Project Relation Registry Interface
+description: >-
+  Private write-path contract for cross-project relations. Owns id stamping and status defaulting;
+  preserves the orchestrator-supplied createdAt/createdBy and the orchestrator-validated
+  targetPublicInterface; performs no authorization or public-surface validation.
+component: project_relation_registry
+methods:
+  - name: upsert
+    description: >-
+      Create or update one cross-project relation: stamp id on create, preserve the
+      orchestrator-supplied createdAt and createdBy, and default status to active when unset.
+      Persist the full relation set durably and refresh the store.
+    signature: 'upsert(record: ProjectRelationRecord): ProjectRelationRecord'
+    returns: ProjectRelationRecord
+    params:
+      - name: record
+        type: ProjectRelationRecord
+    guarantees:
+      - atomic
+  - name: remove
+    description: >-
+      Remove one cross-project relation by id, or mark it removed per retention policy. Persist the
+      full relation set durably and refresh the store.
+    signature: 'remove(id: string): void'
+    returns: void
+    params:
+      - name: id
+        type: string
+status: complete
+createdAt: '2026-07-09T22:05:56.382Z'
+updatedAt: '2026-07-09T22:13:21.027Z'

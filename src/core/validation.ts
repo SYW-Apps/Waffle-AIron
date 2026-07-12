@@ -15,6 +15,9 @@ import {
 } from './specs.js';
 import { buildRuleContext, composeRuleSequence, makeScopeFilter } from './rules/index.js';
 import { LoadedExtensions, loadProjectExtensions } from './extensions.js';
+import { loadSurfaceSnapshots } from './surfaces.js';
+import { buildCodeModel } from './source-analysis.js';
+import { getProjectRoot } from '../utils/fs.js';
 
 // ---------------------------------------------------------------------------
 // Validation
@@ -33,6 +36,14 @@ export interface ValidationIssue {
   /** Optional: agent id related to the issue */
   agentId?: string;
   specId?: string;
+  /**
+   * True when this issue was raised in a draft/design context — i.e. the spec
+   * it concerns (or an ancestor) is not yet complete. Rules that already know
+   * this (e.g. DRAFT_COMPONENT_WARNING, UNUSED_COMPONENT on a draft component)
+   * surface it so downstream policy — like the --ci gate — can waive warnings
+   * that merely reflect declared, unfinished work without silencing the rule.
+   */
+  draftContext?: boolean;
 }
 
 export interface ValidationResult {
@@ -175,6 +186,16 @@ export interface ValidationOptions {
    * MCP callers get pack rules/profiles/languages without passing anything.
    */
   extensions?: LoadedExtensions;
+  /**
+   * Validate at FULL strictness: treat every spec as `complete`, so the
+   * completeness rules that relax to warnings while draft/design apply as
+   * errors. This is the as-complete gate behind `wairon lock`. The flip must
+   * happen INSIDE the validation run — clearLoaderIssues() invalidates the
+   * spec cache, so any status mutation done before calling in is lost to the
+   * rescan (statuses are restored before returning, so the flip is never
+   * observable to later callers).
+   */
+  treatAllAsComplete?: boolean;
 }
 
 export function validateSddTree(
@@ -185,14 +206,16 @@ export function validateSddTree(
   let scopeSubsystem: string | undefined;
   let recursive: boolean | number = true;
   let extensions: LoadedExtensions | undefined;
+  let treatAllAsComplete = false;
 
-  if (rulesOrOptions && ('scopeSubsystem' in rulesOrOptions || 'recursive' in rulesOrOptions || 'rules' in rulesOrOptions || 'projectType' in rulesOrOptions || 'extensions' in rulesOrOptions)) {
+  if (rulesOrOptions && ('scopeSubsystem' in rulesOrOptions || 'recursive' in rulesOrOptions || 'rules' in rulesOrOptions || 'projectType' in rulesOrOptions || 'extensions' in rulesOrOptions || 'treatAllAsComplete' in rulesOrOptions)) {
     const opts = rulesOrOptions as ValidationOptions;
     rules = opts.rules;
     projectType = opts.projectType ?? 'backend';
     scopeSubsystem = opts.scopeSubsystem;
     recursive = opts.recursive ?? true;
     extensions = opts.extensions;
+    treatAllAsComplete = opts.treatAllAsComplete ?? false;
   }
   extensions ??= loadProjectExtensions();
 
@@ -209,49 +232,75 @@ export function validateSddTree(
   const interfaces = loadInterfaceSpecs();
   const implementations = loadImplementationSpecs();
   const types = loadTypeSpecs();
+  // Stored surface snapshots (.wai/surfaces/): declared contracts that
+  // unresolved cross-tree/remote references validate against.
+  const surfaceSnapshots = loadSurfaceSnapshots();
+  // Source-code model (per-sourcePath declaration/export/import/anchor facts)
+  // — what structural conformance checks realization against.
+  const codeModel = buildCodeModel(implementations, getProjectRoot());
 
-  // Retrieve any loader schema validation issues
-  const isSpecInScope = makeScopeFilter({ components, interfaces, implementations, types, scopeSubsystem });
-  const loaderErrors = getLoaderIssues();
-  if (scopeSubsystem) {
-    issues.push(...loaderErrors.filter(e => e.specId && isSpecInScope(e.specId)));
-  } else {
-    issues.push(...loaderErrors);
+  // As-complete mode: flip statuses on the freshly loaded instances — these
+  // are the workspace cache's own objects, loaded after the cache clear above,
+  // so the rules genuinely see them as complete. Restore in `finally` so the
+  // flip never leaks to later callers sharing this process (e.g. the MCP
+  // server or hosted request scope).
+  const statusBearing: { status?: 'draft' | 'design' | 'complete' }[] = treatAllAsComplete
+    ? [...subsystems, ...components, ...interfaces, ...implementations]
+    : [];
+  const statusSnapshot = statusBearing.map((s) => s.status);
+  for (const s of statusBearing) s.status = 'complete';
+
+  try {
+    // Retrieve any loader schema validation issues
+    const isSpecInScope = makeScopeFilter({ components, interfaces, implementations, types, scopeSubsystem });
+    const loaderErrors = getLoaderIssues();
+    if (scopeSubsystem) {
+      issues.push(...loaderErrors.filter(e => e.specId && isSpecInScope(e.specId)));
+    } else {
+      issues.push(...loaderErrors);
+    }
+    // Round-trip serializability runs as a registered rule (roundtripRule in
+    // rules/namespace.ts) — visible in `rules list`, severity-tunable, scoped
+    // like every other finding.
+
+    if (!system) {
+      issues.push(issue('error', 'MISSING_SYSTEM_SPEC', 'L0 System specification (.system.yaml) is missing.'));
+      return { valid: false, issues };
+    }
+
+    // A pack that fails to load is an error, never a silent skip — otherwise
+    // the gate would quietly run without the doctrine the project declared.
+    for (const err of extensions.errors) {
+      issues.push(issue('error', 'EXTENSION_LOAD_ERROR', err));
+    }
+
+    const ctx = buildRuleContext({
+      system,
+      subsystems,
+      components,
+      interfaces,
+      implementations,
+      types,
+      rules,
+      projectType,
+      scopeSubsystem,
+      extensions,
+      surfaceSnapshots,
+      codeModel,
+      issues,
+    });
+
+    for (const rule of composeRuleSequence(extensions.rules)) {
+      rule.check(ctx);
+    }
+
+    return {
+      valid: issues.every((i) => i.severity !== 'error'),
+      issues,
+    };
+  } finally {
+    statusBearing.forEach((s, i) => { s.status = statusSnapshot[i]; });
   }
-
-  if (!system) {
-    issues.push(issue('error', 'MISSING_SYSTEM_SPEC', 'L0 System specification (.system.yaml) is missing.'));
-    return { valid: false, issues };
-  }
-
-  // A pack that fails to load is an error, never a silent skip — otherwise
-  // the gate would quietly run without the doctrine the project declared.
-  for (const err of extensions.errors) {
-    issues.push(issue('error', 'EXTENSION_LOAD_ERROR', err));
-  }
-
-  const ctx = buildRuleContext({
-    system,
-    subsystems,
-    components,
-    interfaces,
-    implementations,
-    types,
-    rules,
-    projectType,
-    scopeSubsystem,
-    extensions,
-    issues,
-  });
-
-  for (const rule of composeRuleSequence(extensions.rules)) {
-    rule.check(ctx);
-  }
-
-  return {
-    valid: issues.every((i) => i.severity !== 'error'),
-    issues,
-  };
 }
 
 /**
@@ -261,23 +310,11 @@ export function validateSddTree(
  * `wairon lock` and the hosting lock require: a draft tree can "pass" a normal
  * validate yet break the moment it is frozen, so lock must gate on this.
  *
- * validateSddTree is fully synchronous, so the mutate → validate → restore below
- * runs atomically within one event-loop turn (no await in between), and the
- * in-memory status flips are never observable outside this call.
+ * The status flip lives inside validateSddTree (treatAllAsComplete) because
+ * validation begins by invalidating the spec cache (clearLoaderIssues), which
+ * would discard any objects mutated out here before the rules ever saw them —
+ * exactly the silent degradation this wrapper previously suffered from.
  */
 export function validateAsComplete(options?: ValidationOptions): ValidationResult {
-  scanAllSpecs({ recursive: options?.recursive ?? true });
-  const specs: { status?: 'draft' | 'design' | 'complete' }[] = [
-    ...loadSubsystemSpecs(),
-    ...loadComponentSpecs(),
-    ...loadInterfaceSpecs(),
-    ...loadImplementationSpecs(),
-  ];
-  const snapshot = specs.map((s) => s.status);
-  for (const s of specs) s.status = 'complete';
-  try {
-    return validateSddTree(options);
-  } finally {
-    specs.forEach((s, i) => { s.status = snapshot[i]; });
-  }
+  return validateSddTree({ ...(options ?? {}), treatAllAsComplete: true });
 }

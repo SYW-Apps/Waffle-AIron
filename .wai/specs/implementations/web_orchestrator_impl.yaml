@@ -1,0 +1,385 @@
+id: web_orchestrator_impl
+name: Web Orchestrator Implementation
+description: >-
+  Server-side shell workflows for the unified web UI: SSO sign-in start/complete, browser-session
+  lifecycle with hygiene (activity touch, expired-session GC, single-active-session-per-principal),
+  the session-principal context projection, and the graph entry point delegated to the web graph
+  orchestrator. Sign-in start/complete are unauthenticated (trust anchored by the signed SSO state
+  and provider code exchange); audit appends are best-effort and never fail the primary action.
+contract: iweb_orchestrator
+sourcePath: src/server/web.ts
+methods:
+  - name: startSignIn
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the configured identity providers through the policy repository (unauthenticated
+          by nature — no caller credential)
+        type: call
+        targetComponent: policy_repository
+        targetMethod: listIdentityProviders
+      - stepNumber: 2
+        description: Select the identity-provider configuration whose id is providerId
+        type: local
+      - stepNumber: 3
+        description: If the selected provider is unknown or not enabled, reject
+        type: branch
+        condition: the selected provider is unknown or not enabled
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the sign-in start for an unknown or disabled provider
+        type: throw
+        error: unknown or disabled identity provider
+      - stepNumber: 5
+        description: Generate a cryptographically random nonce for this sign-in attempt
+        type: local
+      - stepNumber: 6
+        description: >-
+          Sign an SSO state binding providerId, the nonce, and redirectUri via the single signing
+          authority
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: signSsoState
+      - stepNumber: 7
+        description: Build the provider authorization URL from the config, the signed state, and redirectUri
+        type: call
+        targetComponent: identity_provider_adapter
+        targetMethod: buildAuthorizationUrl
+      - stepNumber: 8
+        description: Append a redacted audit event without letting a failure fail the sign-in start
+        type: try
+        endStep: 10
+        catches:
+          - error: audit append failure
+            step: 11
+      - stepNumber: 9
+        description: >-
+          Append the redacted web.signin.start audit event (info level) under the active retention
+          policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 10
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 12
+      - stepNumber: 11
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 12
+        description: Return the provider authorization URL
+        type: return
+        outcome: authorization URL
+  - name: signOut
+    narrative:
+      - stepNumber: 1
+        description: Remove the browser session by id through the web session repository
+        type: call
+        targetComponent: web_session_repository
+        targetMethod: remove
+      - stepNumber: 2
+        description: >-
+          Opportunistically prune all sessions already past their expiry (housekeeping on the
+          sign-out write path)
+        type: call
+        targetComponent: web_session_repository
+        targetMethod: pruneExpired
+      - stepNumber: 3
+        description: Append a redacted audit event without letting a failure fail the sign-out
+        type: try
+        endStep: 5
+        catches:
+          - error: audit append failure
+            step: 6
+      - stepNumber: 4
+        description: Append the redacted web.signout audit event (info level) under the active retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 5
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 7
+      - stepNumber: 6
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 7
+        description: Return once the session has been removed
+        type: return
+        outcome: signed out
+  - name: getCurrentContext
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the session to a Principal through the single auth authority's session bridge
+          (rejects an expired or absent session)
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateSession
+      - stepNumber: 2
+        description: >-
+          Record activity by touching the session's lastSeenAt to now through the web session
+          repository
+        type: call
+        targetComponent: web_session_repository
+        targetMethod: touch
+      - stepNumber: 3
+        description: >-
+          Derive the capability flags from the principal's grants — isAdmin when a grant is
+          instance-wide ('*'), canWriteProjects when any grant carries a write permission (mcp:write
+          or project:create), visibleProjectIds from the specific projectIds named in the grants,
+          visibleUnitIds from the orgUnitIds named in the grants — set local to whether the server
+          is the local developer server (cfg.devMode), which signals the client to hide the
+          tenancy/login chrome — and assemble the WebContext (subject, grants, the derived flags,
+          and local)
+        type: local
+      - stepNumber: 4
+        description: Return the session-principal context
+        type: return
+        outcome: web context
+  - name: getGraph
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Delegate to the web graph orchestrator, which authenticates the session and returns the
+          scoped level-of-detail graph
+        type: call
+        targetComponent: web_graph_orchestrator
+        targetMethod: getGraph
+    detail: calls-only
+  - name: completeSignIn
+    narrative:
+      - stepNumber: 1
+        description: Verify the signed SSO state (rejects tampered or expired state) and return its payload.
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: verifySsoState
+      - stepNumber: 2
+        description: Parse the verified state payload into providerId, nonce, and redirectUri.
+        type: local
+      - stepNumber: 3
+        description: Resolve the configured identity providers through the policy repository.
+        type: call
+        targetComponent: policy_repository
+        targetMethod: listIdentityProviders
+      - stepNumber: 4
+        description: Select the identity-provider configuration whose id is the state's providerId.
+        type: local
+      - stepNumber: 5
+        description: If the selected provider is unknown or not enabled, reject.
+        type: branch
+        condition: the provider is unknown or not enabled
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Reject the callback for an unknown or disabled provider.
+        type: throw
+        error: unknown or disabled identity provider
+      - stepNumber: 7
+        description: Exchange the authorization code with the provider for a redacted token summary.
+        type: call
+        targetComponent: identity_provider_adapter
+        targetMethod: exchangeCode
+      - stepNumber: 8
+        description: >-
+          Verify the provider metadata and resolve it to a Wairon PrincipalSubject (no raw provider
+          tokens).
+        type: call
+        targetComponent: identity_provider_adapter
+        targetMethod: resolveSubject
+      - stepNumber: 9
+        description: Look up the hosted user by the resolved subject's issuer and external subject id.
+        type: call
+        targetComponent: user_repository
+        targetMethod: findByExternalSubject
+      - stepNumber: 10
+        description: >-
+          If no hosted user matched, provision a first-login record; otherwise use the existing
+          user.
+        type: branch
+        condition: no hosted user matched
+        onFalseStep: 13
+      - stepNumber: 11
+        description: >-
+          Build a new active first-login HostedUserRecord for the subject (empty grants; an admin
+          assigns grants afterwards).
+        type: local
+      - stepNumber: 12
+        description: Persist the newly provisioned first-login user record through the user repository.
+        type: call
+        targetComponent: user_repository
+        targetMethod: upsert
+      - stepNumber: 13
+        description: >-
+          If the resolved hosted user's status is not active, reject the sign-in (a deactivated user
+          may not sign in).
+        type: branch
+        condition: the resolved hosted user is not active
+        onFalseStep: 15
+      - stepNumber: 14
+        description: Reject the sign-in of a deactivated user.
+        type: throw
+        error: deactivated user may not sign in
+      - stepNumber: 15
+        description: >-
+          Build the new WebSession (session id with the reserved prefix, subject, grants = the
+          user's current grants, providerId, createdAt, expiresAt = now + the session TTL).
+          MULTI-DEVICE: prior sessions are left intact, so one principal may hold concurrent browser
+          sessions across devices/tabs; each is independently revocable via signOut, and
+          signOutEverywhere revokes them all.
+        type: local
+      - stepNumber: 16
+        description: Persist the new browser session through the web session repository.
+        type: call
+        targetComponent: web_session_repository
+        targetMethod: create
+      - stepNumber: 17
+        description: Append a redacted audit event without letting a failure fail the sign-in.
+        type: try
+        endStep: 19
+        catches:
+          - error: audit append failure
+            step: 20
+      - stepNumber: 18
+        description: >-
+          Append a redacted web.signin audit event (security level) under the active retention
+          policy.
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 19
+        description: On a successful append, continue to the return and skip the audit-failure handler.
+        type: jump
+        toStep: 21
+      - stepNumber: 20
+        description: Record the audit append failure as a server diagnostic and continue.
+        type: local
+      - stepNumber: 21
+        description: Return the new session id (the portal sets it as the browser session cookie).
+        type: return
+        outcome: new session id
+  - name: signOutEverywhere
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the presented session to a Principal (an expired or absent session yields an
+          unauthenticated principal).
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateSession
+      - stepNumber: 2
+        description: If the session did not resolve to an authenticated principal, there is nothing to revoke.
+        type: branch
+        condition: the session did not resolve to an authenticated principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return without action (idempotent no-op).
+        type: return
+        outcome: no-op
+      - stepNumber: 4
+        description: List every browser session belonging to the principal's subject.
+        type: call
+        targetComponent: web_session_repository
+        targetMethod: listBySubject
+      - stepNumber: 5
+        description: For each of the subject's browser sessions
+        type: loop
+        loopKind: forEach
+        over: the subject's sessions
+        endStep: 6
+      - stepNumber: 6
+        description: Remove the session so it can no longer resolve to a Principal.
+        type: call
+        targetComponent: web_session_repository
+        targetMethod: remove
+      - stepNumber: 7
+        description: Append a redacted audit event without letting a failure fail the sign-out.
+        type: try
+        endStep: 9
+        catches:
+          - error: audit append failure
+            step: 10
+      - stepNumber: 8
+        description: >-
+          Append a redacted web.signout.all audit event (security level) under the active retention
+          policy.
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 9
+        description: On a successful append, continue to the return and skip the audit-failure handler.
+        type: jump
+        toStep: 11
+      - stepNumber: 10
+        description: Record the audit append failure as a server diagnostic and continue.
+        type: local
+      - stepNumber: 11
+        description: Return (all of the principal's sessions revoked).
+        type: return
+        outcome: all sessions revoked
+  - name: startDevSession
+    narrative:
+      - stepNumber: 1
+        description: >-
+          If the server is NOT in local developer mode (cfg.devMode is false), reject — this path
+          must never mint a session in a hosted deployment
+        type: branch
+        condition: cfg.devMode is false
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Reject the dev-session mint outside local developer mode
+        type: throw
+        error: dev session is only available under wairon dev (devMode)
+      - stepNumber: 3
+        description: >-
+          List existing sessions for the synthetic local-developer subject through the web session
+          repository (so the dev server reuses one session rather than churning the store on every
+          cookieless hit)
+        type: call
+        targetComponent: web_session_repository
+        targetMethod: listBySubject
+      - stepNumber: 4
+        description: 'If a local-developer session already exists, reuse it: return its id'
+        type: branch
+        condition: a local-developer session already exists
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Return the existing local-developer session id
+        type: return
+        outcome: existing dev session id
+      - stepNumber: 6
+        description: >-
+          Build a new WebSession bound to the synthetic local-developer subject with a single grant
+          on the one local project (mcp:read + mcp:write on the local project id — never an
+          instance-wide '*' grant), expiresAt = now + the session TTL
+        type: local
+      - stepNumber: 7
+        description: Persist the new local-developer session through the web session repository
+        type: call
+        targetComponent: web_session_repository
+        targetMethod: create
+      - stepNumber: 8
+        description: Return the new local-developer session id
+        type: return
+        outcome: new dev session id
+    detail: full
+  - name: getProjectCanvas
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Delegate to the web graph orchestrator, which authenticates the session, scopes the
+          project, and renders the interactive canvas
+        type: call
+        targetComponent: web_graph_orchestrator
+        targetMethod: getProjectCanvas
+    detail: calls-only
+detail: full
+lint:
+  allow:
+    - code: UNREALIZED_DEPENDENCY
+      reason: >-
+        policy_repository/audit_repository gating lands with web UI slices 2–3 (in flight) — the
+        declared edges are design-ahead, not stale.
+status: complete
+createdAt: '2026-07-11T11:36:44.225Z'
+updatedAt: '2026-07-11T20:30:16.623Z'

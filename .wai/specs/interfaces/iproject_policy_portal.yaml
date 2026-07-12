@@ -1,0 +1,75 @@
+id: iproject_policy_portal
+name: Project Policy Portal Interface
+description: >-
+  Draft control-plane HTTP contract for profile-aware project initialization and pack/profile policy
+  enforcement.
+component: project_policy_portal
+methods:
+  - name: initializeProjectWithProfile
+    description: Create a hosted project from an explicit ProjectInitRequest and profile selection.
+    signature: >-
+      initializeProjectWithProfile(credential: string, request: ProjectInitRequest):
+      HostedProjectRecord
+    returns: HostedProjectRecord
+    params:
+      - name: credential
+        type: string
+      - name: request
+        type: ProjectInitRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /projects/init
+  - name: evaluateProjectPolicy
+    description: Evaluate one hosted project's packs and profile selection against active instance policy.
+    signature: 'evaluateProjectPolicy(credential: string, projectId: string): PolicyEvaluationResult'
+    returns: PolicyEvaluationResult
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /projects/{id}/policy/evaluation
+  - name: reconcileProjectPolicy
+    description: Apply allowed auto-reconciliation for one hosted project's pack/profile policy gaps.
+    signature: 'reconcileProjectPolicy(credential: string, projectId: string): PolicyEvaluationResult'
+    returns: PolicyEvaluationResult
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /projects/{id}/policy/reconcile
+  - name: getPackPolicy
+    description: Return the active hosted instance pack/profile policy.
+    signature: 'getPackPolicy(credential: string): InstancePackPolicy'
+    returns: InstancePackPolicy
+    params:
+      - name: credential
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /instance/pack-policy
+  - name: setPackPolicy
+    description: Replace the active hosted instance pack/profile policy.
+    signature: 'setPackPolicy(credential: string, policy: InstancePackPolicy): InstancePackPolicy'
+    returns: InstancePackPolicy
+    params:
+      - name: credential
+        type: string
+      - name: policy
+        type: InstancePackPolicy
+    endpoint:
+      transport: HTTP
+      method: PUT
+      path: /instance/pack-policy
+status: complete
+createdAt: '2026-07-08T21:59:56.662Z'
+updatedAt: '2026-07-09T20:53:13.403Z'

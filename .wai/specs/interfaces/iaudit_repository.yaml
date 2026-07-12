@@ -1,0 +1,44 @@
+id: iaudit_repository
+name: Audit Repository Interface
+description: >-
+  Facade contract for durable hosted audit storage. Hosted workflows append events through this
+  contract and admin-only workflows query or prune through it.
+component: audit_repository
+methods:
+  - name: append
+    description: >-
+      Append one redacted audit event if the policy says it should be persisted. The repository must
+      reject raw token, secret, or full-spec payload metadata.
+    signature: 'append(event: AuditEvent, policy: AuditRetentionPolicy): void'
+    returns: void
+    params:
+      - name: event
+        type: AuditEvent
+      - name: policy
+        type: AuditRetentionPolicy
+  - name: query
+    description: Return redacted audit events matching an admin query filter.
+    signature: 'query(query: AuditQuery): AuditEvent[]'
+    returns: AuditEvent[]
+    params:
+      - name: query
+        type: AuditQuery
+  - name: count
+    description: Count redacted audit events matching an admin query filter.
+    signature: 'count(query: AuditQuery): number'
+    returns: number
+    params:
+      - name: query
+        type: AuditQuery
+  - name: prune
+    description: Apply retention policy and delete expired audit events.
+    signature: 'prune(policy: AuditRetentionPolicy, now: string): number'
+    returns: number
+    params:
+      - name: policy
+        type: AuditRetentionPolicy
+      - name: now
+        type: string
+status: complete
+createdAt: '2026-07-08T20:17:01.026Z'
+updatedAt: '2026-07-09T17:43:40.307Z'

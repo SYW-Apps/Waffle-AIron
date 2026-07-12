@@ -1,0 +1,29 @@
+id: organization_index_impl
+name: Organization Index Implementation
+description: >-
+  Read-path projection over the organization store's units and placements. Shares the store's
+  references; never mutates, never goes stale.
+contract: iorganization_index
+sourcePath: src/server/organization.ts
+methods:
+  - name: listUnits
+    narrative: []
+    intent: >-
+      Return the store's organization units, narrowed to the direct children of parentId when
+      supplied, otherwise all units. Read-only over the store's current references; an empty result
+      is normal, never an error.
+  - name: listPlacements
+    narrative: []
+    intent: >-
+      Return the store's project placements matching every populated filter — project id and
+      organization unit id — otherwise all placements. Read-only over the store's current
+      references; an empty result is normal, never an error.
+  - name: getUnit
+    narrative: []
+    intent: >-
+      Return the store's organization unit whose id matches exactly, or null when absent. Read-only
+      over the store's current references; absence is a null result, not an error.
+detail: intent
+status: complete
+createdAt: '2026-07-09T22:07:49.771Z'
+updatedAt: '2026-07-09T22:13:34.196Z'

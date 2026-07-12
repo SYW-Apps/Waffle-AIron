@@ -1,0 +1,13 @@
+id: approval_registry
+name: Approval Registry
+description: >-
+  Write-path component for creating approval requests, recording approval or denial decisions,
+  expiring pending requests, and marking approved requests completed after execution.
+subsystem: sdd_host
+componentType: Registry
+owns: []
+dependsOn:
+  - approval_store
+status: complete
+createdAt: '2026-07-09T07:19:10.775Z'
+updatedAt: '2026-07-09T19:32:53.747Z'

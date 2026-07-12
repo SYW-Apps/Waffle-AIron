@@ -1,0 +1,25 @@
+kind: value-object
+id: visible_surface_entry
+name: VisibleSurfaceEntry
+description: >-
+  One entry of the visibility-resolved surface catalog served to an observer project: a discoverable
+  target with its audience distance and the redacted public interface summaries whose audience
+  ceiling covers that distance.
+subsystem: sdd_host
+fields:
+  - name: projectId
+    type: string
+    description: The visible target project.
+    optional: false
+    key: primary
+  - name: distance
+    type: string
+    description: 'Audience distance class: department | instance | partner.'
+    optional: false
+  - name: interfaces
+    type: PublicInterfaceSummary[]
+    description: Redacted catalog-grade summaries, already audience-filtered for this observer.
+    optional: false
+methods: []
+createdAt: '2026-07-11T09:38:08.814Z'
+updatedAt: '2026-07-11T09:38:08.818Z'

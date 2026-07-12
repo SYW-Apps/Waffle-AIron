@@ -1,0 +1,14 @@
+id: surface_transfer_adapter
+name: Surface Transfer Adapter
+description: >-
+  File I/O for surface exchange with OTHER locations: writes generated snapshots into chained child
+  project directories (.wai/surfaces/ of the child) and rendered exports to output paths, and reads
+  foreign documents (native snapshots or OpenAPI) on import. Distinct from the repository's fs
+  adapter, which owns only this project's own aggregate.
+subsystem: sdd_surfaces
+componentType: Adapter
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-07-10T23:12:32.346Z'
+updatedAt: '2026-07-11T09:04:02.323Z'

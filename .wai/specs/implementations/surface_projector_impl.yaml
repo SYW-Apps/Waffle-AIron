@@ -1,0 +1,73 @@
+id: surface_projector_impl
+name: Surface Projector Implementation
+description: Contract-grade projection with audience filtering and type-closure computation.
+contract: isurface_projector
+sourcePath: src/core/surfaces.ts
+methods:
+  - name: projectOwnSurface
+    narrative:
+      - stepNumber: 1
+        description: Load the L0 system spec (gateway publicInterfaces + name)
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: loadSystemSpec
+      - stepNumber: 2
+        description: Load subsystem specs (published surfaces backing the gateway entries)
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 3
+        description: Load component specs (backing portals and their dispatch tables)
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: loadComponentSpecs
+      - stepNumber: 4
+        description: Load interface specs (the full L3 contracts)
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 5
+        description: Load type specs (closure source)
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: loadTypeSpecs
+      - stepNumber: 6
+        description: Filter the L0 gateway entries to those at or below the audience ceiling
+        type: local
+      - stepNumber: 7
+        description: >-
+          Resolve each entry to its subsystem-published Portal and copy the full contract: methods
+          with params, returns, guarantees, effect, endpoints, plus the portal's dispatch table
+        type: local
+      - stepNumber: 8
+        description: Compute the transitive type closure of every exported signature and embed the definitions
+        type: local
+      - stepNumber: 9
+        description: Stamp identity, origin generated, the current StateId, and generatedAt
+        type: local
+      - stepNumber: 10
+        description: Return the self-contained snapshot
+        type: return
+        outcome: SurfaceSnapshot
+  - name: projectChildSurface
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Derive the family ceiling: a chained child is part of the system family, so
+          project-audience entries are included
+        type: local
+      - stepNumber: 2
+        description: Project the own surface at the family ceiling
+        type: call
+        targetComponent: surface_projector
+        targetMethod: projectOwnSurface
+      - stepNumber: 3
+        description: Re-stamp the snapshot as scoped to the receiving child (provenance note)
+        type: local
+      - stepNumber: 4
+        description: Return the child-scoped snapshot
+        type: return
+        outcome: SurfaceSnapshot
+status: complete
+createdAt: '2026-07-10T23:15:11.894Z'
+updatedAt: '2026-07-11T18:45:03.920Z'

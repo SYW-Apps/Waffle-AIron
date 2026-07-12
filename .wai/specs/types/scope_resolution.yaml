@@ -1,0 +1,32 @@
+kind: value-object
+id: scope_resolution
+name: ScopeResolution
+description: >-
+  Pure result of resolving a principal's authorization scope for one required permission over the
+  organization-unit tree and project placements. Either signals instance-wide super-admin (all=true,
+  no filtering) or carries the explicit set of in-scope hosted project ids and organization unit
+  ids.
+subsystem: sdd_host
+fields:
+  - name: all
+    type: boolean
+    description: >-
+      True when the principal holds an instance-wide '*' super-admin grant carrying the permission:
+      no filtering applies and every project/unit is in scope. When true, projectIds and unitIds are
+      empty and MUST be ignored.
+    optional: false
+  - name: projectIds
+    type: string[]
+    description: >-
+      Deduplicated hosted project ids in scope for the permission when all=false: the union of
+      directly project-scoped grants and every project placed in an in-scope unit subtree.
+    optional: false
+  - name: unitIds
+    type: string[]
+    description: >-
+      Deduplicated organization unit ids in scope for the permission when all=false: for each
+      unit-scoped grant, that unit plus all its recursive descendant units.
+    optional: false
+methods: []
+createdAt: '2026-07-10T17:12:43.268Z'
+updatedAt: '2026-07-10T17:12:43.380Z'

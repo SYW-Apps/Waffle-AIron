@@ -1,0 +1,26 @@
+kind: value-object
+id: documentation_rule_config
+name: DocumentationRuleConfig
+description: >-
+  Documentation completeness rules enforced by the SDD linter. Controls whether missing descriptions
+  on specs, methods, and fields are flagged.
+fields:
+  - name: minDescriptionLength
+    type: i32
+    description: Non-negative integer minimum character length for descriptions when present or required
+    optional: true
+  - name: requireDescriptions
+    type: boolean
+    description: Require non-empty descriptions on subsystem, component, interface, and type specs
+    optional: true
+  - name: requireMethodDescriptions
+    type: boolean
+    description: Require descriptions on every interface and type method
+    optional: true
+  - name: requireFieldDescriptions
+    type: boolean
+    description: Require descriptions on every type field
+    optional: true
+methods: []
+createdAt: '2026-07-06T20:47:14.570Z'
+updatedAt: '2026-07-06T21:48:41.397Z'

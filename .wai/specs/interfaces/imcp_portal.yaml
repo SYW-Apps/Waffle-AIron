@@ -86,6 +86,25 @@ methods:
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_internalize_subsystem
+  - name: listResources
+    description: 'MCP resource: list the built-in SDD skills the server publishes as read-only resources.'
+    signature: 'listResources(): SkillResourceDescriptor[]'
+    returns: SkillResourceDescriptor[]
+    params: []
+    endpoint:
+      transport: Custom
+      address: mcp resources/list (built-in SDD skills)
+  - name: readResource
+    description: 'MCP resource: read one published built-in SDD skill''s content by resource id.'
+    signature: 'readResource(resourceId: string): string'
+    returns: string
+    params:
+      - name: resourceId
+        type: string
+        description: The MCP resource id / skill id to read.
+    endpoint:
+      transport: Custom
+      address: mcp resources/read (built-in SDD skill)
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-05T18:45:01.286Z'
+updatedAt: '2026-07-10T12:22:19.775Z'

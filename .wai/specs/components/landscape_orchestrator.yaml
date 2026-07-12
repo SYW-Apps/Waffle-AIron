@@ -1,0 +1,31 @@
+id: landscape_orchestrator
+name: Landscape Orchestrator
+description: >-
+  Owns hosted-instance landscape ADMINISTRATION workflows: organization-unit administration, project
+  placement, public-surface snapshot refresh, cross-project relation management (visibility-gated
+  once organization units exist), and landscape graph generation. It authenticates credentials
+  through the single auth authority, authorizes by Principal grants (landscape:manage or
+  instance-admin for writes; landscape:read or higher for reads), reads a target project's specs
+  only to produce its redacted public-surface snapshot and otherwise consumes only stored redacted
+  snapshots, and records audit events for landscape changes. The consumer-facing discovery/exchange
+  workflows (the four data-plane MCP tools and the artifact download) live on the surface exchange
+  orchestrator — two workflows, two orchestrators.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - auth_specialist
+  - organization_repository
+  - project_registry
+  - project_relation_repository
+  - public_surface_repository
+  - landscape_diagram_specialist
+  - audit_repository
+  - host_core_adapter
+  - scope_specialist
+  - visibility_specialist
+lint:
+  allow: []
+status: complete
+createdAt: '2026-07-08T21:12:56.113Z'
+updatedAt: '2026-07-11T12:03:50.251Z'

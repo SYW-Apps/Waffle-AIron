@@ -41,6 +41,13 @@ methods:
       - stepNumber: 1
         description: Derive the host's compare/PR URL from the remote, default and working branches
         type: local
+lint:
+  allow:
+    - code: UNDECLARED_DEPENDENCY
+      reason: >-
+        Uses the shared secrets utility (utils/secrets.ts) which is spec-homed under sdd_host's
+        secret_registry — placement debt: shared infrastructure candidate, not a sanctioned
+        cross-subsystem reach.
 status: complete
 createdAt: '2026-07-04T16:33:28.728Z'
-updatedAt: '2026-07-04T16:37:37.302Z'
+updatedAt: '2026-07-11T20:30:07.313Z'

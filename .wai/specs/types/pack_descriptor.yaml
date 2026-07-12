@@ -34,6 +34,19 @@ fields:
     type: string
     description: The load error if the pack failed to load, else absent
     optional: true
+  - name: tier
+    type: string
+    description: >-
+      For a global pack, which tier it was discovered in: "image" (immutable image-layer directory,
+      WAIRON_IMAGE_PACKS_DIR) or "instance" (mutable instance directory, WAIRON_PACKS_DIR). Absent
+      for project-scoped packs.
+    optional: true
+  - name: shadowed
+    type: boolean
+    description: >-
+      True for an image-tier pack that is shadowed by a same-named instance pack (the instance copy
+      is the effective one). Reported as drift; absent/false otherwise.
+    optional: true
 methods: []
 createdAt: '2026-07-04T18:42:23.978Z'
-updatedAt: '2026-07-04T18:42:23.980Z'
+updatedAt: '2026-07-10T12:36:00.564Z'

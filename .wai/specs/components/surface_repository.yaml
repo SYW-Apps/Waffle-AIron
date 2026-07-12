@@ -1,0 +1,17 @@
+id: surface_repository
+name: Surface Repository
+description: >-
+  Facade over the stored surface snapshots of this project (.wai/surfaces/): imported
+  exchanged/authored surfaces and received parent-generated snapshots. Consumers use the facade
+  only.
+subsystem: sdd_surfaces
+componentType: Repository
+owns:
+  - surface_store
+  - surface_registry
+  - surface_index
+  - surface_fs_adapter
+dependsOn: []
+status: complete
+createdAt: '2026-07-10T23:12:15.724Z'
+updatedAt: '2026-07-11T09:04:02.260Z'

@@ -1,0 +1,55 @@
+kind: value-object
+id: naming_rule_config
+name: NamingRuleConfig
+description: >-
+  Context-sensitive naming convention rules for the SDD linter. Each pattern is either a known
+  casing style (snake_case, PascalCase, camelCase, kebab-case, UPPER_CASE) or a valid regular
+  expression; invalid regex patterns are reported as validation errors.
+fields:
+  - name: components
+    type: string
+    description: Casing for component IDs (e.g. snake_case)
+    optional: true
+  - name: methods
+    type: string
+    description: Casing for interface method names (e.g. camelCase)
+    optional: true
+  - name: types
+    type: string
+    description: Default casing for type names (e.g. PascalCase)
+    optional: true
+  - name: entities
+    type: string
+    description: Casing override for entity type names; falls back to types
+    optional: true
+  - name: valueObjects
+    type: string
+    description: Casing override for value-object type names; falls back to types
+    optional: true
+  - name: fields
+    type: string
+    description: Default casing for type fields (e.g. camelCase)
+    optional: true
+  - name: constants
+    type: string
+    description: Casing override for constant-style fields (e.g. UPPER_CASE); falls back to fields
+    optional: true
+  - name: variables
+    type: string
+    description: Casing for method parameters and variables (e.g. camelCase)
+    optional: true
+  - name: subsystems
+    type: string
+    description: Casing for subsystem IDs (e.g. snake_case)
+    optional: true
+  - name: interfaces
+    type: string
+    description: Casing for interface IDs (e.g. snake_case)
+    optional: true
+  - name: stereotypes
+    type: object
+    description: Per-component-type prefix, suffix, or regex naming constraints
+    optional: true
+methods: []
+createdAt: '2026-07-06T20:47:01.138Z'
+updatedAt: '2026-07-06T21:48:41.503Z'

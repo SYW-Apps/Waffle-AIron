@@ -1,0 +1,45 @@
+id: surface_repository_impl
+name: Surface Repository Implementation
+description: 'Facade forwarding: writes through the registry, reads through the index.'
+contract: isurface_repository
+sourcePath: src/core/surfaces.ts
+methods:
+  - name: saveSnapshot
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry write path
+        type: call
+        targetComponent: surface_registry
+        targetMethod: upsertSnapshot
+  - name: getSnapshot
+    narrative:
+      - stepNumber: 1
+        description: Read through the index
+        type: call
+        targetComponent: surface_index
+        targetMethod: byProject
+  - name: listSnapshots
+    narrative:
+      - stepNumber: 1
+        description: Read through the index
+        type: call
+        targetComponent: surface_index
+        targetMethod: all
+  - name: removeSnapshot
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry write path
+        type: call
+        targetComponent: surface_registry
+        targetMethod: deleteSnapshot
+  - name: hydrate
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry's file read-back
+        type: call
+        targetComponent: surface_registry
+        targetMethod: hydrateFromFiles
+    symbol: loadSurfaceSnapshots
+status: complete
+createdAt: '2026-07-10T23:14:40.814Z'
+updatedAt: '2026-07-11T19:14:23.138Z'

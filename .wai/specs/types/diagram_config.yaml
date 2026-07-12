@@ -1,0 +1,22 @@
+kind: value-object
+id: diagram_config
+name: DiagramConfig
+description: >-
+  Configuration for the interactive diagram renderer. Controls visual style, default view mode, and
+  feature toggles for the canvas output.
+fields:
+  - name: lineStyle
+    type: string
+    description: 'Line routing style: bezier, straight, or taxi (orthogonal)'
+    optional: true
+  - name: defaultView
+    type: string
+    description: 'Default view mode: architecture, types, or databases'
+    optional: true
+  - name: showDatabases
+    type: boolean
+    description: Whether to show the databases view tab in the canvas
+    optional: true
+methods: []
+createdAt: '2026-07-06T20:47:29.113Z'
+updatedAt: '2026-07-06T20:47:29.138Z'

@@ -1,0 +1,35 @@
+kind: value-object
+id: principal_subject
+name: PrincipalSubject
+description: >-
+  Human or service identity resolved from local bootstrap credentials, user-managed tokens, or a
+  future external identity provider. This is the stable actor identity attached to MCP tokens and
+  audit events; raw secrets are never represented here.
+fields:
+  - name: userId
+    type: string
+    description: Stable Wairon user or service-principal id.
+    optional: false
+  - name: kind
+    type: string
+    description: 'Actor kind: "human", "service", or "bootstrap".'
+    optional: false
+  - name: issuer
+    type: string
+    description: Identity issuer such as "local", "bootstrap", or an external OIDC issuer identifier.
+    optional: false
+  - name: externalSubject
+    type: string
+    description: Issuer-local subject id when the identity came from SSO or another external provider.
+    optional: true
+  - name: displayName
+    type: string
+    description: Human-readable name for UI and audit views.
+    optional: true
+  - name: email
+    type: string
+    description: Verified email address when available.
+    optional: true
+methods: []
+createdAt: '2026-07-08T19:34:22.659Z'
+updatedAt: '2026-07-08T19:34:22.665Z'
