@@ -35,6 +35,10 @@ export function isCiDraftWaivable(issue: ValidationIssue): boolean {
   if (issue.severity !== 'warning') return false;
   if (issue.code === 'DRAFT_COMPONENT_WARNING') return true;
   if (issue.code === 'UNUSED_COMPONENT') return issue.draftContext === true;
+  // References that resolve only in the parent tree, downgraded because this is a
+  // chained subproject validated standalone — a subproject is verified from the
+  // parent root, so these must not fail a subproject's own CI run.
+  if (issue.crossTreeContext === true) return true;
   return false;
 }
 

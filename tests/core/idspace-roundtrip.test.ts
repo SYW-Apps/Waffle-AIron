@@ -358,6 +358,51 @@ describe('standalone child: cross-tree refs warn instead of erroring like typos'
     expect(res.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE')).toHaveLength(0);
   });
 
+  it('validating a chained subproject STANDALONE downgrades parent-tree refs to warnings + a clear notice (does not explode)', async () => {
+    // Parent project mounts `kid` as a chained subproject; kid references a
+    // component that lives in the parent (absent when kid is validated alone).
+    rootDir = makeRoot();
+    saveSubsystemSpec(subsystem('parent-sub'));
+    saveComponentSpec(component('parent-portal', 'parent-sub', { componentType: 'Portal', portalType: 'Custom' } as Partial<ComponentSpec>));
+    saveSubsystemSpec(subsystem('kid', { projectPath: 'kid' }));
+
+    const kidDir = path.join(rootDir, 'kid');
+    fs.mkdirSync(path.join(kidDir, '.wai', 'specs'), { recursive: true });
+    const kid = workspaceFor(kidDir);
+    kid.saveSystemSpec({
+      schemaVersion: '1.0.0', name: 'kid-system', vision: 'v',
+      boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
+    });
+    kid.saveSubsystemSpec(subsystem('k-core', { parentSystem: 'kid-system' }));
+    // A dependency on a component that only exists in the parent tree.
+    kid.saveComponentSpec(component('k-orch', 'k-core', { dependsOn: ['parent-portal'] }));
+    invalidateSpecCache();
+
+    const { validateSddTree } = await import('../../src/core/validation.js');
+
+    // From the PARENT root the whole tree resolves — no cross-tree noise.
+    setProjectRoot(rootDir);
+    invalidateSpecCache();
+    const fromParent = validateSddTree();
+    expect(fromParent.issues.filter(i => i.code === 'CHAINED_SUBPROJECT_CONTEXT')).toHaveLength(0);
+
+    // From KID's own root the parent ref cannot resolve — but it is DOWNGRADED to
+    // a warning (not a hard INVALID_DEPENDENCY_REFERENCE error) with one notice,
+    // so `validate` passes (valid) instead of exploding.
+    setProjectRoot(kidDir);
+    invalidateSpecCache();
+    const fromKid = validateSddTree();
+    expect(fromKid.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE' && i.severity === 'error')).toHaveLength(0);
+    const notice = fromKid.issues.find(i => i.code === 'CHAINED_SUBPROJECT_CONTEXT');
+    expect(notice).toBeDefined();
+    expect(notice!.message).toMatch(/chained subproject/);
+    expect(notice!.crossTreeContext).toBe(true);
+    // The dependency warning is present but marked cross-tree (so --ci waives it).
+    const dep = fromKid.issues.find(i => i.code === 'INVALID_DEPENDENCY_REFERENCE');
+    expect(dep?.severity).toBe('warning');
+    expect(dep?.crossTreeContext).toBe(true);
+  });
+
   it('a root-name-qualified target (waffler_core::x form, authored from a parent) warns, not errors, from the child root', async () => {
     // The exact field report: refs stored as `<parent-subsystem>::x` (NOT super::)
     // because they were authored from the parent root. From the child dir the
