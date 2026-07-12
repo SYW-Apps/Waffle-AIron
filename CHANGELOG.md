@@ -1,12 +1,18 @@
 # Changelog
 
-## Unreleased (0.2.0)
+## Unreleased (next release from v3.2.5)
 
 A large correctness + capability release. **No CLI commands, MCP tools, spec
-schema fields, or library APIs were removed or renamed** — everything below is
-additive or a bug fix. The one compatibility surface to review before
-upgrading a CI pipeline is the conformance gate (see *Compatibility &
-migration*).
+schema fields, or library APIs were removed or renamed** — the CLI/MCP/library
+surface is fully backward compatible. Two *deployment/CI* surfaces do change
+behavior and are the reason this is not a plain patch: the conformance gate
+makes `wairon validate` stricter (a stale L4 `sourcePath` is now a hard error,
+and `validate --ci` surfaces new warnings — see *Compatibility & migration*),
+and the container image was rebased debian→alpine with npm removed (extension
+images built `FROM` it must use `apk`, not `apt`, and cannot rely on a bundled
+npm). Recommend a `[minor]` bump (→ v3.3.0) for the additive API framing, or
+`[major]` (→ v4.0.0) if the stricter CI gate / image rebase should signal
+breaking to downstream consumers.
 
 ### Security hardening (multi-tenant + web UI + image)
 
