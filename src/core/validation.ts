@@ -17,7 +17,40 @@ import { buildRuleContext, composeRuleSequence, makeScopeFilter } from './rules/
 import { LoadedExtensions, loadProjectExtensions } from './extensions.js';
 import { loadSurfaceSnapshots } from './surfaces.js';
 import { buildCodeModel } from './source-analysis.js';
+import { findChainingParent } from './specs.js';
 import { getProjectRoot } from '../utils/fs.js';
+
+/**
+ * Codes whose verdict is ROOT-DEPENDENT: they fail because a referenced spec, a
+ * source file, or a dependency edge cannot be resolved in THIS tree, but resolve
+ * fine from the parent. When the tree is a chained subproject validated
+ * standalone, the target legitimately lives in the absent parent (or is reached
+ * by a parent-root-relative sourcePath), so these downgrade to warnings and the
+ * parent root remains the authoritative gate. Two families:
+ *   - cross-tree spec references (type/component/subsystem/dependency), and
+ *   - code↔spec conformance (sourcePaths + realization + dependency graph),
+ *     whose sourcePaths are stored relative to the authoring (parent) root.
+ */
+const SUBPROJECT_LENIENT_CODES = new Set([
+  // reference resolution
+  'UNDEFINED_TYPE_REFERENCE',
+  'INVALID_DEPENDENCY_REFERENCE',
+  'INVALID_TARGET_COMPONENT_REFERENCE',
+  'INVALID_SUBSYSTEM_REFERENCE',
+  'UNDECLARED_DEPENDENCY_CALL',
+  'INVALID_TRUSTED_LINK',
+  'CROSS_SUBSYSTEM_NON_ADAPTER',
+  'CROSS_TREE_REF_UNRESOLVED',
+  // code↔spec conformance (root-relative sourcePaths / import graph)
+  'MISSING_SOURCE_FILE',
+  'SOURCE_PATH_ESCAPES_ROOT',
+  'MISSING_SOURCE_PATH',
+  'UNREALIZED_METHOD',
+  'CONFORMANCE_ANALYSIS_SKIPPED',
+  'CONFORMANCE_DEGRADED',
+  'UNDECLARED_DEPENDENCY',
+  'UNREALIZED_DEPENDENCY',
+]);
 
 // ---------------------------------------------------------------------------
 // Validation
@@ -44,6 +77,14 @@ export interface ValidationIssue {
    * that merely reflect declared, unfinished work without silencing the rule.
    */
   draftContext?: boolean;
+  /**
+   * True when this issue reflects a reference that cannot be resolved because the
+   * tree is being validated STANDALONE as a chained subproject — the referenced
+   * spec lives in the (absent) parent tree. Downgraded from error to warning and
+   * marked so the --ci gate can waive it: a subproject is fully verified from the
+   * parent root, not standalone.
+   */
+  crossTreeContext?: boolean;
 }
 
 export interface ValidationResult {
@@ -318,6 +359,47 @@ export function validateSddTree(
 
     for (const rule of composeRuleSequence(extensions.rules)) {
       rule.check(ctx);
+    }
+
+    // Chained-subproject leniency: when this tree is being validated STANDALONE
+    // but is actually a chained subproject of a discoverable parent, references
+    // INTO the parent (shared types, sibling subsystems, cross-tree components)
+    // point at specs that physically live ABOVE this root and cannot be resolved
+    // here. That is the "different root, different verdict" surprise: from the
+    // parent these resolve and the tree is clean; from the subproject's own dir
+    // they explode into hundreds of hard errors. Downgrade those resolution
+    // errors to warnings, mark them cross-tree (so --ci can waive them), and add
+    // ONE clear notice — so an agent running `wairon validate`/`mcp serve` inside
+    // a subproject dir gets an honest, non-exploding result. Full cross-tree
+    // verification still happens from the parent root.
+    //
+    // Gated on actually HAVING such issues, so a clean tree (or a hosted per-
+    // request validate) never pays the walk-up-the-filesystem cost.
+    const hasCrossTreeSuspects = issues.some(i => SUBPROJECT_LENIENT_CODES.has(i.code));
+    const chainingParent = hasCrossTreeSuspects ? findChainingParent(getProjectRoot()) : null;
+    if (chainingParent) {
+      let downgraded = 0;
+      for (const iss of issues) {
+        if (!SUBPROJECT_LENIENT_CODES.has(iss.code)) continue;
+        if (iss.severity === 'error') {
+          iss.severity = 'warning';
+          downgraded++;
+        }
+        iss.crossTreeContext = true; // mark so --ci waives it (parent root is authoritative)
+      }
+      if (downgraded > 0) {
+        issues.unshift({
+          severity: 'warning',
+          code: 'CHAINED_SUBPROJECT_CONTEXT',
+          crossTreeContext: true,
+          message:
+            `This project is a chained subproject ("${chainingParent.subsystemId}") of the parent project at ` +
+            `"${chainingParent.parentRoot}". ${downgraded} reference(s) resolve only in the parent tree (shared ` +
+            `types, sibling subsystems, or cross-tree components that live above this root) and were downgraded ` +
+            `to warnings — validating a subproject standalone cannot verify them. Run validation from the parent ` +
+            `root for full cross-tree verification.`,
+        });
+      }
     }
 
     return {

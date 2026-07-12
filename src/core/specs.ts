@@ -218,6 +218,59 @@ export function assertContainedProjectPath(projectRoot: string, projectPath: str
 }
 
 /**
+ * Walk UP from a project root to find a PARENT wairon project that chains to it
+ * — a subsystem (anywhere in the parent's spec tree) whose `projectPath` resolves
+ * to this exact root. Returns the parent root + the subsystem id it mounts as, or
+ * null when this is a top-level root.
+ *
+ * This is how a STANDALONE validation of a subproject knows it is a subproject:
+ * references INTO the parent tree (shared types, sibling subsystems, cross-tree
+ * components — all of which live ABOVE this root and are physically absent here)
+ * cannot be resolved standalone, so they are honest cross-tree edges to warn on,
+ * not spec defects to error on. Pure filesystem read; no cache mutation.
+ */
+export function findChainingParent(childRoot: string): { parentRoot: string; subsystemId: string } | null {
+  let childResolved: string;
+  try {
+    childResolved = path.resolve(childRoot);
+  } catch {
+    return null;
+  }
+  let dir = path.dirname(childResolved);
+  for (let hops = 0; hops < 32; hops++) {
+    const specsDir = aiPathsAt(dir).specsDir();
+    if (pathExists(specsDir)) {
+      for (const file of listFilesRecursive(specsDir, '.yaml')) {
+        let raw: unknown;
+        try {
+          raw = readYamlFile(file);
+        } catch {
+          continue;
+        }
+        // A subsystem spec (has parentSystem) that mounts a child via projectPath.
+        if (raw && typeof raw === 'object' && 'parentSystem' in raw) {
+          const projectPath = (raw as { projectPath?: unknown }).projectPath;
+          if (typeof projectPath === 'string' && projectPath.trim() !== '') {
+            try {
+              if (path.resolve(dir, projectPath) === childResolved) {
+                const id = (raw as { id?: unknown }).id;
+                return { parentRoot: dir, subsystemId: typeof id === 'string' ? id : '?' };
+              }
+            } catch {
+              /* malformed projectPath — not our mount */
+            }
+          }
+        }
+      }
+    }
+    const up = path.dirname(dir);
+    if (up === dir) break;
+    dir = up;
+  }
+  return null;
+}
+
+/**
  * Collapse a mount subsystem (has projectPath) and its same-id child realization
  * into a single flat external subsystem: the child provides the content, the
  * mount contributes projectPath. Genuine duplicates (both internal or both

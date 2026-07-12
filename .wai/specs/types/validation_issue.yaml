@@ -6,12 +6,15 @@ fields:
   - name: severity
     type: string
     description: Issue severity — error or warning
+    optional: false
   - name: code
     type: string
     description: Stable machine-readable rule code (e.g. CIRCULAR_DEPENDENCY)
+    optional: false
   - name: message
     type: string
     description: Human-readable description with remediation guidance
+    optional: false
   - name: agentId
     type: string
     description: Related agent id, when the issue concerns topology
@@ -20,6 +23,19 @@ fields:
     type: string
     description: Related spec id, when the issue concerns a spec node
     optional: true
+  - name: draftContext
+    type: Boolean
+    description: >-
+      True when the issue was raised on a draft/design spec (or an ancestor) — lets the --ci gate
+      waive warnings that merely reflect declared, unfinished work.
+    optional: true
+  - name: crossTreeContext
+    type: Boolean
+    description: >-
+      True when the issue reflects a reference/sourcePath that resolves only in the (absent) parent
+      tree, because this is a chained subproject validated standalone — downgraded to a warning and
+      waived by --ci (the parent root is the authoritative gate).
+    optional: true
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-02T00:00:00.000Z'
+updatedAt: '2026-07-12T11:27:06.332Z'

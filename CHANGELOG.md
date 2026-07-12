@@ -7,17 +7,21 @@ Two validation-scope fixes reported right after the v4.0.0 release:
 - **`validate --subsystem <name>` now errors on an unknown subsystem**
   (`SUBSYSTEM_NOT_FOUND`) instead of silently validating clean. The error lists
   the known subsystems, so a typo or wrong namespace prefix fails loudly.
-- **Chained subprojects validate the same from any root.** Cross-subproject
-  references are now stored in the root-invariant relative form (`super::`)
-  rather than a root-absolute `::` anchor, so a subproject validates identically
-  from the top project and from its own directory (an agent running
-  `wairon mcp serve` / `validate` inside a subproject dir). A reference that
-  still can't resolve from a standalone child root — including a
-  `<parent>::component` reference authored from the parent — now warns
-  (`CROSS_TREE_REF_UNRESOLVED`: "validate from the parent project") instead of
-  flooding the report with hard "does not exist" errors. Existing
-  root-absolute references normalize to the portable form on their next save
-  from the parent root.
+- **Chained subprojects no longer explode when validated from their own
+  directory.** A subproject validated standalone physically does not contain its
+  parent tree, so references into it (shared types, sibling subsystems,
+  cross-tree components) and code↔spec sourcePaths stored relative to the parent
+  root cannot resolve — previously this produced hundreds of hard errors from
+  the subproject dir while the same specs were clean from the top project
+  ("different root, different verdict"). Now `wairon` detects that the current
+  project is a chained subproject of a discoverable parent and **downgrades
+  those root-dependent resolution failures to warnings**, with one clear notice
+  (`CHAINED_SUBPROJECT_CONTEXT`) pointing at the parent root for full
+  verification. So an agent running `wairon validate` / `mcp serve` inside a
+  subproject dir gets an honest, non-exploding result instead of a wall of false
+  errors. Additionally, cross-subproject references are now stored in the
+  root-invariant relative form (`super::`) rather than a root-absolute `::`
+  anchor, so newly-authored refs resolve identically from either root.
 
 ## v4.0.0 (from v3.2.5)
 
