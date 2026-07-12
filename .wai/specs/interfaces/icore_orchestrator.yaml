@@ -90,11 +90,14 @@ methods:
   - name: createChainedSubsystem
     description: >-
       Create a chained subproject subsystem: persist the parent L1 subsystem spec (with projectPath)
-      at the bound root, and scaffold an isolated child wairon project at that path when one does
-      not already exist (idempotent wire-only when the child is already initialized). Throws if
-      projectPath is empty, or if projectPath does not resolve to a location strictly within the
-      owning project root — absolute paths and ../-escaping paths are rejected so a chained
-      subproject is always contained by its parent.
+      at the bound root, then FULLY yet NON-DESTRUCTIVELY initialize the isolated child wairon
+      project at that path in the same action — create the specs dir, project.yaml, and L0 system
+      spec only when each is absent, so a fresh child becomes runnable standalone without the caller
+      hand-authoring project.yaml, and an already- or partially-scaffolded child (e.g. specs present
+      but project.yaml missing) is completed without overwriting its existing spec tree. Throws if
+      projectPath is empty, or if it does not resolve strictly within the owning project root
+      (absolute and ../-escaping paths are rejected so a chained subproject is always contained by
+      its parent).
     signature: 'createChainedSubsystem(subsystem: SubsystemSpec, projectName: string): void'
     returns: void
   - name: moveSubsystemProject
@@ -144,4 +147,4 @@ methods:
         type: number
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-11T11:32:14.771Z'
+updatedAt: '2026-07-12T11:09:40.948Z'

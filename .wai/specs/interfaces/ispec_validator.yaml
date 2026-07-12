@@ -12,7 +12,14 @@ description: >-
 component: spec_validator
 methods:
   - name: validateSddTree
-    description: Performs full SDD spec tree structural validation and returns results
+    description: >-
+      Performs full SDD spec tree structural validation and returns results. A --subsystem scope
+      that names no loaded subsystem fails fast with SUBSYSTEM_NOT_FOUND (listing the known
+      subsystems) rather than silently passing. When the tree is a chained subproject validated
+      standalone (detected via the loader’s findChainingParent), references and code↔spec
+      sourcePaths that resolve only in the absent parent tree are downgraded from errors to warnings
+      and one CHAINED_SUBPROJECT_CONTEXT notice is added — full cross-tree verification runs from
+      the parent root.
     signature: 'validateSddTree(): ValidationResult'
     returns: ValidationResult
   - name: validateRegistry
@@ -31,4 +38,4 @@ methods:
     returns: ValidationResult
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-11T19:48:32.898Z'
+updatedAt: '2026-07-12T11:09:40.901Z'
