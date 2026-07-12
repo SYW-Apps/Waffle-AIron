@@ -1,5 +1,5 @@
 import { SddRule } from './types.js';
-import { resolveSurfaceRef } from './namespace.js';
+import { resolveSurfaceRef, isExternalNamespaceRef } from './namespace.js';
 
 /**
  * Contract ↔ implementation symmetry, and narrative-step resolution: every
@@ -76,13 +76,16 @@ export const contractsRule: SddRule = {
             continue;
           }
 
-          // An unresolved relative form (super::/::) means the ref points
-          // outside THIS loading root — a chained subproject opened
-          // standalone physically does not contain its parent's specs, so the
-          // edge is only verifiable from the parent. That is a known-honest
-          // state, not a spec defect: warn with its own code instead of
-          // raising the same error a genuine typo gets.
-          const isCrossTreeForm = step.targetComponent.startsWith('::') || step.targetComponent.startsWith('super::');
+          // An unresolved reference that points OUTSIDE this loading root — a
+          // chained subproject opened standalone physically does not contain its
+          // parent's specs, so the edge is only verifiable from the parent. That
+          // is a known-honest state, not a spec defect: warn with its own code
+          // instead of raising the same error a genuine typo gets. This covers
+          // the explicit relative forms (super::/::) AND a qualified reference
+          // whose leading namespace segment is not a subsystem in THIS tree —
+          // e.g. `waffler_core::x` authored from a parent root, where
+          // `waffler_core` is not present when validating from the child dir.
+          const isCrossTreeForm = isExternalNamespaceRef(ctx, step.targetComponent);
 
           if (step.type === 'dispatch') {
             const dispatchTarget = ctx.componentMap.get(step.targetComponent);

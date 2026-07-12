@@ -268,6 +268,32 @@ export function validateSddTree(
       return { valid: false, issues };
     }
 
+    // A --subsystem scope that names no loaded subsystem is almost always a typo
+    // or a wrong namespace prefix; validating "clean" would silently hide the real
+    // tree. Fail with a clear error instead. A scope is valid when a subsystem's id
+    // matches it exactly, or a namespaced (subproject) subsystem lives under it.
+    if (scopeSubsystem) {
+      const scopeMatches = subsystems.some(
+        s => s.id === scopeSubsystem || s.id.startsWith(`${scopeSubsystem}::`),
+      );
+      if (!scopeMatches) {
+        const known = subsystems.map(s => s.id).sort();
+        const hint = known.length
+          ? ` Known subsystems: ${known.join(', ')}.`
+          : ' This project declares no subsystems.';
+        issues.push(
+          issue(
+            'error',
+            'SUBSYSTEM_NOT_FOUND',
+            `--subsystem "${scopeSubsystem}" matches no subsystem in this project.${hint}`,
+            undefined,
+            scopeSubsystem,
+          ),
+        );
+        return { valid: false, issues };
+      }
+    }
+
     // A pack that fails to load is an error, never a silent skip — otherwise
     // the gate would quietly run without the doctrine the project declared.
     for (const err of extensions.errors) {

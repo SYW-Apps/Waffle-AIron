@@ -1,5 +1,5 @@
 import { SddRule } from './types.js';
-import { resolveSurfaceRef } from './namespace.js';
+import { resolveSurfaceRef, isExternalNamespaceRef } from './namespace.js';
 
 /**
  * The stereotype dependency matrix (intra-subsystem) and the bounded-context
@@ -36,7 +36,7 @@ export const stereotypeDepsRule: SddRule = {
           // against the stored surface snapshots — a hit is a DECLARED remote
           // portal, and the cross-boundary shape rule (source must be an
           // Adapter) applies exactly as it does for cross-subsystem deps.
-          if (depId.startsWith('::') || depId.startsWith('super::')) {
+          if (isExternalNamespaceRef(ctx, depId)) {
             const resolved = resolveSurfaceRef(ctx, depId);
             if (resolved) {
               if (comp.componentType !== 'Adapter') {

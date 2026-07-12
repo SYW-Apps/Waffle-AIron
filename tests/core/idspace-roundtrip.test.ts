@@ -181,6 +181,62 @@ describe('cross-tree narrative targets survive re-save (the re-namespacing bug)'
     invalidateSpecCache();
     expect(loadComponentSpec('transpiler::transpiler-orch')!.dependsOn).toEqual(['crates-portal']);
   });
+
+  // ── The "different root, different verdict" bug ─────────────────────────────
+  // A grandchild (B) references a component in its parent (A). The reference must
+  // resolve IDENTICALLY whether the tree is validated from the top project root
+  // OR from A's own directory as a standalone root (an agent runs `wairon mcp
+  // serve` / `validate` inside A). The fix: the write path stores the RELATIVE
+  // super:: hop count (root-invariant), never an absolute ::-anchor whose meaning
+  // flips when the root changes.
+  it('a cross-subproject ref resolves from BOTH the top root and the parent-subproject root', () => {
+    rootDir = makeRoot();
+
+    // Mount `amid` under the top root.
+    saveSubsystemSpec(subsystem('amid', { projectPath: 'amid' }));
+    const aDir = path.join(rootDir, 'amid');
+    fs.mkdirSync(path.join(aDir, '.wai', 'specs'), { recursive: true });
+
+    // amid's own tree (authored via amid's workspace): a-portal + a nested mount bleaf.
+    const a = workspaceFor(aDir);
+    a.saveSystemSpec({
+      schemaVersion: '1.0.0', name: 'amid-system', vision: 'v',
+      boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
+    });
+    a.saveSubsystemSpec(subsystem('a-core', { parentSystem: 'amid-system' }));
+    a.saveComponentSpec(component('a-portal', 'a-core', { componentType: 'Portal', portalType: 'Custom' } as Partial<ComponentSpec>));
+    a.saveSubsystemSpec(subsystem('bleaf', { parentSystem: 'amid-system', projectPath: 'bleaf' }));
+
+    // bleaf's tree, authored via bleaf's workspace. b-orch (in bleaf) depends on
+    // a-portal (in amid, one level up), authored as the relative super:: form.
+    const bDir = path.join(aDir, 'bleaf');
+    fs.mkdirSync(path.join(bDir, '.wai', 'specs'), { recursive: true });
+    const b = workspaceFor(bDir);
+    b.saveSystemSpec({
+      schemaVersion: '1.0.0', name: 'bleaf-system', vision: 'v',
+      boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
+    });
+    b.saveSubsystemSpec(subsystem('b-core', { parentSystem: 'bleaf-system' }));
+    b.saveComponentSpec(component('b-orch', 'b-core', { dependsOn: ['super::a-portal'] }));
+    invalidateSpecCache();
+
+    // On disk bleaf's reference must be the portable super:: form, never ::a-portal.
+    const bBlob = yamlBlob(path.join(bDir, '.wai'));
+    expect(bBlob).toMatch(/super::a-portal/);
+    expect(bBlob).not.toMatch(/(?<!super)::a-portal/);
+
+    // Verdict from the TOP root: b-orch's dependsOn resolves to amid's a-portal
+    // (qualified with amid's mount prefix).
+    setProjectRoot(rootDir);
+    invalidateSpecCache();
+    expect(loadComponentSpec('amid::bleaf::b-orch')!.dependsOn).toEqual(['amid::a-portal']);
+
+    // Verdict from amid's OWN root (the standalone subproject an agent works in):
+    // the SAME on-disk spec resolves to a-portal locally. Same specs, same verdict.
+    setProjectRoot(aDir);
+    invalidateSpecCache();
+    expect(loadComponentSpec('bleaf::b-orch')!.dependsOn).toEqual(['a-portal']);
+  });
 });
 
 describe('root-mounted external subsystem publicInterfaces (the lock-refusal bug)', () => {
@@ -299,6 +355,24 @@ describe('standalone child: cross-tree refs warn instead of erroring like typos'
     expect(crossTree.every(i => i.severity === 'warning')).toBe(true);
     expect(crossTree.map(i => i.message).join('\n')).toMatch(/validate from the parent project/);
     expect(res.issues.filter(i => i.code === 'INVALID_TARGET_COMPONENT_REFERENCE')).toHaveLength(0);
+    expect(res.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE')).toHaveLength(0);
+  });
+
+  it('a root-name-qualified target (waffler_core::x form, authored from a parent) warns, not errors, from the child root', async () => {
+    // The exact field report: refs stored as `<parent-subsystem>::x` (NOT super::)
+    // because they were authored from the parent root. From the child dir the
+    // leading segment names no local subsystem — an honest cross-tree edge, not a
+    // typo, so it must warn (CROSS_TREE_REF_UNRESOLVED), not flood hard errors.
+    rootDir = makeRoot();
+    saveSubsystemSpec(subsystem('transpiler'));
+    saveComponentSpec(component('transpiler-orch', 'transpiler', { dependsOn: ['waffler_core::blueprints-portal'] }));
+    invalidateSpecCache();
+
+    const { validateSddTree } = await import('../../src/core/validation.js');
+    const res = validateSddTree();
+    const crossTree = res.issues.filter(i => i.code === 'CROSS_TREE_REF_UNRESOLVED');
+    expect(crossTree.length).toBeGreaterThanOrEqual(1);
+    expect(crossTree.every(i => i.severity === 'warning')).toBe(true);
     expect(res.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE')).toHaveLength(0);
   });
 });
