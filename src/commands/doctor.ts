@@ -9,7 +9,8 @@ import {
   loadProjectConfig,
   AI_PATHS,
 } from '../config/loader.js';
-import { pathExists, readFileOrNull, fromProjectRoot } from '../utils/fs.js';
+import { pathExists, readFileOrNull, fromProjectRoot, getProjectRoot } from '../utils/fs.js';
+import { backfillChainedSubprojectConfigs } from '../core/provision.js';
 import { CONTEXT_PATHS, syncContextFiles } from '../core/context.js';
 import { readStampVersion } from '../core/stamp.js';
 import { localGuideFilePath, reinjectLocalGuides } from '../utils/ai-guide.js';
@@ -133,6 +134,16 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
   } else {
     line(tally, 'ok', 'Spec filenames are up to date (.index.yaml)');
   }
+
+  // Chained subprojects that have specs but no project.yaml are un-runnable
+  // standalone (`wairon` reports "No wairon project found"). Detect + point at --fix.
+  try {
+    const { findChainingSubprojectsMissingConfig } = require('../core/provision.js') as typeof import('../core/provision.js');
+    const missing = findChainingSubprojectsMissingConfig(getProjectRoot());
+    if (missing.length > 0) {
+      line(tally, 'warn', `${missing.length} chained subproject(s) have specs but no project.yaml (un-runnable standalone): ${missing.map(d => path.relative(getProjectRoot(), d) || '.').join(', ')}. Run \`wairon doctor --fix\` to initialize them.`);
+    }
+  } catch { /* non-fatal detection */ }
   logger.blank();
 
   // ── Spec tree conformance ───────────────────────────────────────────────────
@@ -280,6 +291,18 @@ async function applyFixes(): Promise<void> {
     }
   } catch (e) {
     console.log(`  ${icon('error')} Spec migration failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  // Backfill project.yaml on any chained subproject that has specs but no config
+  // (the "un-runnable standalone" state). Non-destructive — existing specs are
+  // never touched.
+  try {
+    const repaired = backfillChainedSubprojectConfigs(getProjectRoot());
+    if (repaired.length > 0) {
+      console.log(`  ${icon('ok')} Initialized ${repaired.length} chained subproject(s) that were missing project.yaml (now runnable standalone).`);
+    }
+  } catch (e) {
+    console.log(`  ${icon('error')} Chained-subproject backfill failed: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   // Register / repair the MCP server. The install is now self-healing, so this

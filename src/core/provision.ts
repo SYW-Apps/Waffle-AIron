@@ -67,6 +67,49 @@ export function provisionProject(name: string): void {
   });
 }
 
+/**
+ * NON-DESTRUCTIVELY complete a project's bootstrap at the bound root: write the
+ * default project.yaml and/or the L0 system spec ONLY when each is absent. Unlike
+ * provisionProject (which always writes both, overwriting an existing system
+ * spec), this preserves any spec tree already present — used to fully initialize
+ * a chained subproject on creation and to backfill a partially-scaffolded one
+ * (specs present but project.yaml missing, the state that makes a subproject
+ * un-runnable standalone) without clobbering it. Prefers the existing system
+ * spec's name so a backfilled project.yaml stays consistent with its tree.
+ * Returns which files it created.
+ */
+export function ensureProjectInitialized(fallbackName: string): { wroteConfig: boolean; wroteSystem: boolean } {
+  const now = new Date().toISOString();
+  const paths = aiPathsAt(getProjectRoot());
+  const hasSystem = fs.existsSync(paths.specsSystem());
+  let name = fallbackName;
+  if (hasSystem) {
+    const existing = loadSystemSpec();
+    if (existing?.name) name = existing.name;
+  }
+  let wroteConfig = false;
+  let wroteSystem = false;
+  if (!fs.existsSync(paths.projectConfig())) {
+    saveProjectConfig(defaultProjectConfig(name, now));
+    wroteConfig = true;
+  }
+  if (!hasSystem) {
+    saveSystemSpec({
+      schemaVersion: '1.0.0',
+      name,
+      vision: `Core vision for ${name}`,
+      boundaries: [],
+      globalRequirements: [],
+      databases: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+    wroteSystem = true;
+  }
+  if (wroteConfig || wroteSystem) invalidateSpecCache();
+  return { wroteConfig, wroteSystem };
+}
+
 /** Promote every promotable spec in the bound project to status complete. */
 export function promoteAllComplete(): void {
   for (const p of collectPromotableSpecs()) {
@@ -83,6 +126,83 @@ export function promoteAllComplete(): void {
 // namespace. These helpers keep the two halves — the parent link and the child
 // project — in sync, so authoring one never leaves the other dangling.
 // ---------------------------------------------------------------------------
+
+/**
+ * Walk a project and every chained subproject it links (recursively), invoking
+ * `onChild` for each child dir together with the subsystem id that mounts it.
+ * Shared scan behind the detection + backfill helpers below.
+ */
+function walkChainedSubprojects(
+  projectRoot: string,
+  onChild: (childDir: string, subsystemId: string) => void,
+): void {
+  const visited = new Set<string>();
+  const walk = (dir: string): void => {
+    const resolved = path.resolve(dir);
+    if (visited.has(resolved)) return;
+    visited.add(resolved);
+    const specsDir = aiPathsAt(dir).specsDir();
+    if (!fs.existsSync(specsDir)) return;
+    for (const file of listFilesRecursive(specsDir, '.yaml')) {
+      let raw: unknown;
+      try {
+        raw = readYamlFile(file);
+      } catch {
+        continue;
+      }
+      if (!(raw && typeof raw === 'object' && 'parentSystem' in raw)) continue;
+      const pp = (raw as { projectPath?: unknown }).projectPath;
+      if (typeof pp !== 'string' || pp.trim() === '') continue;
+      let childDir: string;
+      try {
+        childDir = assertContainedProjectPath(dir, pp);
+      } catch {
+        continue; // absolute / escaping projectPath — never touch it
+      }
+      const id = (raw as { id?: unknown }).id;
+      onChild(childDir, typeof id === 'string' ? id : path.basename(childDir));
+      walk(childDir); // recurse into the chain (handles multi-level subprojects)
+    }
+  };
+  walk(projectRoot);
+}
+
+/** True when a child dir has a spec tree but no project.yaml (un-runnable standalone). */
+function childHasSpecsButNoConfig(childDir: string): boolean {
+  return fs.existsSync(aiPathsAt(childDir).specsDir()) && !fs.existsSync(aiPathsAt(childDir).projectConfig());
+}
+
+/**
+ * Detect chained subprojects (recursively) that have specs but no project.yaml —
+ * the state that makes a subproject un-runnable standalone (`wairon` reports "No
+ * wairon project found"). Pure read; returns the child dirs. Used by the doctor
+ * report to point the user at `--fix`.
+ */
+export function findChainingSubprojectsMissingConfig(projectRoot: string): string[] {
+  const missing: string[] = [];
+  walkChainedSubprojects(projectRoot, (childDir) => {
+    if (childHasSpecsButNoConfig(childDir)) missing.push(childDir);
+  });
+  return missing;
+}
+
+/**
+ * Backfill a missing project.yaml on any chained subproject that has a spec tree
+ * but no project config. Existing specs are never touched. Returns the child dirs
+ * repaired. Used by `wairon doctor --fix`.
+ */
+export function backfillChainedSubprojectConfigs(projectRoot: string): string[] {
+  const backfilled: string[] = [];
+  walkChainedSubprojects(projectRoot, (childDir, subsystemId) => {
+    if (childHasSpecsButNoConfig(childDir)) {
+      runWithProjectRoot(childDir, () => {
+        ensureProjectInitialized(subsystemId);
+      });
+      backfilled.push(childDir);
+    }
+  });
+  return backfilled;
+}
 
 /**
  * Create a chained subproject subsystem: persist the parent L1 subsystem spec
@@ -108,14 +228,16 @@ export function createChainedSubsystem(subsystem: SubsystemSpec, projectName: st
   //    its parent. Throws before any child scaffolding below.
   const childDir = assertContainedProjectPath(getProjectRoot(), projectPath);
 
-  // 3. Scaffold the child project unless it is already initialized (idempotent).
-  const alreadyInitialized = fs.existsSync(aiPathsAt(childDir).projectConfig());
-  if (!alreadyInitialized) {
-    runWithProjectRoot(childDir, () => {
-      ensureDir(aiPathsAt(childDir).specsDir());
-      provisionProject(projectName);
-    });
-  }
+  // 3. Fully initialize the child project in the SAME action — but
+    //    NON-DESTRUCTIVELY: create the specs dir, project.yaml, and L0 system
+    //    spec only when each is absent. A fresh child gets a complete, runnable
+    //    project (so an agent never has to hand-author project.yaml); an
+    //    already-scaffolded or partially-scaffolded child (specs but no
+    //    project.yaml) is completed without clobbering its existing spec tree.
+  runWithProjectRoot(childDir, () => {
+    ensureDir(aiPathsAt(childDir).specsDir());
+    ensureProjectInitialized(projectName);
+  });
 
   invalidateSpecCache();
 }
