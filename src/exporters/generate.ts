@@ -1,8 +1,9 @@
 import { AgentRecord } from '../models/agent.js';
 import { ProjectConfig, TargetConfig } from '../models/project.js';
 import { loadTemplate, renderTemplateInstructions } from '../core/templates.js';
+import { getProjectRoot } from '../utils/fs.js';
 import { getExporter } from './registry.js';
-import { ExportResult } from './base.js';
+import { ExportResult, WAIRON_MANAGED_BANNER } from './base.js';
 
 // ---------------------------------------------------------------------------
 // Generate: agent file generation
@@ -35,9 +36,16 @@ export function generateAgent(
   projectConfig: ProjectConfig,
   options: GenerateOptions = {},
 ): GenerateSummary {
-  const projectRoot = options.projectRoot ?? process.cwd();
+  // Write relative to the BOUND project root (request-scoped), not process.cwd():
+  // the layered `generate` cascade binds each subproject's root via
+  // runWithProjectRoot so each layer's agents land in its OWN .claude/agents/,
+  // and running `generate` from a subdir still targets the project root.
+  const projectRoot = options.projectRoot ?? getProjectRoot();
   const template = loadTemplate(agent.template, projectConfig.globalTemplatesDir);
-  const rendered = renderTemplateInstructions(template, buildVars(agent));
+  // Prepend the managed marker so `generate` can later reconcile/prune this file
+  // safely (see WAIRON_MANAGED_MARKER). It is an HTML comment — inert in the
+  // agent's instructions for every markdown-based target.
+  const rendered = `${WAIRON_MANAGED_BANNER}\n${renderTemplateInstructions(template, buildVars(agent))}`;
   const results: ExportResult[] = [];
 
   for (const agentTarget of agent.targets) {

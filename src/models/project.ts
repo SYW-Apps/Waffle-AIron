@@ -107,10 +107,15 @@ export const RulesConfigSchema = z.object({
   enforceReproducibility: z.boolean().default(true),
 
   /**
-   * Whether to generate individual component implementer agents.
-   * If false, only subsystem owner agents are generated, and they own the component implementations.
+   * Whether to generate an individual implementer agent PER COMPONENT. Off by
+   * default: one subsystem-owner agent per subsystem owns its components'
+   * implementations, which keeps the generated topology (and the per-session
+   * agent context every session loads) proportional to the number of
+   * subsystems, not components. A large project or subproject with `true` can
+   * emit thousands of agents — reserve it for small trees that genuinely want
+   * per-component isolation.
    */
-  generateComponentImplementers: z.boolean().default(true),
+  generateComponentImplementers: z.boolean().default(false),
 
   /**
    * Severity overrides for SDD validation rules.

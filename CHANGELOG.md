@@ -1,8 +1,55 @@
 # Changelog
 
-## Unreleased (patch — from v4.0.0)
+## Unreleased (minor — from v4.0.0)
 
-Two validation-scope fixes reported right after the v4.0.0 release:
+Post-v4.0.0 fixes and additive capabilities around chained subprojects and
+agent-topology scale (merge with `[minor]` → v4.1.0).
+
+### Layered agent topology (new)
+
+`wairon generate` now produces a **layered, per-project** agent topology instead
+of one flat pile at the top:
+
+- Generation emits agents for **only the current project's own layer** — the
+  architect and one owner per local subsystem. A **chained subproject collapses
+  to a single delegating owner** that routes work into the subproject; it never
+  enumerates the subproject's internals (which belong to the subproject's own
+  layer). On the real Waffler project this took the root from 507 flat agents to
+  **10**, and `waffler_core` from 2000+ to **29** — each `.claude/agents` (and the
+  context every session loads) now proportional to one layer.
+- **Cascade by default**: one `wairon generate` walks every chained subproject
+  and generates each layer into its **own** `.wai/.claude`, ensuring each child is
+  initialized first (non-destructive). `--no-recurse` limits to the current layer.
+- **`generateComponentImplementers` now defaults to `false`** — one owner per
+  subsystem, not one implementer per component (the source of the explosions).
+  Opt in with `true` on small trees. Projects with the field explicitly set are
+  unaffected.
+- The domain-owner agent template now instructs **hierarchical self-division**:
+  break the domain into components/tasks, spawn focused subagents (which split
+  further as needed), and — for a chained-subproject domain — delegate into the
+  subproject rather than implementing its internals.
+- `wairon generate` (and the exporters) now write relative to the bound project
+  root, so running it from a subdirectory targets the project, not the cwd.
+- **`generate` now reconciles its output dirs** — it prunes agent files that are
+  no longer in the topology (a removed component's orphaned agent, or the old
+  flat pile after the switch to layered) so the on-disk set actually shrinks
+  instead of accumulating. Every generated file carries a `wairon:managed`
+  marker; pruning only ever removes wairon-owned files (that marker, or the
+  generated `-owner`/`-implementer`/`-architect` naming), **never a
+  hand-authored agent**. Scoped runs (`--domain`/`--root`) never prune (they
+  wrote only part of the set); `--no-prune` disables it entirely. The cascade
+  reconciles each layer's own dir.
+
+### Chained subprojects: self-initialize + doctor backfill (new)
+
+- Creating a chained subsystem (`sdd_add_subsystem` with a `projectPath`) now
+  **fully initializes** the child in the same action (project.yaml + system
+  spec), **non-destructively** — never overwriting an existing spec tree (this
+  also fixed a latent clobber in the old scaffold path).
+- `wairon doctor` **detects** chained subprojects that have specs but no
+  project.yaml (un-runnable standalone), and `--fix` **backfills** them.
+
+### Validation-scope fixes
 
 - **`validate --subsystem <name>` now errors on an unknown subsystem**
   (`SUBSYSTEM_NOT_FOUND`) instead of silently validating clean. The error lists

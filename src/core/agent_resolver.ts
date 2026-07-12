@@ -215,8 +215,16 @@ export function resolveAgentTopology(): AgentRecord[] {
   const system = loadSystemSpec();
   if (!system) return [];
 
-  const subsystems = loadSubsystemSpecs();
-  const components = loadComponentSpecs();
+  // LAYERED topology: generate agents ONLY for THIS project's own layer. The
+  // loader federates every chained subproject recursively (their specs carry a
+  // `::` namespace prefix); those belong to the SUBPROJECT's layer, generated in
+  // the subproject's own .wai. Here a chained subproject collapses to a single
+  // delegating owner. A LOCAL spec id carries no `::` prefix. This keeps each
+  // .claude/agents/ (and the context every session loads) proportional to one
+  // layer, not the whole deep tree.
+  const isLocal = (id: string): boolean => !id.includes('::');
+  const subsystems = loadSubsystemSpecs().filter((s) => isLocal(s.id));
+  const components = loadComponentSpecs().filter((c) => isLocal(c.id) && isLocal(c.subsystem));
   const interfaces = loadInterfaceSpecs();
   const implementations = loadImplementationSpecs();
 
@@ -247,6 +255,33 @@ export function resolveAgentTopology(): AgentRecord[] {
 
   // 2. Subsystem Owners (Domain Owners)
   for (const sub of subsystems) {
+    // A chained subproject collapses to ONE delegating owner: it owns only the
+    // parent-side mount spec and points work DOWN into the subproject, whose own
+    // detailed agents are generated in that subproject's .wai (one layer deeper).
+    // It never enumerates the child's internals here — that is the whole point of
+    // stacking agents per layer instead of flattening the tree at the top.
+    if (sub.projectPath) {
+      const mountSpecPath = path.relative(getProjectRoot(), getSubsystemPath(sub.id)).replace(/\\/g, '/');
+      agents.push({
+        id: `${sub.id}-owner`,
+        name: `${sub.name} (chained subproject)`,
+        description: `Delegates into the "${sub.id}" chained subproject at ${sub.projectPath}. Its own agents live in that subproject's .wai — run \`wairon generate\` there (or spawn from ${sub.projectPath}/.claude/agents). Do not implement its internals from this layer.`,
+        template: 'domain-owner',
+        creationReason: `Automatically inferred from a chained subproject subsystem: ${sub.id}`,
+        domainRoot: sub.id,
+        ownedPaths: [mountSpecPath],
+        readPaths: ['**'],
+        writePaths: [mountSpecPath],
+        tags: ['owner', 'subproject', 'delegate', 'sdd'],
+        dependencies: [],
+        status: 'active',
+        targets: activeTargets,
+        createdAt: sub.createdAt,
+        updatedAt: sub.updatedAt,
+      });
+      continue;
+    }
+
     const subComponents = components.filter((c) => c.subsystem === sub.id);
 
     const ownedPaths: string[] = [];
