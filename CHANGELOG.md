@@ -1,18 +1,19 @@
 # Changelog
 
-## Unreleased (next release from v3.2.5)
+## v4.0.0 (from v3.2.5)
 
-A large correctness + capability release. **No CLI commands, MCP tools, spec
-schema fields, or library APIs were removed or renamed** — the CLI/MCP/library
-surface is fully backward compatible. Two *deployment/CI* surfaces do change
-behavior and are the reason this is not a plain patch: the conformance gate
-makes `wairon validate` stricter (a stale L4 `sourcePath` is now a hard error,
-and `validate --ci` surfaces new warnings — see *Compatibility & migration*),
-and the container image was rebased debian→alpine with npm removed (extension
-images built `FROM` it must use `apk`, not `apt`, and cannot rely on a bundled
-npm). Recommend a `[minor]` bump (→ v3.3.0) for the additive API framing, or
-`[major]` (→ v4.0.0) if the stricter CI gate / image rebase should signal
-breaking to downstream consumers.
+A large correctness + capability release, versioned **major** to signal two
+breaking *deployment/CI* changes to downstream consumers (the CLI, MCP tools,
+spec schema, and library APIs themselves are fully backward compatible — nothing
+was removed or renamed):
+
+1. **Stricter validation.** The new conformance gate makes `wairon validate`
+   stricter — a stale L4 `sourcePath` is now a hard error, and `validate --ci`
+   surfaces new warnings. A pipeline that was green may go red until the specs
+   are reconciled (see *Compatibility & migration*).
+2. **Container image rebased debian→alpine, npm removed.** Extension images
+   built `FROM` the wairon image must use `apk` (not `apt`) and cannot rely on a
+   bundled npm at runtime.
 
 ### Security hardening (multi-tenant + web UI + image)
 
