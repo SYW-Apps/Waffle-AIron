@@ -4,6 +4,26 @@ import { dryRunSerializeSpecs } from '../specs.js';
 import { checkChildSurfaceFreshness } from '../surfaces.js';
 
 /**
+ * True when an unresolved reference points OUTSIDE the current loading root,
+ * rather than being a genuine local typo — so it warrants the softer
+ * CROSS_TREE_REF_UNRESOLVED warning ("validate from the parent project")
+ * instead of a hard "does not exist" error. Two shapes qualify:
+ *  - an explicit relative form (`::x` / `super::x`), and
+ *  - a qualified id whose leading namespace segment is not a subsystem in THIS
+ *    tree — e.g. `waffler_core::blueprints-portal` authored from a parent root,
+ *    where `waffler_core` is absent when the same specs are validated from the
+ *    child subproject's own directory. This is exactly the "different root,
+ *    different verdict" case: from the child root such a ref is unresolvable but
+ *    honest, not broken, so it must not flood the report with hard errors.
+ */
+export function isExternalNamespaceRef(ctx: RuleContext, ref: string): boolean {
+  if (ref.startsWith('::') || ref.startsWith('super::')) return true;
+  const sep = ref.indexOf('::');
+  if (sep === -1) return false; // a bare unresolved id is a local typo, not cross-tree
+  return !ctx.subsystemIds.has(ref.slice(0, sep));
+}
+
+/**
  * Resolve an unresolved cross-tree reference (a `super::`/`::` form whose
  * target is outside this loading root) against the stored surface snapshots:
  * the ref's final segment is matched against each snapshot's exported entry

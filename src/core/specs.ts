@@ -146,8 +146,13 @@ function relativizeId(id: string, prefix: string): string {
   // NOT under the save prefix — including a BARE id, which in a prefixed
   // context is a root-level reference (what qualifyId('super::x'/'::x')
   // resolves to), never a local one: locals carry the prefix in memory.
-  // Emit super:: hops to the deepest common ancestor, or anchor ::-absolute
-  // when there is none (robust to the mount moving depth).
+  // Emit super:: hops to the deepest common ancestor — a RELATIVE path whose hop
+  // count is the physical nesting between source and target, which is invariant
+  // across WHICH ancestor is the loading root. This is the key to a chained
+  // subproject validating identically from the top project and from its own dir
+  // as a standalone root: an absolute ::-anchor instead encodes the depth from
+  // the current root and silently breaks the moment the root changes (the
+  // "different root, different verdict" bug).
   const prefixParts = prefix.split('::');
   const idParts = id.split('::');
   let common = 0;
@@ -156,9 +161,6 @@ function relativizeId(id: string, prefix: string): string {
   }
   // The id IS an ancestor namespace: step out one more hop so it can be named.
   if (common === idParts.length) common--;
-  if (common === 0) {
-    return `::${id}`;
-  }
   return `${'super::'.repeat(prefixParts.length - common)}${idParts.slice(common).join('::')}`;
 }
 

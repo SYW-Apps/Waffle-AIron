@@ -254,6 +254,41 @@ updatedAt: '2026-06-10T22:00:00Z'
     }
   });
 
+  it('validate --subsystem <nonexistent> errors (SUBSYSTEM_NOT_FOUND) instead of passing clean', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: v
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: d
+parentSystem: TestSystem
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.activate();
+    try {
+      // A typo'd / non-existent scope must fail loudly, not validate "clean".
+      const missing = validateSddTree({ scopeSubsystem: 'does-not-exist' });
+      expect(missing.valid).toBe(false);
+      const err = missing.issues.find(i => i.code === 'SUBSYSTEM_NOT_FOUND');
+      expect(err).toBeDefined();
+      expect(err!.message).toContain('sub-a'); // lists the known subsystems
+
+      // A real subsystem scope still validates.
+      const ok = validateSddTree({ scopeSubsystem: 'sub-a' });
+      expect(ok.issues.find(i => i.code === 'SUBSYSTEM_NOT_FOUND')).toBeUndefined();
+    } finally {
+      proj.cleanup();
+    }
+  });
+
   it('enforces pattern ownership rules (owns): containment + block-owns-members', () => {
     const proj = createTempProject();
     proj.writeSpec('system', 'system', `

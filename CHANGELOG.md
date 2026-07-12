@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased (patch — from v4.0.0)
+
+Two validation-scope fixes reported right after the v4.0.0 release:
+
+- **`validate --subsystem <name>` now errors on an unknown subsystem**
+  (`SUBSYSTEM_NOT_FOUND`) instead of silently validating clean. The error lists
+  the known subsystems, so a typo or wrong namespace prefix fails loudly.
+- **Chained subprojects validate the same from any root.** Cross-subproject
+  references are now stored in the root-invariant relative form (`super::`)
+  rather than a root-absolute `::` anchor, so a subproject validates identically
+  from the top project and from its own directory (an agent running
+  `wairon mcp serve` / `validate` inside a subproject dir). A reference that
+  still can't resolve from a standalone child root — including a
+  `<parent>::component` reference authored from the parent — now warns
+  (`CROSS_TREE_REF_UNRESOLVED`: "validate from the parent project") instead of
+  flooding the report with hard "does not exist" errors. Existing
+  root-absolute references normalize to the portable form on their next save
+  from the parent root.
+
 ## v4.0.0 (from v3.2.5)
 
 A large correctness + capability release, versioned **major** to signal two
