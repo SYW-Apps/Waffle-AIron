@@ -42,7 +42,10 @@ function defaultProjectConfig(name: string, now: string): ProjectConfig {
       requireOwnedPaths: true,
       metaAgentTags: ['meta', 'guardian', 'architect'],
       enforceReproducibility: true,
-      generateComponentImplementers: true,
+      // Lean by default: one owner agent per subsystem, not one per component —
+      // a large tree/subproject with per-component implementers emits thousands
+      // of agents that every session then loads. Opt in with `true` on small trees.
+      generateComponentImplementers: false,
       sddRuleSeverity: {},
     },
     paths: { specsDir: '.wai/specs' },
