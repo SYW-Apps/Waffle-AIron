@@ -5,6 +5,36 @@
 Post-v4.0.0 fixes and additive capabilities around chained subprojects and
 agent-topology scale (merge with `[minor]` → v4.1.0).
 
+### Hosted server: real SSO + web admin UI + agent tokens (new)
+
+The hosted server (`sdd_host`, `wairon host`) gains the pieces that make its
+web UI a real, self-serviceable control plane. Opt-in as before
+(`exposurePolicy.webUiEnabled`, default off).
+
+- **SSO for self-hosted providers.** The OIDC adapter now resolves each
+  provider's endpoints by **explicit overrides → `.well-known` discovery →
+  providerType template** (Keycloak `/protocol/openid-connect/*`, Authentik
+  `/application/o/*`, generic), so **self-hosted Keycloak/Authentik actually
+  connect** — previously it derived `/authorize`+`/token`, which matches neither.
+  The returned **id_token signature is verified against the provider JWKS**
+  (plus `iss`/`aud`/`exp`), no longer trusting the TLS channel alone.
+- **Split-horizon endpoints.** New `IdentityProviderConfig` overrides
+  (`authorizationEndpoint`/`tokenEndpoint`/`jwksUri`/`userinfoEndpoint`) let a
+  **public** front-channel authorize URL pair with a **VPC-internal** back-channel
+  token/JWKS URL — the common self-hosted-in-a-private-network topology.
+- **Web admin UI.** The identity/admin control-plane portals are bound to the
+  loopback admin listener and unreachable from a remote browser, so admins had
+  no real control plane in the UI. New data-plane `/web/admin/*` routes + client
+  forms bring **Users** (create/status/grants), **Identity Providers/SSO**
+  (incl. the discovery + split-horizon fields), and **Organization units** into
+  the browser app, forwarding the session as the credential so existing scope
+  authorization is unchanged.
+- **Agent tokens, separate from web login.** A signed-in user can mint a
+  **single-project MCP token** for an AI agent — self-scoped (no `key:manage`
+  needed for a token no broader than your own access) and **owned by the minting
+  user**, so deactivating that user revokes their agent tokens. List + revoke
+  round out the lifecycle.
+
 ### Layered agent topology (new)
 
 `wairon generate` now produces a **layered, per-project** agent topology instead
