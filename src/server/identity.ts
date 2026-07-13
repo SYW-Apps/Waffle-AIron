@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
 import type { IncomingMessage, ServerResponse } from 'http';
 import { authenticateCredential, signSsoState, verifySsoState } from './auth.js';
-import { buildAuthorizationUrl, exchangeCode, resolveSubject } from './idp.js';
+import { resolveEndpoints, buildAuthorizationUrl, exchangeCode, resolveSubject } from './idp.js';
 import {
   listIdentityProviderRecords,
   upsertIdentityProviderRecord,
@@ -693,13 +693,16 @@ export function resolveEnabledProvider(cfg: HostConfig, providerId: string): Ide
  * authorization URL, append a best-effort sso.start (info) audit event, and return
  * the authorization URL. Unauthenticated by nature — no caller credential.
  */
-export function startSsoLogin(cfg: HostConfig, providerId: string, redirectUri: string): string {
+export async function startSsoLogin(cfg: HostConfig, providerId: string, redirectUri: string): Promise<string> {
   const provider = resolveEnabledProvider(cfg, providerId);
 
   const nonce = crypto.randomBytes(16).toString('hex');
   const payload: SsoStatePayload = { providerId, nonce, redirectUri };
   const state = signSsoState(JSON.stringify(payload));
-  const url = buildAuthorizationUrl(provider, state, redirectUri);
+  // Resolve the provider's concrete OIDC endpoints (overrides -> discovery ->
+  // template), then build the authorization URL against the front-channel endpoint.
+  const endpoints = await resolveEndpoints(provider);
+  const url = buildAuthorizationUrl(provider, endpoints, state, redirectUri);
 
   tryAppendAudit(cfg, buildSsoAuditEvent(ANONYMOUS_SSO_ACTOR, 'sso.start', 'info', { target: providerId }));
 
@@ -723,10 +726,12 @@ export async function completeSsoLogin(cfg: HostConfig, state: string, code: str
 
   const provider = resolveEnabledProvider(cfg, providerId);
 
-  // Exchange the code (network I/O) and resolve the external subject, never
-  // leaking raw provider tokens across the boundary.
-  const summary = await exchangeCode(provider, code, redirectUri);
-  const subject = resolveSubject(provider, summary);
+  // Resolve the provider endpoints (front-channel authorize + back-channel
+  // token/jwks), then exchange the code (network I/O) and verify+resolve the
+  // external subject against the provider JWKS, never leaking raw provider tokens.
+  const endpoints = await resolveEndpoints(provider);
+  const summary = await exchangeCode(provider, endpoints, code, redirectUri);
+  const subject = await resolveSubject(provider, endpoints, summary);
 
   // Look up the hosted user by issuer + external subject; provision on first login.
   let user = repoFindUserByExternalSubject(cfg.dataDir, subject.issuer, subject.externalSubject ?? '');
@@ -909,7 +914,7 @@ export async function handleIdentityRequest(
     // ── headless SSO login (unauthenticated: no credential) ──────────────────
     // POST /identity/sso/start  { providerId, redirectUri }
     if (req.method === 'POST' && parts.length === 3 && parts[1] === 'sso' && parts[2] === 'start') {
-      const url_ = startSsoLogin(cfg, body.providerId as string, body.redirectUri as string);
+      const url_ = await startSsoLogin(cfg, body.providerId as string, body.redirectUri as string);
       return sendJson(res, 200, { url: url_ });
     }
     // GET /identity/sso/callback?state=&code=

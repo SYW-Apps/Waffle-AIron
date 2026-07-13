@@ -49,6 +49,13 @@ const MASTER = 'master-credential-secret-value';
 const SECRET_REF = 'oidc-client-secret';
 const SECRET_VALUE = 'super-secret-value';
 const PROVIDER_ID = 'authentik-corp';
+const CLIENT_ID = 'test-client';
+
+// A real RSA signing key; its public half is published in the stub JWKS so the
+// adapter can verify the RS256-signed id_tokens end-to-end.
+const { publicKey: SIGN_PUB, privateKey: SIGN_PRIV } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+const KID = 'test-key-1';
+const JWK = { ...(SIGN_PUB.export({ format: 'jwk' }) as crypto.JsonWebKey), kid: KID, use: 'sig', alg: 'RS256' };
 
 // The stub /token response; each test overrides it as needed.
 let tokenResponse: () => { status: number; json: unknown } = () => ({ status: 200, json: {} });
@@ -60,7 +67,26 @@ beforeAll(async () => {
     let raw = '';
     req.on('data', (chunk) => (raw += chunk));
     req.on('end', () => {
-      if (req.method === 'POST' && req.url === '/token') {
+      const url = new URL(req.url ?? '/', issuerUrl);
+      if (req.method === 'GET' && url.pathname === '/.well-known/openid-configuration') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            issuer: issuerUrl,
+            authorization_endpoint: `${issuerUrl}/authorize`,
+            token_endpoint: `${issuerUrl}/token`,
+            jwks_uri: `${issuerUrl}/jwks`,
+            userinfo_endpoint: `${issuerUrl}/userinfo`,
+          }),
+        );
+        return;
+      }
+      if (req.method === 'GET' && url.pathname === '/jwks') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ keys: [JWK] }));
+        return;
+      }
+      if (req.method === 'POST' && url.pathname === '/token') {
         const r = tokenResponse();
         res.writeHead(r.status, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(r.json));
@@ -82,15 +108,20 @@ function b64url(obj: unknown): string {
   return Buffer.from(JSON.stringify(obj)).toString('base64url');
 }
 
-function makeIdToken(claims: unknown): string {
-  return [b64url({ alg: 'RS256', typ: 'JWT' }), b64url(claims), 'sig'].join('.');
+/** RS256-sign an id_token with the stub signing key so it verifies against the JWKS. */
+function signIdToken(claims: Record<string, unknown>): string {
+  const input = `${b64url({ alg: 'RS256', typ: 'JWT', kid: KID })}.${b64url(claims)}`;
+  const sig = crypto.sign('RSA-SHA256', Buffer.from(input), SIGN_PRIV).toString('base64url');
+  return `${input}.${sig}`;
 }
 
-/** Program the stub /token endpoint to return an id_token for the given claims. */
+/** Program the stub /token endpoint to return a SIGNED id_token for the given
+ *  claims (aud + exp are injected so JWKS verification passes). */
 function stubClaims(claims: Record<string, unknown>): void {
+  const full = { aud: CLIENT_ID, exp: Math.floor(Date.now() / 1000) + 3600, ...claims };
   tokenResponse = () => ({
     status: 200,
-    json: { access_token: 'ACCESS', refresh_token: 'REFRESH', id_token: makeIdToken(claims), token_type: 'Bearer' },
+    json: { access_token: 'ACCESS', refresh_token: 'REFRESH', id_token: signIdToken(full), token_type: 'Bearer' },
   });
 }
 
@@ -170,10 +201,10 @@ describe('identity SSO orchestrator (sdd_host)', () => {
 
   // ── startSsoLogin ────────────────────────────────────────────────────────
 
-  it('startSsoLogin returns a provider authorization URL carrying the signed state', () => {
+  it('startSsoLogin returns a provider authorization URL carrying the signed state', async () => {
     upsertIdentityProviderRecord(dataDir, providerConfig());
 
-    const authUrl = identity.startSsoLogin(cfg, PROVIDER_ID, 'https://app.example/cb');
+    const authUrl = await identity.startSsoLogin(cfg, PROVIDER_ID, 'https://app.example/cb');
     const url = new URL(authUrl);
     expect(url.origin).toBe(issuerUrl);
     expect(url.pathname).toBe('/authorize');
@@ -194,15 +225,15 @@ describe('identity SSO orchestrator (sdd_host)', () => {
     expect(events[0].level).toBe('info');
   });
 
-  it('startSsoLogin rejects an unknown provider', () => {
-    expect(() => identity.startSsoLogin(cfg, 'ghost', 'https://app.example/cb')).toThrow(
+  it('startSsoLogin rejects an unknown provider', async () => {
+    await expect(identity.startSsoLogin(cfg, 'ghost', 'https://app.example/cb')).rejects.toThrow(
       /unknown or disabled/i,
     );
   });
 
-  it('startSsoLogin rejects a disabled provider', () => {
+  it('startSsoLogin rejects a disabled provider', async () => {
     upsertIdentityProviderRecord(dataDir, providerConfig({ enabled: false }));
-    expect(() => identity.startSsoLogin(cfg, PROVIDER_ID, 'https://app.example/cb')).toThrow(
+    await expect(identity.startSsoLogin(cfg, PROVIDER_ID, 'https://app.example/cb')).rejects.toThrow(
       /unknown or disabled/i,
     );
   });
@@ -211,7 +242,7 @@ describe('identity SSO orchestrator (sdd_host)', () => {
 
   it('completeSsoLogin (first login): provisions an active user with empty grants and mints a user-bound token', async () => {
     upsertIdentityProviderRecord(dataDir, providerConfig());
-    const state = stateFrom(identity.startSsoLogin(cfg, PROVIDER_ID, 'https://app.example/cb'));
+    const state = stateFrom(await identity.startSsoLogin(cfg, PROVIDER_ID, 'https://app.example/cb'));
 
     const token = await identity.completeSsoLogin(cfg, state, 'auth-code-1');
     expect(token).toMatch(/^wk_[0-9a-f]+$/);
@@ -247,7 +278,7 @@ describe('identity SSO orchestrator (sdd_host)', () => {
     upsertIdentityProviderRecord(dataDir, providerConfig());
 
     // First login provisions the user (empty grants).
-    const s1 = stateFrom(identity.startSsoLogin(cfg, PROVIDER_ID, 'https://app.example/cb'));
+    const s1 = stateFrom(await identity.startSsoLogin(cfg, PROVIDER_ID, 'https://app.example/cb'));
     await identity.completeSsoLogin(cfg, s1, 'code-1');
 
     // An admin assigns grants between logins.
@@ -255,7 +286,7 @@ describe('identity SSO orchestrator (sdd_host)', () => {
     identity.replaceUserGrants(cfg, MASTER, `sso:${PROVIDER_ID}:ext-1`, grants);
 
     // Second login for the same external subject.
-    const s2 = stateFrom(identity.startSsoLogin(cfg, PROVIDER_ID, 'https://app.example/cb'));
+    const s2 = stateFrom(await identity.startSsoLogin(cfg, PROVIDER_ID, 'https://app.example/cb'));
     const token2 = await identity.completeSsoLogin(cfg, s2, 'code-2');
 
     // No duplicate user was created.
@@ -273,7 +304,7 @@ describe('identity SSO orchestrator (sdd_host)', () => {
     upsertIdentityProviderRecord(dataDir, providerConfig());
 
     // First login provisions the user (active) and mints a token.
-    const s1 = stateFrom(identity.startSsoLogin(cfg, PROVIDER_ID, 'https://app.example/cb'));
+    const s1 = stateFrom(await identity.startSsoLogin(cfg, PROVIDER_ID, 'https://app.example/cb'));
     const firstToken = await identity.completeSsoLogin(cfg, s1, 'code-1');
     expect(firstToken).toMatch(/^wk_[0-9a-f]+$/);
 
@@ -282,7 +313,7 @@ describe('identity SSO orchestrator (sdd_host)', () => {
     expect(authenticate(dataDir, firstToken).authenticated).toBe(false);
 
     // A subsequent SSO login for the same (now deactivated) subject is refused before minting …
-    const s2 = stateFrom(identity.startSsoLogin(cfg, PROVIDER_ID, 'https://app.example/cb'));
+    const s2 = stateFrom(await identity.startSsoLogin(cfg, PROVIDER_ID, 'https://app.example/cb'));
     await expect(identity.completeSsoLogin(cfg, s2, 'code-2')).rejects.toThrow(ForbiddenError);
 
     // … and no fresh (active) credential was minted for the refused login.
@@ -317,7 +348,7 @@ describe('identity SSO orchestrator (sdd_host)', () => {
   it('completeSsoLogin surfaces an allowedDomains violation and provisions nothing', async () => {
     upsertIdentityProviderRecord(dataDir, providerConfig({ allowedDomains: ['corp.example'] }));
     stubClaims({ iss: issuerUrl, sub: 'ext-2', email: 'bob@other.example', name: 'Bob' });
-    const state = stateFrom(identity.startSsoLogin(cfg, PROVIDER_ID, 'https://app.example/cb'));
+    const state = stateFrom(await identity.startSsoLogin(cfg, PROVIDER_ID, 'https://app.example/cb'));
 
     await expect(identity.completeSsoLogin(cfg, state, 'code')).rejects.toThrow(/domain/i);
 

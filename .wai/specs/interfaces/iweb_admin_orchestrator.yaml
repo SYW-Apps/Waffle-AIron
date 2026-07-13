@@ -1,0 +1,174 @@
+id: iweb_admin_orchestrator
+name: Web Admin Orchestrator Interface
+description: >-
+  Contract for the web UI's admin-settings workflows. Every method is session-authenticated (the
+  browser sessionId, a first-class data-plane credential). User, identity-provider, and API-key
+  methods forward to the identity/admin orchestrators passing the session as the credential, so
+  those orchestrators' scope authorization and auditing apply unchanged. Organization-unit methods
+  are owned here: they resolve the session to a Principal, require an instance-wide admin grant, and
+  mutate through the organization repository with best-effort auditing.
+component: web_admin_orchestrator
+methods:
+  - name: listUsers
+    description: >-
+      Forward to identity_orchestrator.listUsers with the session as the credential; returns the
+      hosted users within the caller's scope, optionally narrowed to one project's grant holders.
+    signature: 'listUsers(sessionId: string, project: string): HostedUserRecord[]'
+    returns: HostedUserRecord[]
+    params:
+      - name: sessionId
+        type: string
+      - name: project
+        type: string
+        optional: true
+  - name: upsertUser
+    description: >-
+      Forward to identity_orchestrator.upsertUser with the session as the credential; creates or
+      updates a hosted user, scope-checked and audited by the identity orchestrator.
+    signature: 'upsertUser(sessionId: string, record: HostedUserRecord): HostedUserRecord'
+    returns: HostedUserRecord
+    params:
+      - name: sessionId
+        type: string
+      - name: record
+        type: HostedUserRecord
+  - name: setUserStatus
+    description: >-
+      Forward to identity_orchestrator.setUserStatus with the session as the credential; sets a
+      user's lifecycle status (a deactivation revokes the user's tokens and web sessions upstream).
+    signature: 'setUserStatus(sessionId: string, userId: string, status: string): HostedUserRecord'
+    returns: HostedUserRecord
+    params:
+      - name: sessionId
+        type: string
+      - name: userId
+        type: string
+      - name: status
+        type: string
+  - name: replaceUserGrants
+    description: >-
+      Forward to identity_orchestrator.replaceUserGrants with the session as the credential;
+      replaces a user's grants wholesale, privilege-escalation-guarded upstream.
+    signature: 'replaceUserGrants(sessionId: string, userId: string, grants: ProjectGrant[]): HostedUserRecord'
+    returns: HostedUserRecord
+    params:
+      - name: sessionId
+        type: string
+      - name: userId
+        type: string
+      - name: grants
+        type: ProjectGrant[]
+  - name: listIdentityProviders
+    description: >-
+      Forward to identity_orchestrator.listIdentityProviders with the session as the credential;
+      returns the configured identity providers (instance-admin only upstream).
+    signature: 'listIdentityProviders(sessionId: string): IdentityProviderConfig[]'
+    returns: IdentityProviderConfig[]
+    params:
+      - name: sessionId
+        type: string
+  - name: upsertIdentityProvider
+    description: >-
+      Forward to identity_orchestrator.upsertIdentityProvider with the session as the credential;
+      creates or updates one identity-provider (SSO) configuration. The config carries a
+      clientSecretRef, never a raw secret.
+    signature: >-
+      upsertIdentityProvider(sessionId: string, config: IdentityProviderConfig):
+      IdentityProviderConfig
+    returns: IdentityProviderConfig
+    params:
+      - name: sessionId
+        type: string
+      - name: config
+        type: IdentityProviderConfig
+  - name: removeIdentityProvider
+    description: >-
+      Forward to identity_orchestrator.removeIdentityProvider with the session as the credential;
+      removes one identity-provider configuration by id.
+    signature: 'removeIdentityProvider(sessionId: string, id: string): void'
+    returns: void
+    params:
+      - name: sessionId
+        type: string
+      - name: id
+        type: string
+  - name: listKeys
+    description: >-
+      Forward to admin_orchestrator.listKeys with the session as the credential; returns a project's
+      API keys.
+    signature: 'listKeys(sessionId: string, project: string): ApiKeyRecord[]'
+    returns: ApiKeyRecord[]
+    params:
+      - name: sessionId
+        type: string
+      - name: project
+        type: string
+  - name: mintKey
+    description: >-
+      Forward to admin_orchestrator.mintKey with the session as the credential; mints a
+      project-scoped API key and returns the plaintext key once.
+    signature: 'mintKey(sessionId: string, project: string, role: string): string'
+    returns: string
+    params:
+      - name: sessionId
+        type: string
+      - name: project
+        type: string
+      - name: role
+        type: string
+  - name: revokeKey
+    description: >-
+      Forward to admin_orchestrator.revokeKey with the session as the credential; revokes an API key
+      by id.
+    signature: 'revokeKey(sessionId: string, id: string): void'
+    returns: void
+    params:
+      - name: sessionId
+        type: string
+      - name: id
+        type: string
+  - name: listOrganizationUnits
+    description: >-
+      Resolve the session to a Principal via the auth specialist, require an instance-wide admin
+      grant, and return every organization unit through the organization repository. Not audited (a
+      read).
+    signature: 'listOrganizationUnits(sessionId: string): OrganizationUnitRecord[]'
+    returns: OrganizationUnitRecord[]
+    params:
+      - name: sessionId
+        type: string
+  - name: upsertOrganizationUnit
+    description: >-
+      Resolve the session to a Principal, require an instance-wide admin grant, create or update an
+      organization unit through the organization repository, and append a best-effort
+      org.unit.upsert (security) audit event.
+    signature: >-
+      upsertOrganizationUnit(sessionId: string, record: OrganizationUnitRecord):
+      OrganizationUnitRecord
+    returns: OrganizationUnitRecord
+    params:
+      - name: sessionId
+        type: string
+      - name: record
+        type: OrganizationUnitRecord
+    guarantees:
+      - atomic
+  - name: placeProject
+    description: >-
+      Resolve the session to a Principal, require an instance-wide admin grant, place a project into
+      an organization unit through the organization repository, and append a best-effort
+      org.placement.set (security) audit event.
+    signature: 'placeProject(sessionId: string, projectId: string, unitId: string): void'
+    returns: void
+    params:
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
+      - name: unitId
+        type: string
+    guarantees:
+      - atomic
+status: complete
+createdAt: '2026-07-13T18:27:58.377Z'
+updatedAt: '2026-07-13T19:01:53.724Z'

@@ -1,47 +1,84 @@
 id: iidentity_provider_adapter
 name: Identity Provider Adapter Interface
-description: Provider-neutral adapter contract for OIDC/SSO sign-in and subject resolution.
+description: >-
+  Provider-neutral adapter contract for OIDC/SSO sign-in and subject resolution. Resolves each
+  provider's concrete endpoints (via explicit config overrides, OIDC discovery, or a providerType
+  template), then builds authorization URLs, exchanges authorization codes, and verifies the
+  returned id_token against the provider JWKS. Performs external provider I/O only; never persists
+  or logs raw provider tokens or client secrets.
 component: identity_provider_adapter
 methods:
+  - name: resolveEndpoints
+    description: >-
+      Resolve the provider's concrete OIDC endpoints for one config, with precedence: (1) explicit
+      per-endpoint overrides on the config
+      (authorizationEndpoint/tokenEndpoint/jwksUri/userinfoEndpoint) win field-by-field — the
+      split-horizon path, letting a public authorize endpoint coexist with a VPC-internal token/jwks
+      endpoint; (2) OIDC discovery over <issuerUrl>/.well-known/openid-configuration, whose
+      advertised authorization_endpoint/token_endpoint/jwks_uri/userinfo_endpoint are used; (3) a
+      providerType template as a last resort (keycloak:
+      <issuer>/protocol/openid-connect/{auth,token,certs}; authentik:
+      <base>/application/o/{authorize,token}/ + jwks; generic oidc: <issuer>/{authorize,token}).
+      Discovery documents are cached in-adapter (transient, refetchable) so resolution is cheap on
+      the hot path. Rejects a config that resolves to no usable authorization or token endpoint.
+    signature: 'resolveEndpoints(config: IdentityProviderConfig): ProviderEndpoints'
+    returns: ProviderEndpoints
+    params:
+      - name: config
+        type: IdentityProviderConfig
   - name: buildAuthorizationUrl
     description: >-
-      Build a provider authorization URL for a browser sign-in flow using provider config and
-      redirect metadata.
+      Build a provider authorization URL for a browser sign-in flow using the resolved endpoints
+      (the front-channel authorizationEndpoint), the provider config, and redirect metadata.
     signature: >-
-      buildAuthorizationUrl(config: IdentityProviderConfig, state: string, redirectUri: string):
-      string
+      buildAuthorizationUrl(config: IdentityProviderConfig, endpoints: ProviderEndpoints, state:
+      string, redirectUri: string): string
     returns: string
     params:
       - name: config
         type: IdentityProviderConfig
+      - name: endpoints
+        type: ProviderEndpoints
       - name: state
         type: string
       - name: redirectUri
         type: string
   - name: exchangeCode
     description: >-
-      Exchange an authorization code for provider tokens and return a redacted provider response
-      summary as serialized metadata.
-    signature: 'exchangeCode(config: IdentityProviderConfig, code: string, redirectUri: string): string'
+      Exchange an authorization code for provider tokens against the resolved back-channel
+      tokenEndpoint (which may be VPC-internal), and return a redacted provider response summary as
+      serialized metadata (issuer, subject, verified claims, and the id_token needed for signature
+      verification) carrying no raw access/refresh token or client secret.
+    signature: >-
+      exchangeCode(config: IdentityProviderConfig, endpoints: ProviderEndpoints, code: string,
+      redirectUri: string): string
     returns: string
     params:
       - name: config
         type: IdentityProviderConfig
+      - name: endpoints
+        type: ProviderEndpoints
       - name: code
         type: string
       - name: redirectUri
         type: string
   - name: resolveSubject
     description: >-
-      Verify provider identity metadata and return a Wairon PrincipalSubject without leaking raw
-      provider tokens.
-    signature: 'resolveSubject(config: IdentityProviderConfig, providerMetadata: string): PrincipalSubject'
+      Verify provider identity metadata and return a Wairon PrincipalSubject. Fetches the provider's
+      public keys from the resolved jwksUri (cached), verifies the id_token signature and the
+      issuer/audience/expiry claims, and only then maps the verified claims to a subject — never
+      leaking raw provider tokens. Unverifiable metadata is rejected.
+    signature: >-
+      resolveSubject(config: IdentityProviderConfig, endpoints: ProviderEndpoints, providerMetadata:
+      string): PrincipalSubject
     returns: PrincipalSubject
     params:
       - name: config
         type: IdentityProviderConfig
+      - name: endpoints
+        type: ProviderEndpoints
       - name: providerMetadata
         type: string
 status: complete
 createdAt: '2026-07-08T22:00:47.217Z'
-updatedAt: '2026-07-10T08:19:17.093Z'
+updatedAt: '2026-07-13T18:24:00.912Z'

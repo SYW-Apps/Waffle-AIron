@@ -139,6 +139,159 @@ methods:
       transport: HTTP
       method: GET
       path: /web/canvas
+  - name: adminListUsers
+    description: >-
+      List hosted users in the caller's scope; forwards the session to
+      web_admin_orchestrator.listUsers.
+    signature: 'adminListUsers(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/admin/users
+  - name: adminUpsertUser
+    description: Create or update a hosted user; forwards to web_admin_orchestrator.upsertUser.
+    signature: 'adminUpsertUser(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/users
+  - name: adminSetUserStatus
+    description: Set a hosted user's lifecycle status; forwards to web_admin_orchestrator.setUserStatus.
+    signature: 'adminSetUserStatus(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/users/status
+  - name: adminReplaceUserGrants
+    description: Replace a hosted user's grants; forwards to web_admin_orchestrator.replaceUserGrants.
+    signature: 'adminReplaceUserGrants(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/users/grants
+  - name: adminListProviders
+    description: >-
+      List identity-provider (SSO) configurations; forwards to
+      web_admin_orchestrator.listIdentityProviders.
+    signature: 'adminListProviders(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/admin/providers
+  - name: adminUpsertProvider
+    description: >-
+      Create or update an identity-provider (SSO) configuration; forwards to
+      web_admin_orchestrator.upsertIdentityProvider.
+    signature: 'adminUpsertProvider(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/providers
+  - name: adminRemoveProvider
+    description: >-
+      Remove an identity-provider configuration by id; forwards to
+      web_admin_orchestrator.removeIdentityProvider.
+    signature: 'adminRemoveProvider(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/providers/remove
+  - name: adminListKeys
+    description: List a project's API keys; forwards to web_admin_orchestrator.listKeys.
+    signature: 'adminListKeys(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/admin/keys
+  - name: adminMintKey
+    description: Mint a project-scoped API key; forwards to web_admin_orchestrator.mintKey.
+    signature: 'adminMintKey(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/keys
+  - name: adminRevokeKey
+    description: Revoke an API key by id; forwards to web_admin_orchestrator.revokeKey.
+    signature: 'adminRevokeKey(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/keys/revoke
+  - name: adminListOrgUnits
+    description: List organization units; forwards to web_admin_orchestrator.listOrganizationUnits.
+    signature: 'adminListOrgUnits(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/admin/org/units
+  - name: adminUpsertOrgUnit
+    description: >-
+      Create or update an organization unit; forwards to
+      web_admin_orchestrator.upsertOrganizationUnit.
+    signature: 'adminUpsertOrgUnit(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/org/units
+  - name: adminPlaceProject
+    description: Place a project into an organization unit; forwards to web_admin_orchestrator.placeProject.
+    signature: 'adminPlaceProject(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/org/placements
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-07-11T16:37:18.124Z'
+updatedAt: '2026-07-13T18:32:52.218Z'

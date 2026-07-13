@@ -28,7 +28,8 @@ import {
 import { createProjectRecord } from '../../src/server/projects.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
 import { queryAuditEvents as auditQuery } from '../../src/server/audit.js';
-import { upsertOrganizationUnit, placeProject } from '../../src/server/organization.js';
+import { upsertOrganizationUnit, placeProject, listProjectPlacements } from '../../src/server/organization.js';
+import * as webadmin from '../../src/server/webadmin.js';
 import { replacePublicSurfaceSnapshot } from '../../src/server/surfaces.js';
 import { validateProjectAsComplete } from '../../src/server/adapters.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
@@ -65,6 +66,13 @@ const MASTER = 'master-credential-secret-value';
 const SECRET_REF = 'oidc-client-secret';
 const SECRET_VALUE = 'super-secret-value';
 const PROVIDER_ID = 'authentik-corp';
+const CLIENT_ID = 'test-client';
+
+// A real RSA signing key; its public half is published in the stub JWKS so the
+// adapter verifies the RS256-signed id_tokens end-to-end during sign-in.
+const { publicKey: SIGN_PUB, privateKey: SIGN_PRIV } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+const KID = 'test-key-1';
+const JWK = { ...(SIGN_PUB.export({ format: 'jwk' }) as crypto.JsonWebKey), kid: KID, use: 'sig', alg: 'RS256' };
 
 let tokenResponse: () => { status: number; json: unknown } = () => ({ status: 200, json: {} });
 let oidcServer: http.Server;
@@ -75,7 +83,26 @@ beforeAll(async () => {
     let raw = '';
     req.on('data', (chunk) => (raw += chunk));
     req.on('end', () => {
-      if (req.method === 'POST' && req.url === '/token') {
+      const url = new URL(req.url ?? '/', issuerUrl);
+      if (req.method === 'GET' && url.pathname === '/.well-known/openid-configuration') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            issuer: issuerUrl,
+            authorization_endpoint: `${issuerUrl}/authorize`,
+            token_endpoint: `${issuerUrl}/token`,
+            jwks_uri: `${issuerUrl}/jwks`,
+            userinfo_endpoint: `${issuerUrl}/userinfo`,
+          }),
+        );
+        return;
+      }
+      if (req.method === 'GET' && url.pathname === '/jwks') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ keys: [JWK] }));
+        return;
+      }
+      if (req.method === 'POST' && url.pathname === '/token') {
         const r = tokenResponse();
         res.writeHead(r.status, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(r.json));
@@ -96,13 +123,17 @@ afterAll(async () => {
 function b64url(obj: unknown): string {
   return Buffer.from(JSON.stringify(obj)).toString('base64url');
 }
-function makeIdToken(claims: unknown): string {
-  return [b64url({ alg: 'RS256', typ: 'JWT' }), b64url(claims), 'sig'].join('.');
+/** RS256-sign an id_token with the stub signing key so it verifies against the JWKS. */
+function signIdToken(claims: Record<string, unknown>): string {
+  const input = `${b64url({ alg: 'RS256', typ: 'JWT', kid: KID })}.${b64url(claims)}`;
+  const sig = crypto.sign('RSA-SHA256', Buffer.from(input), SIGN_PRIV).toString('base64url');
+  return `${input}.${sig}`;
 }
 function stubClaims(claims: Record<string, unknown>): void {
+  const full = { aud: CLIENT_ID, exp: Math.floor(Date.now() / 1000) + 3600, ...claims };
   tokenResponse = () => ({
     status: 200,
-    json: { access_token: 'ACCESS', id_token: makeIdToken(claims), token_type: 'Bearer' },
+    json: { access_token: 'ACCESS', id_token: signIdToken(full), token_type: 'Bearer' },
   });
 }
 function providerConfig(over: Partial<IdentityProviderConfig> = {}): IdentityProviderConfig {
@@ -154,9 +185,9 @@ describe('web orchestrator SSO sign-in (sdd_host)', () => {
     }
   });
 
-  it('startSignIn returns a provider authorization URL for an enabled provider (info audit)', () => {
+  it('startSignIn returns a provider authorization URL for an enabled provider (info audit)', async () => {
     upsertIdentityProviderRecord(dataDir, providerConfig());
-    const { url: authUrl } = startSignIn(cfg, PROVIDER_ID, 'https://app.example/web/sso/callback');
+    const { url: authUrl } = await startSignIn(cfg, PROVIDER_ID, 'https://app.example/web/sso/callback');
     const url = new URL(authUrl);
     expect(url.origin).toBe(issuerUrl);
     expect(url.pathname).toBe('/authorize');
@@ -174,15 +205,15 @@ describe('web orchestrator SSO sign-in (sdd_host)', () => {
     expect(events[0].level).toBe('info');
   });
 
-  it('startSignIn rejects an unknown and a disabled provider', () => {
-    expect(() => startSignIn(cfg, 'ghost', 'https://app.example/cb')).toThrow(/unknown or disabled/i);
+  it('startSignIn rejects an unknown and a disabled provider', async () => {
+    await expect(startSignIn(cfg, 'ghost', 'https://app.example/cb')).rejects.toThrow(/unknown or disabled/i);
     upsertIdentityProviderRecord(dataDir, providerConfig({ enabled: false }));
-    expect(() => startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb')).toThrow(/unknown or disabled/i);
+    await expect(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb')).rejects.toThrow(/unknown or disabled/i);
   });
 
   it('completeSignIn (first login): provisions an active user with empty grants and creates a resolvable WebSession (no token minted)', async () => {
     upsertIdentityProviderRecord(dataDir, providerConfig());
-    const { state, nonce } = started(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
+    const { state, nonce } = started(await startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
 
     const sessionId = await completeSignIn(cfg, state, 'auth-code-1', nonce);
     expect(sessionId).toMatch(/^ws_[0-9a-f]+$/);
@@ -210,12 +241,12 @@ describe('web orchestrator SSO sign-in (sdd_host)', () => {
 
   it('completeSignIn refuses a returning user who has been deactivated (creates no new session)', async () => {
     upsertIdentityProviderRecord(dataDir, providerConfig());
-    const f1 = started(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
+    const f1 = started(await startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
     await completeSignIn(cfg, f1.state, 'code-1', f1.nonce);
 
     setUserStatus(dataDir, `sso:${PROVIDER_ID}:ext-1`, 'suspended');
 
-    const f2 = started(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
+    const f2 = started(await startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
     await expect(completeSignIn(cfg, f2.state, 'code-2', f2.nonce)).rejects.toThrow(ForbiddenError);
 
     // Only the first (pre-deactivation) session exists; the refused login minted nothing.
@@ -224,9 +255,9 @@ describe('web orchestrator SSO sign-in (sdd_host)', () => {
 
   it('completeSignIn does NOT revoke prior sessions (multi-device): two logins yield two live sessions', async () => {
     upsertIdentityProviderRecord(dataDir, providerConfig());
-    const fA = started(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
+    const fA = started(await startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
     const idA = await completeSignIn(cfg, fA.state, 'c1', fA.nonce);
-    const fB = started(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
+    const fB = started(await startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
     const idB = await completeSignIn(cfg, fB.state, 'c2', fB.nonce);
 
     expect(idA).not.toBe(idB);
@@ -237,7 +268,7 @@ describe('web orchestrator SSO sign-in (sdd_host)', () => {
 
   it('SECURITY: completeSignIn rejects a login-CSRF callback whose nonce cookie is absent or wrong', async () => {
     upsertIdentityProviderRecord(dataDir, providerConfig());
-    const { state, nonce } = started(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
+    const { state, nonce } = started(await startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
 
     // Victim's browser has NO nonce cookie (attacker-delivered callback) → refused.
     await expect(completeSignIn(cfg, state, 'code', null)).rejects.toThrow(ForbiddenError);
@@ -923,4 +954,234 @@ describe('web portal HTTP mount (sdd_host)', () => {
     // webUiEnabled defaults false — the admin routes are part of /web and 404 with it.
     expect((await raw({ method: 'GET', path: '/web/admin/users' })).status).toBe(404);
   });
+});
+
+// ── Web admin orchestrator (sdd_host) ────────────────────────────────────────
+//
+// The bridge exposing the control-plane admin capabilities on the PUBLIC data
+// plane. User / IdP / key methods forward to the identity/admin orchestrators
+// with the session as the credential; org-unit methods are owned here (require an
+// instance-wide admin grant, mutate through the organization repository, audit).
+
+describe('web admin orchestrator (sdd_host)', () => {
+  let dataDir: string;
+  let cfg: HostConfig;
+  const savedEnv = { ...process.env };
+  const FUTURE = (): string => new Date(Date.now() + 3_600_000).toISOString();
+
+  beforeEach(() => {
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-webadmin-'));
+    process.env.WAIRON_ADMIN_TOKEN = MASTER;
+    process.env.WAIRON_DATA_DIR = dataDir;
+    setSecret(SECRET_REF, SECRET_VALUE);
+    cfg = { host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: true };
+  });
+  afterEach(() => {
+    process.env = { ...savedEnv };
+    try {
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    } catch {
+      /* windows file locks */
+    }
+  });
+
+  function adminSession(): string {
+    return createWebSession(dataDir, {
+      id: '',
+      subject: SUBJECT,
+      grants: [{ projectId: '*', permissions: ['*'] }],
+      createdAt: '',
+      expiresAt: FUTURE(),
+    }).id;
+  }
+  function viewerSession(): string {
+    return createWebSession(dataDir, {
+      id: '',
+      subject: { userId: 'viewer', kind: 'human', issuer: 'local' },
+      grants: [{ projectId: 'demo', permissions: ['mcp:read'] }],
+      createdAt: '',
+      expiresAt: FUTURE(),
+    }).id;
+  }
+
+  it('org-unit methods require an instance-wide admin grant (owned auth) and audit writes', () => {
+    const admin = adminSession();
+    const viewer = viewerSession();
+
+    // Admin creates + lists organization units; a security-level audit event is written.
+    const unit = webadmin.upsertOrganizationUnit(cfg, admin, {
+      id: '',
+      name: 'Team One',
+      kind: 'team',
+      status: 'active',
+      createdAt: '',
+      createdBy: SUBJECT,
+    });
+    expect(unit.id).toBeTruthy();
+    expect(webadmin.listOrganizationUnits(cfg, admin).map((u) => u.id)).toContain(unit.id);
+    const up = auditQuery(dataDir, { action: 'org.unit.upsert' });
+    expect(up).toHaveLength(1);
+    expect(up[0].level).toBe('security');
+
+    // A viewer session (no instance-admin grant) is denied on read AND write.
+    expect(() => webadmin.listOrganizationUnits(cfg, viewer)).toThrow(ForbiddenError);
+    expect(() =>
+      webadmin.upsertOrganizationUnit(cfg, viewer, {
+        id: '',
+        name: 'X',
+        kind: 'team',
+        status: 'active',
+        createdAt: '',
+        createdBy: SUBJECT,
+      }),
+    ).toThrow(ForbiddenError);
+    expect(() => webadmin.placeProject(cfg, viewer, 'proj-a', unit.id)).toThrow(ForbiddenError);
+  });
+
+  it('placeProject binds a project to a unit through the repository and audits', () => {
+    const admin = adminSession();
+    const unit = webadmin.upsertOrganizationUnit(cfg, admin, {
+      id: 'unit-1',
+      name: 'Team',
+      kind: 'team',
+      status: 'active',
+      createdAt: '',
+      createdBy: SUBJECT,
+    });
+    createProjectRecord(dataDir, 'proj-a');
+
+    webadmin.placeProject(cfg, admin, 'proj-a', unit.id);
+    expect(listProjectPlacements(dataDir, 'proj-a', unit.id)).toHaveLength(1);
+    const ev = auditQuery(dataDir, { action: 'org.placement.set' });
+    expect(ev).toHaveLength(1);
+    expect(ev[0].level).toBe('security');
+  });
+
+  it('user / IdP methods forward with the session as the credential (upstream scope applies)', () => {
+    const admin = adminSession();
+    const viewer = viewerSession();
+
+    // IdP upsert/list forward to the identity orchestrator (instance-admin only).
+    const stored = webadmin.upsertIdentityProvider(cfg, admin, providerConfig());
+    expect(stored.id).toBe(PROVIDER_ID);
+    expect(webadmin.listIdentityProviders(cfg, admin).map((p) => p.id)).toContain(PROVIDER_ID);
+    // A viewer session is refused by the upstream orchestrator (no new auth surface).
+    expect(() => webadmin.listIdentityProviders(cfg, viewer)).toThrow(ForbiddenError);
+
+    // listUsers forwards + scope-filters; an admin sees the directory, a viewer is denied.
+    expect(Array.isArray(webadmin.listUsers(cfg, admin))).toBe(true);
+    expect(() => webadmin.listUsers(cfg, viewer)).toThrow(ForbiddenError);
+  });
+});
+
+// ── Web admin routes over HTTP (routeData) ───────────────────────────────────
+
+describe('web admin routes over HTTP (sdd_host)', () => {
+  let dataDir: string;
+  let cfg: HostConfig;
+  let server: http.Server;
+  let port: number;
+  const savedEnv = { ...process.env };
+  const FUTURE = (): string => new Date(Date.now() + 3_600_000).toISOString();
+
+  function raw(opts: { method: string; path: string; headers?: Record<string, string>; body?: string }): Promise<{ status: number; body: string }> {
+    return new Promise((resolve, reject) => {
+      const req = http.request(
+        { host: '127.0.0.1', port, method: opts.method, path: opts.path, headers: opts.headers },
+        (res) => {
+          let data = '';
+          res.on('data', (c) => (data += c));
+          res.on('end', () => resolve({ status: res.statusCode ?? 0, body: data }));
+        },
+      );
+      req.on('error', reject);
+      if (opts.body !== undefined) req.write(opts.body);
+      req.end();
+    });
+  }
+
+  beforeEach(async () => {
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-webadmin-http-'));
+    process.env.WAIRON_ADMIN_TOKEN = MASTER;
+    process.env.WAIRON_DATA_DIR = dataDir;
+    fs.writeFileSync(path.join(dataDir, 'exposure-policy.json'), JSON.stringify({ webUiEnabled: true, requireTls: false }));
+    cfg = { host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: true };
+    server = http.createServer((req, res) => routeData(cfg, req, res));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    port = (server.address() as AddressInfo).port;
+  });
+  afterEach(async () => {
+    server.closeAllConnections?.();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    process.env = { ...savedEnv };
+    try {
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    } catch {
+      /* windows file locks */
+    }
+  });
+
+  function adminCookie(): string {
+    const s = createWebSession(dataDir, {
+      id: '',
+      subject: SUBJECT,
+      grants: [{ projectId: '*', permissions: ['*'] }],
+      createdAt: '',
+      expiresAt: FUTURE(),
+    });
+    return `wairon_session=${s.id}`;
+  }
+
+  it('org-unit create forwards through the web admin orchestrator and is CSRF-gated', async () => {
+    const cookie = adminCookie();
+    const unitBody = JSON.stringify({ name: 'Team', kind: 'team', createdBy: { userId: 'u-1', kind: 'human', issuer: 'local' } });
+
+    // A cookie-authenticated POST WITHOUT the CSRF header → 403 (never dispatched).
+    const noCsrf = await raw({ method: 'POST', path: '/web/admin/org/units', headers: { cookie, 'content-type': 'application/json' }, body: unitBody });
+    expect(noCsrf.status).toBe(403);
+
+    // With the X-Wairon-Web header → 200; the unit is created.
+    const create = await raw({
+      method: 'POST',
+      path: '/web/admin/org/units',
+      headers: { cookie, 'content-type': 'application/json', 'x-wairon-web': '1' },
+      body: unitBody,
+    });
+    expect(create.status).toBe(200);
+    const unitId = JSON.parse(create.body).id as string;
+    expect(unitId).toBeTruthy();
+
+    // GET lists it back through the same route.
+    const list = await raw({ method: 'GET', path: '/web/admin/org/units', headers: { cookie } });
+    expect(list.status).toBe(200);
+    expect(JSON.parse(list.body).units.map((u: { id: string }) => u.id)).toContain(unitId);
+  }, 20_000);
+
+  it('a viewer session is refused org administration over HTTP (403, no data leak)', async () => {
+    const viewer = createWebSession(dataDir, {
+      id: '',
+      subject: { userId: 'viewer', kind: 'human', issuer: 'local' },
+      grants: [{ projectId: 'demo', permissions: ['mcp:read'] }],
+      createdAt: '',
+      expiresAt: FUTURE(),
+    });
+    const cookie = `wairon_session=${viewer.id}`;
+    expect((await raw({ method: 'GET', path: '/web/admin/org/units', headers: { cookie } })).status).toBe(403);
+  }, 20_000);
+
+  it('provider upsert + list forward through /web/admin/providers', async () => {
+    const cookie = adminCookie();
+    const put = await raw({
+      method: 'POST',
+      path: '/web/admin/providers',
+      headers: { cookie, 'content-type': 'application/json', 'x-wairon-web': '1' },
+      body: JSON.stringify({ id: PROVIDER_ID, providerType: 'oidc', enabled: true, updatedAt: '' }),
+    });
+    expect(put.status).toBe(200);
+    expect(JSON.parse(put.body).id).toBe(PROVIDER_ID);
+
+    const list = await raw({ method: 'GET', path: '/web/admin/providers', headers: { cookie } });
+    expect(list.status).toBe(200);
+    expect(JSON.parse(list.body).providers.map((p: { id: string }) => p.id)).toContain(PROVIDER_ID);
+  }, 20_000);
 });

@@ -42,32 +42,39 @@ methods:
         targetComponent: auth_specialist
         targetMethod: signSsoState
       - stepNumber: 7
+        description: >-
+          Resolve the provider's concrete OIDC endpoints through the identity provider adapter
+          (explicit overrides -> OIDC discovery -> providerType template)
+        type: call
+        targetComponent: identity_provider_adapter
+        targetMethod: resolveEndpoints
+      - stepNumber: 8
         description: Build the provider authorization URL from the config, the signed state, and redirectUri
         type: call
         targetComponent: identity_provider_adapter
         targetMethod: buildAuthorizationUrl
-      - stepNumber: 8
+      - stepNumber: 9
         description: Append a redacted audit event without letting a failure fail the sign-in start
         type: try
-        endStep: 10
+        endStep: 11
         catches:
           - error: audit append failure
-            step: 11
-      - stepNumber: 9
+            step: 12
+      - stepNumber: 10
         description: >-
           Append the redacted web.signin.start audit event (info level) under the active retention
           policy
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 10
+      - stepNumber: 11
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 12
-      - stepNumber: 11
+        toStep: 13
+      - stepNumber: 12
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 12
+      - stepNumber: 13
         description: Return the provider authorization URL
         type: return
         outcome: authorization URL
@@ -176,51 +183,59 @@ methods:
         type: throw
         error: unknown or disabled identity provider
       - stepNumber: 7
+        description: >-
+          Resolve the provider's concrete OIDC endpoints through the identity provider adapter
+          (front-channel authorize plus back-channel token/jwks, honoring any split-horizon
+          overrides)
+        type: call
+        targetComponent: identity_provider_adapter
+        targetMethod: resolveEndpoints
+      - stepNumber: 8
         description: Exchange the authorization code with the provider for a redacted token summary.
         type: call
         targetComponent: identity_provider_adapter
         targetMethod: exchangeCode
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Verify the provider metadata and resolve it to a Wairon PrincipalSubject (no raw provider
           tokens).
         type: call
         targetComponent: identity_provider_adapter
         targetMethod: resolveSubject
-      - stepNumber: 9
+      - stepNumber: 10
         description: Look up the hosted user by the resolved subject's issuer and external subject id.
         type: call
         targetComponent: user_repository
         targetMethod: findByExternalSubject
-      - stepNumber: 10
+      - stepNumber: 11
         description: >-
           If no hosted user matched, provision a first-login record; otherwise use the existing
           user.
         type: branch
         condition: no hosted user matched
-        onFalseStep: 13
-      - stepNumber: 11
+        onFalseStep: 14
+      - stepNumber: 12
         description: >-
           Build a new active first-login HostedUserRecord for the subject (empty grants; an admin
           assigns grants afterwards).
         type: local
-      - stepNumber: 12
+      - stepNumber: 13
         description: Persist the newly provisioned first-login user record through the user repository.
         type: call
         targetComponent: user_repository
         targetMethod: upsert
-      - stepNumber: 13
+      - stepNumber: 14
         description: >-
           If the resolved hosted user's status is not active, reject the sign-in (a deactivated user
           may not sign in).
         type: branch
         condition: the resolved hosted user is not active
-        onFalseStep: 15
-      - stepNumber: 14
+        onFalseStep: 16
+      - stepNumber: 15
         description: Reject the sign-in of a deactivated user.
         type: throw
         error: deactivated user may not sign in
-      - stepNumber: 15
+      - stepNumber: 16
         description: >-
           Build the new WebSession (session id with the reserved prefix, subject, grants = the
           user's current grants, providerId, createdAt, expiresAt = now + the session TTL).
@@ -228,33 +243,33 @@ methods:
           sessions across devices/tabs; each is independently revocable via signOut, and
           signOutEverywhere revokes them all.
         type: local
-      - stepNumber: 16
+      - stepNumber: 17
         description: Persist the new browser session through the web session repository.
         type: call
         targetComponent: web_session_repository
         targetMethod: create
-      - stepNumber: 17
+      - stepNumber: 18
         description: Append a redacted audit event without letting a failure fail the sign-in.
         type: try
-        endStep: 19
+        endStep: 20
         catches:
           - error: audit append failure
-            step: 20
-      - stepNumber: 18
+            step: 21
+      - stepNumber: 19
         description: >-
           Append a redacted web.signin audit event (security level) under the active retention
           policy.
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 19
+      - stepNumber: 20
         description: On a successful append, continue to the return and skip the audit-failure handler.
         type: jump
-        toStep: 21
-      - stepNumber: 20
+        toStep: 22
+      - stepNumber: 21
         description: Record the audit append failure as a server diagnostic and continue.
         type: local
-      - stepNumber: 21
+      - stepNumber: 22
         description: Return the new session id (the portal sets it as the browser session cookie).
         type: return
         outcome: new session id
@@ -382,4 +397,4 @@ lint:
         declared edges are design-ahead, not stale.
 status: complete
 createdAt: '2026-07-11T11:36:44.225Z'
-updatedAt: '2026-07-11T20:30:16.623Z'
+updatedAt: '2026-07-13T18:25:46.853Z'

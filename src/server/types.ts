@@ -468,8 +468,45 @@ export interface IdentityProviderConfig {
    *  When set and non-empty, a redirectUri not on the list is refused. When
    *  unset/empty, any redirectUri is accepted (backward compatible). */
   allowedRedirectUris?: string[];
+  /** Explicit browser-facing (front-channel) authorization endpoint override.
+   *  When set, wins over OIDC discovery and providerType templates. The PUBLIC URL
+   *  the user's browser is redirected to; the split-horizon lever paired with an
+   *  internal tokenEndpoint. */
+  authorizationEndpoint?: string;
+  /** Explicit server-facing (back-channel) token endpoint override. When set, wins
+   *  over discovery/templates. The URL the host calls directly for code->token
+   *  exchange, so it may be a VPC-internal address unreachable from the internet. */
+  tokenEndpoint?: string;
+  /** Explicit JWKS URI override for id_token signature verification (server-facing
+   *  back-channel; may be VPC-internal). When unset, resolved from discovery or the
+   *  providerType template. */
+  jwksUri?: string;
+  /** Explicit userinfo endpoint override (server-facing back-channel), used as a
+   *  fallback identity-verification path when JWKS verification is unavailable. */
+  userinfoEndpoint?: string;
   enabled: boolean;
   updatedAt: string;
+}
+
+/** The resolved set of OIDC endpoints for one identity provider, computed once by
+ *  the identity provider adapter (from explicit config overrides, OIDC discovery, or
+ *  a providerType template) and threaded through the authorization-URL build,
+ *  code->token exchange, and id_token verification. Splits the browser-facing
+ *  front-channel (authorizationEndpoint) from the server-facing back-channel
+ *  (tokenEndpoint, jwksUri, userinfoEndpoint) so the two may live at different
+ *  addresses (public authorize vs VPC-internal token/jwks). Mirrors
+ *  .wai/specs/types/provider_endpoints.yaml. */
+export interface ProviderEndpoints {
+  /** The provider's canonical issuer identifier, matched against the id_token iss claim. */
+  issuer: string;
+  /** Browser-facing (front-channel) authorization endpoint the user agent is redirected to. */
+  authorizationEndpoint: string;
+  /** Server-facing (back-channel) token endpoint the host calls for code->token exchange. */
+  tokenEndpoint: string;
+  /** Server-facing JWKS URI providing the public keys for id_token signature verification. */
+  jwksUri?: string;
+  /** Server-facing userinfo endpoint used as a fallback verification path. */
+  userinfoEndpoint?: string;
 }
 
 /** Reserved prefix marking a session id as a first-class web-session

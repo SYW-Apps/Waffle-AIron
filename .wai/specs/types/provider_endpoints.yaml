@@ -1,0 +1,39 @@
+kind: value-object
+id: provider_endpoints
+name: ProviderEndpoints
+description: >-
+  The resolved set of OIDC endpoints for one identity provider, computed once by the identity
+  provider adapter (from explicit config overrides, OIDC discovery, or a providerType template) and
+  threaded through the authorization-URL build, code->token exchange, and id_token verification.
+  Splits the browser-facing front-channel (authorizationEndpoint) from the server-facing
+  back-channel (tokenEndpoint, jwksUri, userinfoEndpoint) so the two may live at different addresses
+  (public authorize vs VPC-internal token/jwks).
+subsystem: sdd_host
+fields:
+  - name: issuer
+    type: string
+    description: The provider's canonical issuer identifier, matched against the id_token iss claim.
+    optional: false
+  - name: authorizationEndpoint
+    type: string
+    description: Browser-facing (front-channel) authorization endpoint the user agent is redirected to.
+    optional: false
+  - name: tokenEndpoint
+    type: string
+    description: >-
+      Server-facing (back-channel) token endpoint the host calls for code->token exchange; may be
+      VPC-internal.
+    optional: false
+  - name: jwksUri
+    type: string
+    description: >-
+      Server-facing JWKS URI providing the public keys for id_token signature verification; may be
+      VPC-internal.
+    optional: true
+  - name: userinfoEndpoint
+    type: string
+    description: Server-facing userinfo endpoint used as a fallback verification path.
+    optional: true
+methods: []
+createdAt: '2026-07-13T18:23:18.078Z'
+updatedAt: '2026-07-13T18:23:18.132Z'

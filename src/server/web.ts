@@ -1,15 +1,15 @@
 import * as crypto from 'crypto';
 import type { IncomingMessage, ServerResponse } from 'http';
 import { signSsoState, verifySsoState, authenticateSession } from './auth.js';
-import { buildAuthorizationUrl, exchangeCode, resolveSubject } from './idp.js';
+import { resolveEndpoints, buildAuthorizationUrl, exchangeCode, resolveSubject } from './idp.js';
 import {
   resolveEnabledProvider,
   tryAppendAudit,
   buildSsoAuditEvent,
   ANONYMOUS_SSO_ACTOR,
-  listUsers,
   type SsoStatePayload,
 } from './identity.js';
+import * as webadmin from './webadmin.js';
 import { assertAllowedRedirectUri } from './idp.js';
 import { getHealthReport, getUsage } from './operations.js';
 import { listPendingRequests, decideRequest } from './selfservice.js';
@@ -32,8 +32,11 @@ import type {
   ApprovalDecision,
   HostConfig,
   HostedUserRecord,
+  IdentityProviderConfig,
   LandscapeGraphModel,
+  OrganizationUnitRecord,
   PrincipalSubject,
+  ProjectGrant,
   WebContext,
   WebGraphModel,
   WebGraphNode,
@@ -107,7 +110,11 @@ const DEV_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
  * prove the completing browser is the one that started — defeating login CSRF.
  * Unauthenticated by nature — no caller credential.
  */
-export function startSignIn(cfg: HostConfig, providerId: string, redirectUri: string): { url: string; nonce: string } {
+export async function startSignIn(
+  cfg: HostConfig,
+  providerId: string,
+  redirectUri: string,
+): Promise<{ url: string; nonce: string }> {
   const provider = resolveEnabledProvider(cfg, providerId); // steps 1–4 (throws on unknown/disabled)
 
   // Pin the redirect URI to the provider's server-side allowlist (when configured)
@@ -118,12 +125,15 @@ export function startSignIn(cfg: HostConfig, providerId: string, redirectUri: st
   const nonce = crypto.randomBytes(16).toString('hex'); // step 5
   const payload: SsoStatePayload = { providerId, nonce, redirectUri };
   const state = signSsoState(JSON.stringify(payload)); // step 6
-  const url = buildAuthorizationUrl(provider, state, redirectUri); // step 7
+  // step 7: resolve the provider's concrete endpoints (overrides -> discovery ->
+  // template); step 8: build the authorization URL against the front-channel endpoint.
+  const endpoints = await resolveEndpoints(provider);
+  const url = buildAuthorizationUrl(provider, endpoints, state, redirectUri);
 
-  // steps 8–11: best-effort append (tryAppendAudit wraps the try/jump/catch).
+  // steps 9–12: best-effort append (tryAppendAudit wraps the try/jump/catch).
   tryAppendAudit(cfg, buildSsoAuditEvent(ANONYMOUS_SSO_ACTOR, 'web.signin.start', 'info', { target: providerId }));
 
-  return { url, nonce }; // step 12
+  return { url, nonce }; // step 13
 }
 
 /**
@@ -155,15 +165,18 @@ export async function completeSignIn(cfg: HostConfig, state: string, code: strin
 
   const provider = resolveEnabledProvider(cfg, providerId); // steps 3–6
 
-  // Exchange the code (network I/O) and resolve the external subject, never
-  // leaking raw provider tokens across the boundary.
-  const summary = await exchangeCode(provider, code, redirectUri); // step 7
-  const subject = resolveSubject(provider, summary); // step 8
+  // step 7: resolve the provider endpoints (front-channel authorize + back-channel
+  // token/jwks, honoring split-horizon overrides). step 8: exchange the code
+  // (network I/O). step 9: verify the id_token against the JWKS and resolve the
+  // external subject — never leaking raw provider tokens across the boundary.
+  const endpoints = await resolveEndpoints(provider);
+  const summary = await exchangeCode(provider, endpoints, code, redirectUri);
+  const subject = await resolveSubject(provider, endpoints, summary);
 
   // Look up the hosted user by issuer + external subject; provision on first login.
-  let user = findUserByExternalSubject(cfg.dataDir, subject.issuer, subject.externalSubject ?? ''); // step 9
+  let user = findUserByExternalSubject(cfg.dataDir, subject.issuer, subject.externalSubject ?? ''); // step 10
   if (!user) {
-    // step 10 → 11
+    // steps 11 → 12
     const provisioned: HostedUserRecord = {
       id: subject.userId,
       subject,
@@ -171,14 +184,14 @@ export async function completeSignIn(cfg: HostConfig, state: string, code: strin
       grants: [], // first-login: empty — an admin assigns grants afterwards
       createdAt: new Date().toISOString(),
     };
-    user = upsertUser(cfg.dataDir, provisioned); // step 12
+    user = upsertUser(cfg.dataDir, provisioned); // step 13
   }
 
   // Reject re-login for a deactivated user before creating a session. A freshly
   // provisioned first-login record is always active, so only an existing
   // deactivated user is rejected here.
   if (user.status !== 'active') {
-    // steps 13–14
+    // steps 14–15
     throw new ForbiddenError('deactivated user may not sign in');
   }
 
@@ -192,15 +205,15 @@ export async function completeSignIn(cfg: HostConfig, state: string, code: strin
     createdAt: '', // stamped by the registry
     expiresAt: new Date(Date.now() + WEB_SESSION_TTL_MS).toISOString(),
     providerId,
-  }; // step 15
-  const stored = createWebSession(cfg.dataDir, session); // step 16
+  }; // step 16
+  const stored = createWebSession(cfg.dataDir, session); // step 17
 
-  // steps 17–20: best-effort security-level append. The actor carries WHO signed
+  // steps 18–21: best-effort security-level append. The actor carries WHO signed
   // in; the target is the providerId (the session id is a secret credential and
   // must never be logged — the audit sink rejects credential-shaped targets).
   tryAppendAudit(cfg, buildSsoAuditEvent(user.subject, 'web.signin', 'security', { target: providerId }));
 
-  return stored.id; // step 21 (the portal sets it as the session cookie)
+  return stored.id; // step 22 (the portal sets it as the session cookie)
 }
 
 /**
@@ -1132,6 +1145,88 @@ table.grid tr:hover td { background:rgba(255,255,255,.03); }
 </html>`;
 }
 
+// ── Web admin plane (session-scoped /web/admin/*) ────────────────────────────
+//
+// The unified web UI's admin-settings surface on the PUBLIC data plane. Each of
+// these thin portal handlers resolves the browser session id and forwards to the
+// web admin orchestrator (webadmin.ts), which re-applies the exact control-plane
+// authorization (user/IdP/key methods pass the session as the credential to the
+// identity/admin orchestrators; org-unit methods require an instance-wide admin
+// grant and mutate through the organization repository). Cookie-authenticated
+// POSTs are CSRF-gated in http.ts (routeData) exactly like /web/logout.
+//
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Body = any;
+
+/** List hosted users in the caller's scope; forwards to web_admin_orchestrator.listUsers. */
+function adminListUsers(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  const project = url.searchParams.get('project') ?? undefined;
+  sendJson(res, 200, { users: webadmin.listUsers(cfg, sessionId, project) });
+}
+
+/** Create or update a hosted user; forwards to web_admin_orchestrator.upsertUser. */
+function adminUpsertUser(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, webadmin.upsertUser(cfg, sessionId, body as HostedUserRecord));
+}
+
+/** Set a hosted user's lifecycle status; forwards to web_admin_orchestrator.setUserStatus. */
+function adminSetUserStatus(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, webadmin.setUserStatus(cfg, sessionId, String(body?.userId ?? ''), String(body?.status ?? '')));
+}
+
+/** Replace a hosted user's grants; forwards to web_admin_orchestrator.replaceUserGrants. */
+function adminReplaceUserGrants(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, webadmin.replaceUserGrants(cfg, sessionId, String(body?.userId ?? ''), (body?.grants ?? []) as ProjectGrant[]));
+}
+
+/** List identity-provider (SSO) configurations; forwards to web_admin_orchestrator.listIdentityProviders. */
+function adminListProviders(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
+  sendJson(res, 200, { providers: webadmin.listIdentityProviders(cfg, sessionId) });
+}
+
+/** Create or update an identity-provider configuration; forwards to web_admin_orchestrator.upsertIdentityProvider. */
+function adminUpsertProvider(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, webadmin.upsertIdentityProvider(cfg, sessionId, body as IdentityProviderConfig));
+}
+
+/** Remove an identity-provider configuration by id; forwards to web_admin_orchestrator.removeIdentityProvider. */
+function adminRemoveProvider(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  webadmin.removeIdentityProvider(cfg, sessionId, String(body?.id ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+
+/** List a project's API keys; forwards to web_admin_orchestrator.listKeys. */
+function adminListKeys(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  sendJson(res, 200, { keys: webadmin.listKeys(cfg, sessionId, url.searchParams.get('project') ?? '*') });
+}
+
+/** Mint a project-scoped API key; forwards to web_admin_orchestrator.mintKey. */
+function adminMintKey(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 201, { key: webadmin.mintKey(cfg, sessionId, String(body?.project ?? ''), String(body?.role ?? 'editor')) });
+}
+
+/** Revoke an API key by id; forwards to web_admin_orchestrator.revokeKey. */
+function adminRevokeKey(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  webadmin.revokeKey(cfg, sessionId, String(body?.id ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+
+/** List organization units; forwards to web_admin_orchestrator.listOrganizationUnits. */
+function adminListOrgUnits(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
+  sendJson(res, 200, { units: webadmin.listOrganizationUnits(cfg, sessionId) });
+}
+
+/** Create or update an organization unit; forwards to web_admin_orchestrator.upsertOrganizationUnit. */
+function adminUpsertOrgUnit(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, webadmin.upsertOrganizationUnit(cfg, sessionId, body as OrganizationUnitRecord));
+}
+
+/** Place a project into an organization unit; forwards to web_admin_orchestrator.placeProject. */
+function adminPlaceProject(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  webadmin.placeProject(cfg, sessionId, String(body?.projectId ?? ''), String(body?.unitId ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+
 /**
  * Route one web UI request to the orchestrator and write the HTTP response,
  * managing the session cookie on the response. Owns its own error → status mapping
@@ -1177,7 +1272,7 @@ export async function handleWebRequest(
     // POST /web/sso/start  { providerId, redirectUri } → { url }; also installs the
     // short-lived HttpOnly nonce cookie that binds this browser to the flow.
     if (req.method === 'POST' && parts.length === 3 && parts[1] === 'sso' && parts[2] === 'start') {
-      const started = startSignIn(cfg, body?.providerId as string, body?.redirectUri as string);
+      const started = await startSignIn(cfg, body?.providerId as string, body?.redirectUri as string);
       res.writeHead(200, {
         'content-type': 'application/json',
         'set-cookie': setNonceCookie(started.nonce, ctx.secureCookie),
@@ -1251,10 +1346,65 @@ export async function handleWebRequest(
     // another tenant's data. No new authorization surface, just a browser-reachable
     // route onto the same scoped reads the admin API already exposes.
     if (parts.length >= 2 && parts[1] === 'admin') {
-      // GET /web/admin/users — scoped user directory (user:admin scope).
+      // ── Web admin orchestrator surface (user / IdP / key / org-unit) ───────
+      // Each route forwards to webadmin.ts (web_admin_orchestrator), which
+      // re-applies the exact control-plane authorization with the session as the
+      // credential. Cookie POSTs here are CSRF-gated in http.ts like /web/logout.
+      //
+      // GET /web/admin/users?project= — scoped user directory (user:admin scope).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'users') {
-        return sendJson(res, 200, { users: listUsers(cfg, sessionId) });
+        return adminListUsers(cfg, sessionId, url, res);
       }
+      // POST /web/admin/users/status { userId, status }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'users' && parts[3] === 'status') {
+        return adminSetUserStatus(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/users/grants { userId, grants }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'users' && parts[3] === 'grants') {
+        return adminReplaceUserGrants(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/users { ...HostedUserRecord }
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'users') {
+        return adminUpsertUser(cfg, sessionId, body, res);
+      }
+      // GET /web/admin/providers — identity-provider (SSO) configs (instance-admin).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'providers') {
+        return adminListProviders(cfg, sessionId, res);
+      }
+      // POST /web/admin/providers/remove { id }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'providers' && parts[3] === 'remove') {
+        return adminRemoveProvider(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/providers { ...IdentityProviderConfig }
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'providers') {
+        return adminUpsertProvider(cfg, sessionId, body, res);
+      }
+      // GET /web/admin/keys?project= — a project's API keys.
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'keys') {
+        return adminListKeys(cfg, sessionId, url, res);
+      }
+      // POST /web/admin/keys/revoke { id }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'keys' && parts[3] === 'revoke') {
+        return adminRevokeKey(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/keys { project, role }
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'keys') {
+        return adminMintKey(cfg, sessionId, body, res);
+      }
+      // GET /web/admin/org/units — organization units (instance-admin).
+      if (req.method === 'GET' && parts.length === 4 && parts[2] === 'org' && parts[3] === 'units') {
+        return adminListOrgUnits(cfg, sessionId, res);
+      }
+      // POST /web/admin/org/units { ...OrganizationUnitRecord }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'org' && parts[3] === 'units') {
+        return adminUpsertOrgUnit(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/org/placements { projectId, unitId }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'org' && parts[3] === 'placements') {
+        return adminPlaceProject(cfg, sessionId, body, res);
+      }
+
+      // ── Existing scoped control-plane reads (unchanged) ───────────────────
       // GET /web/admin/landscape — the org-unit + project + relation graph (landscape:read).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'landscape') {
         return sendJson(res, 200, generateLandscape(cfg, sessionId));

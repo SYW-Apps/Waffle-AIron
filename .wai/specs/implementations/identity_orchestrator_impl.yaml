@@ -650,30 +650,37 @@ methods:
         targetComponent: auth_specialist
         targetMethod: signSsoState
       - stepNumber: 7
+        description: >-
+          Resolve the provider's concrete OIDC endpoints through the identity provider adapter
+          (explicit overrides -> OIDC discovery -> providerType template)
+        type: call
+        targetComponent: identity_provider_adapter
+        targetMethod: resolveEndpoints
+      - stepNumber: 8
         description: Build the provider authorization URL from the config, the signed state, and redirectUri
         type: call
         targetComponent: identity_provider_adapter
         targetMethod: buildAuthorizationUrl
-      - stepNumber: 8
+      - stepNumber: 9
         description: Append a redacted audit event without letting a failure fail the login start
         type: try
-        endStep: 10
+        endStep: 11
         catches:
           - error: audit append failure
-            step: 11
-      - stepNumber: 9
+            step: 12
+      - stepNumber: 10
         description: Append the redacted sso.start audit event (info level) under the active retention policy
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 10
+      - stepNumber: 11
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 12
-      - stepNumber: 11
+        toStep: 13
+      - stepNumber: 12
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 12
+      - stepNumber: 13
         description: Return the provider authorization URL
         type: return
         outcome: authorization URL
@@ -709,53 +716,61 @@ methods:
         error: unknown or disabled identity provider
       - stepNumber: 7
         description: >-
+          Resolve the provider's concrete OIDC endpoints through the identity provider adapter
+          (front-channel authorize plus back-channel token/jwks, honoring any split-horizon
+          overrides)
+        type: call
+        targetComponent: identity_provider_adapter
+        targetMethod: resolveEndpoints
+      - stepNumber: 8
+        description: >-
           Exchange the authorization code for provider tokens using the config and the state's
           redirectUri, receiving a redacted provider response summary
         type: call
         targetComponent: identity_provider_adapter
         targetMethod: exchangeCode
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Verify the provider metadata and resolve it to a Wairon PrincipalSubject (issuer +
           external subject), without leaking raw provider tokens
         type: call
         targetComponent: identity_provider_adapter
         targetMethod: resolveSubject
-      - stepNumber: 9
+      - stepNumber: 10
         description: Look up the hosted user by the resolved subject's issuer and external subject id
         type: call
         targetComponent: user_repository
         targetMethod: findByExternalSubject
-      - stepNumber: 10
+      - stepNumber: 11
         description: >-
           If no hosted user matched the resolved external subject, provision one; otherwise skip to
           minting
         type: branch
         condition: no hosted user matched the resolved external subject
-        onFalseStep: 13
-      - stepNumber: 11
+        onFalseStep: 14
+      - stepNumber: 12
         description: >-
           Build a new active HostedUserRecord for the resolved subject — first-login provisioning:
           status active, empty grants (an admin assigns grants afterwards), createdAt now
         type: local
-      - stepNumber: 12
+      - stepNumber: 13
         description: Persist the newly provisioned first-login user record through the user repository
         type: call
         targetComponent: user_repository
         targetMethod: upsert
-      - stepNumber: 13
+      - stepNumber: 14
         description: >-
           Reject re-login for a deactivated user before minting: if the hosted user resolved for
           this login is not 'active', deny (a freshly provisioned first-login record is always
           active, so only an existing deactivated user is rejected here)
         type: branch
         condition: the resolved hosted user's status is not 'active'
-        onFalseStep: 15
-      - stepNumber: 14
+        onFalseStep: 16
+      - stepNumber: 15
         description: Reject the re-login of a deactivated user
         type: throw
         error: deactivated user may not re-login
-      - stepNumber: 15
+      - stepNumber: 16
         description: >-
           Resolve the effective user record (the freshly provisioned record on first login,
           otherwise the existing match) and mint a user-bound token: generate a cryptographically
@@ -764,33 +779,33 @@ methods:
           resolved user's current grants, createdAt now, plus the role/projects compatibility
           projection derived from the grants)
         type: local
-      - stepNumber: 16
+      - stepNumber: 17
         description: Persist only the hashed credential record
         type: call
         targetComponent: credential_registry
         targetMethod: create
-      - stepNumber: 17
+      - stepNumber: 18
         description: Append a redacted audit event without letting a failure fail the login
         type: try
-        endStep: 19
+        endStep: 20
         catches:
           - error: audit append failure
-            step: 20
-      - stepNumber: 18
+            step: 21
+      - stepNumber: 19
         description: >-
           Append the redacted sso.login audit event (security level) under the active retention
           policy
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 19
+      - stepNumber: 20
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 21
-      - stepNumber: 20
+        toStep: 22
+      - stepNumber: 21
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 21
+      - stepNumber: 22
         description: Return the plaintext user-bound token (shown exactly once)
         type: return
         outcome: plaintext token returned once
@@ -917,4 +932,4 @@ methods:
         outcome: identity provider removed
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-07-11T13:18:04.989Z'
+updatedAt: '2026-07-13T18:25:56.354Z'
