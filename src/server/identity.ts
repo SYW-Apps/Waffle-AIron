@@ -92,9 +92,13 @@ export { UnauthenticatedError, ForbiddenError };
 /** Instance-admin = a grant scoped to every project ('*') carrying every
  *  permission ('*'). The bootstrap principal and the legacy admin-role
  *  projection both yield exactly this grant. */
-function isInstanceAdmin(principal: Principal): boolean {
+export function isInstanceAdmin(principal: Principal): boolean {
+  // A grant that also names an orgUnitId is UNIT-scoped by intent even when its
+  // projectId is the '*' wildcard (the shape an operator enters for a delegated
+  // unit/department admin) — it must NOT confer instance-admin. This mirrors the
+  // `!orgUnitId` discipline in scope.ts / request.ts / web.ts.
   return (principal.grants ?? []).some(
-    (g) => g.projectId === '*' && g.permissions.includes('*'),
+    (g) => g.projectId === '*' && !g.orgUnitId && g.permissions.includes('*'),
   );
 }
 
@@ -468,13 +472,16 @@ export function mintSelfToken(
 ): string {
   const principal = requirePrincipal(cfg, credential);
 
-  // Self-scoped authorization: the caller must ALREADY hold the permissions the token
-  // will carry, over this project. No key:manage — the token is no broader than the
-  // caller's own authority.
-  if (!coversPermission(principal, projectId, 'mcp:read')) {
+  // Self-scoped authorization on the RESOLVED, org-unit-aware scope: the caller must
+  // ALREADY hold the permission over this exact project. Using the resolved scope
+  // (not the flat coversPermission) bounds a '*'+orgUnitId unit grant to its own
+  // subtree, so a unit admin can mint for their unit's projects but NEVER another
+  // tenant's. No key:manage — the token is no broader than the caller's own
+  // authority. Mirrors mintToken's scopeCovers gate.
+  if (!permits(resolveScopeFor(cfg, principal, 'mcp:read'), projectId)) {
     throw new ForbiddenError('caller lacks mcp:read on the requested project');
   }
-  if (write && !coversPermission(principal, projectId, 'mcp:write')) {
+  if (write && !permits(resolveScopeFor(cfg, principal, 'mcp:write'), projectId)) {
     throw new ForbiddenError('caller lacks mcp:write on the requested project');
   }
 

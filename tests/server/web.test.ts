@@ -1104,6 +1104,66 @@ describe('web admin orchestrator (sdd_host)', () => {
     expect(() => webadmin.listUsers(cfg, viewer)).toThrow(ForbiddenError);
   });
 
+  // The exact shape an operator enters for a DELEGATED UNIT ADMIN: '*' projects but
+  // bounded to org unit X ({ projectId:'*', orgUnitId:'X' }). It must be treated as
+  // unit-scoped, NEVER instance super-admin.
+  it('SECURITY (Finding A): a {projectId:*, orgUnitId} unit admin is NOT instance-admin — org + IdP methods reject it', () => {
+    const unitAdmin = createWebSession(dataDir, {
+      id: '',
+      subject: { userId: 'unit-admin', kind: 'human', issuer: 'local' },
+      grants: [{ projectId: '*', permissions: ['*'], orgUnitId: 'unit-x' }],
+      createdAt: '',
+      expiresAt: FUTURE(),
+    }).id;
+
+    // Every instance-admin-gated surface must refuse the unit-scoped-wildcard grant.
+    expect(() => webadmin.listOrganizationUnits(cfg, unitAdmin)).toThrow(ForbiddenError);
+    expect(() =>
+      webadmin.upsertOrganizationUnit(cfg, unitAdmin, {
+        id: '',
+        name: 'X',
+        kind: 'team',
+        status: 'active',
+        createdAt: '',
+        createdBy: SUBJECT,
+      }),
+    ).toThrow(ForbiddenError);
+    expect(() => webadmin.placeProject(cfg, unitAdmin, 'proj-a', 'unit-x')).toThrow(ForbiddenError);
+    expect(() => webadmin.upsertIdentityProvider(cfg, unitAdmin, providerConfig())).toThrow(ForbiddenError);
+
+    // A GENUINE instance-admin (projectId '*', no orgUnitId) still passes.
+    expect(webadmin.listOrganizationUnits(cfg, adminSession())).toBeDefined();
+  });
+
+  it('SECURITY (Finding B): a {projectId:*, orgUnitId} unit read/write holder mints ONLY within its unit, never cross-tenant', () => {
+    const admin = adminSession();
+    // Unit U owns proj-in-unit; proj-other belongs to a different tenant (unplaced).
+    const unit = webadmin.upsertOrganizationUnit(cfg, admin, {
+      id: 'unit-u',
+      name: 'U',
+      kind: 'team',
+      status: 'active',
+      createdAt: '',
+      createdBy: SUBJECT,
+    });
+    createProjectRecord(dataDir, 'proj-in-unit');
+    createProjectRecord(dataDir, 'proj-other');
+    webadmin.placeProject(cfg, admin, 'proj-in-unit', unit.id);
+
+    const unitRW = createWebSession(dataDir, {
+      id: '',
+      subject: { userId: 'unit-rw', kind: 'human', issuer: 'local' },
+      grants: [{ projectId: '*', permissions: ['mcp:read', 'mcp:write'], orgUnitId: unit.id }],
+      createdAt: '',
+      expiresAt: FUTURE(),
+    }).id;
+
+    // In-unit project: the mint is allowed (resolved scope covers it).
+    expect(typeof webadmin.mintProjectToken(cfg, unitRW, 'proj-in-unit', true)).toBe('string');
+    // Another tenant's project (outside the unit subtree): DENIED — no cross-tenant mint.
+    expect(() => webadmin.mintProjectToken(cfg, unitRW, 'proj-other', false)).toThrow(ForbiddenError);
+  });
+
   it('mintProjectToken mints a single-project agent token OWNED by the caller; revokeProjectToken revokes it', () => {
     const admin = adminSession();
     createProjectRecord(dataDir, 'proj-a');

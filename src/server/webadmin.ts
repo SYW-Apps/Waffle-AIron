@@ -2,7 +2,7 @@ import { authenticateSession } from './auth.js';
 import * as identity from './identity.js';
 import * as organization from './organization.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
-import { ForbiddenError } from './identity.js';
+import { ForbiddenError, isInstanceAdmin } from './identity.js';
 import type {
   ApiKeyRecord,
   AuditEvent,
@@ -126,12 +126,6 @@ export function listMyTokens(cfg: HostConfig, sessionId: string): ApiKeyRecord[]
 }
 
 // ── organization-unit administration (owned here) ────────────────────────────
-
-/** Instance-admin = a grant scoped to every project ('*') carrying every
- *  permission ('*'). Mirrors identity.ts's isInstanceAdmin so the two agree. */
-function isInstanceAdmin(principal: Principal): boolean {
-  return (principal.grants ?? []).some((g) => g.projectId === '*' && g.permissions.includes('*'));
-}
 
 /** The audit actor for an org-admin action: the session principal's resolved
  *  subject, or a synthesized service identity for a credential without one. */
