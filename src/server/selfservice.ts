@@ -52,50 +52,32 @@ import type {
  *  indefinitely. HostConfig-driven overrides are a later phase. */
 const DEFAULT_APPROVAL_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-/** The permission that authorizes deciding/listing approval requests. An
- *  INSTANCE-WIDE capability, so authorized via carriesInstancePermission — a
- *  project-scoped approval:decide grant does not satisfy it. */
+/** The permission that authorizes deciding/listing/viewing approval requests.
+ *  Authorized on the RESOLVED, org-unit-aware scope (resolveScopeFor + permits):
+ *  an instance-wide grant decides everywhere, a unit-scoped grant decides within
+ *  its subtree's projects, a project-scoped grant confers nothing here. */
 const APPROVAL_DECIDE_PERMISSION = 'approval:decide';
 /** The permission that lets a caller request a project's lock/promotion. */
 const MCP_WRITE_PERMISSION = 'mcp:write';
 
-// ── authorization helpers (mirrored from identity.ts, which keeps them private) ──
+// ── authorization helpers (mirroring the canonical identity.ts versions) ──────
 //
 // '*' is the wildcard in BOTH projectId and permissions (per the grant model).
+// Kept local because self_service_orchestrator declares no edge to the identity
+// orchestrator; this copy MUST stay in lockstep with identity.ts's isInstanceAdmin.
 
 /** Instance-admin = a grant scoped to every project ('*') carrying every
  *  permission ('*'). The bootstrap principal and the legacy admin-role
- *  projection both yield exactly this grant. */
+ *  projection both yield exactly this grant. A grant that also names an
+ *  orgUnitId is UNIT-scoped by intent even when its projectId is the '*'
+ *  wildcard (the shape an operator enters for a delegated unit/department
+ *  admin) — it must NOT confer instance-admin. Mirrors identity.ts's
+ *  isInstanceAdmin and the `!orgUnitId` discipline in scope.ts / request.ts /
+ *  web.ts. */
 function isInstanceAdmin(principal: Principal): boolean {
   return (principal.grants ?? []).some(
-    (g) => g.projectId === '*' && g.permissions.includes('*'),
+    (g) => g.projectId === '*' && !g.orgUnitId && g.permissions.includes('*'),
   );
-}
-
-/** True when the caller's grants cover `permission` for `projectId` — a grant
- *  scoped to that project (or instance-wide '*') carrying that permission (or '*'). */
-function coversPermission(principal: Principal, projectId: string, permission: string): boolean {
-  return (principal.grants ?? []).some(
-    (g) =>
-      (g.projectId === '*' || g.projectId === projectId) &&
-      (g.permissions.includes('*') || g.permissions.includes(permission)),
-  );
-}
-
-// An instance-wide capability requires a grant scoped to ALL projects ('*')
-// carrying the permission (or the '*' wildcard). A project-scoped grant, even
-// one carrying the permission, does NOT confer instance-wide reach.
-function carriesInstancePermission(principal: Principal, permission: string): boolean {
-  return (principal.grants ?? []).some(
-    (g) => g.projectId === '*' && (g.permissions.includes('*') || g.permissions.includes(permission)),
-  );
-}
-
-/** True when the caller may decide/list approvals: an instance-wide approval:decide
- *  grant or an instance-admin grant (both carry projectId '*'). A project-scoped
- *  approval:decide grant does NOT confer instance-wide approval authority. */
-function mayDecide(principal: Principal): boolean {
-  return carriesInstancePermission(principal, APPROVAL_DECIDE_PERMISSION);
 }
 
 // ── subject / audit helpers (mirrored from identity.ts) ─────────────────────
@@ -264,10 +246,11 @@ export function requestProjectInitialization(
 }
 
 /**
- * Authenticate the caller, authorize by grants (a grant covering the project —
- * mcp:write or an instance-wide wildcard), require the project to exist, create a
- * pending project:lock ApprovalRequest, audit the creation (best-effort), and
- * return it. Does not lock the project.
+ * Authenticate the caller, authorize by the resolved mcp:write scope covering the
+ * project (a project grant, a unit grant whose subtree contains it, or a genuine
+ * instance-wide wildcard), require the project to exist, create a pending
+ * project:lock ApprovalRequest, audit the creation (best-effort), and return it.
+ * Does not lock the project.
  */
 export function requestProjectLock(
   cfg: HostConfig,
@@ -278,10 +261,11 @@ export function requestProjectLock(
 }
 
 /**
- * Authenticate the caller, authorize by grants (a grant covering the project —
- * mcp:write or an instance-wide wildcard), require the project to exist, create a
- * pending project:promote ApprovalRequest, audit the creation (best-effort), and
- * return it. Does not promote the project.
+ * Authenticate the caller, authorize by the resolved mcp:write scope covering the
+ * project (a project grant, a unit grant whose subtree contains it, or a genuine
+ * instance-wide wildcard), require the project to exist, create a pending
+ * project:promote ApprovalRequest, audit the creation (best-effort), and return
+ * it. Does not promote the project.
  */
 export function requestProjectPromotion(
   cfg: HostConfig,
@@ -292,8 +276,9 @@ export function requestProjectPromotion(
 }
 
 /** Shared body for the lock/promotion request workflows: identical authenticate →
- *  authorize (grant covering the project) → project-exists → create pending →
- *  audit → return, differing only in the request kind and summary wording. */
+ *  authorize (resolved mcp:write scope over the project) → project-exists →
+ *  create pending → audit → return, differing only in the request kind and
+ *  summary wording. */
 function requestProjectAction(
   cfg: HostConfig,
   credential: string | null,
@@ -304,7 +289,13 @@ function requestProjectAction(
 ): ApprovalRequest {
   const principal = requirePrincipal(cfg, credential);
 
-  if (!coversPermission(principal, projectId, MCP_WRITE_PERMISSION)) {
+  // Authorize on the RESOLVED, org-unit-aware mcp:write scope: a grant on the
+  // project itself qualifies, a unit-scoped grant qualifies for the projects
+  // placed in its subtree, and a genuine instance-wide grant resolves to
+  // scope.all. A flat grant match would let a unit-scoped '*'+orgUnitId grant
+  // request actions for ANY project — cross-tenant (mirrors identity.ts's
+  // mintSelfToken).
+  if (!permits(resolveScopeFor(cfg, principal, MCP_WRITE_PERMISSION), projectId)) {
     throw new ForbiddenError(`caller may not request a ${noun} for this project`);
   }
   if (!existingProjectRoot(cfg.dataDir, projectId)) {
@@ -328,9 +319,10 @@ function requestProjectAction(
 /**
  * Authenticate the caller, lazily expire overdue pending requests first, look up
  * the request by id (not-found error when absent), and return it only to its
- * original requester (matching subject or requesting token id) or to a holder of
- * approval:decide / an instance-admin grant. Unrelated callers are denied. Read —
- * no audit event.
+ * original requester (matching subject or requesting token id) or to a caller
+ * whose RESOLVED approval:decide scope covers the request's project — the same
+ * point-check decideRequest applies, so view authority equals decide authority.
+ * Unrelated callers are denied. Read — no audit event.
  */
 export function getRequestStatus(
   cfg: HostConfig,
@@ -343,7 +335,15 @@ export function getRequestStatus(
   const req = getApprovalRequestById(cfg.dataDir, requestId);
   if (!req) throw new Error(`Approval request "${requestId}" not found.`);
 
-  if (!isOriginalRequester(principal, req) && !mayDecide(principal)) {
+  // Visible to the original requester, or to a caller whose resolved
+  // approval:decide scope permits the request's project (a request with no
+  // projectId is visible only to a super-admin — permits fails closed). A flat
+  // instance-permission check would let a unit-scoped '*'+orgUnitId grant view
+  // ANY tenant's requests.
+  if (
+    !isOriginalRequester(principal, req) &&
+    !permits(resolveScopeFor(cfg, principal, APPROVAL_DECIDE_PERMISSION), req.projectId ?? '')
+  ) {
     throw new ForbiddenError('caller may not view this approval request');
   }
   return req;

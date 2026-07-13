@@ -227,32 +227,51 @@ export function removeIdentityProviderRecord(dataDir: string, id: string): void 
 // ── grant vocabulary + authorization helpers (mirrored from identity.ts) ─────
 //
 // '*' is the wildcard in BOTH projectId and permissions (per the grant model).
+// A grant that ALSO names an orgUnitId is UNIT-scoped by intent even when its
+// projectId is the '*' wildcard (the shape an operator enters for a delegated
+// unit/department admin) — it must never satisfy an instance-wide or flat-'*'
+// check here (the `!orgUnitId` discipline of scope.ts / request.ts / web.ts and
+// the canonical identity.ts helpers; keep these copies in lockstep).
+//
+// NOTE: project_policy_orchestrator declares no scope_specialist edge, so these
+// stay FLAT grant checks — a unit-scoped grant is simply excluded rather than
+// expanded to its subtree. Making unit admins first-class on this plane (as
+// selfservice.ts/identity.ts do via resolveScopeFor + permits) needs a spec
+// revision adding scope_specialist to this component's dependsOn.
 
 const PROJECT_CREATE_PERMISSION = 'project:create';
 const MCP_WRITE_PERMISSION = 'mcp:write';
 const POLICY_MANAGE_PERMISSION = 'policy:manage';
 
-/** Instance-admin = a grant over every project ('*') with every permission ('*'). */
+/** Instance-admin = a grant over every project ('*', no orgUnitId) with every
+ *  permission ('*'). */
 function isInstanceAdmin(principal: Principal): boolean {
-  return (principal.grants ?? []).some((g) => g.projectId === '*' && g.permissions.includes('*'));
+  return (principal.grants ?? []).some(
+    (g) => g.projectId === '*' && !g.orgUnitId && g.permissions.includes('*'),
+  );
 }
 
-/** True when the caller's grants cover `permission` for `projectId` (that project
- *  or instance-wide '*', carrying that permission or '*'). */
+/** True when the caller's grants cover `permission` for `projectId` (that exact
+ *  project, or a genuine instance-wide '*' — never a unit-scoped '*'+orgUnitId
+ *  grant, which is bounded to its subtree — carrying that permission or '*'). */
 function coversPermission(principal: Principal, projectId: string, permission: string): boolean {
   return (principal.grants ?? []).some(
     (g) =>
-      (g.projectId === '*' || g.projectId === projectId) &&
+      ((g.projectId === '*' && !g.orgUnitId) || g.projectId === projectId) &&
       (g.permissions.includes('*') || g.permissions.includes(permission)),
   );
 }
 
-// An instance-wide capability requires a grant scoped to ALL projects ('*')
-// carrying the permission (or the '*' wildcard). A project-scoped grant, even
-// one carrying the permission, does NOT confer instance-wide reach.
+// An instance-wide capability requires a grant scoped to ALL projects (a genuine
+// '*', no orgUnitId) carrying the permission (or the '*' wildcard). A project- or
+// unit-scoped grant, even one carrying the permission, does NOT confer
+// instance-wide reach.
 function carriesInstancePermission(principal: Principal, permission: string): boolean {
   return (principal.grants ?? []).some(
-    (g) => g.projectId === '*' && (g.permissions.includes('*') || g.permissions.includes(permission)),
+    (g) =>
+      g.projectId === '*' &&
+      !g.orgUnitId &&
+      (g.permissions.includes('*') || g.permissions.includes(permission)),
   );
 }
 

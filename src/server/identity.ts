@@ -425,12 +425,16 @@ export function revokeToken(cfg: HostConfig, credential: string | null, tokenId:
   const admin = isInstanceAdmin(principal);
   const target = listCredentials(cfg.dataDir, '*').find((r) => r.id === tokenId);
   const targetProjects = target?.projects ?? [];
+  // Authorize on the RESOLVED, org-unit-aware key:manage scope (mirrors
+  // mintSelfToken): a unit admin manages tokens scoped to its subtree's projects
+  // but never another tenant's — the flat coversPermission would let a
+  // unit-scoped '*'+orgUnitId grant manage ANY project's token. A token scoped
+  // instance-wide ('*') still requires instance-admin.
+  const manageScope = resolveScopeFor(cfg, principal, KEY_MANAGE_PERMISSION);
   const mayManage =
     admin ||
     (targetProjects.length > 0 &&
-      targetProjects.every((p) =>
-        p === '*' ? admin : coversPermission(principal, p, KEY_MANAGE_PERMISSION),
-      ));
+      targetProjects.every((p) => (p === '*' ? admin : permits(manageScope, p))));
   if (!mayManage) {
     throw new ForbiddenError('caller may not manage this token');
   }

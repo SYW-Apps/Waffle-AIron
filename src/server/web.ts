@@ -393,8 +393,17 @@ export function getWebGraph(
       return reshapeLandscapeGraph(landscape, level); // steps 4–5
     }
     case 'project': {
-      // step 6: resolve+bind within the principal's authorized set (an out-of-scope
-      // project resolves to null → Forbidden, no existence leak).
+      // step 6: authorize on the RESOLVED, org-unit-aware mcp:read scope — the
+      // same scoped set the web project orchestrator lists. The flat
+      // principal.projects projection carries a literal '*' for a unit-scoped
+      // '*'+orgUnitId grant, so the authorized-set bind alone would read
+      // ANOTHER tenant's spec tree; the scoped project list bounds a unit
+      // grant to its subtree. Then resolve+bind the project's isolated root
+      // (out-of-scope, unknown, and inactive all yield the same Forbidden — no
+      // existence leak).
+      if (!webproject.listProjects(cfg, sessionId).some((r) => r.id === projectId)) {
+        throw new ForbiddenError('project not authorized or unknown');
+      }
       const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
       if (!root) {
         throw new ForbiddenError('project not authorized or unknown');
@@ -426,7 +435,14 @@ export function getWebProjectCanvas(cfg: HostConfig, sessionId: string, projectI
   const principal = authenticateSession(cfg.dataDir, sessionId); // step 1
   if (!principal.authenticated) throw new UnauthenticatedError();
 
-  // step 2: resolve+bind within the principal's authorized set.
+  // step 2: authorize on the RESOLVED, org-unit-aware mcp:read scope (the same
+  // scoped set the web project orchestrator lists — a unit-scoped '*'+orgUnitId
+  // grant projects a flat '*' into principal.projects and must NOT render
+  // another tenant's canvas), then resolve+bind within the principal's
+  // authorized set.
+  if (!webproject.listProjects(cfg, sessionId).some((r) => r.id === projectId)) {
+    throw new ForbiddenError('project not authorized or unknown');
+  }
   const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
   if (!root) {
     throw new ForbiddenError('project not authorized or unknown');
