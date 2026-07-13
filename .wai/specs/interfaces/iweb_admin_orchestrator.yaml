@@ -92,41 +92,6 @@ methods:
         type: string
       - name: id
         type: string
-  - name: listKeys
-    description: >-
-      Forward to admin_orchestrator.listKeys with the session as the credential; returns a project's
-      API keys.
-    signature: 'listKeys(sessionId: string, project: string): ApiKeyRecord[]'
-    returns: ApiKeyRecord[]
-    params:
-      - name: sessionId
-        type: string
-      - name: project
-        type: string
-  - name: mintKey
-    description: >-
-      Forward to admin_orchestrator.mintKey with the session as the credential; mints a
-      project-scoped API key and returns the plaintext key once.
-    signature: 'mintKey(sessionId: string, project: string, role: string): string'
-    returns: string
-    params:
-      - name: sessionId
-        type: string
-      - name: project
-        type: string
-      - name: role
-        type: string
-  - name: revokeKey
-    description: >-
-      Forward to admin_orchestrator.revokeKey with the session as the credential; revokes an API key
-      by id.
-    signature: 'revokeKey(sessionId: string, id: string): void'
-    returns: void
-    params:
-      - name: sessionId
-        type: string
-      - name: id
-        type: string
   - name: listOrganizationUnits
     description: >-
       Resolve the session to a Principal via the auth specialist, require an instance-wide admin
@@ -169,6 +134,42 @@ methods:
         type: string
     guarantees:
       - atomic
+  - name: mintProjectToken
+    description: >-
+      Mint a single-project MCP token for an AI agent. Forwards to identity_orchestrator.mintToken
+      with the session as the credential and a token request scoped to EXACTLY ONE project
+      (mcp:read, plus mcp:write when write is true); mintToken authorizes strictly against the
+      caller's own access to that project. Returns the plaintext token once. This is an agent
+      credential, entirely separate from the human's web session.
+    signature: 'mintProjectToken(sessionId: string, projectId: string, write: boolean): string'
+    returns: string
+    params:
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
+      - name: write
+        type: boolean
+  - name: revokeProjectToken
+    description: >-
+      Revoke a previously minted MCP token by id. Forwards to identity_orchestrator.revokeToken with
+      the session as the credential (which authorizes key management for the token's owner/scope).
+    signature: 'revokeProjectToken(sessionId: string, tokenId: string): void'
+    returns: void
+    params:
+      - name: sessionId
+        type: string
+      - name: tokenId
+        type: string
+  - name: listMyTokens
+    description: >-
+      Return the caller's own minted MCP tokens (redacted) by forwarding to
+      identity_orchestrator.listSelfTokens with the session as the credential.
+    signature: 'listMyTokens(sessionId: string): ApiKeyRecord[]'
+    returns: ApiKeyRecord[]
+    params:
+      - name: sessionId
+        type: string
 status: complete
 createdAt: '2026-07-13T18:27:58.377Z'
-updatedAt: '2026-07-13T19:01:53.724Z'
+updatedAt: '2026-07-13T19:58:13.021Z'

@@ -112,18 +112,19 @@ function webCsrfHeaderPresent(req: IncomingMessage): boolean {
   return (Array.isArray(h) ? h[0] : h) === '1';
 }
 
-/** The cookie-authenticated web-admin POST routes that require the CSRF header
- *  (mirroring /web/logout). Every state-changing /web/admin/* path is listed. */
-const WEB_ADMIN_MUTATION_PATHS = new Set<string>([
+/** The cookie-authenticated state-changing /web POST routes that require the CSRF
+ *  header (mirroring /web/logout): every /web/admin/* mutation plus the agent-token
+ *  self-service routes. */
+const WEB_MUTATION_PATHS = new Set<string>([
   '/web/admin/users',
   '/web/admin/users/status',
   '/web/admin/users/grants',
   '/web/admin/providers',
   '/web/admin/providers/remove',
-  '/web/admin/keys',
-  '/web/admin/keys/revoke',
   '/web/admin/org/units',
   '/web/admin/org/placements',
+  '/web/tokens',
+  '/web/tokens/revoke',
 ]);
 
 export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResponse): void {
@@ -204,7 +205,7 @@ export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResp
       req.method === 'POST' &&
       (url.pathname === '/web/logout' ||
         url.pathname === '/web/logout-all' ||
-        WEB_ADMIN_MUTATION_PATHS.has(url.pathname));
+        WEB_MUTATION_PATHS.has(url.pathname));
     if (isCookieMutation && cookieAuth && !webCsrfHeaderPresent(req)) {
       sendJson(res, 403, { error: 'missing X-Wairon-Web header' });
       return;

@@ -94,3 +94,15 @@ export function listCredentials(dataDir: string, project: string): ApiKeyRecord[
     (r) => project === '*' || r.projects.includes('*') || r.projects.includes(project),
   );
 }
+
+/**
+ * List every stored credential whose ownerSubject.userId matches ownerUserId — a
+ * user's own minted tokens across all projects. Uses the SAME owner-identity match
+ * as revokeAllForOwner, so a listed record is exactly one the deactivation sweep
+ * would revoke. Each record is returned as stored, carrying only its hashed token
+ * (the plaintext is never present in the store); an owner with no records yields an
+ * empty list. A pure read — never logs token material.
+ */
+export function listByOwner(dataDir: string, ownerUserId: string): ApiKeyRecord[] {
+  return load(dataDir).filter((r) => r.ownerSubject?.userId === ownerUserId);
+}

@@ -1,25 +1,22 @@
 id: web_admin_orchestrator
 name: Web Admin Orchestrator
 description: >-
-  Server-side admin-settings workflows for the unified web UI: the bridge that exposes the
-  control-plane admin capabilities (user, identity-provider/SSO, API-key, and organization-unit
-  management) on the PUBLIC web/data plane, so an authenticated admin manages the instance from the
-  single web UI instead of the loopback-only admin API. Every method carries the browser sessionId;
-  user/IdP/key actions forward to the existing identity and admin orchestrators passing the session
-  AS the credential, so their built-in scope authorization applies unchanged (a web session is a
-  first-class data-plane credential). Organization-unit reads/writes have no upstream orchestrator,
-  so this component owns that workflow directly: it resolves the session to a Principal via the auth
-  specialist, requires an instance-wide admin grant, mutates through the organization repository,
-  and appends a best-effort audit event.
+  Server-side control-bridge for the unified web UI on the PUBLIC data plane. ADMIN capabilities
+  (user, identity-provider/SSO, and organization-unit management) forward to the identity
+  orchestrator passing the ws_ session AS the credential, so their scope authorization applies
+  unchanged; org-unit writes are owned here (authenticateSession -> instance-admin -> organization
+  repository -> best-effort audit). It ALSO handles user-scoped SELF-SERVICE: minting a
+  single-project MCP token for an AI agent via the identity orchestrator (mintToken authorizes
+  strictly against the caller's own project access). Web-UI login (human, session/SSO) and MCP
+  tokens (agent, one project) are deliberately separate concerns — no mixing.
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
 dependsOn:
   - identity_orchestrator
-  - admin_orchestrator
   - auth_specialist
   - organization_repository
   - audit_repository
 status: complete
 createdAt: '2026-07-13T18:27:33.510Z'
-updatedAt: '2026-07-13T19:01:52.700Z'
+updatedAt: '2026-07-13T19:16:00.980Z'

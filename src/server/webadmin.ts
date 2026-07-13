@@ -1,6 +1,5 @@
 import { authenticateSession } from './auth.js';
 import * as identity from './identity.js';
-import * as admin from './admin.js';
 import * as organization from './organization.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import { ForbiddenError } from './identity.js';
@@ -15,22 +14,28 @@ import type {
   PrincipalSubject,
   ProjectGrant,
   ProjectPlacement,
-  Role,
 } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Web Admin Orchestrator (sdd_host)
 //
 // The bridge that exposes the control-plane admin capabilities (user, identity-
-// provider/SSO, API-key, and organization-unit management) on the PUBLIC web/data
-// plane, so an authenticated admin manages the instance from the single web UI
-// instead of the loopback-only admin listener.
+// provider/SSO, and organization-unit management) on the PUBLIC web/data plane, so
+// an authenticated admin manages the instance from the single web UI instead of the
+// loopback-only admin listener. It ALSO handles the user-scoped SELF-SERVICE of
+// minting a single-project MCP token for an AI agent.
 //
-// Every method carries the browser sessionId. USER / IdP / KEY methods forward
-// 1:1 to the existing identity and admin orchestrators PASSING THE SESSION AS THE
+// Every method carries the browser sessionId. USER / IdP methods — and the agent
+// TOKEN methods — forward to the identity orchestrator PASSING THE SESSION AS THE
 // CREDENTIAL — a ws_ session is a first-class data-plane credential that resolves
-// to a Principal exactly like a bearer token, so those orchestrators' scope
+// to a Principal exactly like a bearer token, so the identity orchestrator's scope
 // authorization and auditing apply UNCHANGED (no new authorization surface).
+//
+// Web-UI login (a HUMAN, via SSO/session) and MCP tokens (an AI AGENT, scoped to
+// exactly ONE project) are DELIBERATELY SEPARATE concerns — a token is an agent
+// credential entirely distinct from the human's web session, never a mixing of the
+// two. mintProjectToken forwards to identity_orchestrator.mintToken, which
+// authorizes the mint strictly against the caller's OWN access to that project.
 //
 // ORGANIZATION-UNIT reads/writes have no upstream orchestrator, so this component
 // owns that workflow directly: resolve the session to a Principal via the auth
@@ -90,22 +95,34 @@ export function removeIdentityProvider(cfg: HostConfig, sessionId: string, id: s
   identity.removeIdentityProvider(cfg, sessionId, id);
 }
 
-// ── API-key administration (forward to admin_orchestrator) ───────────────────
+// ── agent-token self-service (forward to identity_orchestrator) ──────────────
 
-/** Forward to admin_orchestrator.listKeys with the session as the credential. */
-export function listKeys(cfg: HostConfig, sessionId: string, project: string): ApiKeyRecord[] {
-  return admin.listKeys(cfg, sessionId, project);
+/**
+ * Mint a single-project MCP token for an AI agent. Forwards to the identity
+ * orchestrator's SELF-SERVICE mint (identity_orchestrator.mintSelfToken) passing the
+ * session as the credential, plus projectId and write; it self-authorizes strictly
+ * against the caller's OWN access to that project (no key:manage), OWNS the token to
+ * the caller (so a later deactivation of that user revokes it), and returns the
+ * plaintext token exactly once. The token is an agent credential entirely separate
+ * from the human's web session, but owned by the human who minted it for lifecycle.
+ */
+export function mintProjectToken(cfg: HostConfig, sessionId: string, projectId: string, write: boolean): string {
+  return identity.mintSelfToken(cfg, sessionId, projectId, write);
 }
 
-/** Forward to admin_orchestrator.mintKey with the session as the credential; the
- *  plaintext key is returned once. */
-export function mintKey(cfg: HostConfig, sessionId: string, project: string, role: string): string {
-  return admin.mintKey(cfg, sessionId, project, role as Role);
+/** Revoke a previously minted MCP token by id. Forward to the identity
+ *  orchestrator's SELF-SERVICE revoke (identity_orchestrator.revokeSelfToken) with
+ *  the session as the credential — it revokes only a token the caller OWNS (a token
+ *  the caller does not own is rejected as not found; no cross-user revocation). */
+export function revokeProjectToken(cfg: HostConfig, sessionId: string, tokenId: string): void {
+  identity.revokeSelfToken(cfg, sessionId, tokenId);
 }
 
-/** Forward to admin_orchestrator.revokeKey with the session as the credential. */
-export function revokeKey(cfg: HostConfig, sessionId: string, id: string): void {
-  admin.revokeKey(cfg, sessionId, id);
+/** Return the caller's own minted MCP tokens (redacted — hashed token only) by
+ *  forwarding to identity_orchestrator.listSelfTokens with the session as the
+ *  credential. */
+export function listMyTokens(cfg: HostConfig, sessionId: string): ApiKeyRecord[] {
+  return identity.listSelfTokens(cfg, sessionId);
 }
 
 // ── organization-unit administration (owned here) ────────────────────────────

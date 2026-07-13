@@ -148,36 +148,6 @@ methods:
         targetComponent: web_admin_orchestrator
         targetMethod: removeIdentityProvider
     detail: calls-only
-  - name: adminListKeys
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Parse the project from the query, resolve the session cookie, and forward to the web admin
-          orchestrator
-        type: call
-        targetComponent: web_admin_orchestrator
-        targetMethod: listKeys
-    detail: calls-only
-  - name: adminMintKey
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Parse project + role from the body, resolve the session cookie, and forward to the web
-          admin orchestrator
-        type: call
-        targetComponent: web_admin_orchestrator
-        targetMethod: mintKey
-    detail: calls-only
-  - name: adminRevokeKey
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Parse the key id from the body, resolve the session cookie, and forward to the web admin
-          orchestrator
-        type: call
-        targetComponent: web_admin_orchestrator
-        targetMethod: revokeKey
-    detail: calls-only
   - name: adminListOrgUnits
     narrative:
       - stepNumber: 1
@@ -206,7 +176,35 @@ methods:
         targetComponent: web_admin_orchestrator
         targetMethod: placeProject
     detail: calls-only
+  - name: mintAgentToken
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse projectId + write from the body, resolve the session cookie, and forward to the web
+          admin orchestrator
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: mintProjectToken
+    detail: calls-only
+  - name: revokeAgentToken
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse the token id from the body, resolve the session cookie, and forward to the web admin
+          orchestrator
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: revokeProjectToken
+    detail: calls-only
+  - name: listAgentTokens
+    narrative:
+      - stepNumber: 1
+        description: Resolve the session cookie and forward to the web admin orchestrator
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: listMyTokens
+    detail: calls-only
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-07-13T18:33:14.479Z'
+updatedAt: '2026-07-13T19:58:13.151Z'

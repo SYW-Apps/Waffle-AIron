@@ -13,6 +13,7 @@ import {
   revokeCredential,
   revokeAllForOwner,
   listCredentials,
+  listByOwner,
 } from './credentials.js';
 import {
   getUserById,
@@ -435,6 +436,110 @@ export function revokeToken(cfg: HostConfig, credential: string | null, tokenId:
   tryAppendAudit(
     cfg,
     buildAuditEvent(principal, 'token.revoke', 'security', 'admin', { target: tokenId }),
+  );
+}
+
+// ── self-service single-project token lifecycle (owned by the caller) ─────────
+//
+// mintSelfToken / listSelfTokens / revokeSelfToken are the USER-facing counterpart
+// to the admin mintToken/revokeToken delegation path. They are SELF-scoped: a caller
+// mints, lists, and revokes only their OWN tokens, so no key:manage is required or
+// consulted. Crucially, the minted token is OWNED by the caller (ownerSubject = the
+// caller's subject), which is what makes deactivation cut it off — setUserStatus's
+// revokeAllForOwner sweep matches on ownerSubject.userId. The token stays a SEPARATE
+// credential from the caller's login session (its own ApiKeyRecord), never a share.
+
+/**
+ * Self-service single-project MCP token mint. Authenticate the caller (a ws_ session
+ * or bearer token) to their principal; require the caller's OWN grants to already
+ * cover mcp:read on projectId (and mcp:write when write) — self-scoped, so key:manage
+ * is neither required nor consulted (the token can never exceed the caller's own
+ * access). Mint a token OWNED BY the caller (ownerSubject AND createdBySubject = the
+ * caller's subject, so deactivating the caller revokes it via revokeAllForOwner)
+ * scoped to EXACTLY ONE project carrying mcp:read (plus mcp:write when write), persist
+ * only its hashed record with the role/projects compatibility projection, append a
+ * best-effort token.mint.self (security) audit event, and return the plaintext once.
+ */
+export function mintSelfToken(
+  cfg: HostConfig,
+  credential: string | null,
+  projectId: string,
+  write: boolean,
+): string {
+  const principal = requirePrincipal(cfg, credential);
+
+  // Self-scoped authorization: the caller must ALREADY hold the permissions the token
+  // will carry, over this project. No key:manage — the token is no broader than the
+  // caller's own authority.
+  if (!coversPermission(principal, projectId, 'mcp:read')) {
+    throw new ForbiddenError('caller lacks mcp:read on the requested project');
+  }
+  if (write && !coversPermission(principal, projectId, 'mcp:write')) {
+    throw new ForbiddenError('caller lacks mcp:write on the requested project');
+  }
+
+  // Mint the token owned by the caller, scoped to exactly the one project. The grant
+  // shape carries only { projectId, permissions } — the same shape a session/bearer
+  // resolves back to — so the minted token authenticates to precisely that scope.
+  const token = 'wk_' + crypto.randomBytes(24).toString('hex');
+  const grants: ProjectGrant[] = [
+    { projectId, permissions: write ? ['mcp:read', 'mcp:write'] : ['mcp:read'] },
+  ];
+  const projection = compatibilityProjection(grants);
+  const owner = auditActor(principal);
+  const record: ApiKeyRecord = {
+    id: crypto.randomBytes(6).toString('hex'),
+    keyHash: hashToken(token),
+    role: projection.role,
+    projects: projection.projects,
+    createdAt: new Date().toISOString(),
+    ownerSubject: owner,
+    createdBySubject: owner,
+    grants,
+    label: `agent token (${projectId})`,
+  };
+  createCredential(cfg.dataDir, record);
+
+  tryAppendAudit(
+    cfg,
+    buildAuditEvent(principal, 'token.mint.self', 'security', 'admin', { target: record.id }),
+  );
+
+  return token; // plaintext, shown exactly once
+}
+
+/**
+ * Authenticate the caller and return their OWN minted credential records
+ * (ownerSubject.userId = caller) through the credential registry, redacted — each
+ * carries the hashed token only (the plaintext is never stored), with its id,
+ * project, label, createdAt and revokedAt for the client to render and offer revoke.
+ * A read; not audited.
+ */
+export function listSelfTokens(cfg: HostConfig, credential: string | null): ApiKeyRecord[] {
+  const principal = requirePrincipal(cfg, credential);
+  return listByOwner(cfg.dataDir, auditActor(principal).userId);
+}
+
+/**
+ * Authenticate the caller, confirm tokenId is among the caller's OWN tokens
+ * (ownerSubject.userId = caller) — a token the caller does not own is rejected as
+ * not found, so there is no cross-user revocation and no key:manage escalation —
+ * then revoke it through the credential registry and append a best-effort
+ * token.revoke.self (security) audit event.
+ */
+export function revokeSelfToken(cfg: HostConfig, credential: string | null, tokenId: string): void {
+  const principal = requirePrincipal(cfg, credential);
+
+  const own = listByOwner(cfg.dataDir, auditActor(principal).userId);
+  if (!own.some((r) => r.id === tokenId)) {
+    throw new Error(`token "${tokenId}" not found`);
+  }
+
+  revokeCredential(cfg.dataDir, tokenId);
+
+  tryAppendAudit(
+    cfg,
+    buildAuditEvent(principal, 'token.revoke.self', 'security', 'admin', { target: tokenId }),
   );
 }
 

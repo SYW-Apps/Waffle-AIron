@@ -66,29 +66,6 @@ methods:
         type: call
         targetComponent: identity_orchestrator
         targetMethod: removeIdentityProvider
-  - name: listKeys
-    narrative:
-      - stepNumber: 1
-        description: Forward to the admin orchestrator, passing the sessionId as the credential
-        type: call
-        targetComponent: admin_orchestrator
-        targetMethod: listKeys
-  - name: mintKey
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Forward to the admin orchestrator, passing the sessionId as the credential; the plaintext
-          key is returned once
-        type: call
-        targetComponent: admin_orchestrator
-        targetMethod: mintKey
-  - name: revokeKey
-    narrative:
-      - stepNumber: 1
-        description: Forward to the admin orchestrator, passing the sessionId as the credential
-        type: call
-        targetComponent: admin_orchestrator
-        targetMethod: revokeKey
   - name: listOrganizationUnits
     narrative:
       - stepNumber: 1
@@ -222,7 +199,40 @@ methods:
         type: return
         outcome: project placed
     detail: full
+  - name: mintProjectToken
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the identity orchestrator's self-service mint passing the sessionId as the
+          credential, plus projectId and write; it self-authorizes against the caller's own access,
+          owns the token to the caller, and returns the plaintext once
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: mintSelfToken
+      - stepNumber: 2
+        description: Return the minted token
+        type: return
+        outcome: plaintext single-project MCP token (shown once)
+    detail: calls-only
+  - name: revokeProjectToken
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the identity orchestrator's self-service revoke passing the sessionId as the
+          credential and the token id
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: revokeSelfToken
+    detail: calls-only
+  - name: listMyTokens
+    narrative:
+      - stepNumber: 1
+        description: Forward to the identity orchestrator passing the sessionId as the credential
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: listSelfTokens
+    detail: calls-only
 detail: calls-only
 status: complete
 createdAt: '2026-07-13T18:28:58.935Z'
-updatedAt: '2026-07-13T19:01:54.238Z'
+updatedAt: '2026-07-13T19:58:13.064Z'

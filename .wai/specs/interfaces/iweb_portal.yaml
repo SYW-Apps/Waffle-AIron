@@ -224,39 +224,6 @@ methods:
       transport: HTTP
       method: POST
       path: /web/admin/providers/remove
-  - name: adminListKeys
-    description: List a project's API keys; forwards to web_admin_orchestrator.listKeys.
-    signature: 'adminListKeys(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
-    params:
-      - name: request
-        type: HttpRequest
-    endpoint:
-      transport: HTTP
-      method: GET
-      path: /web/admin/keys
-  - name: adminMintKey
-    description: Mint a project-scoped API key; forwards to web_admin_orchestrator.mintKey.
-    signature: 'adminMintKey(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
-    params:
-      - name: request
-        type: HttpRequest
-    endpoint:
-      transport: HTTP
-      method: POST
-      path: /web/admin/keys
-  - name: adminRevokeKey
-    description: Revoke an API key by id; forwards to web_admin_orchestrator.revokeKey.
-    signature: 'adminRevokeKey(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
-    params:
-      - name: request
-        type: HttpRequest
-    endpoint:
-      transport: HTTP
-      method: POST
-      path: /web/admin/keys/revoke
   - name: adminListOrgUnits
     description: List organization units; forwards to web_admin_orchestrator.listOrganizationUnits.
     signature: 'adminListOrgUnits(request: HttpRequest): HttpResponse'
@@ -292,6 +259,41 @@ methods:
       transport: HTTP
       method: POST
       path: /web/admin/org/placements
+  - name: mintAgentToken
+    description: >-
+      Mint a single-project MCP token for an AI agent; forwards to
+      web_admin_orchestrator.mintProjectToken. User self-service, session-authorized.
+    signature: 'mintAgentToken(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/tokens
+  - name: revokeAgentToken
+    description: Revoke an MCP token by id; forwards to web_admin_orchestrator.revokeProjectToken.
+    signature: 'revokeAgentToken(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/tokens/revoke
+  - name: listAgentTokens
+    description: List the caller's own MCP tokens; forwards to web_admin_orchestrator.listMyTokens.
+    signature: 'listAgentTokens(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/tokens
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-07-13T18:32:52.218Z'
+updatedAt: '2026-07-13T19:59:55.440Z'

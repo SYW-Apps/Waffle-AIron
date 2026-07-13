@@ -221,6 +221,47 @@ methods:
         type: string
       - name: query
         type: AuditQuery
+  - name: mintSelfToken
+    description: >-
+      Self-service single-project MCP token mint. Authenticate the caller (a ws_ session or token);
+      require the caller's OWN grants already cover mcp:read on projectId (and mcp:write when write)
+      so the token cannot exceed the caller's access (self-scoped, so NO key:manage is required or
+      consulted); mint a token OWNED BY the caller (ownerSubject = the caller's subject, so
+      deactivating the caller revokes it via revokeAllForOwner) scoped to exactly one project,
+      persist only the hashed record, append a redacted token.mint.self audit event, and return the
+      plaintext once. Separate from the caller's login session.
+    signature: 'mintSelfToken(credential: string, projectId: string, write: boolean): string'
+    returns: string
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+      - name: write
+        type: boolean
+  - name: listSelfTokens
+    description: >-
+      Authenticate the caller and return the caller's OWN minted credential records
+      (ownerSubject.userId = caller) through the credential registry, redacted (hashed token only).
+      A read; not audited.
+    signature: 'listSelfTokens(credential: string): ApiKeyRecord[]'
+    returns: ApiKeyRecord[]
+    params:
+      - name: credential
+        type: string
+  - name: revokeSelfToken
+    description: >-
+      Authenticate the caller, confirm the token identified by tokenId is among the caller's OWN
+      tokens (ownerSubject.userId = caller), revoke it, and append a redacted token.revoke.self
+      audit event. A token the caller does not own is rejected (no cross-user revocation, no
+      key:manage escalation).
+    signature: 'revokeSelfToken(credential: string, tokenId: string): void'
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: tokenId
+        type: string
 status: complete
 createdAt: '2026-07-08T20:17:23.976Z'
-updatedAt: '2026-07-10T17:18:03.055Z'
+updatedAt: '2026-07-13T19:58:12.902Z'

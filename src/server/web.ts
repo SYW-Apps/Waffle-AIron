@@ -754,6 +754,29 @@ table.grid tr:hover td { background:rgba(255,255,255,.03); }
 .stat { background:var(--syw-surface-gradient); border:1px solid var(--chrome-border); border-radius:12px; padding:14px 18px; min-width:150px; }
 .stat .k { color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
 .stat .v { font-size:22px; font-weight:800; margin-top:3px; }
+
+/* ---- admin & self-service forms ---- */
+.toolbar { display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap; }
+.formcard { background:var(--card); border:1px solid var(--chrome-border); border-radius:12px; padding:16px 18px; margin:0 0 18px; max-width:780px; }
+.formcard h3 { margin:0 0 12px; font-size:14px; color:var(--ink); }
+.frow { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:10px; }
+.fcol { display:flex; flex-direction:column; gap:5px; flex:1 1 210px; min-width:160px; }
+.fcol.wide { flex-basis:100%; }
+.fcol label { color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
+.fcol input, .fcol select, .fcol textarea { background:var(--input-bg); color:var(--ink); border:1px solid var(--chrome-border); border-radius:8px; padding:8px 10px; font:inherit; width:100%; }
+.fcol input:focus, .fcol select:focus, .fcol textarea:focus { outline:none; border-color:var(--accent); box-shadow:var(--syw-glow); }
+.fcol input[readonly] { opacity:.7; }
+.fcol select { color-scheme:dark; appearance:none; -webkit-appearance:none; }
+.fcol .cbrow { display:flex; align-items:center; gap:8px; color:var(--ink); font-size:12.5px; padding:8px 0; }
+.fcol .cbrow input { width:auto; }
+details.adv { margin:6px 0 12px; }
+details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-bottom:8px; }
+.note { border:1px solid rgba(34,221,255,.35); background:rgba(34,221,255,.07); border-radius:10px; padding:10px 12px; font-size:12px; color:var(--ink); margin:10px 0; line-height:1.5; }
+.tokenout { display:flex; gap:8px; align-items:center; margin-top:8px; }
+.tokenout input { flex:1; background:rgba(0,0,0,.32); border:1px solid var(--chrome-border); color:var(--syw-cyan); border-radius:8px; padding:9px 10px; font:12px/1.4 "SFMono-Regular",Consolas,monospace; }
+.grant-row { display:flex; gap:8px; margin-bottom:8px; align-items:center; }
+.grant-row input { flex:1; background:var(--input-bg); color:var(--ink); border:1px solid var(--chrome-border); border-radius:8px; padding:7px 9px; font:inherit; }
+.grant-row input:focus { outline:none; border-color:var(--accent); box-shadow:var(--syw-glow); }
 </style>
 </head>
 <body data-theme="syw">
@@ -787,6 +810,7 @@ table.grid tr:hover td { background:rgba(255,255,255,.03); }
       <span class="badge-admin" id="adminBadge" hidden>admin</span>
       <button class="tbtn" id="acctBtn"><span class="who" id="whoLbl">&hellip;</span> &#9662;</button>
       <div class="menu">
+        <button id="connectAgent">Connect an agent</button>
         <button id="signout">Sign out</button>
         <button id="signoutAll">Sign out everywhere</button>
       </div>
@@ -818,16 +842,25 @@ table.grid tr:hover td { background:rgba(255,255,255,.03); }
         <div class="subtabs" id="adminSubtabs">
           <button data-panel="approvals" class="active">Approvals</button>
           <button data-panel="users">Users</button>
+          <button data-panel="providers">Identity Providers</button>
+          <button data-panel="org">Organization</button>
           <button data-panel="landscape">Landscape</button>
           <button data-panel="health">Health</button>
         </div>
         <div class="admin-body">
           <div class="apanel active" id="ap-approvals"><div class="hint">Loading…</div></div>
           <div class="apanel" id="ap-users"><div class="hint">Loading…</div></div>
+          <div class="apanel" id="ap-providers"><div class="hint">Loading…</div></div>
+          <div class="apanel" id="ap-org"><div class="hint">Loading…</div></div>
           <div class="apanel" id="ap-landscape"><div class="hint">Loading…</div></div>
           <div class="apanel" id="ap-health"><div class="hint">Loading…</div></div>
         </div>
       </div>
+    </div>
+
+    <!-- Connect an agent view (self-service; any signed-in user) -->
+    <div class="view" id="view-connect">
+      <div class="pane-r"><div id="connectBody" style="max-width:780px;margin:0 auto;"><div class="hint">Loading…</div></div></div>
     </div>
   </div>
 </div>
@@ -946,7 +979,7 @@ table.grid tr:hover td { background:rgba(255,255,255,.03); }
   var currentView = 'canvas';
   function setView(name) {
     currentView = name;
-    ['canvas', 'specs', 'admin'].forEach(function (v) {
+    ['canvas', 'specs', 'admin', 'connect'].forEach(function (v) {
       var el = $('view-' + v); if (el) el.classList.toggle('active', v === name);
     });
     Array.prototype.forEach.call($('navTabs').children, function (b) {
@@ -954,6 +987,7 @@ table.grid tr:hover td { background:rgba(255,255,255,.03); }
     });
     if (name === 'specs') loadSpecList();
     if (name === 'admin') loadAdminPanel(currentPanel);
+    if (name === 'connect') renderConnect();
   }
   Array.prototype.forEach.call($('navTabs').children, function (b) {
     b.addEventListener('click', function () {
@@ -1049,7 +1083,7 @@ table.grid tr:hover td { background:rgba(255,255,255,.03); }
     b.addEventListener('click', function () {
       currentPanel = b.getAttribute('data-panel');
       Array.prototype.forEach.call($('adminSubtabs').children, function (x) { x.classList.toggle('active', x === b); });
-      ['approvals', 'users', 'landscape', 'health'].forEach(function (p) { $('ap-' + p).classList.toggle('active', p === currentPanel); });
+      ['approvals', 'users', 'providers', 'org', 'landscape', 'health'].forEach(function (p) { $('ap-' + p).classList.toggle('active', p === currentPanel); });
       loadAdminPanel(currentPanel);
     });
   });
@@ -1078,17 +1112,11 @@ table.grid tr:hover td { background:rgba(255,255,255,.03); }
         Array.prototype.forEach.call(el.querySelectorAll('[data-reject]'), function (b) { b.addEventListener('click', function () { decide(b.getAttribute('data-reject'), false); }); });
       }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
     } else if (panel === 'users') {
-      adminGet('users').then(function (d) {
-        var rows = d.users || [];
-        if (!rows.length) { el.innerHTML = '<div class="hint">No users in your scope.</div>'; return; }
-        var html = '<table class="grid"><thead><tr><th>User</th><th>Status</th><th>Unit</th><th>Grants</th></tr></thead><tbody>';
-        rows.forEach(function (u) {
-          var st = u.status === 'active' ? 'ok' : 'warn';
-          var grants = (u.grants || []).map(function (g) { return esc(g.projectId) + ':' + esc((g.permissions || []).join('/')); }).join(', ');
-          html += '<tr><td>' + esc(u.subject && u.subject.userId) + '</td><td><span class="pill ' + st + '">' + esc(u.status) + '</span></td><td>' + esc(u.unitId || '—') + '</td><td>' + (grants || '<span class="hint">none</span>') + '</td></tr>';
-        });
-        el.innerHTML = html + '</tbody></table>';
-      }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+      renderUsersPanel(el);
+    } else if (panel === 'providers') {
+      renderProvidersPanel(el);
+    } else if (panel === 'org') {
+      renderOrgPanel(el);
     } else if (panel === 'landscape') {
       adminGet('landscape').then(function (g) {
         var units = (g.nodes || []).filter(function (n) { return n.nodeKind === 'unit'; });
@@ -1136,7 +1164,409 @@ table.grid tr:hover td { background:rgba(255,255,255,.03); }
   document.addEventListener('click', function () { $('acctDd').classList.remove('open'); });
   $('signout').addEventListener('click', function () { doLogout('/web/logout'); });
   $('signoutAll').addEventListener('click', function () { doLogout('/web/logout-all'); });
+  // "Connect an agent" is self-service for ANY signed-in user (not gated on admin).
+  $('connectAgent').addEventListener('click', function () { $('acctDd').classList.remove('open'); setView('connect'); });
   function doLogout(path) { api(path, { method: 'POST' }).then(function () { location.reload(); }).catch(function () { location.reload(); }); }
+
+  // ========================================================================
+  // Admin management panels (Users / Identity Providers / Organization) and the
+  // agent-token self-service page. Everything renders with string concatenation
+  // (this script is embedded in an outer template literal — no backticks / no
+  // dollar-brace / no backslash escapes) and POSTs through postJson so the
+  // X-Wairon-Web CSRF header rides every mutation. Admin panels render only for
+  // ctx.isAdmin; "Connect an agent" renders for any signed-in user.
+  // ========================================================================
+
+  function postJson(path, obj) {
+    return api(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(obj || {}) });
+  }
+  // POST + resolve to parsed JSON, throwing the server's error text on a non-2xx.
+  function postAndParse(path, obj) {
+    return postJson(path, obj).then(function (r) {
+      if (r.ok) return r.json().catch(function () { return {}; });
+      return r.text().then(function (t) {
+        var m = t;
+        try { var j = JSON.parse(t); if (j && j.error) m = j.error; } catch (e) {}
+        throw new Error(m || (path + ' ' + r.status));
+      });
+    });
+  }
+  function commaList(s) {
+    return String(s == null ? '' : s).split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+  }
+  function opt(value, label, selected) {
+    return '<option value="' + esc(value) + '"' + (selected ? ' selected' : '') + '>' + esc(label) + '</option>';
+  }
+  function fcol(label, control, wide) {
+    return '<div class="fcol' + (wide ? ' wide' : '') + '"><label>' + esc(label) + '</label>' + control + '</div>';
+  }
+
+  // ---- Users (admin) ------------------------------------------------------
+  function renderUsersPanel(el) {
+    el.innerHTML = '<div class="hint">Loading…</div>';
+    adminGet('users').then(function (d) {
+      var users = d.users || [];
+      var html = '<div class="toolbar"><button class="mini" id="uNew">New user</button></div><div id="uForm"></div>';
+      if (!users.length) html += '<div class="hint">No users in your scope yet.</div>';
+      else {
+        html += '<table class="grid"><thead><tr><th>User</th><th>Status</th><th>Unit</th><th>Grants</th><th></th></tr></thead><tbody>';
+        users.forEach(function (u, i) {
+          var st = u.status === 'active' ? 'ok' : 'warn';
+          var grants = (u.grants || []).map(function (g) { return esc(g.projectId) + ':' + esc((g.permissions || []).join('/')); }).join(', ');
+          html += '<tr><td>' + esc(u.subject && u.subject.userId) + '</td>'
+            + '<td><span class="pill ' + st + '">' + esc(u.status) + '</span></td>'
+            + '<td>' + esc(u.unitId || '—') + '</td>'
+            + '<td>' + (grants || '<span class="hint">none</span>') + '</td>'
+            + '<td style="white-space:nowrap"><button class="mini" data-edit="' + i + '">Edit</button> '
+            + '<button class="mini" data-grants="' + i + '">Grants</button> '
+            + '<button class="mini" data-setstatus="' + i + '">Status</button></td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+      el.innerHTML = html;
+      $('uNew').addEventListener('click', function () { userForm(el, null); });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-edit]'), function (b) {
+        b.addEventListener('click', function () { userForm(el, users[+b.getAttribute('data-edit')]); });
+      });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-grants]'), function (b) {
+        b.addEventListener('click', function () { grantsForm(el, users[+b.getAttribute('data-grants')]); });
+      });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-setstatus]'), function (b) {
+        b.addEventListener('click', function () { statusForm(el, users[+b.getAttribute('data-setstatus')]); });
+      });
+    }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+  }
+  function userForm(el, user) {
+    var box = $('uForm'); var creating = !user; var subj = (user && user.subject) || {};
+    var statusSel = opt('active', 'active', (user ? user.status : 'active') === 'active')
+      + opt('suspended', 'suspended', !!user && user.status === 'suspended')
+      + opt('deactivated', 'deactivated', !!user && user.status === 'deactivated');
+    var kindSel = opt('human', 'human', (subj.kind || 'human') === 'human') + opt('service', 'service', subj.kind === 'service');
+    var html = '<div class="formcard"><h3>' + (creating ? 'New user' : 'Edit user') + '</h3>';
+    html += '<div class="frow">'
+      + fcol('User record ID', '<input id="uId" value="' + esc(user ? user.id : '') + '"' + (creating ? '' : ' readonly') + ' placeholder="e.g. sso:provider:subject" />')
+      + fcol('Status', '<select id="uStatus">' + statusSel + '</select>')
+      + '</div>';
+    html += '<div class="frow">'
+      + fcol('Subject user id', '<input id="uSubId" value="' + esc(subj.userId || (user ? user.id : '')) + '" placeholder="identity subject id" />')
+      + fcol('Issuer', '<input id="uSubIss" value="' + esc(subj.issuer || 'local') + '" />')
+      + '</div>';
+    html += '<div class="frow">'
+      + fcol('Kind', '<select id="uSubKind">' + kindSel + '</select>')
+      + fcol('External subject', '<input id="uSubExt" value="' + esc(subj.externalSubject || '') + '" placeholder="optional" />')
+      + fcol('Home unit id', '<input id="uUnit" value="' + esc(user && user.unitId ? user.unitId : '') + '" placeholder="optional org unit id" />')
+      + '</div>';
+    html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="uSave">' + (creating ? 'Create user' : 'Save') + '</button> <button class="mini" id="uCancel">Cancel</button> <span class="msg" id="uMsg"></span></div></div>';
+    box.innerHTML = html;
+    $('uCancel').addEventListener('click', function () { box.innerHTML = ''; });
+    $('uSave').addEventListener('click', function () {
+      var msg = $('uMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
+      var subject = { userId: $('uSubId').value.trim(), kind: $('uSubKind').value, issuer: $('uSubIss').value.trim() || 'local' };
+      var ext = $('uSubExt').value.trim(); if (ext) subject.externalSubject = ext;
+      var rec = {
+        id: $('uId').value.trim() || subject.userId,
+        subject: subject,
+        status: $('uStatus').value,
+        grants: (user && user.grants) || [],
+        createdAt: (user && user.createdAt) || new Date().toISOString(),
+      };
+      var unit = $('uUnit').value.trim(); if (unit) rec.unitId = unit;
+      postAndParse('/web/admin/users', rec).then(function () { renderUsersPanel(el); })
+        .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+    });
+  }
+  function statusForm(el, user) {
+    var box = $('uForm');
+    var sel = opt('active', 'active', user.status === 'active') + opt('suspended', 'suspended', user.status === 'suspended') + opt('deactivated', 'deactivated', user.status === 'deactivated');
+    var html = '<div class="formcard"><h3>Set status — ' + esc(user.subject && user.subject.userId) + '</h3>';
+    html += '<div class="frow">' + fcol('Status', '<select id="sStatus">' + sel + '</select>') + '</div>';
+    html += '<div class="note">Suspending or deactivating a user revokes all of their MCP tokens and web sessions.</div>';
+    html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="sSave">Apply</button> <button class="mini" id="sCancel">Cancel</button> <span class="msg" id="sMsg"></span></div></div>';
+    box.innerHTML = html;
+    $('sCancel').addEventListener('click', function () { box.innerHTML = ''; });
+    $('sSave').addEventListener('click', function () {
+      var msg = $('sMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
+      postAndParse('/web/admin/users/status', { userId: user.id, status: $('sStatus').value })
+        .then(function () { renderUsersPanel(el); })
+        .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+    });
+  }
+  function grantsForm(el, user) {
+    var box = $('uForm');
+    var grants = ((user && user.grants) || []).map(function (g) {
+      return { projectId: g.projectId, permissions: (g.permissions || []).join(', '), orgUnitId: g.orgUnitId || '' };
+    });
+    function draw() {
+      var html = '<div class="formcard"><h3>Grants — ' + esc(user.subject && user.subject.userId) + '</h3><div id="gRows">';
+      grants.forEach(function (g, i) {
+        html += '<div class="grant-row">'
+          + '<input data-g="proj" data-i="' + i + '" value="' + esc(g.projectId) + '" placeholder="projectId or *" />'
+          + '<input data-g="perm" data-i="' + i + '" value="' + esc(g.permissions) + '" placeholder="mcp:read, mcp:write, *" />'
+          + '<input data-g="unit" data-i="' + i + '" value="' + esc(g.orgUnitId) + '" placeholder="org unit (optional)" />'
+          + '<button class="mini danger" data-del="' + i + '">Remove</button></div>';
+      });
+      html += '</div><div class="rowbtns"><button class="mini" id="gAdd">Add grant</button> <button class="btn-primary" style="width:auto" id="gSave">Save grants</button> <button class="mini" id="gCancel">Cancel</button> <span class="msg" id="gMsg"></span></div></div>';
+      box.innerHTML = html;
+      function sync() {
+        Array.prototype.forEach.call(box.querySelectorAll('[data-g]'), function (inp) {
+          var i = +inp.getAttribute('data-i'); var f = inp.getAttribute('data-g');
+          if (f === 'proj') grants[i].projectId = inp.value;
+          else if (f === 'perm') grants[i].permissions = inp.value;
+          else grants[i].orgUnitId = inp.value;
+        });
+      }
+      Array.prototype.forEach.call(box.querySelectorAll('[data-del]'), function (b) {
+        b.addEventListener('click', function () { sync(); grants.splice(+b.getAttribute('data-del'), 1); draw(); });
+      });
+      $('gAdd').addEventListener('click', function () { sync(); grants.push({ projectId: '', permissions: '', orgUnitId: '' }); draw(); });
+      $('gCancel').addEventListener('click', function () { box.innerHTML = ''; });
+      $('gSave').addEventListener('click', function () {
+        sync();
+        var msg = $('gMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
+        var out = grants.filter(function (g) { return g.projectId.trim(); }).map(function (g) {
+          var o = { projectId: g.projectId.trim(), permissions: commaList(g.permissions) };
+          if (g.orgUnitId && g.orgUnitId.trim()) o.orgUnitId = g.orgUnitId.trim();
+          return o;
+        });
+        postAndParse('/web/admin/users/grants', { userId: user.id, grants: out })
+          .then(function () { renderUsersPanel(el); })
+          .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+      });
+    }
+    draw();
+  }
+
+  // ---- Identity Providers / SSO (admin) -----------------------------------
+  function renderProvidersPanel(el) {
+    el.innerHTML = '<div class="hint">Loading…</div>';
+    adminGet('providers').then(function (d) {
+      var provs = d.providers || [];
+      var html = '<div class="toolbar"><button class="mini" id="pNew">Add identity provider</button></div><div id="pForm"></div>';
+      if (!provs.length) html += '<div class="hint">No identity providers configured.</div>';
+      else {
+        html += '<table class="grid"><thead><tr><th>ID</th><th>Type</th><th>Issuer</th><th>Enabled</th><th></th></tr></thead><tbody>';
+        provs.forEach(function (p, i) {
+          html += '<tr><td>' + esc(p.id) + '</td><td>' + esc(p.providerType) + '</td><td>' + esc(p.issuerUrl || '—') + '</td>'
+            + '<td><span class="pill ' + (p.enabled ? 'ok' : 'warn') + '">' + (p.enabled ? 'enabled' : 'disabled') + '</span></td>'
+            + '<td style="white-space:nowrap"><button class="mini" data-edit="' + i + '">Edit</button> <button class="mini danger" data-del="' + esc(p.id) + '">Remove</button></td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+      el.innerHTML = html;
+      $('pNew').addEventListener('click', function () { providerForm(el, null); });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-edit]'), function (b) {
+        b.addEventListener('click', function () { providerForm(el, provs[+b.getAttribute('data-edit')]); });
+      });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-del]'), function (b) {
+        b.addEventListener('click', function () {
+          if (!confirm('Remove identity provider "' + b.getAttribute('data-del') + '"?')) return;
+          postAndParse('/web/admin/providers/remove', { id: b.getAttribute('data-del') })
+            .then(function () { renderProvidersPanel(el); }).catch(function (e) { alert(e.message); });
+        });
+      });
+    }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+  }
+  function providerForm(el, p) {
+    var box = $('pForm'); p = p || {}; var creating = !p.id;
+    var types = ['oidc', 'keycloak', 'authentik', 'google_workspace', 'entra_id'];
+    var typeOpts = types.map(function (t) { return opt(t, t, (p.providerType || 'oidc') === t); }).join('');
+    var html = '<div class="formcard"><h3>' + (creating ? 'Add identity provider' : 'Edit ' + esc(p.id)) + '</h3>';
+    html += '<div class="frow">'
+      + fcol('Provider ID', '<input id="pId" value="' + esc(p.id || '') + '"' + (creating ? '' : ' readonly') + ' placeholder="e.g. corp-keycloak" />')
+      + fcol('Type', '<select id="pType">' + typeOpts + '</select>')
+      + fcol('Enabled', '<div class="cbrow"><input type="checkbox" id="pEnabled"' + (p.enabled === false ? '' : ' checked') + ' /> <span>sign-in allowed</span></div>')
+      + '</div>';
+    html += '<div class="frow">' + fcol('Issuer URL', '<input id="pIssuer" value="' + esc(p.issuerUrl || '') + '" placeholder="your provider issuer / realm base URL" />', true) + '</div>';
+    html += '<div class="frow">'
+      + fcol('Client ID', '<input id="pClient" value="' + esc(p.clientId || '') + '" />')
+      + fcol('Client secret ref', '<input id="pSecretRef" value="' + esc(p.clientSecretRef || '') + '" placeholder="secret name — never the raw secret" />')
+      + '</div>';
+    html += '<div class="frow">'
+      + fcol('Allowed email domains', '<input id="pDomains" value="' + esc((p.allowedDomains || []).join(', ')) + '" placeholder="comma-separated, e.g. corp.example" />')
+      + fcol('Admin group claims', '<input id="pAdminGroups" value="' + esc((p.adminGroupClaims || []).join(', ')) + '" placeholder="comma-separated group claims" />')
+      + '</div>';
+    html += '<div class="frow">' + fcol('Allowed redirect URIs', '<input id="pRedirects" value="' + esc((p.allowedRedirectUris || []).join(', ')) + '" placeholder="comma-separated exact-match URIs" />', true) + '</div>';
+    html += '<details class="adv"><summary>Advanced — split-horizon endpoints (leave blank to auto-discover)</summary>';
+    html += '<div class="note">Leave every field blank to resolve endpoints via OIDC discovery from the issuer. Override individually for split-horizon: the token / JWKS / userinfo endpoints may be VPC-internal while the authorize endpoint stays publicly reachable by the browser.</div>';
+    html += '<div class="frow">' + fcol('Authorization endpoint (public)', '<input id="pAuthz" value="' + esc(p.authorizationEndpoint || '') + '" placeholder="browser-facing; blank to auto-discover" />', true) + '</div>';
+    html += '<div class="frow">'
+      + fcol('Token endpoint (may be internal)', '<input id="pToken" value="' + esc(p.tokenEndpoint || '') + '" placeholder="server-facing; blank to auto-discover" />')
+      + fcol('JWKS URI (may be internal)', '<input id="pJwks" value="' + esc(p.jwksUri || '') + '" placeholder="server-facing; blank to auto-discover" />')
+      + '</div>';
+    html += '<div class="frow">' + fcol('Userinfo endpoint (may be internal)', '<input id="pUserinfo" value="' + esc(p.userinfoEndpoint || '') + '" placeholder="server-facing; blank to auto-discover" />', true) + '</div>';
+    html += '</details>';
+    html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="pSave">' + (creating ? 'Add provider' : 'Save') + '</button> <button class="mini" id="pCancel">Cancel</button> <span class="msg" id="pMsg"></span></div></div>';
+    box.innerHTML = html;
+    $('pCancel').addEventListener('click', function () { box.innerHTML = ''; });
+    $('pSave').addEventListener('click', function () {
+      var msg = $('pMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
+      var cf = { id: $('pId').value.trim(), providerType: $('pType').value, enabled: $('pEnabled').checked, updatedAt: new Date().toISOString() };
+      if (!cf.id) { msg.className = 'msg bad'; msg.textContent = 'Provider ID is required.'; return; }
+      var issuer = $('pIssuer').value.trim(); if (issuer) cf.issuerUrl = issuer;
+      var client = $('pClient').value.trim(); if (client) cf.clientId = client;
+      var sref = $('pSecretRef').value.trim(); if (sref) cf.clientSecretRef = sref;
+      var doms = commaList($('pDomains').value); if (doms.length) cf.allowedDomains = doms;
+      var ag = commaList($('pAdminGroups').value); if (ag.length) cf.adminGroupClaims = ag;
+      var red = commaList($('pRedirects').value); if (red.length) cf.allowedRedirectUris = red;
+      var az = $('pAuthz').value.trim(); if (az) cf.authorizationEndpoint = az;
+      var tok = $('pToken').value.trim(); if (tok) cf.tokenEndpoint = tok;
+      var jw = $('pJwks').value.trim(); if (jw) cf.jwksUri = jw;
+      var ui = $('pUserinfo').value.trim(); if (ui) cf.userinfoEndpoint = ui;
+      postAndParse('/web/admin/providers', cf).then(function () { renderProvidersPanel(el); })
+        .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+    });
+  }
+
+  // ---- Organization units (admin) -----------------------------------------
+  function renderOrgPanel(el) {
+    el.innerHTML = '<div class="hint">Loading…</div>';
+    adminGet('org/units').then(function (d) {
+      var units = d.units || [];
+      var html = '<div class="toolbar"><button class="mini" id="oNew">New unit</button><button class="mini" id="oPlace">Place a project</button></div><div id="oForm"></div>';
+      if (!units.length) html += '<div class="hint">No organization units yet.</div>';
+      else {
+        html += '<table class="grid"><thead><tr><th>Name</th><th>ID</th><th>Kind</th><th>Parent</th><th>Visibility</th><th></th></tr></thead><tbody>';
+        units.forEach(function (u, i) {
+          html += '<tr><td>' + esc(u.name) + '</td><td>' + esc(u.id) + '</td><td>' + esc(u.kind) + '</td><td>' + esc(u.parentId || '—') + '</td><td>' + esc(u.visibility || 'inherit') + '</td>'
+            + '<td><button class="mini" data-edit="' + i + '">Edit</button></td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+      el.innerHTML = html;
+      $('oNew').addEventListener('click', function () { orgUnitForm(el, units, null); });
+      $('oPlace').addEventListener('click', function () { placementForm(el, units); });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-edit]'), function (b) {
+        b.addEventListener('click', function () { orgUnitForm(el, units, units[+b.getAttribute('data-edit')]); });
+      });
+    }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+  }
+  function orgUnitForm(el, units, u) {
+    var box = $('oForm'); var creating = !u; u = u || {};
+    var parentOpts = opt('', '(none — root unit)', !u.parentId);
+    units.forEach(function (x) { if (x.id !== u.id) parentOpts += opt(x.id, x.name + ' (' + x.id + ')', u.parentId === x.id); });
+    var vis = u.visibility || 'inherit';
+    var visOpts = opt('inherit', 'inherit', vis === 'inherit') + opt('open', 'open', vis === 'open') + opt('closed', 'closed', vis === 'closed');
+    var html = '<div class="formcard"><h3>' + (creating ? 'New organization unit' : 'Edit ' + esc(u.name)) + '</h3>';
+    html += '<div class="frow">'
+      + fcol('Name', '<input id="oName" value="' + esc(u.name || '') + '" />')
+      + fcol('Unit ID', '<input id="oId" value="' + esc(u.id || '') + '"' + (creating ? '' : ' readonly') + ' placeholder="optional — auto if blank" />')
+      + '</div>';
+    html += '<div class="frow">'
+      + fcol('Kind', '<input id="oKind" value="' + esc(u.kind || 'team') + '" placeholder="organization / department / team / domain" />')
+      + fcol('Parent unit', '<select id="oParent">' + parentOpts + '</select>')
+      + fcol('Visibility', '<select id="oVis">' + visOpts + '</select>')
+      + '</div>';
+    html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="oSave">' + (creating ? 'Create unit' : 'Save') + '</button> <button class="mini" id="oCancel">Cancel</button> <span class="msg" id="oMsg"></span></div></div>';
+    box.innerHTML = html;
+    $('oCancel').addEventListener('click', function () { box.innerHTML = ''; });
+    $('oSave').addEventListener('click', function () {
+      var msg = $('oMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
+      var rec = {
+        id: $('oId').value.trim(),
+        name: $('oName').value.trim(),
+        kind: $('oKind').value.trim() || 'team',
+        status: u.status || 'active',
+        createdAt: u.createdAt || '',
+        createdBy: u.createdBy || (ctx && ctx.subject) || { userId: '', kind: 'human', issuer: 'local' },
+      };
+      var par = $('oParent').value; if (par) rec.parentId = par;
+      var v = $('oVis').value; if (v) rec.visibility = v;
+      postAndParse('/web/admin/org/units', rec).then(function () { renderOrgPanel(el); })
+        .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+    });
+  }
+  function placementForm(el, units) {
+    var box = $('oForm');
+    var pids = (ctx && ctx.visibleProjectIds) || [];
+    var projCtl = pids.length ? '<select id="plProj">' + pids.map(function (pid) { return opt(pid, pid, false); }).join('') + '</select>' : '<input id="plProj" placeholder="projectId" />';
+    var unitOpts = units.map(function (u) { return opt(u.id, u.name + ' (' + u.id + ')', false); }).join('');
+    var html = '<div class="formcard"><h3>Place a project into a unit</h3>';
+    html += '<div class="frow">' + fcol('Project', projCtl) + fcol('Unit', '<select id="plUnit">' + unitOpts + '</select>') + '</div>';
+    html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="plSave">Place</button> <button class="mini" id="plCancel">Cancel</button> <span class="msg" id="plMsg"></span></div></div>';
+    box.innerHTML = html;
+    $('plCancel').addEventListener('click', function () { box.innerHTML = ''; });
+    $('plSave').addEventListener('click', function () {
+      var msg = $('plMsg'); msg.className = 'msg'; msg.textContent = 'Placing…';
+      postAndParse('/web/admin/org/placements', { projectId: $('plProj').value.trim(), unitId: $('plUnit').value })
+        .then(function () { msg.className = 'msg ok'; msg.textContent = 'Placed.'; renderOrgPanel(el); })
+        .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+    });
+  }
+
+  // ---- Connect an agent (self-service; any signed-in user) ----------------
+  function renderConnect() {
+    var box = $('connectBody');
+    var pids = (ctx && ctx.visibleProjectIds) || [];
+    var html = '<h2 style="margin:0 0 4px">Connect an agent</h2>';
+    html += '<p style="color:var(--dim);margin:0 0 12px;font-size:12.5px">Mint a single-project MCP token to hand to an AI agent.</p>';
+    html += '<div class="note">This token is <strong>separate from your login</strong>. It is an agent credential scoped to exactly one project — signing out never affects it, and it can never sign in to this web UI. It is <strong>owned by you</strong>, so deactivating your account revokes it. Copy it now; the full token is shown only once.</div>';
+    html += '<div class="formcard"><h3>Generate a token</h3>';
+    if (!pids.length) html += '<div class="hint">You have no projects in scope to connect an agent to.</div>';
+    else {
+      var projOpts = pids.map(function (pid) { return opt(pid, pid, false); }).join('');
+      html += '<div class="frow">'
+        + fcol('Project', '<select id="tProj">' + projOpts + '</select>')
+        + fcol('Access', '<select id="tWrite">' + opt('read', 'read only (mcp:read)', true) + opt('write', 'read + write (mcp:write)', false) + '</select>')
+        + '</div>';
+      html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="tMint">Generate token</button> <span class="msg" id="tMsg"></span></div><div id="tResult"></div>';
+    }
+    html += '</div>';
+    html += '<div class="formcard"><h3>Your agent tokens <span class="msg" id="tokMsg" style="font-weight:400"></span></h3>';
+    html += '<div id="tokList"><div class="hint">Loading…</div></div></div>';
+    box.innerHTML = html;
+    if (pids.length) {
+      $('tMint').addEventListener('click', function () {
+        var msg = $('tMsg'); msg.className = 'msg'; msg.textContent = 'Generating…';
+        postAndParse('/web/tokens', { projectId: $('tProj').value, write: $('tWrite').value === 'write' })
+          .then(function (d) {
+            msg.textContent = '';
+            var tok = (d && d.token) || '';
+            $('tResult').innerHTML = '<div class="note">Copy this token now — it will not be shown again.</div>'
+              + '<div class="tokenout"><input id="tVal" readonly value="' + esc(tok) + '" /><button class="mini" id="tCopy">Copy</button></div>';
+            $('tCopy').addEventListener('click', function () {
+              var f = $('tVal'); f.focus(); f.select();
+              try { document.execCommand('copy'); $('tCopy').textContent = 'Copied'; } catch (e) {}
+            });
+            loadTokens();
+          })
+          .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+      });
+    }
+    loadTokens();
+  }
+
+  // List the caller's OWN agent tokens (GET /web/tokens) with a per-row Revoke.
+  function loadTokens() {
+    var host = $('tokList');
+    if (!host) return;
+    var note = $('tokMsg'); if (note) { note.className = 'msg'; note.textContent = ''; }
+    api('/web/tokens').then(function (r) {
+      if (!r.ok) throw new Error('tokens ' + r.status);
+      return r.json();
+    }).then(function (d) {
+      var toks = (d && d.tokens) || [];
+      if (!toks.length) { host.innerHTML = '<div class="hint">You have not minted any agent tokens yet.</div>'; return; }
+      var rows = toks.map(function (t) {
+        var proj = (t.projects || []).join(', ');
+        var created = t.createdAt ? String(t.createdAt).slice(0, 10) : '';
+        var status = t.revokedAt ? '<span class="pill bad">revoked</span>' : '<span class="pill ok">active</span>';
+        var action = t.revokedAt ? '' : '<button class="mini danger" data-tok="' + esc(t.id) + '">Revoke</button>';
+        return '<tr><td>' + esc(t.id) + '</td><td>' + esc(proj) + '</td><td>' + esc(created) + '</td><td>' + status + '</td><td>' + action + '</td></tr>';
+      }).join('');
+      host.innerHTML = '<table class="grid"><thead><tr><th>Token ID</th><th>Project</th><th>Created</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
+      Array.prototype.forEach.call(host.querySelectorAll('button[data-tok]'), function (btn) {
+        btn.addEventListener('click', function () {
+          btn.disabled = true; btn.textContent = 'Revoking…';
+          postAndParse('/web/tokens/revoke', { id: btn.getAttribute('data-tok') })
+            .then(function () { loadTokens(); })
+            .catch(function (e) {
+              btn.disabled = false; btn.textContent = 'Revoke';
+              if (note) { note.className = 'msg bad'; note.textContent = e.message; }
+            });
+        });
+      });
+    }).catch(function (e) { host.innerHTML = '<div class="hint">' + esc(e.message) + '</div>'; });
+  }
 
   boot();
 })();
@@ -1195,20 +1625,24 @@ function adminRemoveProvider(cfg: HostConfig, sessionId: string, body: Body, res
   sendJson(res, 200, { ok: true });
 }
 
-/** List a project's API keys; forwards to web_admin_orchestrator.listKeys. */
-function adminListKeys(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
-  sendJson(res, 200, { keys: webadmin.listKeys(cfg, sessionId, url.searchParams.get('project') ?? '*') });
+/** Mint a single-project MCP token for an AI agent (self-service, session-authorized);
+ *  forwards to web_admin_orchestrator.mintProjectToken. The plaintext token is
+ *  returned exactly once. */
+function mintAgentToken(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  const token = webadmin.mintProjectToken(cfg, sessionId, String(body?.projectId ?? ''), body?.write === true);
+  sendJson(res, 201, { token });
 }
 
-/** Mint a project-scoped API key; forwards to web_admin_orchestrator.mintKey. */
-function adminMintKey(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(res, 201, { key: webadmin.mintKey(cfg, sessionId, String(body?.project ?? ''), String(body?.role ?? 'editor')) });
-}
-
-/** Revoke an API key by id; forwards to web_admin_orchestrator.revokeKey. */
-function adminRevokeKey(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  webadmin.revokeKey(cfg, sessionId, String(body?.id ?? ''));
+/** Revoke an MCP token by id; forwards to web_admin_orchestrator.revokeProjectToken. */
+function revokeAgentToken(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  webadmin.revokeProjectToken(cfg, sessionId, String(body?.id ?? ''));
   sendJson(res, 200, { ok: true });
+}
+
+/** List the caller's own MCP tokens (redacted); forwards to
+ *  web_admin_orchestrator.listMyTokens. */
+function listAgentTokens(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
+  sendJson(res, 200, { tokens: webadmin.listMyTokens(cfg, sessionId) });
 }
 
 /** List organization units; forwards to web_admin_orchestrator.listOrganizationUnits. */
@@ -1338,6 +1772,25 @@ export async function handleWebRequest(
       return;
     }
 
+    // ── Agent-token self-service (any signed-in user) ────────────────────────
+    // GET /web/tokens → list the caller's OWN minted MCP tokens (redacted). A read,
+    // so it carries no CSRF requirement (only cookie-auth POSTs are gated above).
+    if (req.method === 'GET' && parts.length === 2 && parts[1] === 'tokens') {
+      return listAgentTokens(cfg, sessionId, res);
+    }
+    // POST /web/tokens { projectId, write } → mint a single-project MCP token for an
+    // AI agent. mintProjectToken forwards to the identity orchestrator's self-service
+    // mint, which authorizes strictly against the caller's own access to that project
+    // and OWNS the token to the caller. The plaintext token is returned once. Web-UI
+    // login and MCP tokens are separate credentials (the token is owned by the human).
+    if (req.method === 'POST' && parts.length === 2 && parts[1] === 'tokens') {
+      return mintAgentToken(cfg, sessionId, body, res);
+    }
+    // POST /web/tokens/revoke { id } → revoke a minted MCP token the caller OWNS.
+    if (req.method === 'POST' && parts.length === 3 && parts[1] === 'tokens' && parts[2] === 'revoke') {
+      return revokeAgentToken(cfg, sessionId, body, res);
+    }
+
     // ── Admin control-plane, session-scoped (slice 3) ────────────────────────
     // These reuse the EXISTING Phase-6 scoped control-plane functions, passing the
     // browser session id as the credential (a ws_ session resolves to a Principal
@@ -1378,18 +1831,6 @@ export async function handleWebRequest(
       // POST /web/admin/providers { ...IdentityProviderConfig }
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'providers') {
         return adminUpsertProvider(cfg, sessionId, body, res);
-      }
-      // GET /web/admin/keys?project= — a project's API keys.
-      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'keys') {
-        return adminListKeys(cfg, sessionId, url, res);
-      }
-      // POST /web/admin/keys/revoke { id }
-      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'keys' && parts[3] === 'revoke') {
-        return adminRevokeKey(cfg, sessionId, body, res);
-      }
-      // POST /web/admin/keys { project, role }
-      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'keys') {
-        return adminMintKey(cfg, sessionId, body, res);
       }
       // GET /web/admin/org/units — organization units (instance-admin).
       if (req.method === 'GET' && parts.length === 4 && parts[2] === 'org' && parts[3] === 'units') {

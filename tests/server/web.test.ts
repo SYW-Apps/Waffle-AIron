@@ -16,17 +16,18 @@ import {
   getProjectCanvas,
   serveApp,
 } from '../../src/server/web.js';
-import { signSsoState, verifySsoState } from '../../src/server/auth.js';
+import { signSsoState, verifySsoState, authenticate } from '../../src/server/auth.js';
 import { ForbiddenError, UnauthenticatedError } from '../../src/server/identity.js';
+import * as identity from '../../src/server/identity.js';
 import { upsertIdentityProviderRecord } from '../../src/server/policy.js';
-import { findUserByExternalSubject, setUserStatus } from '../../src/server/users.js';
+import { findUserByExternalSubject, setUserStatus, upsertUser as repoUpsertUser } from '../../src/server/users.js';
 import {
   createWebSession,
   getWebSessionById,
   listWebSessionsBySubject,
 } from '../../src/server/websessions.js';
 import { createProjectRecord } from '../../src/server/projects.js';
-import { createCredential, hashToken } from '../../src/server/credentials.js';
+import { createCredential, hashToken, findByTokenHash } from '../../src/server/credentials.js';
 import { queryAuditEvents as auditQuery } from '../../src/server/audit.js';
 import { upsertOrganizationUnit, placeProject, listProjectPlacements } from '../../src/server/organization.js';
 import * as webadmin from '../../src/server/webadmin.js';
@@ -632,6 +633,31 @@ describe('web portal client app shell (sdd_host)', () => {
     expect(html).not.toContain('borderPt');
   });
 
+  it('wires the admin management pages and the agent-token self-service page', () => {
+    // Admin management routes for Users / Identity Providers / Organization.
+    expect(html).toContain('/web/admin/users/status');
+    expect(html).toContain('/web/admin/users/grants');
+    expect(html).toContain('/web/admin/providers');
+    expect(html).toContain('/web/admin/providers/remove');
+    expect(html).toContain('/web/admin/org/units');
+    expect(html).toContain('/web/admin/org/placements');
+    // The Identity-Provider form exposes the provider types and the split-horizon
+    // override fields that make self-hosted Keycloak/Authentik work.
+    expect(html).toContain('google_workspace');
+    expect(html).toContain('entra_id');
+    expect(html).toContain('clientSecretRef');
+    expect(html).toContain('authorizationEndpoint');
+    expect(html).toContain('tokenEndpoint');
+    expect(html).toContain('jwksUri');
+    expect(html).toContain('userinfoEndpoint');
+    expect(html).toContain('allowedRedirectUris');
+    // The self-service "Connect an agent" token routes render for any signed-in user.
+    expect(html).toContain('/web/tokens');
+    expect(html).toContain('/web/tokens/revoke');
+    // No stale API-key admin surface remains in the client.
+    expect(html).not.toContain('/web/admin/keys');
+  });
+
   it('references no external http(s):// assets — everything is inline', () => {
     // No external asset loads (CDN scripts, stylesheets, fonts, images, imports).
     expect(html).not.toMatch(/(?:src|href)\s*=\s*["']https?:/i);
@@ -710,6 +736,8 @@ describe('web portal HTTP mount (sdd_host)', () => {
   it('webUiEnabled=false (default): the app shell and every /web path answer 404', async () => {
     expect((await raw({ method: 'GET', path: '/' })).status).toBe(404);
     expect((await raw({ method: 'GET', path: '/web/context' })).status).toBe(404);
+    // The agent-token self-service routes are part of /web, so they are gated too.
+    expect((await raw({ method: 'GET', path: '/web/tokens' })).status).toBe(404);
     expect(
       (await raw({
         method: 'POST',
@@ -1072,6 +1100,124 @@ describe('web admin orchestrator (sdd_host)', () => {
     expect(Array.isArray(webadmin.listUsers(cfg, admin))).toBe(true);
     expect(() => webadmin.listUsers(cfg, viewer)).toThrow(ForbiddenError);
   });
+
+  it('mintProjectToken mints a single-project agent token OWNED by the caller; revokeProjectToken revokes it', () => {
+    const admin = adminSession();
+    createProjectRecord(dataDir, 'proj-a');
+
+    // A read-only agent token: it authenticates and is scoped to EXACTLY one project
+    // (mcp:read only) — never an instance-wide '*' grant, entirely separate from the
+    // human's web session, but OWNED by the minting caller (for lifecycle/revocation).
+    const token = webadmin.mintProjectToken(cfg, admin, 'proj-a', false);
+    expect(token).toMatch(/^wk_[0-9a-f]+$/);
+    const p = authenticate(dataDir, token);
+    expect(p.authenticated).toBe(true);
+    expect(p.grants).toEqual([{ projectId: 'proj-a', permissions: ['mcp:read'] }]);
+    expect(p.projects).toEqual(['proj-a']);
+
+    // The stored record is OWNED by the caller (the session's subject) — NOT an
+    // ownerless service credential with an empty ownerUserId.
+    const rec = findByTokenHash(dataDir, hashToken(token))!;
+    expect(rec.ownerSubject?.userId).toBe(SUBJECT.userId);
+    expect(rec.createdBySubject?.userId).toBe(SUBJECT.userId);
+
+    // A write token additionally carries mcp:write on that one project.
+    const wToken = webadmin.mintProjectToken(cfg, admin, 'proj-a', true);
+    expect(authenticate(dataDir, wToken).grants).toEqual([
+      { projectId: 'proj-a', permissions: ['mcp:read', 'mcp:write'] },
+    ]);
+
+    // Revoke by id → the token no longer authenticates.
+    webadmin.revokeProjectToken(cfg, admin, rec.id);
+    expect(authenticate(dataDir, token).authenticated).toBe(false);
+    // token.mint.self + token.revoke.self security events were written upstream.
+    expect(auditQuery(dataDir, { action: 'token.mint.self' }).length).toBeGreaterThanOrEqual(1);
+    expect(auditQuery(dataDir, { action: 'token.revoke.self' })).toHaveLength(1);
+  });
+
+  it('mintProjectToken is self-scoped: a viewer mints read for its own project (no key:manage), but write and out-of-scope are denied', () => {
+    const viewer = viewerSession();
+    createProjectRecord(dataDir, 'demo');
+
+    // The viewer holds ONLY mcp:read on demo (and NO key:manage). Self-service mint
+    // of a READ-ONLY token for that project SUCCEEDS — the mint is self-scoped, so no
+    // key:manage is required, and the token cannot exceed the caller's own access.
+    const token = webadmin.mintProjectToken(cfg, viewer, 'demo', false);
+    const p = authenticate(dataDir, token);
+    expect(p.grants).toEqual([{ projectId: 'demo', permissions: ['mcp:read'] }]);
+    // Owned by the viewer (not service/empty).
+    const rec = findByTokenHash(dataDir, hashToken(token))!;
+    expect(rec.ownerSubject?.userId).toBe('viewer');
+
+    // Requesting WRITE exceeds the viewer's own access (mcp:read only) → Forbidden.
+    expect(() => webadmin.mintProjectToken(cfg, viewer, 'demo', true)).toThrow(ForbiddenError);
+    // A project the viewer has NO access to → Forbidden (cannot mint beyond own grants).
+    createProjectRecord(dataDir, 'other');
+    expect(() => webadmin.mintProjectToken(cfg, viewer, 'other', false)).toThrow(ForbiddenError);
+  });
+
+  it('listMyTokens returns only the caller-owned tokens (redacted); revokeSelfToken by a non-owner is rejected', () => {
+    createProjectRecord(dataDir, 'proj-a');
+    createProjectRecord(dataDir, 'proj-b');
+    // Two distinct users, each with their own session + mcp access to one project.
+    const sessA = createWebSession(dataDir, {
+      id: '', subject: { userId: 'u-a', kind: 'human', issuer: 'local' },
+      grants: [{ projectId: 'proj-a', permissions: ['mcp:read', 'mcp:write'] }],
+      createdAt: '', expiresAt: FUTURE(),
+    }).id;
+    const sessB = createWebSession(dataDir, {
+      id: '', subject: { userId: 'u-b', kind: 'human', issuer: 'local' },
+      grants: [{ projectId: 'proj-b', permissions: ['mcp:read'] }],
+      createdAt: '', expiresAt: FUTURE(),
+    }).id;
+
+    const tokenA = webadmin.mintProjectToken(cfg, sessA, 'proj-a', true);
+    webadmin.mintProjectToken(cfg, sessB, 'proj-b', false);
+
+    // Each caller sees ONLY their own token, redacted (hashed token only, no plaintext).
+    const myA = webadmin.listMyTokens(cfg, sessA);
+    expect(myA).toHaveLength(1);
+    expect(myA[0].ownerSubject?.userId).toBe('u-a');
+    expect(myA[0].keyHash).toBeTruthy();
+    expect((myA[0] as unknown as { token?: string }).token).toBeUndefined();
+    expect(myA.some((r) => r.ownerSubject?.userId === 'u-b')).toBe(false);
+    expect(webadmin.listMyTokens(cfg, sessB).map((r) => r.ownerSubject?.userId)).toEqual(['u-b']);
+
+    // A non-owner may NOT revoke someone else's token — rejected (not found), no
+    // cross-user revocation, and A's token still authenticates.
+    const recA = findByTokenHash(dataDir, hashToken(tokenA))!;
+    expect(() => webadmin.revokeProjectToken(cfg, sessB, recA.id)).toThrow();
+    expect(authenticate(dataDir, tokenA).authenticated).toBe(true);
+
+    // The owner CAN revoke it → it stops authenticating.
+    webadmin.revokeProjectToken(cfg, sessA, recA.id);
+    expect(authenticate(dataDir, tokenA).authenticated).toBe(false);
+  });
+
+  it('SECURITY: deactivating the owning user revokes their self-minted agent token (owned, so the sweep catches it)', () => {
+    createProjectRecord(dataDir, 'proj-a');
+    // A hosted user who owns an agent token, plus their live session.
+    repoUpsertUser(dataDir, {
+      id: 'u-agent',
+      subject: { userId: 'u-agent', kind: 'human', issuer: 'local' },
+      status: 'active',
+      grants: [{ projectId: 'proj-a', permissions: ['mcp:read'] }],
+      createdAt: new Date().toISOString(),
+    });
+    const agentSession = createWebSession(dataDir, {
+      id: '', subject: { userId: 'u-agent', kind: 'human', issuer: 'local' },
+      grants: [{ projectId: 'proj-a', permissions: ['mcp:read'] }],
+      createdAt: '', expiresAt: FUTURE(),
+    }).id;
+
+    const token = webadmin.mintProjectToken(cfg, agentSession, 'proj-a', false);
+    expect(authenticate(dataDir, token).authenticated).toBe(true);
+
+    // An admin deactivates the OWNER. Because the token is OWNED by that user,
+    // setUserStatus's revokeAllForOwner sweep catches it — the defect this closes.
+    identity.setUserStatus(cfg, adminSession(), 'u-agent', 'suspended');
+    expect(authenticate(dataDir, token).authenticated).toBe(false);
+  });
 });
 
 // ── Web admin routes over HTTP (routeData) ───────────────────────────────────
@@ -1183,5 +1329,67 @@ describe('web admin routes over HTTP (sdd_host)', () => {
     const list = await raw({ method: 'GET', path: '/web/admin/providers', headers: { cookie } });
     expect(list.status).toBe(200);
     expect(JSON.parse(list.body).providers.map((p: { id: string }) => p.id)).toContain(PROVIDER_ID);
+  }, 20_000);
+
+  it('POST /web/tokens mints a single-project agent token (self-service), CSRF-gated; /web/tokens/revoke revokes it', async () => {
+    const cookie = adminCookie();
+    createProjectRecord(dataDir, 'proj-a');
+    const body = JSON.stringify({ projectId: 'proj-a', write: true });
+
+    // A cookie-authenticated POST WITHOUT the CSRF header → 403 (never dispatched).
+    const noCsrf = await raw({ method: 'POST', path: '/web/tokens', headers: { cookie, 'content-type': 'application/json' }, body });
+    expect(noCsrf.status).toBe(403);
+
+    // With the X-Wairon-Web header → 201 with the plaintext token (shown once).
+    const mint = await raw({
+      method: 'POST',
+      path: '/web/tokens',
+      headers: { cookie, 'content-type': 'application/json', 'x-wairon-web': '1' },
+      body,
+    });
+    expect(mint.status).toBe(201);
+    const token = JSON.parse(mint.body).token as string;
+    expect(token).toMatch(/^wk_[0-9a-f]+$/);
+    // The minted token is scoped to exactly the one project, never instance-wide.
+    const p = authenticate(dataDir, token);
+    expect(p.grants).toEqual([{ projectId: 'proj-a', permissions: ['mcp:read', 'mcp:write'] }]);
+
+    // Revoke it by id through the self-service route → 200, and it stops authenticating.
+    const rec = findByTokenHash(dataDir, hashToken(token))!;
+    const revoke = await raw({
+      method: 'POST',
+      path: '/web/tokens/revoke',
+      headers: { cookie, 'content-type': 'application/json', 'x-wairon-web': '1' },
+      body: JSON.stringify({ id: rec.id }),
+    });
+    expect(revoke.status).toBe(200);
+    expect(authenticate(dataDir, token).authenticated).toBe(false);
+  }, 20_000);
+
+  it('GET /web/tokens lists the caller-owned tokens (no CSRF header needed) and redacts to the hashed token', async () => {
+    const cookie = adminCookie();
+    createProjectRecord(dataDir, 'proj-a');
+
+    // Mint one token for this session (CSRF-gated POST).
+    const mint = await raw({
+      method: 'POST',
+      path: '/web/tokens',
+      headers: { cookie, 'content-type': 'application/json', 'x-wairon-web': '1' },
+      body: JSON.stringify({ projectId: 'proj-a', write: false }),
+    });
+    expect(mint.status).toBe(201);
+    const token = JSON.parse(mint.body).token as string;
+    const rec = findByTokenHash(dataDir, hashToken(token))!;
+
+    // GET is a read — it needs NO X-Wairon-Web header (only cookie POSTs are gated).
+    const list = await raw({ method: 'GET', path: '/web/tokens', headers: { cookie } });
+    expect(list.status).toBe(200);
+    const tokens = JSON.parse(list.body).tokens as ApiKeyRecord[];
+    const mine = tokens.find((t) => t.id === rec.id)!;
+    expect(mine).toBeTruthy();
+    // Owned by the caller, and redacted: hashed token present, plaintext absent.
+    expect(mine.ownerSubject?.userId).toBe(SUBJECT.userId);
+    expect(mine.keyHash).toBeTruthy();
+    expect(list.body).not.toContain(token);
   }, 20_000);
 });

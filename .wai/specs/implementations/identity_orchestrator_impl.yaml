@@ -930,6 +930,39 @@ methods:
         description: Return once the identity-provider configuration has been removed
         type: return
         outcome: identity provider removed
+  - name: mintSelfToken
+    narrative: []
+    detail: intent
+    intent: >-
+      Authenticate the caller credential (ws_ session or token) to the calling principal via the
+      auth specialist. Verify the principal's own grants already cover mcp:read on projectId (and
+      mcp:write when write is true), rejecting Forbidden otherwise; because the minted token is no
+      broader than the caller's own authority this is self-scoped, so key:manage is neither required
+      nor consulted. Generate a random token and salted hash and build an ApiKeyRecord OWNED by the
+      caller (ownerSubject and createdBySubject = the principal's subject) with exactly one grant on
+      projectId carrying mcp:read (and mcp:write when write) plus the role/projects compatibility
+      projection, persist only the hashed record through the credential registry, append a
+      best-effort redacted token.mint.self (security) audit event, and return the plaintext exactly
+      once. Because the token is owned by the caller, a later deactivation of that user revokes it
+      via revokeAllForOwner.
+  - name: listSelfTokens
+    narrative: []
+    detail: intent
+    intent: >-
+      Authenticate the caller credential to the calling principal, list the principal's own
+      credential records through the credential registry (listByOwner on the principal's subject
+      user id), and return them redacted: each carries the hashed token (never plaintext) with its
+      id, authorized project, label, createdAt and revokedAt, so the client can show a user their
+      agent tokens and offer revoke. A read; not audited.
+  - name: revokeSelfToken
+    narrative: []
+    detail: intent
+    intent: >-
+      Authenticate the caller credential to the calling principal, fetch the principal's own tokens
+      (listByOwner) and confirm tokenId is among them (a token the caller does not own is rejected
+      as not found, so there is no cross-user revocation and no key:manage escalation), then revoke
+      it through the credential registry and append a best-effort redacted token.revoke.self
+      (security) audit event.
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-07-13T18:25:56.354Z'
+updatedAt: '2026-07-13T19:58:12.977Z'
