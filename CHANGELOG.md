@@ -34,6 +34,9 @@ web UI a real, self-serviceable control plane. Opt-in as before
   needed for a token no broader than your own access) and **owned by the minting
   user**, so deactivating that user revokes their agent tokens. List + revoke
   round out the lifecycle.
+- **Project lifecycle in the UI.** Humans **create / lock / promote / destroy**
+  their projects from the browser (the admin project methods already authorize by
+  grant scope), with a scoped project list — no longer CLI/loopback-only.
 
 ### Layered agent topology (new)
 
