@@ -245,12 +245,11 @@ methods:
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
-          If the caller holds no grant covering the project (neither mcp:write for the project nor
-          an instance-wide wildcard), deny
+          If the caller's resolved mcp:write scope does not permit the project (a grant on the
+          project itself, a unit-scoped grant whose subtree contains it, or a genuine instance-wide
+          wildcard all qualify), deny
         type: branch
-        condition: >-
-          the caller holds no grant covering the project (neither mcp:write for the project nor an
-          instance-wide wildcard)
+        condition: the resolved mcp:write scope does not permit the project
         onFalseStep: 4
       - stepNumber: 3
         description: Reject the lock request
@@ -300,12 +299,11 @@ methods:
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
-          If the caller holds no grant covering the project (neither mcp:write for the project nor
-          an instance-wide wildcard), deny
+          If the caller's resolved mcp:write scope does not permit the project (a grant on the
+          project itself, a unit-scoped grant whose subtree contains it, or a genuine instance-wide
+          wildcard all qualify), deny
         type: branch
-        condition: >-
-          the caller holds no grant covering the project (neither mcp:write for the project nor an
-          instance-wide wildcard)
+        condition: the resolved mcp:write scope does not permit the project
         onFalseStep: 4
       - stepNumber: 3
         description: Reject the promotion request
@@ -374,12 +372,12 @@ methods:
         error: not found
       - stepNumber: 6
         description: >-
-          If the caller is neither the original requester (matching subject or requesting token id)
-          nor a holder of approval:decide or an instance-admin grant, deny
+          If the caller is not the original requester (matching subject or requesting token id) and
+          the resolved approval:decide scope does not permit the request's project, deny
         type: branch
         condition: >-
-          the caller is neither the original requester (matching subject or requesting token id) nor
-          a holder of approval:decide or an instance-admin grant
+          the caller is not the original requester (matching subject or requesting token id) and the
+          resolved approval:decide scope does not permit the request's project
         onFalseStep: 8
       - stepNumber: 7
         description: Reject the status read
@@ -520,4 +518,4 @@ lint:
         by this orchestrator directly — narrative-level realignment pending (Level 3 territory).
 status: complete
 createdAt: '2026-07-09T19:32:43.183Z'
-updatedAt: '2026-07-11T20:30:19.803Z'
+updatedAt: '2026-07-13T22:25:15.777Z'

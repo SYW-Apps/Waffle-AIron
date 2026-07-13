@@ -216,9 +216,15 @@ describe('unit-scoped wildcard grants are never instance-wide (sdd_host)', () =>
 
   // ── policy plane (loopback admin plane; flat checks hardened) ──────────────
 
-  it('evaluate/reconcileProjectPolicy: a unit-a wildcard admin cannot touch tenant B; a project-scoped writer and an instance admin still can', () => {
+  it('evaluate/reconcileProjectPolicy: a unit-a wildcard admin cannot touch tenant B but IS first-class over its own subtree; a project-scoped writer and an instance admin still can', () => {
     expect(() => evaluateProjectPolicy(cfg, unitAdminA, 'proj-b')).toThrow(ForbiddenError);
     expect(() => reconcileProjectPolicy(cfg, unitAdminA, 'proj-b')).toThrow(ForbiddenError);
+
+    // The policy plane is scope-aware: the unit-a admin's resolved mcp:write
+    // scope expands to its subtree's projects, so it CAN evaluate/reconcile its
+    // OWN project without needing instance-wide reach.
+    expect(evaluateProjectPolicy(cfg, unitAdminA, 'proj-a').compliant).toBe(true); // permissive default policy
+    expect(reconcileProjectPolicy(cfg, unitAdminA, 'proj-a').compliant).toBe(true);
 
     const writerB = mintToken('tok-writer-b', [{ projectId: 'proj-b', permissions: ['mcp:write'] }], 'u-writer-b');
     expect(evaluateProjectPolicy(cfg, writerB, 'proj-b').compliant).toBe(true); // permissive default policy

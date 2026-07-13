@@ -12,6 +12,7 @@ componentType: Orchestrator
 owns: []
 dependsOn:
   - auth_specialist
+  - scope_specialist
   - project_registry
   - pack_registry
   - policy_repository
@@ -19,4 +20,4 @@ dependsOn:
   - audit_repository
 status: complete
 createdAt: '2026-07-08T21:59:23.605Z'
-updatedAt: '2026-07-09T20:53:26.458Z'
+updatedAt: '2026-07-13T22:25:15.669Z'
