@@ -204,7 +204,55 @@ methods:
         targetComponent: web_admin_orchestrator
         targetMethod: listMyTokens
     detail: calls-only
+  - name: projectList
+    narrative:
+      - stepNumber: 1
+        description: Resolve the session cookie and forward to the web project orchestrator
+        type: call
+        targetComponent: web_project_orchestrator
+        targetMethod: listProjects
+    detail: calls-only
+  - name: projectCreate
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse id + optional unitId from the body, resolve the session cookie, and forward to the
+          web project orchestrator
+        type: call
+        targetComponent: web_project_orchestrator
+        targetMethod: createProject
+    detail: calls-only
+  - name: projectLock
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse projectId from the body, resolve the session cookie, and forward to the web project
+          orchestrator
+        type: call
+        targetComponent: web_project_orchestrator
+        targetMethod: lockProject
+    detail: calls-only
+  - name: projectPromote
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse projectId from the body, resolve the session cookie, and forward to the web project
+          orchestrator
+        type: call
+        targetComponent: web_project_orchestrator
+        targetMethod: promoteProject
+    detail: calls-only
+  - name: projectDestroy
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse id from the body, resolve the session cookie, and forward to the web project
+          orchestrator
+        type: call
+        targetComponent: web_project_orchestrator
+        targetMethod: destroyProject
+    detail: calls-only
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-07-13T19:58:13.151Z'
+updatedAt: '2026-07-13T20:36:25.169Z'

@@ -125,6 +125,10 @@ const WEB_MUTATION_PATHS = new Set<string>([
   '/web/admin/org/placements',
   '/web/tokens',
   '/web/tokens/revoke',
+  '/web/projects',
+  '/web/projects/lock',
+  '/web/projects/promote',
+  '/web/projects/destroy',
 ]);
 
 export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResponse): void {

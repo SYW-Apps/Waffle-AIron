@@ -10,10 +10,11 @@ import {
   type SsoStatePayload,
 } from './identity.js';
 import * as webadmin from './webadmin.js';
+import * as webproject from './webproject.js';
 import { assertAllowedRedirectUri } from './idp.js';
 import { getHealthReport, getUsage } from './operations.js';
 import { listPendingRequests, decideRequest } from './selfservice.js';
-import { UnauthenticatedError, ForbiddenError } from './errors.js';
+import { UnauthenticatedError, ForbiddenError, AdminAuthError } from './errors.js';
 import { findUserByExternalSubject, upsertUser } from './users.js';
 import {
   createWebSession,
@@ -801,6 +802,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     <nav class="tabs" id="navTabs">
       <button data-view="canvas" class="active">Canvas</button>
       <button data-view="specs">Specs</button>
+      <button data-view="projects">Projects</button>
       <button data-view="admin" id="navAdmin" hidden>Admin</button>
     </nav>
     <div class="ctl" id="projCtl"><span>Project</span><select id="projSel"></select></div>
@@ -856,6 +858,11 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
           <div class="apanel" id="ap-health"><div class="hint">Loading…</div></div>
         </div>
       </div>
+    </div>
+
+    <!-- Projects view (project lifecycle: list / create / lock / promote / destroy) -->
+    <div class="view" id="view-projects">
+      <div class="pane-r"><div id="projectsBody" style="max-width:900px;margin:0 auto;"><div class="hint">Loading…</div></div></div>
     </div>
 
     <!-- Connect an agent view (self-service; any signed-in user) -->
@@ -979,13 +986,14 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   var currentView = 'canvas';
   function setView(name) {
     currentView = name;
-    ['canvas', 'specs', 'admin', 'connect'].forEach(function (v) {
+    ['canvas', 'specs', 'projects', 'admin', 'connect'].forEach(function (v) {
       var el = $('view-' + v); if (el) el.classList.toggle('active', v === name);
     });
     Array.prototype.forEach.call($('navTabs').children, function (b) {
       b.classList.toggle('active', b.getAttribute('data-view') === name);
     });
     if (name === 'specs') loadSpecList();
+    if (name === 'projects') renderProjects();
     if (name === 'admin') loadAdminPanel(currentPanel);
     if (name === 'connect') renderConnect();
   }
@@ -1568,6 +1576,100 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     }).catch(function (e) { host.innerHTML = '<div class="hint">' + esc(e.message) + '</div>'; });
   }
 
+  // ---- Projects (lifecycle management; any signed-in user) ----------------
+  // Lists the caller's in-scope projects (GET /web/projects — scoped read). Create
+  // and the per-row Lock / Promote / Destroy actions are shown only to callers whose
+  // capability flags mark them project authors/admins, but the SERVER enforces the
+  // real per-action grant scope, so a 403 is surfaced gracefully rather than trusted
+  // to the client's flags.
+  function projectsCanManage() { return !!(ctx && (ctx.canWriteProjects || ctx.isAdmin)); }
+
+  function renderProjects() {
+    var box = $('projectsBody');
+    var canManage = projectsCanManage();
+    var html = '<h2 style="margin:0 0 4px">Projects</h2>';
+    html += '<p style="color:var(--dim);margin:0 0 12px;font-size:12.5px">Manage the hosted projects in your scope. Each action is authorized by your grants — you can only act where your grants permit.</p>';
+    if (canManage) {
+      html += '<div class="formcard"><h3>Create a project</h3>';
+      html += '<div class="frow">'
+        + fcol('Project ID', '<input id="npId" placeholder="lowercase letters, digits, hyphen" />')
+        + fcol('Organization unit', '<input id="npUnit" placeholder="optional — required if you are unit-scoped" />')
+        + '</div>';
+      html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="npCreate">Create project</button> <span class="msg" id="npMsg"></span></div></div>';
+    }
+    html += '<div class="formcard"><h3>Your projects <span class="msg" id="plNote" style="font-weight:400"></span></h3><div id="plList"><div class="hint">Loading…</div></div></div>';
+    box.innerHTML = html;
+    if (canManage) {
+      $('npCreate').addEventListener('click', function () {
+        var msg = $('npMsg'); msg.className = 'msg'; msg.textContent = 'Creating…';
+        var id = $('npId').value.trim();
+        if (!id) { msg.className = 'msg bad'; msg.textContent = 'Project ID is required.'; return; }
+        var payload = { id: id };
+        var unit = $('npUnit').value.trim(); if (unit) payload.unitId = unit;
+        postAndParse('/web/projects', payload)
+          .then(function () { msg.className = 'msg ok'; msg.textContent = 'Created.'; $('npId').value = ''; $('npUnit').value = ''; loadProjects(); })
+          .catch(function (e) { msg.className = 'msg bad'; msg.textContent = projectErr(e); });
+      });
+    }
+    loadProjects();
+  }
+
+  function loadProjects() {
+    var host = $('plList');
+    if (!host) return;
+    var canManage = projectsCanManage();
+    var note = $('plNote'); if (note) { note.className = 'msg'; note.textContent = ''; }
+    api('/web/projects').then(function (r) {
+      if (r.status === 403) throw new Error('Your grants do not cover project management.');
+      if (!r.ok) throw new Error('projects ' + r.status);
+      return r.json();
+    }).then(function (d) {
+      var projs = (d && d.projects) || [];
+      if (!projs.length) { host.innerHTML = '<div class="hint">No projects in your scope yet.</div>'; return; }
+      var rows = projs.map(function (p) {
+        var st = p.status === 'active' ? 'ok' : 'warn';
+        var actions = canManage
+          ? '<button class="mini" data-lock="' + esc(p.id) + '">Lock</button> '
+            + '<button class="mini" data-promote="' + esc(p.id) + '">Promote</button> '
+            + '<button class="mini danger" data-destroy="' + esc(p.id) + '">Destroy</button>'
+          : '<span class="hint">read-only</span>';
+        return '<tr><td>' + esc(p.id) + '</td><td><span class="pill ' + st + '">' + esc(p.status || '—') + '</span></td>'
+          + '<td style="white-space:nowrap">' + actions + '</td></tr>';
+      }).join('');
+      host.innerHTML = '<table class="grid"><thead><tr><th>Project</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
+      Array.prototype.forEach.call(host.querySelectorAll('[data-lock]'), function (b) {
+        b.addEventListener('click', function () { projectAction('/web/projects/lock', { projectId: b.getAttribute('data-lock') }, b, 'Locking…', 'Lock'); });
+      });
+      Array.prototype.forEach.call(host.querySelectorAll('[data-promote]'), function (b) {
+        b.addEventListener('click', function () { projectAction('/web/projects/promote', { projectId: b.getAttribute('data-promote') }, b, 'Promoting…', 'Promote'); });
+      });
+      Array.prototype.forEach.call(host.querySelectorAll('[data-destroy]'), function (b) {
+        b.addEventListener('click', function () {
+          if (!confirm('Destroy project "' + b.getAttribute('data-destroy') + '"? This removes its entire spec tree.')) return;
+          projectAction('/web/projects/destroy', { id: b.getAttribute('data-destroy') }, b, 'Destroying…', 'Destroy');
+        });
+      });
+    }).catch(function (e) { host.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+  }
+
+  // A friendlier message for the server's grant-scope denial (the client's flags are
+  // an affordance hint; the server is the authority, so a 403 is expected and shown).
+  function projectErr(e) {
+    return /^forbidden$/i.test(e.message) ? 'Not permitted — your grants do not cover this action.' : e.message;
+  }
+  // POST one lifecycle action and refresh, surfacing a graceful error (e.g. a 403 from
+  // the server's per-action grant-scope check) instead of throwing.
+  function projectAction(path, payload, btn, busyLabel, label) {
+    var note = $('plNote'); if (note) { note.className = 'msg'; note.textContent = ''; }
+    btn.disabled = true; btn.textContent = busyLabel;
+    postAndParse(path, payload).then(function () {
+      loadProjects();
+    }).catch(function (e) {
+      btn.disabled = false; btn.textContent = label;
+      if (note) { note.className = 'msg bad'; note.textContent = projectErr(e); }
+    });
+  }
+
   boot();
 })();
 </script>
@@ -1658,6 +1760,44 @@ function adminUpsertOrgUnit(cfg: HostConfig, sessionId: string, body: Body, res:
 /** Place a project into an organization unit; forwards to web_admin_orchestrator.placeProject. */
 function adminPlaceProject(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
   webadmin.placeProject(cfg, sessionId, String(body?.projectId ?? ''), String(body?.unitId ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+
+// ── Web project-lifecycle plane (session-scoped /web/projects*) ──────────────
+//
+// The human project-lifecycle surface of the unified web UI on the PUBLIC data
+// plane. Each thin portal handler resolves the browser session id and forwards to
+// the web project orchestrator (webproject.ts): projectList is a scoped read owned
+// there; create/lock/promote/destroy forward to the admin orchestrator with the
+// session as the credential, so its per-action grant-scope authorization applies
+// UNCHANGED (a caller lacking the grant is refused with AdminAuthError → 403).
+// Cookie-authenticated POSTs are CSRF-gated in http.ts (routeData) like /web/logout.
+
+/** List the projects the caller can manage; forwards to web_project_orchestrator.listProjects. */
+function projectList(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
+  sendJson(res, 200, { projects: webproject.listProjects(cfg, sessionId) });
+}
+
+/** Create a project; forwards to web_project_orchestrator.createProject. The
+ *  optional org unit is required for a unit-scoped creator (enforced upstream). */
+function projectCreate(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  const unitId = body?.unitId ? String(body.unitId) : undefined;
+  sendJson(res, 201, webproject.createProject(cfg, sessionId, String(body?.id ?? ''), unitId));
+}
+
+/** Lock a project; forwards to web_project_orchestrator.lockProject. */
+function projectLock(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, webproject.lockProject(cfg, sessionId, String(body?.projectId ?? '')));
+}
+
+/** Promote a project; forwards to web_project_orchestrator.promoteProject. */
+function projectPromote(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, webproject.promoteProject(cfg, sessionId, String(body?.projectId ?? '')));
+}
+
+/** Destroy a project; forwards to web_project_orchestrator.destroyProject. */
+function projectDestroy(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  webproject.destroyProject(cfg, sessionId, String(body?.id ?? ''));
   sendJson(res, 200, { ok: true });
 }
 
@@ -1791,6 +1931,36 @@ export async function handleWebRequest(
       return revokeAgentToken(cfg, sessionId, body, res);
     }
 
+    // ── Project-lifecycle self-management (session-scoped) ───────────────────
+    // The human project-lifecycle surface: list the projects the caller may manage
+    // and create / lock / promote / destroy within their grant scope. projectList is
+    // a scoped read owned by the web project orchestrator; the mutations forward to
+    // the admin orchestrator with the session as the credential (per-action grant
+    // scope enforced there — a caller lacking the grant is refused 403). Cookie POSTs
+    // are CSRF-gated in http.ts (routeData) exactly like /web/logout.
+    if (parts.length >= 2 && parts[1] === 'projects') {
+      // GET /web/projects — the projects the caller may manage (scoped).
+      if (req.method === 'GET' && parts.length === 2) {
+        return projectList(cfg, sessionId, res);
+      }
+      // POST /web/projects { id, unitId? } — create a project (project:create scope).
+      if (req.method === 'POST' && parts.length === 2) {
+        return projectCreate(cfg, sessionId, body, res);
+      }
+      // POST /web/projects/lock { projectId } — lock (lock:create scope).
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'lock') {
+        return projectLock(cfg, sessionId, body, res);
+      }
+      // POST /web/projects/promote { projectId } — mark ready (promote:mark-ready scope).
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'promote') {
+        return projectPromote(cfg, sessionId, body, res);
+      }
+      // POST /web/projects/destroy { id } — deregister (project:destroy scope).
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'destroy') {
+        return projectDestroy(cfg, sessionId, body, res);
+      }
+    }
+
     // ── Admin control-plane, session-scoped (slice 3) ────────────────────────
     // These reuse the EXISTING Phase-6 scoped control-plane functions, passing the
     // browser session id as the credential (a ws_ session resolves to a Principal
@@ -1882,6 +2052,18 @@ export async function handleWebRequest(
   } catch (err) {
     if (err instanceof UnauthenticatedError) return sendJson(res, 401, { error: 'unauthorized' });
     if (err instanceof ForbiddenError) return sendJson(res, 403, { error: 'forbidden' });
+    // The project-lifecycle forwards authorize by grant scope in the admin
+    // orchestrator, which throws AdminAuthError (missing credential OR insufficient
+    // scope); both map to 403 here, so the client surfaces a graceful "not permitted".
+    if (err instanceof AdminAuthError) return sendJson(res, 403, { error: 'forbidden' });
+    // A lock that fails validate-as-complete is a conflict, not a client error —
+    // return the validation errors like the admin plane does (409). Matched by name
+    // (not an admin.ts class import) so the web portal takes no undeclared edge onto
+    // the admin orchestrator; the forward itself rides web_project_orchestrator.
+    if (err instanceof Error && err.name === 'LockValidationError') {
+      const errors = (err as { errors?: { code: string; message: string; specId?: string }[] }).errors;
+      return sendJson(res, 409, { error: err.message, errors });
+    }
     const msg = err instanceof Error ? err.message : String(err);
     if (/unsupported graph tier/i.test(msg)) return sendJson(res, 400, { error: msg });
     if (/not found|unknown/i.test(msg)) return sendJson(res, 404, { error: msg });

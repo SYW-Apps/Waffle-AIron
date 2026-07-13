@@ -294,6 +294,61 @@ methods:
       transport: HTTP
       method: GET
       path: /web/tokens
+  - name: projectList
+    description: List the projects the caller can manage; forwards to web_project_orchestrator.listProjects.
+    signature: 'projectList(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/projects
+  - name: projectCreate
+    description: Create a project; forwards to web_project_orchestrator.createProject.
+    signature: 'projectCreate(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/projects
+  - name: projectLock
+    description: Lock a project; forwards to web_project_orchestrator.lockProject.
+    signature: 'projectLock(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/projects/lock
+  - name: projectPromote
+    description: Promote a project; forwards to web_project_orchestrator.promoteProject.
+    signature: 'projectPromote(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/projects/promote
+  - name: projectDestroy
+    description: Destroy a project; forwards to web_project_orchestrator.destroyProject.
+    signature: 'projectDestroy(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/projects/destroy
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-07-13T19:59:55.440Z'
+updatedAt: '2026-07-13T20:36:25.211Z'

@@ -21,7 +21,8 @@ dependsOn:
   - host_server
   - web_orchestrator
   - web_admin_orchestrator
+  - web_project_orchestrator
 portalType: HTTP_API
 status: complete
 createdAt: '2026-07-11T11:31:55.624Z'
-updatedAt: '2026-07-13T18:32:02.371Z'
+updatedAt: '2026-07-13T20:36:25.089Z'

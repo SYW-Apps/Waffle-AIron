@@ -26,7 +26,9 @@ import {
   getWebSessionById,
   listWebSessionsBySubject,
 } from '../../src/server/websessions.js';
-import { createProjectRecord } from '../../src/server/projects.js';
+import { createProjectRecord, listProjectRecords } from '../../src/server/projects.js';
+import * as webproject from '../../src/server/webproject.js';
+import { AdminAuthError } from '../../src/server/admin.js';
 import { createCredential, hashToken, findByTokenHash } from '../../src/server/credentials.js';
 import { queryAuditEvents as auditQuery } from '../../src/server/audit.js';
 import { upsertOrganizationUnit, placeProject, listProjectPlacements } from '../../src/server/organization.js';
@@ -47,6 +49,7 @@ import type {
   ApiKeyRecord,
   HostConfig,
   IdentityProviderConfig,
+  OrganizationUnitRecord,
   PrincipalSubject,
   ProjectGrant,
   WebSession,
@@ -1391,5 +1394,247 @@ describe('web admin routes over HTTP (sdd_host)', () => {
     expect(mine.ownerSubject?.userId).toBe(SUBJECT.userId);
     expect(mine.keyHash).toBeTruthy();
     expect(list.body).not.toContain(token);
+  }, 20_000);
+});
+
+// ── Web project orchestrator (session-scoped project lifecycle) ──────────────
+//
+// listProjects is OWNED here (the admin list is master-only): it resolves the
+// session to a Principal, resolves the caller's mcp:read scope over the org tree,
+// and returns only the in-scope project records (a super-admin sees all).
+// create/lock/promote/destroy are thin forwards to the admin orchestrator with
+// the session AS the credential, so admin.ts's grant-scope authorization applies
+// unchanged (a caller lacking the grant is refused with AdminAuthError → 403).
+
+describe('web project orchestrator (sdd_host)', () => {
+  let dataDir: string;
+  let cfg: HostConfig;
+  const savedEnv = { ...process.env };
+  const FUTURE = (): string => new Date(Date.now() + 3_600_000).toISOString();
+
+  beforeEach(() => {
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-webproject-'));
+    process.env.WAIRON_ADMIN_TOKEN = MASTER;
+    process.env.WAIRON_DATA_DIR = dataDir;
+    cfg = { host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: true };
+  });
+  afterEach(() => {
+    process.env = { ...savedEnv };
+    try {
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    } catch {
+      /* windows file locks */
+    }
+  });
+
+  function session(grants: ProjectGrant[], userId = 'u-proj'): string {
+    return createWebSession(dataDir, {
+      id: '',
+      subject: { userId, kind: 'human', issuer: 'local' },
+      grants,
+      createdAt: '',
+      expiresAt: FUTURE(),
+    }).id;
+  }
+  const superAdmin = (): string => session([{ projectId: '*', permissions: ['*'] }], 'admin');
+  const viewer = (): string => session([{ projectId: 'demo', permissions: ['mcp:read'] }], 'viewer');
+  const orgUnit = (id: string, parentId?: string): OrganizationUnitRecord => {
+    const u: OrganizationUnitRecord = { id, name: id, kind: 'team', status: 'active', createdAt: '', createdBy: SUBJECT };
+    if (parentId) u.parentId = parentId;
+    return u;
+  };
+
+  it('listProjects returns only the caller-scoped projects; a super-admin sees all', () => {
+    createProjectRecord(dataDir, 'proj-a');
+    createProjectRecord(dataDir, 'proj-b');
+
+    // A project-scoped session sees only the project its grant covers (mcp:read).
+    const scoped = session([{ projectId: 'proj-a', permissions: ['mcp:read'] }]);
+    expect(webproject.listProjects(cfg, scoped).map((r) => r.id)).toEqual(['proj-a']);
+
+    // A super-admin sees every hosted project.
+    expect(webproject.listProjects(cfg, superAdmin()).map((r) => r.id).sort()).toEqual(['proj-a', 'proj-b']);
+
+    // An absent/expired session resolves to no grants → an empty list (never throws).
+    expect(webproject.listProjects(cfg, 'ws_not-a-real-session')).toEqual([]);
+  });
+
+  it('listProjects expands a unit-scoped grant across the org subtree (placed projects only)', () => {
+    upsertOrganizationUnit(dataDir, orgUnit('eng'));
+    upsertOrganizationUnit(dataDir, orgUnit('web', 'eng'));
+    createProjectRecord(dataDir, 'web-proj');
+    createProjectRecord(dataDir, 'sales-proj');
+    placeProject(dataDir, { id: '', projectId: 'web-proj', unitId: 'web', role: 'owner', createdAt: '', createdBy: SUBJECT });
+
+    // A grant scoped to the eng subtree (which contains web) sees only the project
+    // placed there — the sales-proj (unplaced) is not in scope.
+    const unitSession = session([{ projectId: '', orgUnitId: 'eng', permissions: ['mcp:read'] }]);
+    expect(webproject.listProjects(cfg, unitSession).map((r) => r.id)).toEqual(['web-proj']);
+  });
+
+  it('createProject forwards with the session: a grant-holder succeeds, a viewer gets AdminAuthError (403)', () => {
+    // A super-admin session creates a project (provisioned + recorded).
+    const rec = webproject.createProject(cfg, superAdmin(), 'new-proj');
+    expect(rec.id).toBe('new-proj');
+    expect(listProjectRecords(dataDir).some((r) => r.id === 'new-proj')).toBe(true);
+
+    // A viewer (mcp:read only) holds no project:create authority → refused, nothing allocated.
+    expect(() => webproject.createProject(cfg, viewer(), 'denied')).toThrow(AdminAuthError);
+    expect(listProjectRecords(dataDir).some((r) => r.id === 'denied')).toBe(false);
+  }, 20_000);
+
+  it('destroyProject forwards with the session: a grant-holder succeeds, a viewer is denied (403)', () => {
+    webproject.createProject(cfg, superAdmin(), 'gone-soon');
+    webproject.destroyProject(cfg, superAdmin(), 'gone-soon');
+    expect(listProjectRecords(dataDir).some((r) => r.id === 'gone-soon')).toBe(false);
+
+    createProjectRecord(dataDir, 'demo');
+    expect(() => webproject.destroyProject(cfg, viewer(), 'demo')).toThrow(AdminAuthError);
+    expect(listProjectRecords(dataDir).some((r) => r.id === 'demo')).toBe(true);
+  }, 20_000);
+
+  it('lockProject forwards with the session: a viewer is denied (403); a grant-holder passes the scope gate', () => {
+    createProjectRecord(dataDir, 'demo');
+    expect(() => webproject.lockProject(cfg, viewer(), 'demo')).toThrow(AdminAuthError);
+
+    // A super-admin passes the authorization gate; the lock itself may fail
+    // validate-as-complete, but that must NOT be an authorization denial.
+    webproject.createProject(cfg, superAdmin(), 'lockable');
+    let err: unknown;
+    try {
+      webproject.lockProject(cfg, superAdmin(), 'lockable');
+    } catch (e) {
+      err = e;
+    }
+    expect(err).not.toBeInstanceOf(AdminAuthError);
+  }, 20_000);
+
+  it('promoteProject forwards with the session: a grant-holder reaches the workflow (not-locked), a viewer is denied (403)', () => {
+    webproject.createProject(cfg, superAdmin(), 'promo');
+    expect(webproject.promoteProject(cfg, superAdmin(), 'promo').status).toBe('not-locked');
+
+    createProjectRecord(dataDir, 'demo');
+    expect(() => webproject.promoteProject(cfg, viewer(), 'demo')).toThrow(AdminAuthError);
+  }, 20_000);
+});
+
+// ── Web project routes over HTTP (routeData) ─────────────────────────────────
+
+describe('web project routes over HTTP (sdd_host)', () => {
+  let dataDir: string;
+  let cfg: HostConfig;
+  let server: http.Server;
+  let port: number;
+  const savedEnv = { ...process.env };
+  const FUTURE = (): string => new Date(Date.now() + 3_600_000).toISOString();
+
+  function raw(opts: { method: string; path: string; headers?: Record<string, string>; body?: string }): Promise<{ status: number; body: string }> {
+    return new Promise((resolve, reject) => {
+      const req = http.request(
+        { host: '127.0.0.1', port, method: opts.method, path: opts.path, headers: opts.headers },
+        (res) => {
+          let data = '';
+          res.on('data', (c) => (data += c));
+          res.on('end', () => resolve({ status: res.statusCode ?? 0, body: data }));
+        },
+      );
+      req.on('error', reject);
+      if (opts.body !== undefined) req.write(opts.body);
+      req.end();
+    });
+  }
+
+  function enableWebUi(): void {
+    fs.writeFileSync(path.join(dataDir, 'exposure-policy.json'), JSON.stringify({ webUiEnabled: true, requireTls: false }));
+  }
+  function adminCookie(): string {
+    const s = createWebSession(dataDir, { id: '', subject: SUBJECT, grants: [{ projectId: '*', permissions: ['*'] }], createdAt: '', expiresAt: FUTURE() });
+    return `wairon_session=${s.id}`;
+  }
+  function viewerCookie(): string {
+    const s = createWebSession(dataDir, {
+      id: '', subject: { userId: 'viewer', kind: 'human', issuer: 'local' },
+      grants: [{ projectId: 'demo', permissions: ['mcp:read'] }], createdAt: '', expiresAt: FUTURE(),
+    });
+    return `wairon_session=${s.id}`;
+  }
+
+  beforeEach(async () => {
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-webproject-http-'));
+    process.env.WAIRON_ADMIN_TOKEN = MASTER;
+    process.env.WAIRON_DATA_DIR = dataDir;
+    // webUiEnabled defaults OFF here so the 404 gate is exercised; enableWebUi() turns it on.
+    cfg = { host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: true };
+    server = http.createServer((req, res) => routeData(cfg, req, res));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    port = (server.address() as AddressInfo).port;
+  });
+  afterEach(async () => {
+    server.closeAllConnections?.();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    process.env = { ...savedEnv };
+    try {
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    } catch {
+      /* windows file locks */
+    }
+  });
+
+  it('webUiEnabled=false (default): every /web/projects route answers 404', async () => {
+    const cookie = adminCookie(); // a valid session exists, but the surface is gated off
+    expect((await raw({ method: 'GET', path: '/web/projects', headers: { cookie } })).status).toBe(404);
+    for (const p of ['/web/projects', '/web/projects/lock', '/web/projects/promote', '/web/projects/destroy']) {
+      const r = await raw({ method: 'POST', path: p, headers: { cookie, 'content-type': 'application/json', 'x-wairon-web': '1' }, body: '{}' });
+      expect(r.status).toBe(404);
+    }
+  });
+
+  it('webUiEnabled=true: GET /web/projects returns the scoped list; create is CSRF-gated then created', async () => {
+    enableWebUi();
+    createProjectRecord(dataDir, 'proj-a');
+    createProjectRecord(dataDir, 'proj-b');
+    const cookie = adminCookie();
+
+    // GET lists all for a super-admin (a read — no CSRF header needed).
+    const list = await raw({ method: 'GET', path: '/web/projects', headers: { cookie } });
+    expect(list.status).toBe(200);
+    expect((JSON.parse(list.body).projects as { id: string }[]).map((p) => p.id).sort()).toEqual(['proj-a', 'proj-b']);
+
+    // A cookie-authenticated POST WITHOUT the CSRF header → 403 (never dispatched).
+    const noCsrf = await raw({ method: 'POST', path: '/web/projects', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify({ id: 'made-here' }) });
+    expect(noCsrf.status).toBe(403);
+    expect(listProjectRecords(dataDir).some((r) => r.id === 'made-here')).toBe(false);
+
+    // With the X-Wairon-Web header → 201 and the project is created.
+    const created = await raw({
+      method: 'POST',
+      path: '/web/projects',
+      headers: { cookie, 'content-type': 'application/json', 'x-wairon-web': '1' },
+      body: JSON.stringify({ id: 'made-here' }),
+    });
+    expect(created.status).toBe(201);
+    expect(JSON.parse(created.body).id).toBe('made-here');
+    expect(listProjectRecords(dataDir).some((r) => r.id === 'made-here')).toBe(true);
+  }, 20_000);
+
+  it('a viewer is refused create/lock/promote/destroy over HTTP (403, grant scope) but can still read the scoped list', async () => {
+    enableWebUi();
+    createProjectRecord(dataDir, 'demo');
+    const cookie = viewerCookie();
+    const post = (p: string, body: string): Promise<{ status: number; body: string }> =>
+      raw({ method: 'POST', path: p, headers: { cookie, 'content-type': 'application/json', 'x-wairon-web': '1' }, body });
+
+    expect((await post('/web/projects', JSON.stringify({ id: 'x' }))).status).toBe(403);
+    expect((await post('/web/projects/lock', JSON.stringify({ projectId: 'demo' }))).status).toBe(403);
+    expect((await post('/web/projects/promote', JSON.stringify({ projectId: 'demo' }))).status).toBe(403);
+    expect((await post('/web/projects/destroy', JSON.stringify({ id: 'demo' }))).status).toBe(403);
+    // Nothing was created or destroyed by the refused mutations.
+    expect(listProjectRecords(dataDir).some((r) => r.id === 'demo')).toBe(true);
+    expect(listProjectRecords(dataDir).some((r) => r.id === 'x')).toBe(false);
+
+    // The viewer CAN read the scoped list (mcp:read on demo → demo is visible).
+    const list = await raw({ method: 'GET', path: '/web/projects', headers: { cookie } });
+    expect(list.status).toBe(200);
+    expect((JSON.parse(list.body).projects as { id: string }[]).map((p) => p.id)).toEqual(['demo']);
   }, 20_000);
 });
