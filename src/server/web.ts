@@ -1,11 +1,15 @@
 import * as crypto from 'crypto';
 import type { IncomingMessage, ServerResponse } from 'http';
-import { signSsoState, verifySsoState, authenticateSession } from './auth.js';
-import { resolveEndpoints, buildAuthorizationUrl, exchangeCode, resolveSubject } from './idp.js';
+import { signSsoState, verifySsoState, authenticateSession, verifyBuiltinAdmin } from './auth.js';
+import { resolveEndpoints, buildAuthorizationUrl, exchangeCode, resolveSubject, resolveGroups } from './idp.js';
 import {
   resolveEnabledProvider,
   tryAppendAudit,
   buildSsoAuditEvent,
+  applySsoAdminBundle,
+  isInAdminGroup,
+  isSuperAdminGrant,
+  ssoAdminBundleGrant,
   ANONYMOUS_SSO_ACTOR,
   type SsoStatePayload,
 } from './identity.js';
@@ -15,7 +19,7 @@ import { assertAllowedRedirectUri } from './idp.js';
 import { getHealthReport, getUsage } from './operations.js';
 import { listPendingRequests, decideRequest } from './selfservice.js';
 import { UnauthenticatedError, ForbiddenError, AdminAuthError } from './errors.js';
-import { findUserByExternalSubject, upsertUser } from './users.js';
+import { findUserByExternalSubject, upsertUser, replaceUserGrants as repoReplaceUserGrants } from './users.js';
 import {
   createWebSession,
   removeWebSession,
@@ -174,47 +178,144 @@ export async function completeSignIn(cfg: HostConfig, state: string, code: strin
   const summary = await exchangeCode(provider, endpoints, code, redirectUri);
   const subject = await resolveSubject(provider, endpoints, summary);
 
+  // steps 10–11: read the groups claim from the SAME summary resolveSubject just
+  // verified, then decide the SSO-admin membership against adminGroupClaims.
+  const groups = resolveGroups(summary);
+  const inAdminGroup = isInAdminGroup(provider, groups);
+
   // Look up the hosted user by issuer + external subject; provision on first login.
-  let user = findUserByExternalSubject(cfg.dataDir, subject.issuer, subject.externalSubject ?? ''); // step 10
+  let user = findUserByExternalSubject(cfg.dataDir, subject.issuer, subject.externalSubject ?? ''); // step 12
   if (!user) {
-    // steps 11 → 12
+    // steps 13 → 14
     const provisioned: HostedUserRecord = {
       id: subject.userId,
       subject,
       status: 'active',
-      grants: [], // first-login: empty — an admin assigns grants afterwards
+      // first-login: the enumerated SSO-admin bundle (never *:*) when the verified
+      // groups match adminGroupClaims, otherwise empty — an admin assigns grants.
+      grants: inAdminGroup ? [ssoAdminBundleGrant()] : [],
       createdAt: new Date().toISOString(),
     };
-    user = upsertUser(cfg.dataDir, provisioned); // step 13
+    user = upsertUser(cfg.dataDir, provisioned); // step 15
   }
 
   // Reject re-login for a deactivated user before creating a session. A freshly
   // provisioned first-login record is always active, so only an existing
   // deactivated user is rejected here.
   if (user.status !== 'active') {
-    // steps 14–15
+    // steps 16–17
     throw new ForbiddenError('deactivated user may not sign in');
   }
 
+  // steps 18–19: refresh the stored grants when they disagree with the admin-group
+  // membership — entering the group appends the enumerated bundle, leaving it
+  // drops the bundle on this login (server-driven, straight through the repository;
+  // the bundle is enumerated, so the *:* hard reservation is preserved).
+  const applied = applySsoAdminBundle(user.grants, inAdminGroup);
+  if (applied.changed) {
+    user = repoReplaceUserGrants(cfg.dataDir, user.id, applied.grants);
+  }
+
   // Build the new WebSession (the repository mints the reserved-prefix id and
-  // stamps createdAt/lastSeenAt). Grants = the user's CURRENT grants. Prior
-  // sessions are LEFT INTACT so one principal may hold concurrent sessions.
+  // stamps createdAt/lastSeenAt). Grants = the user's CURRENT grants with any
+  // reserved instance-wide super-admin (*:*) grant filtered out — *:* is reserved
+  // to the built-in admin account, so no SSO login can ever mint a session carrying
+  // it. Prior sessions are LEFT INTACT so one principal may hold concurrent sessions.
   const session: WebSession = {
     id: '', // web_session_repository mints a ws_-prefixed id
     subject: user.subject,
-    grants: user.grants,
+    grants: user.grants.filter((g) => !isSuperAdminGrant(g)),
     createdAt: '', // stamped by the registry
     expiresAt: new Date(Date.now() + WEB_SESSION_TTL_MS).toISOString(),
     providerId,
-  }; // step 16
-  const stored = createWebSession(cfg.dataDir, session); // step 17
+  }; // step 20
+  const stored = createWebSession(cfg.dataDir, session); // step 21
 
-  // steps 18–21: best-effort security-level append. The actor carries WHO signed
+  // steps 22–25: best-effort security-level append. The actor carries WHO signed
   // in; the target is the providerId (the session id is a secret credential and
   // must never be logged — the audit sink rejects credential-shaped targets).
   tryAppendAudit(cfg, buildSsoAuditEvent(user.subject, 'web.signin', 'security', { target: providerId }));
 
-  return stored.id; // step 22 (the portal sets it as the session cookie)
+  return stored.id; // step 26 (the portal sets it as the session cookie)
+}
+
+// ── Built-in super-admin password sign-in ─────────────────────────────────────
+//
+// The env-anchored (WAIRON_ADMIN_USER/_PASSWORD) web login. This is the ONLY path
+// to an instance-wide *:* session: the identity orchestrator hard-reserves that
+// grant away from user records and minted tokens, so the double-wildcard exists
+// exclusively on sessions minted here (and on the master-token principal).
+
+/** Consecutive failures per username before a short lockout begins. */
+const LOGIN_THROTTLE_MAX_FAILS = 5;
+/** Lockout duration once the failure threshold is reached. */
+const LOGIN_THROTTLE_LOCKOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+/** Transient, in-memory failed-attempt state per presented username. A module-level
+ *  Map — deliberately NOT a store: it holds no authoritative state, is lost on
+ *  restart, and exists only as a minimal anti-bruteforce speed bump. */
+const loginThrottle = new Map<string, { fails: number; lockedUntil: number }>();
+
+/** Clear the transient login throttle. Test hook only (mirrors __clearIdpCaches). */
+export function __resetLoginThrottle(): void {
+  loginThrottle.clear();
+}
+
+/**
+ * Sign the built-in super-admin in with the env-configured username + password.
+ * Consult the minimal in-memory failed-attempt throttle first (~5 consecutive
+ * failures lock the username out for a short window; attempts during the lockout
+ * are rejected outright). Verify BOTH values via the auth specialist's
+ * constant-time verifyBuiltinAdmin (unset env = password login disabled, always
+ * fails). On failure, record the attempt and reject as unauthenticated. On
+ * success, clear the throttle entry and create a browser session bound to the
+ * stable built-in super-admin subject carrying the single instance-wide
+ * super-admin grant ({projectId '*', permissions ['*']}) — the ONLY *:* in the
+ * system. Appends a best-effort web.signin.password (security) audit event and
+ * returns the new session id (the portal sets it as the session cookie).
+ */
+export function signInWithPassword(cfg: HostConfig, user: string, password: string): string {
+  const key = String(user ?? '');
+  const now = Date.now();
+
+  // steps 1–2: an active lockout rejects outright, without consulting credentials.
+  const entry = loginThrottle.get(key);
+  if (entry && entry.lockedUntil > now) {
+    throw new UnauthenticatedError();
+  }
+  // A lockout that has lapsed resets the counter (fresh window).
+  if (entry && entry.lockedUntil !== 0 && entry.lockedUntil <= now) {
+    loginThrottle.delete(key);
+  }
+
+  // step 3: constant-time verification of BOTH values (null on mismatch/disabled).
+  const subject = verifyBuiltinAdmin(cfg, user, password);
+  if (!subject) {
+    // steps 4–6: record the failure (starting a short lockout at the threshold)
+    // and reject — the same rejection for a wrong credential and disabled login.
+    const fails = (loginThrottle.get(key)?.fails ?? 0) + 1;
+    loginThrottle.set(key, {
+      fails,
+      lockedUntil: fails >= LOGIN_THROTTLE_MAX_FAILS ? now + LOGIN_THROTTLE_LOCKOUT_MS : 0,
+    });
+    throw new UnauthenticatedError();
+  }
+
+  // step 7: success clears the throttle; the session carries the ONLY *:* grant.
+  loginThrottle.delete(key);
+  const session: WebSession = {
+    id: '', // web_session_repository mints a ws_-prefixed id
+    subject,
+    grants: [{ projectId: '*', permissions: ['*'] }],
+    createdAt: '', // stamped by the registry
+    expiresAt: new Date(now + WEB_SESSION_TTL_MS).toISOString(),
+  };
+  const stored = createWebSession(cfg.dataDir, session); // step 8
+
+  // steps 9–12: best-effort security-level append (no credential-shaped target).
+  tryAppendAudit(cfg, buildSsoAuditEvent(subject, 'web.signin.password', 'security'));
+
+  return stored.id; // step 13 (the portal sets it as the session cookie)
 }
 
 /**
@@ -692,6 +793,8 @@ button { font:inherit; }
 .btn-primary { width:100%; border:none; border-radius:10px; padding:11px 14px; font-weight:700; color:#04121b; background:var(--syw-primary-gradient); cursor:pointer; }
 .btn-primary:hover { box-shadow:var(--syw-glow); }
 #login .err { color:var(--danger); font-size:12px; min-height:16px; margin-top:10px; }
+.login-sep { display:flex; align-items:center; gap:10px; color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.08em; margin:16px 0; }
+.login-sep::before, .login-sep::after { content:""; flex:1; border-top:1px solid var(--line); }
 
 /* ---- app chrome (top bar) ---- */
 #app { display:flex; flex-direction:column; height:100vh; }
@@ -807,6 +910,12 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     <label for="pid">Identity provider</label>
     <input id="pid" value="default" spellcheck="false" autocomplete="off" />
     <button class="btn-primary" id="signinBtn">Sign in with SSO</button>
+    <div class="login-sep"><span>or</span></div>
+    <label for="lu">Username</label>
+    <input id="lu" spellcheck="false" autocomplete="username" />
+    <label for="lp">Password</label>
+    <input id="lp" type="password" autocomplete="current-password" />
+    <button class="btn-primary" id="pwBtn">Sign in with password</button>
     <div class="err" id="loginErr"></div>
   </div>
 </div>
@@ -940,6 +1049,23 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       .catch(function (e) { $('loginErr').textContent = (e && e.message) || 'Sign-in failed.'; });
   });
   $('pid').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('signinBtn').click(); });
+
+  // Built-in admin password login. Establishes the session cookie server-side
+  // (POST /web/login is not CSRF-gated: it creates a session, it rides none), so
+  // a plain reload afterwards boots straight into the app.
+  $('pwBtn').addEventListener('click', function () {
+    $('loginErr').textContent = '';
+    api('/web/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ user: $('lu').value, password: $('lp').value }),
+    }).then(function (r) {
+      if (r.status === 401) throw new Error('Invalid credentials.');
+      if (!r.ok) return r.text().then(function (t) { throw new Error(t || ('sign-in failed (' + r.status + ')')); });
+      location.reload();
+    }).catch(function (e) { $('loginErr').textContent = (e && e.message) || 'Sign-in failed.'; });
+  });
+  $('lp').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('pwBtn').click(); });
 
   // ---- app start ----------------------------------------------------------
   function startApp() {
@@ -1706,6 +1832,21 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Body = any;
 
+/** Sign the built-in super-admin in with a username + password posted as JSON
+ *  ({user, password}); forwards to web_orchestrator.signInWithPassword and sets the
+ *  session cookie exactly like the SSO callback (Secure follows requireTls). It
+ *  ESTABLISHES a session (no prior cookie exists to ride), so it is intentionally
+ *  NOT in the cookie-mutation CSRF set. An invalid credential (or disabled password
+ *  login, or an active throttle lockout) maps to 401 with no distinguishing detail. */
+function loginWithPassword(cfg: HostConfig, body: Body, res: ServerResponse, secureCookie: boolean): void {
+  const sessionId = signInWithPassword(cfg, String(body?.user ?? ''), String(body?.password ?? ''));
+  res.writeHead(200, {
+    'content-type': 'application/json',
+    'set-cookie': setSessionCookie(sessionId, secureCookie),
+  });
+  res.end(JSON.stringify({ ok: true }));
+}
+
 /** List hosted users in the caller's scope; forwards to web_admin_orchestrator.listUsers. */
 function adminListUsers(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
   const project = url.searchParams.get('project') ?? undefined;
@@ -1886,6 +2027,14 @@ export async function handleWebRequest(
       });
       res.end();
       return;
+    }
+
+    // POST /web/login { user, password } → built-in super-admin password sign-in.
+    // ESTABLISHES a session (no prior cookie exists to ride), so it is NOT in the
+    // cookie-mutation CSRF set — like the SSO callback, trust anchors on the
+    // credential itself. Gated (with every /web route) on exposure.webUiEnabled.
+    if (req.method === 'POST' && parts.length === 2 && parts[1] === 'login') {
+      return loginWithPassword(cfg, body, res, ctx.secureCookie);
     }
 
     // POST /web/logout → end this session and clear the cookie.

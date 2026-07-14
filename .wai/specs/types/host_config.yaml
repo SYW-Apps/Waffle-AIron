@@ -56,6 +56,20 @@ fields:
       hosted `serve` command, so the dev-only auto-session path can never appear in a real
       deployment.
     optional: true
+  - name: builtinAdminUser
+    type: string
+    description: >-
+      Built-in super-admin web-login username, read from WAIRON_ADMIN_USER by the serve command.
+      When this or builtinAdminPassword is unset, password login is disabled (SSO-only) — the server
+      still starts.
+    optional: true
+  - name: builtinAdminPassword
+    type: string
+    description: >-
+      Built-in super-admin web-login password, read from WAIRON_ADMIN_PASSWORD by the serve command.
+      Held in memory only — never persisted or logged; compared constant-time by the auth
+      specialist.
+    optional: true
 methods: []
 createdAt: '2026-07-04T12:58:10.758Z'
-updatedAt: '2026-07-11T15:56:20.491Z'
+updatedAt: '2026-07-14T11:04:17.196Z'

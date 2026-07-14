@@ -84,6 +84,25 @@ methods:
     params:
       - name: sessionId
         type: string
+  - name: verifyBuiltinAdmin
+    description: >-
+      Verify the built-in super-admin web-login credentials against the env-injected
+      WAIRON_ADMIN_USER / WAIRON_ADMIN_PASSWORD pair carried on the host configuration.
+      CONSTANT-TIME: both the username and the password are hashed to fixed-length digests and
+      compared with a timing-safe equality, and BOTH comparisons are always evaluated before
+      branching, so no user-enumeration or early-exit timing signal exists. When either configured
+      value is unset, password login is DISABLED and every attempt resolves to null (the server
+      still starts — SSO-only posture). On a full match, returns the stable built-in super-admin
+      subject (userId 'builtin:superadmin', kind 'human', issuer 'local'); on any mismatch returns
+      null. Never throws and performs no session, grant, throttle, or audit work — the web
+      orchestrator owns the session mint and the failed-attempt throttle.
+    signature: 'verifyBuiltinAdmin(user: string, password: string): PrincipalSubject | null'
+    returns: PrincipalSubject | null
+    params:
+      - name: user
+        type: string
+      - name: password
+        type: string
 status: complete
 createdAt: '2026-07-04T12:49:50.542Z'
-updatedAt: '2026-07-11T11:51:12.005Z'
+updatedAt: '2026-07-14T11:04:16.119Z'

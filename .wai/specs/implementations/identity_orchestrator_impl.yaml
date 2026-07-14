@@ -17,16 +17,35 @@ methods:
         targetComponent: auth_specialist
         targetMethod: authenticateCredential
       - stepNumber: 2
+        description: >-
+          HARD RESERVATION: if any requested grant is the reserved instance-wide super-admin shape
+          (projectId '*' with no orgUnitId and permissions including '*'), reject before any
+          authorization — the check is unconditional and cannot be overridden by any caller
+          authority
+        type: branch
+        condition: >-
+          any requested grant is the reserved instance-wide super-admin shape (projectId '*' with no
+          orgUnitId and permissions including '*')
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Reject the reserved grant unconditionally — even a super-admin or master caller may not
+          mint a *:* token (the built-in admin session and the master principal are not minted
+          records and are unaffected)
+        type: throw
+        error: Forbidden — instance-wide super-admin (*:*) is reserved to the built-in admin account
+      - stepNumber: 4
         description: Gather all organization units to expand any unit-scoped delegation authority
         type: call
         targetComponent: organization_repository
         targetMethod: listUnits
-      - stepNumber: 3
+      - stepNumber: 5
         description: Gather all project placements to map in-scope units to their hosted projects
         type: call
         targetComponent: organization_repository
         targetMethod: listPlacements
-      - stepNumber: 4
+      - stepNumber: 6
         description: >-
           Deny the delegation unless the caller may delegate every requested grant: the caller lacks
           an instance-wide admin grant AND, for some requested grant in request.grants and some
@@ -42,66 +61,66 @@ methods:
           the caller lacks an instance-wide admin grant and, for some requested (target, permission)
           in request.grants, the caller's resolved scope for that permission does not cover the
           requested target project or unit
-        onTrueStep: 5
-        onFalseStep: 6
-      - stepNumber: 5
+        onTrueStep: 7
+        onFalseStep: 8
+      - stepNumber: 7
         description: Reject the delegation
         type: throw
         error: Forbidden — caller may not delegate the requested grants
-      - stepNumber: 6
+      - stepNumber: 8
         description: List hosted projects to validate the request
         type: call
         targetComponent: project_registry
         targetMethod: list
-      - stepNumber: 7
+      - stepNumber: 9
         description: >-
           Verify that every specific projectId referenced in request.grants exists among the known
           projects and every orgUnitId referenced exists among the gathered units
         type: local
-      - stepNumber: 8
+      - stepNumber: 10
         description: If any requested project id or org unit id is unknown, reject
         type: branch
         condition: a requested project id or org unit id is unknown
-        onTrueStep: 9
-        onFalseStep: 10
-      - stepNumber: 9
+        onTrueStep: 11
+        onFalseStep: 12
+      - stepNumber: 11
         description: Reject the unknown project or unit
         type: throw
         error: unknown project or organization unit
-      - stepNumber: 10
+      - stepNumber: 12
         description: Generate a cryptographically random token and compute its salted hash
         type: local
-      - stepNumber: 11
+      - stepNumber: 13
         description: >-
           Build the ApiKeyRecord (hashed token, ownerSubject from the request, createdBySubject from
           the actor principal, grants, label, expiresAt, plus the role/projects compatibility
           projection derived from the grants)
         type: local
-      - stepNumber: 12
+      - stepNumber: 14
         description: Persist the credential record
         type: call
         targetComponent: credential_registry
         targetMethod: create
-      - stepNumber: 13
+      - stepNumber: 15
         description: Append a redacted audit event without letting a failure fail the mint
         type: try
-        endStep: 15
+        endStep: 17
         catches:
           - error: audit append failure
-            step: 16
-      - stepNumber: 14
+            step: 18
+      - stepNumber: 16
         description: Append the redacted token.mint audit event under the active retention policy
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 15
+      - stepNumber: 17
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 17
-      - stepNumber: 16
+        toStep: 19
+      - stepNumber: 18
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 17
+      - stepNumber: 19
         description: Return the plaintext token (shown exactly once)
         type: return
         outcome: plaintext token returned once
@@ -113,36 +132,54 @@ methods:
         targetComponent: auth_specialist
         targetMethod: authenticateCredential
       - stepNumber: 2
+        description: >-
+          HARD RESERVATION: if any incoming grant is the reserved instance-wide super-admin shape
+          (projectId '*' with no orgUnitId and permissions including '*'), reject before any
+          authorization — unconditional, even for a super-admin (enumerated instance-wide bundles
+          remain assignable by a super-admin)
+        type: branch
+        condition: >-
+          any incoming grant is the reserved instance-wide super-admin shape (projectId '*' with no
+          orgUnitId and permissions including '*')
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Reject the reserved grant unconditionally — even a super-admin or master caller may not
+          assign *:* to a user record
+        type: throw
+        error: Forbidden — instance-wide super-admin (*:*) is reserved to the built-in admin account
+      - stepNumber: 4
         description: Gather all organization units to resolve the caller's user-administration scope
         type: call
         targetComponent: organization_repository
         targetMethod: listUnits
-      - stepNumber: 3
+      - stepNumber: 5
         description: Gather all project placements
         type: call
         targetComponent: organization_repository
         targetMethod: listPlacements
-      - stepNumber: 4
+      - stepNumber: 6
         description: Resolve the caller's user:admin scope over the organization tree
         type: call
         targetComponent: scope_specialist
         targetMethod: resolveScope
-      - stepNumber: 5
+      - stepNumber: 7
         description: Look up the existing user record by id to determine its current home unit
         type: call
         targetComponent: user_repository
         targetMethod: getById
-      - stepNumber: 6
+      - stepNumber: 8
         description: If no user matches userId, reject as not found
         type: branch
         condition: no user matches userId
-        onTrueStep: 7
-        onFalseStep: 8
-      - stepNumber: 7
+        onTrueStep: 9
+        onFalseStep: 10
+      - stepNumber: 9
         description: Reject as not found
         type: throw
         error: not found
-      - stepNumber: 8
+      - stepNumber: 10
         description: >-
           Deny unless the caller's scope permits this grant replacement: scope.all is false AND
           either (a) the target user's home unitId is missing or not in scope.unitIds, or (b) the
@@ -153,39 +190,39 @@ methods:
         condition: >-
           scope.all is false and (the target user's home unit is outside scope.unitIds, or the
           incoming grants exceed the caller's own scoped authority)
-        onTrueStep: 9
-        onFalseStep: 10
-      - stepNumber: 9
+        onTrueStep: 11
+        onFalseStep: 12
+      - stepNumber: 11
         description: Reject the grant administration
         type: throw
         error: >-
           Forbidden — grant administration requires scope over the target user's home unit and may
           not exceed the caller's own authority
-      - stepNumber: 10
+      - stepNumber: 12
         description: Replace the user's grants wholesale through the repository
         type: call
         targetComponent: user_repository
         targetMethod: replaceGrants
-      - stepNumber: 11
+      - stepNumber: 13
         description: Append a redacted audit event without letting a failure fail the grant replacement
         type: try
-        endStep: 13
+        endStep: 15
         catches:
           - error: audit append failure
-            step: 14
-      - stepNumber: 12
+            step: 16
+      - stepNumber: 14
         description: Append the redacted user.grants.replace audit event under the active retention policy
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 13
+      - stepNumber: 15
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 15
-      - stepNumber: 14
+        toStep: 17
+      - stepNumber: 16
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 15
+      - stepNumber: 17
         description: Return the updated user record
         type: return
         outcome: updated user record
@@ -341,28 +378,45 @@ methods:
         targetComponent: auth_specialist
         targetMethod: authenticateCredential
       - stepNumber: 2
+        description: >-
+          HARD RESERVATION: if the incoming record carries a grant of the reserved instance-wide
+          super-admin shape (projectId '*' with no orgUnitId and permissions including '*'), reject
+          before any authorization — unconditional, even for a super-admin
+        type: branch
+        condition: >-
+          the incoming record carries a grant of the reserved instance-wide super-admin shape
+          (projectId '*' with no orgUnitId and permissions including '*')
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Reject the reserved grant unconditionally — even a super-admin or master caller may not
+          store *:* on a user record
+        type: throw
+        error: Forbidden — instance-wide super-admin (*:*) is reserved to the built-in admin account
+      - stepNumber: 4
         description: Gather all organization units to resolve the caller's user-administration scope
         type: call
         targetComponent: organization_repository
         targetMethod: listUnits
-      - stepNumber: 3
+      - stepNumber: 5
         description: Gather all project placements
         type: call
         targetComponent: organization_repository
         targetMethod: listPlacements
-      - stepNumber: 4
+      - stepNumber: 6
         description: Resolve the caller's user:admin scope over the organization tree
         type: call
         targetComponent: scope_specialist
         targetMethod: resolveScope
-      - stepNumber: 5
+      - stepNumber: 7
         description: >-
           Look up any existing user record by id to distinguish creation from update and to read its
           current home unit
         type: call
         targetComponent: user_repository
         targetMethod: getById
-      - stepNumber: 6
+      - stepNumber: 8
         description: >-
           Deny unless the caller's scope permits the target user's home unit: scope.all is false AND
           either the incoming record's home unitId is missing or not in scope.unitIds, or (when
@@ -372,44 +426,44 @@ methods:
         condition: >-
           scope.all is false and the target user's home unit (incoming record, or existing record on
           update) is missing or outside scope.unitIds
-        onTrueStep: 7
-        onFalseStep: 8
-      - stepNumber: 7
+        onTrueStep: 9
+        onFalseStep: 10
+      - stepNumber: 9
         description: Reject the user administration
         type: throw
         error: Forbidden — user administration requires scope over the target user's home unit
-      - stepNumber: 8
+      - stepNumber: 10
         description: >-
           Build the redacted audit event with action user.create when no record existed, or
           user.update otherwise
         type: local
-      - stepNumber: 9
+      - stepNumber: 11
         description: Create or update the hosted user through the repository
         type: call
         targetComponent: user_repository
         targetMethod: upsert
-      - stepNumber: 10
+      - stepNumber: 12
         description: Append the audit event without letting a failure fail the upsert
         type: try
-        endStep: 12
+        endStep: 14
         catches:
           - error: audit append failure
-            step: 13
-      - stepNumber: 11
+            step: 15
+      - stepNumber: 13
         description: >-
           Append the redacted user.create or user.update audit event under the active retention
           policy
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 12
+      - stepNumber: 14
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 14
-      - stepNumber: 13
+        toStep: 16
+      - stepNumber: 15
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 14
+      - stepNumber: 16
         description: Return the stored user record
         type: return
         outcome: stored user record
@@ -737,75 +791,112 @@ methods:
         targetComponent: identity_provider_adapter
         targetMethod: resolveSubject
       - stepNumber: 10
+        description: >-
+          Read the verified id_token's groups claim from the redacted provider summary (meaningful
+          only now — after resolveSubject verified the same summary)
+        type: call
+        targetComponent: identity_provider_adapter
+        targetMethod: resolveGroups
+      - stepNumber: 11
+        description: >-
+          Decide the SSO-admin membership: in the admin group exactly when the verified groups
+          intersect the provider's configured adminGroupClaims (an unset or empty adminGroupClaims
+          never matches)
+        type: local
+      - stepNumber: 12
         description: Look up the hosted user by the resolved subject's issuer and external subject id
         type: call
         targetComponent: user_repository
         targetMethod: findByExternalSubject
-      - stepNumber: 11
+      - stepNumber: 13
         description: >-
           If no hosted user matched the resolved external subject, provision one; otherwise skip to
           minting
         type: branch
         condition: no hosted user matched the resolved external subject
-        onFalseStep: 14
-      - stepNumber: 12
+        onFalseStep: 16
+      - stepNumber: 14
         description: >-
           Build a new active HostedUserRecord for the resolved subject — first-login provisioning:
-          status active, empty grants (an admin assigns grants afterwards), createdAt now
+          status active, createdAt now, grants = the enumerated instance-wide SSO-admin bundle
+          ({projectId '*', permissions ['user:admin', 'project:create', 'audit:read']} —
+          deliberately NOT *:*) when in the admin group, otherwise empty (an admin assigns grants
+          afterwards)
         type: local
-      - stepNumber: 13
+      - stepNumber: 15
         description: Persist the newly provisioned first-login user record through the user repository
         type: call
         targetComponent: user_repository
         targetMethod: upsert
-      - stepNumber: 14
+      - stepNumber: 16
         description: >-
           Reject re-login for a deactivated user before minting: if the hosted user resolved for
           this login is not 'active', deny (a freshly provisioned first-login record is always
           active, so only an existing deactivated user is rejected here)
         type: branch
         condition: the resolved hosted user's status is not 'active'
-        onFalseStep: 16
-      - stepNumber: 15
+        onFalseStep: 18
+      - stepNumber: 17
         description: Reject the re-login of a deactivated user
         type: throw
         error: deactivated user may not re-login
-      - stepNumber: 16
+      - stepNumber: 18
+        description: >-
+          If the user's stored grants disagree with the SSO-admin membership (in the admin group but
+          missing the enumerated bundle, or out of the group but still carrying it), refresh them;
+          otherwise skip the refresh
+        type: branch
+        condition: >-
+          the user's stored grants disagree with the SSO-admin membership decided from the verified
+          groups claim
+        onTrueStep: 19
+        onFalseStep: 20
+      - stepNumber: 19
+        description: >-
+          Persist the refreshed grants through the user repository: append the enumerated SSO-admin
+          bundle on entry into the admin group, drop it on exit (server-driven; the bundle is
+          enumerated — never *:* — so the hard reservation is preserved)
+        type: call
+        targetComponent: user_repository
+        targetMethod: replaceGrants
+      - stepNumber: 20
         description: >-
           Resolve the effective user record (the freshly provisioned record on first login,
-          otherwise the existing match) and mint a user-bound token: generate a cryptographically
-          random token, compute its salted hash, and build the ApiKeyRecord (keyHash, ownerSubject =
-          the resolved user's subject, createdBySubject = the resolved user's subject, grants = the
-          resolved user's current grants, createdAt now, plus the role/projects compatibility
-          projection derived from the grants)
+          otherwise the existing match, with the grants refresh applied) and mint a user-bound
+          token: generate a cryptographically random token, compute its salted hash, and build the
+          ApiKeyRecord (keyHash, ownerSubject = the resolved user's subject, createdBySubject = the
+          resolved user's subject, grants = the resolved user's CURRENT grants with any reserved
+          instance-wide super-admin (*:*) grant filtered out — *:* is reserved to the built-in admin
+          account, so no SSO login can ever mint a credential carrying it — createdAt now, plus the
+          role/projects compatibility projection derived from the filtered grants)
         type: local
-      - stepNumber: 17
+      - stepNumber: 21
         description: Persist only the hashed credential record
         type: call
         targetComponent: credential_registry
         targetMethod: create
-      - stepNumber: 18
+      - stepNumber: 22
         description: Append a redacted audit event without letting a failure fail the login
         type: try
-        endStep: 20
+        endStep: 24
         catches:
           - error: audit append failure
-            step: 21
-      - stepNumber: 19
+            step: 25
+      - stepNumber: 23
         description: >-
           Append the redacted sso.login audit event (security level) under the active retention
           policy
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 20
+      - stepNumber: 24
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 22
-      - stepNumber: 21
+        toStep: 26
+      - stepNumber: 25
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 22
+      - stepNumber: 26
         description: Return the plaintext user-bound token (shown exactly once)
         type: return
         outcome: plaintext token returned once
@@ -965,4 +1056,4 @@ methods:
       (security) audit event.
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-07-13T19:58:12.977Z'
+updatedAt: '2026-07-14T11:04:17.156Z'

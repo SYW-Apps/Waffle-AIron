@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
 import type { IncomingMessage, ServerResponse } from 'http';
 import { authenticateCredential, signSsoState, verifySsoState } from './auth.js';
-import { resolveEndpoints, buildAuthorizationUrl, exchangeCode, resolveSubject } from './idp.js';
+import { resolveEndpoints, buildAuthorizationUrl, exchangeCode, resolveSubject, resolveGroups } from './idp.js';
 import {
   listIdentityProviderRecords,
   upsertIdentityProviderRecord,
@@ -100,6 +100,81 @@ export function isInstanceAdmin(principal: Principal): boolean {
   return (principal.grants ?? []).some(
     (g) => g.projectId === '*' && !g.orgUnitId && g.permissions.includes('*'),
   );
+}
+
+// ── the *:* hard reservation ────────────────────────────────────────────────
+//
+// The double-wildcard grant {projectId '*', no orgUnitId, permissions include '*'}
+// is env-reserved to the BUILT-IN admin account (WAIRON_ADMIN_USER/_PASSWORD →
+// web_orchestrator.signInWithPassword) and the master-token principal — neither of
+// which is a user record. No user-record grant and no minted user token may EVER
+// carry it, so every user-facing grant write path below rejects it UNCONDITIONALLY,
+// even for a super-admin/master caller. Enumerated instance-wide bundles (e.g.
+// user:admin/project:create/audit:read over '*') remain assignable by a super-admin.
+
+/** True when a grant is THE reserved instance-wide super-admin shape: projectId
+ *  '*', no orgUnitId (a unit-scoped '*' is bounded to its subtree), and a
+ *  permissions list including the '*' wildcard. */
+export function isSuperAdminGrant(g: ProjectGrant): boolean {
+  return g.projectId === '*' && !g.orgUnitId && g.permissions.includes('*');
+}
+
+/** Reject any reserved *:* grant UNCONDITIONALLY — even a super-admin/master
+ *  caller may not place it on a user record or minted token. */
+function assertNoReservedSuperAdminGrant(grants: ProjectGrant[]): void {
+  if (grants.some(isSuperAdminGrant)) {
+    throw new ForbiddenError('instance-wide super-admin (*:*) is reserved to the built-in admin account');
+  }
+}
+
+// ── the enumerated SSO-admin bundle (provider adminGroupClaims) ─────────────
+//
+// An SSO login whose verified id_token groups intersect the provider's
+// adminGroupClaims is provisioned/refreshed with this ENUMERATED instance-wide
+// bundle — deliberately NOT *:* (that shape is hard-reserved above), so an SSO
+// admin can administer users/projects/audit but can never touch IdP/org config
+// (instance-admin-only surfaces gate on the genuine *:*).
+
+/** The permissions of the SSO-admin bundle, in canonical order. */
+const SSO_ADMIN_BUNDLE_PERMISSIONS = ['user:admin', 'project:create', 'audit:read'] as const;
+
+/** A fresh instance-wide SSO-admin bundle grant (never *:*). */
+export function ssoAdminBundleGrant(): ProjectGrant {
+  return { projectId: '*', permissions: [...SSO_ADMIN_BUNDLE_PERMISSIONS] };
+}
+
+/** True when a grant IS the server-managed SSO-admin bundle: instance-wide
+ *  (projectId '*', no orgUnitId) carrying exactly the bundle's permission set. */
+function isSsoAdminBundleGrant(g: ProjectGrant): boolean {
+  return (
+    g.projectId === '*' &&
+    !g.orgUnitId &&
+    g.permissions.length === SSO_ADMIN_BUNDLE_PERMISSIONS.length &&
+    SSO_ADMIN_BUNDLE_PERMISSIONS.every((p) => g.permissions.includes(p))
+  );
+}
+
+/** Apply the adminGroupClaims decision to a user's stored grants: entering the
+ *  admin group appends the enumerated bundle, leaving it drops the bundle again;
+ *  all other grants are preserved untouched. Returns the (possibly unchanged)
+ *  grants plus whether a repository write is needed. Exported so the web plane's
+ *  completeSignIn applies the identical rule. */
+export function applySsoAdminBundle(
+  grants: ProjectGrant[],
+  inAdminGroup: boolean,
+): { grants: ProjectGrant[]; changed: boolean } {
+  const hasBundle = grants.some(isSsoAdminBundleGrant);
+  if (inAdminGroup === hasBundle) return { grants, changed: false };
+  return inAdminGroup
+    ? { grants: [...grants, ssoAdminBundleGrant()], changed: true }
+    : { grants: grants.filter((g) => !isSsoAdminBundleGrant(g)), changed: true };
+}
+
+/** True when the verified groups intersect the provider's adminGroupClaims (an
+ *  unset or empty adminGroupClaims never matches). Exported for the web plane. */
+export function isInAdminGroup(provider: IdentityProviderConfig, groups: string[]): boolean {
+  const claims = provider.adminGroupClaims ?? [];
+  return claims.length > 0 && groups.some((g) => claims.includes(g));
 }
 
 /** True when the caller's grants cover `permission` for `projectId` — a grant
@@ -310,6 +385,9 @@ export function mintToken(cfg: HostConfig, credential: string | null, request: T
 
   const admin = isInstanceAdmin(principal);
   const grants = request.grants ?? [];
+  // HARD RESERVATION (steps 2–3): a requested *:* grant is rejected before any
+  // authorization — unconditional, even for a super-admin/master caller.
+  assertNoReservedSuperAdminGrant(grants);
   // A grant carrying no permissions is malformed: it would still project to an
   // editor token for the project (compatibility projection), so an empty
   // permissions[] must NOT vacuously pass the delegation check below.
@@ -569,6 +647,9 @@ export function replaceUserGrants(
   grants: ProjectGrant[],
 ): HostedUserRecord {
   const principal = requirePrincipal(cfg, credential);
+  // HARD RESERVATION (steps 2–3): an incoming *:* grant is rejected before any
+  // authorization — unconditional, even for a super-admin/master caller.
+  assertNoReservedSuperAdminGrant(grants);
   const scope = resolveScopeFor(cfg, principal, USER_ADMIN_PERMISSION);
 
   // Read the target's current home unit (and separate not-found from a scope
@@ -681,6 +762,9 @@ export function upsertUser(
   record: HostedUserRecord,
 ): HostedUserRecord {
   const principal = requirePrincipal(cfg, credential);
+  // HARD RESERVATION (steps 2–3): a record carrying a *:* grant is rejected before
+  // any authorization — unconditional, even for a super-admin/master caller.
+  assertNoReservedSuperAdminGrant(record.grants ?? []);
   const scope = resolveScopeFor(cfg, principal, USER_ADMIN_PERMISSION);
 
   // Distinguish creation from update, and read the existing home unit, by probing
@@ -849,6 +933,11 @@ export async function completeSsoLogin(cfg: HostConfig, state: string, code: str
   const summary = await exchangeCode(provider, endpoints, code, redirectUri);
   const subject = await resolveSubject(provider, endpoints, summary);
 
+  // steps 10–11: the groups claim is read from the SAME summary resolveSubject
+  // just verified, then intersected with the provider's adminGroupClaims.
+  const groups = resolveGroups(summary);
+  const inAdminGroup = isInAdminGroup(provider, groups);
+
   // Look up the hosted user by issuer + external subject; provision on first login.
   let user = repoFindUserByExternalSubject(cfg.dataDir, subject.issuer, subject.externalSubject ?? '');
   if (!user) {
@@ -856,7 +945,9 @@ export async function completeSsoLogin(cfg: HostConfig, state: string, code: str
       id: subject.userId,
       subject,
       status: 'active',
-      grants: [], // first-login: empty — an admin assigns grants afterwards
+      // first-login: the enumerated SSO-admin bundle (never *:*) when the verified
+      // groups match adminGroupClaims, otherwise empty — an admin assigns grants.
+      grants: inAdminGroup ? [ssoAdminBundleGrant()] : [],
       createdAt: new Date().toISOString(),
     };
     user = repoUpsertUser(cfg.dataDir, provisioned);
@@ -869,10 +960,22 @@ export async function completeSsoLogin(cfg: HostConfig, state: string, code: str
     throw new ForbiddenError('deactivated user may not sign in');
   }
 
+  // steps 18–19: refresh the stored grants when they disagree with the admin-group
+  // membership — entering the group appends the enumerated bundle, leaving it
+  // drops the bundle on this login (server-driven, straight through the repository;
+  // the bundle is enumerated, so the *:* hard reservation is preserved).
+  const applied = applySsoAdminBundle(user.grants, inAdminGroup);
+  if (applied.changed) {
+    user = repoReplaceUserGrants(cfg.dataDir, user.id, applied.grants);
+  }
+
   // Mint a user-bound token (same record shape as mintToken) carrying the resolved
-  // user's CURRENT grants and their role/projects compatibility projection.
+  // user's CURRENT grants — with any reserved instance-wide super-admin (*:*) grant
+  // filtered out (env-reserved to the built-in admin account; no SSO login can ever
+  // mint a credential carrying it) — and their role/projects projection.
+  const effectiveGrants = user.grants.filter((g) => !isSuperAdminGrant(g));
   const token = 'wk_' + crypto.randomBytes(24).toString('hex');
-  const projection = compatibilityProjection(user.grants);
+  const projection = compatibilityProjection(effectiveGrants);
   const record: ApiKeyRecord = {
     id: crypto.randomBytes(6).toString('hex'),
     keyHash: hashToken(token),
@@ -881,7 +984,7 @@ export async function completeSsoLogin(cfg: HostConfig, state: string, code: str
     createdAt: new Date().toISOString(),
     ownerSubject: user.subject,
     createdBySubject: user.subject,
-    grants: user.grants,
+    grants: effectiveGrants,
     label: `SSO login (${providerId})`,
   };
   createCredential(cfg.dataDir, record);

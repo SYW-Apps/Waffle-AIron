@@ -3,9 +3,12 @@ name: Auth Specialist
 description: >-
   Verifies an inbound credential to a Principal: constant-time hash comparison of a data-plane
   bearer token against stored API-key records, or of the bootstrap/control-plane master credential.
-  Resolves a server-derived subject, token id, project grants, and compatibility role/project
-  projections, enforcing token expiry and revocation. The single authority for authentication;
-  performs no authorization routing itself.
+  Also verifies the built-in super-admin web-login username+password pair (env-injected
+  WAIRON_ADMIN_USER / WAIRON_ADMIN_PASSWORD carried on the host configuration) to its stable subject
+  — constant-time on BOTH values, and disabled (always rejecting) when either is unset. Resolves a
+  server-derived subject, token id, project grants, and compatibility role/project projections,
+  enforcing token expiry and revocation. The single authority for authentication; performs no
+  authorization routing itself.
 subsystem: sdd_host
 componentType: Specialist
 owns: []
@@ -15,4 +18,4 @@ dependsOn:
   - secret_registry
 status: complete
 createdAt: '2026-07-04T12:33:41.835Z'
-updatedAt: '2026-07-11T20:29:41.257Z'
+updatedAt: '2026-07-14T11:04:16.070Z'

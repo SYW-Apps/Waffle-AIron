@@ -560,6 +560,26 @@ export async function resolveSubject(
 }
 
 /**
+ * Extract the `groups` claim from the redacted provider response summary's decoded
+ * id_token claims (the exchangeCode output), returning an empty list when the claim
+ * is absent or the summary is malformed. TRUST NOTE: the claims come from the
+ * id_token that resolveSubject verifies — callers consult resolveGroups only AFTER
+ * resolveSubject has succeeded on the SAME summary, so the groups are backed by the
+ * same verified assertion. A pure parse; performs no provider I/O and never
+ * surfaces raw provider tokens.
+ */
+export function resolveGroups(providerMetadata: string): string[] {
+  try {
+    const parsed = JSON.parse(providerMetadata) as Partial<RedactedSummary>;
+    const groups = parsed?.idTokenClaims?.groups;
+    if (!Array.isArray(groups)) return [];
+    return groups.filter((g): g is string => typeof g === 'string');
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Enforce the provider's server-side redirect_uri allowlist.
  *
  * When `config.allowedRedirectUris` is set and non-empty, `redirectUri` must be

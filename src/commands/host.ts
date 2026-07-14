@@ -52,7 +52,7 @@ function resolveHostConfig(options: HostOptions): HostConfig {
   if (!process.env['WAIRON_PACKS_DIR']) {
     process.env['WAIRON_PACKS_DIR'] = path.join(dataDir, 'packs');
   }
-  return {
+  const cfg: HostConfig = {
     host: options.host || '0.0.0.0',
     port: options.port ? Number(options.port) : 8080,
     adminHost: options.adminHost || '127.0.0.1',
@@ -60,6 +60,14 @@ function resolveHostConfig(options: HostOptions): HostConfig {
     dataDir,
     authEnabled: !options.noAuth,
   };
+  // Built-in super-admin WEB login (optional). When either env value is unset,
+  // password login is disabled (SSO-only) — the server still starts. The values
+  // live only in memory on the resolved config; never persisted or logged.
+  const builtinUser = process.env['WAIRON_ADMIN_USER'];
+  const builtinPassword = process.env['WAIRON_ADMIN_PASSWORD'];
+  if (builtinUser) cfg.builtinAdminUser = builtinUser;
+  if (builtinPassword) cfg.builtinAdminPassword = builtinPassword;
+  return cfg;
 }
 
 function masterCredential(): string | null {

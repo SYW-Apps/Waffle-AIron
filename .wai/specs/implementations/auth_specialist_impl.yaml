@@ -293,6 +293,51 @@ methods:
         description: Return the resolved Principal.
         type: return
         outcome: authenticated principal
+  - name: verifyBuiltinAdmin
+    narrative:
+      - stepNumber: 1
+        description: >-
+          If either the configured built-in admin username or password (env-injected via host
+          config) is unset, password login is disabled
+        type: branch
+        condition: the configured built-in admin username or password is unset
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Return null — password login is disabled (SSO-only posture); the server still runs
+        type: return
+        outcome: null — password login disabled
+      - stepNumber: 3
+        description: >-
+          Hash the presented username, the configured username, the presented password, and the
+          configured password to fixed-length salted digests
+        type: local
+      - stepNumber: 4
+        description: >-
+          Constant-time compare the username digests and the password digests, ALWAYS evaluating
+          both comparisons before branching (no early exit — no user-enumeration timing signal)
+        type: local
+      - stepNumber: 5
+        description: If either comparison failed, reject
+        type: branch
+        condition: the username or the password comparison failed
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Return null — no match (the same path and timing for a wrong username and a wrong
+          password)
+        type: return
+        outcome: null — no match
+      - stepNumber: 7
+        description: >-
+          Assemble the stable built-in super-admin subject (userId 'builtin:superadmin', kind
+          'human', issuer 'local')
+        type: local
+      - stepNumber: 8
+        description: Return the built-in super-admin subject
+        type: return
+        outcome: built-in super-admin subject
 status: complete
 createdAt: '2026-07-04T12:54:26.477Z'
-updatedAt: '2026-07-11T12:37:26.379Z'
+updatedAt: '2026-07-14T11:04:16.168Z'

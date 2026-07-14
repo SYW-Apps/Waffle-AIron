@@ -631,6 +631,14 @@ export interface HostConfig {
    *  working directory. NEVER set by the hosted `serve` command, so the dev-only
    *  auto-session path can never appear in a real deployment. */
   devMode?: boolean;
+  /** Built-in super-admin web-login username, read from WAIRON_ADMIN_USER by the
+   *  serve command. When this or builtinAdminPassword is unset, password login is
+   *  disabled (SSO-only) — the server still starts. */
+  builtinAdminUser?: string;
+  /** Built-in super-admin web-login password, read from WAIRON_ADMIN_PASSWORD by
+   *  the serve command. Held in memory only — never persisted or logged; compared
+   *  constant-time by the auth specialist. */
+  builtinAdminPassword?: string;
 }
 
 /** Outcome of a gated promote — never an actual merge. */

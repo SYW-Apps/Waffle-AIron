@@ -114,7 +114,19 @@ methods:
         description: Return the resolved PrincipalSubject
         type: return
         outcome: resolved PrincipalSubject
+  - name: resolveGroups
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse the redacted provider summary JSON and read its decoded id_token claims' groups
+          list, filtering to strings; a missing claim or malformed summary yields an empty list.
+          Meaningful only after resolveSubject verified the SAME summary (same signed assertion).
+        type: local
+      - stepNumber: 2
+        description: Return the groups list (possibly empty)
+        type: return
+        outcome: verified groups list
 detail: calls-only
 status: complete
 createdAt: '2026-07-10T08:19:10.907Z'
-updatedAt: '2026-07-13T19:07:03.818Z'
+updatedAt: '2026-07-14T11:04:16.596Z'

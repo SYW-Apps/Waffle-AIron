@@ -349,6 +349,23 @@ methods:
       transport: HTTP
       method: POST
       path: /web/projects/destroy
+  - name: loginWithPassword
+    description: >-
+      Sign the built-in super-admin in with a username + password posted as JSON ({user, password});
+      forwards to the web orchestrator's signInWithPassword and sets the session cookie exactly like
+      the SSO callback (Secure follows the effective requireTls). It ESTABLISHES a session — no
+      prior cookie exists to ride — so it is intentionally NOT in the cookie-mutation CSRF set; like
+      every /web route it is gated on exposure.webUiEnabled. An invalid credential (or disabled
+      password login, or an active throttle lockout) answers 401 with no distinguishing detail.
+    signature: 'loginWithPassword(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/login
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-07-13T20:36:25.211Z'
+updatedAt: '2026-07-14T11:04:16.633Z'
