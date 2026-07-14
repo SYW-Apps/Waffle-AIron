@@ -4,6 +4,8 @@ import * as path from 'path';
 import * as os from 'os';
 import { validateSddTree } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
+import { loadProjectExtensions } from '../../src/core/extensions.js';
+import { listSkillResources } from '../../src/core/skills.js';
 
 // ---------------------------------------------------------------------------
 // Extension packs: declarative YAML packs (custom profiles + language tables),
@@ -247,6 +249,105 @@ profiles:
       expect(err).toBeDefined();
       expect(err!.severity).toBe('error');
       expect(res.valid).toBe(false);
+    } finally { proj.cleanup(); }
+  });
+
+  it('resolves a component pattern reference to a pack-declared pattern and flags an unknown one', () => {
+    const proj = createTempProject(['.wai/packs/patterns.yaml']);
+    proj.writeFile('.wai/packs/patterns.yaml', `name: pattern-pack
+patterns:
+  - id: org/domain-pattern
+    version: 1.0.0
+    description: The canonical domain shape.
+`);
+    proj.writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem');
+    proj.writeSpec('component', 'known-a', `schemaVersion: 1.0.0
+id: known-a
+name: known-a
+description: d
+subsystem: sub-a
+componentType: Specialist
+patterns:
+  - id: org/domain-pattern
+    version: 1.0.0`);
+    proj.writeSpec('component', 'unknown-a', `schemaVersion: 1.0.0
+id: unknown-a
+name: unknown-a
+description: d
+subsystem: sub-a
+componentType: Specialist
+patterns:
+  - id: org/missing-pattern`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.issues.some(i => i.code === 'UNKNOWN_PATTERN_REF' && i.specId === 'unknown-a')).toBe(true);
+      expect(res.issues.some(i => i.code === 'UNKNOWN_PATTERN_REF' && i.specId === 'known-a')).toBe(false);
+    } finally { proj.cleanup(); }
+  });
+
+  it('warns PATTERN_VERSION_MISMATCH for a pinned version no pack provides', () => {
+    const proj = createTempProject(['.wai/packs/patterns.yaml']);
+    proj.writeFile('.wai/packs/patterns.yaml', `name: pattern-pack
+patterns:
+  - id: org/domain-pattern
+    version: 1.0.0
+`);
+    proj.writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem');
+    proj.writeSpec('component', 'comp-a', `schemaVersion: 1.0.0
+id: comp-a
+name: comp-a
+description: d
+subsystem: sub-a
+componentType: Specialist
+patterns:
+  - id: org/domain-pattern
+    version: 2.0.0`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.issues.some(i => i.code === 'PATTERN_VERSION_MISMATCH' && i.specId === 'comp-a')).toBe(true);
+    } finally { proj.cleanup(); }
+  });
+
+  it('loads pack-provided skills with provenance and a resolved SKILL.md path', () => {
+    const proj = createTempProject(['.wai/packs/skillpack']);
+    proj.writeFile('.wai/packs/skillpack/pack.yaml', `name: skillpack
+version: 2.1.0
+skills:
+  - id: domain-implementer
+    source: skills/domain-implementer/SKILL.md
+    targets: [claude, gemini]
+`);
+    proj.writeFile('.wai/packs/skillpack/skills/domain-implementer/SKILL.md', '---\nname: Domain Implementer\ndescription: platform guidance\n---\nbody');
+    proj.activate();
+    try {
+      const skills = loadProjectExtensions().skills;
+      expect(skills.length).toBe(1);
+      expect(skills[0].id).toBe('domain-implementer');
+      expect(skills[0].pack).toBe('skillpack');
+      expect(skills[0].packVersion).toBe('2.1.0');
+      expect(skills[0].targets).toEqual(['claude', 'gemini']);
+      expect(fs.existsSync(skills[0].sourcePath)).toBe(true);
+    } finally { proj.cleanup(); }
+  });
+
+  it('publishes pack skills as namespaced <pack-id>-<skill-id> MCP resources', () => {
+    const proj = createTempProject(['.wai/packs/skillpack']);
+    proj.writeFile('.wai/packs/skillpack/pack.yaml', `name: skillpack
+version: 2.1.0
+skills:
+  - id: domain-implementer
+    source: skills/domain-implementer/SKILL.md
+    targets: [claude]
+`);
+    proj.writeFile('.wai/packs/skillpack/skills/domain-implementer/SKILL.md', '---\nname: Domain Implementer\ndescription: platform guidance\n---\nbody');
+    proj.activate();
+    try {
+      const packRes = listSkillResources().find(r => r.id === 'skillpack-domain-implementer');
+      expect(packRes).toBeDefined();
+      expect(packRes!.version).toBe('2.1.0');
+      expect(packRes!.name).toBe('Domain Implementer');
     } finally { proj.cleanup(); }
   });
 });

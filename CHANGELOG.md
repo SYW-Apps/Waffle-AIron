@@ -2,8 +2,37 @@
 
 ## Unreleased (minor — from v4.0.0)
 
-Post-v4.0.0 fixes and additive capabilities around chained subprojects and
-agent-topology scale (merge with `[minor]` → v4.1.0).
+Post-v4.0.0 fixes and additive capabilities around extension packs, the hosted
+server, chained subprojects, and agent-topology scale (merge with `[minor]` →
+v4.1.0).
+
+### Extension packs: pack-provided AI skills + versioned pattern references (new)
+
+Two generic extension-pack capabilities so profiles and wrapper products can
+carry more reusable, versioned knowledge — while wairon's core model stays
+portable. Both are opt-in and change nothing for projects that don't use them.
+
+- **Pack-provided AI-agent skills.** A directory pack can ship declarative
+  `skills:` (SKILL.md files); `wairon skills install` / `generate` install them
+  into the supported client targets, and the hosted MCP server publishes them
+  through the same `wairon-skill://` resource mirror as the built-ins. Skills
+  install **namespaced `<pack-id>-<skill-id>`** (the built-in `sdd-*` names are
+  reserved), so skills from different packs never collide and provenance +
+  version are legible in `wairon skills list`. These are AI-client skills, not
+  MCP tools.
+- **Versioned reusable pattern references.** Packs declare named, versioned
+  `patterns:`; a component references one via `patterns: [{ id, version }]`.
+  Wairon resolves the reference (`UNKNOWN_PATTERN_REF`, plus
+  `PATTERN_VERSION_MISMATCH` for a pinned version no pack provides), lists them
+  with `wairon patterns list`, and exposes them to pack rules via
+  `ctx.ext.patterns` — the pattern's actual constraints are enforced by its
+  declaring pack's own rules. Publishes a reusable architecture convention
+  across projects without copy-pasting a spec shape.
+
+Internally, the previously-unmodeled core extension machinery is now first-class
+in wairon's own spec tree — the pack loader, the conformance rule set as a
+proper in-memory **Repository**, and the `packs`/`rules`/`patterns` CLI — held to
+the same conformance gate as everything else. See `docs/extending-wairon.md`.
 
 ### Hosted server: real SSO + web admin UI + agent tokens (new)
 
