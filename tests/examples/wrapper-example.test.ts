@@ -5,7 +5,7 @@ import * as os from 'os';
 import { validateSddTree } from '../../src/core/validation.js';
 import { loadExtensions } from '../../src/core/extensions.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
-import { runPacksAdd, runPacksRemove } from '../../src/commands/packs.js';
+import { addPack, removePack } from '../../src/commands/packs.js';
 
 // ---------------------------------------------------------------------------
 // Golden test for examples/wrapper — the wrapper-tool template (packs +
@@ -118,14 +118,14 @@ ${stamp}
       expect(validateSddTree().issues.some(i => i.code === 'UNKNOWN_PROFILE')).toBe(true);
 
       // Install (what a wrapper's install script runs).
-      await runPacksAdd(path.join(WRAPPER_DIR, 'packs', 'flowops.yaml'));
+      await addPack(path.join(WRAPPER_DIR, 'packs', 'flowops.yaml'));
       expect(fs.existsSync(path.join(waiDir, 'packs', 'flowops.yaml'))).toBe(true);
       expect(fs.readFileSync(path.join(waiDir, 'project.yaml'), 'utf-8')).toContain('.wai/packs/flowops.yaml');
       invalidateSpecCache();
       expect(validateSddTree().issues.some(i => i.code === 'UNKNOWN_PROFILE')).toBe(false);
 
       // Uninstall by pack name.
-      await runPacksRemove('flowops-doctrine');
+      await removePack('flowops-doctrine');
       expect(fs.existsSync(path.join(waiDir, 'packs', 'flowops.yaml'))).toBe(false);
       expect(fs.readFileSync(path.join(waiDir, 'project.yaml'), 'utf-8')).not.toContain('.wai/packs/flowops.yaml');
       invalidateSpecCache();

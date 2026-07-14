@@ -12,7 +12,7 @@ import { isProjectInitialized, loadProjectConfig } from '../config/loader.js';
 // project-level overrides from rules.sddRuleSeverity.
 // ---------------------------------------------------------------------------
 
-export async function runRulesList(): Promise<void> {
+export async function listRules(): Promise<void> {
   let overrides: Record<string, 'error' | 'warning' | 'off'> = {};
   if (isProjectInitialized()) {
     try {

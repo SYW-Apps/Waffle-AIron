@@ -9,7 +9,7 @@ import { loadProjectExtensions } from '../core/extensions.js';
 // component, and the declaring pack's own rules enforce its actual constraints.
 // ---------------------------------------------------------------------------
 
-export async function runPatternsList(): Promise<void> {
+export async function listPatterns(): Promise<void> {
   const ext = loadProjectExtensions();
 
   console.log(chalk.bold(`\nReusable patterns (${ext.patterns.length})\n`));

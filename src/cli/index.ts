@@ -21,9 +21,9 @@ import { runDomainsList, runDomainsScan, runDomainsAdd, runDomainsRemove } from 
 import { runSkillsList, runSkillsInstall } from '../commands/skills.js';
 import { runDoctor } from '../commands/doctor.js';
 import { runDiagram } from '../commands/diagram.js';
-import { runRulesList } from '../commands/rules.js';
-import { runPatternsList } from '../commands/patterns.js';
-import { runPacksAdd, runPacksList, runPacksRemove } from '../commands/packs.js';
+import { listRules } from '../commands/rules.js';
+import { listPatterns } from '../commands/patterns.js';
+import { addPack, listPacks, removePack } from '../commands/packs.js';
 import {
   runServe,
   runDev,
@@ -78,7 +78,7 @@ program
   .action(async (opts) => {
     await runInit({ yes: opts.yes });
     for (const source of opts.pack as string[]) {
-      await runPacksAdd(source);
+      await addPack(source);
     }
   });
 
@@ -170,15 +170,15 @@ program
 // runValidate/runGenerate/…: the orchestrator routes each subcommand to its
 // command adapter rather than the commander action calling the adapter inline.
 async function runRules(): Promise<void> {
-  await runRulesList();
+  await listRules();
 }
 async function runPatterns(): Promise<void> {
-  await runPatternsList();
+  await listPatterns();
 }
 async function runPacks(action: string, arg?: string, opts: { global?: boolean } = {}): Promise<void> {
-  if (action === 'add') await runPacksAdd(arg!, opts);
-  else if (action === 'list') await runPacksList();
-  else if (action === 'remove') await runPacksRemove(arg!, opts);
+  if (action === 'add') await addPack(arg!, opts);
+  else if (action === 'list') await listPacks();
+  else if (action === 'remove') await removePack(arg!, opts);
 }
 
 const rulesCmd = program

@@ -18,6 +18,13 @@ methods:
       used to validate lint.allow references (UNKNOWN_LINT_ALLOW_CODE). Read-only, derived fresh
       from the store.
 detail: intent
+lint:
+  allow:
+    - code: UNDECLARED_DEPENDENCY
+      reason: >-
+        src/core/rules/index.ts also hosts buildRuleContext (the shared rule-context builder); its
+        reads of LoadedExtensions and the CodeModel are the builder's imports, not the rule
+        repository's. Re-homing buildRuleContext to the validator is a separate refactor.
 status: complete
 createdAt: '2026-07-14T19:17:48.847Z'
-updatedAt: '2026-07-14T20:23:49.719Z'
+updatedAt: '2026-07-14T22:50:22.786Z'
