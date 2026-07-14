@@ -166,6 +166,21 @@ program
 // rules
 // ---------------------------------------------------------------------------
 
+// cli_runner dispatch for the pack-ecosystem commands — consistent with
+// runValidate/runGenerate/…: the orchestrator routes each subcommand to its
+// command adapter rather than the commander action calling the adapter inline.
+async function runRules(): Promise<void> {
+  await runRulesList();
+}
+async function runPatterns(): Promise<void> {
+  await runPatternsList();
+}
+async function runPacks(action: string, arg?: string, opts: { global?: boolean } = {}): Promise<void> {
+  if (action === 'add') await runPacksAdd(arg!, opts);
+  else if (action === 'list') await runPacksList();
+  else if (action === 'remove') await runPacksRemove(arg!, opts);
+}
+
 const rulesCmd = program
   .command('rules')
   .description('The SDD conformance rule registry (the architecture linter)');
@@ -175,7 +190,7 @@ rulesCmd
   .alias('ls')
   .description('List every conformance rule, its issue codes, default severities, and project overrides')
   .action(async () => {
-    await runRulesList();
+    await runRules();
   });
 
 // ---------------------------------------------------------------------------
@@ -191,7 +206,7 @@ packsCmd
   .alias('ls')
   .description('List global and project extension packs with what they provide')
   .action(async () => {
-    await runPacksList();
+    await runPacks('list');
   });
 
 packsCmd
@@ -199,7 +214,7 @@ packsCmd
   .description('Vendor a pack into the project (.wai/packs/ + project.yaml), or install machine-wide with --global')
   .option('-g, --global', 'install into the global packs folder (WAIRON_PACKS_DIR or ~/.wairon/packs)')
   .action(async (source, opts) => {
-    await runPacksAdd(source, { global: opts.global });
+    await runPacks('add', source, { global: opts.global });
   });
 
 packsCmd
@@ -208,7 +223,7 @@ packsCmd
   .description('Deregister a pack by name (deletes vendored files under .wai/packs); --global removes a machine-wide pack')
   .option('-g, --global', 'remove from the global packs folder')
   .action(async (name, opts) => {
-    await runPacksRemove(name, { global: opts.global });
+    await runPacks('remove', name, { global: opts.global });
   });
 
 // ---------------------------------------------------------------------------
@@ -224,7 +239,7 @@ patternsCmd
   .alias('ls')
   .description('List the reusable pattern definitions declared by loaded packs (id, version, source pack)')
   .action(async () => {
-    await runPatternsList();
+    await runPatterns();
   });
 
 // ---------------------------------------------------------------------------
