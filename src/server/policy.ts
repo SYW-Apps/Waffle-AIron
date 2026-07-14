@@ -147,6 +147,7 @@ function sanitizeIdentityProvider(config: IdentityProviderConfig): IdentityProvi
     enabled: config.enabled,
     updatedAt: config.updatedAt,
   };
+  if (config.displayName !== undefined) clean.displayName = config.displayName;
   if (config.issuerUrl !== undefined) clean.issuerUrl = config.issuerUrl;
   if (config.clientId !== undefined) clean.clientId = config.clientId;
   if (config.clientSecretRef !== undefined) clean.clientSecretRef = config.clientSecretRef;

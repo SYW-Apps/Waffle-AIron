@@ -272,7 +272,17 @@ methods:
         targetComponent: web_admin_orchestrator
         targetMethod: listSecretRefs
     detail: calls-only
+  - name: getLoginOptions
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the web orchestrator's getLoginOptions and return the JSON payload (an
+          unauthenticated pre-auth read — no session and no CSRF gate; 404-gated with every /web
+          route on exposure.webUiEnabled)
+        type: call
+        targetComponent: web_orchestrator
+        targetMethod: getLoginOptions
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-07-14T12:31:03.635Z'
+updatedAt: '2026-07-14T12:53:32.882Z'

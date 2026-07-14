@@ -145,6 +145,10 @@ export function seedIdentityProviderFromEnv(cfg: HostConfig): void {
     enabled: true,
     updatedAt: '', // stamped server-side by the policy registry
   };
+  // Login-button label (WAIRON_OIDC_DISPLAY_NAME): the sign-in screen renders
+  // "Sign in with <displayName>", defaulting to the provider id when unset.
+  const displayName = envTrim('WAIRON_OIDC_DISPLAY_NAME');
+  if (displayName) config.displayName = displayName;
   const clientId = envTrim('WAIRON_OIDC_CLIENT_ID');
   if (clientId) config.clientId = clientId;
   if (clientSecretRef) config.clientSecretRef = clientSecretRef;

@@ -12,7 +12,12 @@ methods:
     description: >-
       Serve the unified web UI client application shell and its bundled static assets for the
       requested path (single-page app entry). No orchestrator call; the app then drives every
-      feature by calling existing endpoints with the session cookie.
+      feature by calling existing endpoints with the session cookie. The shell's login screen is
+      DYNAMIC: it fetches GET /web/login-options and renders the username/password form only when
+      the built-in admin login is configured plus one "Sign in with <displayName>" button per
+      ENABLED identity provider (no free-text provider input), hiding the SSO section when no
+      provider is enabled and showing a clear "No sign-in method is configured" message when neither
+      method exists.
     signature: 'serveApp(path: string): string'
     returns: string
     params:
@@ -379,6 +384,22 @@ methods:
       transport: HTTP
       method: GET
       path: /web/admin/secrets
+  - name: getLoginOptions
+    description: >-
+      Return the pre-auth sign-in options for the login screen by forwarding to the web
+      orchestrator's getLoginOptions. UNAUTHENTICATED — a pre-auth read that requires no session and
+      rides no CSRF gate (it is a GET) — and gated with every /web route on exposure.webUiEnabled
+      (404 when the web UI is off). The payload carries only the password-login flag and
+      enabled-provider { id, displayName } pairs; never secrets, clientIds, or endpoint config.
+    signature: 'getLoginOptions(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/login-options
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-07-14T12:31:43.613Z'
+updatedAt: '2026-07-14T12:53:32.800Z'

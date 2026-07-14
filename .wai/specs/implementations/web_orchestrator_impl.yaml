@@ -499,6 +499,33 @@ methods:
         description: Return the new session id (the portal sets it as the browser session cookie)
         type: return
         outcome: new session id
+  - name: getLoginOptions
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Derive passwordLogin: true exactly when BOTH the env-anchored built-in admin username and
+          password are configured on the resolved host config (either unset = password login
+          disabled → false)
+        type: local
+      - stepNumber: 2
+        description: >-
+          Read every configured identity provider through the policy repository (unauthenticated by
+          nature — a pre-auth read; no caller credential is required or accepted)
+        type: call
+        targetComponent: policy_repository
+        targetMethod: listIdentityProviders
+      - stepNumber: 3
+        description: >-
+          Keep only the ENABLED providers and project each to exactly { id, displayName },
+          displayName defaulting to the provider id when unset — no secret, clientId, endpoint, or
+          any other config field ever crosses into the pre-auth payload
+        type: local
+      - stepNumber: 4
+        description: >-
+          Return the WebLoginOptions (the password-login flag plus the projected enabled-provider
+          list)
+        type: return
+        outcome: login options
 detail: full
 lint:
   allow:
@@ -508,4 +535,4 @@ lint:
         declared edges are design-ahead, not stale.
 status: complete
 createdAt: '2026-07-11T11:36:44.225Z'
-updatedAt: '2026-07-14T12:05:09.319Z'
+updatedAt: '2026-07-14T12:53:32.692Z'

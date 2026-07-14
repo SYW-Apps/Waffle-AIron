@@ -255,7 +255,11 @@ describe('built-in super-admin password login (sdd_host)', () => {
     expect(html).toContain('id="lu"');
     expect(html).toContain('id="lp"');
     expect(html).toContain('type="password"');
-    expect(html).toContain('Sign in with SSO'); // SSO stays alongside
+    // The login screen is DYNAMIC now: the password form only shows when
+    // /web/login-options reports it configured, and SSO renders as one button
+    // per ENABLED provider — the old static generic SSO button is gone.
+    expect(html).toContain('/web/login-options');
+    expect(html).not.toContain('Sign in with SSO');
   });
 });
 

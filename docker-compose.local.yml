@@ -59,6 +59,8 @@ services:
       # ref via WAIRON_OIDC_CLIENT_SECRET_REF. List values are comma-separated.
       # WAIRON_OIDC_ISSUER: ${WAIRON_OIDC_ISSUER:-}
       # WAIRON_OIDC_PROVIDER_TYPE: ${WAIRON_OIDC_PROVIDER_TYPE:-oidc}
+      # Login-button label ("Sign in with <display name>"; defaults to the id):
+      # WAIRON_OIDC_DISPLAY_NAME: ${WAIRON_OIDC_DISPLAY_NAME:-}
       # WAIRON_OIDC_CLIENT_ID: ${WAIRON_OIDC_CLIENT_ID:-}
       # WAIRON_OIDC_CLIENT_SECRET: ${WAIRON_OIDC_CLIENT_SECRET:-}
       # WAIRON_OIDC_CLIENT_SECRET_REF: ${WAIRON_OIDC_CLIENT_SECRET_REF:-}

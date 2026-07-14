@@ -457,6 +457,10 @@ export interface IdentityProviderConfig {
   id: string;
   /** e.g. 'oidc' | 'authentik' | 'keycloak' | 'google' | 'entra' */
   providerType: string;
+  /** Optional admin-set human label, shown on the login screen's
+   *  "Sign in with <displayName>" button. Defaults to the provider id when
+   *  unset. Presentation only — never used for provider resolution. */
+  displayName?: string;
   issuerUrl?: string;
   clientId?: string;
   clientSecretRef?: string;
@@ -555,6 +559,22 @@ export interface WebGraphModel {
   level: number;
   generatedAt: string;
   scope?: string;
+}
+
+/** The pre-auth login-options projection the login screen renders from: which
+ *  sign-in methods this hosted instance offers. Served UNAUTHENTICATED on the
+ *  webUiEnabled-gated data plane, so it is deliberately minimal — a
+ *  password-login flag plus enabled-provider ids and display labels (standard,
+ *  safe pre-auth SSO discovery). NEVER carries secrets, clientIds, issuer URLs,
+ *  endpoints, or any other provider config. Mirrors
+ *  .wai/specs/types/web_login_options.yaml. */
+export interface WebLoginOptions {
+  /** Whether the built-in admin password login is configured (BOTH
+   *  WAIRON_ADMIN_USER and WAIRON_ADMIN_PASSWORD set on the server). */
+  passwordLogin: boolean;
+  /** One entry per ENABLED identity provider — displayName is the admin-set
+   *  label, defaulting to the provider id. Disabled providers never appear. */
+  providers: { id: string; displayName: string }[];
 }
 
 /** The current principal's identity + derived capability flags, so the web

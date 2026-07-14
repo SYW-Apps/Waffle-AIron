@@ -26,6 +26,7 @@ const RAW_SECRET = 'raw-oidc-client-secret-value';
 const OIDC_ENV_KEYS = [
   'WAIRON_OIDC_PROVIDER_TYPE',
   'WAIRON_OIDC_ISSUER',
+  'WAIRON_OIDC_DISPLAY_NAME',
   'WAIRON_OIDC_CLIENT_ID',
   'WAIRON_OIDC_CLIENT_SECRET',
   'WAIRON_OIDC_CLIENT_SECRET_REF',
@@ -63,6 +64,7 @@ describe('WAIRON_OIDC_* startup seeding of the default identity provider (sdd_ho
   it('seeds a fully-configured default provider: raw secret → oidc-default ref, comma-lists parsed, endpoints persisted', () => {
     process.env.WAIRON_OIDC_PROVIDER_TYPE = 'authentik';
     process.env.WAIRON_OIDC_ISSUER = ISSUER;
+    process.env.WAIRON_OIDC_DISPLAY_NAME = 'Corporate SSO';
     process.env.WAIRON_OIDC_CLIENT_ID = 'wairon-client';
     process.env.WAIRON_OIDC_CLIENT_SECRET = RAW_SECRET;
     process.env.WAIRON_OIDC_ADMIN_GROUPS = 'wairon-admins, platform-team';
@@ -83,6 +85,9 @@ describe('WAIRON_OIDC_* startup seeding of the default identity provider (sdd_ho
     expect(provider.enabled).toBe(true);
     expect(provider.providerType).toBe('authentik');
     expect(provider.issuerUrl).toBe(ISSUER);
+    // The login-button label survives the whitelist projection (sign-in screen
+    // renders "Sign in with Corporate SSO" for the seeded default provider).
+    expect(provider.displayName).toBe('Corporate SSO');
     expect(provider.clientId).toBe('wairon-client');
     expect(provider.adminGroupClaims).toEqual(['wairon-admins', 'platform-team']);
     expect(provider.allowedRedirectUris).toEqual([
@@ -116,6 +121,7 @@ describe('WAIRON_OIDC_* startup seeding of the default identity provider (sdd_ho
     expect(records).toHaveLength(1);
     expect(records[0].providerType).toBe('oidc');
     expect(records[0].issuerUrl).toBe(ISSUER);
+    expect(records[0].displayName).toBeUndefined(); // label defaults to the id downstream
     expect(records[0].clientSecretRef).toBeUndefined();
     expect(resolveSecret('oidc-default')).toBeNull();
   });

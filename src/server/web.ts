@@ -15,6 +15,7 @@ import {
 } from './identity.js';
 import * as webadmin from './webadmin.js';
 import * as webproject from './webproject.js';
+import { listIdentityProviderRecords } from './policy.js';
 import { assertAllowedRedirectUri } from './idp.js';
 import { getHealthReport, getUsage } from './operations.js';
 import { listPendingRequests, decideRequest } from './selfservice.js';
@@ -45,6 +46,7 @@ import type {
   WebContext,
   WebGraphModel,
   WebGraphNode,
+  WebLoginOptions,
   WebSession,
 } from './types.js';
 
@@ -105,6 +107,33 @@ const DEV_PROJECT_ID = 'local';
 const DEV_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // ── Web Orchestrator ─────────────────────────────────────────────────────────
+
+/**
+ * Return the pre-auth login options the login screen renders from: passwordLogin
+ * = whether the built-in admin password login is configured (BOTH env-anchored
+ * builtinAdminUser and builtinAdminPassword set on the host config — either
+ * unset means password login is disabled), and providers = one { id, displayName }
+ * entry per ENABLED identity provider read through the policy repository,
+ * displayName defaulting to the provider id when the admin set none.
+ * Unauthenticated by nature — a pre-auth read for the login page. The projection
+ * carries ONLY provider ids and display labels (standard, safe pre-auth SSO
+ * discovery); never secrets, clientIds, endpoints, or any other config. Reads
+ * only; not audited.
+ */
+export function getLoginOptions(cfg: HostConfig): WebLoginOptions {
+  // step 1: password login is configured only when BOTH env values are set.
+  const passwordLogin = !!(cfg.builtinAdminUser && cfg.builtinAdminPassword);
+
+  // steps 2–3: read the providers through the policy repository, keep only the
+  // ENABLED ones, and project each to exactly { id, displayName } — no secret,
+  // clientId, endpoint, or any other config field ever crosses into the
+  // pre-auth payload.
+  const providers = listIdentityProviderRecords(cfg.dataDir)
+    .filter((p) => p.enabled)
+    .map((p) => ({ id: p.id, displayName: p.displayName || p.id }));
+
+  return { passwordLogin, providers }; // step 4
+}
 
 /**
  * Begin a browser SSO sign-in: resolve the enabled provider, generate a nonce,
@@ -732,6 +761,13 @@ function nonceMatches(a: string | null, b: string | null): boolean {
  * reuses the exported canvas deep-space --syw-* theme so it reads as a sibling of
  * the embedded canvas.
  *
+ * The login screen is DYNAMIC: it fetches the public pre-auth GET
+ * /web/login-options and renders the username/password form only when the
+ * built-in admin login is configured, plus one "Sign in with <displayName>"
+ * button per ENABLED identity provider (no free-text provider input). No
+ * providers → no SSO section; neither method → a clear "No sign-in method is
+ * configured" message.
+ *
  * One self-contained HTML document — all CSS + JS inline, zero external assets
  * (the iframe loads a same-origin route). The inline script avoids template
  * literals / `$`+`{` so it embeds cleanly in this outer template string. Every
@@ -803,6 +839,9 @@ button { font:inherit; }
 #login .err { color:var(--danger); font-size:12px; min-height:16px; margin-top:10px; }
 .login-sep { display:flex; align-items:center; gap:10px; color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.08em; margin:16px 0; }
 .login-sep::before, .login-sep::after { content:""; flex:1; border-top:1px solid var(--line); }
+.btn-sso { display:block; width:100%; border:1px solid var(--chrome-border); border-radius:10px; padding:11px 14px; font-weight:700; color:var(--ink); background:var(--input-bg); cursor:pointer; margin:0 0 10px; }
+.btn-sso:hover { border-color:var(--accent); box-shadow:var(--syw-glow); }
+#login .none { color:var(--dim); font-size:12.5px; border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
 
 /* ---- app chrome (top bar) ---- */
 #app { display:flex; flex-direction:column; height:100vh; }
@@ -914,19 +953,24 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
 <div id="boot">Loading…</div>
 
 <!-- ============================ LOGIN SCREEN ============================ -->
+<!-- Dynamic: renders exactly the sign-in methods GET /web/login-options reports
+     — the password form only when the built-in admin login is configured, one
+     SSO button per ENABLED identity provider, and a clear message when neither
+     method exists. No free-text provider input. -->
 <div id="login" hidden>
   <div class="card">
     <h1 class="syw-gradient-text">wairon</h1>
     <p class="sub">Spec-driven architecture canvas</p>
-    <label for="pid">Identity provider</label>
-    <input id="pid" value="default" spellcheck="false" autocomplete="off" />
-    <button class="btn-primary" id="signinBtn">Sign in with SSO</button>
-    <div class="login-sep"><span>or</span></div>
-    <label for="lu">Username</label>
-    <input id="lu" spellcheck="false" autocomplete="username" />
-    <label for="lp">Password</label>
-    <input id="lp" type="password" autocomplete="current-password" />
-    <button class="btn-primary" id="pwBtn">Sign in with password</button>
+    <div id="pwForm" hidden>
+      <label for="lu">Username</label>
+      <input id="lu" spellcheck="false" autocomplete="username" />
+      <label for="lp">Password</label>
+      <input id="lp" type="password" autocomplete="current-password" />
+      <button class="btn-primary" id="pwBtn">Sign in with password</button>
+    </div>
+    <div class="login-sep" id="ssoSep" hidden><span>or</span></div>
+    <div id="ssoList" hidden></div>
+    <div class="none" id="noMethod" hidden>No sign-in method is configured. Ask an administrator to set the built-in admin credentials or enable an identity provider.</div>
     <div class="err" id="loginErr"></div>
   </div>
 </div>
@@ -1025,7 +1069,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
 
   // ---- screens ------------------------------------------------------------
   function showBoot() { $('boot').hidden = false; $('login').hidden = true; $('app').hidden = true; }
-  function showLogin(msg) { $('boot').hidden = true; $('app').hidden = true; $('login').hidden = false; $('loginErr').textContent = msg || ''; }
+  function showLogin(msg) { $('boot').hidden = true; $('app').hidden = true; $('login').hidden = false; $('loginErr').textContent = msg || ''; loadLoginOptions(); }
   function showApp() { $('boot').hidden = true; $('login').hidden = true; $('app').hidden = false; }
 
   // ---- state --------------------------------------------------------------
@@ -1044,10 +1088,43 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   }
 
   // ---- login --------------------------------------------------------------
-  // There is no public "list providers" endpoint (provider config is admin-only),
-  // so the login screen takes a provider-id text input defaulted to 'default'.
-  $('signinBtn').addEventListener('click', function () {
-    var pid = ($('pid').value || '').trim() || 'default';
+  // The login screen is DYNAMIC: it renders exactly the sign-in methods the
+  // server reports on the public pre-auth GET /web/login-options read — the
+  // username/password form only when the built-in admin login is configured,
+  // and one "Sign in with <name>" button per ENABLED identity provider (label =
+  // the admin-set displayName, defaulting to the provider id). No free-text
+  // provider input; when neither method exists a clear "No sign-in method is
+  // configured" message shows instead.
+  var loginOptionsLoaded = false;
+  function loadLoginOptions() {
+    if (loginOptionsLoaded) return;
+    loginOptionsLoaded = true;
+    api('/web/login-options').then(function (r) {
+      if (!r.ok) throw new Error('login-options ' + r.status);
+      return r.json();
+    }).then(function (o) {
+      var pw = !!(o && o.passwordLogin);
+      var provs = (o && o.providers) || [];
+      $('pwForm').hidden = !pw;
+      $('ssoSep').hidden = !(pw && provs.length > 0);
+      $('ssoList').hidden = provs.length === 0;
+      $('noMethod').hidden = pw || provs.length > 0;
+      var list = $('ssoList'); list.innerHTML = '';
+      provs.forEach(function (p) {
+        var b = document.createElement('button');
+        b.className = 'btn-sso';
+        b.textContent = 'Sign in with ' + (p.displayName || p.id);
+        b.addEventListener('click', function () { startSso(p.id); });
+        list.appendChild(b);
+      });
+    }).catch(function () {
+      loginOptionsLoaded = false; // allow a retry the next time the screen shows
+      $('loginErr').textContent = 'Could not load the sign-in options.';
+    });
+  }
+  // Begin the EXISTING SSO start flow for one provider button, then follow the
+  // provider authorization URL.
+  function startSso(pid) {
     $('loginErr').textContent = '';
     api('/web/sso/start', {
       method: 'POST',
@@ -1058,8 +1135,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       return r.json();
     }).then(function (d) { location.href = d.url; })
       .catch(function (e) { $('loginErr').textContent = (e && e.message) || 'Sign-in failed.'; });
-  });
-  $('pid').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('signinBtn').click(); });
+  }
 
   // Built-in admin password login. Establishes the session cookie server-side
   // (POST /web/login is not CSRF-gated: it creates a session, it rides none), so
@@ -1534,6 +1610,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     var html = '<div class="formcard"><h3>' + (creating ? 'Add identity provider' : 'Edit ' + esc(p.id)) + '</h3>';
     html += '<div class="frow">'
       + fcol('Provider ID', '<input id="pId" value="' + esc(p.id || '') + '"' + (creating ? '' : ' readonly') + ' placeholder="e.g. corp-keycloak" />')
+      + fcol('Display name', '<input id="pDisplay" value="' + esc(p.displayName || '') + '" placeholder="login-button label — defaults to the ID" />')
       + fcol('Type', '<select id="pType">' + typeOpts + '</select>')
       + fcol('Enabled', '<div class="cbrow"><input type="checkbox" id="pEnabled"' + (p.enabled === false ? '' : ' checked') + ' /> <span>sign-in allowed</span></div>')
       + '</div>';
@@ -1568,6 +1645,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       var msg = $('pMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
       var cf = { id: $('pId').value.trim(), providerType: $('pType').value, enabled: $('pEnabled').checked, updatedAt: new Date().toISOString() };
       if (!cf.id) { msg.className = 'msg bad'; msg.textContent = 'Provider ID is required.'; return; }
+      var disp = $('pDisplay').value.trim(); if (disp) cf.displayName = disp;
       var issuer = $('pIssuer').value.trim(); if (issuer) cf.issuerUrl = issuer;
       var client = $('pClient').value.trim(); if (client) cf.clientId = client;
       var sref = $('pSecretRef').value.trim(); if (sref) cf.clientSecretRef = sref;
@@ -2049,6 +2127,15 @@ export async function handleWebRequest(
       });
       res.end();
       return;
+    }
+
+    // GET /web/login-options → the pre-auth sign-in methods the login screen
+    // renders from. UNAUTHENTICATED (no session, no CSRF — it is a GET) and
+    // 404-gated with every /web route on exposure.webUiEnabled in http.ts. The
+    // payload carries only the password-login flag and enabled-provider
+    // { id, displayName } pairs — never secrets, clientIds, or endpoint config.
+    if (req.method === 'GET' && parts.length === 2 && parts[1] === 'login-options') {
+      return sendJson(res, 200, getLoginOptions(cfg));
     }
 
     // POST /web/login { user, password } → built-in super-admin password sign-in.

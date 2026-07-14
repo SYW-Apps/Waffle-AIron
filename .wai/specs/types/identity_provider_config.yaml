@@ -78,6 +78,13 @@ fields:
       Explicit userinfo endpoint override. Server-facing back-channel used as a fallback
       identity-verification path when JWKS verification is unavailable.
     optional: true
+  - name: displayName
+    type: string
+    description: >-
+      Optional admin-set human label for this provider, shown on the login screen's "Sign in with
+      <displayName>" button. Defaults to the provider id when unset. Presentation only — never used
+      for provider resolution.
+    optional: true
 methods: []
 createdAt: '2026-07-08T22:00:13.587Z'
-updatedAt: '2026-07-13T18:23:12.493Z'
+updatedAt: '2026-07-14T12:53:32.520Z'

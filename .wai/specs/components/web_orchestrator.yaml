@@ -4,16 +4,18 @@ description: >-
   Owns the unified web UI's server-side shell workflows: SSO sign-in (start/complete), the built-in
   super-admin password sign-in (env-anchored, verified constant-time by the auth specialist behind a
   transient in-memory failed-attempt throttle — the ONLY path to an instance-wide *:* session),
-  session lifecycle (resolve/sign-out), the session-principal context projection, and the live graph
-  entry point (delegated to the web graph orchestrator). It creates and deletes browser sessions
-  through the web session repository, reads identity-provider configuration through the policy
-  repository, and provisions first-login users through the user repository — including the
-  adminGroupClaims → enumerated SSO-admin bundle refresh on SSO completion. It carries NO per-page
-  workflows: every actual page (authoring, approvals, users, audit, policy, landscape) is the served
-  client app calling the EXISTING scoped /mcp data plane and the existing
-  identity/landscape/operations/policy control-plane portals, authenticated by the session cookie
-  (the session-as-credential auth bridge). Audit appends are best-effort and never fail the primary
-  action.
+  session lifecycle (resolve/sign-out), the session-principal context projection, the live graph
+  entry point (delegated to the web graph orchestrator), and the unauthenticated pre-auth
+  login-options projection (WebLoginOptions: whether password login is configured plus one { id,
+  displayName } entry per ENABLED identity provider — never secrets, clientIds, or endpoint config).
+  It creates and deletes browser sessions through the web session repository, reads
+  identity-provider configuration through the policy repository, and provisions first-login users
+  through the user repository — including the adminGroupClaims → enumerated SSO-admin bundle refresh
+  on SSO completion. It carries NO per-page workflows: every actual page (authoring, approvals,
+  users, audit, policy, landscape) is the served client app calling the EXISTING scoped /mcp data
+  plane and the existing identity/landscape/operations/policy control-plane portals, authenticated
+  by the session cookie (the session-as-credential auth bridge). Audit appends are best-effort and
+  never fail the primary action.
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
@@ -30,4 +32,4 @@ dependsOn:
   - self_service_orchestrator
 status: complete
 createdAt: '2026-07-11T11:31:49.793Z'
-updatedAt: '2026-07-14T11:04:16.238Z'
+updatedAt: '2026-07-14T12:53:32.651Z'

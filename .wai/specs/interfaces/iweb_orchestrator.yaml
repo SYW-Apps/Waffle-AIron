@@ -139,6 +139,19 @@ methods:
         type: string
       - name: password
         type: string
+  - name: getLoginOptions
+    description: >-
+      Return the pre-auth login options the login screen renders from: passwordLogin = whether the
+      built-in admin password login is configured (BOTH env-anchored builtinAdminUser and
+      builtinAdminPassword set on the host config — either unset means password login is disabled),
+      and providers = one { id, displayName } entry per ENABLED identity provider read through the
+      policy repository, displayName defaulting to the provider id when the admin set none.
+      Unauthenticated by nature — a pre-auth read for the login page. The projection carries ONLY
+      provider ids and display labels (standard, safe pre-auth SSO discovery); never secrets,
+      clientIds, endpoints, or any other config. Reads only; not audited.
+    signature: 'getLoginOptions(): WebLoginOptions'
+    returns: WebLoginOptions
+    params: []
 status: complete
 createdAt: '2026-07-11T11:33:17.127Z'
-updatedAt: '2026-07-14T11:04:16.277Z'
+updatedAt: '2026-07-14T12:53:32.611Z'
