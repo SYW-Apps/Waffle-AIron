@@ -31,7 +31,10 @@ methods:
       method: GET
       path: /admin/projects
   - name: mintKey
-    description: Mint an API key bound to a project and role; the plaintext is returned once.
+    description: >-
+      Mint an API key bound to a project and role; the plaintext is returned once. Instance-wide
+      super-admin requests (role admin or the '*' project wildcard — either would project to a *:*
+      grant) are refused by the orchestrator: the built-in admin account is the only super-admin.
     signature: 'mintKey(credential: string, project: string, role: string): string'
     returns: string
     endpoint:
@@ -314,4 +317,4 @@ methods:
       path: /admin/approvals/{id}/execute
 status: complete
 createdAt: '2026-07-04T12:50:05.545Z'
-updatedAt: '2026-07-09T19:24:34.648Z'
+updatedAt: '2026-07-14T11:43:00.015Z'

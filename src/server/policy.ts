@@ -152,6 +152,11 @@ function sanitizeIdentityProvider(config: IdentityProviderConfig): IdentityProvi
   if (config.clientSecretRef !== undefined) clean.clientSecretRef = config.clientSecretRef;
   if (config.allowedDomains !== undefined) clean.allowedDomains = config.allowedDomains;
   if (config.adminGroupClaims !== undefined) clean.adminGroupClaims = config.adminGroupClaims;
+  if (config.allowedRedirectUris !== undefined) clean.allowedRedirectUris = config.allowedRedirectUris;
+  if (config.authorizationEndpoint !== undefined) clean.authorizationEndpoint = config.authorizationEndpoint;
+  if (config.tokenEndpoint !== undefined) clean.tokenEndpoint = config.tokenEndpoint;
+  if (config.jwksUri !== undefined) clean.jwksUri = config.jwksUri;
+  if (config.userinfoEndpoint !== undefined) clean.userinfoEndpoint = config.userinfoEndpoint;
   return clean;
 }
 

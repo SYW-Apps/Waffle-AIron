@@ -11,7 +11,9 @@ import * as packs from '../server/packs.js';
 import { AdminAuthError, LockValidationError } from '../server/admin.js';
 import { startHostServer } from '../server/http.js';
 import { registerLocalDevProject } from '../server/projects.js';
-import type { HostConfig, HostExposurePolicy, Role } from '../server/types.js';
+import { upsertIdentityProviderRecord } from '../server/policy.js';
+import { setSecret } from '../utils/secrets.js';
+import type { HostConfig, HostExposurePolicy, IdentityProviderConfig, Role } from '../server/types.js';
 
 // ---------------------------------------------------------------------------
 // CLI Host Client Adapter + host command runners (sdd_cli → sdd_host)
@@ -85,10 +87,100 @@ function mapAdminError(e: unknown): WaironError {
   return new WaironError(e instanceof Error ? e.message : String(e));
 }
 
+// ── declarative env-based identity-provider seeding ─────────────────────────
+
+/** A trimmed env value, or undefined when unset/blank. */
+function envTrim(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  return value ? value : undefined;
+}
+
+/** Split a comma-separated env value into trimmed, non-empty entries. */
+function envCsv(name: string): string[] {
+  return (process.env[name] ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Declarative env-based seeding of the `default` OIDC identity provider, so a
+ * whole SSO setup ships in the compose file with no post-deploy clicking.
+ * Activates ONLY when WAIRON_OIDC_ISSUER is set; otherwise a no-op. Builds an
+ * IdentityProviderConfig (id `default` — the sign-in screen's default provider
+ * id — enabled, fields from the WAIRON_OIDC_* env vars), stores a RAW
+ * WAIRON_OIDC_CLIENT_SECRET into the host secret store under the fixed ref
+ * `oidc-default` (the provider carries only that clientSecretRef — never the
+ * raw secret; an existing stored ref may be named via
+ * WAIRON_OIDC_CLIENT_SECRET_REF instead), and UPSERTS the provider through the
+ * policy repository — the same store the identity plane's
+ * upsertIdentityProvider writes to. Server-side bootstrap: no credential is
+ * involved, and the upsert is idempotent, so every boot re-seeds declaratively
+ * (env is the source of truth for the `default` provider; the web UI still
+ * manages providers on top). Exported for tests.
+ */
+export function seedIdentityProviderFromEnv(cfg: HostConfig): void {
+  const issuer = envTrim('WAIRON_OIDC_ISSUER');
+  if (!issuer) return; // seeding activates only when the issuer is set
+
+  // The secret store keys off WAIRON_DATA_DIR — anchor it to the resolved data
+  // dir when unset (same precedent as WAIRON_PACKS_DIR in resolveHostConfig).
+  if (!process.env['WAIRON_DATA_DIR']) {
+    process.env['WAIRON_DATA_DIR'] = cfg.dataDir;
+  }
+
+  let clientSecretRef = envTrim('WAIRON_OIDC_CLIENT_SECRET_REF');
+  const rawSecret = process.env['WAIRON_OIDC_CLIENT_SECRET'];
+  if (rawSecret) {
+    // RAW secret shipped in env: store it under the fixed ref and point the
+    // provider at it — the raw value never lands on the provider record.
+    setSecret('oidc-default', rawSecret);
+    clientSecretRef = 'oidc-default';
+  }
+
+  const config: IdentityProviderConfig = {
+    id: 'default', // matches the sign-in screen's default provider id
+    providerType: envTrim('WAIRON_OIDC_PROVIDER_TYPE') ?? 'oidc',
+    issuerUrl: issuer,
+    enabled: true,
+    updatedAt: '', // stamped server-side by the policy registry
+  };
+  const clientId = envTrim('WAIRON_OIDC_CLIENT_ID');
+  if (clientId) config.clientId = clientId;
+  if (clientSecretRef) config.clientSecretRef = clientSecretRef;
+  const adminGroups = envCsv('WAIRON_OIDC_ADMIN_GROUPS');
+  if (adminGroups.length) config.adminGroupClaims = adminGroups;
+  const redirectUris = envCsv('WAIRON_OIDC_ALLOWED_REDIRECT_URIS');
+  if (redirectUris.length) config.allowedRedirectUris = redirectUris;
+  const domains = envCsv('WAIRON_OIDC_ALLOWED_DOMAINS');
+  if (domains.length) config.allowedDomains = domains;
+  // Split-horizon endpoint overrides (public authorize vs VPC-internal back-channel).
+  const authorizationEndpoint = envTrim('WAIRON_OIDC_AUTHORIZATION_ENDPOINT');
+  if (authorizationEndpoint) config.authorizationEndpoint = authorizationEndpoint;
+  const tokenEndpoint = envTrim('WAIRON_OIDC_TOKEN_ENDPOINT');
+  if (tokenEndpoint) config.tokenEndpoint = tokenEndpoint;
+  const jwksUri = envTrim('WAIRON_OIDC_JWKS_URI');
+  if (jwksUri) config.jwksUri = jwksUri;
+  const userinfoEndpoint = envTrim('WAIRON_OIDC_USERINFO_ENDPOINT');
+  if (userinfoEndpoint) config.userinfoEndpoint = userinfoEndpoint;
+
+  upsertIdentityProviderRecord(cfg.dataDir, config);
+  logger.info("seeded identity provider 'default' from env");
+}
+
 // ── wairon serve ────────────────────────────────────────────────────────────
 
 export async function runServe(options: HostOptions = {}): Promise<void> {
   const cfg = resolveHostConfig(options);
+  // Declarative SSO bootstrap BEFORE the listeners bind, so the provider exists
+  // the moment the server accepts its first sign-in.
+  try {
+    seedIdentityProviderFromEnv(cfg);
+  } catch (e) {
+    throw new WaironError(
+      `Failed to seed identity provider 'default' from WAIRON_OIDC_* env: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
   let handle;
   try {
     handle = startHostServer(cfg);

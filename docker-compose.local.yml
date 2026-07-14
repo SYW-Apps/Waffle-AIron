@@ -50,6 +50,26 @@ services:
       # then these env fallbacks. Generic refs (e.g. "keycloak-secret") are set at
       # runtime instead:  ... exec wairon wairon host secret set keycloak-secret <value>
       # WAIRON_GIT_TOKEN: ${WAIRON_GIT_TOKEN:-}
+      # --- Declarative OIDC/SSO seeding (optional) ---
+      # When WAIRON_OIDC_ISSUER is set, startup seeds (idempotently re-seeds on
+      # every boot) the identity provider `default` from these values — the whole
+      # SSO setup ships here, no post-deploy clicking. The web UI still manages
+      # providers on top. Give EITHER the raw client secret (stored into the
+      # /data secret store under the ref "oidc-default") OR an existing stored
+      # ref via WAIRON_OIDC_CLIENT_SECRET_REF. List values are comma-separated.
+      # WAIRON_OIDC_ISSUER: ${WAIRON_OIDC_ISSUER:-}
+      # WAIRON_OIDC_PROVIDER_TYPE: ${WAIRON_OIDC_PROVIDER_TYPE:-oidc}
+      # WAIRON_OIDC_CLIENT_ID: ${WAIRON_OIDC_CLIENT_ID:-}
+      # WAIRON_OIDC_CLIENT_SECRET: ${WAIRON_OIDC_CLIENT_SECRET:-}
+      # WAIRON_OIDC_CLIENT_SECRET_REF: ${WAIRON_OIDC_CLIENT_SECRET_REF:-}
+      # WAIRON_OIDC_ADMIN_GROUPS: ${WAIRON_OIDC_ADMIN_GROUPS:-}
+      # WAIRON_OIDC_ALLOWED_REDIRECT_URIS: ${WAIRON_OIDC_ALLOWED_REDIRECT_URIS:-}
+      # WAIRON_OIDC_ALLOWED_DOMAINS: ${WAIRON_OIDC_ALLOWED_DOMAINS:-}
+      # Split-horizon endpoint overrides (public authorize vs VPC-internal back-channel):
+      # WAIRON_OIDC_AUTHORIZATION_ENDPOINT: ${WAIRON_OIDC_AUTHORIZATION_ENDPOINT:-}
+      # WAIRON_OIDC_TOKEN_ENDPOINT: ${WAIRON_OIDC_TOKEN_ENDPOINT:-}
+      # WAIRON_OIDC_JWKS_URI: ${WAIRON_OIDC_JWKS_URI:-}
+      # WAIRON_OIDC_USERINFO_ENDPOINT: ${WAIRON_OIDC_USERINFO_ENDPOINT:-}
     volumes:
       - wairon-dev-data:/data
       # Turns the web UI ON over plain http for local dev (webUiEnabled +
