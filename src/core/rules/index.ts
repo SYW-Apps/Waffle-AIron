@@ -9,7 +9,7 @@ import {
 } from '../../models/index.js';
 import type { ValidationIssue } from '../validation.js';
 import { emptyExtensions, LoadedExtensions } from '../extensions.js';
-import { ArchProfile, BUILTIN_PROFILES, RuleContext, SddRule, Severity } from './types.js';
+import { ArchProfile, BUILTIN_PROFILES, RuleCode, RuleContext, SddRule, Severity } from './types.js';
 import { BUILTIN_TYPES, matchTypeRef, normalizeLanguage } from './type-analysis.js';
 
 import { hierarchyRule } from './hierarchy.js';
@@ -20,6 +20,7 @@ import { narrativeDetailRule } from './narrative-detail.js';
 import { portalsRule } from './portals.js';
 import { stereotypeDepsRule } from './stereotype-deps.js';
 import { patternsRule } from './patterns.js';
+import { patternReferencesRule } from './pattern-references.js';
 import { profilesRule } from './profiles.js';
 import { publicSurfaceRule } from './public-surface.js';
 import { cyclesRule, reachabilityRule } from './graph.js';
@@ -58,6 +59,7 @@ export const SDD_RULES: SddRule[] = [
   stereotypeDepsRule,
   patternsRule,
   profilesRule,
+  patternReferencesRule,
   publicSurfaceRule,
   cyclesRule,
   // Semantic-edge family: dispatch/lifecycle validity BEFORE reachability so a
@@ -92,6 +94,48 @@ export const SDD_RULES: SddRule[] = [
 export function composeRuleSequence(extraRules: SddRule[] = []): SddRule[] {
   const base = SDD_RULES.filter(r => r !== lintAllowsRule);
   return [...base, ...extraRules, lintAllowsRule];
+}
+
+// ---------------------------------------------------------------------------
+// Rule repository (rule_store + rule_registry + rule_index + rule_repository).
+// The in-memory rule set for one validation run: the built-in rules plus any
+// programmatic pack rules, in registration order. A ram-projection — reseeded
+// each run, never persisted. `wairon rules list` and the validator read the
+// composed run sequence and the aggregate known-code set from here.
+// ---------------------------------------------------------------------------
+
+let ruleSet: SddRule[] = [];
+
+/** rule_store: append a rule to the held set (registration order preserved). Repository-internal. */
+function addRule(rule: SddRule): void {
+  ruleSet.push(rule);
+}
+
+/** rule_store: return the held rules in registration order. Repository-internal. */
+function listRules(): SddRule[] {
+  return ruleSet;
+}
+
+/** rule_registry: seed the built-in SDD rule set, resetting the set for a fresh run. */
+export function registerBuiltinRules(): void {
+  ruleSet = [];
+  for (const rule of SDD_RULES) addRule(rule);
+}
+
+/** rule_registry: register programmatic pack rules after the built-ins (project pack order is precedence). */
+export function registerPackRules(packRules: SddRule[]): void {
+  for (const rule of packRules) addRule(rule);
+}
+
+/** rule_index: the ordered run sequence — registration order with the lint-allows audit forced last. */
+export function ruleSequence(): SddRule[] {
+  const base = ruleSet.filter(r => r !== lintAllowsRule);
+  return ruleSet.includes(lintAllowsRule) ? [...base, lintAllowsRule] : base;
+}
+
+/** rule_index: every issue code any registered rule can emit — the lint.allow validation set. */
+export function knownIssueCodes(): RuleCode[] {
+  return listRules().flatMap(r => r.codes);
 }
 
 // Completeness rules downgrade to warnings while the surrounding specs are
@@ -357,7 +401,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     isTypeResolved,
     targetLanguageFor,
     isSpecInScope,
-    ext: { profiles: extensions.profiles, languages: extensions.languages },
+    ext: { profiles: extensions.profiles, languages: extensions.languages, patterns: extensions.patterns },
     surfaceSnapshots: opts.surfaceSnapshots ?? [],
     codeModel: opts.codeModel ?? emptyCodeModel(),
     lintAllows,

@@ -13,7 +13,7 @@ import {
   getLoaderIssues,
   scanAllSpecs,
 } from './specs.js';
-import { buildRuleContext, composeRuleSequence, makeScopeFilter } from './rules/index.js';
+import { buildRuleContext, makeScopeFilter, registerBuiltinRules, registerPackRules, ruleSequence, SddRule } from './rules/index.js';
 import { LoadedExtensions, loadProjectExtensions } from './extensions.js';
 import { loadSurfaceSnapshots } from './surfaces.js';
 import { buildCodeModel } from './source-analysis.js';
@@ -239,6 +239,18 @@ export interface ValidationOptions {
   treatAllAsComplete?: boolean;
 }
 
+/**
+ * The active conformance rule set — the built-in rules plus the loaded
+ * programmatic pack rules, in run order — for `wairon rules list`. Loads and
+ * registers the governing packs, then reads the composed sequence.
+ */
+export function listRules(): SddRule[] {
+  const extensions = loadProjectExtensions();
+  registerBuiltinRules();
+  registerPackRules(extensions.rules);
+  return ruleSequence();
+}
+
 export function validateSddTree(
   rulesOrOptions?: RulesConfig | ValidationOptions,
   projectType: string = 'backend'
@@ -357,7 +369,11 @@ export function validateSddTree(
       issues,
     });
 
-    for (const rule of composeRuleSequence(extensions.rules)) {
+    // Register the built-in rules and the loaded pack rules into the rule
+    // repository, then run the composed sequence against the context.
+    registerBuiltinRules();
+    registerPackRules(extensions.rules);
+    for (const rule of ruleSequence()) {
       rule.check(ctx);
     }
 

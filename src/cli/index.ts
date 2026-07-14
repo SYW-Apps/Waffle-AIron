@@ -22,6 +22,7 @@ import { runSkillsList, runSkillsInstall } from '../commands/skills.js';
 import { runDoctor } from '../commands/doctor.js';
 import { runDiagram } from '../commands/diagram.js';
 import { runRulesList } from '../commands/rules.js';
+import { runPatternsList } from '../commands/patterns.js';
 import { runPacksAdd, runPacksList, runPacksRemove } from '../commands/packs.js';
 import {
   runServe,
@@ -208,6 +209,22 @@ packsCmd
   .option('-g, --global', 'remove from the global packs folder')
   .action(async (name, opts) => {
     await runPacksRemove(name, { global: opts.global });
+  });
+
+// ---------------------------------------------------------------------------
+// patterns
+// ---------------------------------------------------------------------------
+
+const patternsCmd = program
+  .command('patterns')
+  .description('Reusable, versioned architecture patterns declared by extension packs');
+
+patternsCmd
+  .command('list')
+  .alias('ls')
+  .description('List the reusable pattern definitions declared by loaded packs (id, version, source pack)')
+  .action(async () => {
+    await runPatternsList();
   });
 
 // ---------------------------------------------------------------------------

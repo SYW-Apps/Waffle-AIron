@@ -275,6 +275,13 @@ export type DispatchBinding = z.infer<typeof DispatchBindingSchema>;
 export const DurabilitySchema = z.enum(['ram-projection', 'durable']);
 export type Durability = z.infer<typeof DurabilitySchema>;
 
+/** A reference from a component to a pack-declared reusable pattern (resolved against loaded packs' PatternDefs; UNKNOWN_PATTERN_REF when unresolved). */
+export const PatternRefSchema = z.object({
+  id: z.string(),
+  version: z.string().optional(),
+});
+export type PatternRef = z.infer<typeof PatternRefSchema>;
+
 export const ComponentSpecSchema = z.object({
   id: SpecIdSchema,
   name: z.string(),
@@ -291,6 +298,8 @@ export const ComponentSpecSchema = z.object({
   dispatch: z.array(DispatchBindingSchema).optional(),
   /** Store-only: whether held state survives restart (see DurabilitySchema). */
   durability: DurabilitySchema.optional(),
+  /** Pack-declared reusable patterns this component realizes (resolved against loaded packs; UNKNOWN_PATTERN_REF). */
+  patterns: z.array(PatternRefSchema).optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
   status: SpecStatusSchema.optional().default('complete'),

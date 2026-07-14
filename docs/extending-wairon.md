@@ -119,6 +119,67 @@ Semantics worth knowing:
 - Unregistered `profile` / `projectType` names get `UNKNOWN_PROFILE`
   (warning) naming the registered set.
 
+## Pack-provided AI-agent skills
+
+A **directory** pack can ship declarative AI-client skills (SKILL.md files)
+alongside its manifest. `wairon skills install` / `wairon generate` install
+them into the supported client targets, and the hosted MCP server publishes
+them through the same `wairon-skill://` resource mirror as the built-ins — so
+a profile can carry platform/domain implementation guidance while wairon stays
+platform-agnostic. These are **AI-client skills, not MCP tools**.
+
+```yaml
+name: appenser              # a directory pack: pack.yaml + skills/
+version: 1.2.0              # optional; shown as the skill's provenance version
+
+skills:
+  - id: domain-implementer
+    source: skills/domain-implementer/SKILL.md   # relative to the pack directory
+    targets: [claude, gemini]                     # client targets to install into
+```
+
+- **Namespaced install.** Every pack skill installs as
+  `<pack-id>-<skill-id>` (e.g. `appenser-domain-implementer`) — so skills from
+  different packs never collide, and provenance is legible in the name. The
+  built-in `sdd-*` skill names are reserved; a pack cannot shadow them.
+- **Provenance + version** come from the pack (`name` + `version`), visible in
+  `wairon skills list` and each MCP resource descriptor.
+- **Reproducibility** is automatic — pack skills are vendored under
+  `.wai/packs/` and pinned in `project.yaml`, so they travel with the repo.
+- **No change when unused** — projects with no pack skills install exactly the
+  built-ins, as before.
+
+## Reusable, versioned pattern references
+
+Packs can declare named, versioned architecture patterns; component specs
+reference them, and wairon resolves + surfaces the reference. This publishes a
+reusable convention across projects without copy-pasting a spec shape, and
+makes adoption/versioning explicit. Core only validates *identity* — the
+pattern's actual constraints are enforced by the **pack's own rules**.
+
+```yaml
+patterns:
+  - id: org/domain-pattern
+    version: 1.0.0
+    description: The organization's canonical domain-module shape.
+```
+
+A component opts in via `patterns` (matching pack + version):
+
+```yaml
+# a component spec
+patterns:
+  - id: org/domain-pattern
+    version: 1.0.0            # optional; omit to accept any resolved version
+```
+
+- A reference to a pattern no loaded pack declares is `UNKNOWN_PATTERN_REF`; a
+  pinned version with no match is `PATTERN_VERSION_MISMATCH` (both warnings,
+  tunable via `rules.sddRuleSeverity`).
+- Loaded patterns are listed by `wairon patterns list` (id, version, source
+  pack) and exposed to programmatic pack rules via `ctx.ext.patterns`, giving
+  them a stable, typed target to enforce against.
+
 ## Programmatic packs (JS)
 
 A CommonJS module: the same declarative fields, plus `rules`. The pack does
