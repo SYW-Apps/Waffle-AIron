@@ -134,10 +134,12 @@ methods:
       - stepNumber: 3
         description: >-
           Derive the capability flags from the principal's grants — isAdmin when a grant is
-          instance-wide ('*'), canWriteProjects when any grant carries a write permission (mcp:write
-          or project:create), visibleProjectIds from the specific projectIds named in the grants,
-          visibleUnitIds from the orgUnitIds named in the grants — set local to whether the server
-          is the local developer server (cfg.devMode), which signals the client to hide the
+          instance-wide ('*', no orgUnitId), canWriteProjects when any grant carries a write
+          permission (mcp:write or project:create), visibleProjectIds from the UNION of the
+          projectIds named in the grants and the caller's resolved read-scoped project records (so a
+          '*' or unit-scoped grant still surfaces its projects and a super-admin's selector is never
+          empty), visibleUnitIds from the orgUnitIds named in the grants — set local to whether the
+          server is the local developer server (cfg.devMode), which signals the client to hide the
           tenancy/login chrome — and assemble the WebContext (subject, grants, the derived flags,
           and local)
         type: local
@@ -506,4 +508,4 @@ lint:
         declared edges are design-ahead, not stale.
 status: complete
 createdAt: '2026-07-11T11:36:44.225Z'
-updatedAt: '2026-07-14T11:04:16.520Z'
+updatedAt: '2026-07-14T12:05:09.319Z'

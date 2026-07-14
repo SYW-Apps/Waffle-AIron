@@ -354,7 +354,15 @@ export function getCurrentContext(cfg: HostConfig, sessionId: string): WebContex
   const canWriteProjects = grants.some(
     (g) => g.permissions.includes('*') || WRITE_PERMISSIONS.some((p) => g.permissions.includes(p)),
   );
-  const visibleProjectIds = [...new Set(grants.filter((g) => g.projectId !== '*').map((g) => g.projectId))];
+  // Union of the projects NAMED in the caller's grants and the projects their
+  // RESOLVED, org-unit-aware scope surfaces. Deriving this from named ids alone
+  // left a super-admin ('*' grant, no named ids) or a unit admin ('*'+orgUnitId)
+  // with an EMPTY selector; the resolved scope adds the actual project records
+  // they can read (all, or the unit subtree). Named ids keep dev mode's single
+  // 'local' project (not a hosted record) and any specifically-granted project.
+  const namedProjectIds = grants.filter((g) => g.projectId !== '*').map((g) => g.projectId);
+  const scopedProjectIds = webproject.listProjects(cfg, sessionId).map((r) => r.id);
+  const visibleProjectIds = [...new Set([...namedProjectIds, ...scopedProjectIds])];
   const visibleUnitIds = [
     ...new Set(grants.filter((g) => g.orgUnitId !== undefined && g.orgUnitId !== '').map((g) => g.orgUnitId as string)),
   ];
@@ -804,7 +812,10 @@ header .brand { font-weight:800; font-size:17px; letter-spacing:.02em; }
 .tbtn { border:1px solid var(--chrome-border); background:var(--input-bg); color:var(--ink); padding:6px 11px; border-radius:8px; cursor:pointer; font-size:12px; white-space:nowrap; }
 .tbtn:hover { background:var(--hover-bg); border-color:var(--accent); }
 .ctl { display:flex; align-items:center; gap:7px; color:var(--dim); font-size:12px; white-space:nowrap; }
-.ctl select { appearance:none; -webkit-appearance:none; background:var(--input-bg); color:var(--ink); border:1px solid var(--chrome-border); border-radius:8px; padding:6px 12px; font:inherit; font-size:12px; color-scheme:dark; max-width:220px; }
+.ctl select { appearance:none; -webkit-appearance:none; background:var(--input-bg); color:var(--ink); border:1px solid var(--chrome-border); border-radius:8px; padding:6px 12px; font:inherit; font-size:12px; color-scheme:light dark; max-width:220px; }
+/* Theme the native dropdown popup so option items are never white-on-white. */
+select { color-scheme:light dark; }
+select option, select optgroup { background:var(--input-bg); color:var(--ink); }
 .badge-admin { background:var(--syw-secondary-gradient); color:#2a1a02; font-weight:800; font-size:10px; text-transform:uppercase; letter-spacing:.06em; padding:2px 8px; border-radius:20px; }
 .ro { color:var(--dim); font-size:11px; border:1px solid var(--line); border-radius:20px; padding:2px 8px; }
 .dropdown { position:relative; }
@@ -886,7 +897,7 @@ table.grid tr:hover td { background:rgba(255,255,255,.03); }
 .fcol input, .fcol select, .fcol textarea { background:var(--input-bg); color:var(--ink); border:1px solid var(--chrome-border); border-radius:8px; padding:8px 10px; font:inherit; width:100%; }
 .fcol input:focus, .fcol select:focus, .fcol textarea:focus { outline:none; border-color:var(--accent); box-shadow:var(--syw-glow); }
 .fcol input[readonly] { opacity:.7; }
-.fcol select { color-scheme:dark; appearance:none; -webkit-appearance:none; }
+.fcol select { color-scheme:light dark; appearance:none; -webkit-appearance:none; }
 .fcol .cbrow { display:flex; align-items:center; gap:8px; color:var(--ink); font-size:12.5px; padding:8px 0; }
 .fcol .cbrow input { width:auto; }
 details.adv { margin:6px 0 12px; }

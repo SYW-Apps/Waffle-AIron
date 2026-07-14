@@ -341,13 +341,24 @@ describe('web orchestrator session lifecycle + context (sdd_host)', () => {
     expect(ctx.subject.userId).toBe('u-1');
     expect(ctx.isAdmin).toBe(false);
     expect(ctx.canWriteProjects).toBe(true); // proj-b carries mcp:write
-    expect(ctx.visibleProjectIds.sort()).toEqual(['proj-a', 'proj-b']);
+    expect(ctx.visibleProjectIds.sort()).toEqual(['proj-a', 'proj-b']); // named grants
     expect(ctx.visibleUnitIds).toEqual(['unit-1']);
 
     // lastSeenAt was advanced away from the seeded (old) value.
     const after = getWebSessionById(dataDir, s.id)!.lastSeenAt!;
     expect(after).not.toBe('2000-01-01T00:00:00.000Z');
     expect(Date.parse(after)).toBeGreaterThan(Date.parse('2000-01-01T00:00:00.000Z'));
+  });
+
+  it('getCurrentContext: a super-admin (*:* grant) sees ALL existing projects in the selector', () => {
+    createProjectRecord(dataDir, 'proj-a');
+    createProjectRecord(dataDir, 'proj-b');
+    const s = mkSession({ grants: [{ projectId: '*', permissions: ['*'] }] });
+    const ctx = getCurrentContext(cfg, s.id);
+    expect(ctx.isAdmin).toBe(true);
+    // The bug: a '*' grant names no specific project id, so the old derivation
+    // yielded []. The resolved scope (scope.all) now surfaces every project.
+    expect(ctx.visibleProjectIds.sort()).toEqual(['proj-a', 'proj-b']);
   });
 
   it('getCurrentContext marks an instance-wide grant as admin (no specific project/unit ids)', () => {
