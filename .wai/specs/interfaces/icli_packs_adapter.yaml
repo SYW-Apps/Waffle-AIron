@@ -1,0 +1,35 @@
+id: icli_packs_adapter
+name: CLI Packs Adapter Interface
+description: 'Terminal surface for the `wairon packs` command family: add (vendor + register), list, and remove.'
+component: cli_packs_adapter
+methods:
+  - name: addPack
+    description: >-
+      Vendor a pack from the given source into .wai/packs (or the global packs dir) and register it
+      in project config.
+    signature: 'addPack(source: string, global: boolean): void'
+    returns: void
+    params:
+      - name: source
+        type: string
+      - name: global
+        type: boolean
+        optional: true
+  - name: listPacks
+    description: List the loaded packs (global + project) with provenance and what each provides.
+    signature: 'listPacks(): void'
+    returns: void
+    params: []
+  - name: removePack
+    description: Deregister and delete a vendored pack by name.
+    signature: 'removePack(name: string, global: boolean): void'
+    returns: void
+    params:
+      - name: name
+        type: string
+      - name: global
+        type: boolean
+        optional: true
+status: complete
+createdAt: '2026-07-14T20:09:24.660Z'
+updatedAt: '2026-07-14T20:23:49.052Z'

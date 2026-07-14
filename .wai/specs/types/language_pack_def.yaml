@@ -1,0 +1,23 @@
+kind: value-object
+id: language_pack_def
+name: LanguagePackDef
+description: >-
+  A pack-defined target language/platform table, merged over the built-in tables. Gates narrative
+  flow constructs for the platform (warning severity) and declares builtin-type markers unambiguous
+  to the language.
+fields:
+  - name: unsupportedFlow
+    type: Json
+    description: >-
+      Map of narrative flow construct (branch|switch|forEach|...) to remodeling guidance shown to
+      the author.
+    optional: false
+  - name: foreignBuiltins
+    type: string[]
+    description: >-
+      Builtin-type markers unambiguous to this language (enables the foreign-builtin check both
+      ways).
+    optional: false
+methods: []
+createdAt: '2026-07-14T18:56:30.920Z'
+updatedAt: '2026-07-14T18:56:30.966Z'

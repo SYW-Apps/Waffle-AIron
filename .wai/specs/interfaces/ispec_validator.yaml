@@ -36,6 +36,14 @@ methods:
       severity relaxation) and mutating nothing. Returns the as-complete results.
     signature: 'validateAsComplete(): ValidationResult'
     returns: ValidationResult
+  - name: listRules
+    description: >-
+      Return the active conformance rule set — the built-in rules plus the loaded programmatic pack
+      rules, in run order — for display by `wairon rules list`. Loads and registers the governing
+      packs, then reads the composed sequence.
+    signature: 'listRules(): SddRule[]'
+    returns: SddRule[]
+    params: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-12T11:09:40.901Z'
+updatedAt: '2026-07-14T20:09:03.951Z'

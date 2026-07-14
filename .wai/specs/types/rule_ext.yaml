@@ -1,0 +1,23 @@
+kind: value-object
+id: rule_ext
+name: RuleExt
+description: >-
+  The extension-pack data merged into validation and exposed on the RuleContext: pack-registered
+  profiles, language/platform tables, and reusable pattern definitions. Rules merge these over their
+  built-in tables and resolve spec references against them.
+fields:
+  - name: profiles
+    type: ProfileDef[]
+    description: Pack-registered profiles, keyed by profile id.
+    optional: false
+  - name: languages
+    type: LanguagePackDef[]
+    description: Pack-registered language/platform tables, keyed by normalized language.
+    optional: false
+  - name: patterns
+    type: PatternDef[]
+    description: Pack-registered reusable pattern definitions, resolvable by PatternRef.
+    optional: false
+methods: []
+createdAt: '2026-07-14T18:56:56.419Z'
+updatedAt: '2026-07-14T18:56:56.460Z'

@@ -1,0 +1,15 @@
+id: icli_rules_adapter
+name: CLI Rules Adapter Interface
+description: Terminal surface for `wairon rules list`.
+component: cli_rules_adapter
+methods:
+  - name: listRules
+    description: >-
+      Print the active conformance rule set (built-ins plus loaded pack rules), each tagged with its
+      source pack.
+    signature: 'listRules(): void'
+    returns: void
+    params: []
+status: complete
+createdAt: '2026-07-14T20:09:26.685Z'
+updatedAt: '2026-07-14T20:23:49.145Z'

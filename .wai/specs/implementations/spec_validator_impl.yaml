@@ -71,10 +71,40 @@ methods:
       - stepNumber: 12
         description: >-
           Reject a --subsystem scope that names no loaded subsystem (SUBSYSTEM_NOT_FOUND, listing
-          the known subsystems) and return early; otherwise load project extensions and compose the
-          active validation rule sequence
+          the known subsystems) and return early
         type: local
       - stepNumber: 13
+        description: >-
+          Load the governing extension packs (LoadedExtensions) — pack rules, profiles, languages,
+          and pattern definitions — to populate the rule context's ext for this run
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectExtensions
+      - stepNumber: 14
+        description: Seed the built-in SDD conformance rule set into the in-memory rule set
+        type: call
+        targetComponent: rule_repository
+        targetMethod: registerBuiltinRules
+      - stepNumber: 15
+        description: >-
+          Register the loaded programmatic pack rules after the built-ins (project pack order is
+          precedence)
+        type: call
+        targetComponent: rule_repository
+        targetMethod: registerPackRules
+      - stepNumber: 16
+        description: Read the composed, ordered rule run sequence to execute
+        type: call
+        targetComponent: rule_repository
+        targetMethod: ruleSequence
+      - stepNumber: 17
+        description: >-
+          Read the aggregate known-issue-code set into the rule context, so lint.allow references
+          are validated against every code the active rules can emit (UNKNOWN_LINT_ALLOW_CODE)
+        type: call
+        targetComponent: rule_repository
+        targetMethod: knownIssueCodes
+      - stepNumber: 18
         description: >-
           Run hierarchy, namespace-hygiene, round-trip, type-reference, contract (incl. cross-tree
           ref recognition), narrative, boundary, graph, naming, documentation, complexity,
@@ -84,13 +114,16 @@ methods:
           realization), structural-conformance rules (sourcePaths resolve within the project root to
           real files; every contract method is realized in its file at the implementation's
           conformance tier — declared | anchored | off — honoring per-method symbol overrides, with
-          analysis grade carried on findings), and dependency-conformance rules (runtime imports
-          between component-mapped files must be justified by declared dependsOn/owns edges — or,
-          across subsystems, by a declared edge to the target subsystem's published surface —
+          analysis grade carried on findings), dependency-conformance rules (runtime imports between
+          component-mapped files must be justified by declared dependsOn/owns edges — or, across
+          subsystems, by a declared edge to the target subsystem's published surface —
           UNDECLARED_DEPENDENCY; declared collaborator edges with no realizing import between
-          exactly-analyzed files surface as UNREALIZED_DEPENDENCY)
+          exactly-analyzed files surface as UNREALIZED_DEPENDENCY), and the pattern-reference rule
+          (a component's patterns[] must each resolve to a loaded pack PatternDef —
+          UNKNOWN_PATTERN_REF — with a version-mismatch warning), each rule's check running against
+          the shared rule context
         type: local
-      - stepNumber: 14
+      - stepNumber: 19
         description: >-
           Chained-subproject leniency: when this root is a chained subproject of a discoverable
           parent (detected via the loader's findChainingParent), downgrade the root-dependent
@@ -100,7 +133,7 @@ methods:
           prepend one CHAINED_SUBPROJECT_CONTEXT notice — full cross-tree verification runs from the
           parent root
         type: local
-      - stepNumber: 15
+      - stepNumber: 20
         description: Return the aggregated validation result
         type: return
         outcome: ValidationResult
@@ -191,6 +224,33 @@ methods:
         description: Return the as-complete validation result
         type: return
         outcome: as-complete ValidationResult
+  - name: listRules
+    narrative:
+      - stepNumber: 1
+        description: Load the governing extension packs so pack rules are available.
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectExtensions
+      - stepNumber: 2
+        description: Seed the built-in SDD rule set.
+        type: call
+        targetComponent: rule_repository
+        targetMethod: registerBuiltinRules
+      - stepNumber: 3
+        description: Register the loaded pack rules after the built-ins.
+        type: call
+        targetComponent: rule_repository
+        targetMethod: registerPackRules
+      - stepNumber: 4
+        description: Read and return the composed, ordered rule sequence.
+        type: call
+        targetComponent: rule_repository
+        targetMethod: ruleSequence
+      - stepNumber: 5
+        description: Return the active rule set.
+        type: return
+        outcome: rule set
+    detail: calls-only
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-12T11:26:02.127Z'
+updatedAt: '2026-07-14T20:09:32.808Z'

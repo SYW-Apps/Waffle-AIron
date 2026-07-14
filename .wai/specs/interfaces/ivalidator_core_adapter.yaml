@@ -35,6 +35,14 @@ methods:
       scoped runs pay scoped cost.
     signature: 'dryRunSerializeSpecs(include?: (specId: string) => boolean): ValidationIssue[]'
     returns: ValidationIssue[]
+  - name: loadProjectExtensions
+    description: >-
+      Load the governing extension packs (global then project) via the core portal, returning the
+      merged LoadedExtensions the validator uses for pack rules, profiles, languages, and pattern
+      definitions.
+    signature: 'loadProjectExtensions(): LoadedExtensions'
+    returns: LoadedExtensions
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-10T22:14:16.427Z'
+updatedAt: '2026-07-14T19:21:19.038Z'

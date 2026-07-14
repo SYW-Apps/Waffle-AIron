@@ -1,0 +1,22 @@
+id: cli_rules_adapter_impl
+name: CLI Rules Adapter Implementation
+description: >-
+  The `wairon rules list` command in src/commands/rules.ts. Reads the active rule set via the
+  validator portal.
+contract: icli_rules_adapter
+sourcePath: src/commands/rules.ts
+methods:
+  - name: listRules
+    narrative:
+      - stepNumber: 1
+        description: Fetch the active conformance rule set via the validator portal.
+        type: call
+        targetComponent: validator_portal
+        targetMethod: listRules
+      - stepNumber: 2
+        description: Print each rule's name, description, emitted codes, and source pack.
+        type: local
+detail: calls-only
+status: complete
+createdAt: '2026-07-14T20:10:06.420Z'
+updatedAt: '2026-07-14T20:23:49.594Z'

@@ -1,0 +1,32 @@
+id: irule_repository
+name: Rule Repository Interface
+description: >-
+  Facade contract for the in-memory SDD rule set: register the built-in and pack rules, then read
+  the ordered run sequence and known-code set.
+component: rule_repository
+methods:
+  - name: registerBuiltinRules
+    description: Seed the built-in SDD rule set.
+    signature: 'registerBuiltinRules(): void'
+    returns: void
+    params: []
+  - name: registerPackRules
+    description: Register programmatic pack rules after the built-ins.
+    signature: 'registerPackRules(packRules: SddRule[]): void'
+    returns: void
+    params:
+      - name: packRules
+        type: SddRule[]
+  - name: ruleSequence
+    description: Return the ordered rule run sequence.
+    signature: 'ruleSequence(): SddRule[]'
+    returns: SddRule[]
+    params: []
+  - name: knownIssueCodes
+    description: Return the aggregate known-issue-code set.
+    signature: 'knownIssueCodes(): RuleCode[]'
+    returns: RuleCode[]
+    params: []
+status: complete
+createdAt: '2026-07-14T19:17:21.194Z'
+updatedAt: '2026-07-14T20:23:49.378Z'

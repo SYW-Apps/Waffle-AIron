@@ -1,0 +1,27 @@
+id: iextension_orchestrator
+name: Extension Orchestrator Interface
+description: Loads and merges the extension packs governing a project into a single LoadedExtensions.
+component: extension_orchestrator
+methods:
+  - name: loadProjectExtensions
+    description: >-
+      Load everything governing the current project: globally installed packs (unless
+      extensions.useGlobalPacks is false), then the packs declared in project config — project packs
+      win on collision. An uninitialized project simply has none.
+    signature: 'loadProjectExtensions(): LoadedExtensions'
+    returns: LoadedExtensions
+    params: []
+  - name: loadExtensions
+    description: >-
+      Load extension packs from explicit refs (all project-scoped) resolved against the given
+      project root — the programmatic entry used when a caller injects its own pack set.
+    signature: 'loadExtensions(packRefs: string[], projectRoot: string): LoadedExtensions'
+    returns: LoadedExtensions
+    params:
+      - name: packRefs
+        type: string[]
+      - name: projectRoot
+        type: string
+status: complete
+createdAt: '2026-07-14T18:59:08.560Z'
+updatedAt: '2026-07-14T20:23:49.190Z'

@@ -1,0 +1,22 @@
+id: irule_store
+name: Rule Store Interface
+description: >-
+  Raw accessors over the in-memory rule set, in registration order. Written by the rule registry,
+  read by the rule index.
+component: rule_store
+methods:
+  - name: addRule
+    description: Append a rule to the held set (registration order preserved).
+    signature: 'addRule(rule: SddRule): void'
+    returns: void
+    params:
+      - name: rule
+        type: SddRule
+  - name: listRules
+    description: Return every held rule in registration order.
+    signature: 'listRules(): SddRule[]'
+    returns: SddRule[]
+    params: []
+status: complete
+createdAt: '2026-07-14T19:17:10.227Z'
+updatedAt: '2026-07-14T20:23:49.423Z'

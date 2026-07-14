@@ -1,0 +1,39 @@
+id: cli_packs_adapter_impl
+name: CLI Packs Adapter Implementation
+description: >-
+  The `wairon packs` command family in src/commands/packs.ts. Vendoring/registration are local file
+  operations; listing reads the merged set via the core portal.
+contract: icli_packs_adapter
+sourcePath: src/commands/packs.ts
+methods:
+  - name: addPack
+    narrative: []
+    detail: intent
+    intent: >-
+      Resolve the pack source (a path or module id), vendor it into the project's .wai/packs (or the
+      global packs dir when --global) and register it in project.yaml under extensions.packs. A
+      directory pack is copied with its entry file; a malformed or unreadable source fails with a
+      clear error and leaves no partial registration.
+  - name: listPacks
+    narrative:
+      - stepNumber: 1
+        description: Load the merged extension set (global then project packs) via the core portal.
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadProjectExtensions
+      - stepNumber: 2
+        description: >-
+          Print each pack with its name, scope, version, and what it provides (profiles, languages,
+          rules, skills, patterns), plus any load errors.
+        type: local
+  - name: removePack
+    narrative: []
+    detail: intent
+    intent: >-
+      Deregister the named pack from project.yaml (or the global packs registration when --global)
+      and delete its vendored files under .wai/packs. Removing a pack that is not present is
+      reported to the user, not treated as an error.
+detail: calls-only
+status: complete
+createdAt: '2026-07-14T20:10:02.916Z'
+updatedAt: '2026-07-14T20:23:49.511Z'

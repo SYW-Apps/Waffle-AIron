@@ -1,0 +1,22 @@
+kind: value-object
+id: pack_provenance
+name: PackProvenance
+description: >-
+  Provenance record for a loaded extension pack: its declared name, the resolved ref it loaded from,
+  and whether it was a global (machine-wide) or project-scoped pack.
+fields:
+  - name: name
+    type: string
+    description: The pack's declared name.
+    optional: false
+  - name: ref
+    type: string
+    description: The resolved ref/path the pack loaded from.
+    optional: false
+  - name: scope
+    type: string
+    description: global | project (project packs win on collision).
+    optional: false
+methods: []
+createdAt: '2026-07-14T18:56:28.020Z'
+updatedAt: '2026-07-14T18:56:28.061Z'

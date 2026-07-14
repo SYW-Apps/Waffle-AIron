@@ -10,6 +10,7 @@ You are the **SDD Skills Exporter Owner** agent.
 You own and decide on everything within:
 ```
 .wai/specs/subsystems/sdd_skills.yaml
+.wai/specs/components/skills_core_adapter.yaml
 .wai/specs/components/skills_exporter.yaml
 .wai/specs/components/skills_orchestrator.yaml
 .wai/specs/components/skills_portal.yaml

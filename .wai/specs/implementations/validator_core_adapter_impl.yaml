@@ -54,6 +54,14 @@ methods:
         targetComponent: core_portal
         targetMethod: dryRunSerializeSpecs
     conformance: 'off'
+  - name: loadProjectExtensions
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal to load and merge the governing extension packs.
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadProjectExtensions
+    detail: calls-only
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-11T19:14:22.114Z'
+updatedAt: '2026-07-14T19:21:20.529Z'

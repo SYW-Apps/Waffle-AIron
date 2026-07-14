@@ -1,0 +1,24 @@
+kind: value-object
+id: sdd_rule
+name: SddRule
+description: >-
+  A single SDD conformance check: a named, documented unit declaring the issue codes it can emit.
+  Registered in the rule registry (built-in) or supplied by a programmatic extension pack; the
+  registry runs each rule's check against the shared RuleContext. The executable check itself is
+  behaviour held by the registry, not intrinsic type data.
+fields:
+  - name: name
+    type: string
+    description: Stable kebab-case rule id (e.g. pattern-references).
+    optional: false
+  - name: description
+    type: string
+    description: One-paragraph statement of what the rule enforces and why.
+    optional: false
+  - name: codes
+    type: RuleCode[]
+    description: Every issue code this rule can emit, with default severity and summary.
+    optional: false
+methods: []
+createdAt: '2026-07-14T18:56:52.909Z'
+updatedAt: '2026-07-14T18:56:52.949Z'

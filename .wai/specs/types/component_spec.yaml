@@ -63,6 +63,13 @@ fields:
       read-back reachable from a declared lifecycle entrypoint (MISSING_HYDRATION); a ram-projection
       declares it is rebuilt, not restored.
     optional: true
+  - name: patterns
+    type: PatternRef[]
+    description: >-
+      Optional references to pack-declared reusable patterns this component realizes. Resolved
+      against loaded packs' PatternDefs (UNKNOWN_PATTERN_REF when unresolved); pack rules enforce
+      the actual pattern constraints.
+    optional: true
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-10T18:47:32.943Z'
+updatedAt: '2026-07-14T18:58:38.986Z'

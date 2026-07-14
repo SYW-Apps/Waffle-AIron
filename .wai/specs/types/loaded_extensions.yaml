@@ -1,0 +1,44 @@
+kind: value-object
+id: loaded_extensions
+name: LoadedExtensions
+description: >-
+  The merged result of loading all governing extension packs (global then project — project wins on
+  collision). Consumed by the validator (rules/profiles/languages/patterns), the skills exporter
+  (skills), and the CLI. A pack that fails to load contributes an EXTENSION_LOAD_ERROR rather than
+  being silently skipped.
+fields:
+  - name: packNames
+    type: string[]
+    description: Names of the successfully loaded packs.
+    optional: false
+  - name: packs
+    type: PackProvenance[]
+    description: Per-pack provenance (name, resolved ref, scope).
+    optional: false
+  - name: rules
+    type: SddRule[]
+    description: Programmatic rules, run after the built-in registry.
+    optional: false
+  - name: profiles
+    type: ProfileDef[]
+    description: Merged pack-registered profiles, keyed by id.
+    optional: false
+  - name: languages
+    type: LanguagePackDef[]
+    description: Merged pack-registered language tables, keyed by language.
+    optional: false
+  - name: skills
+    type: PackSkill[]
+    description: Merged pack-provided skills across all loaded packs.
+    optional: false
+  - name: patterns
+    type: PatternDef[]
+    description: Merged pack-registered pattern definitions.
+    optional: false
+  - name: errors
+    type: string[]
+    description: Pack load failures, surfaced as EXTENSION_LOAD_ERROR.
+    optional: false
+methods: []
+createdAt: '2026-07-14T18:57:07.906Z'
+updatedAt: '2026-07-14T18:57:07.949Z'

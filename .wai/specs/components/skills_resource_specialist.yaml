@@ -9,7 +9,8 @@ description: >-
 subsystem: sdd_skills
 componentType: Specialist
 owns: []
-dependsOn: []
+dependsOn:
+  - skills_core_adapter
 status: complete
 createdAt: '2026-07-08T22:01:27.596Z'
-updatedAt: '2026-07-10T12:20:48.056Z'
+updatedAt: '2026-07-14T20:14:00.351Z'

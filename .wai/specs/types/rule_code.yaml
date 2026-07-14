@@ -1,0 +1,23 @@
+kind: value-object
+id: rule_code
+name: RuleCode
+description: >-
+  One issue code a validation rule can emit, with its default severity and a one-line summary. Every
+  code a rule emits is declared here so allow-validation and the rule catalog know the full code
+  set.
+fields:
+  - name: code
+    type: string
+    description: Stable issue code, e.g. UNKNOWN_PATTERN_REF.
+    optional: false
+  - name: defaultSeverity
+    type: string
+    description: error | warning (before user severity overrides).
+    optional: false
+  - name: summary
+    type: string
+    description: One-line description of what the code flags.
+    optional: false
+methods: []
+createdAt: '2026-07-14T18:56:14.460Z'
+updatedAt: '2026-07-14T18:56:14.511Z'

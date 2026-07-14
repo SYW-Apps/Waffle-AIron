@@ -1,0 +1,14 @@
+id: cli_patterns_adapter
+name: CLI Patterns Client Adapter
+description: >-
+  Local client adapter in sdd_cli for `wairon patterns list`. Lists the reusable, versioned pattern
+  definitions declared by the loaded packs (id, version, description, source pack) via the core
+  portal, giving adoption/discovery visibility for pattern references.
+subsystem: sdd_cli
+componentType: Adapter
+owns: []
+dependsOn:
+  - core_portal
+status: complete
+createdAt: '2026-07-14T20:09:01.451Z'
+updatedAt: '2026-07-14T20:16:14.035Z'

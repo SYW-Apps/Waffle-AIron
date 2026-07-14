@@ -1,0 +1,65 @@
+id: extension_orchestrator_impl
+name: Extension Orchestrator Implementation
+description: >-
+  The pack load/merge workflow in src/core/extensions.ts. Delegates all I/O to the pack source
+  adapter and merges parsed manifests (project packs win) into a LoadedExtensions.
+contract: iextension_orchestrator
+sourcePath: src/core/extensions.ts
+methods:
+  - name: loadProjectExtensions
+    narrative:
+      - stepNumber: 1
+        description: Resolve the global packs directory.
+        type: call
+        targetComponent: pack_source_adapter
+        targetMethod: globalPacksDir
+      - stepNumber: 2
+        description: >-
+          Discover the global packs there (unless extensions.useGlobalPacks is false) to seed the
+          global-scoped refs, then append the project's declared packs as project-scoped refs.
+        type: call
+        targetComponent: pack_source_adapter
+        targetMethod: discoverPacks
+      - stepNumber: 3
+        description: Resolve each gathered ref (global then project) to a concrete load target.
+        type: call
+        targetComponent: pack_source_adapter
+        targetMethod: resolvePackRef
+      - stepNumber: 4
+        description: >-
+          Read each target's raw manifest, then parse/validate it against the pack schema and merge
+          it (project packs win on collision) into the accumulated result; a failed pack is recorded
+          as an EXTENSION_LOAD_ERROR.
+        type: call
+        targetComponent: pack_source_adapter
+        targetMethod: readManifest
+      - stepNumber: 5
+        description: >-
+          Return the merged LoadedExtensions — empty when the project declares no packs or its
+          config is unreadable.
+        type: return
+        outcome: success
+  - name: loadExtensions
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve each explicit project-scoped ref against the given project root to a concrete load
+          target.
+        type: call
+        targetComponent: pack_source_adapter
+        targetMethod: resolvePackRef
+      - stepNumber: 2
+        description: >-
+          Read each target's manifest, then parse/validate and merge it into the accumulated result;
+          a failed pack is recorded as an EXTENSION_LOAD_ERROR rather than aborting the load.
+        type: call
+        targetComponent: pack_source_adapter
+        targetMethod: readManifest
+      - stepNumber: 3
+        description: Return the LoadedExtensions built from the given refs.
+        type: return
+        outcome: success
+detail: calls-only
+status: complete
+createdAt: '2026-07-14T19:01:00.434Z'
+updatedAt: '2026-07-14T20:23:49.634Z'

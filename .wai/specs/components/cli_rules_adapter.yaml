@@ -1,0 +1,14 @@
+id: cli_rules_adapter
+name: CLI Rules Client Adapter
+description: >-
+  Local client adapter in sdd_cli for `wairon rules list`. Lists the active conformance rule set
+  (built-ins plus loaded programmatic pack rules) via the validator portal, each tagged with the
+  source pack that provides it.
+subsystem: sdd_cli
+componentType: Adapter
+owns: []
+dependsOn:
+  - validator_portal
+status: complete
+createdAt: '2026-07-14T20:08:58.947Z'
+updatedAt: '2026-07-14T20:16:13.040Z'

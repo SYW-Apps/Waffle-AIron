@@ -1,0 +1,16 @@
+id: rule_repository
+name: Rule Repository
+description: >-
+  Facade for the in-memory SDD rule set. The validation workflow depends on this repository instead
+  of the private rule store, registry, or index blocks — registering the built-in and pack rules
+  through it and reading back the ordered run sequence and the known-issue-code set.
+subsystem: sdd_validator
+componentType: Repository
+owns:
+  - rule_store
+  - rule_registry
+  - rule_index
+dependsOn: []
+status: complete
+createdAt: '2026-07-14T19:17:02.903Z'
+updatedAt: '2026-07-14T20:16:11.035Z'
