@@ -170,6 +170,17 @@ methods:
     params:
       - name: sessionId
         type: string
+  - name: listSecretRefs
+    description: >-
+      Resolve the session to a Principal, require an instance-wide admin grant, and return the
+      configured secret KEY NAMES (never the values) through the secret registry — so the
+      identity-provider form can offer existing clientSecretRefs to pick from. Names are not
+      sensitive; raw secrets never leave the store. A read; not audited.
+    signature: 'listSecretRefs(sessionId: string): string[]'
+    returns: string[]
+    params:
+      - name: sessionId
+        type: string
 status: complete
 createdAt: '2026-07-13T18:27:58.377Z'
-updatedAt: '2026-07-13T19:58:13.021Z'
+updatedAt: '2026-07-14T12:31:03.458Z'

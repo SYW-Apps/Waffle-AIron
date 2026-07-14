@@ -232,7 +232,33 @@ methods:
         targetComponent: identity_orchestrator
         targetMethod: listSelfTokens
     detail: calls-only
+  - name: listSecretRefs
+    narrative:
+      - stepNumber: 1
+        description: Resolve the browser session to a Principal
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateSession
+      - stepNumber: 2
+        description: If the principal lacks an instance-wide admin grant, deny
+        type: branch
+        condition: the principal lacks an instance-wide admin grant
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the secret-ref listing
+        type: throw
+        error: Forbidden — instance-admin required
+      - stepNumber: 4
+        description: List the configured secret key names (never the values) through the secret registry
+        type: call
+        targetComponent: secret_registry
+        targetMethod: list
+      - stepNumber: 5
+        description: Return the secret ref names
+        type: return
+        outcome: configured secret ref names
+    detail: full
 detail: calls-only
 status: complete
 createdAt: '2026-07-13T18:28:58.935Z'
-updatedAt: '2026-07-13T19:58:13.064Z'
+updatedAt: '2026-07-14T12:31:03.510Z'

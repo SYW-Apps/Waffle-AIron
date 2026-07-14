@@ -264,7 +264,15 @@ methods:
         targetComponent: web_orchestrator
         targetMethod: signInWithPassword
     detail: calls-only
+  - name: adminListSecretRefs
+    narrative:
+      - stepNumber: 1
+        description: Resolve the session cookie and forward to the web admin orchestrator
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: listSecretRefs
+    detail: calls-only
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-07-14T11:04:16.673Z'
+updatedAt: '2026-07-14T12:31:03.635Z'

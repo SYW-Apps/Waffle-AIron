@@ -812,10 +812,10 @@ header .brand { font-weight:800; font-size:17px; letter-spacing:.02em; }
 .tbtn { border:1px solid var(--chrome-border); background:var(--input-bg); color:var(--ink); padding:6px 11px; border-radius:8px; cursor:pointer; font-size:12px; white-space:nowrap; }
 .tbtn:hover { background:var(--hover-bg); border-color:var(--accent); }
 .ctl { display:flex; align-items:center; gap:7px; color:var(--dim); font-size:12px; white-space:nowrap; }
-.ctl select { appearance:none; -webkit-appearance:none; background:var(--input-bg); color:var(--ink); border:1px solid var(--chrome-border); border-radius:8px; padding:6px 12px; font:inherit; font-size:12px; color-scheme:light dark; max-width:220px; }
+.ctl select { appearance:none; -webkit-appearance:none; background:var(--input-bg); color:var(--ink); border:1px solid var(--chrome-border); border-radius:8px; padding:6px 12px; font:inherit; font-size:12px; color-scheme:dark; max-width:220px; }
 /* Theme the native dropdown popup so option items are never white-on-white. */
-select { color-scheme:light dark; }
-select option, select optgroup { background:var(--input-bg); color:var(--ink); }
+select { color-scheme:dark; }
+select option, select optgroup { background:var(--chrome); color:var(--ink); }
 .badge-admin { background:var(--syw-secondary-gradient); color:#2a1a02; font-weight:800; font-size:10px; text-transform:uppercase; letter-spacing:.06em; padding:2px 8px; border-radius:20px; }
 .ro { color:var(--dim); font-size:11px; border:1px solid var(--line); border-radius:20px; padding:2px 8px; }
 .dropdown { position:relative; }
@@ -897,7 +897,7 @@ table.grid tr:hover td { background:rgba(255,255,255,.03); }
 .fcol input, .fcol select, .fcol textarea { background:var(--input-bg); color:var(--ink); border:1px solid var(--chrome-border); border-radius:8px; padding:8px 10px; font:inherit; width:100%; }
 .fcol input:focus, .fcol select:focus, .fcol textarea:focus { outline:none; border-color:var(--accent); box-shadow:var(--syw-glow); }
 .fcol input[readonly] { opacity:.7; }
-.fcol select { color-scheme:light dark; appearance:none; -webkit-appearance:none; }
+.fcol select { color-scheme:dark; appearance:none; -webkit-appearance:none; }
 .fcol .cbrow { display:flex; align-items:center; gap:8px; color:var(--ink); font-size:12.5px; padding:8px 0; }
 .fcol .cbrow input { width:auto; }
 details.adv { margin:6px 0 12px; }
@@ -1086,7 +1086,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     // fill the viewport with no chrome.
     var isLocal = !!(ctx && ctx.local);
     $('topbar').hidden = isLocal;
-    $('whoLbl').textContent = (ctx.subject && ctx.subject.userId) || 'signed in';
+    $('whoLbl').textContent = (ctx.subject && (ctx.subject.displayName || ctx.subject.email || ctx.subject.userId)) || 'signed in';
     $('adminBadge').hidden = !ctx.isAdmin;
     $('navAdmin').hidden = !ctx.isAdmin;      // the Admin tab appears only for admins
     // Role-aware: developers who cannot author see a read-only marker AND the spec
@@ -1540,7 +1540,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     html += '<div class="frow">' + fcol('Issuer URL', '<input id="pIssuer" value="' + esc(p.issuerUrl || '') + '" placeholder="your provider issuer / realm base URL" />', true) + '</div>';
     html += '<div class="frow">'
       + fcol('Client ID', '<input id="pClient" value="' + esc(p.clientId || '') + '" />')
-      + fcol('Client secret ref', '<input id="pSecretRef" value="' + esc(p.clientSecretRef || '') + '" placeholder="secret name — never the raw secret" />')
+      + fcol('Client secret ref', '<input id="pSecretRef" list="secretRefsList" value="' + esc(p.clientSecretRef || '') + '" placeholder="pick an existing ref or type a new name" /><datalist id="secretRefsList"></datalist>')
       + '</div>';
     html += '<div class="frow">'
       + fcol('Allowed email domains', '<input id="pDomains" value="' + esc((p.allowedDomains || []).join(', ')) + '" placeholder="comma-separated, e.g. corp.example" />')
@@ -1558,6 +1558,11 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     html += '</details>';
     html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="pSave">' + (creating ? 'Add provider' : 'Save') + '</button> <button class="mini" id="pCancel">Cancel</button> <span class="msg" id="pMsg"></span></div></div>';
     box.innerHTML = html;
+    // Offer the existing secret ref NAMES (never values) as datalist suggestions.
+    api('/web/admin/secrets').then(function (r) { return r.ok ? r.json() : { refs: [] }; }).then(function (d) {
+      var dl = $('secretRefsList'); if (!dl) return;
+      dl.innerHTML = ((d && d.refs) || []).map(function (k) { return '<option value="' + esc(k) + '">'; }).join('');
+    }).catch(function () {});
     $('pCancel').addEventListener('click', function () { box.innerHTML = ''; });
     $('pSave').addEventListener('click', function () {
       var msg = $('pMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
@@ -1613,7 +1618,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       + fcol('Unit ID', '<input id="oId" value="' + esc(u.id || '') + '"' + (creating ? '' : ' readonly') + ' placeholder="optional — auto if blank" />')
       + '</div>';
     html += '<div class="frow">'
-      + fcol('Kind', '<input id="oKind" value="' + esc(u.kind || 'team') + '" placeholder="organization / department / team / domain" />')
+      + fcol('Kind', '<select id="oKind">' + ['organization', 'department', 'team', 'domain'].map(function (k) { return opt(k, k, (u.kind || 'team') === k); }).join('') + '</select>')
       + fcol('Parent unit', '<select id="oParent">' + parentOpts + '</select>')
       + fcol('Visibility', '<select id="oVis">' + visOpts + '</select>')
       + '</div>';
@@ -1920,6 +1925,12 @@ function adminListOrgUnits(cfg: HostConfig, sessionId: string, res: ServerRespon
   sendJson(res, 200, { units: webadmin.listOrganizationUnits(cfg, sessionId) });
 }
 
+/** List configured secret KEY NAMES (never values); forwards to
+ *  web_admin_orchestrator.listSecretRefs — for the IdP form's clientSecretRef picker. */
+function adminListSecretRefs(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
+  sendJson(res, 200, { refs: webadmin.listSecretRefs(cfg, sessionId) });
+}
+
 /** Create or update an organization unit; forwards to web_admin_orchestrator.upsertOrganizationUnit. */
 function adminUpsertOrgUnit(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
   sendJson(res, 200, webadmin.upsertOrganizationUnit(cfg, sessionId, body as OrganizationUnitRecord));
@@ -2181,6 +2192,10 @@ export async function handleWebRequest(
       // GET /web/admin/org/units — organization units (instance-admin).
       if (req.method === 'GET' && parts.length === 4 && parts[2] === 'org' && parts[3] === 'units') {
         return adminListOrgUnits(cfg, sessionId, res);
+      }
+      // GET /web/admin/secrets — configured secret ref NAMES (instance-admin; never values).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'secrets') {
+        return adminListSecretRefs(cfg, sessionId, res);
       }
       // POST /web/admin/org/units { ...OrganizationUnitRecord }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'org' && parts[3] === 'units') {

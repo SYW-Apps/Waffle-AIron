@@ -366,6 +366,19 @@ methods:
       transport: HTTP
       method: POST
       path: /web/login
+  - name: adminListSecretRefs
+    description: >-
+      List the configured secret ref names (never values); forwards to
+      web_admin_orchestrator.listSecretRefs. For the IdP form's clientSecretRef picker.
+    signature: 'adminListSecretRefs(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/admin/secrets
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-07-14T11:04:16.633Z'
+updatedAt: '2026-07-14T12:31:43.613Z'

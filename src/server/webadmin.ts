@@ -3,6 +3,7 @@ import * as identity from './identity.js';
 import * as organization from './organization.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import { ForbiddenError, isInstanceAdmin } from './identity.js';
+import { listSecretKeys } from '../utils/secrets.js';
 import type {
   ApiKeyRecord,
   AuditEvent,
@@ -180,6 +181,17 @@ function requireInstanceAdminSession(cfg: HostConfig, sessionId: string): Princi
 export function listOrganizationUnits(cfg: HostConfig, sessionId: string): OrganizationUnitRecord[] {
   requireInstanceAdminSession(cfg, sessionId); // steps 1–3
   return organization.listOrganizationUnits(cfg.dataDir); // steps 4–5
+}
+
+/**
+ * Resolve the session to a Principal, require an instance-wide admin grant, and
+ * return the configured secret KEY NAMES (never the values) — so the identity-
+ * provider form can offer existing clientSecretRefs to pick from. The names are
+ * not sensitive; the raw secrets never leave the secret store. A read; not audited.
+ */
+export function listSecretRefs(cfg: HostConfig, sessionId: string): string[] {
+  requireInstanceAdminSession(cfg, sessionId);
+  return listSecretKeys();
 }
 
 /**
