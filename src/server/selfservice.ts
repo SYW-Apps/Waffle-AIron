@@ -12,7 +12,7 @@ import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { executeApprovedLock, executeApprovedPromote } from './admin.js';
 import { evaluateInitRequest, executeApprovedInit } from './policy.js';
 import { isValidProjectId, listProjectRecords, existingProjectRoot } from './projects.js';
-import { resolveScopeFor, permits } from './scope.js';
+import { authorize, visibleScopes, isInstanceAdmin, actionableProjectIds } from './authorization.js';
 import type {
   ApprovalRequest,
   ApprovalDecision,
@@ -52,32 +52,32 @@ import type {
  *  indefinitely. HostConfig-driven overrides are a later phase. */
 const DEFAULT_APPROVAL_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-/** The permission that authorizes deciding/listing/viewing approval requests.
- *  Authorized on the RESOLVED, org-unit-aware scope (resolveScopeFor + permits):
- *  an instance-wide grant decides everywhere, a unit-scoped grant decides within
- *  its subtree's projects, a project-scoped grant confers nothing here. */
-const APPROVAL_DECIDE_PERMISSION = 'approval:decide';
-/** The permission that lets a caller request a project's lock/promotion. */
-const MCP_WRITE_PERMISSION = 'mcp:write';
+/** The capability that authorizes deciding/listing/viewing approval requests.
+ *  Resolved hierarchically: an instance-level value decides everywhere, a
+ *  unit-scoped value decides within its subtree's projects. */
+const APPROVAL_DECIDE_CAPABILITY = 'approval:decide';
+/** The capability that lets a caller lock/promote a project. The legacy
+ *  `mcp:write` / `lock:create` / `promote:mark-ready` permissions all map here. */
+const PROJECT_WRITE_CAPABILITY = 'project:write';
 
-// ── authorization helpers (mirroring the canonical identity.ts versions) ──────
+// ── authorization ────────────────────────────────────────────────────────────
 //
-// '*' is the wildcard in BOTH projectId and permissions (per the grant model).
-// Kept local because self_service_orchestrator declares no edge to the identity
-// orchestrator; this copy MUST stay in lockstep with identity.ts's isInstanceAdmin.
+// Every decision resolves through the permission resolver (authorization.ts).
+// isInstanceAdmin is imported rather than re-implemented: the previous local
+// copy had to be kept "in lockstep" with three other copies by hand, which is
+// exactly how the model drifted.
 
-/** Instance-admin = a grant scoped to every project ('*') carrying every
- *  permission ('*'). The bootstrap principal and the legacy admin-role
- *  projection both yield exactly this grant. A grant that also names an
- *  orgUnitId is UNIT-scoped by intent even when its projectId is the '*'
- *  wildcard (the shape an operator enters for a delegated unit/department
- *  admin) — it must NOT confer instance-admin. Mirrors identity.ts's
- *  isInstanceAdmin and the `!orgUnitId` discipline in scope.ts / request.ts /
- *  web.ts. */
-function isInstanceAdmin(principal: Principal): boolean {
-  return (principal.grants ?? []).some(
-    (g) => g.projectId === '*' && !g.orgUnitId && g.permissions.includes('*'),
-  );
+/**
+ * True when the caller may decide/view an approval for a request's project.
+ *
+ * Fails CLOSED on a request with no projectId (e.g. a project:init whose target
+ * does not exist yet): only an instance-admin may decide those, because there is
+ * no scope to resolve a delegated permission against.
+ */
+function canDecideFor(cfg: HostConfig, principal: Principal, projectId?: string): boolean {
+  if (isInstanceAdmin(principal)) return true;
+  if (!projectId) return false;
+  return authorize(cfg.dataDir, principal, APPROVAL_DECIDE_CAPABILITY, 'project', projectId).value === 'yes';
 }
 
 // ── subject / audit helpers (mirrored from identity.ts) ─────────────────────
@@ -289,13 +289,11 @@ function requestProjectAction(
 ): ApprovalRequest {
   const principal = requirePrincipal(cfg, credential);
 
-  // Authorize on the RESOLVED, org-unit-aware mcp:write scope: a grant on the
-  // project itself qualifies, a unit-scoped grant qualifies for the projects
-  // placed in its subtree, and a genuine instance-wide grant resolves to
-  // scope.all. A flat grant match would let a unit-scoped '*'+orgUnitId grant
-  // request actions for ANY project — cross-tenant (mirrors identity.ts's
-  // mintSelfToken).
-  if (!permits(resolveScopeFor(cfg, principal, MCP_WRITE_PERMISSION), projectId)) {
+  // Resolve project:write over the project through the permission resolver: the
+  // leaf->root walk reaches a project-scoped value, a unit-scoped value for the
+  // subtree it is placed in, or an instance-level default — so a unit admin is
+  // first-class over their subtree and nobody reaches across tenants.
+  if (authorize(cfg.dataDir, principal, PROJECT_WRITE_CAPABILITY, 'project', projectId).value === 'no') {
     throw new ForbiddenError(`caller may not request a ${noun} for this project`);
   }
   if (!existingProjectRoot(cfg.dataDir, projectId)) {
@@ -340,10 +338,7 @@ export function getRequestStatus(
   // projectId is visible only to a super-admin — permits fails closed). A flat
   // instance-permission check would let a unit-scoped '*'+orgUnitId grant view
   // ANY tenant's requests.
-  if (
-    !isOriginalRequester(principal, req) &&
-    !permits(resolveScopeFor(cfg, principal, APPROVAL_DECIDE_PERMISSION), req.projectId ?? '')
-  ) {
+  if (!isOriginalRequester(principal, req) && !canDecideFor(cfg, principal, req.projectId)) {
     throw new ForbiddenError('caller may not view this approval request');
   }
   return req;
@@ -361,18 +356,21 @@ export function listPendingRequests(
   projectId?: string,
 ): ApprovalRequest[] {
   const principal = requirePrincipal(cfg, credential);
-  const scope = resolveScopeFor(cfg, principal, APPROVAL_DECIDE_PERMISSION);
-  if (!scope.all && scope.projectIds.length === 0 && scope.unitIds.length === 0) {
-    throw new ForbiddenError(
-      'deciding approvals requires an instance-wide or unit-scoped approval:decide grant',
-    );
+  const admin = isInstanceAdmin(principal);
+  const decidable = admin
+    ? []
+    : actionableProjectIds(visibleScopes(cfg.dataDir, principal, APPROVAL_DECIDE_CAPABILITY));
+  if (!admin && decidable.length === 0) {
+    throw new ForbiddenError('deciding approvals requires approval:decide over at least one project');
   }
   expirePendingApprovals(cfg.dataDir, new Date().toISOString());
   const pending = listApprovalRequests(cfg.dataDir, 'pending', projectId);
-  if (scope.all) return pending;
-  // Filter to requests whose project is within the caller's scope (honoring any
-  // optional project narrowing already applied above).
-  return pending.filter((r) => r.projectId !== undefined && scope.projectIds.includes(r.projectId));
+  if (admin) return pending;
+  // Filter to requests whose project the caller may decide (honoring any optional
+  // project narrowing already applied above). A request with no projectId is
+  // instance-admin-only, so it is excluded here — fail closed.
+  const inScope = new Set(decidable);
+  return pending.filter((r) => r.projectId !== undefined && inScope.has(r.projectId));
 }
 
 /**
@@ -389,17 +387,15 @@ export function decideRequest(
   decision: ApprovalDecision,
 ): ApprovalRequest {
   const principal = requirePrincipal(cfg, credential);
-  const scope = resolveScopeFor(cfg, principal, APPROVAL_DECIDE_PERMISSION);
 
   const req = getApprovalRequestById(cfg.dataDir, decision.requestId);
   if (!req) throw new Error(`Approval request "${decision.requestId}" not found.`);
 
-  // Scope point-check: the caller's approval:decide scope must permit the
-  // request's project. A request with no projectId (or a project:init target that
-  // is not yet an in-scope project) is decidable only by a super-admin — permits
-  // fails closed for a scoped caller on an empty/out-of-scope projectId.
-  if (!permits(scope, req.projectId ?? '')) {
-    throw new ForbiddenError("deciding this approval requires approval:decide scope over the request's project");
+  // Point-check: the caller must hold approval:decide over the request's project.
+  // A request with no projectId (e.g. a project:init whose target does not exist
+  // yet) is decidable only by an instance-admin — canDecideFor fails closed.
+  if (!canDecideFor(cfg, principal, req.projectId)) {
+    throw new ForbiddenError("deciding this approval requires approval:decide over the request's project");
   }
 
   // Self-approval rejection: the decided-by identity is ALWAYS the authenticated

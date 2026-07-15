@@ -3,7 +3,7 @@ import { authenticateCredential } from './auth.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { listProjectRecords } from './projects.js';
 import { sendJson } from './httpio.js';
-import { resolveScopeFor } from './scope.js';
+import { visibleScopes, actionableProjectIds, isInstanceAdmin } from './authorization.js';
 import * as packs from './packs.js';
 import { listProjectRelations } from './relations.js';
 import { getPublicSurfaceSnapshot } from './surfaces.js';
@@ -16,7 +16,6 @@ import type {
   ProjectPackReference,
   ResourceQuotaPolicy,
   ResourceUsageSnapshot,
-  ScopeResolution,
   ProjectRelationRecord,
   ProjectPublicSurfaceSnapshot,
 } from './types.js';
@@ -41,7 +40,9 @@ import type {
 // HostExposurePolicy `operationsApiEnabled` flag; http.ts gates the mount.
 // ---------------------------------------------------------------------------
 
-const OPERATIONS_READ_PERMISSION = 'operations:read';
+/** Operations reads are project reads: the legacy `operations:read` permission
+ *  maps onto the hierarchical model's project:read capability. */
+const OPERATIONS_READ_CAPABILITY = 'project:read';
 
 /** The advisory quota policy resolved when HostConfig.quotaPolicy is unset:
  *  disabled, so quota evaluation is a no-op until an operator opts in. */
@@ -63,18 +64,25 @@ function requirePrincipal(cfg: HostConfig, credential: string | null): Principal
   return principal;
 }
 
-/** Resolve the caller's operations:read scope, rejecting a caller with no reach
- *  at all (scope.all is false and neither an in-scope project nor unit). */
-function requireOperationsReadScope(cfg: HostConfig, principal: Principal): ScopeResolution {
-  const scope = resolveScopeFor(cfg, principal, OPERATIONS_READ_PERMISSION);
-  if (!scope.all && scope.projectIds.length === 0 && scope.unitIds.length === 0) {
-    throw new ForbiddenError('operations read access required');
-  }
-  return scope;
+/** The caller's operations-read view: every scope for an instance-admin, else
+ *  their actionable project:read scopes. Rejects a caller with no reach at all. */
+interface OperationsReadScope {
+  all: boolean;
+  projectIds: string[];
 }
 
-/** Narrow hosted project records to the caller's scope (a super-admin keeps all). */
-function narrowToScope(projects: HostedProjectRecord[], scope: ScopeResolution): HostedProjectRecord[] {
+/** Resolve the caller's operations-read scope, rejecting a caller with no reach. */
+function requireOperationsReadScope(cfg: HostConfig, principal: Principal): OperationsReadScope {
+  if (isInstanceAdmin(principal)) return { all: true, projectIds: [] };
+  const scopes = visibleScopes(cfg.dataDir, principal, OPERATIONS_READ_CAPABILITY);
+  if (scopes.length === 0) {
+    throw new ForbiddenError('operations read access required');
+  }
+  return { all: false, projectIds: actionableProjectIds(scopes) };
+}
+
+/** Narrow hosted project records to the caller's scope (an instance-admin keeps all). */
+function narrowToScope(projects: HostedProjectRecord[], scope: OperationsReadScope): HostedProjectRecord[] {
   if (scope.all) return projects;
   return projects.filter((p) => scope.projectIds.includes(p.id));
 }

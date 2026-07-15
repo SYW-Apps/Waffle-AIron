@@ -15,6 +15,6 @@ dependsOn:
   - permission_repository
   - role_repository
   - permission_resolver
-status: design
+status: complete
 createdAt: '2026-07-15T21:31:49.217Z'
-updatedAt: '2026-07-15T22:32:40.027Z'
+updatedAt: '2026-07-15T23:30:40.953Z'

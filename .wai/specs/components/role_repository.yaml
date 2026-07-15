@@ -10,6 +10,6 @@ owns:
   - role_registry
   - role_index
 dependsOn: []
-status: design
+status: complete
 createdAt: '2026-07-15T20:26:57.322Z'
-updatedAt: '2026-07-15T22:32:39.021Z'
+updatedAt: '2026-07-15T23:30:41.389Z'

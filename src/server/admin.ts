@@ -4,7 +4,7 @@ import { WAIRON_VERSION } from '../config/defaults.js';
 import { stateIdEquals } from '../core/statehash.js';
 import type { LockRecord } from '../core/lockfile.js';
 import { authenticateMaster, authenticateCredential, signViewToken } from './auth.js';
-import { resolveScopeFor, permits } from './scope.js';
+import { authorize } from './authorization.js';
 import { placeProject as placeProjectInUnit } from './organization.js';
 import {
   hashToken,
@@ -28,7 +28,7 @@ import type {
   Principal,
   PrincipalSubject,
   PromoteResult,
-  Role,
+  DisplayRole,
 } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -95,16 +95,18 @@ export function createProject(
   unitId?: string,
 ): HostedProjectRecord {
   const principal = requirePrincipal(cfg, credential);
-  const scope = resolveScopeFor(cfg, principal, 'project:create');
 
-  // No create authority at all: not a super-admin and no in-scope units.
-  if (!scope.all && scope.unitIds.length === 0) {
-    throw new AdminAuthError('Forbidden — creating a project requires project:create authority');
-  }
-  // A unit-scoped creator must target an in-scope unit; a super-admin may skip.
-  if (!scope.all && (!unitId || !scope.unitIds.includes(unitId))) {
+  // A creator targeting an organization unit must hold project:create over THAT
+  // unit; creating an unplaced project is an instance-level act, so it requires
+  // project:create at the instance root (an instance-admin passes either way).
+  const target: { kind: 'unit' | 'instance'; id: string } = unitId
+    ? { kind: 'unit', id: unitId }
+    : { kind: 'instance', id: '' };
+  if (authorize(cfg.dataDir, principal, 'project:create', target.kind, target.id).value !== 'yes') {
     throw new AdminAuthError(
-      'Forbidden — a unit-scoped project creator must target an organization unit within their scope',
+      unitId
+        ? 'Forbidden — creating a project requires project:create over the target organization unit'
+        : 'Forbidden — creating an unplaced project requires instance-wide project:create',
     );
   }
 
@@ -141,9 +143,8 @@ export function executeApprovedCreate(cfg: HostConfig, id: string): HostedProjec
 
 export function destroyProject(cfg: HostConfig, credential: string | null, id: string): void {
   const principal = requirePrincipal(cfg, credential);
-  const scope = resolveScopeFor(cfg, principal, 'project:destroy');
-  if (!permits(scope, id)) {
-    throw new AdminAuthError('Forbidden — destroying a project requires project:destroy scope over it');
+  if (authorize(cfg.dataDir, principal, 'project:admin', 'project', id).value !== 'yes') {
+    throw new AdminAuthError('Forbidden — destroying a project requires project:admin over it');
   }
   removeProjectRecord(cfg.dataDir, id);
 }
@@ -153,15 +154,14 @@ export function listProjects(cfg: HostConfig, credential: string | null): Hosted
   return listProjectRecords(cfg.dataDir);
 }
 
-export function mintKey(cfg: HostConfig, credential: string | null, project: string, role: Role): string {
+export function mintKey(cfg: HostConfig, credential: string | null, project: string, role: DisplayRole): string {
   requireAdmin(credential);
-  // Strict "built-in is the only super-admin": the legacy admin role projects to
-  // {projectId:'*', permissions:['*']} and the '*' project wildcard is an
-  // instance-wide grant, so either shape would mint a distributable *:* bearer —
-  // a second super-admin route beside the env-anchored built-in account. Only
+  // Strict "built-in is the only super-admin": a '*' project narrowing or the
+  // legacy admin display role would mint an instance-wide bearer — a second
+  // super-admin route beside the env-anchored built-in account. Only
   // project-scoped, non-super-admin keys are mintable. The WAIRON_ADMIN_TOKEN
   // master principal and the built-in password login are NOT minted keys and
-  // remain full *:* super-admins (their auth paths are untouched).
+  // remain the only instance-admins (their auth paths are untouched).
   if (role === 'admin' || project === '*') {
     throw new Error(
       'instance-wide super-admin (*:*) keys cannot be minted — the built-in admin account (WAIRON_ADMIN_USER) is the only super-admin',
@@ -191,9 +191,8 @@ export function listKeys(cfg: HostConfig, credential: string | null, project: st
 
 export function lockProject(cfg: HostConfig, credential: string | null, project: string): LockRecord {
   const principal = requirePrincipal(cfg, credential);
-  const scope = resolveScopeFor(cfg, principal, 'lock:create');
-  if (!permits(scope, project)) {
-    throw new AdminAuthError('Forbidden — locking a project requires lock:create scope over it');
+  if (authorize(cfg.dataDir, principal, 'project:write', 'project', project).value !== 'yes') {
+    throw new AdminAuthError('Forbidden — locking a project requires project:write over it');
   }
   return executeApprovedLock(cfg, project);
 }
@@ -338,9 +337,8 @@ export function diagramViewLink(cfg: HostConfig, credential: string | null, proj
 
 export function promoteProject(cfg: HostConfig, credential: string | null, project: string): PromoteResult {
   const principal = requirePrincipal(cfg, credential);
-  const scope = resolveScopeFor(cfg, principal, 'promote:mark-ready');
-  if (!permits(scope, project)) {
-    throw new AdminAuthError('Forbidden — promoting a project requires promote:mark-ready scope over it');
+  if (authorize(cfg.dataDir, principal, 'project:write', 'project', project).value !== 'yes') {
+    throw new AdminAuthError('Forbidden — promoting a project requires project:write over it');
   }
   return executeApprovedPromote(cfg, project);
 }

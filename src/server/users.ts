@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import type { HostedUserRecord, ProjectGrant } from './types.js';
+import { listAssignments } from './permissions.js';
+import type { HostedUserRecord, UnitIdRemap } from './types.js';
 
 // ---------------------------------------------------------------------------
 // User Repository (sdd_host)
@@ -114,20 +115,57 @@ function registrySetStatus(dataDir: string, id: string, status: string): HostedU
 }
 
 /**
- * Replace a user's grants wholesale with the supplied set — no merging, since the
- * caller has already computed and authorized the final grant state. An unknown id
- * fails with a not-found error. Persists atomically and returns the updated record.
+ * Rewrite every user's home unitId and role-binding scopeIds per the remap (a
+ * unit rename/move), and clear any home unitId or role-binding scoped to a
+ * removedScopeId (a cascade-deleted subtree). Persists atomically.
+ *
+ * Without this, a moved unit would leave users pointing at a qualified id that
+ * no longer exists — and a binding orphaned at a reused path would silently
+ * resurrect when a unit is later recreated there.
  */
-function registryReplaceGrants(dataDir: string, id: string, grants: ProjectGrant[]): HostedUserRecord {
+function registryRemapUnitReferences(
+  dataDir: string,
+  remap: UnitIdRemap[],
+  removedScopeIds: string[],
+): void {
+  if (remap.length === 0 && removedScopeIds.length === 0) return;
+  const lookup = new Map(remap.map((r) => [r.oldId, r.newId]));
+  const removed = new Set(removedScopeIds);
   const records = loadStore(dataDir);
-  const idx = records.findIndex((r) => r.id === id);
-  if (idx === -1) {
-    throw new Error(`Hosted user "${id}" not found.`);
-  }
-  const stored: HostedUserRecord = { ...records[idx], grants };
-  records[idx] = stored;
-  replaceAll(dataDir, records);
-  return stored;
+  let changed = false;
+
+  const rewritten = records.map((record) => {
+    const next: HostedUserRecord = { ...record };
+
+    if (next.unitId) {
+      const moved = lookup.get(next.unitId);
+      if (moved) {
+        next.unitId = moved;
+        changed = true;
+      } else if (removed.has(next.unitId)) {
+        delete next.unitId;
+        changed = true;
+      }
+    }
+
+    if (next.roleBindings && next.roleBindings.length > 0) {
+      const bindings = next.roleBindings
+        .filter((b) => !(b.scopeId && removed.has(b.scopeId)))
+        .map((b) => (b.scopeId && lookup.has(b.scopeId) ? { ...b, scopeId: lookup.get(b.scopeId) } : b));
+      if (
+        bindings.length !== next.roleBindings.length ||
+        bindings.some((b, i) => b.scopeId !== next.roleBindings?.[i]?.scopeId)
+      ) {
+        next.roleBindings = bindings;
+        changed = true;
+      }
+    }
+
+    return next;
+  });
+
+  if (!changed) return;
+  replaceAll(dataDir, rewritten);
 }
 
 // ── Index (read path) ──────────────────────────────────────────────────────
@@ -154,9 +192,16 @@ function indexFindByExternalSubject(
 }
 
 /**
- * List users filtered by the optional status and the optional project id — a
- * project filter matches users holding at least one grant scoped to that project
- * or an instance-wide ('*') grant — sorted by id for stable pagination.
+ * List users filtered by the optional status and the optional project id, sorted
+ * by id for stable pagination.
+ *
+ * The project filter matches users holding a direct permission assignment scoped
+ * to that project. Grants are gone, so a user record no longer carries any
+ * project reference of its own — "who is on project X" is now a question for the
+ * permission grid, and answering it from the grid keeps the admin filter honest
+ * rather than silently widening to every user. It deliberately does NOT resolve
+ * inherited access (a broader unit/instance grant): that is a resolver question,
+ * and admins inspect effective access through the assignment views.
  */
 function indexList(dataDir: string, status?: string, projectId?: string): HostedUserRecord[] {
   let records = loadStore(dataDir);
@@ -164,9 +209,12 @@ function indexList(dataDir: string, status?: string, projectId?: string): Hosted
     records = records.filter((r) => r.status === status);
   }
   if (projectId) {
-    records = records.filter((r) =>
-      r.grants.some((g) => g.projectId === projectId || g.projectId === '*'),
+    const holders = new Set(
+      listAssignments(dataDir, [projectId], 'user')
+        .map((a) => a.subjectId)
+        .filter((id): id is string => id !== undefined),
     );
+    records = records.filter((r) => holders.has(r.id));
   }
   return records.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
@@ -202,11 +250,18 @@ export function setUserStatus(dataDir: string, id: string, status: string): Host
   return registrySetStatus(dataDir, id, status);
 }
 
-/** Replace a user's grants through the repository facade after authorization (atomic). */
-export function replaceUserGrants(
+/**
+ * Rewrite/clear user home units and role-binding scopes for a unit
+ * rename/move/cascade through the repository facade (atomic).
+ *
+ * (There is no replaceUserGrants: grants are gone. A user's permissions are
+ * managed through role bindings and the assignment grid — see
+ * permission_admin_orchestrator's bindRole / setAssignment.)
+ */
+export function remapUnitReferences(
   dataDir: string,
-  id: string,
-  grants: ProjectGrant[],
-): HostedUserRecord {
-  return registryReplaceGrants(dataDir, id, grants);
+  remap: UnitIdRemap[],
+  removedScopeIds: string[],
+): void {
+  registryRemapUnitReferences(dataDir, remap, removedScopeIds);
 }

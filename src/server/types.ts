@@ -1,10 +1,130 @@
 import type { StateId } from '../core/statehash.js';
+import type { LockRecord } from '../core/lockfile.js';
 
 // ---------------------------------------------------------------------------
 // Hosting value types (sdd_host)
 // ---------------------------------------------------------------------------
 
-export type Role = 'editor' | 'admin';
+/** Coarse compatibility role projected for DISPLAY only — never an authorization
+ *  source. Precise authorization resolves from a Principal's permissionSubject
+ *  through the permission resolver. (Named DisplayRole so the domain concept
+ *  `Role` below can carry its canonical meaning: a permission template.) */
+export type DisplayRole = 'editor' | 'admin';
+
+// ---------------------------------------------------------------------------
+// Hierarchical permission model (roles + assignments + the resolver)
+// ---------------------------------------------------------------------------
+
+/** The five capabilities the hierarchical permission model gates. There is NO
+ *  '*' capability: the instance-admin bypass is env-anchored to the built-in
+ *  super-admin/master and is never granted through the assignment grid. */
+export type Capability =
+  | 'project:read'
+  | 'project:create'
+  | 'project:write'
+  | 'project:admin'
+  | 'approval:decide';
+
+/** A three-valued permission plus `inherit`. The values ARE the approval flow:
+ *  `yes` = act directly, `approval` = create an approval request, `no` = deny
+ *  (403 + invisible), `inherit` = defer to the next ancestor scope. */
+export type PermissionValue = 'yes' | 'approval' | 'no' | 'inherit';
+
+/** The value an effective resolution can settle on — `inherit` is consumed by the walk. */
+export type EffectiveValue = Extract<PermissionValue, 'yes' | 'approval' | 'no'>;
+
+/** The scope tiers permissions may be anchored at. */
+export type ScopeKind = 'instance' | 'unit' | 'project';
+
+/** One capability→value default a role confers. */
+export interface RolePermission {
+  capability: Capability;
+  /** yes | approval | inherit. Roles GRANT only — combined most-permissively
+   *  (yes > approval) with the subject's other roles anchored at the same scope;
+   *  a role never denies, so 'no'/'inherit' is non-deciding during resolution. */
+  value: PermissionValue;
+}
+
+/** A named, reusable permission template bound to users (optionally scoped).
+ *  Most roles are admin-defined and stored; the BUILT-IN reserved roles are
+ *  intrinsic constants always merged into the PermissionWorld. */
+export interface Role {
+  /** Stable role id (lowercase slug, e.g. 'intern', 'project-owner'). */
+  id: string;
+  name: string;
+  description?: string;
+  permissions: RolePermission[];
+  createdAt: string;
+  createdBy?: PrincipalSubject;
+}
+
+/** One (subject × scope × capability → value) binding — the atom of the grid.
+ *  Roles are NOT assignment subjects: a role's values live on Role.permissions
+ *  and apply through the user's RoleBindings, anchored at the binding's scope. */
+export interface PermissionAssignment {
+  id: string;
+  /** user | everyone (a scope-wide default). */
+  subjectKind: 'user' | 'everyone';
+  /** The user id; absent when subjectKind is 'everyone'. */
+  subjectId?: string;
+  scopeKind: ScopeKind;
+  /** Qualified unit id or project id; absent when scopeKind is 'instance'. */
+  scopeId?: string;
+  capability: Capability;
+  value: PermissionValue;
+  createdAt: string;
+  createdBy?: PrincipalSubject;
+}
+
+/** Binds a role to a user within a scope. An unscoped binding applies
+ *  instance-wide (anchored at the instance root during resolution). */
+export interface RoleBinding {
+  roleId: string;
+  scopeKind?: ScopeKind;
+  scopeId?: string;
+}
+
+/** The resolved caller handed to the pure permission resolver. */
+export interface PermissionSubject {
+  /** The principal's stable user id (matches PermissionAssignment.subjectId). */
+  subjectId: string;
+  /** Roles bound to this subject, optionally scoped. */
+  roleBindings: RoleBinding[];
+  /** True ONLY for the env-anchored built-in super-admin subject, the master
+   *  credential, or (devMode) the local-developer subject — the resolver then
+   *  bypasses to yes. Determined by SUBJECT IDENTITY, never by an assignment;
+   *  a regular user is never instanceAdmin, even a delegated project:admin. */
+  instanceAdmin: boolean;
+}
+
+/** The gathered, read-only data the pure resolver walks. The caller performs
+ *  the I/O; the resolver performs none. */
+export interface PermissionWorld {
+  assignments: PermissionAssignment[];
+  /** Stored roles MERGED with the intrinsic built-in reserved roles. */
+  roles: Role[];
+  units: OrganizationUnitRecord[];
+  placements: ProjectPlacement[];
+}
+
+/** The resolved effective permission for one (subject, capability, target). */
+export interface EffectivePermission {
+  value: EffectiveValue;
+  /** instance-admin | user | role | everyone-default | instance-default. */
+  source: 'instance-admin' | 'user' | 'role' | 'everyone-default' | 'instance-default';
+  decidedScopeKind?: ScopeKind;
+  decidedScopeId?: string;
+}
+
+/** One scope in a subject's visibility view: actionable, or an ancestor shown
+ *  only as a navigation breadcrumb. Never an ancestor's other children. */
+export interface VisibleScope {
+  scopeKind: 'unit' | 'project';
+  scopeId: string;
+  value: EffectiveValue;
+  /** True when shown only as an ancestor breadcrumb (not directly actionable). */
+  context: boolean;
+}
 
 /** Human, service, or bootstrap identity resolved from a credential. The stable
  *  actor identity attached to MCP tokens and audit events; raw secrets never appear. */
@@ -23,47 +143,24 @@ export interface PrincipalSubject {
   email?: string;
 }
 
-/** Server-side authorization grant binding a principal/token to a hosted project
- *  and a precise permission set. Callers may not self-assert grants. */
-export interface ProjectGrant {
-  /** Hosted project id the grant applies to, or '*' for an instance-wide grant. */
-  projectId: string;
-  /** Permission identifiers such as 'mcp:read', 'mcp:write', 'key:manage', or '*'. */
-  permissions: string[];
-  /** Optional coarse display role derived from permissions ('viewer'…'admin'). */
-  role?: string;
-  /** When set, the grant is scoped to an organization unit: it covers every
-   *  hosted project placed in that unit AND all descendant units (recursive
-   *  subtree). '*' in projectId remains the instance-wide super-admin scope. */
-  orgUnitId?: string;
-  /** Optional ISO-8601 expiry for temporary grants. */
-  expiresAt?: string;
-}
-
-/** The set of hosted projects/units a principal may act on for a permission —
- *  or `all` for an instance-wide ('*') super-admin, meaning no filtering. */
-export interface ScopeResolution {
-  /** True = super-admin: unrestricted, projectIds/unitIds are not consulted. */
-  all: boolean;
-  /** In-scope project ids (empty when all=true — callers short-circuit on all). */
-  projectIds: string[];
-  /** In-scope unit ids (the resolved subtree) — used to filter users by home unit. */
-  unitIds: string[];
-}
-
-/** The authenticated caller identity and authorized scope. Transient. The
- *  role/projects fields remain a coarse compatibility projection; precise
- *  authorization is expressed by grants. */
+/** The authenticated caller identity and authorized scope. Transient (never
+ *  persisted). Its subject, projects narrowing, and permissionSubject are
+ *  server-side bindings derived from the token or bootstrap credential, never
+ *  from client-supplied parameters. The role/projects fields remain a coarse
+ *  compatibility projection for display; precise authorization is expressed
+ *  through the permission resolver over permissionSubject, never stored grants. */
 export interface Principal {
   tokenId: string;
-  role: Role;
-  /** Authorized project ids, or ['*'] for all. */
+  /** Coarse display projection — NOT an authorization source. */
+  role: DisplayRole;
+  /** Coarse projection of the token's project narrowing; '*' denotes no
+   *  narrowing (the resolver still gates per project). */
   projects: string[];
   authenticated: boolean;
   /** Resolved human, service, or bootstrap identity behind the action. */
   subject?: PrincipalSubject;
-  /** Precise server-derived project and instance permissions. */
-  grants?: ProjectGrant[];
+  /** The resolved permission subject for hierarchical authorization. */
+  permissionSubject?: PermissionSubject;
 }
 
 export const UNAUTHENTICATED: Principal = {
@@ -73,19 +170,25 @@ export const UNAUTHENTICATED: Principal = {
   authenticated: false,
 };
 
-/** A persisted API-key credential (the plaintext is never stored). */
+/** A persisted MCP/API credential: the hashed bearer token bound server-side to
+ *  an owner identity and a projects narrowing. The token carries NO permissions
+ *  of its own — within its narrowing it acts as the owner user's LIVE permission
+ *  (the resolver gates per project). The plaintext is never stored. */
 export interface ApiKeyRecord {
   id: string;
   keyHash: string;
-  role: Role;
+  /** Legacy coarse display role, optional and display-only — NOT an authority
+   *  source. Set by the legacy master-only mintKey path; unset by the
+   *  user-bound mint flows. */
+  role?: DisplayRole;
+  /** The project ids this token may act on, or ['*'] for the owner's full
+   *  accessible set — the token's narrowing, not a grant. */
   projects: string[];
   createdAt: string;
-  /** Human or service identity that owns this token. */
+  /** Human or service identity that owns this token — the identity it acts as. */
   ownerSubject?: PrincipalSubject;
   /** Identity that minted this token (when an admin creates it for someone else). */
   createdBySubject?: PrincipalSubject;
-  /** Precise project and instance permissions granted to this token. */
-  grants?: ProjectGrant[];
   /** Human-readable label for token administration and audit screens. */
   label?: string;
   /** Optional ISO-8601 expiration timestamp. */
@@ -94,21 +197,35 @@ export interface ApiKeyRecord {
   revokedAt?: string;
 }
 
-/** A hosted human or service-principal account bound to an identity subject. */
+/** A hosted human or service-principal account bound to an identity subject.
+ *  Links tokens, permission bindings, and audit events to a stable actor
+ *  identity. Permissions live in roleBindings + the assignment grid — never on
+ *  the record as grants. */
 export interface HostedUserRecord {
   id: string;
   /** The identity this account is bound to (issuer, kind, external subject). */
   subject: PrincipalSubject;
-  /** Lifecycle status: 'active' | 'suspended' | 'deactivated'. */
+  /** Lifecycle status collapsed to a single axis: 'active' or inactive (any
+   *  non-'active' value). An inactive record is retained for audit provenance
+   *  but the user cannot act. */
   status: string;
-  /** Project and instance permissions granted to this user. */
-  grants: ProjectGrant[];
   createdAt: string;
+  /** Human-readable display name (from the SSO id_token 'name'/'preferred_username'
+   *  claim at provisioning, refreshed on re-login). Shown in the admin UI and
+   *  audit views instead of the opaque subject id. */
+  displayName?: string;
+  /** Email address from the SSO id_token 'email' claim when present; shown
+   *  alongside the display name so admins identify users by name/email. */
+  email?: string;
   /** ISO-8601 timestamp of the user's most recent authenticated activity. */
   lastSeenAt?: string;
   /** The user's home organization unit; scoped user administration lists and
    *  filters users by their home unit subtree. */
   unitId?: string;
+  /** Roles bound to this user, optionally scoped to a unit/project subtree;
+   *  combined with direct assignments and everyone-defaults during resolution.
+   *  Authorization is expressed ONLY here (plus the grid), never via grants. */
+  roleBindings?: RoleBinding[];
 }
 
 /** A durable, redacted audit event: who acted, through which token, on what, with what outcome.
@@ -297,12 +414,22 @@ export interface PolicyEvaluationResult {
 
 /** A node in the hosted organization hierarchy (department, team, domain, …). */
 export interface OrganizationUnitRecord {
+  /** Qualified dot-path identity from the org root: the parent's qualified id +
+   *  '.' + slug (a root unit's id IS its slug), e.g. "company_a.it.team_a". The
+   *  stable unique key referenced by placements.unitId, assignment scopeIds,
+   *  user.unitId, and exposeTo[]. Uniqueness is enforced on this qualified path;
+   *  a create or move onto an existing id is an error (never a silent
+   *  overwrite). There is no hidden opaque key. */
   id: string;
   name: string;
-  /** e.g. 'organization' | 'department' | 'team' | 'domain' */
+  /** e.g. 'business_entity' | 'department' | 'team' | 'portfolio' | 'group' */
   kind: string;
-  /** Parent unit id; absent on root units. (Type spec marks this required — narrative
-   *  says "when set"; root units omit it. Flagged for a type-spec fix.) */
+  /** Local segment, unique among sibling units under the same parentId
+   *  (top-level slugs are unique instance-wide). Lowercase [a-z0-9-], dot-free
+   *  ('.' is the qualified-id separator). Reused freely across parents:
+   *  company_a.it and company_b.it coexist. */
+  slug: string;
+  /** Qualified id of the parent organization unit; absent for a root/tenant unit. */
   parentId?: string;
   status: string;
   createdAt: string;
@@ -336,6 +463,37 @@ export interface ProjectPlacement {
 export interface OrganizationState {
   units: OrganizationUnitRecord[];
   placements: ProjectPlacement[];
+}
+
+/** The chosen resolution when removing an organization unit — a unit is never
+ *  silently cascade-deleted; the caller picks what happens to its child units
+ *  and project placements. Every non-cascade disposition is an explicit move
+ *  that rewrites the moved subtree's qualified ids and every reference to them. */
+export interface UnitDisposition {
+  /** 'migrate' (content → an existing targetUnitId) | 'alternative' (create a
+   *  new sibling newSlug/newName and move content in — how a rename/replace is
+   *  expressed) | 'absorb' (content → the parent unit) | 'cascade' (delete this
+   *  unit with its entire subtree and their placements). */
+  kind: 'migrate' | 'alternative' | 'absorb' | 'cascade';
+  /** Required for kind='migrate': the existing destination unit that adopts this
+   *  unit's children/placements. Must exist and must not be this unit or one of
+   *  its own descendants. */
+  targetUnitId?: string;
+  /** Required for kind='alternative': slug of a new unit created under the same
+   *  parent (unique among siblings) into which all content is moved. */
+  newSlug?: string;
+  /** Optional display name for the 'alternative' replacement unit; defaults to
+   *  the removed unit's name. */
+  newName?: string;
+}
+
+/** Maps an organization unit's previous qualified id to its new one after a
+ *  reparent or rename. reparentUnit returns one per moved unit (the unit plus
+ *  every descendant) so callers rewrite every reference to the old id —
+ *  placements, assignment scopes, user home units, and exposeTo lists. */
+export interface UnitIdRemap {
+  oldId: string;
+  newId: string;
 }
 
 /** A remote project public surface consumed across project boundaries. */
@@ -431,6 +589,11 @@ export interface LandscapeNode {
   unitId?: string;
   publicInterfaceId?: string;
   status?: string;
+  /** True when the caller can act on this scope. False/absent on an
+   *  ancestor-breadcrumb (context) unit included only so the hierarchy stays
+   *  navigable to the root — shown read-only, its non-visible children omitted.
+   *  An instance-admin sees every node actionable. */
+  actionable?: boolean;
 }
 
 /** A directed edge of the hosted landscape graph. */
@@ -524,12 +687,16 @@ export const WEB_SESSION_PREFIX = 'ws_';
 export interface WebSession {
   id: string;
   subject: PrincipalSubject;
-  grants: ProjectGrant[];
+  /** The session's project narrowing ('*' = none). It stores no permissions:
+   *  the single auth authority resolves permissionSubject (roleBindings +
+   *  instanceAdmin) LIVE at authentication. */
+  projects: string[];
   createdAt: string;
   expiresAt: string;
   lastSeenAt?: string;
   providerId?: string;
-  /** Optional correlated user-bound token id, for correlated revocation. */
+  /** Optional correlated user-bound token id, for correlated revocation; never
+   *  a raw token. Unset when the session itself is the credential. */
   tokenId?: string;
 }
 
@@ -541,11 +708,20 @@ export interface WebGraphNode {
   kind: string;
   /** Detail level: lower = higher-level (landscape/subsystem), deeper = L2/L3. */
   level: number;
+  /** Id of the containing node, for hierarchical expand/collapse. Spans the full
+   *  environment tree: unit→unit (nested org hierarchy over the qualified unit
+   *  paths), unit→project, project→subsystem, subsystem→component,
+   *  component→interface. Absent only at the environment root. */
   parentId?: string;
   projectId?: string;
   status?: string;
   /** Count of validation issues on this node (overlaid on the project tier). */
   issueCount?: number;
+  /** True when the caller can act on this scope. False/absent on an ancestor
+   *  breadcrumb shown read-only only so the tree stays navigable to a deeper
+   *  actionable scope (the no@org + yes@one-project case). Carried through from
+   *  LandscapeNode.actionable on the landscape tier. */
+  actionable?: boolean;
 }
 
 /** A level-of-detail graph payload for the web UI: the landscape tier, or one
@@ -581,11 +757,10 @@ export interface WebLoginOptions {
  *  client renders role-appropriately (an admin is a developer with more scope). */
 export interface WebContext {
   subject: PrincipalSubject;
-  grants: ProjectGrant[];
+  /** True only for the env-anchored instance super-admin. Delegated/SSO admins
+   *  are NOT flagged here — the client drives admin chrome from their
+   *  project:admin visible scopes; every endpoint enforces server-side. */
   isAdmin: boolean;
-  canWriteProjects: boolean;
-  visibleProjectIds: string[];
-  visibleUnitIds: string[];
   /** True when this context comes from the local developer server (`wairon dev`):
    *  the SAME reused client hides the tenancy/login/account chrome (Landscape tier,
    *  project picker, sign-out, admin badge) and renders the single local project
@@ -666,6 +841,25 @@ export interface PromoteResult {
   status: 'ready' | 'stale' | 'not-locked';
   stateId?: StateId;
   message: string;
+}
+
+/** The standardized result of a self-service action (lock/promote/initialize).
+ *  EXECUTE-PRIMARY: when the caller is authorized the action RUNS and status is
+ *  'completed' with the natural result; when their effective permission is
+ *  'approval' the action is not run and status is 'pending-approval' carrying
+ *  the created request. A 'no' permission never returns this — it raises Forbidden. */
+export interface SelfServiceOutcome {
+  status: 'completed' | 'pending-approval';
+  action: 'project:init' | 'project:lock' | 'project:promote';
+  /** Human-readable outcome: the result detail when completed, or that a
+   *  request was submitted when pending-approval. */
+  summary: string;
+  /** The pending approval request — only when status is 'pending-approval'. */
+  approval?: ApprovalRequest;
+  /** The lock record, present when a project:lock completed. */
+  lock?: LockRecord;
+  /** The promote result, present when a project:promote completed. */
+  promote?: PromoteResult;
 }
 
 /** A verified short-lived capability to view one project's diagram in a browser —

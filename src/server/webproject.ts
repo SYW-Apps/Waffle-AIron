@@ -1,6 +1,5 @@
 import { authenticateSession } from './auth.js';
-import { listOrganizationUnits, listProjectPlacements } from './organization.js';
-import { resolveScope } from './scope.js';
+import { visibleScopes, actionableProjectIds, isInstanceAdmin } from './authorization.js';
 import { listProjectRecords } from './projects.js';
 import {
   createProject as adminCreateProject,
@@ -20,53 +19,46 @@ import type { HostConfig, HostedProjectRecord, PromoteResult } from './types.js'
 // bearer token).
 //
 // create/lock/promote/destroy are THIN forwards to the admin orchestrator,
-// passing the session id AS the credential. Those admin functions authorize by
-// the caller's GRANT SCOPE (project:create / lock:create / promote:mark-ready /
-// project:destroy over the org tree) and re-validate, so a signed-in human
-// manages exactly the projects their grants permit — no new authorization
-// surface is introduced here.
+// passing the session id AS the credential. Those admin functions authorize
+// through the permission resolver (project:create / project:write /
+// project:admin over the org tree) and re-validate, so a signed-in human manages
+// exactly the projects their permissions allow — no new authorization surface is
+// introduced here.
 //
 // listProjects is OWNED here because the admin orchestrator's list is
-// master-only (requireAdmin). It resolves the session to a Principal, resolves
-// the caller's project-access scope over the organization tree (mcp:read, the
-// same access level the web context derives visibleProjectIds from), and returns
-// only the project records within that scope (a super-admin sees all).
+// master-only (requireAdmin). It resolves the session to a Principal, computes
+// the caller's project:read visible scopes, and returns only the project records
+// they can act on.
 // ---------------------------------------------------------------------------
 
 /**
- * Resolve the session to a Principal, resolve the caller's project-access scope
- * over the organization tree, and return the hosted project records within that
- * scope — every record for a super-admin (scope.all), otherwise those whose id
- * is in the resolved scope's projectIds. An expired or absent session yields an
- * unauthenticated principal (no grants → an empty result), never a throw. A read;
- * not audited.
+ * Resolve the session to a Principal, compute the caller's project:read visible
+ * scopes over the organization tree, and return the hosted project records they
+ * can act on. Breadcrumb (context) scopes are deliberately excluded: an ancestor
+ * shown only for navigation is not a project the caller may open. An expired or
+ * absent session yields an unauthenticated principal (an empty result), never a
+ * throw. A read; not audited.
  */
 export function listProjects(cfg: HostConfig, sessionId: string): HostedProjectRecord[] {
-  // step 1: resolve the browser session to a Principal (unauthenticated → no grants).
+  // step 1: resolve the browser session to a Principal (unauthenticated → sees nothing).
   const principal = authenticateSession(cfg.dataDir, sessionId);
 
-  // steps 2–3: gather the org unit tree and project placements the scope is computed over.
-  const units = listOrganizationUnits(cfg.dataDir);
-  const placements = listProjectPlacements(cfg.dataDir);
-
-  // step 4: resolve the caller's project-access scope (unit-scoped grants expand
-  // across each unit's subtree). mcp:read is the access level the web context
-  // derives visibleProjectIds from, so the managed set matches what the UI shows.
-  const scope = resolveScope(principal.grants ?? [], 'mcp:read', units, placements);
-
-  // step 5: list all hosted project records.
+  // step 2: list all hosted project records.
   const records = listProjectRecords(cfg.dataDir);
 
-  // step 6: keep only the records within the caller's scope (all for a super-admin).
-  if (scope.all) return records;
-  const inScope = new Set(scope.projectIds);
-  return records.filter((r) => inScope.has(r.id)); // step 7
+  // step 3: an instance-admin sees the whole instance, including projects not yet
+  // placed in any organization unit (which no unit-scoped permission can reach).
+  if (isInstanceAdmin(principal)) return records;
+
+  // step 4: otherwise keep only the projects the caller can act on.
+  const inScope = new Set(actionableProjectIds(visibleScopes(cfg.dataDir, principal, 'project:read')));
+  return records.filter((r) => inScope.has(r.id));
 }
 
 /**
  * Create a hosted project. Forwards to admin_orchestrator.createProject passing
- * the sessionId as the credential — project:create scope (and the required target
- * org unit for a unit-scoped creator) is enforced there.
+ * the sessionId as the credential — project:create permission (and the required
+ * target org unit) is enforced there.
  */
 export function createProject(
   cfg: HostConfig,

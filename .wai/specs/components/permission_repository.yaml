@@ -10,6 +10,6 @@ owns:
   - permission_registry
   - permission_index
 dependsOn: []
-status: design
+status: complete
 createdAt: '2026-07-15T20:27:05.322Z'
-updatedAt: '2026-07-15T22:32:34.528Z'
+updatedAt: '2026-07-15T23:30:41.153Z'

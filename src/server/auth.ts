@@ -2,15 +2,15 @@ import * as crypto from 'crypto';
 import {
   type ApiKeyRecord,
   type HostConfig,
+  type PermissionSubject,
   type Principal,
   type PrincipalSubject,
-  type ProjectGrant,
-  type Role,
   type ViewGrant,
   UNAUTHENTICATED,
 } from './types.js';
 import { findByTokenHash, hashToken } from './credentials.js';
 import { getWebSessionById, WEB_SESSION_PREFIX } from './websessions.js';
+import { getUserById } from './users.js';
 import { resolveSecret } from '../utils/secrets.js';
 
 // ---------------------------------------------------------------------------
@@ -20,8 +20,89 @@ import { resolveSecret } from '../utils/secrets.js';
 // the credential registry; the control-plane master credential verifies against
 // WAIRON_ADMIN_TOKEN (an env-injected secret) so the admin API can be reached
 // before any project or key exists (the bootstrap chicken-and-egg). Performs no
-// routing — only produces a Principal, resolving its subject and precise grants.
+// routing — it only produces a Principal.
+//
+// A Principal carries NO permissions of its own. It carries a resolved
+// permissionSubject (subjectId + roleBindings + instanceAdmin) that the
+// permission resolver evaluates per request, so a token always acts as its
+// owner's LIVE permission and can never outlive or exceed it.
 // ---------------------------------------------------------------------------
+
+/** The stable userId of the env-anchored built-in super-admin web-login account. */
+export const BUILTIN_SUPERADMIN_USER_ID = 'builtin:superadmin';
+
+/** The stable userId of the synthetic local-developer subject (`wairon dev`). */
+export const BUILTIN_LOCALDEV_USER_ID = 'builtin:localdev';
+
+/** The issuer the env-anchored built-in subjects are minted under. */
+const LOCAL_ISSUER = 'local';
+
+/**
+ * Subject ids that confer the env-anchored instance-admin BYPASS. They are
+ * reserved: a hosted user record may never claim one (see assertSubjectNotReserved),
+ * or creating such a user would silently mint an un-overridable super-admin.
+ */
+export const RESERVED_SUBJECT_IDS: readonly string[] = [
+  BUILTIN_SUPERADMIN_USER_ID,
+  BUILTIN_LOCALDEV_USER_ID,
+];
+
+/**
+ * True ONLY for the env-anchored subjects that hold the resolver bypass:
+ *   - the built-in super-admin, matched on the FULL tuple (issuer 'local' AND
+ *     userId 'builtin:superadmin') so an SSO provider issuing that userId under
+ *     its own issuer can never collide into the bypass;
+ *   - the synthetic local-developer subject, likewise matched on the full tuple.
+ *     It exists only when `wairon dev` minted it (startDevSession is devMode-only
+ *     and is the sole minter), and the reserved-id guard stops a user record from
+ *     impersonating it;
+ *   - the bootstrap/master credential.
+ *
+ * instanceAdmin is determined by SUBJECT IDENTITY, never by a roleBinding or an
+ * assignment. A regular user is never instanceAdmin — a delegated instance-wide
+ * admin holds project:admin@instance, which resolves as a normal OVERRIDABLE
+ * permission, not the bypass.
+ */
+function isInstanceAdminSubject(subject: PrincipalSubject | undefined): boolean {
+  if (!subject) return false;
+  if (subject.kind === 'bootstrap' && subject.issuer === 'bootstrap') return true;
+  if (subject.issuer !== LOCAL_ISSUER) return false;
+  return (
+    subject.userId === BUILTIN_SUPERADMIN_USER_ID || subject.userId === BUILTIN_LOCALDEV_USER_ID
+  );
+}
+
+/** True when a subject claims one of the env-reserved built-in identities. */
+export function isReservedSubject(subject: PrincipalSubject): boolean {
+  return subject.issuer === LOCAL_ISSUER && RESERVED_SUBJECT_IDS.includes(subject.userId);
+}
+
+/**
+ * Resolve a credential's subject to its LIVE permission subject.
+ *
+ * roleBindings are read fresh from the user record on every authentication, so
+ * revoking a role takes effect immediately for existing tokens. Returns null when
+ * the owner user exists but is not active — defense in depth behind
+ * revokeAllForOwner, so a deactivated user cannot act even if a credential
+ * somehow survived the revocation sweep.
+ */
+function resolvePermissionSubject(
+  dataDir: string,
+  subject: PrincipalSubject | undefined,
+): PermissionSubject | null {
+  const subjectId = subject?.userId ?? '';
+  if (isInstanceAdminSubject(subject)) {
+    // The env-anchored subjects have no user record — bindings are irrelevant
+    // because the resolver bypasses the walk for them entirely.
+    return { subjectId, roleBindings: [], instanceAdmin: true };
+  }
+  if (!subjectId) {
+    return { subjectId: '', roleBindings: [], instanceAdmin: false };
+  }
+  const user = getUserById(dataDir, subjectId);
+  if (user && user.status !== 'active') return null;
+  return { subjectId, roleBindings: user?.roleBindings ?? [], instanceAdmin: false };
+}
 
 /** True once a credential record is past its expiresAt or has a revokedAt set. */
 function isExpiredOrRevoked(rec: ApiKeyRecord): boolean {
@@ -30,30 +111,22 @@ function isExpiredOrRevoked(rec: ApiKeyRecord): boolean {
   return false;
 }
 
-/** Compatibility projection of legacy role/projects into precise grants:
- *  admin → a single instance-wide grant; editor → an mcp:read/mcp:write grant
- *  per authorized project. */
-function projectGrantsFromRole(role: Role, projects: string[]): ProjectGrant[] {
-  if (role === 'admin') {
-    return [{ projectId: '*', permissions: ['*'], role: 'admin' }];
-  }
-  return projects.map((projectId) => ({
-    projectId,
-    permissions: ['mcp:read', 'mcp:write'],
-    role: 'editor',
-  }));
-}
-
-/** Assemble an authenticated Principal from a matched credential record:
- *  subject from ownerSubject when present, grants from the record when present,
- *  otherwise projected from the compatibility role/projects. */
-function principalFromRecord(rec: ApiKeyRecord): Principal {
+/**
+ * Assemble an authenticated Principal from a matched credential record: the
+ * subject from ownerSubject, the token's project narrowing from the record, and
+ * the permissionSubject resolved LIVE from the owner's user record. The record's
+ * role/projects remain a coarse DISPLAY projection only. A record whose owner is
+ * no longer active resolves to UNAUTHENTICATED.
+ */
+function principalFromRecord(dataDir: string, rec: ApiKeyRecord): Principal {
+  const permissionSubject = resolvePermissionSubject(dataDir, rec.ownerSubject);
+  if (!permissionSubject) return UNAUTHENTICATED;
   const principal: Principal = {
     tokenId: rec.id,
-    role: rec.role,
+    role: rec.role ?? 'editor',
     projects: rec.projects,
     authenticated: true,
-    grants: rec.grants ?? projectGrantsFromRole(rec.role, rec.projects),
+    permissionSubject,
   };
   if (rec.ownerSubject) principal.subject = rec.ownerSubject;
   return principal;
@@ -66,7 +139,7 @@ function resolveTokenPrincipal(dataDir: string, token: string | null): Principal
   const rec = findByTokenHash(dataDir, hashToken(token));
   if (!rec) return UNAUTHENTICATED;
   if (isExpiredOrRevoked(rec)) return UNAUTHENTICATED;
-  return principalFromRecord(rec);
+  return principalFromRecord(dataDir, rec);
 }
 
 /** Constant-time check of a presented credential against WAIRON_ADMIN_TOKEN. */
@@ -78,79 +151,76 @@ function masterMatches(credential: string | null): boolean {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-/** The bootstrap/control-plane admin identity: admin over all projects, carrying
- *  a bootstrap subject and an instance-wide administrative grant. */
+/** The bootstrap/control-plane admin identity: the env-anchored master credential,
+ *  which holds the instance-admin bypass by subject identity. */
 function bootstrapAdminPrincipal(): Principal {
+  const subject: PrincipalSubject = {
+    userId: 'bootstrap',
+    kind: 'bootstrap',
+    issuer: 'bootstrap',
+    displayName: 'Bootstrap Administrator',
+  };
   return {
     tokenId: 'admin:master',
     role: 'admin',
     projects: ['*'],
     authenticated: true,
-    subject: {
-      userId: 'bootstrap',
-      kind: 'bootstrap',
-      issuer: 'bootstrap',
-      displayName: 'Bootstrap Administrator',
-    },
-    grants: [{ projectId: '*', permissions: ['*'], role: 'admin' }],
+    subject,
+    permissionSubject: { subjectId: subject.userId, roleBindings: [], instanceAdmin: true },
   };
 }
 
-/** Reverse of projectGrantsFromRole: derive the coarse role/projects
- *  compatibility projection from precise grants — any instance-wide ('*') grant →
- *  admin over ['*']; otherwise editor over the distinct granted project ids. Kept
- *  local (mirrors identity.ts's compatibilityProjection) because auth.ts must not
- *  import from identity.ts. */
-function compatibilityProjectionFromGrants(grants: ProjectGrant[]): { role: Role; projects: string[] } {
-  // Instance-wide super-admin is '*' WITHOUT an orgUnitId — a unit-scoped grant
-  // that happens to carry '*' is bounded to its subtree (scope.ts agrees).
-  if (grants.some((g) => g.projectId === '*' && !g.orgUnitId)) {
-    return { role: 'admin', projects: ['*'] };
-  }
-  return { role: 'editor', projects: [...new Set(grants.map((g) => g.projectId))] };
+/** The coarse role/projects DISPLAY projection for a session. Not an authority
+ *  source — every decision resolves from permissionSubject. */
+function displayProjection(permissionSubject: PermissionSubject, projects: string[]): {
+  role: Principal['role'];
+  projects: string[];
+} {
+  if (permissionSubject.instanceAdmin) return { role: 'admin', projects: ['*'] };
+  return { role: 'editor', projects };
 }
 
 /** The single, shared session-resolution path used by BOTH authenticateSession
  *  and the session branch of authenticateCredential, so the two can never diverge.
  *  Look up the browser session by id; reject an absent or expired (expiresAt at or
  *  before now) session as UNAUTHENTICATED. Otherwise assemble the same Principal
- *  shape a bearer token yields — subject and grants straight from the session, with
- *  the coarse role/projects compatibility projection derived from those grants and
- *  no credential-record lookup. The raw session id is a secret credential, so it is
+ *  shape a bearer token yields — the subject and project narrowing straight from
+ *  the session, with the permissionSubject resolved LIVE (the session stores no
+ *  permissions of its own). The raw session id is a secret credential, so it is
  *  never used as the audit-facing tokenId (only a correlated tokenId, when present). */
 function resolveSessionPrincipal(dataDir: string, sessionId: string): Principal {
   const session = getWebSessionById(dataDir, sessionId);
   if (!session) return UNAUTHENTICATED;
   if (Date.parse(session.expiresAt) <= Date.now()) return UNAUTHENTICATED;
-  const { role, projects } = compatibilityProjectionFromGrants(session.grants);
-  const principal: Principal = {
+  const permissionSubject = resolvePermissionSubject(dataDir, session.subject);
+  if (!permissionSubject) return UNAUTHENTICATED;
+  const { role, projects } = displayProjection(permissionSubject, session.projects);
+  return {
     tokenId: session.tokenId ?? '',
     role,
     projects,
     authenticated: true,
     subject: session.subject,
-    grants: session.grants,
+    permissionSubject,
   };
-  return principal;
 }
 
 /** Verify a data-plane bearer token to a Principal (or UNAUTHENTICATED). Resolves
- *  the Principal's subject and grants from the record (legacy records fall back to
- *  the role/projects projection); rejects expired or revoked records. */
+ *  the Principal's subject from the record and its permissionSubject LIVE from the
+ *  owner's user record; rejects expired or revoked records, and a record whose
+ *  owner is no longer active. */
 export function authenticate(dataDir: string, token: string | null): Principal {
   return resolveTokenPrincipal(dataDir, token);
 }
 
-/** Verify the control-plane master credential to an admin Principal (or reject). */
+/** Verify the control-plane master credential to the bootstrap admin Principal
+ *  (or reject). The master holds the env-anchored instance-admin bypass. */
 export function authenticateMaster(token: string | null): Principal {
   if (!masterMatches(token)) return UNAUTHENTICATED;
-  return { tokenId: 'admin:master', role: 'admin', projects: ['*'], authenticated: true };
+  return bootstrapAdminPrincipal();
 }
 
 // ── Built-in super-admin web login (WAIRON_ADMIN_USER / WAIRON_ADMIN_PASSWORD) ─
-
-/** The stable userId of the env-anchored built-in super-admin web-login account. */
-export const BUILTIN_SUPERADMIN_USER_ID = 'builtin:superadmin';
 
 /** Constant-time equality of two strings via fixed-length salted digests: hashing
  *  first normalizes both sides to equal-length buffers, so timingSafeEqual applies

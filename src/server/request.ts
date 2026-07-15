@@ -3,6 +3,7 @@ import * as path from 'path';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { runWithProjectRoot } from '../utils/fs.js';
 import { authenticate, authenticateSession, verifyViewToken } from './auth.js';
+import { authorize } from './authorization.js';
 import { WEB_SESSION_PREFIX } from './types.js';
 import { resolveProjectRoot, existingProjectRoot } from './projects.js';
 import { createScopedServer, hostCore } from './adapters.js';
@@ -215,44 +216,33 @@ const WRITE_TOOL_PREFIXES = [
 const READ_TOOL_PREFIXES = ['sdd_get_', 'sdd_validate_'];
 
 /**
- * The data-plane permission a tool requires: `mcp:read` for a read tool (a name
- * starting with sdd_get_ / sdd_validate_), otherwise `mcp:write`. Unknown / other
- * names are treated as writes (fail safe) so a novel tool can never slip past on a
- * read-only grant.
+ * The data-plane capability a tool requires: `project:read` for a read tool (a
+ * name starting with sdd_get_ / sdd_validate_), otherwise `project:write`.
+ *
+ * FAIL CLOSED: a read is ONLY the explicit read prefixes. The known write
+ * prefixes and any unrecognized or newly added tool name are all treated as
+ * writes, so a novel tool can never slip past on read-level permission.
  */
-function requiredDataPlanePermission(toolName: string): 'mcp:read' | 'mcp:write' {
-  if (READ_TOOL_PREFIXES.some((p) => toolName.startsWith(p))) return 'mcp:read';
-  if (WRITE_TOOL_PREFIXES.some((p) => toolName.startsWith(p))) return 'mcp:write';
-  return 'mcp:write';
-}
-
-/**
- * True when the principal's grant FOR THE BOUND PROJECT carries the required
- * data-plane permission: a grant whose projectId is the bound project (or the
- * instance-wide '*') carrying that permission — or the '*' permission wildcard,
- * which covers both read and write. Consults principal.grants, NOT the coarse
- * role/projects projection, so a read-only token (mcp:read only) is correctly
- * refused writes.
- */
-function grantPermitsDataPlane(principal: Principal, projectId: string, permission: string): boolean {
-  return (principal.grants ?? []).some(
-    (g) =>
-      // exact bound-project grant, or a genuine instance-wide '*' (NOT a
-      // unit-scoped grant that merely carries '*'+orgUnitId — that is bounded
-      // to its subtree and must not confer instance-wide data-plane reach).
-      (g.projectId === projectId || (g.projectId === '*' && !g.orgUnitId)) &&
-      (g.permissions.includes('*') || g.permissions.includes(permission)),
-  );
+function requiredDataPlaneCapability(toolName: string): 'project:read' | 'project:write' {
+  if (READ_TOOL_PREFIXES.some((p) => toolName.startsWith(p))) return 'project:read';
+  if (WRITE_TOOL_PREFIXES.some((p) => toolName.startsWith(p))) return 'project:write';
+  return 'project:write';
 }
 
 /**
  * Enforce the granular data-plane permission for an ordinary sdd_* `tools/call`.
  * Returns an `isError` tool-result response to send (and NOT dispatch) when the
- * bound project is not covered for the needed permission, or undefined to let the
- * call proceed. A non-`tools/call` message (initialize, tools/list) or a call with
- * no tool name is never gated — those do not mutate project state.
+ * caller lacks the needed capability over the BOUND project, or undefined to let
+ * the call proceed. A non-`tools/call` message (initialize, tools/list) or a call
+ * with no tool name is never gated — those do not mutate project state.
+ *
+ * This resolves through the permission resolver over the bound project, so a
+ * token always acts as its owner's LIVE permission: the token's `projects`
+ * narrowing (enforced separately at resolveProjectRoot) bounds WHICH projects it
+ * may name, and this gate decides what it may DO there.
  */
 function dataPlanePermissionError(
+  cfg: HostConfig,
   principal: Principal,
   projectId: string,
   body: unknown,
@@ -262,8 +252,8 @@ function dataPlanePermissionError(
   const name = msg.params?.name;
   if (typeof name !== 'string' || name.length === 0) return undefined;
 
-  const needed = requiredDataPlanePermission(name);
-  if (grantPermitsDataPlane(principal, projectId, needed)) return undefined;
+  const needed = requiredDataPlaneCapability(name);
+  if (authorize(cfg.dataDir, principal, needed, 'project', projectId).value === 'yes') return undefined;
 
   return {
     jsonrpc: '2.0',
@@ -379,16 +369,16 @@ export async function handleMcpRequest(
       return;
     }
   } else {
-    // Trusted-network mode: no credential required, but a project must still be
-    // named. The anonymous principal is a super-admin, so it carries an
-    // instance-wide '*'/'*' grant — this satisfies the granular data-plane
-    // permission gate below exactly as the master credential does.
+    // Trusted-network mode (auth disabled): no credential required, but a project
+    // must still be named. The anonymous principal is an instance-admin, so it
+    // holds the resolver bypass — satisfying the data-plane gate below exactly as
+    // the master credential does.
     principal = {
       tokenId: 'anonymous',
       role: 'admin',
       projects: ['*'],
       authenticated: true,
-      grants: [{ projectId: '*', permissions: ['*'] }],
+      permissionSubject: { subjectId: 'anonymous', roleBindings: [], instanceAdmin: true },
     };
   }
 
@@ -437,7 +427,7 @@ export async function handleMcpRequest(
     // consulted from the principal's grant for the BOUND project. A refusal is an
     // isError tool result (HTTP still 200) and the tool is never dispatched; it
     // still flows through the SAME best-effort audit path.
-    const permissionError = dataPlanePermissionError(principal, projectId, body);
+    const permissionError = dataPlanePermissionError(cfg, principal, projectId, body);
     if (permissionError !== undefined) {
       sendJson(res, 200, permissionError);
       auditToolCall(cfg.dataDir, principal, projectId, body, deriveMcpOutcome(permissionError));

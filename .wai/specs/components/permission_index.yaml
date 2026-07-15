@@ -8,6 +8,6 @@ componentType: Index
 owns: []
 dependsOn:
   - permission_store
-status: design
+status: complete
 createdAt: '2026-07-15T20:27:03.322Z'
-updatedAt: '2026-07-15T22:32:34.019Z'
+updatedAt: '2026-07-15T23:30:41.055Z'

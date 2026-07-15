@@ -9,7 +9,7 @@ import { authenticateCredential } from './auth.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { executeApprovedCreate } from './admin.js';
 import { resolveProjectRoot } from './projects.js';
-import { resolveScopeFor, permits } from './scope.js';
+import { authorize } from './authorization.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import { sendJson } from './httpio.js';
 import * as packs from './packs.js';
@@ -241,27 +241,23 @@ export function removeIdentityProviderRecord(dataDir: string, id: string): void 
 // canonical identity.ts helpers; keep this copy in lockstep).
 //
 // Project-scoped methods (evaluateProjectPolicy, reconcileProjectPolicy)
-// authorize on the RESOLVED, org-unit-aware mcp:write scope (scope_specialist:
-// resolveScopeFor + permits) — a unit admin is first-class over the projects
-// placed in its subtree, and a genuine instance-wide grant resolves to
-// scope.all. Only the instance-WIDE capabilities (initializeProjectWithProfile,
-// setPackPolicy) stay on the flat carriesInstancePermission check by design.
+// authorize project:write over the project through the permission resolver — a
+// unit admin is first-class over the projects placed in its subtree, because the
+// resolver's leaf->root walk reaches their unit-scoped permission. Only the
+// instance-WIDE capabilities (initializeProjectWithProfile, setPackPolicy)
+// authorize at the instance root by design.
 
-const PROJECT_CREATE_PERMISSION = 'project:create';
-const MCP_WRITE_PERMISSION = 'mcp:write';
-const POLICY_MANAGE_PERMISSION = 'policy:manage';
+/** Creating a project is its own capability. */
+const PROJECT_CREATE_CAPABILITY = 'project:create';
+/** The legacy `mcp:write` permission maps onto project:write. */
+const PROJECT_WRITE_CAPABILITY = 'project:write';
+/** The legacy `policy:manage` permission maps onto project:admin. */
+const POLICY_MANAGE_CAPABILITY = 'project:admin';
 
-// An instance-wide capability requires a grant scoped to ALL projects (a genuine
-// '*', no orgUnitId) carrying the permission (or the '*' wildcard). A project- or
-// unit-scoped grant, even one carrying the permission, does NOT confer
-// instance-wide reach.
-function carriesInstancePermission(principal: Principal, permission: string): boolean {
-  return (principal.grants ?? []).some(
-    (g) =>
-      g.projectId === '*' &&
-      !g.orgUnitId &&
-      (g.permissions.includes('*') || g.permissions.includes(permission)),
-  );
+// An instance-WIDE capability must resolve at the instance root: a unit- or
+// project-scoped permission, however broad, does NOT confer instance-wide reach.
+function carriesInstancePermission(cfg: HostConfig, principal: Principal, capability: string): boolean {
+  return authorize(cfg.dataDir, principal, capability, 'instance', '').value === 'yes';
 }
 
 /** Authenticate the caller credential or throw (401-mapping). */
@@ -545,7 +541,7 @@ export function initializeProjectWithProfile(
   request: ProjectInitRequest,
 ): HostedProjectRecord {
   const principal = requirePrincipal(cfg, credential);
-  if (!carriesInstancePermission(principal, PROJECT_CREATE_PERMISSION)) {
+  if (!carriesInstancePermission(cfg, principal, PROJECT_CREATE_CAPABILITY)) {
     throw new ForbiddenError('creating a project requires a project:create grant or an instance-admin grant');
   }
   return performInit(cfg, request, principal);
@@ -590,9 +586,9 @@ export function evaluateProjectPolicy(
   projectId: string,
 ): PolicyEvaluationResult {
   const principal = requirePrincipal(cfg, credential);
-  if (!permits(resolveScopeFor(cfg, principal, MCP_WRITE_PERMISSION), projectId)) {
+  if (authorize(cfg.dataDir, principal, PROJECT_WRITE_CAPABILITY, 'project', projectId).value !== 'yes') {
     throw new ForbiddenError(
-      "evaluating a project's policy requires a grant covering the project or an instance-admin grant",
+      "evaluating a project's policy requires project:write over the project",
     );
   }
   const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
@@ -624,9 +620,9 @@ export function reconcileProjectPolicy(
   projectId: string,
 ): PolicyEvaluationResult {
   const principal = requirePrincipal(cfg, credential);
-  if (!permits(resolveScopeFor(cfg, principal, MCP_WRITE_PERMISSION), projectId)) {
+  if (authorize(cfg.dataDir, principal, PROJECT_WRITE_CAPABILITY, 'project', projectId).value !== 'yes') {
     throw new ForbiddenError(
-      "reconciling a project's policy requires a grant covering the project or an instance-admin grant",
+      "reconciling a project's policy requires project:write over the project",
     );
   }
   const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
@@ -688,7 +684,7 @@ export function setPackPolicy(
   policy: InstancePackPolicy,
 ): InstancePackPolicy {
   const principal = requirePrincipal(cfg, credential);
-  if (!carriesInstancePermission(principal, POLICY_MANAGE_PERMISSION)) {
+  if (!carriesInstancePermission(cfg, principal, POLICY_MANAGE_CAPABILITY)) {
     throw new ForbiddenError('policy administration requires a policy:manage grant or an instance-admin grant');
   }
 

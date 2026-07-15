@@ -9,6 +9,6 @@ componentType: Registry
 owns: []
 dependsOn:
   - permission_store
-status: design
+status: complete
 createdAt: '2026-07-15T20:27:01.456Z'
-updatedAt: '2026-07-15T22:32:33.019Z'
+updatedAt: '2026-07-15T23:30:41.104Z'
