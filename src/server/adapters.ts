@@ -5,6 +5,7 @@ import { provisionProject, promoteAllComplete } from '../core/provision.js';
 import { validateAsComplete } from '../core/validation.js';
 import { renderDiagram } from '../core/diagram.js';
 import { loadProjectConfig } from '../config/loader.js';
+import { globalPacksDir, discoverPacks, loadExtensionPacks, DeclarativePackSchema } from '../core/extensions.js';
 import { createMcpServer } from '../mcp/server.js';
 import * as gitPortal from '../git/index.js';
 import * as producerPortal from '../producers/index.js';
@@ -33,6 +34,16 @@ export const hostCore = {
   loadSubsystemSpecs,
   // Level-of-detail project-tier graph for the web UI, forwarded to core_portal.
   buildProjectGraph,
+  // Extension-pack loading forwarded to sdd_core — used by the hosted pack store
+  // (pack_registry) and the policy plane's required/default-pack application.
+  globalPacksDir,
+  discoverPacks,
+  loadExtensionPacks,
+  /** Validate a parsed manifest as a declarative pack; returns the first error message, or null when valid. */
+  checkDeclarativePack: (raw: unknown): string | null => {
+    const result = DeclarativePackSchema.safeParse(raw);
+    return result.success ? null : (result.error.issues[0]?.message ?? 'shape mismatch');
+  },
 };
 
 // host_validator_adapter → sdd_validator (validator_portal)

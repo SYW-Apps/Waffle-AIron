@@ -22,12 +22,7 @@ methods:
     symbol: listIdentityProviderRecords
 detail: intent
 lint:
-  allow:
-    - code: UNDECLARED_DEPENDENCY
-      reason: >-
-        Pre-existing: the hosted policy management (server/policy.ts) uses the core extension loader
-        directly; routing it through host_core_adapter -> core_portal is a separate hosted-code
-        cleanup, unrelated to the extension-packs feature.
+  allow: []
 status: complete
 createdAt: '2026-07-09T20:47:47.802Z'
-updatedAt: '2026-07-14T22:50:21.085Z'
+updatedAt: '2026-07-15T06:53:08.171Z'

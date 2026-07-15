@@ -4,7 +4,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { runWithProjectRoot } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { AI_PATHS } from '../config/loader.js';
-import { globalPacksDir, discoverPacks } from '../core/extensions.js';
+import { hostCore } from './adapters.js';
 import { authenticateCredential } from './auth.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { executeApprovedCreate } from './admin.js';
@@ -338,13 +338,13 @@ function packStem(ref: string): string {
 /** Resolve one named pack's declarative content from the server-global pack set,
  *  or null when the global set carries no such pack. */
 function readGlobalPackContent(name: string): string | null {
-  const dir = globalPacksDir();
+  const dir = hostCore.globalPacksDir();
   for (const candidate of [path.join(dir, `${name}.yaml`), path.join(dir, `${name}.yml`)]) {
     if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
       return fs.readFileSync(candidate, 'utf8');
     }
   }
-  const match = discoverPacks(dir).find((ref) => packStem(ref) === name || path.basename(ref) === name);
+  const match = hostCore.discoverPacks(dir).find((ref) => packStem(ref) === name || path.basename(ref) === name);
   if (match && fs.statSync(match).isFile()) return fs.readFileSync(match, 'utf8');
   return null;
 }

@@ -3,13 +3,8 @@ import * as path from 'path';
 import { runWithProjectRoot, getProjectRoot } from '../utils/fs.js';
 import { parseYaml, readYamlFile } from '../utils/yaml.js';
 import { loadProjectConfig, saveProjectConfig, AI_PATHS } from '../config/loader.js';
-import {
-  globalPacksDir,
-  discoverPacks,
-  loadExtensionPacks,
-  DeclarativePackSchema,
-  type PackScope,
-} from '../core/extensions.js';
+import type { PackScope } from '../core/extensions.js';
+import { hostCore } from './adapters.js';
 import { authenticateMaster } from './auth.js';
 import { AdminAuthError } from './errors.js';
 import { existingProjectRoot } from './projects.js';
@@ -57,16 +52,16 @@ function assertDeclarative(content: string): void {
   } catch (e) {
     throw new Error(`Not a valid declarative pack: ${e instanceof Error ? e.message : String(e)}. ${guidance}`);
   }
-  const result = DeclarativePackSchema.safeParse(parsed);
-  if (!result.success) {
-    throw new Error(`Not a valid declarative pack (${result.error.issues[0]?.message ?? 'shape mismatch'}). ${guidance}`);
+  const err = hostCore.checkDeclarativePack(parsed);
+  if (err) {
+    throw new Error(`Not a valid declarative pack (${err}). ${guidance}`);
   }
 }
 
 /** Load one pack ref in isolation to learn its name and contents. Never throws
  *  for a bad pack — the load error rides on the descriptor. */
 function probe(loadRef: string, baseRoot: string, scope: PackScope, displayRef: string): PackDescriptor {
-  const loaded = loadExtensionPacks([{ ref: loadRef, scope }], baseRoot);
+  const loaded = hostCore.loadExtensionPacks([{ ref: loadRef, scope }], baseRoot);
   if (loaded.errors.length) {
     return { name: path.basename(displayRef), scope, ref: displayRef, profiles: 0, languages: 0, rules: 0, error: loaded.errors[0] };
   }
@@ -108,7 +103,7 @@ function imagePacksDir(): string {
 
 /** Probe every pack in one server-global tier, tagging each descriptor's tier. */
 function probeTier(dir: string, tier: 'image' | 'instance'): PackDescriptor[] {
-  return discoverPacks(dir).map((full) => {
+  return hostCore.discoverPacks(dir).map((full) => {
     const d = probe(full, path.dirname(full), 'global', path.basename(full));
     d.tier = tier;
     return d;
@@ -129,7 +124,7 @@ function probeTier(dir: string, tier: 'image' | 'instance'): PackDescriptor[] {
  * operations orchestrator calls it directly after its own operations:read check.
  */
 export function storeListGlobalPacks(): PackDescriptor[] {
-  const instance = probeTier(globalPacksDir(), 'instance');
+  const instance = probeTier(hostCore.globalPacksDir(), 'instance');
   const instanceNames = new Set(instance.map((d) => d.name));
   const image = probeTier(imagePacksDir(), 'image').map((d) =>
     instanceNames.has(d.name) ? { ...d, shadowed: true } : d,
@@ -141,7 +136,7 @@ function storeInstallGlobalPack(name: string, content: string): PackDescriptor {
   assertName(name);
   assertDeclarative(content);
   // Installs write the MUTABLE instance tier only; the image layer is immutable.
-  const dir = globalPacksDir();
+  const dir = hostCore.globalPacksDir();
   const file = path.join(dir, `${name}.yaml`);
   writeFileAtomic(file, content);
   const descriptor = probe(file, dir, 'global', `${name}.yaml`);
@@ -154,10 +149,10 @@ function storeRemoveGlobalPack(name: string): void {
   // Removals touch the MUTABLE instance tier only; a pack that lives solely in
   // the immutable image layer cannot be removed here. Removing an instance pack
   // that shadowed a same-named image pack re-exposes the image pack.
-  const dir = globalPacksDir();
-  const match = discoverPacks(dir).find((ref) => stem(ref) === name || path.basename(ref) === name);
+  const dir = hostCore.globalPacksDir();
+  const match = hostCore.discoverPacks(dir).find((ref) => stem(ref) === name || path.basename(ref) === name);
   if (!match) {
-    const inImage = discoverPacks(imagePacksDir()).some(
+    const inImage = hostCore.discoverPacks(imagePacksDir()).some(
       (ref) => stem(ref) === name || path.basename(ref) === name,
     );
     throw new Error(

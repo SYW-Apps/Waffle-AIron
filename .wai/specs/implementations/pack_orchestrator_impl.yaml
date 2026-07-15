@@ -167,12 +167,7 @@ methods:
         type: return
         outcome: removed
 lint:
-  allow:
-    - code: UNDECLARED_DEPENDENCY
-      reason: >-
-        Pre-existing: the hosted pack management (server/packs.ts) uses the core extension loader
-        directly; routing it through host_core_adapter -> core_portal is a separate hosted-code
-        cleanup, unrelated to the extension-packs feature.
+  allow: []
 status: complete
 createdAt: '2026-07-04T18:47:13.157Z'
-updatedAt: '2026-07-14T22:50:19.494Z'
+updatedAt: '2026-07-15T06:53:07.615Z'
