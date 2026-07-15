@@ -37,9 +37,9 @@ methods:
         outcome: unauthenticated
       - stepNumber: 8
         description: >-
-          Assemble the Principal (tokenId, subject and grants from the record when present,
-          otherwise projected from the record's role and authorized projects; plus the compatibility
-          role and project set)
+          Assemble the Principal — tokenId, the record's subject, and the resolved permissionSubject
+          (subjectId, roleBindings, and instanceAdmin) for that subject — plus the compatibility
+          role/projects projection
         type: local
       - stepNumber: 9
         description: Return the authenticated principal
@@ -63,7 +63,9 @@ methods:
         type: return
         outcome: unauthenticated
       - stepNumber: 5
-        description: Assemble an admin Principal (role admin, all projects)
+        description: >-
+          Assemble an admin Principal (role admin, all projects, permissionSubject with
+          instanceAdmin true)
         type: local
       - stepNumber: 6
         description: Return the admin principal
@@ -192,9 +194,9 @@ methods:
         outcome: unauthenticated
       - stepNumber: 5
         description: >-
-          Assemble the Principal from the session's subject and grants — a session resolves to the
-          same Principal shape a bearer token yields, so every existing scoped endpoint
-          authenticates a browser session identically.
+          Assemble the Principal from the session's subject and its resolved permissionSubject — a
+          session resolves to the same Principal shape a bearer token yields, so every existing
+          scoped endpoint authenticates a browser session identically
         type: local
       - stepNumber: 6
         description: Return the authenticated principal (from the session).
@@ -211,7 +213,7 @@ methods:
       - stepNumber: 9
         description: >-
           Assemble the bootstrap admin Principal (admin role, all projects, bootstrap subject,
-          instance-wide administrative grant).
+          permissionSubject with instanceAdmin true)
         type: local
       - stepNumber: 10
         description: Return the bootstrap admin principal.
@@ -248,8 +250,9 @@ methods:
         outcome: unauthenticated
       - stepNumber: 18
         description: >-
-          Assemble the Principal with subject and grants from the record (falling back to the
-          role/projects projection for legacy records).
+          Assemble the Principal with the record's subject and its resolved permissionSubject
+          (subjectId, roleBindings, instanceAdmin), falling back to the role/projects projection for
+          legacy records
         type: local
       - stepNumber: 19
         description: Return the authenticated principal.
@@ -286,8 +289,8 @@ methods:
         outcome: unauthenticated
       - stepNumber: 6
         description: >-
-          Assemble the Principal from the session's subject and grants (same Principal shape a
-          bearer token yields), never carrying the raw session id as the token id.
+          Assemble the Principal from the session's subject and its resolved permissionSubject (same
+          Principal shape a bearer token yields), never carrying the raw session id as the token id
         type: local
       - stepNumber: 7
         description: Return the resolved Principal.
@@ -340,4 +343,4 @@ methods:
         outcome: built-in super-admin subject
 status: complete
 createdAt: '2026-07-04T12:54:26.477Z'
-updatedAt: '2026-07-14T11:04:16.168Z'
+updatedAt: '2026-07-15T21:10:03.217Z'

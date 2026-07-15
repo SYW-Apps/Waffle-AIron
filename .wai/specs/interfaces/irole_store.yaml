@@ -1,0 +1,26 @@
+id: irole_store
+name: Role Store Interface
+description: >-
+  Private contract for the authoritative in-memory role collection, loaded from and swapped as one
+  backing file (roles.json under the hosted data root).
+component: role_store
+methods:
+  - name: load
+    description: >-
+      Load the persisted role collection from roles.json under the hosted data root and hold it as
+      the authoritative in-memory representation.
+    signature: 'load(): Role[]'
+    returns: Role[]
+    params: []
+  - name: replaceAll
+    description: >-
+      Atomically swap the in-memory role collection to the supplied complete set after the registry
+      has persisted it.
+    signature: 'replaceAll(roles: Role[]): void'
+    returns: void
+    params:
+      - name: roles
+        type: Role[]
+status: complete
+createdAt: '2026-07-15T20:27:29.060Z'
+updatedAt: '2026-07-15T22:22:07.595Z'

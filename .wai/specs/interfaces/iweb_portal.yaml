@@ -400,6 +400,120 @@ methods:
       transport: HTTP
       method: GET
       path: /web/login-options
+  - name: adminRemoveUnit
+    description: >-
+      Remove an organization unit with a disposition (migrate/alternative/absorb/cascade); forwards
+      to web_admin_orchestrator.removeUnit.
+    signature: 'adminRemoveUnit(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/org/units/remove
+  - name: adminListRoles
+    description: List permission roles; forwards to web_admin_orchestrator.listRoles.
+    signature: 'adminListRoles(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/admin/roles
+  - name: adminCreateRole
+    description: Create a permission role; forwards to web_admin_orchestrator.createRole.
+    signature: 'adminCreateRole(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/roles
+  - name: adminUpdateRole
+    description: Update a permission role; forwards to web_admin_orchestrator.updateRole.
+    signature: 'adminUpdateRole(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/roles/update
+  - name: adminDeleteRole
+    description: Delete a permission role; forwards to web_admin_orchestrator.deleteRole.
+    signature: 'adminDeleteRole(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/roles/remove
+  - name: adminListAssignments
+    description: >-
+      List permission assignments filtered by scope/subject; forwards to
+      web_admin_orchestrator.listAssignments.
+    signature: 'adminListAssignments(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/admin/permissions
+  - name: adminSetAssignment
+    description: Upsert a permission assignment; forwards to web_admin_orchestrator.setAssignment.
+    signature: 'adminSetAssignment(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/permissions
+  - name: adminRemoveAssignment
+    description: Remove a permission assignment; forwards to web_admin_orchestrator.removeAssignment.
+    signature: 'adminRemoveAssignment(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/permissions/remove
+  - name: adminBindRole
+    description: Bind a role to a user at a scope; forwards to web_admin_orchestrator.bindRole.
+    signature: 'adminBindRole(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/roles/bind
+  - name: adminUnbindRole
+    description: Unbind a role from a user at a scope; forwards to web_admin_orchestrator.unbindRole.
+    signature: 'adminUnbindRole(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/roles/unbind
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-07-14T12:53:32.800Z'
+updatedAt: '2026-07-15T22:03:01.669Z'

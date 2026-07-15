@@ -9,16 +9,18 @@ component: self_service_orchestrator
 methods:
   - name: requestProjectInitialization
     description: >-
-      MCP/UI/CLI workflow `sdd_host_request_project_initialization`: authenticate the caller
-      credential, authorize by grants (any authenticated principal may request — no special grant
-      required), validate the ProjectInitRequest structurally, then evaluate it against the active
-      instance pack policy via the policy orchestrator's pre-authorized evaluation — rejecting the
-      request immediately when an enforcing policy reports violations and attaching warn-mode
-      findings to the approval summary — create a pending ApprovalRequest of kind project:init
-      carrying a redacted summary and payload, audit the request, and return the pending request.
-      Does not create the project until an authorized decision approves and it is executed.
-    signature: 'requestProjectInitialization(credential: string, request: ProjectInitRequest): ApprovalRequest'
-    returns: ApprovalRequest
+      Execute-primary project initialization. Authenticate the caller, validate the
+      ProjectInitRequest structurally, evaluate it against the active instance pack policy
+      (enforce-mode violations reject immediately; warn-mode findings ride the summary), then
+      resolve the caller's project:create permission over the target unit (or instance for a
+      top-level project): yes -> initialize the project directly via the policy orchestrator's
+      pre-authorized executeApprovedInit and return a completed SelfServiceOutcome; approval ->
+      create a pending project:init ApprovalRequest and return a pending-approval outcome; no ->
+      Forbidden.
+    signature: >-
+      requestProjectInitialization(credential: string, request: ProjectInitRequest):
+      SelfServiceOutcome
+    returns: SelfServiceOutcome
     params:
       - name: credential
         type: string
@@ -28,13 +30,13 @@ methods:
       - atomic
   - name: requestProjectLock
     description: >-
-      MCP/UI/CLI workflow `sdd_host_request_project_lock`: authenticate the caller credential,
-      authorize by grants (the requester must hold a grant covering the project — mcp:write or an
-      instance-wide wildcard), create a pending ApprovalRequest of kind project:lock, audit the
-      request, and return it. Does not lock until an authorized decision approves and it is
-      executed.
-    signature: 'requestProjectLock(credential: string, projectId: string): ApprovalRequest'
-    returns: ApprovalRequest
+      Execute-primary project lock. Authenticate the caller and resolve their project:write
+      permission over the project: yes -> lock directly via the admin plane's pre-authorized
+      executeApprovedLock and return a completed SelfServiceOutcome carrying the lock record;
+      approval -> create a pending project:lock ApprovalRequest and return a pending-approval
+      outcome; no -> Forbidden.
+    signature: 'requestProjectLock(credential: string, projectId: string): SelfServiceOutcome'
+    returns: SelfServiceOutcome
     params:
       - name: credential
         type: string
@@ -44,13 +46,13 @@ methods:
       - atomic
   - name: requestProjectPromotion
     description: >-
-      MCP/UI/CLI workflow `sdd_host_request_project_promotion`: authenticate the caller credential,
-      authorize by grants (the requester must hold a grant covering the project — mcp:write or an
-      instance-wide wildcard), create a pending ApprovalRequest of kind project:promote, audit the
-      request, and return it. Does not promote until an authorized decision approves and it is
-      executed.
-    signature: 'requestProjectPromotion(credential: string, projectId: string): ApprovalRequest'
-    returns: ApprovalRequest
+      Execute-primary project promotion. Authenticate the caller and resolve their project:write
+      permission over the project: yes -> promote directly via the admin plane's pre-authorized
+      executeApprovedPromote and return a completed SelfServiceOutcome carrying the promote result;
+      approval -> create a pending project:promote ApprovalRequest and return a pending-approval
+      outcome; no -> Forbidden.
+    signature: 'requestProjectPromotion(credential: string, projectId: string): SelfServiceOutcome'
+    returns: SelfServiceOutcome
     params:
       - name: credential
         type: string
@@ -60,10 +62,10 @@ methods:
       - atomic
   - name: getRequestStatus
     description: >-
-      MCP-safe workflow `sdd_host_get_approval_status`: authenticate the caller credential, lazily
-      expire overdue pending requests first, then return one approval request visible only to its
-      original requester (matching subject or requesting tokenId) or to holders of approval:decide
-      or an instance-admin grant; never exposes unrelated requests.
+      Authenticate the caller, lazily expire overdue pending requests, then return one approval
+      request visible only to its original requester (matching subject or requesting token id) or to
+      a caller whose resolved approval:decide permission over the request's project is yes; never
+      exposes unrelated requests.
     signature: 'getRequestStatus(credential: string, requestId: string): ApprovalRequest'
     returns: ApprovalRequest
     params:
@@ -73,11 +75,10 @@ methods:
         type: string
   - name: listPendingRequests
     description: >-
-      UI/CLI workflow: authenticate the caller credential, authorize by an instance-wide OR
-      unit-scoped approval:decide grant; results are filtered to the caller's scope. Resolve the
-      caller's approval:decide scope, lazily expire overdue pending requests first, then list the
-      pending approval requests whose project is within scope (a super-admin sees all), optionally
-      narrowed to one project.
+      Authenticate the caller, gather the permission world, expire overdue pending requests, then
+      list pending approval requests the caller may decide: an instance-admin sees all; otherwise a
+      request is included only when the caller's resolved approval:decide permission over the
+      request's project is yes. Optionally narrowed to one project.
     signature: 'listPendingRequests(credential: string, projectId: string): ApprovalRequest[]'
     returns: ApprovalRequest[]
     params:
@@ -88,12 +89,13 @@ methods:
         optional: true
   - name: decideRequest
     description: >-
-      UI/CLI workflow: authenticate the caller credential, authorize by an instance-wide OR
-      unit-scoped approval:decide grant — the caller's scope must permit the decided request's
-      project (a project:init request for a not-yet-created project is decidable only by a
-      super-admin unless its target id is already an in-scope project) — and reject self-approval
-      (the decision's decidedBy MUST differ from the request's requestedBy), then approve or deny
-      the pending request and audit the decision at security level.
+      Authenticate the caller and resolve their approval:decide permission over the decided
+      request's project (must be yes); reject self-approval (decidedBy MUST differ from
+      requestedBy); record the approve/deny decision; then AUTO-EXECUTE an approved request
+      immediately by dispatching by kind to the pre-authorized entrypoints (project:init ->
+      executeApprovedInit; project:lock/project:promote -> the admin plane) and mark it completed.
+      Audit at security level. A re-evaluation failure at execution leaves the approval approved,
+      not completed (retryable via executeApprovedRequest).
     signature: 'decideRequest(credential: string, decision: ApprovalDecision): ApprovalRequest'
     returns: ApprovalRequest
     params:
@@ -120,6 +122,22 @@ methods:
         type: string
       - name: requestId
         type: string
+  - name: awaitApproval
+    description: >-
+      Long-poll for a decision so an MCP agent can wait then continue: authenticate the caller (only
+      the original requester may await), then block server-side re-reading the request until it
+      leaves pending status (approved/denied/completed/expired) or the timeout elapses, and return
+      the request in its current state. Pairs with decideRequest's auto-execute so an approved
+      request returns already completed.
+    signature: 'awaitApproval(credential: string, requestId: string, timeoutSeconds: number): ApprovalRequest'
+    returns: ApprovalRequest
+    params:
+      - name: credential
+        type: string
+      - name: requestId
+        type: string
+      - name: timeoutSeconds
+        type: number
 status: complete
 createdAt: '2026-07-09T07:19:58.825Z'
-updatedAt: '2026-07-10T17:19:30.566Z'
+updatedAt: '2026-07-15T20:58:05.139Z'

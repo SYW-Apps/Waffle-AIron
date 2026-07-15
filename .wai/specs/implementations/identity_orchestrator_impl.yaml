@@ -47,19 +47,13 @@ methods:
         targetMethod: listPlacements
       - stepNumber: 6
         description: >-
-          Deny the delegation unless the caller may delegate every requested grant: the caller lacks
-          an instance-wide admin grant AND, for some requested grant in request.grants and some
-          permission it carries, the caller's authorization scope for that permission — resolved via
-          scope_specialist.resolveScope(principal.grants, that permission, the gathered units, the
-          gathered placements), which expands the caller's unit-scoped grants across each unit's
-          recursive subtree — does not cover the requested grant's target: a requested specific
-          projectId must appear in that scope's projectIds and a requested orgUnitId must appear in
-          that scope's unitIds. Holding key:manage alone never suffices to delegate arbitrary
-          permissions.
+          Deny the delegation unless the caller may delegate every requested grant (an
+          instance-admin may delegate any enumerated grant; a scoped caller only within their
+          authorized subtree). Holding key:manage alone never suffices.
         type: branch
         condition: >-
-          the caller lacks an instance-wide admin grant and, for some requested (target, permission)
-          in request.grants, the caller's resolved scope for that permission does not cover the
+          the caller is not an instance admin and, for some requested (target, permission) in
+          request.grants, the caller's resolved authorization for that permission does not cover the
           requested target project or unit
         onTrueStep: 7
         onFalseStep: 8
@@ -124,455 +118,6 @@ methods:
         description: Return the plaintext token (shown exactly once)
         type: return
         outcome: plaintext token returned once
-  - name: replaceUserGrants
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the caller credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateCredential
-      - stepNumber: 2
-        description: >-
-          HARD RESERVATION: if any incoming grant is the reserved instance-wide super-admin shape
-          (projectId '*' with no orgUnitId and permissions including '*'), reject before any
-          authorization — unconditional, even for a super-admin (enumerated instance-wide bundles
-          remain assignable by a super-admin)
-        type: branch
-        condition: >-
-          any incoming grant is the reserved instance-wide super-admin shape (projectId '*' with no
-          orgUnitId and permissions including '*')
-        onTrueStep: 3
-        onFalseStep: 4
-      - stepNumber: 3
-        description: >-
-          Reject the reserved grant unconditionally — even a super-admin or master caller may not
-          assign *:* to a user record
-        type: throw
-        error: Forbidden — instance-wide super-admin (*:*) is reserved to the built-in admin account
-      - stepNumber: 4
-        description: Gather all organization units to resolve the caller's user-administration scope
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listUnits
-      - stepNumber: 5
-        description: Gather all project placements
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listPlacements
-      - stepNumber: 6
-        description: Resolve the caller's user:admin scope over the organization tree
-        type: call
-        targetComponent: scope_specialist
-        targetMethod: resolveScope
-      - stepNumber: 7
-        description: Look up the existing user record by id to determine its current home unit
-        type: call
-        targetComponent: user_repository
-        targetMethod: getById
-      - stepNumber: 8
-        description: If no user matches userId, reject as not found
-        type: branch
-        condition: no user matches userId
-        onTrueStep: 9
-        onFalseStep: 10
-      - stepNumber: 9
-        description: Reject as not found
-        type: throw
-        error: not found
-      - stepNumber: 10
-        description: >-
-          Deny unless the caller's scope permits this grant replacement: scope.all is false AND
-          either (a) the target user's home unitId is missing or not in scope.unitIds, or (b) the
-          incoming grants would exceed the caller's own authority — they include an instance-wide
-          '*' grant, or any project/unit outside the caller's scope for the permissions being
-          granted (privilege-escalation guard). A super-admin (scope.all) bypasses both checks.
-        type: branch
-        condition: >-
-          scope.all is false and (the target user's home unit is outside scope.unitIds, or the
-          incoming grants exceed the caller's own scoped authority)
-        onTrueStep: 11
-        onFalseStep: 12
-      - stepNumber: 11
-        description: Reject the grant administration
-        type: throw
-        error: >-
-          Forbidden — grant administration requires scope over the target user's home unit and may
-          not exceed the caller's own authority
-      - stepNumber: 12
-        description: Replace the user's grants wholesale through the repository
-        type: call
-        targetComponent: user_repository
-        targetMethod: replaceGrants
-      - stepNumber: 13
-        description: Append a redacted audit event without letting a failure fail the grant replacement
-        type: try
-        endStep: 15
-        catches:
-          - error: audit append failure
-            step: 16
-      - stepNumber: 14
-        description: Append the redacted user.grants.replace audit event under the active retention policy
-        type: call
-        targetComponent: audit_repository
-        targetMethod: append
-      - stepNumber: 15
-        description: On a successful append, continue to the return and skip the audit-failure handler
-        type: jump
-        toStep: 17
-      - stepNumber: 16
-        description: Record the audit append failure as a server diagnostic and continue
-        type: local
-      - stepNumber: 17
-        description: Return the updated user record
-        type: return
-        outcome: updated user record
-  - name: listUsers
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the caller credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateCredential
-      - stepNumber: 2
-        description: Gather all organization units to resolve the caller's user-administration scope
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listUnits
-      - stepNumber: 3
-        description: Gather all project placements
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listPlacements
-      - stepNumber: 4
-        description: Resolve the caller's user:admin scope over the organization tree
-        type: call
-        targetComponent: scope_specialist
-        targetMethod: resolveScope
-      - stepNumber: 5
-        description: >-
-          If the caller has no user-administration scope (scope.all is false and the scope is empty
-          — no in-scope units and no in-scope projects), deny
-        type: branch
-        condition: scope.all is false and the scope is empty (no in-scope units and no in-scope projects)
-        onTrueStep: 6
-        onFalseStep: 7
-      - stepNumber: 6
-        description: Reject the listing
-        type: throw
-        error: Forbidden — user administration required
-      - stepNumber: 7
-        description: List hosted users, optionally narrowed to one project's grant holders
-        type: call
-        targetComponent: user_repository
-        targetMethod: list
-      - stepNumber: 8
-        description: >-
-          When scope.all is false, filter the returned users to those whose home unitId is in the
-          caller's in-scope units (scope.unitIds); when scope.all is true, keep every user. Honor
-          any optional project narrowing already applied.
-        type: local
-      - stepNumber: 9
-        description: Return the hosted user records filtered to the caller's scope
-        type: return
-        outcome: scoped hosted user records
-  - name: queryAuditEvents
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the caller credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateCredential
-      - stepNumber: 2
-        description: Gather all organization units to resolve the caller's audit-read scope
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listUnits
-      - stepNumber: 3
-        description: Gather all project placements
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listPlacements
-      - stepNumber: 4
-        description: Resolve the caller's audit:read scope over the organization tree
-        type: call
-        targetComponent: scope_specialist
-        targetMethod: resolveScope
-      - stepNumber: 5
-        description: >-
-          If the caller has no audit-read scope (scope.all is false and the scope is empty — no
-          in-scope projects and no in-scope units), deny
-        type: branch
-        condition: scope.all is false and the scope is empty (no in-scope projects and no in-scope units)
-        onTrueStep: 6
-        onFalseStep: 7
-      - stepNumber: 6
-        description: Reject the audit read
-        type: throw
-        error: Forbidden — audit read access required
-      - stepNumber: 7
-        description: >-
-          When scope.all is false, constrain the audit query to the caller's in-scope projects
-          (scope.projectIds); when scope.all is true, leave the query unconstrained (instance-wide
-          audit read)
-        type: local
-      - stepNumber: 8
-        description: Return redacted audit events matching the scoped query
-        type: call
-        targetComponent: audit_repository
-        targetMethod: query
-      - stepNumber: 9
-        description: Return the redacted audit events scoped to the caller
-        type: return
-        outcome: redacted audit events
-  - name: countAuditEvents
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the caller credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateCredential
-      - stepNumber: 2
-        description: Gather all organization units to resolve the caller's audit-read scope
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listUnits
-      - stepNumber: 3
-        description: Gather all project placements
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listPlacements
-      - stepNumber: 4
-        description: Resolve the caller's audit:read scope over the organization tree
-        type: call
-        targetComponent: scope_specialist
-        targetMethod: resolveScope
-      - stepNumber: 5
-        description: If the caller has no audit-read scope (scope.all is false and the scope is empty), deny
-        type: branch
-        condition: scope.all is false and the scope is empty (no in-scope projects and no in-scope units)
-        onTrueStep: 6
-        onFalseStep: 7
-      - stepNumber: 6
-        description: Reject the audit read
-        type: throw
-        error: Forbidden — audit read access required
-      - stepNumber: 7
-        description: >-
-          When scope.all is false, constrain the audit query to the caller's in-scope projects
-          (scope.projectIds); when scope.all is true, leave the query unconstrained
-        type: local
-      - stepNumber: 8
-        description: Count redacted audit events matching the scoped query through the audit repository
-        type: call
-        targetComponent: audit_repository
-        targetMethod: count
-      - stepNumber: 9
-        description: Return the audit event count scoped to the caller
-        type: return
-        outcome: audit event count
-  - name: upsertUser
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the caller credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateCredential
-      - stepNumber: 2
-        description: >-
-          HARD RESERVATION: if the incoming record carries a grant of the reserved instance-wide
-          super-admin shape (projectId '*' with no orgUnitId and permissions including '*'), reject
-          before any authorization — unconditional, even for a super-admin
-        type: branch
-        condition: >-
-          the incoming record carries a grant of the reserved instance-wide super-admin shape
-          (projectId '*' with no orgUnitId and permissions including '*')
-        onTrueStep: 3
-        onFalseStep: 4
-      - stepNumber: 3
-        description: >-
-          Reject the reserved grant unconditionally — even a super-admin or master caller may not
-          store *:* on a user record
-        type: throw
-        error: Forbidden — instance-wide super-admin (*:*) is reserved to the built-in admin account
-      - stepNumber: 4
-        description: Gather all organization units to resolve the caller's user-administration scope
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listUnits
-      - stepNumber: 5
-        description: Gather all project placements
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listPlacements
-      - stepNumber: 6
-        description: Resolve the caller's user:admin scope over the organization tree
-        type: call
-        targetComponent: scope_specialist
-        targetMethod: resolveScope
-      - stepNumber: 7
-        description: >-
-          Look up any existing user record by id to distinguish creation from update and to read its
-          current home unit
-        type: call
-        targetComponent: user_repository
-        targetMethod: getById
-      - stepNumber: 8
-        description: >-
-          Deny unless the caller's scope permits the target user's home unit: scope.all is false AND
-          either the incoming record's home unitId is missing or not in scope.unitIds, or (when
-          updating an existing user) the existing user's home unitId is not in scope.unitIds. A
-          super-admin (scope.all) bypasses the check.
-        type: branch
-        condition: >-
-          scope.all is false and the target user's home unit (incoming record, or existing record on
-          update) is missing or outside scope.unitIds
-        onTrueStep: 9
-        onFalseStep: 10
-      - stepNumber: 9
-        description: Reject the user administration
-        type: throw
-        error: Forbidden — user administration requires scope over the target user's home unit
-      - stepNumber: 10
-        description: >-
-          Build the redacted audit event with action user.create when no record existed, or
-          user.update otherwise
-        type: local
-      - stepNumber: 11
-        description: Create or update the hosted user through the repository
-        type: call
-        targetComponent: user_repository
-        targetMethod: upsert
-      - stepNumber: 12
-        description: Append the audit event without letting a failure fail the upsert
-        type: try
-        endStep: 14
-        catches:
-          - error: audit append failure
-            step: 15
-      - stepNumber: 13
-        description: >-
-          Append the redacted user.create or user.update audit event under the active retention
-          policy
-        type: call
-        targetComponent: audit_repository
-        targetMethod: append
-      - stepNumber: 14
-        description: On a successful append, continue to the return and skip the audit-failure handler
-        type: jump
-        toStep: 16
-      - stepNumber: 15
-        description: Record the audit append failure as a server diagnostic and continue
-        type: local
-      - stepNumber: 16
-        description: Return the stored user record
-        type: return
-        outcome: stored user record
-  - name: setUserStatus
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the caller credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateCredential
-      - stepNumber: 2
-        description: Gather all organization units to resolve the caller's user-administration scope
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listUnits
-      - stepNumber: 3
-        description: Gather all project placements
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listPlacements
-      - stepNumber: 4
-        description: Resolve the caller's user:admin scope over the organization tree
-        type: call
-        targetComponent: scope_specialist
-        targetMethod: resolveScope
-      - stepNumber: 5
-        description: Look up the target user by id to read its home unit
-        type: call
-        targetComponent: user_repository
-        targetMethod: getById
-      - stepNumber: 6
-        description: If no user matches userId, reject as not found
-        type: branch
-        condition: no user matches userId
-        onTrueStep: 7
-        onFalseStep: 8
-      - stepNumber: 7
-        description: Reject as not found
-        type: throw
-        error: not found
-      - stepNumber: 8
-        description: >-
-          Deny unless the caller's scope permits the target user's home unit: scope.all is false and
-          the user's home unitId is missing or not in scope.unitIds. A super-admin (scope.all)
-          bypasses the check.
-        type: branch
-        condition: scope.all is false and the target user's home unit is missing or outside scope.unitIds
-        onTrueStep: 9
-        onFalseStep: 10
-      - stepNumber: 9
-        description: Reject the user administration
-        type: throw
-        error: Forbidden — user administration requires scope over the target user's home unit
-      - stepNumber: 10
-        description: Set the user's lifecycle status through the repository
-        type: call
-        targetComponent: user_repository
-        targetMethod: setStatus
-      - stepNumber: 11
-        description: >-
-          If the new status is not 'active' (a deactivation), revoke all of the user's credentials
-          before auditing; an active status skips straight to the audit append
-        type: branch
-        condition: the new status is not 'active'
-        onTrueStep: 12
-        onFalseStep: 14
-      - stepNumber: 12
-        description: >-
-          Revoke every non-revoked credential owned by the user so existing tokens can no longer
-          authenticate, capturing the revoked count for the audit event
-        type: call
-        targetComponent: credential_registry
-        targetMethod: revokeAllForOwner
-      - stepNumber: 13
-        description: >-
-          Still on the deactivation path, revoke every one of the user's browser sessions too, so a
-          deactivation also invalidates live web sessions (a separate credential type from tokens
-          that the auth bridge accepts on the data plane), capturing the revoked-session count for
-          the audit event
-        type: call
-        targetComponent: web_session_repository
-        targetMethod: removeAllForSubject
-      - stepNumber: 14
-        description: Append the audit event without letting a failure fail the status change
-        type: try
-        endStep: 16
-        catches:
-          - error: audit append failure
-            step: 17
-      - stepNumber: 15
-        description: >-
-          Append the redacted audit event under the active retention policy — action
-          'user.deactivate' at security level (including the revoked-token and revoked-session
-          counts) when the status change deactivated the user, otherwise 'user.status.set' at info
-          level
-        type: call
-        targetComponent: audit_repository
-        targetMethod: append
-      - stepNumber: 16
-        description: On a successful append, continue to the return and skip the audit-failure handler
-        type: jump
-        toStep: 18
-      - stepNumber: 17
-        description: Record the audit append failure as a server diagnostic and continue
-        type: local
-      - stepNumber: 18
-        description: Return the updated user record
-        type: return
-        outcome: updated user record
   - name: revokeToken
     narrative:
       - stepNumber: 1
@@ -1054,6 +599,372 @@ methods:
       as not found, so there is no cross-user revocation and no key:manage escalation), then revoke
       it through the credential registry and append a best-effort redacted token.revoke.self
       (security) audit event.
+  - name: listUsers
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          Compute the caller's project:admin visible scopes over the organization tree (the units
+          they may administer)
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: visibleScopes
+      - stepNumber: 3
+        description: If the caller has no actionable unit scope, deny
+        type: branch
+        condition: the caller has no actionable unit scope in the visible set
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the listing
+        type: throw
+        error: Forbidden — user administration required
+      - stepNumber: 5
+        description: List hosted users, optionally narrowed to one project's grant holders
+        type: call
+        targetComponent: user_repository
+        targetMethod: list
+      - stepNumber: 6
+        description: >-
+          Filter the returned users to those whose home unit is an actionable unit in the visible
+          set (an instance-admin keeps every user); honor any optional project narrowing already
+          applied
+        type: local
+      - stepNumber: 7
+        description: Return the hosted user records filtered to the caller's scope
+        type: return
+        outcome: scoped hosted user records
+    detail: full
+  - name: upsertUser
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          HARD RESERVATION: if the incoming record carries a grant of the reserved instance-wide
+          super-admin shape (projectId '*' with no orgUnitId and permissions including '*'), reject
+          before any authorization — unconditional
+        type: branch
+        condition: the incoming record carries a grant of the reserved instance-wide super-admin shape
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the reserved grant unconditionally
+        type: throw
+        error: Forbidden — instance-wide super-admin (*:*) is reserved to the built-in admin account
+      - stepNumber: 4
+        description: >-
+          Look up any existing user record by id to distinguish creation from update and to read its
+          current home unit
+        type: call
+        targetComponent: user_repository
+        targetMethod: getById
+      - stepNumber: 5
+        description: >-
+          Resolve the caller's project:admin permission over the target user's home unit (the
+          incoming record's, or the existing record's on update)
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 6
+        description: If the effective project:admin value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 7
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Reject the user administration
+        type: throw
+        error: Forbidden — user administration requires project:admin over the target user's home unit
+      - stepNumber: 8
+        description: >-
+          Build the redacted audit event with action user.create when no record existed, or
+          user.update otherwise
+        type: local
+      - stepNumber: 9
+        description: Create or update the hosted user through the repository
+        type: call
+        targetComponent: user_repository
+        targetMethod: upsert
+      - stepNumber: 10
+        description: Append the audit event without letting a failure fail the upsert
+        type: try
+        endStep: 12
+        catches:
+          - error: audit append failure
+            step: 13
+      - stepNumber: 11
+        description: >-
+          Append the redacted user.create or user.update audit event under the active retention
+          policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 12
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 14
+      - stepNumber: 13
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 14
+        description: Return the stored user record
+        type: return
+        outcome: stored user record
+    detail: full
+  - name: setUserStatus
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Look up the target user by id to read its home unit and existence
+        type: call
+        targetComponent: user_repository
+        targetMethod: getById
+      - stepNumber: 3
+        description: If no user matches userId, reject as not found
+        type: branch
+        condition: no user matches userId
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject as not found
+        type: throw
+        error: not found
+      - stepNumber: 5
+        description: Resolve the caller's project:admin permission over the target user's home unit
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 6
+        description: If the effective project:admin value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 7
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Reject the user administration
+        type: throw
+        error: Forbidden — user administration requires project:admin over the target user's home unit
+      - stepNumber: 8
+        description: Set the user's lifecycle status through the repository
+        type: call
+        targetComponent: user_repository
+        targetMethod: setStatus
+      - stepNumber: 9
+        description: >-
+          If the new status is not 'active' (a deactivation), revoke the user's credentials and
+          sessions; an active status skips to the audit
+        type: branch
+        condition: the new status is not 'active'
+        onTrueStep: 10
+        onFalseStep: 12
+      - stepNumber: 10
+        description: >-
+          Revoke every non-revoked credential owned by the user so existing tokens can no longer
+          authenticate, capturing the revoked count
+        type: call
+        targetComponent: credential_registry
+        targetMethod: revokeAllForOwner
+      - stepNumber: 11
+        description: >-
+          Revoke every one of the user's browser sessions too, so a deactivation invalidates live
+          web sessions, capturing the revoked-session count
+        type: call
+        targetComponent: web_session_repository
+        targetMethod: removeAllForSubject
+      - stepNumber: 12
+        description: Append the audit event without letting a failure fail the status change
+        type: try
+        endStep: 14
+        catches:
+          - error: audit append failure
+            step: 15
+      - stepNumber: 13
+        description: >-
+          Append the redacted user.deactivate (security, with revoked counts) or user.status.set
+          (info) audit event under the active retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 14
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 16
+      - stepNumber: 15
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 16
+        description: Return the updated user record
+        type: return
+        outcome: updated user record
+    detail: full
+  - name: replaceUserGrants
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          HARD RESERVATION: if any incoming grant is the reserved instance-wide super-admin shape,
+          reject before any authorization — unconditional
+        type: branch
+        condition: >-
+          any incoming grant is the reserved instance-wide super-admin shape (projectId '*' with no
+          orgUnitId and permissions including '*')
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the reserved grant unconditionally
+        type: throw
+        error: Forbidden — instance-wide super-admin (*:*) is reserved to the built-in admin account
+      - stepNumber: 4
+        description: Look up the existing user record by id to read its current home unit
+        type: call
+        targetComponent: user_repository
+        targetMethod: getById
+      - stepNumber: 5
+        description: If no user matches userId, reject as not found
+        type: branch
+        condition: no user matches userId
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Reject as not found
+        type: throw
+        error: not found
+      - stepNumber: 7
+        description: >-
+          Resolve the caller's project:admin permission over the target user's home unit (Phase 4
+          replaces grant management with assignment CRUD carrying its own escalation guard)
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 8
+        description: If the effective project:admin value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 9
+        onFalseStep: 10
+      - stepNumber: 9
+        description: Reject the grant administration
+        type: throw
+        error: Forbidden — grant administration requires project:admin over the target user's home unit
+      - stepNumber: 10
+        description: Replace the user's grants wholesale through the repository
+        type: call
+        targetComponent: user_repository
+        targetMethod: replaceGrants
+      - stepNumber: 11
+        description: Append a redacted audit event without letting a failure fail the grant replacement
+        type: try
+        endStep: 13
+        catches:
+          - error: audit append failure
+            step: 14
+      - stepNumber: 12
+        description: Append the redacted user.grants.replace audit event under the active retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 13
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 15
+      - stepNumber: 14
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 15
+        description: Return the updated user record
+        type: return
+        outcome: updated user record
+    detail: full
+  - name: queryAuditEvents
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Compute the caller's project:admin visible scopes over the organization tree
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: visibleScopes
+      - stepNumber: 3
+        description: If the caller has no actionable project scope, deny
+        type: branch
+        condition: the caller has no actionable project scope in the visible set
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the audit read
+        type: throw
+        error: Forbidden — audit read access required
+      - stepNumber: 5
+        description: >-
+          Constrain the audit query to the caller's actionable project scopes (an instance-admin
+          leaves it unconstrained — instance-wide audit read)
+        type: local
+      - stepNumber: 6
+        description: Return redacted audit events matching the scoped query
+        type: call
+        targetComponent: audit_repository
+        targetMethod: query
+      - stepNumber: 7
+        description: Return the redacted audit events scoped to the caller
+        type: return
+        outcome: redacted audit events
+    detail: full
+  - name: countAuditEvents
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Compute the caller's project:admin visible scopes over the organization tree
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: visibleScopes
+      - stepNumber: 3
+        description: If the caller has no actionable project scope, deny
+        type: branch
+        condition: the caller has no actionable project scope in the visible set
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the audit read
+        type: throw
+        error: Forbidden — audit read access required
+      - stepNumber: 5
+        description: >-
+          Constrain the audit query to the caller's actionable project scopes (an instance-admin
+          leaves it unconstrained)
+        type: local
+      - stepNumber: 6
+        description: Count redacted audit events matching the scoped query through the audit repository
+        type: call
+        targetComponent: audit_repository
+        targetMethod: count
+      - stepNumber: 7
+        description: Return the audit event count scoped to the caller
+        type: return
+        outcome: audit event count
+    detail: full
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-07-14T11:04:17.156Z'
+updatedAt: '2026-07-15T21:45:11.564Z'

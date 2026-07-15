@@ -1,0 +1,25 @@
+kind: value-object
+id: role_permission
+name: RolePermission
+description: >-
+  One capability→value default a role confers. Combined most-permissively with the subject's other
+  applicable roles at a scope during resolution.
+subsystem: sdd_host
+fields:
+  - name: capability
+    type: string
+    description: >-
+      One capability: project:read | project:create | project:write | project:admin |
+      approval:decide.
+    optional: false
+  - name: value
+    type: string
+    description: >-
+      yes | approval | inherit. Roles GRANT only — they are combined most-permissively (yes >
+      approval) with the subject's other roles anchored at the same scope; a role never denies, so a
+      'no' (or 'inherit') value is non-deciding during resolution. Denial is expressed via a
+      scope-default ('everyone') or a direct-user assignment, not a role.
+    optional: false
+methods: []
+createdAt: '2026-07-15T20:25:06.030Z'
+updatedAt: '2026-07-15T21:16:53.118Z'

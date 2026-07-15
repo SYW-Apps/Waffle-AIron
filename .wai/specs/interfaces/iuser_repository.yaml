@@ -65,6 +65,19 @@ methods:
         type: ProjectGrant[]
     guarantees:
       - atomic
+  - name: remapUnitReferences
+    description: >-
+      Facade: rewrite/clear user home units and role-binding scopes for a unit rename/move/cascade
+      through the registry.
+    signature: 'remapUnitReferences(remap: UnitIdRemap[], removedScopeIds: string[]): void'
+    returns: void
+    params:
+      - name: remap
+        type: UnitIdRemap[]
+      - name: removedScopeIds
+        type: string[]
+    guarantees:
+      - atomic
 status: complete
 createdAt: '2026-07-08T20:16:35.931Z'
-updatedAt: '2026-07-09T17:43:43.810Z'
+updatedAt: '2026-07-15T21:18:24.200Z'

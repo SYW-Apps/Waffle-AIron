@@ -20,9 +20,9 @@ dependsOn:
   - host_producer_adapter
   - secret_registry
   - organization_repository
-  - scope_specialist
+  - authorization_specialist
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T12:33:51.178Z'
-updatedAt: '2026-07-10T17:36:59.120Z'
+updatedAt: '2026-07-15T21:35:02.117Z'

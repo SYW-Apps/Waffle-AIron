@@ -17,10 +17,9 @@ dependsOn:
   - diagnostics_specialist
   - quota_specialist
   - pack_registry
-  - organization_repository
-  - scope_specialist
+  - authorization_specialist
   - project_relation_repository
   - public_surface_repository
 status: complete
 createdAt: '2026-07-09T09:09:26.722Z'
-updatedAt: '2026-07-11T10:13:34.021Z'
+updatedAt: '2026-07-15T21:39:46.354Z'

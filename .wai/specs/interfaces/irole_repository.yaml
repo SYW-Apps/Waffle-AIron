@@ -1,0 +1,47 @@
+id: irole_repository
+name: Role Repository Interface
+description: >-
+  Facade contract for permission-role definitions — writes forward to the role registry, reads to
+  the role index.
+component: role_repository
+methods:
+  - name: createRole
+    description: 'Facade: create one role through the registry.'
+    signature: 'createRole(role: Role): Role'
+    returns: Role
+    params:
+      - name: role
+        type: Role
+    guarantees:
+      - atomic
+  - name: updateRole
+    description: 'Facade: update one role through the registry.'
+    signature: 'updateRole(role: Role): Role'
+    returns: Role
+    params:
+      - name: role
+        type: Role
+    guarantees:
+      - atomic
+  - name: deleteRole
+    description: 'Facade: delete one role through the registry.'
+    signature: 'deleteRole(roleId: string): void'
+    returns: void
+    params:
+      - name: roleId
+        type: string
+  - name: getRole
+    description: 'Facade: look up one role through the index.'
+    signature: 'getRole(roleId: string): Role | null'
+    returns: Role | null
+    params:
+      - name: roleId
+        type: string
+  - name: listRoles
+    description: 'Facade: list roles through the index.'
+    signature: 'listRoles(): Role[]'
+    returns: Role[]
+    params: []
+status: complete
+createdAt: '2026-07-15T20:27:40.646Z'
+updatedAt: '2026-07-15T22:22:07.541Z'

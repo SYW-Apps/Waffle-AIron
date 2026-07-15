@@ -1,0 +1,15 @@
+id: permission_repository
+name: Permission Repository
+description: >-
+  Facade for the durable permission-assignment grid. Hosted workflows depend on this repository
+  instead of the private permission store, registry, or index blocks.
+subsystem: sdd_host
+componentType: Repository
+owns:
+  - permission_store
+  - permission_registry
+  - permission_index
+dependsOn: []
+status: design
+createdAt: '2026-07-15T20:27:05.322Z'
+updatedAt: '2026-07-15T22:32:34.528Z'

@@ -1,0 +1,26 @@
+kind: value-object
+id: permission_subject
+name: PermissionSubject
+description: >-
+  The resolved caller handed to the pure permission resolver: the principal's id, their role
+  bindings, and whether they hold the reserved instance-admin assignment (capability '*' at instance
+  scope). An instance-admin resolves to yes everywhere, bypassing the walk.
+subsystem: sdd_host
+fields:
+  - name: subjectId
+    type: string
+    description: The user/principal id being authorized.
+    optional: false
+  - name: roleBindings
+    type: RoleBinding[]
+    description: The subject's role bindings.
+    optional: false
+  - name: instanceAdmin
+    type: boolean
+    description: >-
+      True when the subject holds the reserved instance-admin assignment; the resolver bypasses to
+      yes.
+    optional: false
+methods: []
+createdAt: '2026-07-15T20:25:25.002Z'
+updatedAt: '2026-07-15T20:25:25.052Z'

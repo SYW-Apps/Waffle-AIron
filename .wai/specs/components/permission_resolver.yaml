@@ -1,0 +1,16 @@
+id: permission_resolver
+name: Permission Resolver
+description: >-
+  Pure hierarchical permission resolution over the assignment grid, roles, and organization tree.
+  Computes a subject's effective permission (yes/approval/no) for a capability at a target scope via
+  the nearest-ancestor walk (direct-user > role most-permissive > everyone-default > inherit; an
+  instance-admin bypasses to yes), and the subject's visible-scope set (actionable scopes plus their
+  ancestor breadcrumb, never an ancestor's other children). Performs no I/O and never authenticates
+  — the calling orchestrator gathers the world and has already authenticated the principal.
+subsystem: sdd_host
+componentType: Specialist
+owns: []
+dependsOn: []
+status: design
+createdAt: '2026-07-15T20:27:07.813Z'
+updatedAt: '2026-07-15T22:32:35.527Z'

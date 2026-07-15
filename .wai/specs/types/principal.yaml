@@ -24,10 +24,14 @@ fields:
     type: PrincipalSubject
     description: Resolved human, service, or bootstrap identity responsible for the authenticated action.
     optional: true
-  - name: grants
-    type: ProjectGrant[]
-    description: Precise server-derived project and instance permissions for authorization checks.
+  - name: permissionSubject
+    type: PermissionSubject
+    description: >-
+      The resolved permission subject (subjectId + roleBindings + instanceAdmin) for hierarchical
+      authorization. instanceAdmin is computed at authentication from the reserved '*'@instance
+      assignment, so isInstanceAdmin stays a cheap flag check. Replaces the former grants field;
+      precise authorization is expressed through the permission resolver over this subject.
     optional: true
 methods: []
 createdAt: '2026-07-04T12:44:18.529Z'
-updatedAt: '2026-07-08T19:34:59.535Z'
+updatedAt: '2026-07-15T20:52:20.071Z'

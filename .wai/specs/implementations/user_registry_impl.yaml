@@ -32,7 +32,15 @@ methods:
       the final grant state), stamp updatedAt, then persist and swap exactly as upsert does. The
       registry performs no authorization itself.
     symbol: registryReplaceGrants
+  - name: remapUnitReferences
+    narrative: []
+    detail: intent
+    intent: >-
+      For every user record, rewrite its home unitId and each role binding's scopeId to the new id
+      when the old matches a remap entry, and clear its home unitId or a role binding whose scope is
+      in removedScopeIds. Rewrite the persisted user collection via write-temp-then-rename and
+      refresh the store. Users referencing none of the ids are untouched.
 detail: intent
 status: complete
 createdAt: '2026-07-09T17:30:03.044Z'
-updatedAt: '2026-07-11T19:14:22.918Z'
+updatedAt: '2026-07-15T21:18:22.205Z'

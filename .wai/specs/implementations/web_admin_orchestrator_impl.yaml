@@ -94,57 +94,6 @@ methods:
         type: return
         outcome: organization units
     detail: full
-  - name: upsertOrganizationUnit
-    narrative:
-      - stepNumber: 1
-        description: Resolve the browser session to a Principal through the auth specialist
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateSession
-      - stepNumber: 2
-        description: If the principal lacks an instance-wide admin grant, deny
-        type: branch
-        condition: the principal lacks an instance-wide admin grant
-        onFalseStep: 4
-      - stepNumber: 3
-        description: Reject the organization administration
-        type: throw
-        error: Forbidden — instance-admin required
-      - stepNumber: 4
-        description: >-
-          Create or update the organization unit through the organization repository (id/createdAt
-          stamping and parent referential + cycle validation happen there)
-        type: call
-        targetComponent: organization_repository
-        targetMethod: upsertUnit
-        assertsGuarantees:
-          - atomic
-      - stepNumber: 5
-        description: Append a redacted audit event without letting a failure fail the upsert
-        type: try
-        endStep: 7
-        catches:
-          - error: audit append failure
-            step: 8
-      - stepNumber: 6
-        description: >-
-          Append the redacted org.unit.upsert audit event (security level) under the active
-          retention policy
-        type: call
-        targetComponent: audit_repository
-        targetMethod: append
-      - stepNumber: 7
-        description: On a successful append, continue to the return and skip the audit-failure handler
-        type: jump
-        toStep: 9
-      - stepNumber: 8
-        description: Record the audit append failure as a server diagnostic and continue
-        type: local
-      - stepNumber: 9
-        description: Return the stored organization unit
-        type: return
-        outcome: stored organization unit
-    detail: full
   - name: placeProject
     narrative:
       - stepNumber: 1
@@ -258,7 +207,367 @@ methods:
         type: return
         outcome: configured secret ref names
     detail: full
+  - name: upsertOrganizationUnit
+    narrative:
+      - stepNumber: 1
+        description: Resolve the browser session to a Principal through the auth specialist
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateSession
+      - stepNumber: 2
+        description: If the principal lacks an instance-wide admin grant, deny
+        type: branch
+        condition: the principal lacks an instance-wide admin grant
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the organization administration
+        type: throw
+        error: Forbidden — instance-admin required
+      - stepNumber: 4
+        description: Look up the record's unit through the organization repository (when it carries an id)
+        type: call
+        targetComponent: organization_repository
+        targetMethod: getUnit
+      - stepNumber: 5
+        description: If the record matches an existing unit, update its metadata; otherwise create a new unit
+        type: branch
+        condition: the record matches an existing organization unit
+        onFalseStep: 8
+      - stepNumber: 6
+        description: Update the existing unit's metadata through the organization repository
+        type: call
+        targetComponent: organization_repository
+        targetMethod: updateUnit
+        assertsGuarantees:
+          - atomic
+      - stepNumber: 7
+        description: Metadata updated — skip the create step
+        type: jump
+        toStep: 9
+      - stepNumber: 8
+        description: >-
+          Create a new unit through the organization repository (qualified-id computation and
+          collision rejection happen there)
+        type: call
+        targetComponent: organization_repository
+        targetMethod: createUnit
+        assertsGuarantees:
+          - atomic
+      - stepNumber: 9
+        description: Append a redacted audit event without letting a failure fail the write
+        type: try
+        endStep: 11
+        catches:
+          - error: audit append failure
+            step: 12
+      - stepNumber: 10
+        description: >-
+          Append the redacted org.unit.upsert audit event (security level) under the active
+          retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 11
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 13
+      - stepNumber: 12
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 13
+        description: Return the stored organization unit
+        type: return
+        outcome: stored organization unit
+    detail: full
+  - name: removeUnit
+    narrative:
+      - stepNumber: 1
+        description: Resolve the browser session to a Principal through the auth specialist
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateSession
+      - stepNumber: 2
+        description: If the principal is not an instance admin (permissionSubject.instanceAdmin is false), deny
+        type: branch
+        condition: the principal is not an instance admin
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the organization administration
+        type: throw
+        error: Forbidden — instance-admin required
+      - stepNumber: 4
+        description: Load the target organization unit through the organization repository
+        type: call
+        targetComponent: organization_repository
+        targetMethod: getUnit
+      - stepNumber: 5
+        description: If the unit does not exist, reject
+        type: branch
+        condition: the target unit does not exist
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Reject removing an unknown unit
+        type: throw
+        error: Unknown organization unit
+      - stepNumber: 7
+        description: >-
+          Route on the disposition: cascade deletes the subtree; migrate/absorb/alternative move
+          content to a destination
+        type: switch
+        'on': disposition.kind
+        cases:
+          - value: cascade
+            step: 26
+        defaultStep: 8
+      - stepNumber: 8
+        description: An 'alternative' disposition needs a fresh replacement sibling
+        type: branch
+        condition: the disposition kind is 'alternative'
+        onFalseStep: 11
+      - stepNumber: 9
+        description: >-
+          Create the replacement sibling under the same parent (newSlug/newName), copying the
+          removed unit's visibility and exposeTo so the rename preserves posture; its id becomes the
+          destination
+        type: call
+        targetComponent: organization_repository
+        targetMethod: createUnit
+      - stepNumber: 10
+        description: Replacement created — continue to destination resolution
+        type: jump
+        toStep: 16
+      - stepNumber: 11
+        description: Is this a 'migrate' disposition?
+        type: branch
+        condition: the disposition kind is 'migrate'
+        onFalseStep: 14
+      - stepNumber: 12
+        description: Validate the migrate target up front
+        type: branch
+        condition: disposition.targetUnitId is absent, is the unit itself, or lies inside the removed subtree
+        onTrueStep: 13
+        onFalseStep: 16
+      - stepNumber: 13
+        description: Reject an invalid migrate target
+        type: throw
+        error: Invalid migrate target — must be an existing unit outside the removed subtree
+      - stepNumber: 14
+        description: 'This is ''absorb'': the unit must have a parent to absorb into'
+        type: branch
+        condition: the unit has no parent (it is a root)
+        onTrueStep: 15
+        onFalseStep: 16
+      - stepNumber: 15
+        description: Reject absorbing a root unit (no parent destination)
+        type: throw
+        error: Cannot absorb a root unit — it has no parent
+      - stepNumber: 16
+        description: >-
+          Resolve the destination unit id: the replacement sibling ('alternative'),
+          disposition.targetUnitId ('migrate'), or the unit's parentId ('absorb')
+        type: local
+      - stepNumber: 17
+        description: >-
+          Reparent every direct child subtree under the destination, accumulating the old->new id
+          remap (this also rewrites exposeTo references to moved ids)
+        type: loop
+        loopKind: forEach
+        over: the target unit's direct child units
+        endStep: 18
+      - stepNumber: 18
+        description: Move one child subtree under the destination through the organization repository
+        type: call
+        targetComponent: organization_repository
+        targetMethod: reparentUnit
+      - stepNumber: 19
+        description: >-
+          Extend the remap with an entry mapping the removed unit's own id to the destination id
+          (its direct references move to the destination)
+        type: local
+      - stepNumber: 20
+        description: Re-point every placement in the removed unit's subtree onto the destination
+        type: loop
+        loopKind: forEach
+        over: the project placements in the removed unit's subtree
+        endStep: 21
+      - stepNumber: 21
+        description: >-
+          Re-point one placement onto the destination or its remapped unit id through the
+          organization repository
+        type: call
+        targetComponent: organization_repository
+        targetMethod: placeProject
+      - stepNumber: 22
+        description: Remap every permission assignment scoped to a moved/removed id onto its new id
+        type: call
+        targetComponent: permission_repository
+        targetMethod: remapScope
+      - stepNumber: 23
+        description: >-
+          Remap user home units and role-binding scopes onto their new ids (removedScopeIds empty
+          for a move)
+        type: call
+        targetComponent: user_repository
+        targetMethod: remapUnitReferences
+      - stepNumber: 24
+        description: Delete the now-empty removed unit through the organization repository
+        type: call
+        targetComponent: organization_repository
+        targetMethod: deleteUnit
+      - stepNumber: 25
+        description: Content moved and references rewritten — continue to auditing
+        type: jump
+        toStep: 33
+      - stepNumber: 26
+        description: >-
+          Cascade: gather the removed unit's full subtree (all descendant unit ids) and their
+          placements
+        type: local
+      - stepNumber: 27
+        description: Delete every project placement in the subtree
+        type: loop
+        loopKind: forEach
+        over: the project placements in the subtree
+        endStep: 28
+      - stepNumber: 28
+        description: Delete one placement through the organization repository
+        type: call
+        targetComponent: organization_repository
+        targetMethod: deletePlacement
+      - stepNumber: 29
+        description: >-
+          Remove every permission assignment scoped into the deleted subtree (prevents resurrection
+          at a reused path)
+        type: call
+        targetComponent: permission_repository
+        targetMethod: removeAssignmentsForScopes
+      - stepNumber: 30
+        description: >-
+          Clear user home units and role bindings scoped into the deleted subtree (remap empty,
+          removedScopeIds = the subtree ids)
+        type: call
+        targetComponent: user_repository
+        targetMethod: remapUnitReferences
+      - stepNumber: 31
+        description: >-
+          Delete every unit in the subtree, deepest-first (each strips its id from other units'
+          exposeTo)
+        type: loop
+        loopKind: forEach
+        over: the units in the subtree, deepest-first
+        endStep: 32
+      - stepNumber: 32
+        description: Delete one unit through the organization repository
+        type: call
+        targetComponent: organization_repository
+        targetMethod: deleteUnit
+      - stepNumber: 33
+        description: Append a redacted audit event without letting a failure fail the removal
+        type: try
+        endStep: 35
+        catches:
+          - error: audit append failure
+            step: 36
+      - stepNumber: 34
+        description: >-
+          Append the redacted org.unit.remove audit event (security level) under the active
+          retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 35
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 37
+      - stepNumber: 36
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 37
+        description: Return once the unit has been removed
+        type: return
+        outcome: unit removed
+    detail: full
+  - name: listRoles
+    narrative:
+      - stepNumber: 1
+        description: Forward to the permission admin orchestrator, passing the sessionId as the credential
+        type: call
+        targetComponent: permission_admin_orchestrator
+        targetMethod: listRoles
+    detail: calls-only
+  - name: createRole
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse the role from the body and forward to the permission admin orchestrator, passing the
+          sessionId as the credential
+        type: call
+        targetComponent: permission_admin_orchestrator
+        targetMethod: createRole
+    detail: calls-only
+  - name: updateRole
+    narrative:
+      - stepNumber: 1
+        description: Parse the role from the body and forward, passing the sessionId as the credential
+        type: call
+        targetComponent: permission_admin_orchestrator
+        targetMethod: updateRole
+    detail: calls-only
+  - name: deleteRole
+    narrative:
+      - stepNumber: 1
+        description: Forward to the permission admin orchestrator, passing the sessionId as the credential
+        type: call
+        targetComponent: permission_admin_orchestrator
+        targetMethod: deleteRole
+    detail: calls-only
+  - name: listAssignments
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the scope/subject filters to the permission admin orchestrator, passing the
+          sessionId as the credential
+        type: call
+        targetComponent: permission_admin_orchestrator
+        targetMethod: listAssignments
+    detail: calls-only
+  - name: setAssignment
+    narrative:
+      - stepNumber: 1
+        description: Parse the assignment from the body and forward, passing the sessionId as the credential
+        type: call
+        targetComponent: permission_admin_orchestrator
+        targetMethod: setAssignment
+    detail: calls-only
+  - name: removeAssignment
+    narrative:
+      - stepNumber: 1
+        description: Forward to the permission admin orchestrator, passing the sessionId as the credential
+        type: call
+        targetComponent: permission_admin_orchestrator
+        targetMethod: removeAssignment
+    detail: calls-only
+  - name: bindRole
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the user/role/scope to the permission admin orchestrator, passing the sessionId as
+          the credential
+        type: call
+        targetComponent: permission_admin_orchestrator
+        targetMethod: bindRole
+    detail: calls-only
+  - name: unbindRole
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the user/role/scope to the permission admin orchestrator, passing the sessionId as
+          the credential
+        type: call
+        targetComponent: permission_admin_orchestrator
+        targetMethod: unbindRole
+    detail: calls-only
 detail: calls-only
 status: complete
 createdAt: '2026-07-13T18:28:58.935Z'
-updatedAt: '2026-07-14T12:31:03.510Z'
+updatedAt: '2026-07-15T22:02:38.820Z'

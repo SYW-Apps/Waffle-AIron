@@ -16,108 +16,93 @@ methods:
         targetComponent: auth_specialist
         targetMethod: authenticateCredential
       - stepNumber: 2
-        description: Gather all organization units to resolve the caller's operations-read scope
+        description: Compute the caller's project-read visible scopes over the organization tree
         type: call
-        targetComponent: organization_repository
-        targetMethod: listUnits
+        targetComponent: authorization_specialist
+        targetMethod: visibleScopes
       - stepNumber: 3
-        description: Gather all project placements
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listPlacements
-      - stepNumber: 4
-        description: Resolve the caller's operations:read scope over the organization tree
-        type: call
-        targetComponent: scope_specialist
-        targetMethod: resolveScope
-      - stepNumber: 5
-        description: >-
-          If the caller has no operations-read scope (scope.all is false and the scope is empty — no
-          in-scope projects and no in-scope units), deny
+        description: If the caller has no actionable project scope, deny
         type: branch
-        condition: scope.all is false and the scope is empty (no in-scope projects and no in-scope units)
-        onTrueStep: 6
-        onFalseStep: 7
-      - stepNumber: 6
+        condition: the caller has no actionable project scope in the visible set
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
         description: Reject the health read
         type: throw
         error: Forbidden — operations read access required
-      - stepNumber: 7
+      - stepNumber: 5
         description: List all hosted project records
         type: call
         targetComponent: project_registry
         targetMethod: list
-      - stepNumber: 8
+      - stepNumber: 6
         description: >-
-          When scope.all is false, narrow the hosted project records to those whose id is in
-          scope.projectIds; when scope.all is true, keep every project (instance-wide operations
-          read)
+          Narrow the hosted project records to those actionable in the visible set (an
+          instance-admin keeps every project)
         type: local
-      - stepNumber: 9
+      - stepNumber: 7
         description: >-
           List the server-global packs across both tiers (image and instance), tier-tagged and
           shadow-marked
         type: call
         targetComponent: pack_registry
         targetMethod: listGlobalPacks
-      - stepNumber: 10
+      - stepNumber: 8
         description: >-
           Derive the image-tier and instance-tier pack name listings from the tier-tagged global
           pack descriptors
         type: local
-      - stepNumber: 11
-        description: >-
-          For each in-scope hosted project record, read its declared pack/profile references,
-          accumulating a ProjectPackReference per project
+      - stepNumber: 9
+        description: For each in-scope hosted project record, read its declared pack/profile references
         type: loop
         loopKind: forEach
         over: the in-scope hosted project records
-        endStep: 12
-      - stepNumber: 12
+        endStep: 10
+      - stepNumber: 10
         description: Read the project's pack/profile references from its isolated root
         type: call
         targetComponent: pack_registry
         targetMethod: readProjectReferences
-      - stepNumber: 13
+      - stepNumber: 11
         description: Gather the cross-project relations sourced from in-scope projects (relation-health inputs)
         type: call
         targetComponent: project_relation_repository
         targetMethod: list
-      - stepNumber: 14
+      - stepNumber: 12
         description: For each distinct relation target project
         type: loop
         loopKind: forEach
         over: the distinct relation target projects
-        endStep: 15
-      - stepNumber: 15
+        endStep: 13
+      - stepNumber: 13
         description: >-
           Fetch the target's stored public-surface snapshot for interface-drift checking (a missing
           snapshot is itself a finding)
         type: call
         targetComponent: public_surface_repository
         targetMethod: getSnapshot
-      - stepNumber: 16
+      - stepNumber: 14
         description: >-
           Derive redacted diagnostic checks from the in-scope project records, the two pack-tier
-          name listings, the per-project references, and the relation-health inputs (relations +
-          target snapshots)
+          name listings, the per-project references, and the relation-health inputs
         type: call
         targetComponent: diagnostics_specialist
         targetMethod: runChecks
-      - stepNumber: 17
+      - stepNumber: 15
         description: Derive usage snapshots for the requested scope from the in-scope project records
         type: call
         targetComponent: diagnostics_specialist
         targetMethod: collectUsage
-      - stepNumber: 18
+      - stepNumber: 16
         description: Assemble the aggregated instance health report from the checks and usage
         type: call
         targetComponent: diagnostics_specialist
         targetMethod: buildHealthReport
-      - stepNumber: 19
+      - stepNumber: 17
         description: Return the redacted health report scoped to the caller
         type: return
         outcome: redacted health report
+    detail: full
   - name: getUsage
     narrative:
       - stepNumber: 1
@@ -126,51 +111,40 @@ methods:
         targetComponent: auth_specialist
         targetMethod: authenticateCredential
       - stepNumber: 2
-        description: Gather all organization units to resolve the caller's operations-read scope
+        description: Compute the caller's project-read visible scopes over the organization tree
         type: call
-        targetComponent: organization_repository
-        targetMethod: listUnits
+        targetComponent: authorization_specialist
+        targetMethod: visibleScopes
       - stepNumber: 3
-        description: Gather all project placements
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listPlacements
-      - stepNumber: 4
-        description: Resolve the caller's operations:read scope over the organization tree
-        type: call
-        targetComponent: scope_specialist
-        targetMethod: resolveScope
-      - stepNumber: 5
-        description: >-
-          If the caller has no operations-read scope (scope.all is false and the scope is empty),
-          deny
+        description: If the caller has no actionable project scope, deny
         type: branch
-        condition: scope.all is false and the scope is empty (no in-scope projects and no in-scope units)
-        onTrueStep: 6
-        onFalseStep: 7
-      - stepNumber: 6
+        condition: the caller has no actionable project scope in the visible set
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
         description: Reject the usage read
         type: throw
         error: Forbidden — operations read access required
-      - stepNumber: 7
+      - stepNumber: 5
         description: List all hosted project records
         type: call
         targetComponent: project_registry
         targetMethod: list
-      - stepNumber: 8
+      - stepNumber: 6
         description: >-
-          When scope.all is false, narrow the hosted project records to those whose id is in
-          scope.projectIds; when scope.all is true, keep every project
+          Narrow the hosted project records to those actionable in the visible set (instance-admin
+          keeps all)
         type: local
-      - stepNumber: 9
+      - stepNumber: 7
         description: Derive usage snapshots for the requested scope from the in-scope project records
         type: call
         targetComponent: diagnostics_specialist
         targetMethod: collectUsage
-      - stepNumber: 10
+      - stepNumber: 8
         description: Return the redacted usage snapshots scoped to the caller
         type: return
         outcome: redacted usage snapshots
+    detail: full
   - name: evaluateQuota
     narrative:
       - stepNumber: 1
@@ -179,69 +153,54 @@ methods:
         targetComponent: auth_specialist
         targetMethod: authenticateCredential
       - stepNumber: 2
-        description: Gather all organization units to resolve the caller's operations-read scope
+        description: Compute the caller's project-read visible scopes over the organization tree
         type: call
-        targetComponent: organization_repository
-        targetMethod: listUnits
+        targetComponent: authorization_specialist
+        targetMethod: visibleScopes
       - stepNumber: 3
-        description: Gather all project placements
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listPlacements
-      - stepNumber: 4
-        description: Resolve the caller's operations:read scope over the organization tree
-        type: call
-        targetComponent: scope_specialist
-        targetMethod: resolveScope
-      - stepNumber: 5
-        description: >-
-          If the caller has no operations-read scope (scope.all is false and the scope is empty),
-          deny
+        description: If the caller has no actionable project scope, deny
         type: branch
-        condition: scope.all is false and the scope is empty (no in-scope projects and no in-scope units)
-        onTrueStep: 6
-        onFalseStep: 7
-      - stepNumber: 6
+        condition: the caller has no actionable project scope in the visible set
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
         description: Reject the quota read
         type: throw
         error: Forbidden — operations read access required
-      - stepNumber: 7
+      - stepNumber: 5
         description: List all hosted project records
         type: call
         targetComponent: project_registry
         targetMethod: list
-      - stepNumber: 8
+      - stepNumber: 6
         description: >-
-          When scope.all is false, narrow the hosted project records to those whose id is in
-          scope.projectIds; when scope.all is true, keep every project
+          Narrow the hosted project records to those actionable in the visible set (instance-admin
+          keeps all)
         type: local
-      - stepNumber: 9
+      - stepNumber: 7
         description: Derive usage snapshots for the requested scope from the in-scope project records
         type: call
         targetComponent: diagnostics_specialist
         targetMethod: collectUsage
-      - stepNumber: 10
+      - stepNumber: 8
         description: >-
           Resolve the advisory ResourceQuotaPolicy from the host config, using the secure default
           policy when unset
         type: local
-      - stepNumber: 11
+      - stepNumber: 9
         description: >-
           Evaluate the usage snapshots against the advisory quota policy, annotating observe/warn
           messages
         type: call
         targetComponent: quota_specialist
         targetMethod: evaluateUsage
-      - stepNumber: 12
+      - stepNumber: 10
         description: Return the advisory quota-annotated usage snapshots scoped to the caller
         type: return
         outcome: advisory quota-annotated usage snapshots
+    detail: full
 lint:
-  allow:
-    - code: UNREALIZED_DEPENDENCY
-      reason: >-
-        Organization data is gathered inside scope_specialist's resolveScopeFor in code rather than
-        by this orchestrator directly — narrative-level realignment pending (Level 3 territory).
+  allow: []
 status: complete
 createdAt: '2026-07-10T11:27:00.178Z'
-updatedAt: '2026-07-11T20:30:18.506Z'
+updatedAt: '2026-07-15T21:40:18.241Z'

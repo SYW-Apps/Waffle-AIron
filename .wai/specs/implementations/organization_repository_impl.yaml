@@ -7,13 +7,6 @@ description: >-
 contract: iorganization_repository
 sourcePath: src/server/organization.ts
 methods:
-  - name: upsertUnit
-    narrative:
-      - stepNumber: 1
-        description: Forward to the organization registry
-        type: call
-        targetComponent: organization_registry
-        targetMethod: upsertUnit
   - name: placeProject
     narrative:
       - stepNumber: 1
@@ -42,7 +35,42 @@ methods:
         type: call
         targetComponent: organization_index
         targetMethod: getUnit
+  - name: createUnit
+    narrative:
+      - stepNumber: 1
+        description: Forward to the organization registry
+        type: call
+        targetComponent: organization_registry
+        targetMethod: createUnit
+  - name: updateUnit
+    narrative:
+      - stepNumber: 1
+        description: Forward to the organization registry
+        type: call
+        targetComponent: organization_registry
+        targetMethod: updateUnit
+  - name: reparentUnit
+    narrative:
+      - stepNumber: 1
+        description: Forward to the organization registry
+        type: call
+        targetComponent: organization_registry
+        targetMethod: reparentUnit
+  - name: deleteUnit
+    narrative:
+      - stepNumber: 1
+        description: Forward to the organization registry
+        type: call
+        targetComponent: organization_registry
+        targetMethod: deleteUnit
+  - name: deletePlacement
+    narrative:
+      - stepNumber: 1
+        description: Forward to the organization registry
+        type: call
+        targetComponent: organization_registry
+        targetMethod: deletePlacement
 detail: calls-only
 status: complete
 createdAt: '2026-07-09T22:07:54.774Z'
-updatedAt: '2026-07-09T22:17:22.077Z'
+updatedAt: '2026-07-15T19:49:32.208Z'

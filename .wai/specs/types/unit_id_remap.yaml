@@ -1,0 +1,21 @@
+kind: value-object
+id: unit_id_remap
+name: UnitIdRemap
+description: >-
+  One entry mapping an organization unit's previous qualified id to its new one after a reparent or
+  rename. reparentUnit returns one per moved unit (the unit plus every descendant) so callers can
+  rewrite every reference to the old id — project placements, grant/assignment scopes, user home
+  units, and exposeTo lists.
+subsystem: sdd_host
+fields:
+  - name: oldId
+    type: string
+    description: The unit's qualified id before the move.
+    optional: false
+  - name: newId
+    type: string
+    description: The unit's qualified id after the move.
+    optional: false
+methods: []
+createdAt: '2026-07-15T19:49:00.776Z'
+updatedAt: '2026-07-15T19:49:00.784Z'

@@ -1,0 +1,23 @@
+id: permission_store_impl
+name: Permission Store Implementation
+description: >-
+  Authoritative in-memory permission-assignment grid loaded from and swapped as permissions.json
+  under the hosted data root.
+contract: ipermission_store
+sourcePath: src/server/permissions.ts
+methods:
+  - name: load
+    narrative: []
+    intent: >-
+      Read the persisted assignment collection from permissions.json under the hosted data root — an
+      absent or empty file yields an empty collection — and hold it as the authoritative in-memory
+      representation.
+  - name: replaceAll
+    narrative: []
+    intent: >-
+      Swap the in-memory assignment collection to the supplied complete set; the registry has
+      already persisted it durably.
+detail: intent
+status: complete
+createdAt: '2026-07-15T20:28:56.023Z'
+updatedAt: '2026-07-15T22:22:07.973Z'

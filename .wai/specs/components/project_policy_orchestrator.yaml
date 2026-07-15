@@ -12,7 +12,7 @@ componentType: Orchestrator
 owns: []
 dependsOn:
   - auth_specialist
-  - scope_specialist
+  - authorization_specialist
   - project_registry
   - pack_registry
   - policy_repository
@@ -21,4 +21,4 @@ dependsOn:
   - host_core_adapter
 status: complete
 createdAt: '2026-07-08T21:59:23.605Z'
-updatedAt: '2026-07-15T06:53:06.663Z'
+updatedAt: '2026-07-15T21:41:18.677Z'

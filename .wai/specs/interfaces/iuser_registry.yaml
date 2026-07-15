@@ -36,6 +36,20 @@ methods:
         type: ProjectGrant[]
     guarantees:
       - atomic
+  - name: remapUnitReferences
+    description: >-
+      Rewrite every user's home unitId and role-binding scopeIds per the remap (a unit rename/move),
+      and clear any home unitId or role-binding scoped to a removedScopeId (a cascade-deleted
+      subtree). Persist durably and refresh the store.
+    signature: 'remapUnitReferences(remap: UnitIdRemap[], removedScopeIds: string[]): void'
+    returns: void
+    params:
+      - name: remap
+        type: UnitIdRemap[]
+      - name: removedScopeIds
+        type: string[]
+    guarantees:
+      - atomic
 status: complete
 createdAt: '2026-07-08T20:16:18.364Z'
-updatedAt: '2026-07-09T17:43:41.817Z'
+updatedAt: '2026-07-15T21:18:19.683Z'

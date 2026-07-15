@@ -1,0 +1,29 @@
+kind: value-object
+id: effective_permission
+name: EffectivePermission
+description: >-
+  The resolved effective permission for one (subject, capability, target scope): the decided value
+  plus which source/scope decided it, for explainability in the UI and audit.
+subsystem: sdd_host
+fields:
+  - name: value
+    type: string
+    description: >-
+      yes | approval | no — the resolved effective permission (never 'inherit'; inherit is consumed
+      during the walk).
+    optional: false
+  - name: source
+    type: string
+    description: 'Which source decided it: instance-admin | user | role | everyone-default | instance-default.'
+    optional: false
+  - name: decidedScopeKind
+    type: string
+    description: Scope kind whose setting won (instance | unit | project).
+    optional: true
+  - name: decidedScopeId
+    type: string
+    description: The ancestor-chain scope whose setting won.
+    optional: true
+methods: []
+createdAt: '2026-07-15T20:25:33.560Z'
+updatedAt: '2026-07-15T20:25:33.607Z'

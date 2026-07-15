@@ -7,16 +7,6 @@ description: >-
 contract: iorganization_registry
 sourcePath: src/server/organization.ts
 methods:
-  - name: upsertUnit
-    narrative: []
-    intent: >-
-      Stamp the new unit's id and createdAt on create (preserving both on update) and default status
-      to active, validate that parentId — when set — resolves to an existing unit, and reject any
-      change that would introduce a cycle in the unit tree (a unit reachable from itself through
-      parent links). Then rewrite the persisted unit collection via write-temp-then-rename, refresh
-      the store with replaceAll, and return the stored unit. Persistence failures leave the previous
-      collections intact and surface as storage errors. Authorization is enforced by the
-      orchestrator, not here.
   - name: placeProject
     narrative: []
     intent: >-
@@ -25,7 +15,53 @@ methods:
       error otherwise. Then rewrite the persisted placement collection via write-temp-then-rename,
       refresh the store, and return the stored placement. Persistence failures leave the previous
       collections intact. Authorization is enforced by the orchestrator, not here.
+  - name: createUnit
+    narrative: []
+    detail: intent
+    intent: >-
+      Compute the unit's qualified id from its parentId path plus slug (a root unit's id is its
+      slug), verify the parent resolves to an existing unit when set, and reject a collision — an
+      existing unit already holding that qualified id, or a sibling already using the slug — with a
+      validation error. Stamp createdAt and default status to active, then rewrite the persisted
+      unit collection via write-temp-then-rename, refresh the store with replaceAll, and return the
+      stored unit. Persistence failures leave the previous collections intact. Authorization is
+      enforced by the orchestrator, not here.
+  - name: updateUnit
+    narrative: []
+    detail: intent
+    intent: >-
+      Load the existing unit by id (validation error when absent) and apply only metadata changes —
+      name, kind, status, visibility, exposeTo — while preserving id, slug, parentId, createdAt, and
+      createdBy; reject any attempt to change slug or parentId, which are moves via reparentUnit.
+      Rewrite the persisted unit collection via write-temp-then-rename, refresh the store, and
+      return the stored unit.
+  - name: reparentUnit
+    narrative: []
+    detail: intent
+    intent: >-
+      Resolve the unit and its full descendant subtree, reject the move when newParentId is the unit
+      itself or one of its descendants (cycle) or does not resolve, and recompute every moved unit's
+      qualified id from the new parent path (an empty newParentId promotes to a root). Reject the
+      move if any recomputed id collides with a unit outside the moving subtree. Rewrite the renamed
+      subtree AND every exposeTo[] entry across all units that referenced a moved id into the
+      persisted unit collection via write-temp-then-rename, refresh the store, and return the
+      old->new UnitIdRemap for every moved unit. Persistence failures leave the previous collections
+      intact.
+  - name: deleteUnit
+    narrative: []
+    detail: intent
+    intent: >-
+      Reject the delete when the unit still has child units or project placements. Remove the unit
+      from the collection and strip its id from every other unit's exposeTo[] list, rewrite via
+      write-temp-then-rename, and refresh the store; deleting an absent unit is a no-op.
+  - name: deletePlacement
+    narrative: []
+    detail: intent
+    intent: >-
+      Remove the placement with the given id from the placement collection — the placed project
+      itself is untouched — rewrite via write-temp-then-rename, and refresh the store; an absent
+      placement is a no-op.
 detail: intent
 status: complete
 createdAt: '2026-07-09T22:07:46.272Z'
-updatedAt: '2026-07-09T22:13:33.327Z'
+updatedAt: '2026-07-15T21:19:42.323Z'

@@ -9,9 +9,10 @@ methods:
   - name: authenticate
     description: >-
       Verify a data-plane bearer token by constant-time comparison of its hash against stored
-      records; resolves the Principal's subject and grants from the credential record when present
-      (legacy records fall back to the role/projects projection) and rejects expired (expiresAt) or
-      revoked (revokedAt) records, or rejects as unauthenticated when no record matches.
+      records; resolve the Principal's subject and permissionSubject (subjectId, roleBindings,
+      instanceAdmin) from the credential record when present (legacy records fall back to the
+      role/projects projection) and reject expired or revoked records, or reject as unauthenticated
+      when no record matches.
     signature: 'authenticate(token: string): Principal'
     returns: Principal
     params:
@@ -20,7 +21,8 @@ methods:
   - name: authenticateMaster
     description: >-
       Verify the bootstrap/control-plane master credential by constant-time comparison; return an
-      administrative Principal (admin role over all projects) or reject.
+      administrative Principal (admin role over all projects, permissionSubject with instanceAdmin
+      true) or reject.
     signature: 'authenticateMaster(credential: string): Principal'
     returns: Principal
     params:
@@ -40,13 +42,12 @@ methods:
     returns: ViewGrant
   - name: authenticateCredential
     description: >-
-      Verify a control-plane credential and resolve it to a Principal. Accepts three credential
-      kinds through this single authority: the bootstrap/master credential, a stored user-bound
-      bearer token, and a browser web-session id (reserved prefix) resolved via the
-      web_session_repository. Because a session resolves to the same Principal a token yields, every
-      existing scoped endpoint authenticates a browser session with no per-endpoint change. Rejects
-      expired/revoked tokens and expired/absent sessions as unauthenticated. Shares one
-      session-resolution helper with authenticateSession.
+      Verify a control-plane credential and resolve it to a Principal (with its permissionSubject).
+      Accepts three credential kinds through this single authority: the bootstrap/master credential,
+      a stored user-bound bearer token, and a browser web-session id (reserved prefix) resolved via
+      the web_session_repository. Because a session resolves to the same Principal a token yields,
+      every existing scoped endpoint authenticates a browser session with no per-endpoint change.
+      Rejects expired/revoked tokens and expired/absent sessions as unauthenticated.
     signature: 'authenticateCredential(credential: string): Principal'
     returns: Principal
     params:
@@ -73,12 +74,11 @@ methods:
         type: string
   - name: authenticateSession
     description: >-
-      Resolve a browser session id to a Principal — the auth bridge that lets the unified web UI
-      reuse every existing endpoint with a session cookie in place of a bearer token. Look up the
-      session through the web session repository; reject an absent or expired session (past
-      expiresAt) as unauthenticated. Assemble the Principal directly from the session's stored
-      PrincipalSubject and server-derived grants (with the role/projects compatibility projection
-      derived from those grants) — no token record lookup. Performs no authorization routing itself.
+      Resolve a browser session id to a Principal (with its permissionSubject) — the auth bridge
+      that lets the unified web UI reuse every existing endpoint with a session cookie in place of a
+      bearer token. Look up the session through the web session repository; reject an absent or
+      expired session as unauthenticated. Assemble the Principal directly from the session's stored
+      PrincipalSubject and resolved permissionSubject. Performs no authorization routing itself.
     signature: 'authenticateSession(sessionId: string): Principal'
     returns: Principal
     params:
@@ -105,4 +105,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-04T12:49:50.542Z'
-updatedAt: '2026-07-14T11:04:16.119Z'
+updatedAt: '2026-07-15T21:10:09.835Z'

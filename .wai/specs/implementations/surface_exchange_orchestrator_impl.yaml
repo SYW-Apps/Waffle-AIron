@@ -235,43 +235,39 @@ methods:
         targetComponent: auth_specialist
         targetMethod: authenticateCredential
       - stepNumber: 2
-        description: Resolve the caller's landscape:manage scope over the organization tree
+        description: >-
+          Resolve the caller's project:admin permission over the target project (an instance-admin
+          bypasses to yes)
         type: call
-        targetComponent: scope_specialist
-        targetMethod: resolveScope
+        targetComponent: authorization_specialist
+        targetMethod: authorize
       - stepNumber: 3
-        description: Point-check the scope against the target project
-        type: call
-        targetComponent: scope_specialist
-        targetMethod: permits
-      - stepNumber: 4
-        description: If the caller's scope does not permit the target project, deny
+        description: If the effective value is not yes, deny
         type: branch
-        condition: the scope does not permit the target project (permits returned false)
-        onTrueStep: 5
-        onFalseStep: 6
-      - stepNumber: 5
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
         description: Reject the surface export
         type: throw
-        error: >-
-          Forbidden — exporting a project's surface artifact requires landscape:manage scope over
-          the project
-      - stepNumber: 6
+        error: Forbidden — exporting a project's surface artifact requires project:admin over the project
+      - stepNumber: 5
         description: Resolve and bind the target project's isolated root within the principal's authorized set
         type: call
         targetComponent: project_registry
         targetMethod: resolveRoot
-      - stepNumber: 7
+      - stepNumber: 6
         description: >-
           Generate the audience-filtered surface artifact for the bound project (native snapshot or
           rendered OpenAPI)
         type: call
         targetComponent: host_surfaces_adapter
         targetMethod: exportBoundSurface
-      - stepNumber: 8
+      - stepNumber: 7
         description: Return the typed downloadable artifact (body, content type, filename)
         type: return
         outcome: SurfaceArtifact
+    detail: full
 status: complete
 createdAt: '2026-07-11T12:03:31.491Z'
-updatedAt: '2026-07-11T12:09:30.127Z'
+updatedAt: '2026-07-15T21:41:38.302Z'

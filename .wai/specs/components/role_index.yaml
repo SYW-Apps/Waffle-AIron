@@ -1,0 +1,11 @@
+id: role_index
+name: Role Index
+description: 'Read-path projection over permission roles: single-role lookup and full listing.'
+subsystem: sdd_host
+componentType: Index
+owns: []
+dependsOn:
+  - role_store
+status: design
+createdAt: '2026-07-15T20:26:55.347Z'
+updatedAt: '2026-07-15T22:32:38.021Z'

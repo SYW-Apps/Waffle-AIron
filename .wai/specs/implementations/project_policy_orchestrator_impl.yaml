@@ -237,15 +237,15 @@ methods:
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
-          Resolve the caller's mcp:write scope over the organization tree — a unit-scoped grant
-          expands to its subtree's projects, a genuine instance grant is unrestricted
+          Resolve the caller's project:write permission over the target project (an instance-admin
+          bypasses to yes)
         type: call
-        targetComponent: scope_specialist
-        targetMethod: resolveScope
+        targetComponent: authorization_specialist
+        targetMethod: authorize
       - stepNumber: 3
-        description: If the resolved mcp:write scope does not permit the target project, deny
+        description: If the caller's project:write is not yes, deny
         type: branch
-        condition: the resolved mcp:write scope does not permit the target project
+        condition: the effective project:write value is not yes
         onFalseStep: 5
       - stepNumber: 4
         description: Reject the evaluation
@@ -294,15 +294,15 @@ methods:
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
-          Resolve the caller's mcp:write scope over the organization tree — a unit-scoped grant
-          expands to its subtree's projects, a genuine instance grant is unrestricted
+          Resolve the caller's project:write permission over the target project (an instance-admin
+          bypasses to yes)
         type: call
-        targetComponent: scope_specialist
-        targetMethod: resolveScope
+        targetComponent: authorization_specialist
+        targetMethod: authorize
       - stepNumber: 3
-        description: If the resolved mcp:write scope does not permit the target project, deny
+        description: If the caller's project:write is not yes, deny
         type: branch
-        condition: the resolved mcp:write scope does not permit the target project
+        condition: the effective project:write value is not yes
         onFalseStep: 5
       - stepNumber: 4
         description: Reject the reconciliation
@@ -479,4 +479,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-09T20:50:11.443Z'
-updatedAt: '2026-07-13T22:25:15.723Z'
+updatedAt: '2026-07-15T21:41:22.402Z'

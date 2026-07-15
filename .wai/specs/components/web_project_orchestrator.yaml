@@ -14,9 +14,8 @@ owns: []
 dependsOn:
   - admin_orchestrator
   - auth_specialist
-  - scope_specialist
-  - organization_repository
+  - authorization_specialist
   - project_registry
 status: complete
 createdAt: '2026-07-13T20:36:24.912Z'
-updatedAt: '2026-07-13T20:37:54.217Z'
+updatedAt: '2026-07-15T21:39:43.831Z'

@@ -1,0 +1,22 @@
+id: permission_index_impl
+name: Permission Index Implementation
+description: >-
+  Read path over the in-memory permission-assignment grid, applying the optional
+  scope/subject/capability filters.
+contract: ipermission_index
+sourcePath: src/server/permissions.ts
+methods:
+  - name: listAssignments
+    narrative: []
+    intent: >-
+      Return the in-memory assignments filtered by every supplied criterion: scopeId in scopeIds
+      (when given), matching subjectKind, matching subjectId, and matching capability. Any omitted
+      filter is not applied; an empty filter returns the whole grid.
+  - name: getAssignment
+    narrative: []
+    detail: intent
+    intent: Return the in-memory assignment whose id matches, or null when none does.
+detail: intent
+status: complete
+createdAt: '2026-07-15T20:29:05.567Z'
+updatedAt: '2026-07-15T22:22:07.760Z'

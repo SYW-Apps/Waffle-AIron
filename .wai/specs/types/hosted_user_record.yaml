@@ -42,6 +42,13 @@ fields:
       The user's home organization unit; scoped user administration lists and filters users by their
       home unit subtree.
     optional: true
+  - name: roleBindings
+    type: RoleBinding[]
+    description: >-
+      Roles bound to this user, optionally scoped to a unit/project subtree; combined with direct
+      permission assignments and everyone-defaults during hierarchical resolution. (The legacy
+      grants field is migrated into the permission-assignment grid in Phase 3.)
+    optional: true
 methods: []
 createdAt: '2026-07-08T19:34:35.627Z'
-updatedAt: '2026-07-10T17:12:37.872Z'
+updatedAt: '2026-07-15T20:25:39.204Z'

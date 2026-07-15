@@ -9,7 +9,13 @@ subsystem: sdd_host
 fields:
   - name: id
     type: string
-    description: Stable organization unit id.
+    description: >-
+      Qualified dot-path identity from the org root: the parent's qualified id + '.' + slug (a root
+      unit's id IS its slug), e.g. "company_a.it.team_a". The stable unique key referenced by
+      placements.unitId, grants.orgUnitId, user.unitId, and exposeTo[]. Uniqueness is enforced on
+      this qualified path; a create or move onto an existing id is an error (never a silent
+      overwrite). Renames/reparents rewrite this id together with its descendants' ids and every
+      reference, performed explicitly via a removeUnit disposition — there is no hidden opaque key.
     optional: false
   - name: name
     type: string
@@ -21,7 +27,7 @@ fields:
     optional: false
   - name: parentId
     type: string
-    description: Optional parent organization unit id.
+    description: Qualified id of the parent organization unit; absent for a root/tenant unit.
     optional: true
   - name: status
     type: string
@@ -51,6 +57,14 @@ fields:
       that punches holes through a closed posture and the ONLY path across tenant roots. No
       deny-lists: restrict by placing sensitive projects in a closed group instead.
     optional: true
+  - name: slug
+    type: string
+    description: >-
+      Local segment, unique among sibling units under the same parentId (top-level/root slugs are
+      unique instance-wide). Lowercase [a-z0-9-], dot-free ('.' is the qualified-id separator). The
+      human-chosen leaf name at this level (e.g. "it", "team_a"), reused freely across different
+      parents: company_a.it and company_b.it coexist.
+    optional: false
 methods: []
 createdAt: '2026-07-08T21:11:11.067Z'
-updatedAt: '2026-07-11T09:36:45.130Z'
+updatedAt: '2026-07-15T19:39:30.050Z'

@@ -1,0 +1,30 @@
+kind: value-object
+id: visible_scope
+name: VisibleScope
+description: >-
+  One scope in a subject's visibility view: a scope they can act on (value yes/approval) or an
+  ancestor shown only as a navigation breadcrumb. The set is actionable scopes plus their ancestor
+  chain, never an ancestor's other children.
+subsystem: sdd_host
+fields:
+  - name: scopeKind
+    type: string
+    description: unit | project.
+    optional: false
+  - name: scopeId
+    type: string
+    description: Qualified unit id or project id.
+    optional: false
+  - name: value
+    type: string
+    description: yes | approval | no — the effective permission for the relevant capability at this scope.
+    optional: false
+  - name: context
+    type: boolean
+    description: >-
+      True when shown only as an ancestor breadcrumb (not directly actionable); false when directly
+      actionable.
+    optional: false
+methods: []
+createdAt: '2026-07-15T20:25:37.511Z'
+updatedAt: '2026-07-15T20:25:37.560Z'

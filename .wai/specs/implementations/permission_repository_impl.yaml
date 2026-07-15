@@ -1,0 +1,54 @@
+id: permission_repository_impl
+name: Permission Repository Implementation
+description: >-
+  Facade over the owned permission store, registry, and index. Pure 1:1 forwarding — writes to the
+  registry, reads to the index; no logic here.
+contract: ipermission_repository
+sourcePath: src/server/permissions.ts
+methods:
+  - name: setAssignment
+    narrative:
+      - stepNumber: 1
+        description: Forward to the permission registry
+        type: call
+        targetComponent: permission_registry
+        targetMethod: setAssignment
+  - name: removeAssignment
+    narrative:
+      - stepNumber: 1
+        description: Forward to the permission registry
+        type: call
+        targetComponent: permission_registry
+        targetMethod: removeAssignment
+  - name: remapScope
+    narrative:
+      - stepNumber: 1
+        description: Forward to the permission registry
+        type: call
+        targetComponent: permission_registry
+        targetMethod: remapScope
+  - name: listAssignments
+    narrative:
+      - stepNumber: 1
+        description: Forward to the permission index
+        type: call
+        targetComponent: permission_index
+        targetMethod: listAssignments
+  - name: removeAssignmentsForScopes
+    narrative:
+      - stepNumber: 1
+        description: Forward to the permission registry
+        type: call
+        targetComponent: permission_registry
+        targetMethod: removeAssignmentsForScopes
+  - name: getAssignment
+    narrative:
+      - stepNumber: 1
+        description: Forward to the permission index
+        type: call
+        targetComponent: permission_index
+        targetMethod: getAssignment
+detail: calls-only
+status: complete
+createdAt: '2026-07-15T20:29:09.558Z'
+updatedAt: '2026-07-15T22:22:07.866Z'

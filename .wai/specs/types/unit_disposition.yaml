@@ -1,0 +1,41 @@
+kind: value-object
+id: unit_disposition
+name: UnitDisposition
+description: >-
+  The chosen resolution when removing an organization unit — a unit is never silently
+  cascade-deleted; the caller picks what happens to its child units and project placements.
+  "migrate" moves all child units and placements to an existing destination unit (targetUnitId);
+  "alternative" creates a new sibling unit (newSlug/newName) and moves all content into it — the way
+  a rename or replace is expressed; "absorb" moves child units and placements up into the parent
+  unit, then removes this unit; "cascade" deletes this unit together with its entire subtree and
+  their placements. Every non-cascade disposition is an explicit move that rewrites the moved
+  subtree's qualified ids and every reference to them (placements, permission assignments/grants,
+  and user home units).
+subsystem: sdd_host
+fields:
+  - name: kind
+    type: string
+    description: 'Disposition selector: "migrate" | "alternative" | "absorb" | "cascade".'
+    optional: false
+  - name: targetUnitId
+    type: string
+    description: >-
+      Required for kind="migrate": qualified id of the existing destination unit that adopts this
+      unit's child units and project placements. Must exist and must not be this unit or one of its
+      own descendants.
+    optional: true
+  - name: newSlug
+    type: string
+    description: >-
+      Required for kind="alternative": slug of a new unit created under the same parent (unique
+      among siblings) into which all content is moved — this is how a rename/replace is expressed.
+    optional: true
+  - name: newName
+    type: string
+    description: >-
+      Optional display name for the kind="alternative" replacement unit; defaults to the removed
+      unit's name.
+    optional: true
+methods: []
+createdAt: '2026-07-15T19:39:37.500Z'
+updatedAt: '2026-07-15T19:39:37.559Z'

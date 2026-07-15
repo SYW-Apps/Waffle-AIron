@@ -282,7 +282,91 @@ methods:
         type: call
         targetComponent: web_orchestrator
         targetMethod: getLoginOptions
+  - name: adminRemoveUnit
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse unitId + disposition from the body, resolve the session cookie, and forward to the
+          web admin orchestrator
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: removeUnit
+    detail: calls-only
+  - name: adminListRoles
+    narrative:
+      - stepNumber: 1
+        description: Resolve the session cookie and forward to the web admin orchestrator
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: listRoles
+    detail: calls-only
+  - name: adminCreateRole
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse the role from the body, resolve the session cookie, and forward to the web admin
+          orchestrator
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: createRole
+    detail: calls-only
+  - name: adminUpdateRole
+    narrative:
+      - stepNumber: 1
+        description: Parse the role from the body, resolve the session cookie, and forward
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: updateRole
+    detail: calls-only
+  - name: adminDeleteRole
+    narrative:
+      - stepNumber: 1
+        description: Parse the roleId from the body, resolve the session cookie, and forward
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: deleteRole
+    detail: calls-only
+  - name: adminListAssignments
+    narrative:
+      - stepNumber: 1
+        description: Read the scope/subject filters from the query, resolve the session cookie, and forward
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: listAssignments
+    detail: calls-only
+  - name: adminSetAssignment
+    narrative:
+      - stepNumber: 1
+        description: Parse the assignment from the body, resolve the session cookie, and forward
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: setAssignment
+    detail: calls-only
+  - name: adminRemoveAssignment
+    narrative:
+      - stepNumber: 1
+        description: Parse the assignmentId from the body, resolve the session cookie, and forward
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: removeAssignment
+    detail: calls-only
+  - name: adminBindRole
+    narrative:
+      - stepNumber: 1
+        description: Parse the user/role/scope from the body, resolve the session cookie, and forward
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: bindRole
+    detail: calls-only
+  - name: adminUnbindRole
+    narrative:
+      - stepNumber: 1
+        description: Parse the user/role/scope from the body, resolve the session cookie, and forward
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: unbindRole
+    detail: calls-only
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-07-14T12:53:32.882Z'
+updatedAt: '2026-07-15T22:03:10.092Z'

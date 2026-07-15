@@ -1,0 +1,13 @@
+id: permission_store
+name: Permission Store
+description: >-
+  Authoritative in-memory representation of the hierarchical permission-assignment grid (subject ×
+  scope × capability → value), loaded from the hosted data root. Administrative instance state, not
+  part of any project's SDD subsystem tree.
+subsystem: sdd_host
+componentType: Store
+owns: []
+dependsOn: []
+status: design
+createdAt: '2026-07-15T20:26:59.322Z'
+updatedAt: '2026-07-15T22:32:32.033Z'

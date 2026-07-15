@@ -1,0 +1,112 @@
+id: permission_resolver_impl
+name: Permission Resolver Implementation
+description: >-
+  Pure hierarchical permission resolution: the nearest-ancestor walk for effective permission, and
+  the actionable-plus-breadcrumb visibility view. No I/O; deterministic over its inputs.
+contract: ipermission_resolver
+sourcePath: src/server/permission_resolver.ts
+methods:
+  - name: resolvePermission
+    narrative:
+      - stepNumber: 1
+        description: An instance-admin subject is authorized everywhere
+        type: branch
+        condition: the subject is an instance admin
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Bypass the walk
+        type: return
+        outcome: yes (instance-admin)
+      - stepNumber: 3
+        description: >-
+          Build the target's ancestor chain leaf->root: for a project, its own scope then its
+          placement unit and that unit's ancestors; for a unit, the unit and its ancestors; ending
+          at the instance root
+        type: local
+      - stepNumber: 4
+        description: Walk the ancestor chain, stopping at the nearest scope with a definitive value
+        type: loop
+        loopKind: forEach
+        over: each scope in the ancestor chain, leaf->root
+        endStep: 9
+      - stepNumber: 5
+        description: >-
+          Gather the subject's settings that apply AT THIS SCOPE for the capability: the direct-user
+          assignment scoped here; the values from the subject's roles whose binding is ANCHORED here
+          (an instance-wide/unscoped role binding anchors at the instance root, a unit/project
+          binding at that scope), read from each role's permissions and combined most-permissively;
+          and the everyone-default scoped here. Roles are NOT re-pulled at every scope — anchoring
+          them makes the leaf->root walk realize subtree inheritance correctly, so a nearer
+          direct-user or scope-default deny outranks a broadly-bound role.
+        type: local
+      - stepNumber: 6
+        description: >-
+          Resolve this scope's value by precedence: a definitive direct-user value wins; else the
+          most-permissive GRANTING role value among roles anchored here (yes > approval; a role
+          never denies — a role 'no'/'inherit' is non-deciding); else the everyone-default; else
+          'inherit' (continue upward).
+        type: local
+      - stepNumber: 7
+        description: If this scope produced a definitive value, it decides
+        type: branch
+        condition: this scope produced a definitive value (not inherit)
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Return the deciding value
+        type: return
+        outcome: the definitive value with its source and deciding scope
+      - stepNumber: 9
+        description: No definitive value here — continue to the next ancestor
+        type: local
+      - stepNumber: 10
+        description: The walk reached the root with nothing definitive
+        type: return
+        outcome: no (instance default)
+    detail: full
+  - name: resolveVisibleScopes
+    narrative:
+      - stepNumber: 1
+        description: An instance-admin sees every scope as actionable
+        type: branch
+        condition: the subject is an instance admin
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Return all scopes actionable
+        type: return
+        outcome: every unit and placed project marked actionable
+      - stepNumber: 3
+        description: Prepare the visibility accumulator (actionable set and context set)
+        type: local
+      - stepNumber: 4
+        description: Determine the subject's view of every scope
+        type: loop
+        loopKind: forEach
+        over: each unit and each placed project in the world
+        endStep: 8
+      - stepNumber: 5
+        description: >-
+          Resolve this scope's effective permission for the GIVEN capability via the
+          nearest-ancestor walk (the same anchored role logic as resolvePermission)
+        type: local
+      - stepNumber: 6
+        description: A yes/approval scope is actionable
+        type: branch
+        condition: the effective value is yes or approval
+        onFalseStep: 8
+      - stepNumber: 7
+        description: >-
+          Record the scope as actionable; add its ancestor units to the context set only when they
+          are not themselves actionable (actionable always wins over context).
+        type: local
+      - stepNumber: 8
+        description: Advance to the next scope
+        type: local
+      - stepNumber: 9
+        description: Return the visibility view, deduplicated by scope with actionable winning over context
+        type: return
+        outcome: actionable scopes plus their context-only ancestor breadcrumb
+    detail: full
+detail: full
+status: complete
+createdAt: '2026-07-15T20:30:34.619Z'
+updatedAt: '2026-07-15T22:22:07.924Z'

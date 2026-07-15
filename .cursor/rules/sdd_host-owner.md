@@ -20,6 +20,7 @@ You own and decide on everything within:
 .wai/specs/components/audit_registry.yaml
 .wai/specs/components/audit_repository.yaml
 .wai/specs/components/audit_store.yaml
+.wai/specs/components/authorization_specialist.yaml
 .wai/specs/components/auth_specialist.yaml
 .wai/specs/components/credential_registry.yaml
 .wai/specs/components/diagnostics_specialist.yaml
@@ -47,6 +48,12 @@ You own and decide on everything within:
 .wai/specs/components/organization_store.yaml
 .wai/specs/components/pack_orchestrator.yaml
 .wai/specs/components/pack_registry.yaml
+.wai/specs/components/permission_admin_orchestrator.yaml
+.wai/specs/components/permission_index.yaml
+.wai/specs/components/permission_registry.yaml
+.wai/specs/components/permission_repository.yaml
+.wai/specs/components/permission_resolver.yaml
+.wai/specs/components/permission_store.yaml
 .wai/specs/components/policy_index.yaml
 .wai/specs/components/policy_registry.yaml
 .wai/specs/components/policy_repository.yaml
@@ -63,7 +70,10 @@ You own and decide on everything within:
 .wai/specs/components/public_surface_repository.yaml
 .wai/specs/components/public_surface_store.yaml
 .wai/specs/components/quota_specialist.yaml
-.wai/specs/components/scope_specialist.yaml
+.wai/specs/components/role_index.yaml
+.wai/specs/components/role_registry.yaml
+.wai/specs/components/role_repository.yaml
+.wai/specs/components/role_store.yaml
 .wai/specs/components/secret_registry.yaml
 .wai/specs/components/self_service_orchestrator.yaml
 .wai/specs/components/surface_exchange_orchestrator.yaml
@@ -85,6 +95,7 @@ src/server/admin.ts
 src/server/http.ts
 src/server/approvals.ts
 src/server/audit.ts
+src/server/authorization.ts
 src/server/auth.ts
 src/server/credentials.ts
 src/server/operations.ts
@@ -95,11 +106,14 @@ src/server/idp.ts
 src/server/landscape.ts
 src/server/organization.ts
 src/server/packs.ts
+src/server/permissionadmin.ts
+src/server/permissions.ts
+src/server/permission_resolver.ts
 src/server/policy.ts
 src/server/projects.ts
 src/server/relations.ts
 src/server/surfaces.ts
-src/server/scope.ts
+src/server/roles.ts
 src/utils/secrets.ts
 src/server/selfservice.ts
 src/server/users.ts

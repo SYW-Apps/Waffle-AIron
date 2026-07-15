@@ -1,0 +1,47 @@
+id: role_repository_impl
+name: Role Repository Implementation
+description: >-
+  Facade over the owned role store, registry, and index. Pure 1:1 forwarding — writes to the
+  registry, reads to the index; no logic here.
+contract: irole_repository
+sourcePath: src/server/roles.ts
+methods:
+  - name: createRole
+    narrative:
+      - stepNumber: 1
+        description: Forward to the role registry
+        type: call
+        targetComponent: role_registry
+        targetMethod: createRole
+  - name: updateRole
+    narrative:
+      - stepNumber: 1
+        description: Forward to the role registry
+        type: call
+        targetComponent: role_registry
+        targetMethod: updateRole
+  - name: deleteRole
+    narrative:
+      - stepNumber: 1
+        description: Forward to the role registry
+        type: call
+        targetComponent: role_registry
+        targetMethod: deleteRole
+  - name: getRole
+    narrative:
+      - stepNumber: 1
+        description: Forward to the role index
+        type: call
+        targetComponent: role_index
+        targetMethod: getRole
+  - name: listRoles
+    narrative:
+      - stepNumber: 1
+        description: Forward to the role index
+        type: call
+        targetComponent: role_index
+        targetMethod: listRoles
+detail: calls-only
+status: complete
+createdAt: '2026-07-15T20:28:47.319Z'
+updatedAt: '2026-07-15T22:22:08.124Z'

@@ -6,19 +6,6 @@ description: >-
   rejection; performs no authorization.
 component: organization_registry
 methods:
-  - name: upsertUnit
-    description: >-
-      Create or update one organization unit: stamp id and createdAt on create and default status to
-      active, validate that parentId (when set) resolves to an existing unit, and reject any change
-      that would introduce a cycle in the unit tree. Persist the full unit collection durably and
-      refresh the store.
-    signature: 'upsertUnit(unit: OrganizationUnitRecord): OrganizationUnitRecord'
-    returns: OrganizationUnitRecord
-    params:
-      - name: unit
-        type: OrganizationUnitRecord
-    guarantees:
-      - atomic
   - name: placeProject
     description: >-
       Create or update one project placement: stamp id and createdAt on create and validate that the
@@ -31,6 +18,69 @@ methods:
         type: ProjectPlacement
     guarantees:
       - atomic
+  - name: createUnit
+    description: >-
+      Create one organization unit: compute its qualified id from the parentId path plus slug (a
+      root unit's id is its slug), validate that parentId — when set — resolves to an existing unit,
+      and reject a collision (an existing unit already holding that qualified id, or a sibling
+      already using the slug). Stamp createdAt and default status to active, persist durably, and
+      refresh the store.
+    signature: 'createUnit(unit: OrganizationUnitRecord): OrganizationUnitRecord'
+    returns: OrganizationUnitRecord
+    params:
+      - name: unit
+        type: OrganizationUnitRecord
+    guarantees:
+      - atomic
+  - name: updateUnit
+    description: >-
+      Update one existing organization unit's metadata (name, kind, status, visibility, exposeTo) by
+      id, preserving id, slug, parentId, createdAt, and createdBy. Reject any change to slug or
+      parentId — those are moves performed via reparentUnit. Persist durably and refresh the store.
+    signature: 'updateUnit(unit: OrganizationUnitRecord): OrganizationUnitRecord'
+    returns: OrganizationUnitRecord
+    params:
+      - name: unit
+        type: OrganizationUnitRecord
+    guarantees:
+      - atomic
+  - name: reparentUnit
+    description: >-
+      Move a unit and its whole subtree under a new parent: recompute the qualified id of the unit
+      and every descendant from the new parent path (an empty newParentId promotes to a root),
+      reject the move on a cycle or an id collision outside the moving subtree, rewrite every
+      exposeTo[] reference to a moved id across all units, persist the renamed subtree durably, and
+      return the old->new id remap for every moved unit so the caller can rewrite external
+      references.
+    signature: 'reparentUnit(unitId: string, newParentId?: string): UnitIdRemap[]'
+    returns: UnitIdRemap[]
+    params:
+      - name: unitId
+        type: string
+      - name: newParentId
+        type: string
+        optional: true
+    guarantees:
+      - atomic
+  - name: deleteUnit
+    description: >-
+      Delete one organization unit that has no child units and no project placements (the
+      orchestrator empties it first), and strip the deleted id from any other unit's exposeTo[].
+      Persist durably and refresh the store; deleting an absent unit is a no-op.
+    signature: 'deleteUnit(unitId: string): void'
+    returns: void
+    params:
+      - name: unitId
+        type: string
+  - name: deletePlacement
+    description: >-
+      Remove one project placement by id — the placed project itself is untouched. Persist durably
+      and refresh the store; removing an absent placement is a no-op.
+    signature: 'deletePlacement(placementId: string): void'
+    returns: void
+    params:
+      - name: placementId
+        type: string
 status: complete
 createdAt: '2026-07-09T22:05:44.376Z'
-updatedAt: '2026-07-09T22:13:17.527Z'
+updatedAt: '2026-07-15T21:19:38.331Z'
