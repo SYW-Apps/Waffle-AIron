@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
-import { SDD_RULES } from '../core/rules/index.js';
+import { listRules as listActiveRules } from '../core/validation.js';
+import type { SddRule } from '../core/rules/index.js';
 import { loadProjectExtensions } from '../core/extensions.js';
 import { isProjectInitialized, loadProjectConfig } from '../config/loader.js';
 
@@ -28,13 +29,20 @@ export async function listRules(): Promise<void> {
     return chalk.gray('off    ');
   };
 
+  // Get the active rule set through the validator's published surface (built-ins
+  // plus registered pack rules), and split it back out for display by matching
+  // pack-rule names from the loaded extensions.
   const ext = loadProjectExtensions();
-  const groups: { rules: typeof SDD_RULES; tag?: string }[] = [
-    { rules: SDD_RULES },
-    ...(ext.rules.length ? [{ rules: ext.rules, tag: `pack: ${ext.packNames.join(', ')}` }] : []),
+  const packRuleNames = new Set(ext.rules.map((r) => r.name));
+  const active = listActiveRules();
+  const builtin = active.filter((r) => !packRuleNames.has(r.name));
+  const packRules = active.filter((r) => packRuleNames.has(r.name));
+  const groups: { rules: SddRule[]; tag?: string }[] = [
+    { rules: builtin },
+    ...(packRules.length ? [{ rules: packRules, tag: `pack: ${ext.packNames.join(', ')}` }] : []),
   ];
 
-  console.log(chalk.bold(`\nSDD conformance rules (${SDD_RULES.length + ext.rules.length} rule groups)\n`));
+  console.log(chalk.bold(`\nSDD conformance rules (${active.length})\n`));
   for (const group of groups) {
     for (const rule of group.rules) {
       console.log(chalk.bold.cyan(`■ ${rule.name}`) + (group.tag ? chalk.magenta(`  [${group.tag}]`) : ''));

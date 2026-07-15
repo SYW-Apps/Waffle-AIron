@@ -13,7 +13,8 @@ import {
   getLoaderIssues,
   scanAllSpecs,
 } from './specs.js';
-import { buildRuleContext, makeScopeFilter, registerBuiltinRules, registerPackRules, ruleSequence, SddRule } from './rules/index.js';
+import { buildRuleContext, makeScopeFilter, SddRule } from './rules/index.js';
+import { registerBuiltinRules, registerPackRules, ruleSequence } from './rules/repository.js';
 import { LoadedExtensions, loadProjectExtensions } from './extensions.js';
 import { loadSurfaceSnapshots } from './surfaces.js';
 import { buildCodeModel } from './source-analysis.js';

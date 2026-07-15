@@ -4,7 +4,7 @@ description: >-
   In-memory rule set held in src/core/rules/index.ts. Authoritative for one validation run; rebuilt
   on the next.
 contract: irule_store
-sourcePath: src/core/rules/index.ts
+sourcePath: src/core/rules/repository.ts
 methods:
   - name: addRule
     narrative: []
@@ -19,4 +19,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-07-14T19:17:41.361Z'
-updatedAt: '2026-07-14T20:23:49.843Z'
+updatedAt: '2026-07-15T06:23:42.791Z'

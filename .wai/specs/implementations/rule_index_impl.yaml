@@ -4,7 +4,7 @@ description: >-
   Read path in src/core/rules/index.ts: ordered run sequence and known-code projections over the
   rule store.
 contract: irule_index
-sourcePath: src/core/rules/index.ts
+sourcePath: src/core/rules/repository.ts
 methods:
   - name: ruleSequence
     narrative: []
@@ -19,12 +19,7 @@ methods:
       from the store.
 detail: intent
 lint:
-  allow:
-    - code: UNDECLARED_DEPENDENCY
-      reason: >-
-        src/core/rules/index.ts also hosts buildRuleContext (the shared rule-context builder); its
-        reads of LoadedExtensions and the CodeModel are the builder's imports, not the rule
-        repository's. Re-homing buildRuleContext to the validator is a separate refactor.
+  allow: []
 status: complete
 createdAt: '2026-07-14T19:17:48.847Z'
-updatedAt: '2026-07-14T22:50:22.786Z'
+updatedAt: '2026-07-15T06:23:45.003Z'
