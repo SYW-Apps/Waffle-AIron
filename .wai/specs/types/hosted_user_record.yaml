@@ -2,8 +2,9 @@ kind: entity
 id: hosted_user_record
 name: HostedUserRecord
 description: >-
-  A hosted-instance user or service principal known to Wairon. The record links tokens, project
-  grants, and audit events to a stable actor identity without storing external-provider secrets.
+  A hosted-instance user or service principal known to Wairon. The record links tokens, permission
+  bindings (roleBindings + the assignment grid), and audit events to a stable actor identity without
+  storing external-provider secrets or any legacy grants.
 subsystem: sdd_host
 fields:
   - name: id
@@ -24,10 +25,6 @@ fields:
       re-login is blocked. Returning to "active" does NOT auto-restore revoked tokens — the user
       re-logs in via SSO or an admin mints fresh.
     optional: false
-  - name: grants
-    type: ProjectGrant[]
-    description: Current project and instance permissions granted to this actor.
-    optional: false
   - name: createdAt
     type: string
     description: ISO-8601 creation timestamp.
@@ -46,9 +43,25 @@ fields:
     type: RoleBinding[]
     description: >-
       Roles bound to this user, optionally scoped to a unit/project subtree; combined with direct
-      permission assignments and everyone-defaults during hierarchical resolution. (The legacy
-      grants field is migrated into the permission-assignment grid in Phase 3.)
+      permission assignments and everyone-defaults during hierarchical resolution. Authorization is
+      expressed ONLY here (plus the assignment grid), never via stored grants. Deploy-time migration
+      of any legacy grants into role bindings/assignments is a doctor concern, not stored on the
+      record.
+    optional: true
+  - name: displayName
+    type: string
+    description: >-
+      Human-readable display name (from the SSO id_token 'name'/'preferred_username' claim at
+      provisioning, refreshed on re-login). Shown in the admin UI and audit views instead of the
+      opaque subject id; may be unset for service principals or when the provider supplies no name.
+    optional: true
+  - name: email
+    type: string
+    description: >-
+      Email address from the SSO id_token 'email' claim when present; shown alongside the display
+      name in the admin UI so admins identify users by name/email rather than the raw subject id.
+      May be unset.
     optional: true
 methods: []
 createdAt: '2026-07-08T19:34:35.627Z'
-updatedAt: '2026-07-15T20:25:39.204Z'
+updatedAt: '2026-07-15T23:15:38.872Z'

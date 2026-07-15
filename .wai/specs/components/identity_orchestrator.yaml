@@ -20,11 +20,10 @@ dependsOn:
   - audit_repository
   - identity_provider_adapter
   - policy_repository
-  - organization_repository
   - authorization_specialist
   - web_session_repository
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-08T20:15:25.548Z'
-updatedAt: '2026-07-15T21:44:12.124Z'
+updatedAt: '2026-07-15T22:48:33.818Z'

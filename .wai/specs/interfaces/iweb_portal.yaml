@@ -179,17 +179,6 @@ methods:
       transport: HTTP
       method: POST
       path: /web/admin/users/status
-  - name: adminReplaceUserGrants
-    description: Replace a hosted user's grants; forwards to web_admin_orchestrator.replaceUserGrants.
-    signature: 'adminReplaceUserGrants(request: HttpRequest): HttpResponse'
-    returns: HttpResponse
-    params:
-      - name: request
-        type: HttpRequest
-    endpoint:
-      transport: HTTP
-      method: POST
-      path: /web/admin/users/grants
   - name: adminListProviders
     description: >-
       List identity-provider (SSO) configurations; forwards to
@@ -516,4 +505,4 @@ methods:
       path: /web/admin/roles/unbind
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-07-15T22:03:01.669Z'
+updatedAt: '2026-07-15T22:49:36.540Z'

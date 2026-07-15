@@ -3,29 +3,25 @@ name: Identity Orchestrator Interface
 description: >-
   Contract for hosted identity workflows behind the identity portal: headless SSO login
   (unauthenticated start/complete with first-login user provisioning), plus credential-authenticated
-  management of users, grants, user-bound MCP/API tokens, identity-provider (SSO) configuration, and
-  admin-only audit read/count. Follows the control-plane house pattern: every credential-bearing
-  method authenticates via the auth specialist before any effect. The SSO start/complete pair
-  carries no credential and derives trust entirely from the signed SSO state and the provider code
-  exchange.
+  management of users, their role bindings, user-bound MCP/API tokens, identity-provider (SSO)
+  configuration, and admin-only audit read/count. Authorization resolves through the permission
+  resolver (project:admin over the relevant scope, or the env-anchored instance-admin bypass) —
+  never stored grants. Follows the control-plane house pattern: every credential-bearing method
+  authenticates via the auth specialist before any effect. The SSO start/complete pair carries no
+  credential and derives trust entirely from the signed SSO state and the provider code exchange.
 component: identity_orchestrator
 methods:
   - name: mintToken
     description: >-
-      Authenticate the caller, then HARD-RESERVE the instance-wide super-admin grant: a requested
-      grant of the shape {projectId '*', no orgUnitId, permissions including '*'} is rejected
-      UNCONDITIONALLY — even for a super-admin or master caller — because *:* is env-reserved to the
-      built-in admin account (an enumerated instance-wide bundle such as
-      user:admin/project:create/audit:read remains delegable by a super-admin). Then authorize token
-      delegation strictly against the caller's OWN scope: gather the organization units and
-      placements and, for each requested grant, require the caller to itself cover the requested
-      target for every requested permission — either an instance-wide admin grant, or a scope
-      (resolved via the scope specialist, expanding unit-scoped grants across each unit's recursive
-      subtree) whose projectIds cover a requested specific projectId and whose unitIds cover a
-      requested orgUnitId. Merely holding key:manage does NOT permit delegating arbitrary
-      permissions. Validate the requested projects/units exist, mint a user-bound MCP/API token,
-      persist only its hashed credential record with owner/grant metadata, and append a redacted
-      audit event. Returns the plaintext token exactly once.
+      Authenticate the caller and look up the token's owner user (not-found when absent; a
+      deactivated owner is rejected so a fresh token cannot revive revoked access). Require the
+      caller to be an instance-admin: the minted token ACTS AS the owner user's live permission,
+      which could exceed a non-super-admin minter's own authority (confused deputy), so only the
+      env-anchored instance-admin — who dominates every owner — may mint on another user's behalf (a
+      user mints their own single-project tokens via mintSelfToken). Mint a token narrowed to
+      request.projects; it carries no grants and the resolver gates per project at use time. Persist
+      only the hashed credential record, append a redacted token.mint audit event, and return the
+      plaintext exactly once.
     signature: 'mintToken(credential: string, request: TokenMintRequest): string'
     returns: string
     params:
@@ -35,8 +31,10 @@ methods:
         type: TokenMintRequest
   - name: revokeToken
     description: >-
-      Authenticate the caller, authorize key management for the token's owner and project scope,
-      revoke the credential record, and append a redacted audit event.
+      Authenticate the caller and require instance-admin to revoke ANOTHER user's token (a user
+      revokes their own via revokeSelfToken, ownership-checked — no key:manage/grant scope is
+      consulted). Revoke the credential record by token id and append a redacted token.revoke audit
+      event.
     signature: 'revokeToken(credential: string, tokenId: string): void'
     returns: void
     params:
@@ -44,38 +42,12 @@ methods:
         type: string
       - name: tokenId
         type: string
-  - name: replaceUserGrants
-    description: >-
-      Authenticate the caller, then HARD-RESERVE the instance-wide super-admin grant: an incoming
-      grant of the shape {projectId '*', no orgUnitId, permissions including '*'} is rejected
-      UNCONDITIONALLY — even for a super-admin or master caller — because *:* is env-reserved to the
-      built-in admin account (enumerated instance-wide bundles remain assignable by a super-admin).
-      Then authorize grant administration by an instance-wide OR unit-scoped user:admin grant:
-      gather org units/placements, resolve the caller's user:admin scope, and require the scope to
-      permit the target user's home unit; a non-super-admin caller may not assign grants exceeding
-      their own authority (no instance-wide '*' and no project/unit outside their scope —
-      privilege-escalation guard). Replace the user's grants wholesale through the user repository,
-      and append a redacted audit event.
-    signature: >-
-      replaceUserGrants(credential: string, userId: string, grants: ProjectGrant[]):
-      HostedUserRecord
-    returns: HostedUserRecord
-    params:
-      - name: credential
-        type: string
-      - name: userId
-        type: string
-      - name: grants
-        type: ProjectGrant[]
-    guarantees:
-      - atomic
   - name: listUsers
     description: >-
-      Authenticate the caller, authorize user administration by an instance-wide OR unit-scoped
-      user:admin grant; results are filtered to the caller's scope. Resolve the caller's user:admin
-      scope over the organization tree and list hosted users, keeping only those whose home unit is
-      within scope.unitIds (a super-admin sees all), optionally narrowed to one project's grant
-      holders.
+      Authenticate the caller and compute their project:admin visible scopes over the organization
+      tree (the units they may administer); deny when that set is empty. List hosted users, keeping
+      only those whose home unit is an actionable unit in the visible set (an instance-admin sees
+      all), optionally narrowed to one project's holders.
     signature: 'listUsers(credential: string, project: string): HostedUserRecord[]'
     returns: HostedUserRecord[]
     params:
@@ -86,10 +58,9 @@ methods:
         optional: true
   - name: queryAuditEvents
     description: >-
-      Authenticate the caller, authorize audit read access by an instance-wide OR unit-scoped
-      audit:read grant; results are filtered to the caller's scope. Resolve the caller's audit:read
-      scope, constrain the audit query to the in-scope projects (a super-admin reads instance-wide),
-      and return the redacted audit events.
+      Authenticate the caller and compute their project:admin visible scopes; deny when empty.
+      Constrain the audit query to the caller's actionable project scopes (an instance-admin reads
+      instance-wide) and return the redacted audit events.
     signature: 'queryAuditEvents(credential: string, query: AuditQuery): AuditEvent[]'
     returns: AuditEvent[]
     params:
@@ -99,9 +70,9 @@ methods:
         type: AuditQuery
   - name: pruneAuditEvents
     description: >-
-      Authenticate the caller, authorize admin-only audit administration, apply the instance's
-      active retention policy, append a redacted audit event for the prune itself, and return the
-      number of events removed.
+      Authenticate the caller, require instance-wide project:admin for audit administration, apply
+      the instance's active retention policy, append a redacted audit event for the prune itself,
+      and return the number of events removed.
     signature: 'pruneAuditEvents(credential: string): number'
     returns: number
     params:
@@ -109,14 +80,11 @@ methods:
         type: string
   - name: upsertUser
     description: >-
-      Authenticate the caller, then HARD-RESERVE the instance-wide super-admin grant: a record
-      carrying a grant of the shape {projectId '*', no orgUnitId, permissions including '*'} is
-      rejected UNCONDITIONALLY — even for a super-admin or master caller — because *:* is
-      env-reserved to the built-in admin account. Then authorize user administration by an
-      instance-wide OR unit-scoped user:admin grant; the caller's scope must permit the target
-      user's home unit (both the incoming and, on update, the existing home unit). Create or update
-      the hosted user through the user repository, and append a redacted audit event distinguishing
-      creation from update.
+      Authenticate the caller, require project:admin over the target user's home unit (both the
+      incoming and, on update, the existing home unit), create or update the hosted user (subject,
+      status, home unit, roleBindings) through the user repository, and append a redacted audit
+      event distinguishing creation from update. User PERMISSIONS are managed via role bindings +
+      the assignment grid (permission_admin_orchestrator), never stored on the user record.
     signature: 'upsertUser(credential: string, record: HostedUserRecord): HostedUserRecord'
     returns: HostedUserRecord
     params:
@@ -128,13 +96,13 @@ methods:
       - atomic
   - name: setUserStatus
     description: >-
-      Authenticate the caller, authorize user administration by an instance-wide OR unit-scoped
-      user:admin grant; the caller's scope must permit the target user's home unit. Then set the
-      user's lifecycle status through the user repository. When the new status is not 'active'
-      (deactivation), revoke ALL of the user's credentials via credential_registry.revokeAllForOwner
-      so existing tokens can no longer authenticate, and append a security-level 'user.deactivate'
-      audit event including the revoked-token count; the user record is retained for audit
-      provenance. Returning a user to 'active' does NOT auto-restore any revoked tokens. For a
+      Authenticate the caller and require project:admin over the target user's home unit (an
+      instance-admin passes via bypass). Then set the user's lifecycle status through the user
+      repository. When the new status is not 'active' (deactivation), revoke ALL of the user's
+      credentials via credential_registry.revokeAllForOwner AND all of their web sessions, so
+      existing tokens and live sessions can no longer authenticate, and append a security-level
+      'user.deactivate' audit event including the revoked counts; the user record is retained for
+      audit provenance. Returning a user to 'active' does NOT auto-restore any revoked tokens. For a
       status change that keeps the user active, append the ordinary 'user.status.set' event.
     signature: 'setUserStatus(credential: string, userId: string, status: string): HostedUserRecord'
     returns: HostedUserRecord
@@ -168,19 +136,20 @@ methods:
       or expired state is rejected), resolve the bound identity-provider configuration, exchange the
       authorization code and resolve the external subject through the provider adapter, and read the
       verified id_token's groups claim through the adapter (resolveGroups — meaningful only after
-      resolveSubject verified the same summary). ADMIN GROUPS: when the groups intersect the
-      provider's adminGroupClaims, the hosted user is provisioned/refreshed with the enumerated
-      instance-wide SSO-admin bundle {projectId '*', permissions ['user:admin', 'project:create',
-      'audit:read']} — deliberately NOT *:* (env-reserved to the built-in admin account; it can
-      never appear on a user record or minted token); a later login after dropping out of the group
-      removes the bundle again. Look up the hosted user by issuer + external subject, provision a
-      first-login active user record when absent (the bundle when in the admin group, otherwise
-      empty grants — an admin assigns grants afterwards), reject re-login for an existing
-      deactivated user before minting, then mint a user-bound MCP/API token carrying the user's
-      CURRENT grants with any reserved *:* grant filtered out, persisting only its hashed credential
-      record. Append a best-effort sso.login (security) audit event and return the plaintext token
-      exactly once. Inlines first-login provisioning — there is no separate resolve-or-create
-      method. Unauthenticated by nature: no caller credential is required or accepted.
+      resolveSubject verified the same summary). ADMIN GROUPS: when the verified groups intersect
+      the provider's adminGroupClaims, the hosted user is provisioned/refreshed with a binding to
+      the built-in 'sso-admin' role at instance scope (which grants project:admin + project:create
+      instance-wide — never the *:* / instance-admin bypass, which is env-reserved to the built-in
+      admin account and can never appear on a user record or minted token); a later login after
+      dropping out of the group removes the binding again. Look up the hosted user by issuer +
+      external subject, provision a first-login active user record when absent (with the sso-admin
+      binding when in the admin group, otherwise empty roleBindings — an admin assigns
+      roles/permissions afterwards), reject re-login for an existing deactivated user before
+      minting, then mint a grant-free user-bound MCP/API token (projects '*', acting as the user's
+      live permission), persisting only its hashed credential record. Append a best-effort sso.login
+      (security) audit event and return the plaintext token exactly once. Inlines first-login
+      provisioning — there is no separate resolve-or-create method. Unauthenticated by nature: no
+      caller credential is required or accepted.
     signature: 'completeSsoLogin(state: string, code: string): string'
     returns: string
     params:
@@ -190,9 +159,10 @@ methods:
         type: string
   - name: listIdentityProviders
     description: >-
-      Authenticate the caller, authorize instance-admin-only identity-provider administration, and
-      return every configured identity provider by forwarding to the policy repository. Not audited
-      (a read).
+      Authenticate the caller, require instance-wide project:admin (the env-anchored instance-admin
+      passes via bypass; a delegated project:admin@instance also passes) for identity-provider
+      administration, and return every configured identity provider by forwarding to the policy
+      repository. Not audited (a read).
     signature: 'listIdentityProviders(credential: string): IdentityProviderConfig[]'
     returns: IdentityProviderConfig[]
     params:
@@ -200,10 +170,10 @@ methods:
         type: string
   - name: upsertIdentityProvider
     description: >-
-      Authenticate the caller, authorize instance-admin-only identity-provider administration,
-      create or update one identity-provider configuration through the policy repository, append a
-      redacted idp.upsert (security) audit event, and return the stored config. The config carries a
-      clientSecretRef, never a raw secret.
+      Authenticate the caller, require instance-wide project:admin for identity-provider
+      administration, create or update one identity-provider configuration through the policy
+      repository, append a redacted idp.upsert (security) audit event, and return the stored config.
+      The config carries a clientSecretRef, never a raw secret.
     signature: >-
       upsertIdentityProvider(credential: string, config: IdentityProviderConfig):
       IdentityProviderConfig
@@ -217,9 +187,9 @@ methods:
       - atomic
   - name: removeIdentityProvider
     description: >-
-      Authenticate the caller, authorize instance-admin-only identity-provider administration,
-      remove one identity-provider configuration by id through the policy repository (an unknown id
-      is rejected), and append a redacted idp.remove (security) audit event.
+      Authenticate the caller, require instance-wide project:admin for identity-provider
+      administration, remove one identity-provider configuration by id through the policy repository
+      (an unknown id is rejected), and append a redacted idp.remove (security) audit event.
     signature: 'removeIdentityProvider(credential: string, id: string): void'
     returns: void
     params:
@@ -231,10 +201,9 @@ methods:
       - atomic
   - name: countAuditEvents
     description: >-
-      Authenticate the caller, authorize audit read access by an instance-wide OR unit-scoped
-      audit:read grant; the count is scoped to the caller. Resolve the caller's audit:read scope,
-      constrain the query to the in-scope projects (a super-admin counts instance-wide), and return
-      the count of redacted audit events. Not audited (a read).
+      Authenticate the caller and compute their project:admin visible scopes; deny when empty.
+      Constrain the query to the caller's actionable project scopes (an instance-admin counts
+      instance-wide) and return the count of redacted audit events. Not audited (a read).
     signature: 'countAuditEvents(credential: string, query: AuditQuery): number'
     returns: number
     params:
@@ -244,13 +213,13 @@ methods:
         type: AuditQuery
   - name: mintSelfToken
     description: >-
-      Self-service single-project MCP token mint. Authenticate the caller (a ws_ session or token);
-      require the caller's OWN grants already cover mcp:read on projectId (and mcp:write when write)
-      so the token cannot exceed the caller's access (self-scoped, so NO key:manage is required or
-      consulted); mint a token OWNED BY the caller (ownerSubject = the caller's subject, so
-      deactivating the caller revokes it via revokeAllForOwner) scoped to exactly one project,
-      persist only the hashed record, append a redacted token.mint.self audit event, and return the
-      plaintext once. Separate from the caller's login session.
+      Self-service single-project MCP token mint. Authenticate the caller (a ws_ session or token)
+      and mint a token OWNED BY the caller (ownerSubject = createdBySubject = the caller's subject,
+      so deactivating the caller revokes it via revokeAllForOwner) narrowed to exactly one project;
+      the token carries no grants — it acts as the caller's OWN live permission on that project (the
+      resolver gates read vs write at use time; the write flag is advisory for the token label).
+      Persist only the hashed record, append a token.mint.self audit event, and return the plaintext
+      once. Separate from the caller's login session.
     signature: 'mintSelfToken(credential: string, projectId: string, write: boolean): string'
     returns: string
     params:
@@ -285,4 +254,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-08T20:17:23.976Z'
-updatedAt: '2026-07-14T11:04:16.712Z'
+updatedAt: '2026-07-15T23:13:51.767Z'

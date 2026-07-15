@@ -3,8 +3,8 @@ id: permission_subject
 name: PermissionSubject
 description: >-
   The resolved caller handed to the pure permission resolver: the principal's id, their role
-  bindings, and whether they hold the reserved instance-admin assignment (capability '*' at instance
-  scope). An instance-admin resolves to yes everywhere, bypassing the walk.
+  bindings, and whether they are the env-anchored instance super-admin. An instance-admin resolves
+  to yes everywhere, bypassing the walk (non-overridable).
 subsystem: sdd_host
 fields:
   - name: subjectId
@@ -18,9 +18,12 @@ fields:
   - name: instanceAdmin
     type: boolean
     description: >-
-      True when the subject holds the reserved instance-admin assignment; the resolver bypasses to
-      yes.
+      True ONLY for the env-anchored built-in super-admin subject (issuer 'local', userId
+      'builtin:superadmin'), the master credential, or (devMode only) the synthetic local-developer
+      subject — the resolver then bypasses to yes. A regular user is NEVER instanceAdmin, even a
+      delegated instance-wide project:admin (that resolves as a normal overridable permission). It
+      is determined by subject identity, never by an assignment.
     optional: false
 methods: []
 createdAt: '2026-07-15T20:25:25.002Z'
-updatedAt: '2026-07-15T20:25:25.052Z'
+updatedAt: '2026-07-15T23:07:27.761Z'

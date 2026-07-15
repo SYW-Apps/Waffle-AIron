@@ -45,19 +45,6 @@ methods:
         type: string
       - name: status
         type: string
-  - name: replaceUserGrants
-    description: >-
-      Forward to identity_orchestrator.replaceUserGrants with the session as the credential;
-      replaces a user's grants wholesale, privilege-escalation-guarded upstream.
-    signature: 'replaceUserGrants(sessionId: string, userId: string, grants: ProjectGrant[]): HostedUserRecord'
-    returns: HostedUserRecord
-    params:
-      - name: sessionId
-        type: string
-      - name: userId
-        type: string
-      - name: grants
-        type: ProjectGrant[]
   - name: listIdentityProviders
     description: >-
       Forward to identity_orchestrator.listIdentityProviders with the session as the credential;
@@ -315,4 +302,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-13T18:27:58.377Z'
-updatedAt: '2026-07-15T22:02:29.622Z'
+updatedAt: '2026-07-15T22:49:34.435Z'

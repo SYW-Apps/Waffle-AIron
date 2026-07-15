@@ -4,160 +4,12 @@ description: >-
   Role, assignment, and role-binding management: authenticate, authorize through the authorization
   specialist (instance-level project:admin for roles, project:admin over the scope for
   assignments/bindings), mutate through the role/permission/user repositories, and audit at security
-  level. Enforces the reserved '*' instance-admin marker.
+  level. Reserves the built-in role ids (e.g. 'sso-admin' — intrinsic, not stored) against
+  create/update/delete, and rejects any attempt to set the reserved '*' capability (there is no
+  instance-admin assignment — the bypass is env-anchored to the built-in admin).
 contract: ipermission_admin_orchestrator
 sourcePath: src/server/permissionadmin.ts
 methods:
-  - name: createRole
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the caller credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateCredential
-      - stepNumber: 2
-        description: Resolve the caller's project:admin permission at instance scope (roles are instance-level)
-        type: call
-        targetComponent: authorization_specialist
-        targetMethod: authorize
-      - stepNumber: 3
-        description: If the effective value is not yes, deny
-        type: branch
-        condition: the effective project:admin value is not yes
-        onTrueStep: 4
-        onFalseStep: 5
-      - stepNumber: 4
-        description: Reject the role management
-        type: throw
-        error: Forbidden — managing roles requires instance-level project:admin
-      - stepNumber: 5
-        description: Create the role through the role repository
-        type: call
-        targetComponent: role_repository
-        targetMethod: createRole
-      - stepNumber: 6
-        description: Append a redacted audit event without letting a failure fail the write
-        type: try
-        endStep: 8
-        catches:
-          - error: audit append failure
-            step: 9
-      - stepNumber: 7
-        description: Append the redacted role.create audit event (security level)
-        type: call
-        targetComponent: audit_repository
-        targetMethod: append
-      - stepNumber: 8
-        description: On a successful append, continue to the return and skip the audit-failure handler
-        type: jump
-        toStep: 10
-      - stepNumber: 9
-        description: Record the audit append failure as a server diagnostic and continue
-        type: local
-      - stepNumber: 10
-        description: Return the stored role
-        type: return
-        outcome: the stored role
-  - name: updateRole
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the caller credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateCredential
-      - stepNumber: 2
-        description: Resolve the caller's project:admin permission at instance scope
-        type: call
-        targetComponent: authorization_specialist
-        targetMethod: authorize
-      - stepNumber: 3
-        description: If the effective value is not yes, deny
-        type: branch
-        condition: the effective project:admin value is not yes
-        onTrueStep: 4
-        onFalseStep: 5
-      - stepNumber: 4
-        description: Reject the role management
-        type: throw
-        error: Forbidden — managing roles requires instance-level project:admin
-      - stepNumber: 5
-        description: Update the role through the role repository
-        type: call
-        targetComponent: role_repository
-        targetMethod: updateRole
-      - stepNumber: 6
-        description: Append a redacted audit event without letting a failure fail the write
-        type: try
-        endStep: 8
-        catches:
-          - error: audit append failure
-            step: 9
-      - stepNumber: 7
-        description: Append the redacted role.update audit event (security level)
-        type: call
-        targetComponent: audit_repository
-        targetMethod: append
-      - stepNumber: 8
-        description: On a successful append, continue to the return and skip the audit-failure handler
-        type: jump
-        toStep: 10
-      - stepNumber: 9
-        description: Record the audit append failure as a server diagnostic and continue
-        type: local
-      - stepNumber: 10
-        description: Return the stored role
-        type: return
-        outcome: the stored role
-  - name: deleteRole
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the caller credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateCredential
-      - stepNumber: 2
-        description: Resolve the caller's project:admin permission at instance scope
-        type: call
-        targetComponent: authorization_specialist
-        targetMethod: authorize
-      - stepNumber: 3
-        description: If the effective value is not yes, deny
-        type: branch
-        condition: the effective project:admin value is not yes
-        onTrueStep: 4
-        onFalseStep: 5
-      - stepNumber: 4
-        description: Reject the role management
-        type: throw
-        error: Forbidden — managing roles requires instance-level project:admin
-      - stepNumber: 5
-        description: Delete the role through the role repository (bindings to it become inert)
-        type: call
-        targetComponent: role_repository
-        targetMethod: deleteRole
-      - stepNumber: 6
-        description: Append a redacted audit event without letting a failure fail the delete
-        type: try
-        endStep: 8
-        catches:
-          - error: audit append failure
-            step: 9
-      - stepNumber: 7
-        description: Append the redacted role.delete audit event (security level)
-        type: call
-        targetComponent: audit_repository
-        targetMethod: append
-      - stepNumber: 8
-        description: On a successful append, continue to the return and skip the audit-failure handler
-        type: jump
-        toStep: 10
-      - stepNumber: 9
-        description: Record the audit append failure as a server diagnostic and continue
-        type: local
-      - stepNumber: 10
-        description: Return once the role has been deleted
-        type: return
-        outcome: role deleted
   - name: listRoles
     narrative:
       - stepNumber: 1
@@ -489,7 +341,189 @@ methods:
         description: Return the updated user record
         type: return
         outcome: the updated user record
+  - name: createRole
+    narrative:
+      - stepNumber: 1
+        description: >-
+          If the role id is a reserved built-in id (e.g. 'sso-admin'), reject before anything else —
+          built-in roles are intrinsic constants, not admin-defined stored rows
+        type: branch
+        condition: the role id is a reserved built-in id
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Reject creating over a reserved built-in role
+        type: throw
+        error: Forbidden — built-in reserved roles are intrinsic and cannot be created or overridden
+      - stepNumber: 3
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 4
+        description: Resolve the caller's project:admin permission at instance scope (roles are instance-level)
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 5
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Reject the role management
+        type: throw
+        error: Forbidden — managing roles requires instance-level project:admin
+      - stepNumber: 7
+        description: Create the role through the role repository
+        type: call
+        targetComponent: role_repository
+        targetMethod: createRole
+      - stepNumber: 8
+        description: Append a redacted audit event without letting a failure fail the write
+        type: try
+        endStep: 10
+        catches:
+          - error: audit append failure
+            step: 11
+      - stepNumber: 9
+        description: Append the redacted role.create audit event (security level)
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 10
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 12
+      - stepNumber: 11
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 12
+        description: Return the stored role
+        type: return
+        outcome: the stored role
+  - name: updateRole
+    narrative:
+      - stepNumber: 1
+        description: If the role id is a reserved built-in id (e.g. 'sso-admin'), reject before anything else
+        type: branch
+        condition: the role id is a reserved built-in id
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Reject modifying a reserved built-in role
+        type: throw
+        error: Forbidden — built-in reserved roles are intrinsic and cannot be modified
+      - stepNumber: 3
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 4
+        description: Resolve the caller's project:admin permission at instance scope
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 5
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Reject the role management
+        type: throw
+        error: Forbidden — managing roles requires instance-level project:admin
+      - stepNumber: 7
+        description: Update the role through the role repository
+        type: call
+        targetComponent: role_repository
+        targetMethod: updateRole
+      - stepNumber: 8
+        description: Append a redacted audit event without letting a failure fail the write
+        type: try
+        endStep: 10
+        catches:
+          - error: audit append failure
+            step: 11
+      - stepNumber: 9
+        description: Append the redacted role.update audit event (security level)
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 10
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 12
+      - stepNumber: 11
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 12
+        description: Return the stored role
+        type: return
+        outcome: the stored role
+  - name: deleteRole
+    narrative:
+      - stepNumber: 1
+        description: If the role id is a reserved built-in id (e.g. 'sso-admin'), reject before anything else
+        type: branch
+        condition: the role id is a reserved built-in id
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Reject deleting a reserved built-in role
+        type: throw
+        error: Forbidden — built-in reserved roles are intrinsic and cannot be deleted
+      - stepNumber: 3
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 4
+        description: Resolve the caller's project:admin permission at instance scope
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 5
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Reject the role management
+        type: throw
+        error: Forbidden — managing roles requires instance-level project:admin
+      - stepNumber: 7
+        description: Delete the role through the role repository (bindings to it become inert)
+        type: call
+        targetComponent: role_repository
+        targetMethod: deleteRole
+      - stepNumber: 8
+        description: Append a redacted audit event without letting a failure fail the delete
+        type: try
+        endStep: 10
+        catches:
+          - error: audit append failure
+            step: 11
+      - stepNumber: 9
+        description: Append the redacted role.delete audit event (security level)
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 10
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 12
+      - stepNumber: 11
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 12
+        description: Return once the role has been deleted
+        type: return
+        outcome: role deleted
 detail: full
 status: complete
 createdAt: '2026-07-15T22:01:26.906Z'
-updatedAt: '2026-07-15T22:22:07.703Z'
+updatedAt: '2026-07-15T23:22:14.212Z'

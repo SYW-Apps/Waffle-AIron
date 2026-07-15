@@ -3,10 +3,11 @@ id: web_session
 name: WebSession
 description: >-
   A durable browser session for the unified web UI: a cookie session id resolves to a fully-derived
-  Principal. Created on SSO sign-in and deleted on sign-out, it expires at expiresAt. It stores the
-  resolved PrincipalSubject and the server-derived ProjectGrant set so the session resolves to a
-  Principal WITHOUT any token lookup — the session id is itself a first-class credential the single
-  auth authority accepts (the auth bridge). Raw external identity tokens are never stored here; only
+  Principal. Created on SSO sign-in (or built-in super-admin password sign-in) and deleted on
+  sign-out, it expires at expiresAt. It stores the resolved PrincipalSubject and the token's
+  projects narrowing; the single auth authority resolves the principal's permissionSubject
+  (roleBindings + instanceAdmin) LIVE at authentication, so the session resolves to a Principal
+  without carrying any permissions itself. Raw external identity tokens are never stored here; only
   a secret reference or a user-bound credential id may be represented.
 subsystem: sdd_host
 fields:
@@ -17,10 +18,6 @@ fields:
   - name: subject
     type: PrincipalSubject
     description: Resolved identity for the session.
-    optional: false
-  - name: grants
-    type: ProjectGrant[]
-    description: Server-derived grants available to this session.
     optional: false
   - name: createdAt
     type: string
@@ -42,9 +39,9 @@ fields:
     type: string
     description: >-
       Optional id of a user-bound credential this session is associated with, for correlated
-      revocation; never a raw token. Left unset when the session itself is the credential (subject +
-      grants resolve the Principal directly).
+      revocation; never a raw token. Left unset when the session itself is the credential (the
+      subject resolves the Principal directly, with permissionSubject resolved live).
     optional: true
 methods: []
 createdAt: '2026-07-08T22:00:22.213Z'
-updatedAt: '2026-07-11T11:30:59.605Z'
+updatedAt: '2026-07-15T23:15:40.048Z'

@@ -29,7 +29,13 @@ methods:
         targetComponent: role_repository
         targetMethod: listRoles
       - stepNumber: 5
-        description: Assemble the PermissionWorld from the gathered assignments, roles, units, and placements
+        description: >-
+          Assemble the PermissionWorld from the gathered assignments, units, and placements, and a
+          role set that MERGES the stored (admin-defined) roles with the intrinsic built-in reserved
+          roles (e.g. 'sso-admin' → project:admin + project:create @ instance). Built-in roles are
+          code constants always present in every world, so a binding to a built-in role ALWAYS
+          resolves without any seed row in the role store — there is no seeding step to forget and
+          no silent admin lockout.
         type: local
       - stepNumber: 6
         description: Resolve the principal's effective permission for the capability at the target scope
@@ -63,7 +69,9 @@ methods:
         targetComponent: role_repository
         targetMethod: listRoles
       - stepNumber: 5
-        description: Assemble the PermissionWorld
+        description: >-
+          Assemble the PermissionWorld (stored roles MERGED with the intrinsic built-in reserved
+          roles such as 'sso-admin', which are always present without a seed row).
         type: local
       - stepNumber: 6
         description: Compute the scopes actionable for the capability plus their ancestor breadcrumb
@@ -77,4 +85,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-15T21:32:08.971Z'
-updatedAt: '2026-07-15T22:22:07.647Z'
+updatedAt: '2026-07-15T23:21:11.283Z'

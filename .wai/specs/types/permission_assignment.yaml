@@ -35,8 +35,9 @@ fields:
   - name: capability
     type: string
     description: >-
-      project:read | project:create | project:write | project:admin | approval:decide, or '*' — the
-      reserved instance-admin marker, valid only at instance scope with value 'yes'.
+      project:read | project:create | project:write | project:admin | approval:decide. There is NO
+      '*' capability and no instance-admin assignment — the instance-admin bypass is env-anchored to
+      the built-in super-admin/master, never granted through the assignment grid.
     optional: false
   - name: value
     type: string
@@ -52,4 +53,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-07-15T20:25:17.662Z'
-updatedAt: '2026-07-15T21:16:51.246Z'
+updatedAt: '2026-07-15T23:07:29.231Z'

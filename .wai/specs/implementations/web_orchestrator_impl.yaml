@@ -115,38 +115,6 @@ methods:
         description: Return once the session has been removed
         type: return
         outcome: signed out
-  - name: getCurrentContext
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Resolve the session to a Principal through the single auth authority's session bridge
-          (rejects an expired or absent session)
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateSession
-      - stepNumber: 2
-        description: >-
-          Record activity by touching the session's lastSeenAt to now through the web session
-          repository
-        type: call
-        targetComponent: web_session_repository
-        targetMethod: touch
-      - stepNumber: 3
-        description: >-
-          Derive the capability flags from the principal's grants — isAdmin when a grant is
-          instance-wide ('*', no orgUnitId), canWriteProjects when any grant carries a write
-          permission (mcp:write or project:create), visibleProjectIds from the UNION of the
-          projectIds named in the grants and the caller's resolved read-scoped project records (so a
-          '*' or unit-scoped grant still surfaces its projects and a super-admin's selector is never
-          empty), visibleUnitIds from the orgUnitIds named in the grants — set local to whether the
-          server is the local developer server (cfg.devMode), which signals the client to hide the
-          tenancy/login chrome — and assemble the WebContext (subject, grants, the derived flags,
-          and local)
-        type: local
-      - stepNumber: 4
-        description: Return the session-principal context
-        type: return
-        outcome: web context
   - name: getGraph
     narrative:
       - stepNumber: 1
@@ -231,10 +199,10 @@ methods:
         onFalseStep: 16
       - stepNumber: 14
         description: >-
-          Build a new active first-login HostedUserRecord for the subject — grants = the enumerated
-          instance-wide SSO-admin bundle ({projectId '*', permissions ['user:admin',
-          'project:create', 'audit:read']} — deliberately NOT *:*) when in the admin group,
-          otherwise empty (an admin assigns grants afterwards)
+          Build a new active first-login HostedUserRecord for the subject — roleBindings = a single
+          binding to the built-in 'sso-admin' role at instance scope when in the admin group,
+          otherwise empty (an admin assigns roles/permissions afterwards). The sso-admin role grants
+          project:admin + project:create instance-wide, never *:*.
         type: local
       - stepNumber: 15
         description: Persist the newly provisioned first-login user record through the user repository.
@@ -254,32 +222,32 @@ methods:
         error: deactivated user may not sign in
       - stepNumber: 18
         description: >-
-          If the user's stored grants disagree with the SSO-admin membership (in the admin group but
-          missing the enumerated bundle, or out of the group but still carrying it), refresh them;
-          otherwise skip the refresh
+          If the user's roleBindings disagree with the SSO-admin membership, refresh them; otherwise
+          skip the refresh
         type: branch
         condition: >-
-          the user's stored grants disagree with the SSO-admin membership decided from the verified
-          groups claim
+          the user's roleBindings disagree with the SSO-admin membership decided from the verified
+          groups claim (in the admin group but missing the sso-admin binding, or out of the group
+          but still holding it)
         onTrueStep: 19
         onFalseStep: 20
       - stepNumber: 19
         description: >-
-          Persist the refreshed grants through the user repository: append the enumerated SSO-admin
-          bundle on entry into the admin group, drop it on exit (server-driven; the bundle is
-          enumerated — never *:* — so the hard reservation is preserved)
+          Persist the refreshed roleBindings through the user repository: add the built-in sso-admin
+          role binding on entry into the admin group, drop it on exit (server-driven; sso-admin
+          grants project:admin + project:create instance-wide, never *:* — the reservation is
+          preserved)
         type: call
         targetComponent: user_repository
-        targetMethod: replaceGrants
+        targetMethod: upsert
       - stepNumber: 20
         description: >-
           Build the new WebSession (session id with the reserved prefix, subject, providerId,
-          createdAt, expiresAt = now + the session TTL); grants = the user's CURRENT grants with any
-          reserved instance-wide super-admin (*:*) grant filtered out — *:* is reserved to the
-          built-in admin account, so no SSO login can ever mint a session carrying it. MULTI-DEVICE:
-          prior sessions are left intact, so one principal may hold concurrent browser sessions
-          across devices/tabs; each is independently revocable via signOut, and signOutEverywhere
-          revokes them all.
+          createdAt, expiresAt = now + the session TTL); the session carries NO grants — the auth
+          specialist resolves the principal's permissionSubject (roleBindings + instanceAdmin) live
+          at authentication. MULTI-DEVICE: prior sessions are left intact, so one principal may hold
+          concurrent browser sessions across devices/tabs; each independently revocable via signOut,
+          and signOutEverywhere revokes them all.
         type: local
       - stepNumber: 21
         description: Persist the new browser session through the web session repository.
@@ -402,9 +370,13 @@ methods:
         outcome: existing dev session id
       - stepNumber: 6
         description: >-
-          Build a new WebSession bound to the synthetic local-developer subject with a single grant
-          on the one local project (mcp:read + mcp:write on the local project id — never an
-          instance-wide '*' grant), expiresAt = now + the session TTL
+          Build a new WebSession bound to the synthetic local-developer subject (issuer 'local',
+          userId 'builtin:localdev', kind 'human'), narrowed to the one local project (projects =
+          [the local project id]); the session carries NO permissions — in devMode the auth
+          specialist resolves THIS subject's permissionSubject with instanceAdmin = true (full local
+          access) live at authentication, matching the dev-subject identity check in
+          authenticateSession. This path is devMode-only and never mints a session in a hosted
+          deployment. expiresAt = now + the session TTL.
         type: local
       - stepNumber: 7
         description: Persist the new local-developer session through the web session repository
@@ -465,9 +437,10 @@ methods:
       - stepNumber: 7
         description: >-
           Clear the username's throttle entry and build the WebSession bound to the stable built-in
-          super-admin subject with the single instance-wide super-admin grant ({projectId '*',
-          permissions ['*']}) — the ONLY *:* in the system (hard-reserved away from user records and
-          minted tokens by the identity orchestrator); expiresAt = now + the session TTL
+          super-admin subject; the session carries NO grants — the auth specialist resolves the
+          built-in super-admin's permissionSubject with instanceAdmin = true (the ONLY
+          instance-admin, env-anchored, hard-reserved away from user records and minted tokens).
+          expiresAt = now + the session TTL.
         type: local
       - stepNumber: 8
         description: Persist the new super-admin browser session through the web session repository
@@ -526,6 +499,34 @@ methods:
           list)
         type: return
         outcome: login options
+  - name: getCurrentContext
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the session to a Principal through the single auth authority's session bridge
+          (rejects an expired or absent session)
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateSession
+      - stepNumber: 2
+        description: >-
+          Record activity by touching the session's lastSeenAt to now through the web session
+          repository
+        type: call
+        targetComponent: web_session_repository
+        targetMethod: touch
+      - stepNumber: 3
+        description: >-
+          Assemble the WebContext from the resolved principal: subject, isAdmin from
+          principal.permissionSubject.instanceAdmin, and local from cfg.devMode (signals the client
+          to hide the tenancy/login chrome). The client fetches its permission-filtered project list
+          from listProjects and relies on per-endpoint enforcement for write affordances — no grants
+        type: local
+      - stepNumber: 4
+        description: Return the session-principal context
+        type: return
+        outcome: web context
+    detail: full
 detail: full
 lint:
   allow:
@@ -535,4 +536,4 @@ lint:
         declared edges are design-ahead, not stale.
 status: complete
 createdAt: '2026-07-11T11:36:44.225Z'
-updatedAt: '2026-07-14T12:53:32.692Z'
+updatedAt: '2026-07-15T23:19:30.046Z'

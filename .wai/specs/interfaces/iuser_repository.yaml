@@ -52,19 +52,6 @@ methods:
         type: string
     guarantees:
       - atomic
-  - name: replaceGrants
-    description: >-
-      Replace a user's grants through the repository facade after authorization has been completed
-      by the orchestrator.
-    signature: 'replaceGrants(id: string, grants: ProjectGrant[]): HostedUserRecord'
-    returns: HostedUserRecord
-    params:
-      - name: id
-        type: string
-      - name: grants
-        type: ProjectGrant[]
-    guarantees:
-      - atomic
   - name: remapUnitReferences
     description: >-
       Facade: rewrite/clear user home units and role-binding scopes for a unit rename/move/cascade
@@ -80,4 +67,4 @@ methods:
       - atomic
 status: complete
 createdAt: '2026-07-08T20:16:35.931Z'
-updatedAt: '2026-07-15T21:18:24.200Z'
+updatedAt: '2026-07-15T22:49:40.502Z'

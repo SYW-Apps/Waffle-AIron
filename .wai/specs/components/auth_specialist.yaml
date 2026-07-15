@@ -16,6 +16,7 @@ dependsOn:
   - credential_registry
   - web_session_repository
   - secret_registry
+  - user_repository
 status: complete
 createdAt: '2026-07-04T12:33:41.835Z'
-updatedAt: '2026-07-14T11:04:16.070Z'
+updatedAt: '2026-07-15T22:52:46.906Z'

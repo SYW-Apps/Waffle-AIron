@@ -2,9 +2,10 @@ kind: entity
 id: api_key_record
 name: ApiKeyRecord
 description: >-
-  A persisted MCP/API credential: the hashed bearer token bound server-side to an owner identity,
-  project grants, and compatibility role/project projections. The plaintext key is shown once at
-  mint time and never stored.
+  A persisted MCP/API credential: the hashed bearer token bound server-side to an owner identity and
+  a projects narrowing. The token carries no permissions of its own — within its narrowing it acts
+  as the owner user's live permission (the resolver gates per project). The plaintext key is shown
+  once at mint time and never stored.
 subsystem: sdd_host
 fields:
   - name: id
@@ -17,11 +18,17 @@ fields:
     optional: false
   - name: role
     type: string
-    description: '"editor" or "admin"'
-    optional: false
+    description: >-
+      Legacy coarse display role ('editor'/'admin'), optional and display-only — NOT an authority
+      source (authorization resolves from the owner's permissionSubject). Set by the legacy
+      master-only mintKey path; unset by the user-bound mint flows.
+    optional: true
   - name: projects
     type: string[]
-    description: Authorized project ids, or "*"
+    description: >-
+      The token's project narrowing: the project ids this token may act on, or "*" for the owner's
+      full accessible set. The token carries no permissions of its own — within this narrowing it
+      acts as the owner user's LIVE permission (the resolver gates per project).
     optional: false
   - name: createdAt
     type: string
@@ -34,10 +41,6 @@ fields:
   - name: createdBySubject
     type: PrincipalSubject
     description: Identity that minted this token, useful when an admin creates a token for someone else.
-    optional: true
-  - name: grants
-    type: ProjectGrant[]
-    description: Precise project and instance permissions granted to this token.
     optional: true
   - name: label
     type: string
@@ -53,4 +56,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-07-04T12:44:18.552Z'
-updatedAt: '2026-07-08T19:35:06.980Z'
+updatedAt: '2026-07-15T23:07:32.521Z'

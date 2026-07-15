@@ -2,10 +2,14 @@ kind: entity
 id: role
 name: Role
 description: >-
-  A named, reusable permission template defined by an admin and bound to users (optionally scoped to
-  a unit/project). Roles are additive grants — where two of a user's roles apply at one scope, the
-  most-permissive value wins; explicit denial is expressed at the scope-default or per-user level,
-  not by a role.
+  A named, reusable permission template bound to users (optionally scoped to a unit/project). Roles
+  are additive grants — where two of a user's roles apply at one scope, the most-permissive value
+  wins; explicit denial is expressed at the scope-default or per-user level, not by a role. Most
+  roles are admin-defined and stored in the role repository. A small set of BUILT-IN reserved roles
+  (notably 'sso-admin' → project:admin + project:create at instance scope) are intrinsic code
+  constants: they are always merged into the permission world by the authorization specialist (so a
+  binding to them always resolves without a seed row), and role CRUD refuses to create, edit, or
+  delete a reserved built-in id.
 subsystem: sdd_host
 fields:
   - name: id
@@ -35,4 +39,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-07-15T20:25:10.998Z'
-updatedAt: '2026-07-15T20:25:11.079Z'
+updatedAt: '2026-07-15T23:21:14.718Z'

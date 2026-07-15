@@ -110,16 +110,6 @@ methods:
         targetComponent: web_admin_orchestrator
         targetMethod: setUserStatus
     detail: calls-only
-  - name: adminReplaceUserGrants
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Parse userId + grants from the body, resolve the session cookie, and forward to the web
-          admin orchestrator
-        type: call
-        targetComponent: web_admin_orchestrator
-        targetMethod: replaceUserGrants
-    detail: calls-only
   - name: adminListProviders
     narrative:
       - stepNumber: 1
@@ -369,4 +359,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-07-15T22:03:10.092Z'
+updatedAt: '2026-07-15T22:49:37.436Z'

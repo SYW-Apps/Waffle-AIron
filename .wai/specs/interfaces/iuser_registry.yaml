@@ -25,17 +25,6 @@ methods:
         type: string
     guarantees:
       - atomic
-  - name: replaceGrants
-    description: Replace the project grants for a hosted user after the caller has authorized the grant change.
-    signature: 'replaceGrants(id: string, grants: ProjectGrant[]): HostedUserRecord'
-    returns: HostedUserRecord
-    params:
-      - name: id
-        type: string
-      - name: grants
-        type: ProjectGrant[]
-    guarantees:
-      - atomic
   - name: remapUnitReferences
     description: >-
       Rewrite every user's home unitId and role-binding scopeIds per the remap (a unit rename/move),
@@ -52,4 +41,4 @@ methods:
       - atomic
 status: complete
 createdAt: '2026-07-08T20:16:18.364Z'
-updatedAt: '2026-07-15T21:18:19.683Z'
+updatedAt: '2026-07-15T22:49:38.436Z'

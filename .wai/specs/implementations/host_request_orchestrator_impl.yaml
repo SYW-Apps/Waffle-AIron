@@ -7,8 +7,8 @@ description: >-
   sdd_host_get_approval_status, sdd_host_await_approval) to the self-service orchestrator, the
   hosted landscape discovery tools to the surface exchange orchestrator (currentProjectId = the
   bound project), and every other tool to the scoped MCP server after enforcing the granular
-  data-plane permission (mcp:read for reads, mcp:write for writes) from the principal's grant for
-  the bound project.
+  data-plane permission through the authorization specialist (project:read for reads, project:write
+  for writes — unknown tools fail closed as writes) over the bound project.
 contract: ihost_request_orchestrator
 sourcePath: src/server/request.ts
 methods:
@@ -217,10 +217,12 @@ methods:
         toStep: 38
       - stepNumber: 32
         description: >-
-          Classify the called sdd_* tool as a write
+          Classify the called sdd_* tool: a read ONLY when its name starts with sdd_get_ or
+          sdd_validate_ (required capability project:read); ANY other tool — the explicit write
+          prefixes
           (sdd_add_/sdd_update_/sdd_delete_/sdd_write_/sdd_define_/sdd_set_/sdd_initialize_/sdd_externalize_/sdd_internalize_/sdd_move_)
-          or a read (sdd_get_/sdd_validate_); the required capability is project:write for a write
-          tool and project:read for a read tool
+          AND any unrecognized or newly added name — is treated as a write requiring project:write
+          (fail closed: an unknown tool never falls through to read-level gating)
         type: local
       - stepNumber: 33
         description: >-
@@ -284,4 +286,4 @@ methods:
     symbol: handleMcpRequest
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-07-15T22:17:15.891Z'
+updatedAt: '2026-07-15T23:15:12.564Z'
