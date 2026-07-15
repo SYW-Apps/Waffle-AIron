@@ -110,6 +110,27 @@ describe('identity provider config storage (sdd_host policy repository)', () => 
     expect(raw).toContain('secret://safe-ref');
   });
 
+  it('persists the redirect allowlist and split-horizon endpoint overrides through the whitelist', () => {
+    const stored = upsertIdentityProviderRecord(
+      dataDir,
+      idp({
+        allowedRedirectUris: ['https://app.example/cb'],
+        authorizationEndpoint: 'https://sso.example/authorize',
+        tokenEndpoint: 'http://sso.internal:9000/token',
+        jwksUri: 'http://sso.internal:9000/jwks',
+        userinfoEndpoint: 'http://sso.internal:9000/userinfo',
+      }),
+    );
+    expect(stored.allowedRedirectUris).toEqual(['https://app.example/cb']);
+
+    const [reloaded] = listIdentityProviderRecords(dataDir);
+    expect(reloaded.allowedRedirectUris).toEqual(['https://app.example/cb']);
+    expect(reloaded.authorizationEndpoint).toBe('https://sso.example/authorize');
+    expect(reloaded.tokenEndpoint).toBe('http://sso.internal:9000/token');
+    expect(reloaded.jwksUri).toBe('http://sso.internal:9000/jwks');
+    expect(reloaded.userinfoEndpoint).toBe('http://sso.internal:9000/userinfo');
+  });
+
   // ── multiple providers coexist ───────────────────────────────────────────
 
   it('multiple providers coexist and preserve order across an in-place update', () => {

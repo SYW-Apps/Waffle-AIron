@@ -1,0 +1,23 @@
+id: web_admin_orchestrator
+name: Web Admin Orchestrator
+description: >-
+  Server-side control-bridge for the unified web UI on the PUBLIC data plane. ADMIN capabilities
+  (user, identity-provider/SSO, and organization-unit management) forward to the identity
+  orchestrator passing the ws_ session AS the credential, so their scope authorization applies
+  unchanged; org-unit writes are owned here (authenticateSession -> instance-admin -> organization
+  repository -> best-effort audit). It ALSO handles user-scoped SELF-SERVICE: minting a
+  single-project MCP token for an AI agent via the identity orchestrator (mintToken authorizes
+  strictly against the caller's own project access). Web-UI login (human, session/SSO) and MCP
+  tokens (agent, one project) are deliberately separate concerns — no mixing.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - identity_orchestrator
+  - auth_specialist
+  - organization_repository
+  - audit_repository
+  - secret_registry
+status: complete
+createdAt: '2026-07-13T18:27:33.510Z'
+updatedAt: '2026-07-14T12:31:03.407Z'

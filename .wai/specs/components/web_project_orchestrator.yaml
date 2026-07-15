@@ -1,0 +1,22 @@
+id: web_project_orchestrator
+name: Web Project Orchestrator
+description: >-
+  Server-side project-lifecycle workflows for the web UI on the PUBLIC data plane. Bridges project
+  create/lock/promote/destroy to the admin orchestrator passing the ws_ session AS the credential —
+  those methods authorize by the caller's grant scope, so a signed-in human manages exactly the
+  projects their grants permit (create where they hold project:create, lock where they hold
+  lock:create, etc.). listProjects is owned here because the admin orchestrator's list is
+  master-only: it resolves the session to a Principal, resolves the caller's project scope over the
+  organization tree, and returns the project records within that scope.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - admin_orchestrator
+  - auth_specialist
+  - scope_specialist
+  - organization_repository
+  - project_registry
+status: complete
+createdAt: '2026-07-13T20:36:24.912Z'
+updatedAt: '2026-07-13T20:37:54.217Z'

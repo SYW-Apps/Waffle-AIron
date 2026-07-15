@@ -155,6 +155,18 @@ export function listProjects(cfg: HostConfig, credential: string | null): Hosted
 
 export function mintKey(cfg: HostConfig, credential: string | null, project: string, role: Role): string {
   requireAdmin(credential);
+  // Strict "built-in is the only super-admin": the legacy admin role projects to
+  // {projectId:'*', permissions:['*']} and the '*' project wildcard is an
+  // instance-wide grant, so either shape would mint a distributable *:* bearer —
+  // a second super-admin route beside the env-anchored built-in account. Only
+  // project-scoped, non-super-admin keys are mintable. The WAIRON_ADMIN_TOKEN
+  // master principal and the built-in password login are NOT minted keys and
+  // remain full *:* super-admins (their auth paths are untouched).
+  if (role === 'admin' || project === '*') {
+    throw new Error(
+      'instance-wide super-admin (*:*) keys cannot be minted — the built-in admin account (WAIRON_ADMIN_USER) is the only super-admin',
+    );
+  }
   const token = 'wk_' + crypto.randomBytes(24).toString('hex');
   const record: ApiKeyRecord = {
     id: crypto.randomBytes(6).toString('hex'),

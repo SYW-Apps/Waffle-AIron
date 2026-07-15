@@ -12,7 +12,12 @@ methods:
     description: >-
       Serve the unified web UI client application shell and its bundled static assets for the
       requested path (single-page app entry). No orchestrator call; the app then drives every
-      feature by calling existing endpoints with the session cookie.
+      feature by calling existing endpoints with the session cookie. The shell's login screen is
+      DYNAMIC: it fetches GET /web/login-options and renders the username/password form only when
+      the built-in admin login is configured plus one "Sign in with <displayName>" button per
+      ENABLED identity provider (no free-text provider input), hiding the SSO section when no
+      provider is enabled and showing a clear "No sign-in method is configured" message when neither
+      method exists.
     signature: 'serveApp(path: string): string'
     returns: string
     params:
@@ -139,6 +144,262 @@ methods:
       transport: HTTP
       method: GET
       path: /web/canvas
+  - name: adminListUsers
+    description: >-
+      List hosted users in the caller's scope; forwards the session to
+      web_admin_orchestrator.listUsers.
+    signature: 'adminListUsers(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/admin/users
+  - name: adminUpsertUser
+    description: Create or update a hosted user; forwards to web_admin_orchestrator.upsertUser.
+    signature: 'adminUpsertUser(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/users
+  - name: adminSetUserStatus
+    description: Set a hosted user's lifecycle status; forwards to web_admin_orchestrator.setUserStatus.
+    signature: 'adminSetUserStatus(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/users/status
+  - name: adminReplaceUserGrants
+    description: Replace a hosted user's grants; forwards to web_admin_orchestrator.replaceUserGrants.
+    signature: 'adminReplaceUserGrants(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/users/grants
+  - name: adminListProviders
+    description: >-
+      List identity-provider (SSO) configurations; forwards to
+      web_admin_orchestrator.listIdentityProviders.
+    signature: 'adminListProviders(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/admin/providers
+  - name: adminUpsertProvider
+    description: >-
+      Create or update an identity-provider (SSO) configuration; forwards to
+      web_admin_orchestrator.upsertIdentityProvider.
+    signature: 'adminUpsertProvider(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/providers
+  - name: adminRemoveProvider
+    description: >-
+      Remove an identity-provider configuration by id; forwards to
+      web_admin_orchestrator.removeIdentityProvider.
+    signature: 'adminRemoveProvider(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/providers/remove
+  - name: adminListOrgUnits
+    description: List organization units; forwards to web_admin_orchestrator.listOrganizationUnits.
+    signature: 'adminListOrgUnits(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/admin/org/units
+  - name: adminUpsertOrgUnit
+    description: >-
+      Create or update an organization unit; forwards to
+      web_admin_orchestrator.upsertOrganizationUnit.
+    signature: 'adminUpsertOrgUnit(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/org/units
+  - name: adminPlaceProject
+    description: Place a project into an organization unit; forwards to web_admin_orchestrator.placeProject.
+    signature: 'adminPlaceProject(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/org/placements
+  - name: mintAgentToken
+    description: >-
+      Mint a single-project MCP token for an AI agent; forwards to
+      web_admin_orchestrator.mintProjectToken. User self-service, session-authorized.
+    signature: 'mintAgentToken(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/tokens
+  - name: revokeAgentToken
+    description: Revoke an MCP token by id; forwards to web_admin_orchestrator.revokeProjectToken.
+    signature: 'revokeAgentToken(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/tokens/revoke
+  - name: listAgentTokens
+    description: List the caller's own MCP tokens; forwards to web_admin_orchestrator.listMyTokens.
+    signature: 'listAgentTokens(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/tokens
+  - name: projectList
+    description: List the projects the caller can manage; forwards to web_project_orchestrator.listProjects.
+    signature: 'projectList(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/projects
+  - name: projectCreate
+    description: Create a project; forwards to web_project_orchestrator.createProject.
+    signature: 'projectCreate(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/projects
+  - name: projectLock
+    description: Lock a project; forwards to web_project_orchestrator.lockProject.
+    signature: 'projectLock(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/projects/lock
+  - name: projectPromote
+    description: Promote a project; forwards to web_project_orchestrator.promoteProject.
+    signature: 'projectPromote(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/projects/promote
+  - name: projectDestroy
+    description: Destroy a project; forwards to web_project_orchestrator.destroyProject.
+    signature: 'projectDestroy(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/projects/destroy
+  - name: loginWithPassword
+    description: >-
+      Sign the built-in super-admin in with a username + password posted as JSON ({user, password});
+      forwards to the web orchestrator's signInWithPassword and sets the session cookie exactly like
+      the SSO callback (Secure follows the effective requireTls). It ESTABLISHES a session — no
+      prior cookie exists to ride — so it is intentionally NOT in the cookie-mutation CSRF set; like
+      every /web route it is gated on exposure.webUiEnabled. An invalid credential (or disabled
+      password login, or an active throttle lockout) answers 401 with no distinguishing detail.
+    signature: 'loginWithPassword(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/login
+  - name: adminListSecretRefs
+    description: >-
+      List the configured secret ref names (never values); forwards to
+      web_admin_orchestrator.listSecretRefs. For the IdP form's clientSecretRef picker.
+    signature: 'adminListSecretRefs(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/admin/secrets
+  - name: getLoginOptions
+    description: >-
+      Return the pre-auth sign-in options for the login screen by forwarding to the web
+      orchestrator's getLoginOptions. UNAUTHENTICATED — a pre-auth read that requires no session and
+      rides no CSRF gate (it is a GET) — and gated with every /web route on exposure.webUiEnabled
+      (404 when the web UI is off). The payload carries only the password-login flag and
+      enabled-provider { id, displayName } pairs; never secrets, clientIds, or endpoint config.
+    signature: 'getLoginOptions(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/login-options
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-07-11T16:37:18.124Z'
+updatedAt: '2026-07-14T12:53:32.800Z'

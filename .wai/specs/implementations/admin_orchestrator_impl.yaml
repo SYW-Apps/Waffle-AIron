@@ -349,15 +349,29 @@ methods:
         outcome: 403 Forbidden
       - stepNumber: 4
         description: >-
+          If the requested role is admin or the project is the '*' wildcard — either would project
+          to an instance-wide *:* super-admin grant — reject the mint
+        type: branch
+        condition: role is admin or project is '*' (would project to instance-wide *:*)
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Refuse: instance-wide super-admin (*:*) keys cannot be minted — the env-anchored built-in
+          admin account (WAIRON_ADMIN_TOKEN / WAIRON_ADMIN_USER) is the only super-admin; only
+          project-scoped keys are mintable
+        type: return
+        outcome: rejected — *:* keys are not mintable
+      - stepNumber: 6
+        description: >-
           Generate a random API key and its salted hash; assemble an ApiKeyRecord bound to the
           project and role
         type: local
-      - stepNumber: 5
+      - stepNumber: 7
         description: Persist the credential
         type: call
         targetComponent: credential_registry
         targetMethod: create
-      - stepNumber: 6
+      - stepNumber: 8
         description: Return the plaintext key (shown once)
         type: return
         outcome: plaintext key
@@ -875,4 +889,4 @@ lint:
         host_core_adapter — documented shortcut on the lock/promote path; refactor candidate.
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-07-11T20:30:00.419Z'
+updatedAt: '2026-07-14T11:43:00.061Z'

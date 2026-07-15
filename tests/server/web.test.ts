@@ -16,19 +16,23 @@ import {
   getProjectCanvas,
   serveApp,
 } from '../../src/server/web.js';
-import { signSsoState, verifySsoState } from '../../src/server/auth.js';
+import { signSsoState, verifySsoState, authenticate } from '../../src/server/auth.js';
 import { ForbiddenError, UnauthenticatedError } from '../../src/server/identity.js';
+import * as identity from '../../src/server/identity.js';
 import { upsertIdentityProviderRecord } from '../../src/server/policy.js';
-import { findUserByExternalSubject, setUserStatus } from '../../src/server/users.js';
+import { findUserByExternalSubject, setUserStatus, upsertUser as repoUpsertUser } from '../../src/server/users.js';
 import {
   createWebSession,
   getWebSessionById,
   listWebSessionsBySubject,
 } from '../../src/server/websessions.js';
-import { createProjectRecord } from '../../src/server/projects.js';
-import { createCredential, hashToken } from '../../src/server/credentials.js';
+import { createProjectRecord, listProjectRecords } from '../../src/server/projects.js';
+import * as webproject from '../../src/server/webproject.js';
+import { AdminAuthError } from '../../src/server/admin.js';
+import { createCredential, hashToken, findByTokenHash } from '../../src/server/credentials.js';
 import { queryAuditEvents as auditQuery } from '../../src/server/audit.js';
-import { upsertOrganizationUnit, placeProject } from '../../src/server/organization.js';
+import { upsertOrganizationUnit, placeProject, listProjectPlacements } from '../../src/server/organization.js';
+import * as webadmin from '../../src/server/webadmin.js';
 import { replacePublicSurfaceSnapshot } from '../../src/server/surfaces.js';
 import { validateProjectAsComplete } from '../../src/server/adapters.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
@@ -45,6 +49,7 @@ import type {
   ApiKeyRecord,
   HostConfig,
   IdentityProviderConfig,
+  OrganizationUnitRecord,
   PrincipalSubject,
   ProjectGrant,
   WebSession,
@@ -65,6 +70,13 @@ const MASTER = 'master-credential-secret-value';
 const SECRET_REF = 'oidc-client-secret';
 const SECRET_VALUE = 'super-secret-value';
 const PROVIDER_ID = 'authentik-corp';
+const CLIENT_ID = 'test-client';
+
+// A real RSA signing key; its public half is published in the stub JWKS so the
+// adapter verifies the RS256-signed id_tokens end-to-end during sign-in.
+const { publicKey: SIGN_PUB, privateKey: SIGN_PRIV } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+const KID = 'test-key-1';
+const JWK = { ...(SIGN_PUB.export({ format: 'jwk' }) as crypto.JsonWebKey), kid: KID, use: 'sig', alg: 'RS256' };
 
 let tokenResponse: () => { status: number; json: unknown } = () => ({ status: 200, json: {} });
 let oidcServer: http.Server;
@@ -75,7 +87,26 @@ beforeAll(async () => {
     let raw = '';
     req.on('data', (chunk) => (raw += chunk));
     req.on('end', () => {
-      if (req.method === 'POST' && req.url === '/token') {
+      const url = new URL(req.url ?? '/', issuerUrl);
+      if (req.method === 'GET' && url.pathname === '/.well-known/openid-configuration') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            issuer: issuerUrl,
+            authorization_endpoint: `${issuerUrl}/authorize`,
+            token_endpoint: `${issuerUrl}/token`,
+            jwks_uri: `${issuerUrl}/jwks`,
+            userinfo_endpoint: `${issuerUrl}/userinfo`,
+          }),
+        );
+        return;
+      }
+      if (req.method === 'GET' && url.pathname === '/jwks') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ keys: [JWK] }));
+        return;
+      }
+      if (req.method === 'POST' && url.pathname === '/token') {
         const r = tokenResponse();
         res.writeHead(r.status, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(r.json));
@@ -96,13 +127,17 @@ afterAll(async () => {
 function b64url(obj: unknown): string {
   return Buffer.from(JSON.stringify(obj)).toString('base64url');
 }
-function makeIdToken(claims: unknown): string {
-  return [b64url({ alg: 'RS256', typ: 'JWT' }), b64url(claims), 'sig'].join('.');
+/** RS256-sign an id_token with the stub signing key so it verifies against the JWKS. */
+function signIdToken(claims: Record<string, unknown>): string {
+  const input = `${b64url({ alg: 'RS256', typ: 'JWT', kid: KID })}.${b64url(claims)}`;
+  const sig = crypto.sign('RSA-SHA256', Buffer.from(input), SIGN_PRIV).toString('base64url');
+  return `${input}.${sig}`;
 }
 function stubClaims(claims: Record<string, unknown>): void {
+  const full = { aud: CLIENT_ID, exp: Math.floor(Date.now() / 1000) + 3600, ...claims };
   tokenResponse = () => ({
     status: 200,
-    json: { access_token: 'ACCESS', id_token: makeIdToken(claims), token_type: 'Bearer' },
+    json: { access_token: 'ACCESS', id_token: signIdToken(full), token_type: 'Bearer' },
   });
 }
 function providerConfig(over: Partial<IdentityProviderConfig> = {}): IdentityProviderConfig {
@@ -154,9 +189,9 @@ describe('web orchestrator SSO sign-in (sdd_host)', () => {
     }
   });
 
-  it('startSignIn returns a provider authorization URL for an enabled provider (info audit)', () => {
+  it('startSignIn returns a provider authorization URL for an enabled provider (info audit)', async () => {
     upsertIdentityProviderRecord(dataDir, providerConfig());
-    const { url: authUrl } = startSignIn(cfg, PROVIDER_ID, 'https://app.example/web/sso/callback');
+    const { url: authUrl } = await startSignIn(cfg, PROVIDER_ID, 'https://app.example/web/sso/callback');
     const url = new URL(authUrl);
     expect(url.origin).toBe(issuerUrl);
     expect(url.pathname).toBe('/authorize');
@@ -174,15 +209,15 @@ describe('web orchestrator SSO sign-in (sdd_host)', () => {
     expect(events[0].level).toBe('info');
   });
 
-  it('startSignIn rejects an unknown and a disabled provider', () => {
-    expect(() => startSignIn(cfg, 'ghost', 'https://app.example/cb')).toThrow(/unknown or disabled/i);
+  it('startSignIn rejects an unknown and a disabled provider', async () => {
+    await expect(startSignIn(cfg, 'ghost', 'https://app.example/cb')).rejects.toThrow(/unknown or disabled/i);
     upsertIdentityProviderRecord(dataDir, providerConfig({ enabled: false }));
-    expect(() => startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb')).toThrow(/unknown or disabled/i);
+    await expect(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb')).rejects.toThrow(/unknown or disabled/i);
   });
 
   it('completeSignIn (first login): provisions an active user with empty grants and creates a resolvable WebSession (no token minted)', async () => {
     upsertIdentityProviderRecord(dataDir, providerConfig());
-    const { state, nonce } = started(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
+    const { state, nonce } = started(await startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
 
     const sessionId = await completeSignIn(cfg, state, 'auth-code-1', nonce);
     expect(sessionId).toMatch(/^ws_[0-9a-f]+$/);
@@ -210,12 +245,12 @@ describe('web orchestrator SSO sign-in (sdd_host)', () => {
 
   it('completeSignIn refuses a returning user who has been deactivated (creates no new session)', async () => {
     upsertIdentityProviderRecord(dataDir, providerConfig());
-    const f1 = started(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
+    const f1 = started(await startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
     await completeSignIn(cfg, f1.state, 'code-1', f1.nonce);
 
     setUserStatus(dataDir, `sso:${PROVIDER_ID}:ext-1`, 'suspended');
 
-    const f2 = started(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
+    const f2 = started(await startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
     await expect(completeSignIn(cfg, f2.state, 'code-2', f2.nonce)).rejects.toThrow(ForbiddenError);
 
     // Only the first (pre-deactivation) session exists; the refused login minted nothing.
@@ -224,9 +259,9 @@ describe('web orchestrator SSO sign-in (sdd_host)', () => {
 
   it('completeSignIn does NOT revoke prior sessions (multi-device): two logins yield two live sessions', async () => {
     upsertIdentityProviderRecord(dataDir, providerConfig());
-    const fA = started(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
+    const fA = started(await startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
     const idA = await completeSignIn(cfg, fA.state, 'c1', fA.nonce);
-    const fB = started(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
+    const fB = started(await startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
     const idB = await completeSignIn(cfg, fB.state, 'c2', fB.nonce);
 
     expect(idA).not.toBe(idB);
@@ -237,7 +272,7 @@ describe('web orchestrator SSO sign-in (sdd_host)', () => {
 
   it('SECURITY: completeSignIn rejects a login-CSRF callback whose nonce cookie is absent or wrong', async () => {
     upsertIdentityProviderRecord(dataDir, providerConfig());
-    const { state, nonce } = started(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
+    const { state, nonce } = started(await startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
 
     // Victim's browser has NO nonce cookie (attacker-delivered callback) → refused.
     await expect(completeSignIn(cfg, state, 'code', null)).rejects.toThrow(ForbiddenError);
@@ -306,13 +341,24 @@ describe('web orchestrator session lifecycle + context (sdd_host)', () => {
     expect(ctx.subject.userId).toBe('u-1');
     expect(ctx.isAdmin).toBe(false);
     expect(ctx.canWriteProjects).toBe(true); // proj-b carries mcp:write
-    expect(ctx.visibleProjectIds.sort()).toEqual(['proj-a', 'proj-b']);
+    expect(ctx.visibleProjectIds.sort()).toEqual(['proj-a', 'proj-b']); // named grants
     expect(ctx.visibleUnitIds).toEqual(['unit-1']);
 
     // lastSeenAt was advanced away from the seeded (old) value.
     const after = getWebSessionById(dataDir, s.id)!.lastSeenAt!;
     expect(after).not.toBe('2000-01-01T00:00:00.000Z');
     expect(Date.parse(after)).toBeGreaterThan(Date.parse('2000-01-01T00:00:00.000Z'));
+  });
+
+  it('getCurrentContext: a super-admin (*:* grant) sees ALL existing projects in the selector', () => {
+    createProjectRecord(dataDir, 'proj-a');
+    createProjectRecord(dataDir, 'proj-b');
+    const s = mkSession({ grants: [{ projectId: '*', permissions: ['*'] }] });
+    const ctx = getCurrentContext(cfg, s.id);
+    expect(ctx.isAdmin).toBe(true);
+    // The bug: a '*' grant names no specific project id, so the old derivation
+    // yielded []. The resolved scope (scope.all) now surfaces every project.
+    expect(ctx.visibleProjectIds.sort()).toEqual(['proj-a', 'proj-b']);
   });
 
   it('getCurrentContext marks an instance-wide grant as admin (no specific project/unit ids)', () => {
@@ -601,6 +647,31 @@ describe('web portal client app shell (sdd_host)', () => {
     expect(html).not.toContain('borderPt');
   });
 
+  it('wires the admin management pages and the agent-token self-service page', () => {
+    // Admin management routes for Users / Identity Providers / Organization.
+    expect(html).toContain('/web/admin/users/status');
+    expect(html).toContain('/web/admin/users/grants');
+    expect(html).toContain('/web/admin/providers');
+    expect(html).toContain('/web/admin/providers/remove');
+    expect(html).toContain('/web/admin/org/units');
+    expect(html).toContain('/web/admin/org/placements');
+    // The Identity-Provider form exposes the provider types and the split-horizon
+    // override fields that make self-hosted Keycloak/Authentik work.
+    expect(html).toContain('google_workspace');
+    expect(html).toContain('entra_id');
+    expect(html).toContain('clientSecretRef');
+    expect(html).toContain('authorizationEndpoint');
+    expect(html).toContain('tokenEndpoint');
+    expect(html).toContain('jwksUri');
+    expect(html).toContain('userinfoEndpoint');
+    expect(html).toContain('allowedRedirectUris');
+    // The self-service "Connect an agent" token routes render for any signed-in user.
+    expect(html).toContain('/web/tokens');
+    expect(html).toContain('/web/tokens/revoke');
+    // No stale API-key admin surface remains in the client.
+    expect(html).not.toContain('/web/admin/keys');
+  });
+
   it('references no external http(s):// assets — everything is inline', () => {
     // No external asset loads (CDN scripts, stylesheets, fonts, images, imports).
     expect(html).not.toMatch(/(?:src|href)\s*=\s*["']https?:/i);
@@ -679,6 +750,8 @@ describe('web portal HTTP mount (sdd_host)', () => {
   it('webUiEnabled=false (default): the app shell and every /web path answer 404', async () => {
     expect((await raw({ method: 'GET', path: '/' })).status).toBe(404);
     expect((await raw({ method: 'GET', path: '/web/context' })).status).toBe(404);
+    // The agent-token self-service routes are part of /web, so they are gated too.
+    expect((await raw({ method: 'GET', path: '/web/tokens' })).status).toBe(404);
     expect(
       (await raw({
         method: 'POST',
@@ -923,4 +996,716 @@ describe('web portal HTTP mount (sdd_host)', () => {
     // webUiEnabled defaults false — the admin routes are part of /web and 404 with it.
     expect((await raw({ method: 'GET', path: '/web/admin/users' })).status).toBe(404);
   });
+});
+
+// ── Web admin orchestrator (sdd_host) ────────────────────────────────────────
+//
+// The bridge exposing the control-plane admin capabilities on the PUBLIC data
+// plane. User / IdP / key methods forward to the identity/admin orchestrators
+// with the session as the credential; org-unit methods are owned here (require an
+// instance-wide admin grant, mutate through the organization repository, audit).
+
+describe('web admin orchestrator (sdd_host)', () => {
+  let dataDir: string;
+  let cfg: HostConfig;
+  const savedEnv = { ...process.env };
+  const FUTURE = (): string => new Date(Date.now() + 3_600_000).toISOString();
+
+  beforeEach(() => {
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-webadmin-'));
+    process.env.WAIRON_ADMIN_TOKEN = MASTER;
+    process.env.WAIRON_DATA_DIR = dataDir;
+    setSecret(SECRET_REF, SECRET_VALUE);
+    cfg = { host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: true };
+  });
+  afterEach(() => {
+    process.env = { ...savedEnv };
+    try {
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    } catch {
+      /* windows file locks */
+    }
+  });
+
+  function adminSession(): string {
+    return createWebSession(dataDir, {
+      id: '',
+      subject: SUBJECT,
+      grants: [{ projectId: '*', permissions: ['*'] }],
+      createdAt: '',
+      expiresAt: FUTURE(),
+    }).id;
+  }
+  function viewerSession(): string {
+    return createWebSession(dataDir, {
+      id: '',
+      subject: { userId: 'viewer', kind: 'human', issuer: 'local' },
+      grants: [{ projectId: 'demo', permissions: ['mcp:read'] }],
+      createdAt: '',
+      expiresAt: FUTURE(),
+    }).id;
+  }
+
+  it('org-unit methods require an instance-wide admin grant (owned auth) and audit writes', () => {
+    const admin = adminSession();
+    const viewer = viewerSession();
+
+    // Admin creates + lists organization units; a security-level audit event is written.
+    const unit = webadmin.upsertOrganizationUnit(cfg, admin, {
+      id: '',
+      name: 'Team One',
+      kind: 'team',
+      status: 'active',
+      createdAt: '',
+      createdBy: SUBJECT,
+    });
+    expect(unit.id).toBeTruthy();
+    expect(webadmin.listOrganizationUnits(cfg, admin).map((u) => u.id)).toContain(unit.id);
+    const up = auditQuery(dataDir, { action: 'org.unit.upsert' });
+    expect(up).toHaveLength(1);
+    expect(up[0].level).toBe('security');
+
+    // A viewer session (no instance-admin grant) is denied on read AND write.
+    expect(() => webadmin.listOrganizationUnits(cfg, viewer)).toThrow(ForbiddenError);
+    expect(() =>
+      webadmin.upsertOrganizationUnit(cfg, viewer, {
+        id: '',
+        name: 'X',
+        kind: 'team',
+        status: 'active',
+        createdAt: '',
+        createdBy: SUBJECT,
+      }),
+    ).toThrow(ForbiddenError);
+    expect(() => webadmin.placeProject(cfg, viewer, 'proj-a', unit.id)).toThrow(ForbiddenError);
+  });
+
+  it('placeProject binds a project to a unit through the repository and audits', () => {
+    const admin = adminSession();
+    const unit = webadmin.upsertOrganizationUnit(cfg, admin, {
+      id: 'unit-1',
+      name: 'Team',
+      kind: 'team',
+      status: 'active',
+      createdAt: '',
+      createdBy: SUBJECT,
+    });
+    createProjectRecord(dataDir, 'proj-a');
+
+    webadmin.placeProject(cfg, admin, 'proj-a', unit.id);
+    expect(listProjectPlacements(dataDir, 'proj-a', unit.id)).toHaveLength(1);
+    const ev = auditQuery(dataDir, { action: 'org.placement.set' });
+    expect(ev).toHaveLength(1);
+    expect(ev[0].level).toBe('security');
+  });
+
+  it('user / IdP methods forward with the session as the credential (upstream scope applies)', () => {
+    const admin = adminSession();
+    const viewer = viewerSession();
+
+    // IdP upsert/list forward to the identity orchestrator (instance-admin only).
+    const stored = webadmin.upsertIdentityProvider(cfg, admin, providerConfig());
+    expect(stored.id).toBe(PROVIDER_ID);
+    expect(webadmin.listIdentityProviders(cfg, admin).map((p) => p.id)).toContain(PROVIDER_ID);
+    // A viewer session is refused by the upstream orchestrator (no new auth surface).
+    expect(() => webadmin.listIdentityProviders(cfg, viewer)).toThrow(ForbiddenError);
+
+    // listUsers forwards + scope-filters; an admin sees the directory, a viewer is denied.
+    expect(Array.isArray(webadmin.listUsers(cfg, admin))).toBe(true);
+    expect(() => webadmin.listUsers(cfg, viewer)).toThrow(ForbiddenError);
+  });
+
+  // The exact shape an operator enters for a DELEGATED UNIT ADMIN: '*' projects but
+  // bounded to org unit X ({ projectId:'*', orgUnitId:'X' }). It must be treated as
+  // unit-scoped, NEVER instance super-admin.
+  it('SECURITY (Finding A): a {projectId:*, orgUnitId} unit admin is NOT instance-admin — org + IdP methods reject it', () => {
+    const unitAdmin = createWebSession(dataDir, {
+      id: '',
+      subject: { userId: 'unit-admin', kind: 'human', issuer: 'local' },
+      grants: [{ projectId: '*', permissions: ['*'], orgUnitId: 'unit-x' }],
+      createdAt: '',
+      expiresAt: FUTURE(),
+    }).id;
+
+    // Every instance-admin-gated surface must refuse the unit-scoped-wildcard grant.
+    expect(() => webadmin.listOrganizationUnits(cfg, unitAdmin)).toThrow(ForbiddenError);
+    expect(() =>
+      webadmin.upsertOrganizationUnit(cfg, unitAdmin, {
+        id: '',
+        name: 'X',
+        kind: 'team',
+        status: 'active',
+        createdAt: '',
+        createdBy: SUBJECT,
+      }),
+    ).toThrow(ForbiddenError);
+    expect(() => webadmin.placeProject(cfg, unitAdmin, 'proj-a', 'unit-x')).toThrow(ForbiddenError);
+    expect(() => webadmin.upsertIdentityProvider(cfg, unitAdmin, providerConfig())).toThrow(ForbiddenError);
+
+    // A GENUINE instance-admin (projectId '*', no orgUnitId) still passes.
+    expect(webadmin.listOrganizationUnits(cfg, adminSession())).toBeDefined();
+  });
+
+  it('SECURITY (Finding B): a {projectId:*, orgUnitId} unit read/write holder mints ONLY within its unit, never cross-tenant', () => {
+    const admin = adminSession();
+    // Unit U owns proj-in-unit; proj-other belongs to a different tenant (unplaced).
+    const unit = webadmin.upsertOrganizationUnit(cfg, admin, {
+      id: 'unit-u',
+      name: 'U',
+      kind: 'team',
+      status: 'active',
+      createdAt: '',
+      createdBy: SUBJECT,
+    });
+    createProjectRecord(dataDir, 'proj-in-unit');
+    createProjectRecord(dataDir, 'proj-other');
+    webadmin.placeProject(cfg, admin, 'proj-in-unit', unit.id);
+
+    const unitRW = createWebSession(dataDir, {
+      id: '',
+      subject: { userId: 'unit-rw', kind: 'human', issuer: 'local' },
+      grants: [{ projectId: '*', permissions: ['mcp:read', 'mcp:write'], orgUnitId: unit.id }],
+      createdAt: '',
+      expiresAt: FUTURE(),
+    }).id;
+
+    // In-unit project: the mint is allowed (resolved scope covers it).
+    expect(typeof webadmin.mintProjectToken(cfg, unitRW, 'proj-in-unit', true)).toBe('string');
+    // Another tenant's project (outside the unit subtree): DENIED — no cross-tenant mint.
+    expect(() => webadmin.mintProjectToken(cfg, unitRW, 'proj-other', false)).toThrow(ForbiddenError);
+  });
+
+  it('mintProjectToken mints a single-project agent token OWNED by the caller; revokeProjectToken revokes it', () => {
+    const admin = adminSession();
+    createProjectRecord(dataDir, 'proj-a');
+
+    // A read-only agent token: it authenticates and is scoped to EXACTLY one project
+    // (mcp:read only) — never an instance-wide '*' grant, entirely separate from the
+    // human's web session, but OWNED by the minting caller (for lifecycle/revocation).
+    const token = webadmin.mintProjectToken(cfg, admin, 'proj-a', false);
+    expect(token).toMatch(/^wk_[0-9a-f]+$/);
+    const p = authenticate(dataDir, token);
+    expect(p.authenticated).toBe(true);
+    expect(p.grants).toEqual([{ projectId: 'proj-a', permissions: ['mcp:read'] }]);
+    expect(p.projects).toEqual(['proj-a']);
+
+    // The stored record is OWNED by the caller (the session's subject) — NOT an
+    // ownerless service credential with an empty ownerUserId.
+    const rec = findByTokenHash(dataDir, hashToken(token))!;
+    expect(rec.ownerSubject?.userId).toBe(SUBJECT.userId);
+    expect(rec.createdBySubject?.userId).toBe(SUBJECT.userId);
+
+    // A write token additionally carries mcp:write on that one project.
+    const wToken = webadmin.mintProjectToken(cfg, admin, 'proj-a', true);
+    expect(authenticate(dataDir, wToken).grants).toEqual([
+      { projectId: 'proj-a', permissions: ['mcp:read', 'mcp:write'] },
+    ]);
+
+    // Revoke by id → the token no longer authenticates.
+    webadmin.revokeProjectToken(cfg, admin, rec.id);
+    expect(authenticate(dataDir, token).authenticated).toBe(false);
+    // token.mint.self + token.revoke.self security events were written upstream.
+    expect(auditQuery(dataDir, { action: 'token.mint.self' }).length).toBeGreaterThanOrEqual(1);
+    expect(auditQuery(dataDir, { action: 'token.revoke.self' })).toHaveLength(1);
+  });
+
+  it('mintProjectToken is self-scoped: a viewer mints read for its own project (no key:manage), but write and out-of-scope are denied', () => {
+    const viewer = viewerSession();
+    createProjectRecord(dataDir, 'demo');
+
+    // The viewer holds ONLY mcp:read on demo (and NO key:manage). Self-service mint
+    // of a READ-ONLY token for that project SUCCEEDS — the mint is self-scoped, so no
+    // key:manage is required, and the token cannot exceed the caller's own access.
+    const token = webadmin.mintProjectToken(cfg, viewer, 'demo', false);
+    const p = authenticate(dataDir, token);
+    expect(p.grants).toEqual([{ projectId: 'demo', permissions: ['mcp:read'] }]);
+    // Owned by the viewer (not service/empty).
+    const rec = findByTokenHash(dataDir, hashToken(token))!;
+    expect(rec.ownerSubject?.userId).toBe('viewer');
+
+    // Requesting WRITE exceeds the viewer's own access (mcp:read only) → Forbidden.
+    expect(() => webadmin.mintProjectToken(cfg, viewer, 'demo', true)).toThrow(ForbiddenError);
+    // A project the viewer has NO access to → Forbidden (cannot mint beyond own grants).
+    createProjectRecord(dataDir, 'other');
+    expect(() => webadmin.mintProjectToken(cfg, viewer, 'other', false)).toThrow(ForbiddenError);
+  });
+
+  it('listMyTokens returns only the caller-owned tokens (redacted); revokeSelfToken by a non-owner is rejected', () => {
+    createProjectRecord(dataDir, 'proj-a');
+    createProjectRecord(dataDir, 'proj-b');
+    // Two distinct users, each with their own session + mcp access to one project.
+    const sessA = createWebSession(dataDir, {
+      id: '', subject: { userId: 'u-a', kind: 'human', issuer: 'local' },
+      grants: [{ projectId: 'proj-a', permissions: ['mcp:read', 'mcp:write'] }],
+      createdAt: '', expiresAt: FUTURE(),
+    }).id;
+    const sessB = createWebSession(dataDir, {
+      id: '', subject: { userId: 'u-b', kind: 'human', issuer: 'local' },
+      grants: [{ projectId: 'proj-b', permissions: ['mcp:read'] }],
+      createdAt: '', expiresAt: FUTURE(),
+    }).id;
+
+    const tokenA = webadmin.mintProjectToken(cfg, sessA, 'proj-a', true);
+    webadmin.mintProjectToken(cfg, sessB, 'proj-b', false);
+
+    // Each caller sees ONLY their own token, redacted (hashed token only, no plaintext).
+    const myA = webadmin.listMyTokens(cfg, sessA);
+    expect(myA).toHaveLength(1);
+    expect(myA[0].ownerSubject?.userId).toBe('u-a');
+    expect(myA[0].keyHash).toBeTruthy();
+    expect((myA[0] as unknown as { token?: string }).token).toBeUndefined();
+    expect(myA.some((r) => r.ownerSubject?.userId === 'u-b')).toBe(false);
+    expect(webadmin.listMyTokens(cfg, sessB).map((r) => r.ownerSubject?.userId)).toEqual(['u-b']);
+
+    // A non-owner may NOT revoke someone else's token — rejected (not found), no
+    // cross-user revocation, and A's token still authenticates.
+    const recA = findByTokenHash(dataDir, hashToken(tokenA))!;
+    expect(() => webadmin.revokeProjectToken(cfg, sessB, recA.id)).toThrow();
+    expect(authenticate(dataDir, tokenA).authenticated).toBe(true);
+
+    // The owner CAN revoke it → it stops authenticating.
+    webadmin.revokeProjectToken(cfg, sessA, recA.id);
+    expect(authenticate(dataDir, tokenA).authenticated).toBe(false);
+  });
+
+  it('SECURITY: deactivating the owning user revokes their self-minted agent token (owned, so the sweep catches it)', () => {
+    createProjectRecord(dataDir, 'proj-a');
+    // A hosted user who owns an agent token, plus their live session.
+    repoUpsertUser(dataDir, {
+      id: 'u-agent',
+      subject: { userId: 'u-agent', kind: 'human', issuer: 'local' },
+      status: 'active',
+      grants: [{ projectId: 'proj-a', permissions: ['mcp:read'] }],
+      createdAt: new Date().toISOString(),
+    });
+    const agentSession = createWebSession(dataDir, {
+      id: '', subject: { userId: 'u-agent', kind: 'human', issuer: 'local' },
+      grants: [{ projectId: 'proj-a', permissions: ['mcp:read'] }],
+      createdAt: '', expiresAt: FUTURE(),
+    }).id;
+
+    const token = webadmin.mintProjectToken(cfg, agentSession, 'proj-a', false);
+    expect(authenticate(dataDir, token).authenticated).toBe(true);
+
+    // An admin deactivates the OWNER. Because the token is OWNED by that user,
+    // setUserStatus's revokeAllForOwner sweep catches it — the defect this closes.
+    identity.setUserStatus(cfg, adminSession(), 'u-agent', 'suspended');
+    expect(authenticate(dataDir, token).authenticated).toBe(false);
+  });
+});
+
+// ── Web admin routes over HTTP (routeData) ───────────────────────────────────
+
+describe('web admin routes over HTTP (sdd_host)', () => {
+  let dataDir: string;
+  let cfg: HostConfig;
+  let server: http.Server;
+  let port: number;
+  const savedEnv = { ...process.env };
+  const FUTURE = (): string => new Date(Date.now() + 3_600_000).toISOString();
+
+  function raw(opts: { method: string; path: string; headers?: Record<string, string>; body?: string }): Promise<{ status: number; body: string }> {
+    return new Promise((resolve, reject) => {
+      const req = http.request(
+        { host: '127.0.0.1', port, method: opts.method, path: opts.path, headers: opts.headers },
+        (res) => {
+          let data = '';
+          res.on('data', (c) => (data += c));
+          res.on('end', () => resolve({ status: res.statusCode ?? 0, body: data }));
+        },
+      );
+      req.on('error', reject);
+      if (opts.body !== undefined) req.write(opts.body);
+      req.end();
+    });
+  }
+
+  beforeEach(async () => {
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-webadmin-http-'));
+    process.env.WAIRON_ADMIN_TOKEN = MASTER;
+    process.env.WAIRON_DATA_DIR = dataDir;
+    fs.writeFileSync(path.join(dataDir, 'exposure-policy.json'), JSON.stringify({ webUiEnabled: true, requireTls: false }));
+    cfg = { host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: true };
+    server = http.createServer((req, res) => routeData(cfg, req, res));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    port = (server.address() as AddressInfo).port;
+  });
+  afterEach(async () => {
+    server.closeAllConnections?.();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    process.env = { ...savedEnv };
+    try {
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    } catch {
+      /* windows file locks */
+    }
+  });
+
+  function adminCookie(): string {
+    const s = createWebSession(dataDir, {
+      id: '',
+      subject: SUBJECT,
+      grants: [{ projectId: '*', permissions: ['*'] }],
+      createdAt: '',
+      expiresAt: FUTURE(),
+    });
+    return `wairon_session=${s.id}`;
+  }
+
+  it('org-unit create forwards through the web admin orchestrator and is CSRF-gated', async () => {
+    const cookie = adminCookie();
+    const unitBody = JSON.stringify({ name: 'Team', kind: 'team', createdBy: { userId: 'u-1', kind: 'human', issuer: 'local' } });
+
+    // A cookie-authenticated POST WITHOUT the CSRF header → 403 (never dispatched).
+    const noCsrf = await raw({ method: 'POST', path: '/web/admin/org/units', headers: { cookie, 'content-type': 'application/json' }, body: unitBody });
+    expect(noCsrf.status).toBe(403);
+
+    // With the X-Wairon-Web header → 200; the unit is created.
+    const create = await raw({
+      method: 'POST',
+      path: '/web/admin/org/units',
+      headers: { cookie, 'content-type': 'application/json', 'x-wairon-web': '1' },
+      body: unitBody,
+    });
+    expect(create.status).toBe(200);
+    const unitId = JSON.parse(create.body).id as string;
+    expect(unitId).toBeTruthy();
+
+    // GET lists it back through the same route.
+    const list = await raw({ method: 'GET', path: '/web/admin/org/units', headers: { cookie } });
+    expect(list.status).toBe(200);
+    expect(JSON.parse(list.body).units.map((u: { id: string }) => u.id)).toContain(unitId);
+  }, 20_000);
+
+  it('a viewer session is refused org administration over HTTP (403, no data leak)', async () => {
+    const viewer = createWebSession(dataDir, {
+      id: '',
+      subject: { userId: 'viewer', kind: 'human', issuer: 'local' },
+      grants: [{ projectId: 'demo', permissions: ['mcp:read'] }],
+      createdAt: '',
+      expiresAt: FUTURE(),
+    });
+    const cookie = `wairon_session=${viewer.id}`;
+    expect((await raw({ method: 'GET', path: '/web/admin/org/units', headers: { cookie } })).status).toBe(403);
+  }, 20_000);
+
+  it('provider upsert + list forward through /web/admin/providers', async () => {
+    const cookie = adminCookie();
+    const put = await raw({
+      method: 'POST',
+      path: '/web/admin/providers',
+      headers: { cookie, 'content-type': 'application/json', 'x-wairon-web': '1' },
+      body: JSON.stringify({ id: PROVIDER_ID, providerType: 'oidc', enabled: true, updatedAt: '' }),
+    });
+    expect(put.status).toBe(200);
+    expect(JSON.parse(put.body).id).toBe(PROVIDER_ID);
+
+    const list = await raw({ method: 'GET', path: '/web/admin/providers', headers: { cookie } });
+    expect(list.status).toBe(200);
+    expect(JSON.parse(list.body).providers.map((p: { id: string }) => p.id)).toContain(PROVIDER_ID);
+  }, 20_000);
+
+  it('POST /web/tokens mints a single-project agent token (self-service), CSRF-gated; /web/tokens/revoke revokes it', async () => {
+    const cookie = adminCookie();
+    createProjectRecord(dataDir, 'proj-a');
+    const body = JSON.stringify({ projectId: 'proj-a', write: true });
+
+    // A cookie-authenticated POST WITHOUT the CSRF header → 403 (never dispatched).
+    const noCsrf = await raw({ method: 'POST', path: '/web/tokens', headers: { cookie, 'content-type': 'application/json' }, body });
+    expect(noCsrf.status).toBe(403);
+
+    // With the X-Wairon-Web header → 201 with the plaintext token (shown once).
+    const mint = await raw({
+      method: 'POST',
+      path: '/web/tokens',
+      headers: { cookie, 'content-type': 'application/json', 'x-wairon-web': '1' },
+      body,
+    });
+    expect(mint.status).toBe(201);
+    const token = JSON.parse(mint.body).token as string;
+    expect(token).toMatch(/^wk_[0-9a-f]+$/);
+    // The minted token is scoped to exactly the one project, never instance-wide.
+    const p = authenticate(dataDir, token);
+    expect(p.grants).toEqual([{ projectId: 'proj-a', permissions: ['mcp:read', 'mcp:write'] }]);
+
+    // Revoke it by id through the self-service route → 200, and it stops authenticating.
+    const rec = findByTokenHash(dataDir, hashToken(token))!;
+    const revoke = await raw({
+      method: 'POST',
+      path: '/web/tokens/revoke',
+      headers: { cookie, 'content-type': 'application/json', 'x-wairon-web': '1' },
+      body: JSON.stringify({ id: rec.id }),
+    });
+    expect(revoke.status).toBe(200);
+    expect(authenticate(dataDir, token).authenticated).toBe(false);
+  }, 20_000);
+
+  it('GET /web/tokens lists the caller-owned tokens (no CSRF header needed) and redacts to the hashed token', async () => {
+    const cookie = adminCookie();
+    createProjectRecord(dataDir, 'proj-a');
+
+    // Mint one token for this session (CSRF-gated POST).
+    const mint = await raw({
+      method: 'POST',
+      path: '/web/tokens',
+      headers: { cookie, 'content-type': 'application/json', 'x-wairon-web': '1' },
+      body: JSON.stringify({ projectId: 'proj-a', write: false }),
+    });
+    expect(mint.status).toBe(201);
+    const token = JSON.parse(mint.body).token as string;
+    const rec = findByTokenHash(dataDir, hashToken(token))!;
+
+    // GET is a read — it needs NO X-Wairon-Web header (only cookie POSTs are gated).
+    const list = await raw({ method: 'GET', path: '/web/tokens', headers: { cookie } });
+    expect(list.status).toBe(200);
+    const tokens = JSON.parse(list.body).tokens as ApiKeyRecord[];
+    const mine = tokens.find((t) => t.id === rec.id)!;
+    expect(mine).toBeTruthy();
+    // Owned by the caller, and redacted: hashed token present, plaintext absent.
+    expect(mine.ownerSubject?.userId).toBe(SUBJECT.userId);
+    expect(mine.keyHash).toBeTruthy();
+    expect(list.body).not.toContain(token);
+  }, 20_000);
+});
+
+// ── Web project orchestrator (session-scoped project lifecycle) ──────────────
+//
+// listProjects is OWNED here (the admin list is master-only): it resolves the
+// session to a Principal, resolves the caller's mcp:read scope over the org tree,
+// and returns only the in-scope project records (a super-admin sees all).
+// create/lock/promote/destroy are thin forwards to the admin orchestrator with
+// the session AS the credential, so admin.ts's grant-scope authorization applies
+// unchanged (a caller lacking the grant is refused with AdminAuthError → 403).
+
+describe('web project orchestrator (sdd_host)', () => {
+  let dataDir: string;
+  let cfg: HostConfig;
+  const savedEnv = { ...process.env };
+  const FUTURE = (): string => new Date(Date.now() + 3_600_000).toISOString();
+
+  beforeEach(() => {
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-webproject-'));
+    process.env.WAIRON_ADMIN_TOKEN = MASTER;
+    process.env.WAIRON_DATA_DIR = dataDir;
+    cfg = { host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: true };
+  });
+  afterEach(() => {
+    process.env = { ...savedEnv };
+    try {
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    } catch {
+      /* windows file locks */
+    }
+  });
+
+  function session(grants: ProjectGrant[], userId = 'u-proj'): string {
+    return createWebSession(dataDir, {
+      id: '',
+      subject: { userId, kind: 'human', issuer: 'local' },
+      grants,
+      createdAt: '',
+      expiresAt: FUTURE(),
+    }).id;
+  }
+  const superAdmin = (): string => session([{ projectId: '*', permissions: ['*'] }], 'admin');
+  const viewer = (): string => session([{ projectId: 'demo', permissions: ['mcp:read'] }], 'viewer');
+  const orgUnit = (id: string, parentId?: string): OrganizationUnitRecord => {
+    const u: OrganizationUnitRecord = { id, name: id, kind: 'team', status: 'active', createdAt: '', createdBy: SUBJECT };
+    if (parentId) u.parentId = parentId;
+    return u;
+  };
+
+  it('listProjects returns only the caller-scoped projects; a super-admin sees all', () => {
+    createProjectRecord(dataDir, 'proj-a');
+    createProjectRecord(dataDir, 'proj-b');
+
+    // A project-scoped session sees only the project its grant covers (mcp:read).
+    const scoped = session([{ projectId: 'proj-a', permissions: ['mcp:read'] }]);
+    expect(webproject.listProjects(cfg, scoped).map((r) => r.id)).toEqual(['proj-a']);
+
+    // A super-admin sees every hosted project.
+    expect(webproject.listProjects(cfg, superAdmin()).map((r) => r.id).sort()).toEqual(['proj-a', 'proj-b']);
+
+    // An absent/expired session resolves to no grants → an empty list (never throws).
+    expect(webproject.listProjects(cfg, 'ws_not-a-real-session')).toEqual([]);
+  });
+
+  it('listProjects expands a unit-scoped grant across the org subtree (placed projects only)', () => {
+    upsertOrganizationUnit(dataDir, orgUnit('eng'));
+    upsertOrganizationUnit(dataDir, orgUnit('web', 'eng'));
+    createProjectRecord(dataDir, 'web-proj');
+    createProjectRecord(dataDir, 'sales-proj');
+    placeProject(dataDir, { id: '', projectId: 'web-proj', unitId: 'web', role: 'owner', createdAt: '', createdBy: SUBJECT });
+
+    // A grant scoped to the eng subtree (which contains web) sees only the project
+    // placed there — the sales-proj (unplaced) is not in scope.
+    const unitSession = session([{ projectId: '', orgUnitId: 'eng', permissions: ['mcp:read'] }]);
+    expect(webproject.listProjects(cfg, unitSession).map((r) => r.id)).toEqual(['web-proj']);
+  });
+
+  it('createProject forwards with the session: a grant-holder succeeds, a viewer gets AdminAuthError (403)', () => {
+    // A super-admin session creates a project (provisioned + recorded).
+    const rec = webproject.createProject(cfg, superAdmin(), 'new-proj');
+    expect(rec.id).toBe('new-proj');
+    expect(listProjectRecords(dataDir).some((r) => r.id === 'new-proj')).toBe(true);
+
+    // A viewer (mcp:read only) holds no project:create authority → refused, nothing allocated.
+    expect(() => webproject.createProject(cfg, viewer(), 'denied')).toThrow(AdminAuthError);
+    expect(listProjectRecords(dataDir).some((r) => r.id === 'denied')).toBe(false);
+  }, 20_000);
+
+  it('destroyProject forwards with the session: a grant-holder succeeds, a viewer is denied (403)', () => {
+    webproject.createProject(cfg, superAdmin(), 'gone-soon');
+    webproject.destroyProject(cfg, superAdmin(), 'gone-soon');
+    expect(listProjectRecords(dataDir).some((r) => r.id === 'gone-soon')).toBe(false);
+
+    createProjectRecord(dataDir, 'demo');
+    expect(() => webproject.destroyProject(cfg, viewer(), 'demo')).toThrow(AdminAuthError);
+    expect(listProjectRecords(dataDir).some((r) => r.id === 'demo')).toBe(true);
+  }, 20_000);
+
+  it('lockProject forwards with the session: a viewer is denied (403); a grant-holder passes the scope gate', () => {
+    createProjectRecord(dataDir, 'demo');
+    expect(() => webproject.lockProject(cfg, viewer(), 'demo')).toThrow(AdminAuthError);
+
+    // A super-admin passes the authorization gate; the lock itself may fail
+    // validate-as-complete, but that must NOT be an authorization denial.
+    webproject.createProject(cfg, superAdmin(), 'lockable');
+    let err: unknown;
+    try {
+      webproject.lockProject(cfg, superAdmin(), 'lockable');
+    } catch (e) {
+      err = e;
+    }
+    expect(err).not.toBeInstanceOf(AdminAuthError);
+  }, 20_000);
+
+  it('promoteProject forwards with the session: a grant-holder reaches the workflow (not-locked), a viewer is denied (403)', () => {
+    webproject.createProject(cfg, superAdmin(), 'promo');
+    expect(webproject.promoteProject(cfg, superAdmin(), 'promo').status).toBe('not-locked');
+
+    createProjectRecord(dataDir, 'demo');
+    expect(() => webproject.promoteProject(cfg, viewer(), 'demo')).toThrow(AdminAuthError);
+  }, 20_000);
+});
+
+// ── Web project routes over HTTP (routeData) ─────────────────────────────────
+
+describe('web project routes over HTTP (sdd_host)', () => {
+  let dataDir: string;
+  let cfg: HostConfig;
+  let server: http.Server;
+  let port: number;
+  const savedEnv = { ...process.env };
+  const FUTURE = (): string => new Date(Date.now() + 3_600_000).toISOString();
+
+  function raw(opts: { method: string; path: string; headers?: Record<string, string>; body?: string }): Promise<{ status: number; body: string }> {
+    return new Promise((resolve, reject) => {
+      const req = http.request(
+        { host: '127.0.0.1', port, method: opts.method, path: opts.path, headers: opts.headers },
+        (res) => {
+          let data = '';
+          res.on('data', (c) => (data += c));
+          res.on('end', () => resolve({ status: res.statusCode ?? 0, body: data }));
+        },
+      );
+      req.on('error', reject);
+      if (opts.body !== undefined) req.write(opts.body);
+      req.end();
+    });
+  }
+
+  function enableWebUi(): void {
+    fs.writeFileSync(path.join(dataDir, 'exposure-policy.json'), JSON.stringify({ webUiEnabled: true, requireTls: false }));
+  }
+  function adminCookie(): string {
+    const s = createWebSession(dataDir, { id: '', subject: SUBJECT, grants: [{ projectId: '*', permissions: ['*'] }], createdAt: '', expiresAt: FUTURE() });
+    return `wairon_session=${s.id}`;
+  }
+  function viewerCookie(): string {
+    const s = createWebSession(dataDir, {
+      id: '', subject: { userId: 'viewer', kind: 'human', issuer: 'local' },
+      grants: [{ projectId: 'demo', permissions: ['mcp:read'] }], createdAt: '', expiresAt: FUTURE(),
+    });
+    return `wairon_session=${s.id}`;
+  }
+
+  beforeEach(async () => {
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-webproject-http-'));
+    process.env.WAIRON_ADMIN_TOKEN = MASTER;
+    process.env.WAIRON_DATA_DIR = dataDir;
+    // webUiEnabled defaults OFF here so the 404 gate is exercised; enableWebUi() turns it on.
+    cfg = { host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: true };
+    server = http.createServer((req, res) => routeData(cfg, req, res));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    port = (server.address() as AddressInfo).port;
+  });
+  afterEach(async () => {
+    server.closeAllConnections?.();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    process.env = { ...savedEnv };
+    try {
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    } catch {
+      /* windows file locks */
+    }
+  });
+
+  it('webUiEnabled=false (default): every /web/projects route answers 404', async () => {
+    const cookie = adminCookie(); // a valid session exists, but the surface is gated off
+    expect((await raw({ method: 'GET', path: '/web/projects', headers: { cookie } })).status).toBe(404);
+    for (const p of ['/web/projects', '/web/projects/lock', '/web/projects/promote', '/web/projects/destroy']) {
+      const r = await raw({ method: 'POST', path: p, headers: { cookie, 'content-type': 'application/json', 'x-wairon-web': '1' }, body: '{}' });
+      expect(r.status).toBe(404);
+    }
+  });
+
+  it('webUiEnabled=true: GET /web/projects returns the scoped list; create is CSRF-gated then created', async () => {
+    enableWebUi();
+    createProjectRecord(dataDir, 'proj-a');
+    createProjectRecord(dataDir, 'proj-b');
+    const cookie = adminCookie();
+
+    // GET lists all for a super-admin (a read — no CSRF header needed).
+    const list = await raw({ method: 'GET', path: '/web/projects', headers: { cookie } });
+    expect(list.status).toBe(200);
+    expect((JSON.parse(list.body).projects as { id: string }[]).map((p) => p.id).sort()).toEqual(['proj-a', 'proj-b']);
+
+    // A cookie-authenticated POST WITHOUT the CSRF header → 403 (never dispatched).
+    const noCsrf = await raw({ method: 'POST', path: '/web/projects', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify({ id: 'made-here' }) });
+    expect(noCsrf.status).toBe(403);
+    expect(listProjectRecords(dataDir).some((r) => r.id === 'made-here')).toBe(false);
+
+    // With the X-Wairon-Web header → 201 and the project is created.
+    const created = await raw({
+      method: 'POST',
+      path: '/web/projects',
+      headers: { cookie, 'content-type': 'application/json', 'x-wairon-web': '1' },
+      body: JSON.stringify({ id: 'made-here' }),
+    });
+    expect(created.status).toBe(201);
+    expect(JSON.parse(created.body).id).toBe('made-here');
+    expect(listProjectRecords(dataDir).some((r) => r.id === 'made-here')).toBe(true);
+  }, 20_000);
+
+  it('a viewer is refused create/lock/promote/destroy over HTTP (403, grant scope) but can still read the scoped list', async () => {
+    enableWebUi();
+    createProjectRecord(dataDir, 'demo');
+    const cookie = viewerCookie();
+    const post = (p: string, body: string): Promise<{ status: number; body: string }> =>
+      raw({ method: 'POST', path: p, headers: { cookie, 'content-type': 'application/json', 'x-wairon-web': '1' }, body });
+
+    expect((await post('/web/projects', JSON.stringify({ id: 'x' }))).status).toBe(403);
+    expect((await post('/web/projects/lock', JSON.stringify({ projectId: 'demo' }))).status).toBe(403);
+    expect((await post('/web/projects/promote', JSON.stringify({ projectId: 'demo' }))).status).toBe(403);
+    expect((await post('/web/projects/destroy', JSON.stringify({ id: 'demo' }))).status).toBe(403);
+    // Nothing was created or destroyed by the refused mutations.
+    expect(listProjectRecords(dataDir).some((r) => r.id === 'demo')).toBe(true);
+    expect(listProjectRecords(dataDir).some((r) => r.id === 'x')).toBe(false);
+
+    // The viewer CAN read the scoped list (mcp:read on demo → demo is visible).
+    const list = await raw({ method: 'GET', path: '/web/projects', headers: { cookie } });
+    expect(list.status).toBe(200);
+    expect((JSON.parse(list.body).projects as { id: string }[]).map((p) => p.id)).toEqual(['demo']);
+  }, 20_000);
 });

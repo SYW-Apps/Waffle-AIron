@@ -1,47 +1,82 @@
 id: identity_provider_adapter_impl
 name: Identity Provider Adapter Implementation
 description: >-
-  Provider-neutral OIDC/SSO adapter: assembles authorization URLs, exchanges authorization codes for
-  provider tokens over HTTPS, and verifies provider identity metadata into a Wairon
-  PrincipalSubject. Performs external provider I/O only; never persists or logs raw provider tokens
-  or client secrets.
+  Provider-neutral OIDC/SSO adapter: resolves each provider's endpoints (explicit overrides -> OIDC
+  discovery -> providerType template), assembles authorization URLs against the front-channel
+  authorization endpoint, exchanges authorization codes against the back-channel token endpoint
+  (which may be VPC-internal), and verifies the returned id_token against the provider JWKS before
+  mapping claims to a PrincipalSubject. Caches discovery documents and signing keys in-adapter
+  (transient, refetchable). Performs external provider I/O only; never persists or logs raw provider
+  tokens or client secrets.
 contract: iidentity_provider_adapter
 sourcePath: src/server/idp.ts
 methods:
+  - name: resolveEndpoints
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Start from the config's explicit endpoint overrides, taking authorizationEndpoint,
+          tokenEndpoint, jwksUri, and userinfoEndpoint field-by-field when present (the
+          split-horizon path: a public authorize endpoint may pair with a VPC-internal token/jwks
+          endpoint)
+        type: local
+      - stepNumber: 2
+        description: >-
+          For any endpoint still unresolved, when config.issuerUrl is set, fetch and cache the OIDC
+          discovery document at <issuerUrl>/.well-known/openid-configuration and fill the missing
+          endpoints from its authorization_endpoint / token_endpoint / jwks_uri / userinfo_endpoint
+        type: local
+      - stepNumber: 3
+        description: >-
+          For any endpoint still unresolved, apply the providerType template as a last resort —
+          keycloak: <issuer>/protocol/openid-connect/{auth,token,certs}; authentik: the
+          <base>/application/o/{authorize,token}/ paths plus jwks; generic oidc:
+          <issuer>/{authorize,token}
+        type: local
+      - stepNumber: 4
+        description: If no usable authorization or token endpoint could be resolved, reject
+        type: branch
+        condition: no usable authorization or token endpoint resolved
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Reject a provider whose endpoints cannot be resolved
+        type: throw
+        error: provider endpoints unresolved
+      - stepNumber: 6
+        description: >-
+          Return the resolved ProviderEndpoints (issuer plus the front-channel and back-channel
+          endpoints)
+        type: return
+        outcome: resolved ProviderEndpoints
   - name: buildAuthorizationUrl
     narrative:
       - stepNumber: 1
         description: >-
-          Resolve the provider's authorization endpoint from the config — OIDC discovery over
-          config.issuerUrl when applicable, otherwise the providerType default
+          Assemble the authorization URL against endpoints.authorizationEndpoint (the browser-facing
+          front-channel) with client_id (config.clientId), response_type=code, the supplied
+          redirectUri, the opaque state, and the requested scopes (openid email profile)
         type: local
       - stepNumber: 2
-        description: >-
-          Assemble the authorization URL with client_id (config.clientId), response_type=code, the
-          supplied redirectUri, the opaque state, and the requested scopes
-        type: local
-      - stepNumber: 3
         description: Return the provider authorization URL
         type: return
         outcome: provider authorization URL
   - name: exchangeCode
     narrative:
       - stepNumber: 1
-        description: Resolve the provider's token endpoint from the config's OIDC discovery metadata
+        description: >-
+          POST the authorization code to endpoints.tokenEndpoint (the back-channel, possibly
+          VPC-internal) — client_id (config.clientId), the client secret resolved from
+          config.clientSecretRef via the host secret mechanism, the supplied redirectUri, and
+          grant_type=authorization_code — never logging the raw code, client secret, or returned
+          provider tokens
         type: local
       - stepNumber: 2
         description: >-
-          POST the authorization code to the token endpoint over HTTPS — client_id
-          (config.clientId), the client secret resolved from config.clientSecretRef via the host
-          secret mechanism, the supplied redirectUri, and grant_type=authorization_code — never
-          logging the raw code, client secret, or returned provider tokens
+          Summarize the provider response into redacted serialized metadata (issuer, subject,
+          verified claims, and the id_token needed for downstream signature verification) that
+          carries no raw access/refresh token or client secret
         type: local
       - stepNumber: 3
-        description: >-
-          Summarize the provider response into redacted serialized metadata (issuer, subject, and
-          verified claims) that carries no raw provider tokens or client secret
-        type: local
-      - stepNumber: 4
         description: Return the redacted provider response summary
         type: return
         outcome: redacted provider response summary
@@ -49,30 +84,49 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Verify the provider identity metadata — validate the ID token signature against the
-          provider JWKS and check issuer, audience, and expiry (or verify through the userinfo
-          endpoint)
+          Fetch the provider signing keys from endpoints.jwksUri (cached, refetched on unknown key
+          id / rotation), or fall back to endpoints.userinfoEndpoint when no JWKS is available
         type: local
       - stepNumber: 2
-        description: If the provider identity metadata fails verification, reject
-        type: branch
-        condition: the provider identity metadata fails verification
-        onFalseStep: 4
+        description: >-
+          Verify the id_token carried in the provider metadata: its signature against the JWKS key,
+          and its issuer (endpoints.issuer), audience (config.clientId), and expiry claims
+        type: local
       - stepNumber: 3
+        description: If verification fails, reject
+        type: branch
+        condition: id_token verification fails
+        onFalseStep: 5
+      - stepNumber: 4
         description: Reject unverifiable provider identity metadata
         type: throw
         error: invalid provider identity metadata
-      - stepNumber: 4
-        description: >-
-          Map the verified claims to a Wairon PrincipalSubject (issuer = the provider issuer,
-          externalSubject = the provider subject, kind human, displayName and email from verified
-          claims); never copy raw provider tokens or secrets
-        type: local
       - stepNumber: 5
+        description: >-
+          Map the verified claims to a Wairon PrincipalSubject: issuer = the provider config id
+          (config.id) — the stable handle SSO user records are keyed by
+          (findByExternalSubject(issuer, sub)); using the issuer URL would orphan existing users, so
+          endpoints.issuer serves only to verify the id_token iss claim in the prior step.
+          externalSubject = the sub claim, kind human, displayName and email from verified claims;
+          never copy raw provider tokens or secrets
+        type: local
+      - stepNumber: 6
         description: Return the resolved PrincipalSubject
         type: return
         outcome: resolved PrincipalSubject
+  - name: resolveGroups
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse the redacted provider summary JSON and read its decoded id_token claims' groups
+          list, filtering to strings; a missing claim or malformed summary yields an empty list.
+          Meaningful only after resolveSubject verified the SAME summary (same signed assertion).
+        type: local
+      - stepNumber: 2
+        description: Return the groups list (possibly empty)
+        type: return
+        outcome: verified groups list
 detail: calls-only
 status: complete
 createdAt: '2026-07-10T08:19:10.907Z'
-updatedAt: '2026-07-10T08:19:17.698Z'
+updatedAt: '2026-07-14T11:04:16.596Z'

@@ -28,11 +28,19 @@ methods:
       Complete a browser SSO sign-in: verify the signed SSO state via the single signing authority
       (a tampered/expired state is rejected), resolve the bound identity-provider configuration,
       exchange the authorization code and resolve the external subject through the provider adapter,
-      look up the hosted user by issuer + external subject, provision a first-login active user with
-      empty grants when absent, create a browser session bound to the resolved subject and the
-      user's current grants through the web session repository, append a best-effort web.signin
-      (security) audit event, and return the new session id (which the portal sets as the session
-      cookie). Unauthenticated by nature.
+      and read the verified id_token's groups claim through the adapter (resolveGroups — meaningful
+      only after resolveSubject verified the same summary). ADMIN GROUPS: when the groups intersect
+      the provider's adminGroupClaims, the hosted user is provisioned/refreshed with the enumerated
+      instance-wide SSO-admin bundle {projectId '*', permissions ['user:admin', 'project:create',
+      'audit:read']} — deliberately NOT *:* (which is env-reserved to the built-in admin account and
+      can never appear on a user record); a later login after dropping out of the group removes the
+      bundle again. Look up the hosted user by issuer + external subject, provision a first-login
+      active user when absent (the bundle when in the admin group, otherwise empty grants), reject
+      re-login for an existing deactivated user, then create a browser session bound to the resolved
+      subject and the user's CURRENT grants — with any reserved instance-wide super-admin (*:*)
+      grant filtered out, so no SSO path can ever yield a *:* session. Append a best-effort
+      web.signin (security) audit event and return the new session id (which the portal sets as the
+      session cookie). Unauthenticated by nature.
     signature: 'completeSignIn(state: string, code: string): string'
     returns: string
     params:
@@ -110,6 +118,40 @@ methods:
         type: string
       - name: projectId
         type: string
+  - name: signInWithPassword
+    description: >-
+      Sign the built-in super-admin in with the env-configured username + password. Consult a
+      MINIMAL in-memory failed-attempt throttle first (module-level, transient — never persisted: ~5
+      consecutive failures lock the username out for a short window, and attempts during the lockout
+      are rejected outright — anti-bruteforce only). Verify BOTH values via the auth specialist's
+      constant-time verifyBuiltinAdmin (unset env = password login disabled, always fails). On
+      failure, record the attempt in the throttle and reject as unauthenticated. On success, clear
+      the username's throttle entry and create a browser session bound to the stable built-in
+      super-admin subject carrying the single instance-wide super-admin grant ({projectId '*',
+      permissions ['*']}) — the ONLY *:* in the system: this env-anchored login is the sole path to
+      a *:* session, because the identity orchestrator hard-reserves that grant away from user
+      records and minted tokens. Append a best-effort web.signin.password (security) audit event and
+      return the new session id (the portal sets it as the session cookie).
+    signature: 'signInWithPassword(user: string, password: string): string'
+    returns: string
+    params:
+      - name: user
+        type: string
+      - name: password
+        type: string
+  - name: getLoginOptions
+    description: >-
+      Return the pre-auth login options the login screen renders from: passwordLogin = whether the
+      built-in admin password login is configured (BOTH env-anchored builtinAdminUser and
+      builtinAdminPassword set on the host config — either unset means password login is disabled),
+      and providers = one { id, displayName } entry per ENABLED identity provider read through the
+      policy repository, displayName defaulting to the provider id when the admin set none.
+      Unauthenticated by nature — a pre-auth read for the login page. The projection carries ONLY
+      provider ids and display labels (standard, safe pre-auth SSO discovery); never secrets,
+      clientIds, endpoints, or any other config. Reads only; not audited.
+    signature: 'getLoginOptions(): WebLoginOptions'
+    returns: WebLoginOptions
+    params: []
 status: complete
 createdAt: '2026-07-11T11:33:17.127Z'
-updatedAt: '2026-07-11T16:37:13.443Z'
+updatedAt: '2026-07-14T12:53:32.611Z'

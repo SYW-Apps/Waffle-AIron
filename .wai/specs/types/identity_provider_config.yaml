@@ -50,6 +50,41 @@ fields:
       non-empty, a redirectUri not on the list is refused (server-side redirect_uri pinning). When
       unset/empty, any redirectUri is accepted (backward compatible).
     optional: true
+  - name: authorizationEndpoint
+    type: string
+    description: >-
+      Explicit browser-facing authorization endpoint override. When set, wins over OIDC discovery
+      and providerType templates. This is the PUBLIC front-channel URL the user's browser is
+      redirected to — set it to a browser-reachable address (public, or VPN-internal if all users
+      are inside the network). The split-horizon lever paired with an internal tokenEndpoint.
+    optional: true
+  - name: tokenEndpoint
+    type: string
+    description: >-
+      Explicit server-facing token endpoint override. When set, wins over discovery/templates. This
+      is the BACK-CHANNEL URL the host server calls directly for code->token exchange, so it may be
+      a VPC-internal address (e.g. https://authentik.internal) unreachable from the public internet.
+    optional: true
+  - name: jwksUri
+    type: string
+    description: >-
+      Explicit JWKS URI override for id_token signature verification. Server-facing back-channel
+      (may be VPC-internal, like tokenEndpoint). When unset, resolved from discovery or the
+      providerType template.
+    optional: true
+  - name: userinfoEndpoint
+    type: string
+    description: >-
+      Explicit userinfo endpoint override. Server-facing back-channel used as a fallback
+      identity-verification path when JWKS verification is unavailable.
+    optional: true
+  - name: displayName
+    type: string
+    description: >-
+      Optional admin-set human label for this provider, shown on the login screen's "Sign in with
+      <displayName>" button. Defaults to the provider id when unset. Presentation only — never used
+      for provider resolution.
+    optional: true
 methods: []
 createdAt: '2026-07-08T22:00:13.587Z'
-updatedAt: '2026-07-11T23:34:40.999Z'
+updatedAt: '2026-07-14T12:53:32.520Z'

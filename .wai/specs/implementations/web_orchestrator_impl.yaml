@@ -42,32 +42,39 @@ methods:
         targetComponent: auth_specialist
         targetMethod: signSsoState
       - stepNumber: 7
+        description: >-
+          Resolve the provider's concrete OIDC endpoints through the identity provider adapter
+          (explicit overrides -> OIDC discovery -> providerType template)
+        type: call
+        targetComponent: identity_provider_adapter
+        targetMethod: resolveEndpoints
+      - stepNumber: 8
         description: Build the provider authorization URL from the config, the signed state, and redirectUri
         type: call
         targetComponent: identity_provider_adapter
         targetMethod: buildAuthorizationUrl
-      - stepNumber: 8
+      - stepNumber: 9
         description: Append a redacted audit event without letting a failure fail the sign-in start
         type: try
-        endStep: 10
+        endStep: 11
         catches:
           - error: audit append failure
-            step: 11
-      - stepNumber: 9
+            step: 12
+      - stepNumber: 10
         description: >-
           Append the redacted web.signin.start audit event (info level) under the active retention
           policy
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 10
+      - stepNumber: 11
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 12
-      - stepNumber: 11
+        toStep: 13
+      - stepNumber: 12
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 12
+      - stepNumber: 13
         description: Return the provider authorization URL
         type: return
         outcome: authorization URL
@@ -127,10 +134,12 @@ methods:
       - stepNumber: 3
         description: >-
           Derive the capability flags from the principal's grants — isAdmin when a grant is
-          instance-wide ('*'), canWriteProjects when any grant carries a write permission (mcp:write
-          or project:create), visibleProjectIds from the specific projectIds named in the grants,
-          visibleUnitIds from the orgUnitIds named in the grants — set local to whether the server
-          is the local developer server (cfg.devMode), which signals the client to hide the
+          instance-wide ('*', no orgUnitId), canWriteProjects when any grant carries a write
+          permission (mcp:write or project:create), visibleProjectIds from the UNION of the
+          projectIds named in the grants and the caller's resolved read-scoped project records (so a
+          '*' or unit-scoped grant still surfaces its projects and a super-admin's selector is never
+          empty), visibleUnitIds from the orgUnitIds named in the grants — set local to whether the
+          server is the local developer server (cfg.devMode), which signals the client to hide the
           tenancy/login chrome — and assemble the WebContext (subject, grants, the derived flags,
           and local)
         type: local
@@ -176,85 +185,129 @@ methods:
         type: throw
         error: unknown or disabled identity provider
       - stepNumber: 7
+        description: >-
+          Resolve the provider's concrete OIDC endpoints through the identity provider adapter
+          (front-channel authorize plus back-channel token/jwks, honoring any split-horizon
+          overrides)
+        type: call
+        targetComponent: identity_provider_adapter
+        targetMethod: resolveEndpoints
+      - stepNumber: 8
         description: Exchange the authorization code with the provider for a redacted token summary.
         type: call
         targetComponent: identity_provider_adapter
         targetMethod: exchangeCode
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Verify the provider metadata and resolve it to a Wairon PrincipalSubject (no raw provider
           tokens).
         type: call
         targetComponent: identity_provider_adapter
         targetMethod: resolveSubject
-      - stepNumber: 9
+      - stepNumber: 10
+        description: >-
+          Read the verified id_token's groups claim from the redacted provider summary (meaningful
+          only now — after resolveSubject verified the same summary)
+        type: call
+        targetComponent: identity_provider_adapter
+        targetMethod: resolveGroups
+      - stepNumber: 11
+        description: >-
+          Decide the SSO-admin membership: in the admin group exactly when the verified groups
+          intersect the provider's configured adminGroupClaims (an unset or empty adminGroupClaims
+          never matches)
+        type: local
+      - stepNumber: 12
         description: Look up the hosted user by the resolved subject's issuer and external subject id.
         type: call
         targetComponent: user_repository
         targetMethod: findByExternalSubject
-      - stepNumber: 10
+      - stepNumber: 13
         description: >-
           If no hosted user matched, provision a first-login record; otherwise use the existing
           user.
         type: branch
         condition: no hosted user matched
-        onFalseStep: 13
-      - stepNumber: 11
+        onFalseStep: 16
+      - stepNumber: 14
         description: >-
-          Build a new active first-login HostedUserRecord for the subject (empty grants; an admin
-          assigns grants afterwards).
+          Build a new active first-login HostedUserRecord for the subject — grants = the enumerated
+          instance-wide SSO-admin bundle ({projectId '*', permissions ['user:admin',
+          'project:create', 'audit:read']} — deliberately NOT *:*) when in the admin group,
+          otherwise empty (an admin assigns grants afterwards)
         type: local
-      - stepNumber: 12
+      - stepNumber: 15
         description: Persist the newly provisioned first-login user record through the user repository.
         type: call
         targetComponent: user_repository
         targetMethod: upsert
-      - stepNumber: 13
+      - stepNumber: 16
         description: >-
           If the resolved hosted user's status is not active, reject the sign-in (a deactivated user
           may not sign in).
         type: branch
         condition: the resolved hosted user is not active
-        onFalseStep: 15
-      - stepNumber: 14
+        onFalseStep: 18
+      - stepNumber: 17
         description: Reject the sign-in of a deactivated user.
         type: throw
         error: deactivated user may not sign in
-      - stepNumber: 15
+      - stepNumber: 18
         description: >-
-          Build the new WebSession (session id with the reserved prefix, subject, grants = the
-          user's current grants, providerId, createdAt, expiresAt = now + the session TTL).
-          MULTI-DEVICE: prior sessions are left intact, so one principal may hold concurrent browser
-          sessions across devices/tabs; each is independently revocable via signOut, and
-          signOutEverywhere revokes them all.
+          If the user's stored grants disagree with the SSO-admin membership (in the admin group but
+          missing the enumerated bundle, or out of the group but still carrying it), refresh them;
+          otherwise skip the refresh
+        type: branch
+        condition: >-
+          the user's stored grants disagree with the SSO-admin membership decided from the verified
+          groups claim
+        onTrueStep: 19
+        onFalseStep: 20
+      - stepNumber: 19
+        description: >-
+          Persist the refreshed grants through the user repository: append the enumerated SSO-admin
+          bundle on entry into the admin group, drop it on exit (server-driven; the bundle is
+          enumerated — never *:* — so the hard reservation is preserved)
+        type: call
+        targetComponent: user_repository
+        targetMethod: replaceGrants
+      - stepNumber: 20
+        description: >-
+          Build the new WebSession (session id with the reserved prefix, subject, providerId,
+          createdAt, expiresAt = now + the session TTL); grants = the user's CURRENT grants with any
+          reserved instance-wide super-admin (*:*) grant filtered out — *:* is reserved to the
+          built-in admin account, so no SSO login can ever mint a session carrying it. MULTI-DEVICE:
+          prior sessions are left intact, so one principal may hold concurrent browser sessions
+          across devices/tabs; each is independently revocable via signOut, and signOutEverywhere
+          revokes them all.
         type: local
-      - stepNumber: 16
+      - stepNumber: 21
         description: Persist the new browser session through the web session repository.
         type: call
         targetComponent: web_session_repository
         targetMethod: create
-      - stepNumber: 17
+      - stepNumber: 22
         description: Append a redacted audit event without letting a failure fail the sign-in.
         type: try
-        endStep: 19
+        endStep: 24
         catches:
           - error: audit append failure
-            step: 20
-      - stepNumber: 18
+            step: 25
+      - stepNumber: 23
         description: >-
           Append a redacted web.signin audit event (security level) under the active retention
           policy.
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 19
+      - stepNumber: 24
         description: On a successful append, continue to the return and skip the audit-failure handler.
         type: jump
-        toStep: 21
-      - stepNumber: 20
+        toStep: 26
+      - stepNumber: 25
         description: Record the audit append failure as a server diagnostic and continue.
         type: local
-      - stepNumber: 21
+      - stepNumber: 26
         description: Return the new session id (the portal sets it as the browser session cookie).
         type: return
         outcome: new session id
@@ -373,6 +426,106 @@ methods:
         targetComponent: web_graph_orchestrator
         targetMethod: getProjectCanvas
     detail: calls-only
+  - name: signInWithPassword
+    narrative:
+      - stepNumber: 1
+        description: >-
+          If the transient in-memory throttle holds an active lockout for this username (~5
+          consecutive failures start a short lockout), reject outright
+        type: branch
+        condition: the in-memory throttle holds an active lockout for this username
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Reject the locked-out attempt without consulting the credentials
+        type: throw
+        error: Unauthenticated — too many failed attempts (short lockout)
+      - stepNumber: 3
+        description: >-
+          Verify BOTH the username and the password constant-time via the auth specialist (unset env
+          = password login disabled → always null)
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: verifyBuiltinAdmin
+      - stepNumber: 4
+        description: If verification returned no subject (mismatch or disabled), record and reject
+        type: branch
+        condition: verification returned no subject
+        onTrueStep: 5
+        onFalseStep: 7
+      - stepNumber: 5
+        description: >-
+          Record the failed attempt in the transient module-level throttle map (~5 consecutive
+          failures start a short lockout; never persisted)
+        type: local
+      - stepNumber: 6
+        description: Reject the sign-in
+        type: throw
+        error: Unauthenticated — invalid credentials
+      - stepNumber: 7
+        description: >-
+          Clear the username's throttle entry and build the WebSession bound to the stable built-in
+          super-admin subject with the single instance-wide super-admin grant ({projectId '*',
+          permissions ['*']}) — the ONLY *:* in the system (hard-reserved away from user records and
+          minted tokens by the identity orchestrator); expiresAt = now + the session TTL
+        type: local
+      - stepNumber: 8
+        description: Persist the new super-admin browser session through the web session repository
+        type: call
+        targetComponent: web_session_repository
+        targetMethod: create
+      - stepNumber: 9
+        description: Append a redacted audit event without letting a failure fail the sign-in
+        type: try
+        endStep: 11
+        catches:
+          - error: audit append failure
+            step: 12
+      - stepNumber: 10
+        description: >-
+          Append the redacted web.signin.password audit event (security level) under the active
+          retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 11
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 13
+      - stepNumber: 12
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 13
+        description: Return the new session id (the portal sets it as the browser session cookie)
+        type: return
+        outcome: new session id
+  - name: getLoginOptions
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Derive passwordLogin: true exactly when BOTH the env-anchored built-in admin username and
+          password are configured on the resolved host config (either unset = password login
+          disabled → false)
+        type: local
+      - stepNumber: 2
+        description: >-
+          Read every configured identity provider through the policy repository (unauthenticated by
+          nature — a pre-auth read; no caller credential is required or accepted)
+        type: call
+        targetComponent: policy_repository
+        targetMethod: listIdentityProviders
+      - stepNumber: 3
+        description: >-
+          Keep only the ENABLED providers and project each to exactly { id, displayName },
+          displayName defaulting to the provider id when unset — no secret, clientId, endpoint, or
+          any other config field ever crosses into the pre-auth payload
+        type: local
+      - stepNumber: 4
+        description: >-
+          Return the WebLoginOptions (the password-login flag plus the projected enabled-provider
+          list)
+        type: return
+        outcome: login options
 detail: full
 lint:
   allow:
@@ -382,4 +535,4 @@ lint:
         declared edges are design-ahead, not stale.
 status: complete
 createdAt: '2026-07-11T11:36:44.225Z'
-updatedAt: '2026-07-11T20:30:16.623Z'
+updatedAt: '2026-07-14T12:53:32.692Z'

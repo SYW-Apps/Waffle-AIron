@@ -1,20 +1,26 @@
 import * as crypto from 'crypto';
 import type { IncomingMessage, ServerResponse } from 'http';
-import { signSsoState, verifySsoState, authenticateSession } from './auth.js';
-import { buildAuthorizationUrl, exchangeCode, resolveSubject } from './idp.js';
+import { signSsoState, verifySsoState, authenticateSession, verifyBuiltinAdmin } from './auth.js';
+import { resolveEndpoints, buildAuthorizationUrl, exchangeCode, resolveSubject, resolveGroups } from './idp.js';
 import {
   resolveEnabledProvider,
   tryAppendAudit,
   buildSsoAuditEvent,
+  applySsoAdminBundle,
+  isInAdminGroup,
+  isSuperAdminGrant,
+  ssoAdminBundleGrant,
   ANONYMOUS_SSO_ACTOR,
-  listUsers,
   type SsoStatePayload,
 } from './identity.js';
+import * as webadmin from './webadmin.js';
+import * as webproject from './webproject.js';
+import { listIdentityProviderRecords } from './policy.js';
 import { assertAllowedRedirectUri } from './idp.js';
 import { getHealthReport, getUsage } from './operations.js';
 import { listPendingRequests, decideRequest } from './selfservice.js';
-import { UnauthenticatedError, ForbiddenError } from './errors.js';
-import { findUserByExternalSubject, upsertUser } from './users.js';
+import { UnauthenticatedError, ForbiddenError, AdminAuthError } from './errors.js';
+import { findUserByExternalSubject, upsertUser, replaceUserGrants as repoReplaceUserGrants } from './users.js';
 import {
   createWebSession,
   removeWebSession,
@@ -32,11 +38,15 @@ import type {
   ApprovalDecision,
   HostConfig,
   HostedUserRecord,
+  IdentityProviderConfig,
   LandscapeGraphModel,
+  OrganizationUnitRecord,
   PrincipalSubject,
+  ProjectGrant,
   WebContext,
   WebGraphModel,
   WebGraphNode,
+  WebLoginOptions,
   WebSession,
 } from './types.js';
 
@@ -99,6 +109,33 @@ const DEV_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 // ── Web Orchestrator ─────────────────────────────────────────────────────────
 
 /**
+ * Return the pre-auth login options the login screen renders from: passwordLogin
+ * = whether the built-in admin password login is configured (BOTH env-anchored
+ * builtinAdminUser and builtinAdminPassword set on the host config — either
+ * unset means password login is disabled), and providers = one { id, displayName }
+ * entry per ENABLED identity provider read through the policy repository,
+ * displayName defaulting to the provider id when the admin set none.
+ * Unauthenticated by nature — a pre-auth read for the login page. The projection
+ * carries ONLY provider ids and display labels (standard, safe pre-auth SSO
+ * discovery); never secrets, clientIds, endpoints, or any other config. Reads
+ * only; not audited.
+ */
+export function getLoginOptions(cfg: HostConfig): WebLoginOptions {
+  // step 1: password login is configured only when BOTH env values are set.
+  const passwordLogin = !!(cfg.builtinAdminUser && cfg.builtinAdminPassword);
+
+  // steps 2–3: read the providers through the policy repository, keep only the
+  // ENABLED ones, and project each to exactly { id, displayName } — no secret,
+  // clientId, endpoint, or any other config field ever crosses into the
+  // pre-auth payload.
+  const providers = listIdentityProviderRecords(cfg.dataDir)
+    .filter((p) => p.enabled)
+    .map((p) => ({ id: p.id, displayName: p.displayName || p.id }));
+
+  return { passwordLogin, providers }; // step 4
+}
+
+/**
  * Begin a browser SSO sign-in: resolve the enabled provider, generate a nonce,
  * sign an SSO state binding providerId + nonce + redirectUri, build the provider
  * authorization URL, append a best-effort web.signin.start (info) audit event, and
@@ -107,7 +144,11 @@ const DEV_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
  * prove the completing browser is the one that started — defeating login CSRF.
  * Unauthenticated by nature — no caller credential.
  */
-export function startSignIn(cfg: HostConfig, providerId: string, redirectUri: string): { url: string; nonce: string } {
+export async function startSignIn(
+  cfg: HostConfig,
+  providerId: string,
+  redirectUri: string,
+): Promise<{ url: string; nonce: string }> {
   const provider = resolveEnabledProvider(cfg, providerId); // steps 1–4 (throws on unknown/disabled)
 
   // Pin the redirect URI to the provider's server-side allowlist (when configured)
@@ -118,12 +159,15 @@ export function startSignIn(cfg: HostConfig, providerId: string, redirectUri: st
   const nonce = crypto.randomBytes(16).toString('hex'); // step 5
   const payload: SsoStatePayload = { providerId, nonce, redirectUri };
   const state = signSsoState(JSON.stringify(payload)); // step 6
-  const url = buildAuthorizationUrl(provider, state, redirectUri); // step 7
+  // step 7: resolve the provider's concrete endpoints (overrides -> discovery ->
+  // template); step 8: build the authorization URL against the front-channel endpoint.
+  const endpoints = await resolveEndpoints(provider);
+  const url = buildAuthorizationUrl(provider, endpoints, state, redirectUri);
 
-  // steps 8–11: best-effort append (tryAppendAudit wraps the try/jump/catch).
+  // steps 9–12: best-effort append (tryAppendAudit wraps the try/jump/catch).
   tryAppendAudit(cfg, buildSsoAuditEvent(ANONYMOUS_SSO_ACTOR, 'web.signin.start', 'info', { target: providerId }));
 
-  return { url, nonce }; // step 12
+  return { url, nonce }; // step 13
 }
 
 /**
@@ -155,52 +199,152 @@ export async function completeSignIn(cfg: HostConfig, state: string, code: strin
 
   const provider = resolveEnabledProvider(cfg, providerId); // steps 3–6
 
-  // Exchange the code (network I/O) and resolve the external subject, never
-  // leaking raw provider tokens across the boundary.
-  const summary = await exchangeCode(provider, code, redirectUri); // step 7
-  const subject = resolveSubject(provider, summary); // step 8
+  // step 7: resolve the provider endpoints (front-channel authorize + back-channel
+  // token/jwks, honoring split-horizon overrides). step 8: exchange the code
+  // (network I/O). step 9: verify the id_token against the JWKS and resolve the
+  // external subject — never leaking raw provider tokens across the boundary.
+  const endpoints = await resolveEndpoints(provider);
+  const summary = await exchangeCode(provider, endpoints, code, redirectUri);
+  const subject = await resolveSubject(provider, endpoints, summary);
+
+  // steps 10–11: read the groups claim from the SAME summary resolveSubject just
+  // verified, then decide the SSO-admin membership against adminGroupClaims.
+  const groups = resolveGroups(summary);
+  const inAdminGroup = isInAdminGroup(provider, groups);
 
   // Look up the hosted user by issuer + external subject; provision on first login.
-  let user = findUserByExternalSubject(cfg.dataDir, subject.issuer, subject.externalSubject ?? ''); // step 9
+  let user = findUserByExternalSubject(cfg.dataDir, subject.issuer, subject.externalSubject ?? ''); // step 12
   if (!user) {
-    // step 10 → 11
+    // steps 13 → 14
     const provisioned: HostedUserRecord = {
       id: subject.userId,
       subject,
       status: 'active',
-      grants: [], // first-login: empty — an admin assigns grants afterwards
+      // first-login: the enumerated SSO-admin bundle (never *:*) when the verified
+      // groups match adminGroupClaims, otherwise empty — an admin assigns grants.
+      grants: inAdminGroup ? [ssoAdminBundleGrant()] : [],
       createdAt: new Date().toISOString(),
     };
-    user = upsertUser(cfg.dataDir, provisioned); // step 12
+    user = upsertUser(cfg.dataDir, provisioned); // step 15
   }
 
   // Reject re-login for a deactivated user before creating a session. A freshly
   // provisioned first-login record is always active, so only an existing
   // deactivated user is rejected here.
   if (user.status !== 'active') {
-    // steps 13–14
+    // steps 16–17
     throw new ForbiddenError('deactivated user may not sign in');
   }
 
+  // steps 18–19: refresh the stored grants when they disagree with the admin-group
+  // membership — entering the group appends the enumerated bundle, leaving it
+  // drops the bundle on this login (server-driven, straight through the repository;
+  // the bundle is enumerated, so the *:* hard reservation is preserved).
+  const applied = applySsoAdminBundle(user.grants, inAdminGroup);
+  if (applied.changed) {
+    user = repoReplaceUserGrants(cfg.dataDir, user.id, applied.grants);
+  }
+
   // Build the new WebSession (the repository mints the reserved-prefix id and
-  // stamps createdAt/lastSeenAt). Grants = the user's CURRENT grants. Prior
-  // sessions are LEFT INTACT so one principal may hold concurrent sessions.
+  // stamps createdAt/lastSeenAt). Grants = the user's CURRENT grants with any
+  // reserved instance-wide super-admin (*:*) grant filtered out — *:* is reserved
+  // to the built-in admin account, so no SSO login can ever mint a session carrying
+  // it. Prior sessions are LEFT INTACT so one principal may hold concurrent sessions.
   const session: WebSession = {
     id: '', // web_session_repository mints a ws_-prefixed id
     subject: user.subject,
-    grants: user.grants,
+    grants: user.grants.filter((g) => !isSuperAdminGrant(g)),
     createdAt: '', // stamped by the registry
     expiresAt: new Date(Date.now() + WEB_SESSION_TTL_MS).toISOString(),
     providerId,
-  }; // step 15
-  const stored = createWebSession(cfg.dataDir, session); // step 16
+  }; // step 20
+  const stored = createWebSession(cfg.dataDir, session); // step 21
 
-  // steps 17–20: best-effort security-level append. The actor carries WHO signed
+  // steps 22–25: best-effort security-level append. The actor carries WHO signed
   // in; the target is the providerId (the session id is a secret credential and
   // must never be logged — the audit sink rejects credential-shaped targets).
   tryAppendAudit(cfg, buildSsoAuditEvent(user.subject, 'web.signin', 'security', { target: providerId }));
 
-  return stored.id; // step 21 (the portal sets it as the session cookie)
+  return stored.id; // step 26 (the portal sets it as the session cookie)
+}
+
+// ── Built-in super-admin password sign-in ─────────────────────────────────────
+//
+// The env-anchored (WAIRON_ADMIN_USER/_PASSWORD) web login. This is the ONLY path
+// to an instance-wide *:* session: the identity orchestrator hard-reserves that
+// grant away from user records and minted tokens, so the double-wildcard exists
+// exclusively on sessions minted here (and on the master-token principal).
+
+/** Consecutive failures per username before a short lockout begins. */
+const LOGIN_THROTTLE_MAX_FAILS = 5;
+/** Lockout duration once the failure threshold is reached. */
+const LOGIN_THROTTLE_LOCKOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+/** Transient, in-memory failed-attempt state per presented username. A module-level
+ *  Map — deliberately NOT a store: it holds no authoritative state, is lost on
+ *  restart, and exists only as a minimal anti-bruteforce speed bump. */
+const loginThrottle = new Map<string, { fails: number; lockedUntil: number }>();
+
+/** Clear the transient login throttle. Test hook only (mirrors __clearIdpCaches). */
+export function __resetLoginThrottle(): void {
+  loginThrottle.clear();
+}
+
+/**
+ * Sign the built-in super-admin in with the env-configured username + password.
+ * Consult the minimal in-memory failed-attempt throttle first (~5 consecutive
+ * failures lock the username out for a short window; attempts during the lockout
+ * are rejected outright). Verify BOTH values via the auth specialist's
+ * constant-time verifyBuiltinAdmin (unset env = password login disabled, always
+ * fails). On failure, record the attempt and reject as unauthenticated. On
+ * success, clear the throttle entry and create a browser session bound to the
+ * stable built-in super-admin subject carrying the single instance-wide
+ * super-admin grant ({projectId '*', permissions ['*']}) — the ONLY *:* in the
+ * system. Appends a best-effort web.signin.password (security) audit event and
+ * returns the new session id (the portal sets it as the session cookie).
+ */
+export function signInWithPassword(cfg: HostConfig, user: string, password: string): string {
+  const key = String(user ?? '');
+  const now = Date.now();
+
+  // steps 1–2: an active lockout rejects outright, without consulting credentials.
+  const entry = loginThrottle.get(key);
+  if (entry && entry.lockedUntil > now) {
+    throw new UnauthenticatedError();
+  }
+  // A lockout that has lapsed resets the counter (fresh window).
+  if (entry && entry.lockedUntil !== 0 && entry.lockedUntil <= now) {
+    loginThrottle.delete(key);
+  }
+
+  // step 3: constant-time verification of BOTH values (null on mismatch/disabled).
+  const subject = verifyBuiltinAdmin(cfg, user, password);
+  if (!subject) {
+    // steps 4–6: record the failure (starting a short lockout at the threshold)
+    // and reject — the same rejection for a wrong credential and disabled login.
+    const fails = (loginThrottle.get(key)?.fails ?? 0) + 1;
+    loginThrottle.set(key, {
+      fails,
+      lockedUntil: fails >= LOGIN_THROTTLE_MAX_FAILS ? now + LOGIN_THROTTLE_LOCKOUT_MS : 0,
+    });
+    throw new UnauthenticatedError();
+  }
+
+  // step 7: success clears the throttle; the session carries the ONLY *:* grant.
+  loginThrottle.delete(key);
+  const session: WebSession = {
+    id: '', // web_session_repository mints a ws_-prefixed id
+    subject,
+    grants: [{ projectId: '*', permissions: ['*'] }],
+    createdAt: '', // stamped by the registry
+    expiresAt: new Date(now + WEB_SESSION_TTL_MS).toISOString(),
+  };
+  const stored = createWebSession(cfg.dataDir, session); // step 8
+
+  // steps 9–12: best-effort security-level append (no credential-shaped target).
+  tryAppendAudit(cfg, buildSsoAuditEvent(subject, 'web.signin.password', 'security'));
+
+  return stored.id; // step 13 (the portal sets it as the session cookie)
 }
 
 /**
@@ -239,7 +383,15 @@ export function getCurrentContext(cfg: HostConfig, sessionId: string): WebContex
   const canWriteProjects = grants.some(
     (g) => g.permissions.includes('*') || WRITE_PERMISSIONS.some((p) => g.permissions.includes(p)),
   );
-  const visibleProjectIds = [...new Set(grants.filter((g) => g.projectId !== '*').map((g) => g.projectId))];
+  // Union of the projects NAMED in the caller's grants and the projects their
+  // RESOLVED, org-unit-aware scope surfaces. Deriving this from named ids alone
+  // left a super-admin ('*' grant, no named ids) or a unit admin ('*'+orgUnitId)
+  // with an EMPTY selector; the resolved scope adds the actual project records
+  // they can read (all, or the unit subtree). Named ids keep dev mode's single
+  // 'local' project (not a hosted record) and any specifically-granted project.
+  const namedProjectIds = grants.filter((g) => g.projectId !== '*').map((g) => g.projectId);
+  const scopedProjectIds = webproject.listProjects(cfg, sessionId).map((r) => r.id);
+  const visibleProjectIds = [...new Set([...namedProjectIds, ...scopedProjectIds])];
   const visibleUnitIds = [
     ...new Set(grants.filter((g) => g.orgUnitId !== undefined && g.orgUnitId !== '').map((g) => g.orgUnitId as string)),
   ];
@@ -379,8 +531,17 @@ export function getWebGraph(
       return reshapeLandscapeGraph(landscape, level); // steps 4–5
     }
     case 'project': {
-      // step 6: resolve+bind within the principal's authorized set (an out-of-scope
-      // project resolves to null → Forbidden, no existence leak).
+      // step 6: authorize on the RESOLVED, org-unit-aware mcp:read scope — the
+      // same scoped set the web project orchestrator lists. The flat
+      // principal.projects projection carries a literal '*' for a unit-scoped
+      // '*'+orgUnitId grant, so the authorized-set bind alone would read
+      // ANOTHER tenant's spec tree; the scoped project list bounds a unit
+      // grant to its subtree. Then resolve+bind the project's isolated root
+      // (out-of-scope, unknown, and inactive all yield the same Forbidden — no
+      // existence leak).
+      if (!webproject.listProjects(cfg, sessionId).some((r) => r.id === projectId)) {
+        throw new ForbiddenError('project not authorized or unknown');
+      }
       const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
       if (!root) {
         throw new ForbiddenError('project not authorized or unknown');
@@ -412,7 +573,14 @@ export function getWebProjectCanvas(cfg: HostConfig, sessionId: string, projectI
   const principal = authenticateSession(cfg.dataDir, sessionId); // step 1
   if (!principal.authenticated) throw new UnauthenticatedError();
 
-  // step 2: resolve+bind within the principal's authorized set.
+  // step 2: authorize on the RESOLVED, org-unit-aware mcp:read scope (the same
+  // scoped set the web project orchestrator lists — a unit-scoped '*'+orgUnitId
+  // grant projects a flat '*' into principal.projects and must NOT render
+  // another tenant's canvas), then resolve+bind within the principal's
+  // authorized set.
+  if (!webproject.listProjects(cfg, sessionId).some((r) => r.id === projectId)) {
+    throw new ForbiddenError('project not authorized or unknown');
+  }
   const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
   if (!root) {
     throw new ForbiddenError('project not authorized or unknown');
@@ -593,6 +761,13 @@ function nonceMatches(a: string | null, b: string | null): boolean {
  * reuses the exported canvas deep-space --syw-* theme so it reads as a sibling of
  * the embedded canvas.
  *
+ * The login screen is DYNAMIC: it fetches the public pre-auth GET
+ * /web/login-options and renders the username/password form only when the
+ * built-in admin login is configured, plus one "Sign in with <displayName>"
+ * button per ENABLED identity provider (no free-text provider input). No
+ * providers → no SSO section; neither method → a clear "No sign-in method is
+ * configured" message.
+ *
  * One self-contained HTML document — all CSS + JS inline, zero external assets
  * (the iframe loads a same-origin route). The inline script avoids template
  * literals / `$`+`{` so it embeds cleanly in this outer template string. Every
@@ -662,6 +837,11 @@ button { font:inherit; }
 .btn-primary { width:100%; border:none; border-radius:10px; padding:11px 14px; font-weight:700; color:#04121b; background:var(--syw-primary-gradient); cursor:pointer; }
 .btn-primary:hover { box-shadow:var(--syw-glow); }
 #login .err { color:var(--danger); font-size:12px; min-height:16px; margin-top:10px; }
+.login-sep { display:flex; align-items:center; gap:10px; color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.08em; margin:16px 0; }
+.login-sep::before, .login-sep::after { content:""; flex:1; border-top:1px solid var(--line); }
+.btn-sso { display:block; width:100%; border:1px solid var(--chrome-border); border-radius:10px; padding:11px 14px; font-weight:700; color:var(--ink); background:var(--input-bg); cursor:pointer; margin:0 0 10px; }
+.btn-sso:hover { border-color:var(--accent); box-shadow:var(--syw-glow); }
+#login .none { color:var(--dim); font-size:12.5px; border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
 
 /* ---- app chrome (top bar) ---- */
 #app { display:flex; flex-direction:column; height:100vh; }
@@ -672,6 +852,9 @@ header .brand { font-weight:800; font-size:17px; letter-spacing:.02em; }
 .tbtn:hover { background:var(--hover-bg); border-color:var(--accent); }
 .ctl { display:flex; align-items:center; gap:7px; color:var(--dim); font-size:12px; white-space:nowrap; }
 .ctl select { appearance:none; -webkit-appearance:none; background:var(--input-bg); color:var(--ink); border:1px solid var(--chrome-border); border-radius:8px; padding:6px 12px; font:inherit; font-size:12px; color-scheme:dark; max-width:220px; }
+/* Theme the native dropdown popup so option items are never white-on-white. */
+select { color-scheme:dark; }
+select option, select optgroup { background:var(--chrome); color:var(--ink); }
 .badge-admin { background:var(--syw-secondary-gradient); color:#2a1a02; font-weight:800; font-size:10px; text-transform:uppercase; letter-spacing:.06em; padding:2px 8px; border-radius:20px; }
 .ro { color:var(--dim); font-size:11px; border:1px solid var(--line); border-radius:20px; padding:2px 8px; }
 .dropdown { position:relative; }
@@ -741,19 +924,53 @@ table.grid tr:hover td { background:rgba(255,255,255,.03); }
 .stat { background:var(--syw-surface-gradient); border:1px solid var(--chrome-border); border-radius:12px; padding:14px 18px; min-width:150px; }
 .stat .k { color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
 .stat .v { font-size:22px; font-weight:800; margin-top:3px; }
+
+/* ---- admin & self-service forms ---- */
+.toolbar { display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap; }
+.formcard { background:var(--card); border:1px solid var(--chrome-border); border-radius:12px; padding:16px 18px; margin:0 0 18px; max-width:780px; }
+.formcard h3 { margin:0 0 12px; font-size:14px; color:var(--ink); }
+.frow { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:10px; }
+.fcol { display:flex; flex-direction:column; gap:5px; flex:1 1 210px; min-width:160px; }
+.fcol.wide { flex-basis:100%; }
+.fcol label { color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
+.fcol input, .fcol select, .fcol textarea { background:var(--input-bg); color:var(--ink); border:1px solid var(--chrome-border); border-radius:8px; padding:8px 10px; font:inherit; width:100%; }
+.fcol input:focus, .fcol select:focus, .fcol textarea:focus { outline:none; border-color:var(--accent); box-shadow:var(--syw-glow); }
+.fcol input[readonly] { opacity:.7; }
+.fcol select { color-scheme:dark; appearance:none; -webkit-appearance:none; }
+.fcol .cbrow { display:flex; align-items:center; gap:8px; color:var(--ink); font-size:12.5px; padding:8px 0; }
+.fcol .cbrow input { width:auto; }
+details.adv { margin:6px 0 12px; }
+details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-bottom:8px; }
+.note { border:1px solid rgba(34,221,255,.35); background:rgba(34,221,255,.07); border-radius:10px; padding:10px 12px; font-size:12px; color:var(--ink); margin:10px 0; line-height:1.5; }
+.tokenout { display:flex; gap:8px; align-items:center; margin-top:8px; }
+.tokenout input { flex:1; background:rgba(0,0,0,.32); border:1px solid var(--chrome-border); color:var(--syw-cyan); border-radius:8px; padding:9px 10px; font:12px/1.4 "SFMono-Regular",Consolas,monospace; }
+.grant-row { display:flex; gap:8px; margin-bottom:8px; align-items:center; }
+.grant-row input { flex:1; background:var(--input-bg); color:var(--ink); border:1px solid var(--chrome-border); border-radius:8px; padding:7px 9px; font:inherit; }
+.grant-row input:focus { outline:none; border-color:var(--accent); box-shadow:var(--syw-glow); }
 </style>
 </head>
 <body data-theme="syw">
 <div id="boot">Loading…</div>
 
 <!-- ============================ LOGIN SCREEN ============================ -->
+<!-- Dynamic: renders exactly the sign-in methods GET /web/login-options reports
+     — the password form only when the built-in admin login is configured, one
+     SSO button per ENABLED identity provider, and a clear message when neither
+     method exists. No free-text provider input. -->
 <div id="login" hidden>
   <div class="card">
     <h1 class="syw-gradient-text">wairon</h1>
     <p class="sub">Spec-driven architecture canvas</p>
-    <label for="pid">Identity provider</label>
-    <input id="pid" value="default" spellcheck="false" autocomplete="off" />
-    <button class="btn-primary" id="signinBtn">Sign in with SSO</button>
+    <div id="pwForm" hidden>
+      <label for="lu">Username</label>
+      <input id="lu" spellcheck="false" autocomplete="username" />
+      <label for="lp">Password</label>
+      <input id="lp" type="password" autocomplete="current-password" />
+      <button class="btn-primary" id="pwBtn">Sign in with password</button>
+    </div>
+    <div class="login-sep" id="ssoSep" hidden><span>or</span></div>
+    <div id="ssoList" hidden></div>
+    <div class="none" id="noMethod" hidden>No sign-in method is configured. Ask an administrator to set the built-in admin credentials or enable an identity provider.</div>
     <div class="err" id="loginErr"></div>
   </div>
 </div>
@@ -765,6 +982,7 @@ table.grid tr:hover td { background:rgba(255,255,255,.03); }
     <nav class="tabs" id="navTabs">
       <button data-view="canvas" class="active">Canvas</button>
       <button data-view="specs">Specs</button>
+      <button data-view="projects">Projects</button>
       <button data-view="admin" id="navAdmin" hidden>Admin</button>
     </nav>
     <div class="ctl" id="projCtl"><span>Project</span><select id="projSel"></select></div>
@@ -774,6 +992,7 @@ table.grid tr:hover td { background:rgba(255,255,255,.03); }
       <span class="badge-admin" id="adminBadge" hidden>admin</span>
       <button class="tbtn" id="acctBtn"><span class="who" id="whoLbl">&hellip;</span> &#9662;</button>
       <div class="menu">
+        <button id="connectAgent">Connect an agent</button>
         <button id="signout">Sign out</button>
         <button id="signoutAll">Sign out everywhere</button>
       </div>
@@ -805,16 +1024,30 @@ table.grid tr:hover td { background:rgba(255,255,255,.03); }
         <div class="subtabs" id="adminSubtabs">
           <button data-panel="approvals" class="active">Approvals</button>
           <button data-panel="users">Users</button>
+          <button data-panel="providers">Identity Providers</button>
+          <button data-panel="org">Organization</button>
           <button data-panel="landscape">Landscape</button>
           <button data-panel="health">Health</button>
         </div>
         <div class="admin-body">
           <div class="apanel active" id="ap-approvals"><div class="hint">Loading…</div></div>
           <div class="apanel" id="ap-users"><div class="hint">Loading…</div></div>
+          <div class="apanel" id="ap-providers"><div class="hint">Loading…</div></div>
+          <div class="apanel" id="ap-org"><div class="hint">Loading…</div></div>
           <div class="apanel" id="ap-landscape"><div class="hint">Loading…</div></div>
           <div class="apanel" id="ap-health"><div class="hint">Loading…</div></div>
         </div>
       </div>
+    </div>
+
+    <!-- Projects view (project lifecycle: list / create / lock / promote / destroy) -->
+    <div class="view" id="view-projects">
+      <div class="pane-r"><div id="projectsBody" style="max-width:900px;margin:0 auto;"><div class="hint">Loading…</div></div></div>
+    </div>
+
+    <!-- Connect an agent view (self-service; any signed-in user) -->
+    <div class="view" id="view-connect">
+      <div class="pane-r"><div id="connectBody" style="max-width:780px;margin:0 auto;"><div class="hint">Loading…</div></div></div>
     </div>
   </div>
 </div>
@@ -836,7 +1069,7 @@ table.grid tr:hover td { background:rgba(255,255,255,.03); }
 
   // ---- screens ------------------------------------------------------------
   function showBoot() { $('boot').hidden = false; $('login').hidden = true; $('app').hidden = true; }
-  function showLogin(msg) { $('boot').hidden = true; $('app').hidden = true; $('login').hidden = false; $('loginErr').textContent = msg || ''; }
+  function showLogin(msg) { $('boot').hidden = true; $('app').hidden = true; $('login').hidden = false; $('loginErr').textContent = msg || ''; loadLoginOptions(); }
   function showApp() { $('boot').hidden = true; $('login').hidden = true; $('app').hidden = false; }
 
   // ---- state --------------------------------------------------------------
@@ -855,10 +1088,43 @@ table.grid tr:hover td { background:rgba(255,255,255,.03); }
   }
 
   // ---- login --------------------------------------------------------------
-  // There is no public "list providers" endpoint (provider config is admin-only),
-  // so the login screen takes a provider-id text input defaulted to 'default'.
-  $('signinBtn').addEventListener('click', function () {
-    var pid = ($('pid').value || '').trim() || 'default';
+  // The login screen is DYNAMIC: it renders exactly the sign-in methods the
+  // server reports on the public pre-auth GET /web/login-options read — the
+  // username/password form only when the built-in admin login is configured,
+  // and one "Sign in with <name>" button per ENABLED identity provider (label =
+  // the admin-set displayName, defaulting to the provider id). No free-text
+  // provider input; when neither method exists a clear "No sign-in method is
+  // configured" message shows instead.
+  var loginOptionsLoaded = false;
+  function loadLoginOptions() {
+    if (loginOptionsLoaded) return;
+    loginOptionsLoaded = true;
+    api('/web/login-options').then(function (r) {
+      if (!r.ok) throw new Error('login-options ' + r.status);
+      return r.json();
+    }).then(function (o) {
+      var pw = !!(o && o.passwordLogin);
+      var provs = (o && o.providers) || [];
+      $('pwForm').hidden = !pw;
+      $('ssoSep').hidden = !(pw && provs.length > 0);
+      $('ssoList').hidden = provs.length === 0;
+      $('noMethod').hidden = pw || provs.length > 0;
+      var list = $('ssoList'); list.innerHTML = '';
+      provs.forEach(function (p) {
+        var b = document.createElement('button');
+        b.className = 'btn-sso';
+        b.textContent = 'Sign in with ' + (p.displayName || p.id);
+        b.addEventListener('click', function () { startSso(p.id); });
+        list.appendChild(b);
+      });
+    }).catch(function () {
+      loginOptionsLoaded = false; // allow a retry the next time the screen shows
+      $('loginErr').textContent = 'Could not load the sign-in options.';
+    });
+  }
+  // Begin the EXISTING SSO start flow for one provider button, then follow the
+  // provider authorization URL.
+  function startSso(pid) {
     $('loginErr').textContent = '';
     api('/web/sso/start', {
       method: 'POST',
@@ -869,8 +1135,24 @@ table.grid tr:hover td { background:rgba(255,255,255,.03); }
       return r.json();
     }).then(function (d) { location.href = d.url; })
       .catch(function (e) { $('loginErr').textContent = (e && e.message) || 'Sign-in failed.'; });
+  }
+
+  // Built-in admin password login. Establishes the session cookie server-side
+  // (POST /web/login is not CSRF-gated: it creates a session, it rides none), so
+  // a plain reload afterwards boots straight into the app.
+  $('pwBtn').addEventListener('click', function () {
+    $('loginErr').textContent = '';
+    api('/web/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ user: $('lu').value, password: $('lp').value }),
+    }).then(function (r) {
+      if (r.status === 401) throw new Error('Invalid credentials.');
+      if (!r.ok) return r.text().then(function (t) { throw new Error(t || ('sign-in failed (' + r.status + ')')); });
+      location.reload();
+    }).catch(function (e) { $('loginErr').textContent = (e && e.message) || 'Sign-in failed.'; });
   });
-  $('pid').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('signinBtn').click(); });
+  $('lp').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('pwBtn').click(); });
 
   // ---- app start ----------------------------------------------------------
   function startApp() {
@@ -880,7 +1162,7 @@ table.grid tr:hover td { background:rgba(255,255,255,.03); }
     // fill the viewport with no chrome.
     var isLocal = !!(ctx && ctx.local);
     $('topbar').hidden = isLocal;
-    $('whoLbl').textContent = (ctx.subject && ctx.subject.userId) || 'signed in';
+    $('whoLbl').textContent = (ctx.subject && (ctx.subject.displayName || ctx.subject.email || ctx.subject.userId)) || 'signed in';
     $('adminBadge').hidden = !ctx.isAdmin;
     $('navAdmin').hidden = !ctx.isAdmin;      // the Admin tab appears only for admins
     // Role-aware: developers who cannot author see a read-only marker AND the spec
@@ -933,14 +1215,16 @@ table.grid tr:hover td { background:rgba(255,255,255,.03); }
   var currentView = 'canvas';
   function setView(name) {
     currentView = name;
-    ['canvas', 'specs', 'admin'].forEach(function (v) {
+    ['canvas', 'specs', 'projects', 'admin', 'connect'].forEach(function (v) {
       var el = $('view-' + v); if (el) el.classList.toggle('active', v === name);
     });
     Array.prototype.forEach.call($('navTabs').children, function (b) {
       b.classList.toggle('active', b.getAttribute('data-view') === name);
     });
     if (name === 'specs') loadSpecList();
+    if (name === 'projects') renderProjects();
     if (name === 'admin') loadAdminPanel(currentPanel);
+    if (name === 'connect') renderConnect();
   }
   Array.prototype.forEach.call($('navTabs').children, function (b) {
     b.addEventListener('click', function () {
@@ -1036,7 +1320,7 @@ table.grid tr:hover td { background:rgba(255,255,255,.03); }
     b.addEventListener('click', function () {
       currentPanel = b.getAttribute('data-panel');
       Array.prototype.forEach.call($('adminSubtabs').children, function (x) { x.classList.toggle('active', x === b); });
-      ['approvals', 'users', 'landscape', 'health'].forEach(function (p) { $('ap-' + p).classList.toggle('active', p === currentPanel); });
+      ['approvals', 'users', 'providers', 'org', 'landscape', 'health'].forEach(function (p) { $('ap-' + p).classList.toggle('active', p === currentPanel); });
       loadAdminPanel(currentPanel);
     });
   });
@@ -1065,17 +1349,11 @@ table.grid tr:hover td { background:rgba(255,255,255,.03); }
         Array.prototype.forEach.call(el.querySelectorAll('[data-reject]'), function (b) { b.addEventListener('click', function () { decide(b.getAttribute('data-reject'), false); }); });
       }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
     } else if (panel === 'users') {
-      adminGet('users').then(function (d) {
-        var rows = d.users || [];
-        if (!rows.length) { el.innerHTML = '<div class="hint">No users in your scope.</div>'; return; }
-        var html = '<table class="grid"><thead><tr><th>User</th><th>Status</th><th>Unit</th><th>Grants</th></tr></thead><tbody>';
-        rows.forEach(function (u) {
-          var st = u.status === 'active' ? 'ok' : 'warn';
-          var grants = (u.grants || []).map(function (g) { return esc(g.projectId) + ':' + esc((g.permissions || []).join('/')); }).join(', ');
-          html += '<tr><td>' + esc(u.subject && u.subject.userId) + '</td><td><span class="pill ' + st + '">' + esc(u.status) + '</span></td><td>' + esc(u.unitId || '—') + '</td><td>' + (grants || '<span class="hint">none</span>') + '</td></tr>';
-        });
-        el.innerHTML = html + '</tbody></table>';
-      }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+      renderUsersPanel(el);
+    } else if (panel === 'providers') {
+      renderProvidersPanel(el);
+    } else if (panel === 'org') {
+      renderOrgPanel(el);
     } else if (panel === 'landscape') {
       adminGet('landscape').then(function (g) {
         var units = (g.nodes || []).filter(function (n) { return n.nodeKind === 'unit'; });
@@ -1123,13 +1401,661 @@ table.grid tr:hover td { background:rgba(255,255,255,.03); }
   document.addEventListener('click', function () { $('acctDd').classList.remove('open'); });
   $('signout').addEventListener('click', function () { doLogout('/web/logout'); });
   $('signoutAll').addEventListener('click', function () { doLogout('/web/logout-all'); });
+  // "Connect an agent" is self-service for ANY signed-in user (not gated on admin).
+  $('connectAgent').addEventListener('click', function () { $('acctDd').classList.remove('open'); setView('connect'); });
   function doLogout(path) { api(path, { method: 'POST' }).then(function () { location.reload(); }).catch(function () { location.reload(); }); }
+
+  // ========================================================================
+  // Admin management panels (Users / Identity Providers / Organization) and the
+  // agent-token self-service page. Everything renders with string concatenation
+  // (this script is embedded in an outer template literal — no backticks / no
+  // dollar-brace / no backslash escapes) and POSTs through postJson so the
+  // X-Wairon-Web CSRF header rides every mutation. Admin panels render only for
+  // ctx.isAdmin; "Connect an agent" renders for any signed-in user.
+  // ========================================================================
+
+  function postJson(path, obj) {
+    return api(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(obj || {}) });
+  }
+  // POST + resolve to parsed JSON, throwing the server's error text on a non-2xx.
+  function postAndParse(path, obj) {
+    return postJson(path, obj).then(function (r) {
+      if (r.ok) return r.json().catch(function () { return {}; });
+      return r.text().then(function (t) {
+        var m = t;
+        try { var j = JSON.parse(t); if (j && j.error) m = j.error; } catch (e) {}
+        throw new Error(m || (path + ' ' + r.status));
+      });
+    });
+  }
+  function commaList(s) {
+    return String(s == null ? '' : s).split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+  }
+  function opt(value, label, selected) {
+    return '<option value="' + esc(value) + '"' + (selected ? ' selected' : '') + '>' + esc(label) + '</option>';
+  }
+  function fcol(label, control, wide) {
+    return '<div class="fcol' + (wide ? ' wide' : '') + '"><label>' + esc(label) + '</label>' + control + '</div>';
+  }
+
+  // ---- Users (admin) ------------------------------------------------------
+  function renderUsersPanel(el) {
+    el.innerHTML = '<div class="hint">Loading…</div>';
+    adminGet('users').then(function (d) {
+      var users = d.users || [];
+      var html = '<div class="toolbar"><button class="mini" id="uNew">New user</button></div><div id="uForm"></div>';
+      if (!users.length) html += '<div class="hint">No users in your scope yet.</div>';
+      else {
+        html += '<table class="grid"><thead><tr><th>User</th><th>Status</th><th>Unit</th><th>Grants</th><th></th></tr></thead><tbody>';
+        users.forEach(function (u, i) {
+          var st = u.status === 'active' ? 'ok' : 'warn';
+          var grants = (u.grants || []).map(function (g) { return esc(g.projectId) + ':' + esc((g.permissions || []).join('/')); }).join(', ');
+          html += '<tr><td>' + esc(u.subject && u.subject.userId) + '</td>'
+            + '<td><span class="pill ' + st + '">' + esc(u.status) + '</span></td>'
+            + '<td>' + esc(u.unitId || '—') + '</td>'
+            + '<td>' + (grants || '<span class="hint">none</span>') + '</td>'
+            + '<td style="white-space:nowrap"><button class="mini" data-edit="' + i + '">Edit</button> '
+            + '<button class="mini" data-grants="' + i + '">Grants</button> '
+            + '<button class="mini" data-setstatus="' + i + '">Status</button></td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+      el.innerHTML = html;
+      $('uNew').addEventListener('click', function () { userForm(el, null); });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-edit]'), function (b) {
+        b.addEventListener('click', function () { userForm(el, users[+b.getAttribute('data-edit')]); });
+      });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-grants]'), function (b) {
+        b.addEventListener('click', function () { grantsForm(el, users[+b.getAttribute('data-grants')]); });
+      });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-setstatus]'), function (b) {
+        b.addEventListener('click', function () { statusForm(el, users[+b.getAttribute('data-setstatus')]); });
+      });
+    }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+  }
+  function userForm(el, user) {
+    var box = $('uForm'); var creating = !user; var subj = (user && user.subject) || {};
+    var statusSel = opt('active', 'active', (user ? user.status : 'active') === 'active')
+      + opt('suspended', 'suspended', !!user && user.status === 'suspended')
+      + opt('deactivated', 'deactivated', !!user && user.status === 'deactivated');
+    var kindSel = opt('human', 'human', (subj.kind || 'human') === 'human') + opt('service', 'service', subj.kind === 'service');
+    var html = '<div class="formcard"><h3>' + (creating ? 'New user' : 'Edit user') + '</h3>';
+    html += '<div class="frow">'
+      + fcol('User record ID', '<input id="uId" value="' + esc(user ? user.id : '') + '"' + (creating ? '' : ' readonly') + ' placeholder="e.g. sso:provider:subject" />')
+      + fcol('Status', '<select id="uStatus">' + statusSel + '</select>')
+      + '</div>';
+    html += '<div class="frow">'
+      + fcol('Subject user id', '<input id="uSubId" value="' + esc(subj.userId || (user ? user.id : '')) + '" placeholder="identity subject id" />')
+      + fcol('Issuer', '<input id="uSubIss" value="' + esc(subj.issuer || 'local') + '" />')
+      + '</div>';
+    html += '<div class="frow">'
+      + fcol('Kind', '<select id="uSubKind">' + kindSel + '</select>')
+      + fcol('External subject', '<input id="uSubExt" value="' + esc(subj.externalSubject || '') + '" placeholder="optional" />')
+      + fcol('Home unit id', '<input id="uUnit" value="' + esc(user && user.unitId ? user.unitId : '') + '" placeholder="optional org unit id" />')
+      + '</div>';
+    html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="uSave">' + (creating ? 'Create user' : 'Save') + '</button> <button class="mini" id="uCancel">Cancel</button> <span class="msg" id="uMsg"></span></div></div>';
+    box.innerHTML = html;
+    $('uCancel').addEventListener('click', function () { box.innerHTML = ''; });
+    $('uSave').addEventListener('click', function () {
+      var msg = $('uMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
+      var subject = { userId: $('uSubId').value.trim(), kind: $('uSubKind').value, issuer: $('uSubIss').value.trim() || 'local' };
+      var ext = $('uSubExt').value.trim(); if (ext) subject.externalSubject = ext;
+      var rec = {
+        id: $('uId').value.trim() || subject.userId,
+        subject: subject,
+        status: $('uStatus').value,
+        grants: (user && user.grants) || [],
+        createdAt: (user && user.createdAt) || new Date().toISOString(),
+      };
+      var unit = $('uUnit').value.trim(); if (unit) rec.unitId = unit;
+      postAndParse('/web/admin/users', rec).then(function () { renderUsersPanel(el); })
+        .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+    });
+  }
+  function statusForm(el, user) {
+    var box = $('uForm');
+    var sel = opt('active', 'active', user.status === 'active') + opt('suspended', 'suspended', user.status === 'suspended') + opt('deactivated', 'deactivated', user.status === 'deactivated');
+    var html = '<div class="formcard"><h3>Set status — ' + esc(user.subject && user.subject.userId) + '</h3>';
+    html += '<div class="frow">' + fcol('Status', '<select id="sStatus">' + sel + '</select>') + '</div>';
+    html += '<div class="note">Suspending or deactivating a user revokes all of their MCP tokens and web sessions.</div>';
+    html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="sSave">Apply</button> <button class="mini" id="sCancel">Cancel</button> <span class="msg" id="sMsg"></span></div></div>';
+    box.innerHTML = html;
+    $('sCancel').addEventListener('click', function () { box.innerHTML = ''; });
+    $('sSave').addEventListener('click', function () {
+      var msg = $('sMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
+      postAndParse('/web/admin/users/status', { userId: user.id, status: $('sStatus').value })
+        .then(function () { renderUsersPanel(el); })
+        .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+    });
+  }
+  function grantsForm(el, user) {
+    var box = $('uForm');
+    var grants = ((user && user.grants) || []).map(function (g) {
+      return { projectId: g.projectId, permissions: (g.permissions || []).join(', '), orgUnitId: g.orgUnitId || '' };
+    });
+    function draw() {
+      var html = '<div class="formcard"><h3>Grants — ' + esc(user.subject && user.subject.userId) + '</h3><div id="gRows">';
+      grants.forEach(function (g, i) {
+        html += '<div class="grant-row">'
+          + '<input data-g="proj" data-i="' + i + '" value="' + esc(g.projectId) + '" placeholder="projectId or *" />'
+          + '<input data-g="perm" data-i="' + i + '" value="' + esc(g.permissions) + '" placeholder="mcp:read, mcp:write, *" />'
+          + '<input data-g="unit" data-i="' + i + '" value="' + esc(g.orgUnitId) + '" placeholder="org unit (optional)" />'
+          + '<button class="mini danger" data-del="' + i + '">Remove</button></div>';
+      });
+      html += '</div><div class="rowbtns"><button class="mini" id="gAdd">Add grant</button> <button class="btn-primary" style="width:auto" id="gSave">Save grants</button> <button class="mini" id="gCancel">Cancel</button> <span class="msg" id="gMsg"></span></div></div>';
+      box.innerHTML = html;
+      function sync() {
+        Array.prototype.forEach.call(box.querySelectorAll('[data-g]'), function (inp) {
+          var i = +inp.getAttribute('data-i'); var f = inp.getAttribute('data-g');
+          if (f === 'proj') grants[i].projectId = inp.value;
+          else if (f === 'perm') grants[i].permissions = inp.value;
+          else grants[i].orgUnitId = inp.value;
+        });
+      }
+      Array.prototype.forEach.call(box.querySelectorAll('[data-del]'), function (b) {
+        b.addEventListener('click', function () { sync(); grants.splice(+b.getAttribute('data-del'), 1); draw(); });
+      });
+      $('gAdd').addEventListener('click', function () { sync(); grants.push({ projectId: '', permissions: '', orgUnitId: '' }); draw(); });
+      $('gCancel').addEventListener('click', function () { box.innerHTML = ''; });
+      $('gSave').addEventListener('click', function () {
+        sync();
+        var msg = $('gMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
+        var out = grants.filter(function (g) { return g.projectId.trim(); }).map(function (g) {
+          var o = { projectId: g.projectId.trim(), permissions: commaList(g.permissions) };
+          if (g.orgUnitId && g.orgUnitId.trim()) o.orgUnitId = g.orgUnitId.trim();
+          return o;
+        });
+        postAndParse('/web/admin/users/grants', { userId: user.id, grants: out })
+          .then(function () { renderUsersPanel(el); })
+          .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+      });
+    }
+    draw();
+  }
+
+  // ---- Identity Providers / SSO (admin) -----------------------------------
+  function renderProvidersPanel(el) {
+    el.innerHTML = '<div class="hint">Loading…</div>';
+    adminGet('providers').then(function (d) {
+      var provs = d.providers || [];
+      var html = '<div class="toolbar"><button class="mini" id="pNew">Add identity provider</button></div><div id="pForm"></div>';
+      if (!provs.length) html += '<div class="hint">No identity providers configured.</div>';
+      else {
+        html += '<table class="grid"><thead><tr><th>ID</th><th>Type</th><th>Issuer</th><th>Enabled</th><th></th></tr></thead><tbody>';
+        provs.forEach(function (p, i) {
+          html += '<tr><td>' + esc(p.id) + '</td><td>' + esc(p.providerType) + '</td><td>' + esc(p.issuerUrl || '—') + '</td>'
+            + '<td><span class="pill ' + (p.enabled ? 'ok' : 'warn') + '">' + (p.enabled ? 'enabled' : 'disabled') + '</span></td>'
+            + '<td style="white-space:nowrap"><button class="mini" data-edit="' + i + '">Edit</button> <button class="mini danger" data-del="' + esc(p.id) + '">Remove</button></td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+      el.innerHTML = html;
+      $('pNew').addEventListener('click', function () { providerForm(el, null); });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-edit]'), function (b) {
+        b.addEventListener('click', function () { providerForm(el, provs[+b.getAttribute('data-edit')]); });
+      });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-del]'), function (b) {
+        b.addEventListener('click', function () {
+          if (!confirm('Remove identity provider "' + b.getAttribute('data-del') + '"?')) return;
+          postAndParse('/web/admin/providers/remove', { id: b.getAttribute('data-del') })
+            .then(function () { renderProvidersPanel(el); }).catch(function (e) { alert(e.message); });
+        });
+      });
+    }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+  }
+  function providerForm(el, p) {
+    var box = $('pForm'); p = p || {}; var creating = !p.id;
+    var types = ['oidc', 'keycloak', 'authentik', 'google_workspace', 'entra_id'];
+    var typeOpts = types.map(function (t) { return opt(t, t, (p.providerType || 'oidc') === t); }).join('');
+    var html = '<div class="formcard"><h3>' + (creating ? 'Add identity provider' : 'Edit ' + esc(p.id)) + '</h3>';
+    html += '<div class="frow">'
+      + fcol('Provider ID', '<input id="pId" value="' + esc(p.id || '') + '"' + (creating ? '' : ' readonly') + ' placeholder="e.g. corp-keycloak" />')
+      + fcol('Display name', '<input id="pDisplay" value="' + esc(p.displayName || '') + '" placeholder="login-button label — defaults to the ID" />')
+      + fcol('Type', '<select id="pType">' + typeOpts + '</select>')
+      + fcol('Enabled', '<div class="cbrow"><input type="checkbox" id="pEnabled"' + (p.enabled === false ? '' : ' checked') + ' /> <span>sign-in allowed</span></div>')
+      + '</div>';
+    html += '<div class="frow">' + fcol('Issuer URL', '<input id="pIssuer" value="' + esc(p.issuerUrl || '') + '" placeholder="your provider issuer / realm base URL" />', true) + '</div>';
+    html += '<div class="frow">'
+      + fcol('Client ID', '<input id="pClient" value="' + esc(p.clientId || '') + '" />')
+      + fcol('Client secret ref', '<input id="pSecretRef" list="secretRefsList" value="' + esc(p.clientSecretRef || '') + '" placeholder="pick an existing ref or type a new name" /><datalist id="secretRefsList"></datalist>')
+      + '</div>';
+    html += '<div class="frow">'
+      + fcol('Allowed email domains', '<input id="pDomains" value="' + esc((p.allowedDomains || []).join(', ')) + '" placeholder="comma-separated, e.g. corp.example" />')
+      + fcol('Admin group claims', '<input id="pAdminGroups" value="' + esc((p.adminGroupClaims || []).join(', ')) + '" placeholder="comma-separated group claims" />')
+      + '</div>';
+    html += '<div class="frow">' + fcol('Allowed redirect URIs', '<input id="pRedirects" value="' + esc((p.allowedRedirectUris || []).join(', ')) + '" placeholder="comma-separated exact-match URIs" />', true) + '</div>';
+    html += '<details class="adv"><summary>Advanced — split-horizon endpoints (leave blank to auto-discover)</summary>';
+    html += '<div class="note">Leave every field blank to resolve endpoints via OIDC discovery from the issuer. Override individually for split-horizon: the token / JWKS / userinfo endpoints may be VPC-internal while the authorize endpoint stays publicly reachable by the browser.</div>';
+    html += '<div class="frow">' + fcol('Authorization endpoint (public)', '<input id="pAuthz" value="' + esc(p.authorizationEndpoint || '') + '" placeholder="browser-facing; blank to auto-discover" />', true) + '</div>';
+    html += '<div class="frow">'
+      + fcol('Token endpoint (may be internal)', '<input id="pToken" value="' + esc(p.tokenEndpoint || '') + '" placeholder="server-facing; blank to auto-discover" />')
+      + fcol('JWKS URI (may be internal)', '<input id="pJwks" value="' + esc(p.jwksUri || '') + '" placeholder="server-facing; blank to auto-discover" />')
+      + '</div>';
+    html += '<div class="frow">' + fcol('Userinfo endpoint (may be internal)', '<input id="pUserinfo" value="' + esc(p.userinfoEndpoint || '') + '" placeholder="server-facing; blank to auto-discover" />', true) + '</div>';
+    html += '</details>';
+    html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="pSave">' + (creating ? 'Add provider' : 'Save') + '</button> <button class="mini" id="pCancel">Cancel</button> <span class="msg" id="pMsg"></span></div></div>';
+    box.innerHTML = html;
+    // Offer the existing secret ref NAMES (never values) as datalist suggestions.
+    api('/web/admin/secrets').then(function (r) { return r.ok ? r.json() : { refs: [] }; }).then(function (d) {
+      var dl = $('secretRefsList'); if (!dl) return;
+      dl.innerHTML = ((d && d.refs) || []).map(function (k) { return '<option value="' + esc(k) + '">'; }).join('');
+    }).catch(function () {});
+    $('pCancel').addEventListener('click', function () { box.innerHTML = ''; });
+    $('pSave').addEventListener('click', function () {
+      var msg = $('pMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
+      var cf = { id: $('pId').value.trim(), providerType: $('pType').value, enabled: $('pEnabled').checked, updatedAt: new Date().toISOString() };
+      if (!cf.id) { msg.className = 'msg bad'; msg.textContent = 'Provider ID is required.'; return; }
+      var disp = $('pDisplay').value.trim(); if (disp) cf.displayName = disp;
+      var issuer = $('pIssuer').value.trim(); if (issuer) cf.issuerUrl = issuer;
+      var client = $('pClient').value.trim(); if (client) cf.clientId = client;
+      var sref = $('pSecretRef').value.trim(); if (sref) cf.clientSecretRef = sref;
+      var doms = commaList($('pDomains').value); if (doms.length) cf.allowedDomains = doms;
+      var ag = commaList($('pAdminGroups').value); if (ag.length) cf.adminGroupClaims = ag;
+      var red = commaList($('pRedirects').value); if (red.length) cf.allowedRedirectUris = red;
+      var az = $('pAuthz').value.trim(); if (az) cf.authorizationEndpoint = az;
+      var tok = $('pToken').value.trim(); if (tok) cf.tokenEndpoint = tok;
+      var jw = $('pJwks').value.trim(); if (jw) cf.jwksUri = jw;
+      var ui = $('pUserinfo').value.trim(); if (ui) cf.userinfoEndpoint = ui;
+      postAndParse('/web/admin/providers', cf).then(function () { renderProvidersPanel(el); })
+        .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+    });
+  }
+
+  // ---- Organization units (admin) -----------------------------------------
+  function renderOrgPanel(el) {
+    el.innerHTML = '<div class="hint">Loading…</div>';
+    adminGet('org/units').then(function (d) {
+      var units = d.units || [];
+      var html = '<div class="toolbar"><button class="mini" id="oNew">New unit</button><button class="mini" id="oPlace">Place a project</button></div><div id="oForm"></div>';
+      if (!units.length) html += '<div class="hint">No organization units yet.</div>';
+      else {
+        html += '<table class="grid"><thead><tr><th>Name</th><th>ID</th><th>Kind</th><th>Parent</th><th>Visibility</th><th></th></tr></thead><tbody>';
+        units.forEach(function (u, i) {
+          html += '<tr><td>' + esc(u.name) + '</td><td>' + esc(u.id) + '</td><td>' + esc(u.kind) + '</td><td>' + esc(u.parentId || '—') + '</td><td>' + esc(u.visibility || 'inherit') + '</td>'
+            + '<td><button class="mini" data-edit="' + i + '">Edit</button></td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+      el.innerHTML = html;
+      $('oNew').addEventListener('click', function () { orgUnitForm(el, units, null); });
+      $('oPlace').addEventListener('click', function () { placementForm(el, units); });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-edit]'), function (b) {
+        b.addEventListener('click', function () { orgUnitForm(el, units, units[+b.getAttribute('data-edit')]); });
+      });
+    }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+  }
+  function orgUnitForm(el, units, u) {
+    var box = $('oForm'); var creating = !u; u = u || {};
+    var parentOpts = opt('', '(none — root unit)', !u.parentId);
+    units.forEach(function (x) { if (x.id !== u.id) parentOpts += opt(x.id, x.name + ' (' + x.id + ')', u.parentId === x.id); });
+    var vis = u.visibility || 'inherit';
+    var visOpts = opt('inherit', 'inherit', vis === 'inherit') + opt('open', 'open', vis === 'open') + opt('closed', 'closed', vis === 'closed');
+    var html = '<div class="formcard"><h3>' + (creating ? 'New organization unit' : 'Edit ' + esc(u.name)) + '</h3>';
+    html += '<div class="frow">'
+      + fcol('Name', '<input id="oName" value="' + esc(u.name || '') + '" />')
+      + fcol('Unit ID', '<input id="oId" value="' + esc(u.id || '') + '"' + (creating ? '' : ' readonly') + ' placeholder="optional — auto if blank" />')
+      + '</div>';
+    html += '<div class="frow">'
+      + fcol('Kind', '<select id="oKind">' + ['organization', 'department', 'team', 'domain'].map(function (k) { return opt(k, k, (u.kind || 'team') === k); }).join('') + '</select>')
+      + fcol('Parent unit', '<select id="oParent">' + parentOpts + '</select>')
+      + fcol('Visibility', '<select id="oVis">' + visOpts + '</select>')
+      + '</div>';
+    html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="oSave">' + (creating ? 'Create unit' : 'Save') + '</button> <button class="mini" id="oCancel">Cancel</button> <span class="msg" id="oMsg"></span></div></div>';
+    box.innerHTML = html;
+    $('oCancel').addEventListener('click', function () { box.innerHTML = ''; });
+    $('oSave').addEventListener('click', function () {
+      var msg = $('oMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
+      var rec = {
+        id: $('oId').value.trim(),
+        name: $('oName').value.trim(),
+        kind: $('oKind').value.trim() || 'team',
+        status: u.status || 'active',
+        createdAt: u.createdAt || '',
+        createdBy: u.createdBy || (ctx && ctx.subject) || { userId: '', kind: 'human', issuer: 'local' },
+      };
+      var par = $('oParent').value; if (par) rec.parentId = par;
+      var v = $('oVis').value; if (v) rec.visibility = v;
+      postAndParse('/web/admin/org/units', rec).then(function () { renderOrgPanel(el); })
+        .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+    });
+  }
+  function placementForm(el, units) {
+    var box = $('oForm');
+    var pids = (ctx && ctx.visibleProjectIds) || [];
+    var projCtl = pids.length ? '<select id="plProj">' + pids.map(function (pid) { return opt(pid, pid, false); }).join('') + '</select>' : '<input id="plProj" placeholder="projectId" />';
+    var unitOpts = units.map(function (u) { return opt(u.id, u.name + ' (' + u.id + ')', false); }).join('');
+    var html = '<div class="formcard"><h3>Place a project into a unit</h3>';
+    html += '<div class="frow">' + fcol('Project', projCtl) + fcol('Unit', '<select id="plUnit">' + unitOpts + '</select>') + '</div>';
+    html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="plSave">Place</button> <button class="mini" id="plCancel">Cancel</button> <span class="msg" id="plMsg"></span></div></div>';
+    box.innerHTML = html;
+    $('plCancel').addEventListener('click', function () { box.innerHTML = ''; });
+    $('plSave').addEventListener('click', function () {
+      var msg = $('plMsg'); msg.className = 'msg'; msg.textContent = 'Placing…';
+      postAndParse('/web/admin/org/placements', { projectId: $('plProj').value.trim(), unitId: $('plUnit').value })
+        .then(function () { msg.className = 'msg ok'; msg.textContent = 'Placed.'; renderOrgPanel(el); })
+        .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+    });
+  }
+
+  // ---- Connect an agent (self-service; any signed-in user) ----------------
+  function renderConnect() {
+    var box = $('connectBody');
+    var pids = (ctx && ctx.visibleProjectIds) || [];
+    var html = '<h2 style="margin:0 0 4px">Connect an agent</h2>';
+    html += '<p style="color:var(--dim);margin:0 0 12px;font-size:12.5px">Mint a single-project MCP token to hand to an AI agent.</p>';
+    html += '<div class="note">This token is <strong>separate from your login</strong>. It is an agent credential scoped to exactly one project — signing out never affects it, and it can never sign in to this web UI. It is <strong>owned by you</strong>, so deactivating your account revokes it. Copy it now; the full token is shown only once.</div>';
+    html += '<div class="formcard"><h3>Generate a token</h3>';
+    if (!pids.length) html += '<div class="hint">You have no projects in scope to connect an agent to.</div>';
+    else {
+      var projOpts = pids.map(function (pid) { return opt(pid, pid, false); }).join('');
+      html += '<div class="frow">'
+        + fcol('Project', '<select id="tProj">' + projOpts + '</select>')
+        + fcol('Access', '<select id="tWrite">' + opt('read', 'read only (mcp:read)', true) + opt('write', 'read + write (mcp:write)', false) + '</select>')
+        + '</div>';
+      html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="tMint">Generate token</button> <span class="msg" id="tMsg"></span></div><div id="tResult"></div>';
+    }
+    html += '</div>';
+    html += '<div class="formcard"><h3>Your agent tokens <span class="msg" id="tokMsg" style="font-weight:400"></span></h3>';
+    html += '<div id="tokList"><div class="hint">Loading…</div></div></div>';
+    box.innerHTML = html;
+    if (pids.length) {
+      $('tMint').addEventListener('click', function () {
+        var msg = $('tMsg'); msg.className = 'msg'; msg.textContent = 'Generating…';
+        postAndParse('/web/tokens', { projectId: $('tProj').value, write: $('tWrite').value === 'write' })
+          .then(function (d) {
+            msg.textContent = '';
+            var tok = (d && d.token) || '';
+            $('tResult').innerHTML = '<div class="note">Copy this token now — it will not be shown again.</div>'
+              + '<div class="tokenout"><input id="tVal" readonly value="' + esc(tok) + '" /><button class="mini" id="tCopy">Copy</button></div>';
+            $('tCopy').addEventListener('click', function () {
+              var f = $('tVal'); f.focus(); f.select();
+              try { document.execCommand('copy'); $('tCopy').textContent = 'Copied'; } catch (e) {}
+            });
+            loadTokens();
+          })
+          .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+      });
+    }
+    loadTokens();
+  }
+
+  // List the caller's OWN agent tokens (GET /web/tokens) with a per-row Revoke.
+  function loadTokens() {
+    var host = $('tokList');
+    if (!host) return;
+    var note = $('tokMsg'); if (note) { note.className = 'msg'; note.textContent = ''; }
+    api('/web/tokens').then(function (r) {
+      if (!r.ok) throw new Error('tokens ' + r.status);
+      return r.json();
+    }).then(function (d) {
+      var toks = (d && d.tokens) || [];
+      if (!toks.length) { host.innerHTML = '<div class="hint">You have not minted any agent tokens yet.</div>'; return; }
+      var rows = toks.map(function (t) {
+        var proj = (t.projects || []).join(', ');
+        var created = t.createdAt ? String(t.createdAt).slice(0, 10) : '';
+        var status = t.revokedAt ? '<span class="pill bad">revoked</span>' : '<span class="pill ok">active</span>';
+        var action = t.revokedAt ? '' : '<button class="mini danger" data-tok="' + esc(t.id) + '">Revoke</button>';
+        return '<tr><td>' + esc(t.id) + '</td><td>' + esc(proj) + '</td><td>' + esc(created) + '</td><td>' + status + '</td><td>' + action + '</td></tr>';
+      }).join('');
+      host.innerHTML = '<table class="grid"><thead><tr><th>Token ID</th><th>Project</th><th>Created</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
+      Array.prototype.forEach.call(host.querySelectorAll('button[data-tok]'), function (btn) {
+        btn.addEventListener('click', function () {
+          btn.disabled = true; btn.textContent = 'Revoking…';
+          postAndParse('/web/tokens/revoke', { id: btn.getAttribute('data-tok') })
+            .then(function () { loadTokens(); })
+            .catch(function (e) {
+              btn.disabled = false; btn.textContent = 'Revoke';
+              if (note) { note.className = 'msg bad'; note.textContent = e.message; }
+            });
+        });
+      });
+    }).catch(function (e) { host.innerHTML = '<div class="hint">' + esc(e.message) + '</div>'; });
+  }
+
+  // ---- Projects (lifecycle management; any signed-in user) ----------------
+  // Lists the caller's in-scope projects (GET /web/projects — scoped read). Create
+  // and the per-row Lock / Promote / Destroy actions are shown only to callers whose
+  // capability flags mark them project authors/admins, but the SERVER enforces the
+  // real per-action grant scope, so a 403 is surfaced gracefully rather than trusted
+  // to the client's flags.
+  function projectsCanManage() { return !!(ctx && (ctx.canWriteProjects || ctx.isAdmin)); }
+
+  function renderProjects() {
+    var box = $('projectsBody');
+    var canManage = projectsCanManage();
+    var html = '<h2 style="margin:0 0 4px">Projects</h2>';
+    html += '<p style="color:var(--dim);margin:0 0 12px;font-size:12.5px">Manage the hosted projects in your scope. Each action is authorized by your grants — you can only act where your grants permit.</p>';
+    if (canManage) {
+      html += '<div class="formcard"><h3>Create a project</h3>';
+      html += '<div class="frow">'
+        + fcol('Project ID', '<input id="npId" placeholder="lowercase letters, digits, hyphen" />')
+        + fcol('Organization unit', '<input id="npUnit" placeholder="optional — required if you are unit-scoped" />')
+        + '</div>';
+      html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="npCreate">Create project</button> <span class="msg" id="npMsg"></span></div></div>';
+    }
+    html += '<div class="formcard"><h3>Your projects <span class="msg" id="plNote" style="font-weight:400"></span></h3><div id="plList"><div class="hint">Loading…</div></div></div>';
+    box.innerHTML = html;
+    if (canManage) {
+      $('npCreate').addEventListener('click', function () {
+        var msg = $('npMsg'); msg.className = 'msg'; msg.textContent = 'Creating…';
+        var id = $('npId').value.trim();
+        if (!id) { msg.className = 'msg bad'; msg.textContent = 'Project ID is required.'; return; }
+        var payload = { id: id };
+        var unit = $('npUnit').value.trim(); if (unit) payload.unitId = unit;
+        postAndParse('/web/projects', payload)
+          .then(function () { msg.className = 'msg ok'; msg.textContent = 'Created.'; $('npId').value = ''; $('npUnit').value = ''; loadProjects(); })
+          .catch(function (e) { msg.className = 'msg bad'; msg.textContent = projectErr(e); });
+      });
+    }
+    loadProjects();
+  }
+
+  function loadProjects() {
+    var host = $('plList');
+    if (!host) return;
+    var canManage = projectsCanManage();
+    var note = $('plNote'); if (note) { note.className = 'msg'; note.textContent = ''; }
+    api('/web/projects').then(function (r) {
+      if (r.status === 403) throw new Error('Your grants do not cover project management.');
+      if (!r.ok) throw new Error('projects ' + r.status);
+      return r.json();
+    }).then(function (d) {
+      var projs = (d && d.projects) || [];
+      if (!projs.length) { host.innerHTML = '<div class="hint">No projects in your scope yet.</div>'; return; }
+      var rows = projs.map(function (p) {
+        var st = p.status === 'active' ? 'ok' : 'warn';
+        var actions = canManage
+          ? '<button class="mini" data-lock="' + esc(p.id) + '">Lock</button> '
+            + '<button class="mini" data-promote="' + esc(p.id) + '">Promote</button> '
+            + '<button class="mini danger" data-destroy="' + esc(p.id) + '">Destroy</button>'
+          : '<span class="hint">read-only</span>';
+        return '<tr><td>' + esc(p.id) + '</td><td><span class="pill ' + st + '">' + esc(p.status || '—') + '</span></td>'
+          + '<td style="white-space:nowrap">' + actions + '</td></tr>';
+      }).join('');
+      host.innerHTML = '<table class="grid"><thead><tr><th>Project</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
+      Array.prototype.forEach.call(host.querySelectorAll('[data-lock]'), function (b) {
+        b.addEventListener('click', function () { projectAction('/web/projects/lock', { projectId: b.getAttribute('data-lock') }, b, 'Locking…', 'Lock'); });
+      });
+      Array.prototype.forEach.call(host.querySelectorAll('[data-promote]'), function (b) {
+        b.addEventListener('click', function () { projectAction('/web/projects/promote', { projectId: b.getAttribute('data-promote') }, b, 'Promoting…', 'Promote'); });
+      });
+      Array.prototype.forEach.call(host.querySelectorAll('[data-destroy]'), function (b) {
+        b.addEventListener('click', function () {
+          if (!confirm('Destroy project "' + b.getAttribute('data-destroy') + '"? This removes its entire spec tree.')) return;
+          projectAction('/web/projects/destroy', { id: b.getAttribute('data-destroy') }, b, 'Destroying…', 'Destroy');
+        });
+      });
+    }).catch(function (e) { host.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+  }
+
+  // A friendlier message for the server's grant-scope denial (the client's flags are
+  // an affordance hint; the server is the authority, so a 403 is expected and shown).
+  function projectErr(e) {
+    return /^forbidden$/i.test(e.message) ? 'Not permitted — your grants do not cover this action.' : e.message;
+  }
+  // POST one lifecycle action and refresh, surfacing a graceful error (e.g. a 403 from
+  // the server's per-action grant-scope check) instead of throwing.
+  function projectAction(path, payload, btn, busyLabel, label) {
+    var note = $('plNote'); if (note) { note.className = 'msg'; note.textContent = ''; }
+    btn.disabled = true; btn.textContent = busyLabel;
+    postAndParse(path, payload).then(function () {
+      loadProjects();
+    }).catch(function (e) {
+      btn.disabled = false; btn.textContent = label;
+      if (note) { note.className = 'msg bad'; note.textContent = projectErr(e); }
+    });
+  }
 
   boot();
 })();
 </script>
 </body>
 </html>`;
+}
+
+// ── Web admin plane (session-scoped /web/admin/*) ────────────────────────────
+//
+// The unified web UI's admin-settings surface on the PUBLIC data plane. Each of
+// these thin portal handlers resolves the browser session id and forwards to the
+// web admin orchestrator (webadmin.ts), which re-applies the exact control-plane
+// authorization (user/IdP/key methods pass the session as the credential to the
+// identity/admin orchestrators; org-unit methods require an instance-wide admin
+// grant and mutate through the organization repository). Cookie-authenticated
+// POSTs are CSRF-gated in http.ts (routeData) exactly like /web/logout.
+//
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Body = any;
+
+/** Sign the built-in super-admin in with a username + password posted as JSON
+ *  ({user, password}); forwards to web_orchestrator.signInWithPassword and sets the
+ *  session cookie exactly like the SSO callback (Secure follows requireTls). It
+ *  ESTABLISHES a session (no prior cookie exists to ride), so it is intentionally
+ *  NOT in the cookie-mutation CSRF set. An invalid credential (or disabled password
+ *  login, or an active throttle lockout) maps to 401 with no distinguishing detail. */
+function loginWithPassword(cfg: HostConfig, body: Body, res: ServerResponse, secureCookie: boolean): void {
+  const sessionId = signInWithPassword(cfg, String(body?.user ?? ''), String(body?.password ?? ''));
+  res.writeHead(200, {
+    'content-type': 'application/json',
+    'set-cookie': setSessionCookie(sessionId, secureCookie),
+  });
+  res.end(JSON.stringify({ ok: true }));
+}
+
+/** List hosted users in the caller's scope; forwards to web_admin_orchestrator.listUsers. */
+function adminListUsers(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  const project = url.searchParams.get('project') ?? undefined;
+  sendJson(res, 200, { users: webadmin.listUsers(cfg, sessionId, project) });
+}
+
+/** Create or update a hosted user; forwards to web_admin_orchestrator.upsertUser. */
+function adminUpsertUser(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, webadmin.upsertUser(cfg, sessionId, body as HostedUserRecord));
+}
+
+/** Set a hosted user's lifecycle status; forwards to web_admin_orchestrator.setUserStatus. */
+function adminSetUserStatus(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, webadmin.setUserStatus(cfg, sessionId, String(body?.userId ?? ''), String(body?.status ?? '')));
+}
+
+/** Replace a hosted user's grants; forwards to web_admin_orchestrator.replaceUserGrants. */
+function adminReplaceUserGrants(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, webadmin.replaceUserGrants(cfg, sessionId, String(body?.userId ?? ''), (body?.grants ?? []) as ProjectGrant[]));
+}
+
+/** List identity-provider (SSO) configurations; forwards to web_admin_orchestrator.listIdentityProviders. */
+function adminListProviders(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
+  sendJson(res, 200, { providers: webadmin.listIdentityProviders(cfg, sessionId) });
+}
+
+/** Create or update an identity-provider configuration; forwards to web_admin_orchestrator.upsertIdentityProvider. */
+function adminUpsertProvider(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, webadmin.upsertIdentityProvider(cfg, sessionId, body as IdentityProviderConfig));
+}
+
+/** Remove an identity-provider configuration by id; forwards to web_admin_orchestrator.removeIdentityProvider. */
+function adminRemoveProvider(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  webadmin.removeIdentityProvider(cfg, sessionId, String(body?.id ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+
+/** Mint a single-project MCP token for an AI agent (self-service, session-authorized);
+ *  forwards to web_admin_orchestrator.mintProjectToken. The plaintext token is
+ *  returned exactly once. */
+function mintAgentToken(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  const token = webadmin.mintProjectToken(cfg, sessionId, String(body?.projectId ?? ''), body?.write === true);
+  sendJson(res, 201, { token });
+}
+
+/** Revoke an MCP token by id; forwards to web_admin_orchestrator.revokeProjectToken. */
+function revokeAgentToken(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  webadmin.revokeProjectToken(cfg, sessionId, String(body?.id ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+
+/** List the caller's own MCP tokens (redacted); forwards to
+ *  web_admin_orchestrator.listMyTokens. */
+function listAgentTokens(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
+  sendJson(res, 200, { tokens: webadmin.listMyTokens(cfg, sessionId) });
+}
+
+/** List organization units; forwards to web_admin_orchestrator.listOrganizationUnits. */
+function adminListOrgUnits(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
+  sendJson(res, 200, { units: webadmin.listOrganizationUnits(cfg, sessionId) });
+}
+
+/** List configured secret KEY NAMES (never values); forwards to
+ *  web_admin_orchestrator.listSecretRefs — for the IdP form's clientSecretRef picker. */
+function adminListSecretRefs(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
+  sendJson(res, 200, { refs: webadmin.listSecretRefs(cfg, sessionId) });
+}
+
+/** Create or update an organization unit; forwards to web_admin_orchestrator.upsertOrganizationUnit. */
+function adminUpsertOrgUnit(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, webadmin.upsertOrganizationUnit(cfg, sessionId, body as OrganizationUnitRecord));
+}
+
+/** Place a project into an organization unit; forwards to web_admin_orchestrator.placeProject. */
+function adminPlaceProject(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  webadmin.placeProject(cfg, sessionId, String(body?.projectId ?? ''), String(body?.unitId ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+
+// ── Web project-lifecycle plane (session-scoped /web/projects*) ──────────────
+//
+// The human project-lifecycle surface of the unified web UI on the PUBLIC data
+// plane. Each thin portal handler resolves the browser session id and forwards to
+// the web project orchestrator (webproject.ts): projectList is a scoped read owned
+// there; create/lock/promote/destroy forward to the admin orchestrator with the
+// session as the credential, so its per-action grant-scope authorization applies
+// UNCHANGED (a caller lacking the grant is refused with AdminAuthError → 403).
+// Cookie-authenticated POSTs are CSRF-gated in http.ts (routeData) like /web/logout.
+
+/** List the projects the caller can manage; forwards to web_project_orchestrator.listProjects. */
+function projectList(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
+  sendJson(res, 200, { projects: webproject.listProjects(cfg, sessionId) });
+}
+
+/** Create a project; forwards to web_project_orchestrator.createProject. The
+ *  optional org unit is required for a unit-scoped creator (enforced upstream). */
+function projectCreate(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  const unitId = body?.unitId ? String(body.unitId) : undefined;
+  sendJson(res, 201, webproject.createProject(cfg, sessionId, String(body?.id ?? ''), unitId));
+}
+
+/** Lock a project; forwards to web_project_orchestrator.lockProject. */
+function projectLock(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, webproject.lockProject(cfg, sessionId, String(body?.projectId ?? '')));
+}
+
+/** Promote a project; forwards to web_project_orchestrator.promoteProject. */
+function projectPromote(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, webproject.promoteProject(cfg, sessionId, String(body?.projectId ?? '')));
+}
+
+/** Destroy a project; forwards to web_project_orchestrator.destroyProject. */
+function projectDestroy(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  webproject.destroyProject(cfg, sessionId, String(body?.id ?? ''));
+  sendJson(res, 200, { ok: true });
 }
 
 /**
@@ -1177,7 +2103,7 @@ export async function handleWebRequest(
     // POST /web/sso/start  { providerId, redirectUri } → { url }; also installs the
     // short-lived HttpOnly nonce cookie that binds this browser to the flow.
     if (req.method === 'POST' && parts.length === 3 && parts[1] === 'sso' && parts[2] === 'start') {
-      const started = startSignIn(cfg, body?.providerId as string, body?.redirectUri as string);
+      const started = await startSignIn(cfg, body?.providerId as string, body?.redirectUri as string);
       res.writeHead(200, {
         'content-type': 'application/json',
         'set-cookie': setNonceCookie(started.nonce, ctx.secureCookie),
@@ -1201,6 +2127,23 @@ export async function handleWebRequest(
       });
       res.end();
       return;
+    }
+
+    // GET /web/login-options → the pre-auth sign-in methods the login screen
+    // renders from. UNAUTHENTICATED (no session, no CSRF — it is a GET) and
+    // 404-gated with every /web route on exposure.webUiEnabled in http.ts. The
+    // payload carries only the password-login flag and enabled-provider
+    // { id, displayName } pairs — never secrets, clientIds, or endpoint config.
+    if (req.method === 'GET' && parts.length === 2 && parts[1] === 'login-options') {
+      return sendJson(res, 200, getLoginOptions(cfg));
+    }
+
+    // POST /web/login { user, password } → built-in super-admin password sign-in.
+    // ESTABLISHES a session (no prior cookie exists to ride), so it is NOT in the
+    // cookie-mutation CSRF set — like the SSO callback, trust anchors on the
+    // credential itself. Gated (with every /web route) on exposure.webUiEnabled.
+    if (req.method === 'POST' && parts.length === 2 && parts[1] === 'login') {
+      return loginWithPassword(cfg, body, res, ctx.secureCookie);
     }
 
     // POST /web/logout → end this session and clear the cookie.
@@ -1243,6 +2186,55 @@ export async function handleWebRequest(
       return;
     }
 
+    // ── Agent-token self-service (any signed-in user) ────────────────────────
+    // GET /web/tokens → list the caller's OWN minted MCP tokens (redacted). A read,
+    // so it carries no CSRF requirement (only cookie-auth POSTs are gated above).
+    if (req.method === 'GET' && parts.length === 2 && parts[1] === 'tokens') {
+      return listAgentTokens(cfg, sessionId, res);
+    }
+    // POST /web/tokens { projectId, write } → mint a single-project MCP token for an
+    // AI agent. mintProjectToken forwards to the identity orchestrator's self-service
+    // mint, which authorizes strictly against the caller's own access to that project
+    // and OWNS the token to the caller. The plaintext token is returned once. Web-UI
+    // login and MCP tokens are separate credentials (the token is owned by the human).
+    if (req.method === 'POST' && parts.length === 2 && parts[1] === 'tokens') {
+      return mintAgentToken(cfg, sessionId, body, res);
+    }
+    // POST /web/tokens/revoke { id } → revoke a minted MCP token the caller OWNS.
+    if (req.method === 'POST' && parts.length === 3 && parts[1] === 'tokens' && parts[2] === 'revoke') {
+      return revokeAgentToken(cfg, sessionId, body, res);
+    }
+
+    // ── Project-lifecycle self-management (session-scoped) ───────────────────
+    // The human project-lifecycle surface: list the projects the caller may manage
+    // and create / lock / promote / destroy within their grant scope. projectList is
+    // a scoped read owned by the web project orchestrator; the mutations forward to
+    // the admin orchestrator with the session as the credential (per-action grant
+    // scope enforced there — a caller lacking the grant is refused 403). Cookie POSTs
+    // are CSRF-gated in http.ts (routeData) exactly like /web/logout.
+    if (parts.length >= 2 && parts[1] === 'projects') {
+      // GET /web/projects — the projects the caller may manage (scoped).
+      if (req.method === 'GET' && parts.length === 2) {
+        return projectList(cfg, sessionId, res);
+      }
+      // POST /web/projects { id, unitId? } — create a project (project:create scope).
+      if (req.method === 'POST' && parts.length === 2) {
+        return projectCreate(cfg, sessionId, body, res);
+      }
+      // POST /web/projects/lock { projectId } — lock (lock:create scope).
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'lock') {
+        return projectLock(cfg, sessionId, body, res);
+      }
+      // POST /web/projects/promote { projectId } — mark ready (promote:mark-ready scope).
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'promote') {
+        return projectPromote(cfg, sessionId, body, res);
+      }
+      // POST /web/projects/destroy { id } — deregister (project:destroy scope).
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'destroy') {
+        return projectDestroy(cfg, sessionId, body, res);
+      }
+    }
+
     // ── Admin control-plane, session-scoped (slice 3) ────────────────────────
     // These reuse the EXISTING Phase-6 scoped control-plane functions, passing the
     // browser session id as the credential (a ws_ session resolves to a Principal
@@ -1251,10 +2243,57 @@ export async function handleWebRequest(
     // another tenant's data. No new authorization surface, just a browser-reachable
     // route onto the same scoped reads the admin API already exposes.
     if (parts.length >= 2 && parts[1] === 'admin') {
-      // GET /web/admin/users — scoped user directory (user:admin scope).
+      // ── Web admin orchestrator surface (user / IdP / key / org-unit) ───────
+      // Each route forwards to webadmin.ts (web_admin_orchestrator), which
+      // re-applies the exact control-plane authorization with the session as the
+      // credential. Cookie POSTs here are CSRF-gated in http.ts like /web/logout.
+      //
+      // GET /web/admin/users?project= — scoped user directory (user:admin scope).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'users') {
-        return sendJson(res, 200, { users: listUsers(cfg, sessionId) });
+        return adminListUsers(cfg, sessionId, url, res);
       }
+      // POST /web/admin/users/status { userId, status }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'users' && parts[3] === 'status') {
+        return adminSetUserStatus(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/users/grants { userId, grants }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'users' && parts[3] === 'grants') {
+        return adminReplaceUserGrants(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/users { ...HostedUserRecord }
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'users') {
+        return adminUpsertUser(cfg, sessionId, body, res);
+      }
+      // GET /web/admin/providers — identity-provider (SSO) configs (instance-admin).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'providers') {
+        return adminListProviders(cfg, sessionId, res);
+      }
+      // POST /web/admin/providers/remove { id }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'providers' && parts[3] === 'remove') {
+        return adminRemoveProvider(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/providers { ...IdentityProviderConfig }
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'providers') {
+        return adminUpsertProvider(cfg, sessionId, body, res);
+      }
+      // GET /web/admin/org/units — organization units (instance-admin).
+      if (req.method === 'GET' && parts.length === 4 && parts[2] === 'org' && parts[3] === 'units') {
+        return adminListOrgUnits(cfg, sessionId, res);
+      }
+      // GET /web/admin/secrets — configured secret ref NAMES (instance-admin; never values).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'secrets') {
+        return adminListSecretRefs(cfg, sessionId, res);
+      }
+      // POST /web/admin/org/units { ...OrganizationUnitRecord }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'org' && parts[3] === 'units') {
+        return adminUpsertOrgUnit(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/org/placements { projectId, unitId }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'org' && parts[3] === 'placements') {
+        return adminPlaceProject(cfg, sessionId, body, res);
+      }
+
+      // ── Existing scoped control-plane reads (unchanged) ───────────────────
       // GET /web/admin/landscape — the org-unit + project + relation graph (landscape:read).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'landscape') {
         return sendJson(res, 200, generateLandscape(cfg, sessionId));
@@ -1291,6 +2330,18 @@ export async function handleWebRequest(
   } catch (err) {
     if (err instanceof UnauthenticatedError) return sendJson(res, 401, { error: 'unauthorized' });
     if (err instanceof ForbiddenError) return sendJson(res, 403, { error: 'forbidden' });
+    // The project-lifecycle forwards authorize by grant scope in the admin
+    // orchestrator, which throws AdminAuthError (missing credential OR insufficient
+    // scope); both map to 403 here, so the client surfaces a graceful "not permitted".
+    if (err instanceof AdminAuthError) return sendJson(res, 403, { error: 'forbidden' });
+    // A lock that fails validate-as-complete is a conflict, not a client error —
+    // return the validation errors like the admin plane does (409). Matched by name
+    // (not an admin.ts class import) so the web portal takes no undeclared edge onto
+    // the admin orchestrator; the forward itself rides web_project_orchestrator.
+    if (err instanceof Error && err.name === 'LockValidationError') {
+      const errors = (err as { errors?: { code: string; message: string; specId?: string }[] }).errors;
+      return sendJson(res, 409, { error: err.message, errors });
+    }
     const msg = err instanceof Error ? err.message : String(err);
     if (/unsupported graph tier/i.test(msg)) return sendJson(res, 400, { error: msg });
     if (/not found|unknown/i.test(msg)) return sendJson(res, 404, { error: msg });

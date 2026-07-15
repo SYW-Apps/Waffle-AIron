@@ -112,6 +112,25 @@ function webCsrfHeaderPresent(req: IncomingMessage): boolean {
   return (Array.isArray(h) ? h[0] : h) === '1';
 }
 
+/** The cookie-authenticated state-changing /web POST routes that require the CSRF
+ *  header (mirroring /web/logout): every /web/admin/* mutation plus the agent-token
+ *  self-service routes. */
+const WEB_MUTATION_PATHS = new Set<string>([
+  '/web/admin/users',
+  '/web/admin/users/status',
+  '/web/admin/users/grants',
+  '/web/admin/providers',
+  '/web/admin/providers/remove',
+  '/web/admin/org/units',
+  '/web/admin/org/placements',
+  '/web/tokens',
+  '/web/tokens/revoke',
+  '/web/projects',
+  '/web/projects/lock',
+  '/web/projects/promote',
+  '/web/projects/destroy',
+]);
+
 export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResponse): void {
   const url = new URL(req.url ?? '/', 'http://localhost');
   if (req.method === 'GET' && url.pathname === '/healthz') {
@@ -183,10 +202,14 @@ export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResp
       sendJson(res, 404, { error: 'not found' });
       return;
     }
-    // CSRF: cookie-authenticated state-changing web routes require the header.
+    // CSRF: cookie-authenticated state-changing web routes require the header. The
+    // /web/admin/* mutations are session-scoped writes on the public data plane, so
+    // they carry the same cookie-mutation CSRF requirement as /web/logout.
     const isCookieMutation =
       req.method === 'POST' &&
-      (url.pathname === '/web/logout' || url.pathname === '/web/logout-all');
+      (url.pathname === '/web/logout' ||
+        url.pathname === '/web/logout-all' ||
+        WEB_MUTATION_PATHS.has(url.pathname));
     if (isCookieMutation && cookieAuth && !webCsrfHeaderPresent(req)) {
       sendJson(res, 403, { error: 'missing X-Wairon-Web header' });
       return;

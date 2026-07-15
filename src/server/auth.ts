@@ -1,7 +1,9 @@
 import * as crypto from 'crypto';
 import {
   type ApiKeyRecord,
+  type HostConfig,
   type Principal,
+  type PrincipalSubject,
   type ProjectGrant,
   type Role,
   type ViewGrant,
@@ -143,6 +145,48 @@ export function authenticate(dataDir: string, token: string | null): Principal {
 export function authenticateMaster(token: string | null): Principal {
   if (!masterMatches(token)) return UNAUTHENTICATED;
   return { tokenId: 'admin:master', role: 'admin', projects: ['*'], authenticated: true };
+}
+
+// ── Built-in super-admin web login (WAIRON_ADMIN_USER / WAIRON_ADMIN_PASSWORD) ─
+
+/** The stable userId of the env-anchored built-in super-admin web-login account. */
+export const BUILTIN_SUPERADMIN_USER_ID = 'builtin:superadmin';
+
+/** Constant-time equality of two strings via fixed-length salted digests: hashing
+ *  first normalizes both sides to equal-length buffers, so timingSafeEqual applies
+ *  and the comparison leaks neither content nor length. */
+function hashedEquals(a: string, b: string): boolean {
+  const ha = Buffer.from(hashToken(a), 'hex');
+  const hb = Buffer.from(hashToken(b), 'hex');
+  return ha.length === hb.length && crypto.timingSafeEqual(ha, hb);
+}
+
+/**
+ * Verify the built-in super-admin web-login credentials against the env-injected
+ * WAIRON_ADMIN_USER / WAIRON_ADMIN_PASSWORD pair carried on the host configuration.
+ * CONSTANT-TIME: both the username and the password are hashed to fixed-length
+ * digests and compared with a timing-safe equality, and BOTH comparisons are always
+ * evaluated before branching, so no user-enumeration or early-exit timing signal
+ * exists. When either configured value is unset, password login is DISABLED and
+ * every attempt resolves to null (the server still starts — SSO-only posture). On a
+ * full match, returns the stable built-in super-admin subject; on any mismatch
+ * returns null. Never throws and performs no session, grant, throttle, or audit
+ * work — the web orchestrator owns the session mint and the failed-attempt throttle.
+ */
+export function verifyBuiltinAdmin(cfg: HostConfig, user: string, password: string): PrincipalSubject | null {
+  const configuredUser = cfg.builtinAdminUser ?? '';
+  const configuredPassword = cfg.builtinAdminPassword ?? '';
+  if (!configuredUser || !configuredPassword) {
+    return null; // password login disabled (SSO-only) — steps 1–2
+  }
+  // steps 3–4: ALWAYS evaluate both comparisons before branching (no early exit).
+  const userMatches = hashedEquals(String(user ?? ''), configuredUser);
+  const passwordMatches = hashedEquals(String(password ?? ''), configuredPassword);
+  if (!(userMatches && passwordMatches)) {
+    return null; // steps 5–6: same path/timing for a wrong user and a wrong password
+  }
+  // steps 7–8: the stable built-in super-admin subject.
+  return { userId: BUILTIN_SUPERADMIN_USER_ID, kind: 'human', issuer: 'local' };
 }
 
 /** The single control-plane entry point accepting three credential kinds: a browser

@@ -1,0 +1,93 @@
+id: web_project_orchestrator_impl
+name: Web Project Orchestrator Implementation
+description: >-
+  Bridges project lifecycle to the admin orchestrator (session as credential; grant-scope authorized
+  there); owns the scoped project list because the admin list is master-only.
+contract: iweb_project_orchestrator
+sourcePath: src/server/webproject.ts
+methods:
+  - name: listProjects
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the browser session to a Principal (an expired or absent session yields an
+          unauthenticated principal)
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateSession
+      - stepNumber: 2
+        description: Gather organization units to resolve the caller's project scope
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listUnits
+      - stepNumber: 3
+        description: Gather project placements to map in-scope units to their projects
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listPlacements
+      - stepNumber: 4
+        description: >-
+          Resolve the caller's project-access scope over the organization tree (expanding
+          unit-scoped grants across each unit's subtree)
+        type: call
+        targetComponent: scope_specialist
+        targetMethod: resolveScope
+      - stepNumber: 5
+        description: List all hosted project records
+        type: call
+        targetComponent: project_registry
+        targetMethod: list
+      - stepNumber: 6
+        description: >-
+          Keep only the records within the caller's scope — every record when scope.all
+          (super-admin), otherwise those whose id is in the scope's projectIds
+        type: local
+      - stepNumber: 7
+        description: Return the project records the caller may see
+        type: return
+        outcome: scoped hosted project records
+    detail: full
+  - name: createProject
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the admin orchestrator passing the sessionId as the credential (project:create
+          scope enforced there)
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: createProject
+    detail: calls-only
+  - name: lockProject
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the admin orchestrator passing the sessionId as the credential (lock:create
+          scope enforced there)
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: lockProject
+    detail: calls-only
+  - name: promoteProject
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the admin orchestrator passing the sessionId as the credential
+          (promote:mark-ready scope enforced there)
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: promoteProject
+    detail: calls-only
+  - name: destroyProject
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the admin orchestrator passing the sessionId as the credential (project:destroy
+          scope enforced there)
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: destroyProject
+    detail: calls-only
+detail: calls-only
+status: complete
+createdAt: '2026-07-13T20:36:25.016Z'
+updatedAt: '2026-07-13T20:37:54.302Z'

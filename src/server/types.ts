@@ -457,6 +457,10 @@ export interface IdentityProviderConfig {
   id: string;
   /** e.g. 'oidc' | 'authentik' | 'keycloak' | 'google' | 'entra' */
   providerType: string;
+  /** Optional admin-set human label, shown on the login screen's
+   *  "Sign in with <displayName>" button. Defaults to the provider id when
+   *  unset. Presentation only — never used for provider resolution. */
+  displayName?: string;
   issuerUrl?: string;
   clientId?: string;
   clientSecretRef?: string;
@@ -468,8 +472,45 @@ export interface IdentityProviderConfig {
    *  When set and non-empty, a redirectUri not on the list is refused. When
    *  unset/empty, any redirectUri is accepted (backward compatible). */
   allowedRedirectUris?: string[];
+  /** Explicit browser-facing (front-channel) authorization endpoint override.
+   *  When set, wins over OIDC discovery and providerType templates. The PUBLIC URL
+   *  the user's browser is redirected to; the split-horizon lever paired with an
+   *  internal tokenEndpoint. */
+  authorizationEndpoint?: string;
+  /** Explicit server-facing (back-channel) token endpoint override. When set, wins
+   *  over discovery/templates. The URL the host calls directly for code->token
+   *  exchange, so it may be a VPC-internal address unreachable from the internet. */
+  tokenEndpoint?: string;
+  /** Explicit JWKS URI override for id_token signature verification (server-facing
+   *  back-channel; may be VPC-internal). When unset, resolved from discovery or the
+   *  providerType template. */
+  jwksUri?: string;
+  /** Explicit userinfo endpoint override (server-facing back-channel), used as a
+   *  fallback identity-verification path when JWKS verification is unavailable. */
+  userinfoEndpoint?: string;
   enabled: boolean;
   updatedAt: string;
+}
+
+/** The resolved set of OIDC endpoints for one identity provider, computed once by
+ *  the identity provider adapter (from explicit config overrides, OIDC discovery, or
+ *  a providerType template) and threaded through the authorization-URL build,
+ *  code->token exchange, and id_token verification. Splits the browser-facing
+ *  front-channel (authorizationEndpoint) from the server-facing back-channel
+ *  (tokenEndpoint, jwksUri, userinfoEndpoint) so the two may live at different
+ *  addresses (public authorize vs VPC-internal token/jwks). Mirrors
+ *  .wai/specs/types/provider_endpoints.yaml. */
+export interface ProviderEndpoints {
+  /** The provider's canonical issuer identifier, matched against the id_token iss claim. */
+  issuer: string;
+  /** Browser-facing (front-channel) authorization endpoint the user agent is redirected to. */
+  authorizationEndpoint: string;
+  /** Server-facing (back-channel) token endpoint the host calls for code->token exchange. */
+  tokenEndpoint: string;
+  /** Server-facing JWKS URI providing the public keys for id_token signature verification. */
+  jwksUri?: string;
+  /** Server-facing userinfo endpoint used as a fallback verification path. */
+  userinfoEndpoint?: string;
 }
 
 /** Reserved prefix marking a session id as a first-class web-session
@@ -518,6 +559,22 @@ export interface WebGraphModel {
   level: number;
   generatedAt: string;
   scope?: string;
+}
+
+/** The pre-auth login-options projection the login screen renders from: which
+ *  sign-in methods this hosted instance offers. Served UNAUTHENTICATED on the
+ *  webUiEnabled-gated data plane, so it is deliberately minimal — a
+ *  password-login flag plus enabled-provider ids and display labels (standard,
+ *  safe pre-auth SSO discovery). NEVER carries secrets, clientIds, issuer URLs,
+ *  endpoints, or any other provider config. Mirrors
+ *  .wai/specs/types/web_login_options.yaml. */
+export interface WebLoginOptions {
+  /** Whether the built-in admin password login is configured (BOTH
+   *  WAIRON_ADMIN_USER and WAIRON_ADMIN_PASSWORD set on the server). */
+  passwordLogin: boolean;
+  /** One entry per ENABLED identity provider — displayName is the admin-set
+   *  label, defaulting to the provider id. Disabled providers never appear. */
+  providers: { id: string; displayName: string }[];
 }
 
 /** The current principal's identity + derived capability flags, so the web
@@ -594,6 +651,14 @@ export interface HostConfig {
    *  working directory. NEVER set by the hosted `serve` command, so the dev-only
    *  auto-session path can never appear in a real deployment. */
   devMode?: boolean;
+  /** Built-in super-admin web-login username, read from WAIRON_ADMIN_USER by the
+   *  serve command. When this or builtinAdminPassword is unset, password login is
+   *  disabled (SSO-only) — the server still starts. */
+  builtinAdminUser?: string;
+  /** Built-in super-admin web-login password, read from WAIRON_ADMIN_PASSWORD by
+   *  the serve command. Held in memory only — never persisted or logged; compared
+   *  constant-time by the auth specialist. */
+  builtinAdminPassword?: string;
 }
 
 /** Outcome of a gated promote — never an actual merge. */

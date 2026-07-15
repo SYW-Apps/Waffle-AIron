@@ -84,6 +84,10 @@ import type { SurfaceSnapshot } from '../models/index.js';
 
 const LANDSCAPE_MANAGE_PERMISSION = 'landscape:manage';
 const LANDSCAPE_READ_PERMISSION = 'landscape:read';
+/** The data-plane permissions that scope an agent/session credential to a
+ *  project — accepted as observer authority by the consumer-facing exchange. */
+const MCP_READ_PERMISSION = 'mcp:read';
+const MCP_WRITE_PERMISSION = 'mcp:write';
 
 // ── authorization helpers (scope-aware — Phase 6 tenancy) ────────────────────
 //
@@ -130,6 +134,34 @@ function resolveLandscapeReadScope(
     projectIds: [...new Set([...read.projectIds, ...manage.projectIds])],
     unitIds: [...new Set([...read.unitIds, ...manage.unitIds])],
   };
+}
+
+/**
+ * Require the caller's RESOLVED, org-unit-aware scope to cover the OBSERVER
+ * project it claims to act as (the data plane's bound project, or the portal's
+ * path parameter). The observer identity drives every reachability/visibility
+ * resolution in the consumer-facing exchange, so an unverified claim would let a
+ * credential read the discovery neighbourhood of a project it is not scoped to —
+ * in particular, a unit-scoped '*'+orgUnitId grant projects a flat '*' into the
+ * coarse role/projects set and can BIND another tenant's project on the data
+ * plane. Accepts any of the caller's mcp:read / mcp:write (agent or session,
+ * data plane) or landscape:read / landscape:manage (operator) scopes over the
+ * observer project; a genuine instance-wide grant resolves to scope.all and
+ * passes for any project.
+ */
+function requireObserverScope(cfg: HostConfig, principal: Principal, observerProjectId: string): void {
+  const units = listOrganizationUnits(cfg.dataDir);
+  const placements = listProjectPlacements(cfg.dataDir);
+  const grants = principal.grants ?? [];
+  const covered = [
+    MCP_READ_PERMISSION,
+    MCP_WRITE_PERMISSION,
+    LANDSCAPE_READ_PERMISSION,
+    LANDSCAPE_MANAGE_PERMISSION,
+  ].some((permission) => permits(resolveScope(grants, permission, units, placements), observerProjectId));
+  if (!covered) {
+    throw new ForbiddenError('caller lacks scope over the current project');
+  }
 }
 
 // ── subject / audit helpers (mirrored from identity.ts / policy.ts) ──────────
@@ -733,7 +765,9 @@ export function generateLandscape(
 
 /**
  * MCP tool workflow `sdd_landscape_list_reachable_projects`: authenticate the
- * caller, then return only the projects reachable from currentProjectId.
+ * caller, require its resolved scope to cover the observer project
+ * (requireObserverScope), then return only the projects reachable from
+ * currentProjectId.
  * Reachability is DIRECTIONAL and RELATIONS-ONLY — the reachable targets are
  * exactly the projects with an ACTIVE relation whose sourceProjectId is
  * currentProjectId. Placements confer none; there is no transitive closure.
@@ -743,7 +777,8 @@ export function listReachableProjectsForMcp(
   credential: string | null,
   currentProjectId: string,
 ): ReachableProjectRef[] {
-  requirePrincipal(cfg, credential);
+  const principal = requirePrincipal(cfg, credential);
+  requireObserverScope(cfg, principal, currentProjectId);
 
   const active = listProjectRelations(cfg.dataDir, currentProjectId, undefined, 'active');
   const byTarget = new Map<string, ReachableProjectRef>();
@@ -765,7 +800,8 @@ export function listReachableProjectsForMcp(
 
 /**
  * MCP tool workflow `sdd_landscape_list_reachable_project_interfaces`:
- * authenticate the caller, reject any target outside the reachable set (no ACTIVE
+ * authenticate the caller, require its resolved scope to cover the observer
+ * project (requireObserverScope), reject any target outside the reachable set (no ACTIVE
  * relation from currentProjectId → Forbidden, no existence leak), then return the
  * redacted PublicInterfaceSummary entries from the target's stored snapshot. A
  * target with no snapshot yields an empty list (private by default).
@@ -776,7 +812,8 @@ export function listReachableProjectInterfacesForMcp(
   currentProjectId: string,
   targetProjectId: string,
 ): PublicInterfaceSummary[] {
-  requirePrincipal(cfg, credential);
+  const principal = requirePrincipal(cfg, credential);
+  requireObserverScope(cfg, principal, currentProjectId);
 
   const active = listProjectRelations(cfg.dataDir, currentProjectId, targetProjectId, 'active');
   if (active.length === 0) {
@@ -802,7 +839,8 @@ export function listReachableProjectInterfacesForMcp(
 }
 
 /**
- * Stage 2 discovery catalog: authenticate the caller, resolve the observer
+ * Stage 2 discovery catalog: authenticate the caller, require its resolved scope
+ * to cover the observer project (requireObserverScope), resolve the observer
  * project's unit-graph visibility (open-within-tenant, closed groups hidden,
  * exposeTo grants honored, cross-tenant grant-only), and return each visible
  * target with its audience distance and the redacted catalog summaries whose
@@ -815,7 +853,8 @@ export function listVisibleSurfaces(
   credential: string | null,
   currentProjectId: string,
 ): VisibleSurfaceEntry[] {
-  requirePrincipal(cfg, credential);
+  const principal = requirePrincipal(cfg, credential);
+  requireObserverScope(cfg, principal, currentProjectId);
 
   const units = listOrganizationUnits(cfg.dataDir);
   const placements = listProjectPlacements(cfg.dataDir);
@@ -834,7 +873,8 @@ export function listVisibleSurfaces(
 
 /**
  * MCP tool workflow `sdd_landscape_get_project_surface`: the CONSUMER path of
- * the surface exchange. Authenticate the caller, gate by unit-graph
+ * the surface exchange. Authenticate the caller, require its resolved scope to
+ * cover the observer project (requireObserverScope), gate by unit-graph
  * visibility (or, on an instance with no org units, by relations-only
  * reachability — the legacy posture), then generate the target's
  * CONTRACT-GRADE snapshot with the audience ceiling set to the observer's
@@ -848,7 +888,8 @@ export function getProjectSurfaceForMcp(
   currentProjectId: string,
   targetProjectId: string,
 ): SurfaceSnapshot {
-  requirePrincipal(cfg, credential);
+  const principal = requirePrincipal(cfg, credential);
+  requireObserverScope(cfg, principal, currentProjectId);
 
   const units = listOrganizationUnits(cfg.dataDir);
   let maxAudience: string;

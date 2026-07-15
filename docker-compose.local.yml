@@ -1,0 +1,83 @@
+# Standalone LOCAL DEV environment.
+#
+# Builds the wairon image from THIS checkout (the latest dev source — no GHCR
+# pull), and runs the full hosted server with the web UI ON over plain http and
+# state persisted to a named volume. NOT for production (see docker-compose.yml
+# for the self-hosting starting point).
+#
+# Quick start (PowerShell shown; bash equivalents in the walkthrough):
+#   1) Set a master admin token in .env:
+#        "WAIRON_ADMIN_TOKEN=$(-join ((1..32)|%{ '{0:x2}' -f (Get-Random -Max 256) }))" | Out-File -Encoding ascii .env
+#   2) Build + run:
+#        docker compose -f docker-compose.local.yml up -d --build
+#   3) Verify + open:
+#        curl http://localhost:8080/healthz          ->  {"ok":true}
+#        start http://localhost:8080/                ->  the web UI (app shell at /, API under /web/*)
+#   4) Bootstrap a project (admin plane is loopback-in-container — reach it via exec):
+#        docker compose -f docker-compose.local.yml exec wairon wairon host project create --id demo
+#        docker compose -f docker-compose.local.yml exec wairon wairon host key mint --project demo --role editor
+#
+# Rebuild after new commits:   docker compose -f docker-compose.local.yml up -d --build
+# Tail logs:                   docker compose -f docker-compose.local.yml logs -f
+# Tear down (keep data):       docker compose -f docker-compose.local.yml down
+# Tear down + wipe data:       docker compose -f docker-compose.local.yml down -v
+
+services:
+  wairon:
+    image: wairon:dev
+    build:
+      context: .
+      args:
+        VERSION: dev
+        REVISION: local
+        CREATED: local
+    ports:
+      - "8080:8080" # one listener: web UI at /, its API under /web/*, MCP data plane at /mcp
+    environment:
+      WAIRON_DATA_DIR: /data
+      WAIRON_PACKS_DIR: /data/packs
+      # Master admin credential — the server REFUSES to start without it (>=16 chars).
+      # Read from .env; never commit the value.
+      WAIRON_ADMIN_TOKEN: ${WAIRON_ADMIN_TOKEN:?set WAIRON_ADMIN_TOKEN in .env (copy .env.example)}
+      # Built-in super-admin WEB login (optional): set BOTH in .env to enable the
+      # username+password sign-in on the web UI. When either is unset, password
+      # login is disabled (SSO-only). This env-anchored account is the ONLY
+      # instance-wide *:* identity — user grants can never carry *:*.
+      WAIRON_ADMIN_USER: ${WAIRON_ADMIN_USER:-}
+      WAIRON_ADMIN_PASSWORD: ${WAIRON_ADMIN_PASSWORD:-}
+      # --- SSO client secrets (optional, for testing Identity Providers) ---
+      # A provider's clientSecretRef resolves from the /data secret store first,
+      # then these env fallbacks. Generic refs (e.g. "keycloak-secret") are set at
+      # runtime instead:  ... exec wairon wairon host secret set keycloak-secret <value>
+      # WAIRON_GIT_TOKEN: ${WAIRON_GIT_TOKEN:-}
+      # --- Declarative OIDC/SSO seeding (optional) ---
+      # When WAIRON_OIDC_ISSUER is set, startup seeds (idempotently re-seeds on
+      # every boot) the identity provider `default` from these values — the whole
+      # SSO setup ships here, no post-deploy clicking. The web UI still manages
+      # providers on top. Give EITHER the raw client secret (stored into the
+      # /data secret store under the ref "oidc-default") OR an existing stored
+      # ref via WAIRON_OIDC_CLIENT_SECRET_REF. List values are comma-separated.
+      # WAIRON_OIDC_ISSUER: ${WAIRON_OIDC_ISSUER:-}
+      # WAIRON_OIDC_PROVIDER_TYPE: ${WAIRON_OIDC_PROVIDER_TYPE:-oidc}
+      # Login-button label ("Sign in with <display name>"; defaults to the id):
+      # WAIRON_OIDC_DISPLAY_NAME: ${WAIRON_OIDC_DISPLAY_NAME:-}
+      # WAIRON_OIDC_CLIENT_ID: ${WAIRON_OIDC_CLIENT_ID:-}
+      # WAIRON_OIDC_CLIENT_SECRET: ${WAIRON_OIDC_CLIENT_SECRET:-}
+      # WAIRON_OIDC_CLIENT_SECRET_REF: ${WAIRON_OIDC_CLIENT_SECRET_REF:-}
+      # WAIRON_OIDC_ADMIN_GROUPS: ${WAIRON_OIDC_ADMIN_GROUPS:-}
+      # WAIRON_OIDC_ALLOWED_REDIRECT_URIS: ${WAIRON_OIDC_ALLOWED_REDIRECT_URIS:-}
+      # WAIRON_OIDC_ALLOWED_DOMAINS: ${WAIRON_OIDC_ALLOWED_DOMAINS:-}
+      # Split-horizon endpoint overrides (public authorize vs VPC-internal back-channel):
+      # WAIRON_OIDC_AUTHORIZATION_ENDPOINT: ${WAIRON_OIDC_AUTHORIZATION_ENDPOINT:-}
+      # WAIRON_OIDC_TOKEN_ENDPOINT: ${WAIRON_OIDC_TOKEN_ENDPOINT:-}
+      # WAIRON_OIDC_JWKS_URI: ${WAIRON_OIDC_JWKS_URI:-}
+      # WAIRON_OIDC_USERINFO_ENDPOINT: ${WAIRON_OIDC_USERINFO_ENDPOINT:-}
+    volumes:
+      - wairon-dev-data:/data
+      # Turns the web UI ON over plain http for local dev (webUiEnabled +
+      # requireTls:false). In serve mode the web UI is OFF by default.
+      - ./dev/exposure-policy.json:/data/exposure-policy.json:ro
+    restart: unless-stopped
+
+volumes:
+  wairon-dev-data:

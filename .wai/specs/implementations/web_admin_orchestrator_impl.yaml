@@ -1,0 +1,264 @@
+id: web_admin_orchestrator_impl
+name: Web Admin Orchestrator Implementation
+description: >-
+  Bridges the public web plane to the control-plane admin capabilities. User, identity-provider, and
+  API-key methods are 1:1 forwards to the identity/admin orchestrators passing the browser sessionId
+  as the credential, so their scope authorization and auditing apply unchanged. Organization-unit
+  reads/writes are owned here: resolve the session to a Principal, require an instance-wide admin
+  grant, mutate through the organization repository, and append best-effort audit events.
+contract: iweb_admin_orchestrator
+sourcePath: src/server/webadmin.ts
+methods:
+  - name: listUsers
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the identity orchestrator, passing the sessionId as the credential (so its
+          user:admin scope filtering applies)
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: listUsers
+  - name: upsertUser
+    narrative:
+      - stepNumber: 1
+        description: Forward to the identity orchestrator, passing the sessionId as the credential
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: upsertUser
+  - name: setUserStatus
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the identity orchestrator, passing the sessionId as the credential (a
+          deactivation revokes the user's tokens and web sessions upstream)
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: setUserStatus
+  - name: replaceUserGrants
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the identity orchestrator, passing the sessionId as the credential
+          (privilege-escalation guarded upstream)
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: replaceUserGrants
+  - name: listIdentityProviders
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the identity orchestrator, passing the sessionId as the credential
+          (instance-admin only upstream)
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: listIdentityProviders
+  - name: upsertIdentityProvider
+    narrative:
+      - stepNumber: 1
+        description: Forward to the identity orchestrator, passing the sessionId as the credential
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: upsertIdentityProvider
+  - name: removeIdentityProvider
+    narrative:
+      - stepNumber: 1
+        description: Forward to the identity orchestrator, passing the sessionId as the credential
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: removeIdentityProvider
+  - name: listOrganizationUnits
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the browser session to a Principal through the auth specialist (an expired or
+          absent session yields an unauthenticated principal)
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateSession
+      - stepNumber: 2
+        description: If the principal lacks an instance-wide admin grant, deny
+        type: branch
+        condition: the principal lacks an instance-wide admin grant
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the organization administration
+        type: throw
+        error: Forbidden — instance-admin required
+      - stepNumber: 4
+        description: List every organization unit through the organization repository
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listUnits
+      - stepNumber: 5
+        description: Return the organization units
+        type: return
+        outcome: organization units
+    detail: full
+  - name: upsertOrganizationUnit
+    narrative:
+      - stepNumber: 1
+        description: Resolve the browser session to a Principal through the auth specialist
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateSession
+      - stepNumber: 2
+        description: If the principal lacks an instance-wide admin grant, deny
+        type: branch
+        condition: the principal lacks an instance-wide admin grant
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the organization administration
+        type: throw
+        error: Forbidden — instance-admin required
+      - stepNumber: 4
+        description: >-
+          Create or update the organization unit through the organization repository (id/createdAt
+          stamping and parent referential + cycle validation happen there)
+        type: call
+        targetComponent: organization_repository
+        targetMethod: upsertUnit
+        assertsGuarantees:
+          - atomic
+      - stepNumber: 5
+        description: Append a redacted audit event without letting a failure fail the upsert
+        type: try
+        endStep: 7
+        catches:
+          - error: audit append failure
+            step: 8
+      - stepNumber: 6
+        description: >-
+          Append the redacted org.unit.upsert audit event (security level) under the active
+          retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 7
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 9
+      - stepNumber: 8
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 9
+        description: Return the stored organization unit
+        type: return
+        outcome: stored organization unit
+    detail: full
+  - name: placeProject
+    narrative:
+      - stepNumber: 1
+        description: Resolve the browser session to a Principal through the auth specialist
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateSession
+      - stepNumber: 2
+        description: If the principal lacks an instance-wide admin grant, deny
+        type: branch
+        condition: the principal lacks an instance-wide admin grant
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the organization administration
+        type: throw
+        error: Forbidden — instance-admin required
+      - stepNumber: 4
+        description: >-
+          Build the ProjectPlacement binding projectId to unitId (id/createdAt stamping and unitId
+          referential validation happen in the repository)
+        type: local
+      - stepNumber: 5
+        description: Place the project into the organization unit through the organization repository
+        type: call
+        targetComponent: organization_repository
+        targetMethod: placeProject
+        assertsGuarantees:
+          - atomic
+      - stepNumber: 6
+        description: Append a redacted audit event without letting a failure fail the placement
+        type: try
+        endStep: 8
+        catches:
+          - error: audit append failure
+            step: 9
+      - stepNumber: 7
+        description: >-
+          Append the redacted org.placement.set audit event (security level) under the active
+          retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 8
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 10
+      - stepNumber: 9
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 10
+        description: Return once the project has been placed
+        type: return
+        outcome: project placed
+    detail: full
+  - name: mintProjectToken
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the identity orchestrator's self-service mint passing the sessionId as the
+          credential, plus projectId and write; it self-authorizes against the caller's own access,
+          owns the token to the caller, and returns the plaintext once
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: mintSelfToken
+      - stepNumber: 2
+        description: Return the minted token
+        type: return
+        outcome: plaintext single-project MCP token (shown once)
+    detail: calls-only
+  - name: revokeProjectToken
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the identity orchestrator's self-service revoke passing the sessionId as the
+          credential and the token id
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: revokeSelfToken
+    detail: calls-only
+  - name: listMyTokens
+    narrative:
+      - stepNumber: 1
+        description: Forward to the identity orchestrator passing the sessionId as the credential
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: listSelfTokens
+    detail: calls-only
+  - name: listSecretRefs
+    narrative:
+      - stepNumber: 1
+        description: Resolve the browser session to a Principal
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateSession
+      - stepNumber: 2
+        description: If the principal lacks an instance-wide admin grant, deny
+        type: branch
+        condition: the principal lacks an instance-wide admin grant
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the secret-ref listing
+        type: throw
+        error: Forbidden — instance-admin required
+      - stepNumber: 4
+        description: List the configured secret key names (never the values) through the secret registry
+        type: call
+        targetComponent: secret_registry
+        targetMethod: list
+      - stepNumber: 5
+        description: Return the secret ref names
+        type: return
+        outcome: configured secret ref names
+    detail: full
+detail: calls-only
+status: complete
+createdAt: '2026-07-13T18:28:58.935Z'
+updatedAt: '2026-07-14T12:31:03.510Z'

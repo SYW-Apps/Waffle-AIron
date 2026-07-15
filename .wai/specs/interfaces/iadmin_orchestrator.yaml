@@ -39,7 +39,14 @@ methods:
     signature: 'listProjects(credential: string): HostedProjectRecord[]'
     returns: HostedProjectRecord[]
   - name: mintKey
-    description: Authenticate and mint a project-scoped API key.
+    description: >-
+      Authenticate the master credential and mint a project-scoped API key. REFUSES any request that
+      would produce an instance-wide super-admin credential: the legacy admin role projects to a
+      {projectId '*', permissions '*'} grant and the '*' project wildcard is instance-wide, so role
+      admin and project '*' are both rejected — only project-scoped, non-super-admin keys are
+      mintable. The env-anchored built-in admin account (the WAIRON_ADMIN_TOKEN master credential
+      and the WAIRON_ADMIN_USER web login) is the only instance-wide *:* super-admin; those
+      principals are not minted keys and their authentication paths are unaffected.
     signature: 'mintKey(credential: string, project: string, role: string): string'
     returns: string
   - name: revokeKey
@@ -150,4 +157,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-07-10T17:21:59.390Z'
+updatedAt: '2026-07-14T11:42:59.964Z'

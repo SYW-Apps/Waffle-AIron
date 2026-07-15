@@ -1,0 +1,72 @@
+id: iweb_project_orchestrator
+name: Web Project Orchestrator Interface
+description: >-
+  Contract for the web UI's project-lifecycle workflows. Every method is session-authenticated.
+  listProjects is owned here (scoped read); create/lock/promote/destroy forward to the admin
+  orchestrator with the session as the credential, so its grant-scope authorization applies
+  unchanged.
+component: web_project_orchestrator
+methods:
+  - name: listProjects
+    description: >-
+      Resolve the session to a Principal, resolve the caller's project scope over the organization
+      tree, and return the hosted project records within that scope (a super-admin sees all). A
+      read; not audited.
+    signature: 'listProjects(sessionId: string): HostedProjectRecord[]'
+    returns: HostedProjectRecord[]
+    params:
+      - name: sessionId
+        type: string
+  - name: createProject
+    description: >-
+      Create a hosted project; forwards to admin_orchestrator.createProject with the session as the
+      credential (project:create scope enforced there; an optional target org unit is required for a
+      unit-scoped creator).
+    signature: 'createProject(sessionId: string, id: string, unitId: string): HostedProjectRecord'
+    returns: HostedProjectRecord
+    params:
+      - name: sessionId
+        type: string
+      - name: id
+        type: string
+      - name: unitId
+        type: string
+        optional: true
+  - name: lockProject
+    description: >-
+      Lock a project (validate-as-complete then write the StateId-scoped lock); forwards to
+      admin_orchestrator.lockProject with the session as the credential (lock:create scope enforced
+      there).
+    signature: 'lockProject(sessionId: string, projectId: string): LockRecord'
+    returns: LockRecord
+    params:
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
+  - name: promoteProject
+    description: >-
+      Mark a locked project ready-for-promotion after the StateId re-check; forwards to
+      admin_orchestrator.promoteProject with the session as the credential (promote:mark-ready scope
+      enforced there).
+    signature: 'promoteProject(sessionId: string, projectId: string): PromoteResult'
+    returns: PromoteResult
+    params:
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
+  - name: destroyProject
+    description: >-
+      Deregister a project and its tree; forwards to admin_orchestrator.destroyProject with the
+      session as the credential (project:destroy scope enforced there).
+    signature: 'destroyProject(sessionId: string, id: string): void'
+    returns: void
+    params:
+      - name: sessionId
+        type: string
+      - name: id
+        type: string
+status: complete
+createdAt: '2026-07-13T20:36:24.967Z'
+updatedAt: '2026-07-13T20:37:54.262Z'

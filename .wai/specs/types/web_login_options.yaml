@@ -1,0 +1,28 @@
+kind: value-object
+id: web_login_options
+name: WebLoginOptions
+description: >-
+  The pre-auth login-options projection the login screen renders from: which sign-in methods this
+  hosted instance offers. Served UNAUTHENTICATED on the webUiEnabled-gated data plane, so it is
+  deliberately minimal — a password-login flag plus enabled-provider ids and display labels
+  (standard, safe pre-auth SSO discovery). It NEVER carries secrets, clientIds, issuer URLs,
+  endpoints, or any other provider config.
+subsystem: sdd_host
+fields:
+  - name: passwordLogin
+    type: boolean
+    description: >-
+      Whether the built-in admin password login is configured (BOTH WAIRON_ADMIN_USER and
+      WAIRON_ADMIN_PASSWORD set on the server). The login screen shows the username/password form
+      only when true.
+    optional: false
+  - name: providers
+    type: object[]
+    description: >-
+      One entry per ENABLED identity provider, each exactly { id, displayName } — displayName is the
+      admin-set label, defaulting to the provider id. Only what a login page needs to render a
+      sign-in button; disabled providers never appear.
+    optional: false
+methods: []
+createdAt: '2026-07-14T12:53:32.525Z'
+updatedAt: '2026-07-14T12:53:32.568Z'

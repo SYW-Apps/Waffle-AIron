@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
 import type { IncomingMessage, ServerResponse } from 'http';
 import { authenticateCredential, signSsoState, verifySsoState } from './auth.js';
-import { buildAuthorizationUrl, exchangeCode, resolveSubject } from './idp.js';
+import { resolveEndpoints, buildAuthorizationUrl, exchangeCode, resolveSubject, resolveGroups } from './idp.js';
 import {
   listIdentityProviderRecords,
   upsertIdentityProviderRecord,
@@ -13,6 +13,7 @@ import {
   revokeCredential,
   revokeAllForOwner,
   listCredentials,
+  listByOwner,
 } from './credentials.js';
 import {
   getUserById,
@@ -91,10 +92,89 @@ export { UnauthenticatedError, ForbiddenError };
 /** Instance-admin = a grant scoped to every project ('*') carrying every
  *  permission ('*'). The bootstrap principal and the legacy admin-role
  *  projection both yield exactly this grant. */
-function isInstanceAdmin(principal: Principal): boolean {
+export function isInstanceAdmin(principal: Principal): boolean {
+  // A grant that also names an orgUnitId is UNIT-scoped by intent even when its
+  // projectId is the '*' wildcard (the shape an operator enters for a delegated
+  // unit/department admin) — it must NOT confer instance-admin. This mirrors the
+  // `!orgUnitId` discipline in scope.ts / request.ts / web.ts.
   return (principal.grants ?? []).some(
-    (g) => g.projectId === '*' && g.permissions.includes('*'),
+    (g) => g.projectId === '*' && !g.orgUnitId && g.permissions.includes('*'),
   );
+}
+
+// ── the *:* hard reservation ────────────────────────────────────────────────
+//
+// The double-wildcard grant {projectId '*', no orgUnitId, permissions include '*'}
+// is env-reserved to the BUILT-IN admin account (WAIRON_ADMIN_USER/_PASSWORD →
+// web_orchestrator.signInWithPassword) and the master-token principal — neither of
+// which is a user record. No user-record grant and no minted user token may EVER
+// carry it, so every user-facing grant write path below rejects it UNCONDITIONALLY,
+// even for a super-admin/master caller. Enumerated instance-wide bundles (e.g.
+// user:admin/project:create/audit:read over '*') remain assignable by a super-admin.
+
+/** True when a grant is THE reserved instance-wide super-admin shape: projectId
+ *  '*', no orgUnitId (a unit-scoped '*' is bounded to its subtree), and a
+ *  permissions list including the '*' wildcard. */
+export function isSuperAdminGrant(g: ProjectGrant): boolean {
+  return g.projectId === '*' && !g.orgUnitId && g.permissions.includes('*');
+}
+
+/** Reject any reserved *:* grant UNCONDITIONALLY — even a super-admin/master
+ *  caller may not place it on a user record or minted token. */
+function assertNoReservedSuperAdminGrant(grants: ProjectGrant[]): void {
+  if (grants.some(isSuperAdminGrant)) {
+    throw new ForbiddenError('instance-wide super-admin (*:*) is reserved to the built-in admin account');
+  }
+}
+
+// ── the enumerated SSO-admin bundle (provider adminGroupClaims) ─────────────
+//
+// An SSO login whose verified id_token groups intersect the provider's
+// adminGroupClaims is provisioned/refreshed with this ENUMERATED instance-wide
+// bundle — deliberately NOT *:* (that shape is hard-reserved above), so an SSO
+// admin can administer users/projects/audit but can never touch IdP/org config
+// (instance-admin-only surfaces gate on the genuine *:*).
+
+/** The permissions of the SSO-admin bundle, in canonical order. */
+const SSO_ADMIN_BUNDLE_PERMISSIONS = ['user:admin', 'project:create', 'audit:read'] as const;
+
+/** A fresh instance-wide SSO-admin bundle grant (never *:*). */
+export function ssoAdminBundleGrant(): ProjectGrant {
+  return { projectId: '*', permissions: [...SSO_ADMIN_BUNDLE_PERMISSIONS] };
+}
+
+/** True when a grant IS the server-managed SSO-admin bundle: instance-wide
+ *  (projectId '*', no orgUnitId) carrying exactly the bundle's permission set. */
+function isSsoAdminBundleGrant(g: ProjectGrant): boolean {
+  return (
+    g.projectId === '*' &&
+    !g.orgUnitId &&
+    g.permissions.length === SSO_ADMIN_BUNDLE_PERMISSIONS.length &&
+    SSO_ADMIN_BUNDLE_PERMISSIONS.every((p) => g.permissions.includes(p))
+  );
+}
+
+/** Apply the adminGroupClaims decision to a user's stored grants: entering the
+ *  admin group appends the enumerated bundle, leaving it drops the bundle again;
+ *  all other grants are preserved untouched. Returns the (possibly unchanged)
+ *  grants plus whether a repository write is needed. Exported so the web plane's
+ *  completeSignIn applies the identical rule. */
+export function applySsoAdminBundle(
+  grants: ProjectGrant[],
+  inAdminGroup: boolean,
+): { grants: ProjectGrant[]; changed: boolean } {
+  const hasBundle = grants.some(isSsoAdminBundleGrant);
+  if (inAdminGroup === hasBundle) return { grants, changed: false };
+  return inAdminGroup
+    ? { grants: [...grants, ssoAdminBundleGrant()], changed: true }
+    : { grants: grants.filter((g) => !isSsoAdminBundleGrant(g)), changed: true };
+}
+
+/** True when the verified groups intersect the provider's adminGroupClaims (an
+ *  unset or empty adminGroupClaims never matches). Exported for the web plane. */
+export function isInAdminGroup(provider: IdentityProviderConfig, groups: string[]): boolean {
+  const claims = provider.adminGroupClaims ?? [];
+  return claims.length > 0 && groups.some((g) => claims.includes(g));
 }
 
 /** True when the caller's grants cover `permission` for `projectId` — a grant
@@ -305,6 +385,9 @@ export function mintToken(cfg: HostConfig, credential: string | null, request: T
 
   const admin = isInstanceAdmin(principal);
   const grants = request.grants ?? [];
+  // HARD RESERVATION (steps 2–3): a requested *:* grant is rejected before any
+  // authorization — unconditional, even for a super-admin/master caller.
+  assertNoReservedSuperAdminGrant(grants);
   // A grant carrying no permissions is malformed: it would still project to an
   // editor token for the project (compatibility projection), so an empty
   // permissions[] must NOT vacuously pass the delegation check below.
@@ -420,12 +503,16 @@ export function revokeToken(cfg: HostConfig, credential: string | null, tokenId:
   const admin = isInstanceAdmin(principal);
   const target = listCredentials(cfg.dataDir, '*').find((r) => r.id === tokenId);
   const targetProjects = target?.projects ?? [];
+  // Authorize on the RESOLVED, org-unit-aware key:manage scope (mirrors
+  // mintSelfToken): a unit admin manages tokens scoped to its subtree's projects
+  // but never another tenant's — the flat coversPermission would let a
+  // unit-scoped '*'+orgUnitId grant manage ANY project's token. A token scoped
+  // instance-wide ('*') still requires instance-admin.
+  const manageScope = resolveScopeFor(cfg, principal, KEY_MANAGE_PERMISSION);
   const mayManage =
     admin ||
     (targetProjects.length > 0 &&
-      targetProjects.every((p) =>
-        p === '*' ? admin : coversPermission(principal, p, KEY_MANAGE_PERMISSION),
-      ));
+      targetProjects.every((p) => (p === '*' ? admin : permits(manageScope, p))));
   if (!mayManage) {
     throw new ForbiddenError('caller may not manage this token');
   }
@@ -435,6 +522,113 @@ export function revokeToken(cfg: HostConfig, credential: string | null, tokenId:
   tryAppendAudit(
     cfg,
     buildAuditEvent(principal, 'token.revoke', 'security', 'admin', { target: tokenId }),
+  );
+}
+
+// ── self-service single-project token lifecycle (owned by the caller) ─────────
+//
+// mintSelfToken / listSelfTokens / revokeSelfToken are the USER-facing counterpart
+// to the admin mintToken/revokeToken delegation path. They are SELF-scoped: a caller
+// mints, lists, and revokes only their OWN tokens, so no key:manage is required or
+// consulted. Crucially, the minted token is OWNED by the caller (ownerSubject = the
+// caller's subject), which is what makes deactivation cut it off — setUserStatus's
+// revokeAllForOwner sweep matches on ownerSubject.userId. The token stays a SEPARATE
+// credential from the caller's login session (its own ApiKeyRecord), never a share.
+
+/**
+ * Self-service single-project MCP token mint. Authenticate the caller (a ws_ session
+ * or bearer token) to their principal; require the caller's OWN grants to already
+ * cover mcp:read on projectId (and mcp:write when write) — self-scoped, so key:manage
+ * is neither required nor consulted (the token can never exceed the caller's own
+ * access). Mint a token OWNED BY the caller (ownerSubject AND createdBySubject = the
+ * caller's subject, so deactivating the caller revokes it via revokeAllForOwner)
+ * scoped to EXACTLY ONE project carrying mcp:read (plus mcp:write when write), persist
+ * only its hashed record with the role/projects compatibility projection, append a
+ * best-effort token.mint.self (security) audit event, and return the plaintext once.
+ */
+export function mintSelfToken(
+  cfg: HostConfig,
+  credential: string | null,
+  projectId: string,
+  write: boolean,
+): string {
+  const principal = requirePrincipal(cfg, credential);
+
+  // Self-scoped authorization on the RESOLVED, org-unit-aware scope: the caller must
+  // ALREADY hold the permission over this exact project. Using the resolved scope
+  // (not the flat coversPermission) bounds a '*'+orgUnitId unit grant to its own
+  // subtree, so a unit admin can mint for their unit's projects but NEVER another
+  // tenant's. No key:manage — the token is no broader than the caller's own
+  // authority. Mirrors mintToken's scopeCovers gate.
+  if (!permits(resolveScopeFor(cfg, principal, 'mcp:read'), projectId)) {
+    throw new ForbiddenError('caller lacks mcp:read on the requested project');
+  }
+  if (write && !permits(resolveScopeFor(cfg, principal, 'mcp:write'), projectId)) {
+    throw new ForbiddenError('caller lacks mcp:write on the requested project');
+  }
+
+  // Mint the token owned by the caller, scoped to exactly the one project. The grant
+  // shape carries only { projectId, permissions } — the same shape a session/bearer
+  // resolves back to — so the minted token authenticates to precisely that scope.
+  const token = 'wk_' + crypto.randomBytes(24).toString('hex');
+  const grants: ProjectGrant[] = [
+    { projectId, permissions: write ? ['mcp:read', 'mcp:write'] : ['mcp:read'] },
+  ];
+  const projection = compatibilityProjection(grants);
+  const owner = auditActor(principal);
+  const record: ApiKeyRecord = {
+    id: crypto.randomBytes(6).toString('hex'),
+    keyHash: hashToken(token),
+    role: projection.role,
+    projects: projection.projects,
+    createdAt: new Date().toISOString(),
+    ownerSubject: owner,
+    createdBySubject: owner,
+    grants,
+    label: `agent token (${projectId})`,
+  };
+  createCredential(cfg.dataDir, record);
+
+  tryAppendAudit(
+    cfg,
+    buildAuditEvent(principal, 'token.mint.self', 'security', 'admin', { target: record.id }),
+  );
+
+  return token; // plaintext, shown exactly once
+}
+
+/**
+ * Authenticate the caller and return their OWN minted credential records
+ * (ownerSubject.userId = caller) through the credential registry, redacted — each
+ * carries the hashed token only (the plaintext is never stored), with its id,
+ * project, label, createdAt and revokedAt for the client to render and offer revoke.
+ * A read; not audited.
+ */
+export function listSelfTokens(cfg: HostConfig, credential: string | null): ApiKeyRecord[] {
+  const principal = requirePrincipal(cfg, credential);
+  return listByOwner(cfg.dataDir, auditActor(principal).userId);
+}
+
+/**
+ * Authenticate the caller, confirm tokenId is among the caller's OWN tokens
+ * (ownerSubject.userId = caller) — a token the caller does not own is rejected as
+ * not found, so there is no cross-user revocation and no key:manage escalation —
+ * then revoke it through the credential registry and append a best-effort
+ * token.revoke.self (security) audit event.
+ */
+export function revokeSelfToken(cfg: HostConfig, credential: string | null, tokenId: string): void {
+  const principal = requirePrincipal(cfg, credential);
+
+  const own = listByOwner(cfg.dataDir, auditActor(principal).userId);
+  if (!own.some((r) => r.id === tokenId)) {
+    throw new Error(`token "${tokenId}" not found`);
+  }
+
+  revokeCredential(cfg.dataDir, tokenId);
+
+  tryAppendAudit(
+    cfg,
+    buildAuditEvent(principal, 'token.revoke.self', 'security', 'admin', { target: tokenId }),
   );
 }
 
@@ -453,6 +647,9 @@ export function replaceUserGrants(
   grants: ProjectGrant[],
 ): HostedUserRecord {
   const principal = requirePrincipal(cfg, credential);
+  // HARD RESERVATION (steps 2–3): an incoming *:* grant is rejected before any
+  // authorization — unconditional, even for a super-admin/master caller.
+  assertNoReservedSuperAdminGrant(grants);
   const scope = resolveScopeFor(cfg, principal, USER_ADMIN_PERMISSION);
 
   // Read the target's current home unit (and separate not-found from a scope
@@ -565,6 +762,9 @@ export function upsertUser(
   record: HostedUserRecord,
 ): HostedUserRecord {
   const principal = requirePrincipal(cfg, credential);
+  // HARD RESERVATION (steps 2–3): a record carrying a *:* grant is rejected before
+  // any authorization — unconditional, even for a super-admin/master caller.
+  assertNoReservedSuperAdminGrant(record.grants ?? []);
   const scope = resolveScopeFor(cfg, principal, USER_ADMIN_PERMISSION);
 
   // Distinguish creation from update, and read the existing home unit, by probing
@@ -693,13 +893,16 @@ export function resolveEnabledProvider(cfg: HostConfig, providerId: string): Ide
  * authorization URL, append a best-effort sso.start (info) audit event, and return
  * the authorization URL. Unauthenticated by nature — no caller credential.
  */
-export function startSsoLogin(cfg: HostConfig, providerId: string, redirectUri: string): string {
+export async function startSsoLogin(cfg: HostConfig, providerId: string, redirectUri: string): Promise<string> {
   const provider = resolveEnabledProvider(cfg, providerId);
 
   const nonce = crypto.randomBytes(16).toString('hex');
   const payload: SsoStatePayload = { providerId, nonce, redirectUri };
   const state = signSsoState(JSON.stringify(payload));
-  const url = buildAuthorizationUrl(provider, state, redirectUri);
+  // Resolve the provider's concrete OIDC endpoints (overrides -> discovery ->
+  // template), then build the authorization URL against the front-channel endpoint.
+  const endpoints = await resolveEndpoints(provider);
+  const url = buildAuthorizationUrl(provider, endpoints, state, redirectUri);
 
   tryAppendAudit(cfg, buildSsoAuditEvent(ANONYMOUS_SSO_ACTOR, 'sso.start', 'info', { target: providerId }));
 
@@ -723,10 +926,17 @@ export async function completeSsoLogin(cfg: HostConfig, state: string, code: str
 
   const provider = resolveEnabledProvider(cfg, providerId);
 
-  // Exchange the code (network I/O) and resolve the external subject, never
-  // leaking raw provider tokens across the boundary.
-  const summary = await exchangeCode(provider, code, redirectUri);
-  const subject = resolveSubject(provider, summary);
+  // Resolve the provider endpoints (front-channel authorize + back-channel
+  // token/jwks), then exchange the code (network I/O) and verify+resolve the
+  // external subject against the provider JWKS, never leaking raw provider tokens.
+  const endpoints = await resolveEndpoints(provider);
+  const summary = await exchangeCode(provider, endpoints, code, redirectUri);
+  const subject = await resolveSubject(provider, endpoints, summary);
+
+  // steps 10–11: the groups claim is read from the SAME summary resolveSubject
+  // just verified, then intersected with the provider's adminGroupClaims.
+  const groups = resolveGroups(summary);
+  const inAdminGroup = isInAdminGroup(provider, groups);
 
   // Look up the hosted user by issuer + external subject; provision on first login.
   let user = repoFindUserByExternalSubject(cfg.dataDir, subject.issuer, subject.externalSubject ?? '');
@@ -735,7 +945,9 @@ export async function completeSsoLogin(cfg: HostConfig, state: string, code: str
       id: subject.userId,
       subject,
       status: 'active',
-      grants: [], // first-login: empty — an admin assigns grants afterwards
+      // first-login: the enumerated SSO-admin bundle (never *:*) when the verified
+      // groups match adminGroupClaims, otherwise empty — an admin assigns grants.
+      grants: inAdminGroup ? [ssoAdminBundleGrant()] : [],
       createdAt: new Date().toISOString(),
     };
     user = repoUpsertUser(cfg.dataDir, provisioned);
@@ -748,10 +960,22 @@ export async function completeSsoLogin(cfg: HostConfig, state: string, code: str
     throw new ForbiddenError('deactivated user may not sign in');
   }
 
+  // steps 18–19: refresh the stored grants when they disagree with the admin-group
+  // membership — entering the group appends the enumerated bundle, leaving it
+  // drops the bundle on this login (server-driven, straight through the repository;
+  // the bundle is enumerated, so the *:* hard reservation is preserved).
+  const applied = applySsoAdminBundle(user.grants, inAdminGroup);
+  if (applied.changed) {
+    user = repoReplaceUserGrants(cfg.dataDir, user.id, applied.grants);
+  }
+
   // Mint a user-bound token (same record shape as mintToken) carrying the resolved
-  // user's CURRENT grants and their role/projects compatibility projection.
+  // user's CURRENT grants — with any reserved instance-wide super-admin (*:*) grant
+  // filtered out (env-reserved to the built-in admin account; no SSO login can ever
+  // mint a credential carrying it) — and their role/projects projection.
+  const effectiveGrants = user.grants.filter((g) => !isSuperAdminGrant(g));
   const token = 'wk_' + crypto.randomBytes(24).toString('hex');
-  const projection = compatibilityProjection(user.grants);
+  const projection = compatibilityProjection(effectiveGrants);
   const record: ApiKeyRecord = {
     id: crypto.randomBytes(6).toString('hex'),
     keyHash: hashToken(token),
@@ -760,7 +984,7 @@ export async function completeSsoLogin(cfg: HostConfig, state: string, code: str
     createdAt: new Date().toISOString(),
     ownerSubject: user.subject,
     createdBySubject: user.subject,
-    grants: user.grants,
+    grants: effectiveGrants,
     label: `SSO login (${providerId})`,
   };
   createCredential(cfg.dataDir, record);
@@ -909,7 +1133,7 @@ export async function handleIdentityRequest(
     // ── headless SSO login (unauthenticated: no credential) ──────────────────
     // POST /identity/sso/start  { providerId, redirectUri }
     if (req.method === 'POST' && parts.length === 3 && parts[1] === 'sso' && parts[2] === 'start') {
-      const url_ = startSsoLogin(cfg, body.providerId as string, body.redirectUri as string);
+      const url_ = await startSsoLogin(cfg, body.providerId as string, body.redirectUri as string);
       return sendJson(res, 200, { url: url_ });
     }
     // GET /identity/sso/callback?state=&code=

@@ -82,7 +82,207 @@ methods:
         targetComponent: web_orchestrator
         targetMethod: getProjectCanvas
     symbol: getWebProjectCanvas
+  - name: adminListUsers
+    narrative:
+      - stepNumber: 1
+        description: Resolve the session cookie to a sessionId and forward to the web admin orchestrator
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: listUsers
+    detail: calls-only
+  - name: adminUpsertUser
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse the user record from the body, resolve the session cookie, and forward to the web
+          admin orchestrator
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: upsertUser
+    detail: calls-only
+  - name: adminSetUserStatus
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse userId + status from the body, resolve the session cookie, and forward to the web
+          admin orchestrator
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: setUserStatus
+    detail: calls-only
+  - name: adminReplaceUserGrants
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse userId + grants from the body, resolve the session cookie, and forward to the web
+          admin orchestrator
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: replaceUserGrants
+    detail: calls-only
+  - name: adminListProviders
+    narrative:
+      - stepNumber: 1
+        description: Resolve the session cookie and forward to the web admin orchestrator
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: listIdentityProviders
+    detail: calls-only
+  - name: adminUpsertProvider
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse the identity-provider config from the body, resolve the session cookie, and forward
+          to the web admin orchestrator
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: upsertIdentityProvider
+    detail: calls-only
+  - name: adminRemoveProvider
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse the provider id from the body, resolve the session cookie, and forward to the web
+          admin orchestrator
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: removeIdentityProvider
+    detail: calls-only
+  - name: adminListOrgUnits
+    narrative:
+      - stepNumber: 1
+        description: Resolve the session cookie and forward to the web admin orchestrator
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: listOrganizationUnits
+    detail: calls-only
+  - name: adminUpsertOrgUnit
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse the organization-unit record from the body, resolve the session cookie, and forward
+          to the web admin orchestrator
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: upsertOrganizationUnit
+    detail: calls-only
+  - name: adminPlaceProject
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse projectId + unitId from the body, resolve the session cookie, and forward to the web
+          admin orchestrator
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: placeProject
+    detail: calls-only
+  - name: mintAgentToken
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse projectId + write from the body, resolve the session cookie, and forward to the web
+          admin orchestrator
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: mintProjectToken
+    detail: calls-only
+  - name: revokeAgentToken
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse the token id from the body, resolve the session cookie, and forward to the web admin
+          orchestrator
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: revokeProjectToken
+    detail: calls-only
+  - name: listAgentTokens
+    narrative:
+      - stepNumber: 1
+        description: Resolve the session cookie and forward to the web admin orchestrator
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: listMyTokens
+    detail: calls-only
+  - name: projectList
+    narrative:
+      - stepNumber: 1
+        description: Resolve the session cookie and forward to the web project orchestrator
+        type: call
+        targetComponent: web_project_orchestrator
+        targetMethod: listProjects
+    detail: calls-only
+  - name: projectCreate
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse id + optional unitId from the body, resolve the session cookie, and forward to the
+          web project orchestrator
+        type: call
+        targetComponent: web_project_orchestrator
+        targetMethod: createProject
+    detail: calls-only
+  - name: projectLock
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse projectId from the body, resolve the session cookie, and forward to the web project
+          orchestrator
+        type: call
+        targetComponent: web_project_orchestrator
+        targetMethod: lockProject
+    detail: calls-only
+  - name: projectPromote
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse projectId from the body, resolve the session cookie, and forward to the web project
+          orchestrator
+        type: call
+        targetComponent: web_project_orchestrator
+        targetMethod: promoteProject
+    detail: calls-only
+  - name: projectDestroy
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse id from the body, resolve the session cookie, and forward to the web project
+          orchestrator
+        type: call
+        targetComponent: web_project_orchestrator
+        targetMethod: destroyProject
+    detail: calls-only
+  - name: loginWithPassword
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse user + password from the JSON body and forward to the web orchestrator; on success
+          set the session cookie exactly like the SSO callback (HttpOnly, SameSite=Lax, Secure per
+          requireTls) and answer ok. Establishes a session (no prior cookie), so the route is NOT in
+          the cookie-mutation CSRF set.
+        type: call
+        targetComponent: web_orchestrator
+        targetMethod: signInWithPassword
+    detail: calls-only
+  - name: adminListSecretRefs
+    narrative:
+      - stepNumber: 1
+        description: Resolve the session cookie and forward to the web admin orchestrator
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: listSecretRefs
+    detail: calls-only
+  - name: getLoginOptions
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the web orchestrator's getLoginOptions and return the JSON payload (an
+          unauthenticated pre-auth read — no session and no CSRF gate; 404-gated with every /web
+          route on exposure.webUiEnabled)
+        type: call
+        targetComponent: web_orchestrator
+        targetMethod: getLoginOptions
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-07-11T19:14:22.346Z'
+updatedAt: '2026-07-14T12:53:32.882Z'

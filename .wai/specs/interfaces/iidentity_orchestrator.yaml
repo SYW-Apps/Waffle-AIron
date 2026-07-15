@@ -12,15 +12,20 @@ component: identity_orchestrator
 methods:
   - name: mintToken
     description: >-
-      Authenticate the caller, then authorize token delegation strictly against the caller's OWN
-      scope: gather the organization units and placements and, for each requested grant, require the
-      caller to itself cover the requested target for every requested permission — either an
-      instance-wide admin grant, or a scope (resolved via the scope specialist, expanding
-      unit-scoped grants across each unit's recursive subtree) whose projectIds cover a requested
-      specific projectId and whose unitIds cover a requested orgUnitId. Merely holding key:manage
-      does NOT permit delegating arbitrary permissions. Validate the requested projects/units exist,
-      mint a user-bound MCP/API token, persist only its hashed credential record with owner/grant
-      metadata, and append a redacted audit event. Returns the plaintext token exactly once.
+      Authenticate the caller, then HARD-RESERVE the instance-wide super-admin grant: a requested
+      grant of the shape {projectId '*', no orgUnitId, permissions including '*'} is rejected
+      UNCONDITIONALLY — even for a super-admin or master caller — because *:* is env-reserved to the
+      built-in admin account (an enumerated instance-wide bundle such as
+      user:admin/project:create/audit:read remains delegable by a super-admin). Then authorize token
+      delegation strictly against the caller's OWN scope: gather the organization units and
+      placements and, for each requested grant, require the caller to itself cover the requested
+      target for every requested permission — either an instance-wide admin grant, or a scope
+      (resolved via the scope specialist, expanding unit-scoped grants across each unit's recursive
+      subtree) whose projectIds cover a requested specific projectId and whose unitIds cover a
+      requested orgUnitId. Merely holding key:manage does NOT permit delegating arbitrary
+      permissions. Validate the requested projects/units exist, mint a user-bound MCP/API token,
+      persist only its hashed credential record with owner/grant metadata, and append a redacted
+      audit event. Returns the plaintext token exactly once.
     signature: 'mintToken(credential: string, request: TokenMintRequest): string'
     returns: string
     params:
@@ -41,12 +46,16 @@ methods:
         type: string
   - name: replaceUserGrants
     description: >-
-      Authenticate the caller, authorize grant administration by an instance-wide OR unit-scoped
-      user:admin grant: gather org units/placements, resolve the caller's user:admin scope, and
-      require the scope to permit the target user's home unit; a non-super-admin caller may not
-      assign grants exceeding their own authority (no instance-wide '*' and no project/unit outside
-      their scope — privilege-escalation guard). Replace the user's grants wholesale through the
-      user repository, and append a redacted audit event.
+      Authenticate the caller, then HARD-RESERVE the instance-wide super-admin grant: an incoming
+      grant of the shape {projectId '*', no orgUnitId, permissions including '*'} is rejected
+      UNCONDITIONALLY — even for a super-admin or master caller — because *:* is env-reserved to the
+      built-in admin account (enumerated instance-wide bundles remain assignable by a super-admin).
+      Then authorize grant administration by an instance-wide OR unit-scoped user:admin grant:
+      gather org units/placements, resolve the caller's user:admin scope, and require the scope to
+      permit the target user's home unit; a non-super-admin caller may not assign grants exceeding
+      their own authority (no instance-wide '*' and no project/unit outside their scope —
+      privilege-escalation guard). Replace the user's grants wholesale through the user repository,
+      and append a redacted audit event.
     signature: >-
       replaceUserGrants(credential: string, userId: string, grants: ProjectGrant[]):
       HostedUserRecord
@@ -100,10 +109,14 @@ methods:
         type: string
   - name: upsertUser
     description: >-
-      Authenticate the caller, authorize user administration by an instance-wide OR unit-scoped
-      user:admin grant; the caller's scope must permit the target user's home unit (both the
-      incoming and, on update, the existing home unit). Create or update the hosted user through the
-      user repository, and append a redacted audit event distinguishing creation from update.
+      Authenticate the caller, then HARD-RESERVE the instance-wide super-admin grant: a record
+      carrying a grant of the shape {projectId '*', no orgUnitId, permissions including '*'} is
+      rejected UNCONDITIONALLY — even for a super-admin or master caller — because *:* is
+      env-reserved to the built-in admin account. Then authorize user administration by an
+      instance-wide OR unit-scoped user:admin grant; the caller's scope must permit the target
+      user's home unit (both the incoming and, on update, the existing home unit). Create or update
+      the hosted user through the user repository, and append a redacted audit event distinguishing
+      creation from update.
     signature: 'upsertUser(credential: string, record: HostedUserRecord): HostedUserRecord'
     returns: HostedUserRecord
     params:
@@ -153,13 +166,21 @@ methods:
     description: >-
       Complete a headless SSO login: verify the signed SSO state via the auth specialist (a tampered
       or expired state is rejected), resolve the bound identity-provider configuration, exchange the
-      authorization code and resolve the external subject through the provider adapter, look up the
-      hosted user by issuer + external subject, provision a first-login active user record with
-      empty grants when absent (an admin assigns grants afterwards), mint a user-bound MCP/API token
-      for the resolved user persisting only its hashed credential record, append a best-effort
-      sso.login (security) audit event, and return the plaintext token exactly once. Inlines
-      first-login provisioning — there is no separate resolve-or-create method. Unauthenticated by
-      nature: no caller credential is required or accepted.
+      authorization code and resolve the external subject through the provider adapter, and read the
+      verified id_token's groups claim through the adapter (resolveGroups — meaningful only after
+      resolveSubject verified the same summary). ADMIN GROUPS: when the groups intersect the
+      provider's adminGroupClaims, the hosted user is provisioned/refreshed with the enumerated
+      instance-wide SSO-admin bundle {projectId '*', permissions ['user:admin', 'project:create',
+      'audit:read']} — deliberately NOT *:* (env-reserved to the built-in admin account; it can
+      never appear on a user record or minted token); a later login after dropping out of the group
+      removes the bundle again. Look up the hosted user by issuer + external subject, provision a
+      first-login active user record when absent (the bundle when in the admin group, otherwise
+      empty grants — an admin assigns grants afterwards), reject re-login for an existing
+      deactivated user before minting, then mint a user-bound MCP/API token carrying the user's
+      CURRENT grants with any reserved *:* grant filtered out, persisting only its hashed credential
+      record. Append a best-effort sso.login (security) audit event and return the plaintext token
+      exactly once. Inlines first-login provisioning — there is no separate resolve-or-create
+      method. Unauthenticated by nature: no caller credential is required or accepted.
     signature: 'completeSsoLogin(state: string, code: string): string'
     returns: string
     params:
@@ -221,6 +242,47 @@ methods:
         type: string
       - name: query
         type: AuditQuery
+  - name: mintSelfToken
+    description: >-
+      Self-service single-project MCP token mint. Authenticate the caller (a ws_ session or token);
+      require the caller's OWN grants already cover mcp:read on projectId (and mcp:write when write)
+      so the token cannot exceed the caller's access (self-scoped, so NO key:manage is required or
+      consulted); mint a token OWNED BY the caller (ownerSubject = the caller's subject, so
+      deactivating the caller revokes it via revokeAllForOwner) scoped to exactly one project,
+      persist only the hashed record, append a redacted token.mint.self audit event, and return the
+      plaintext once. Separate from the caller's login session.
+    signature: 'mintSelfToken(credential: string, projectId: string, write: boolean): string'
+    returns: string
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+      - name: write
+        type: boolean
+  - name: listSelfTokens
+    description: >-
+      Authenticate the caller and return the caller's OWN minted credential records
+      (ownerSubject.userId = caller) through the credential registry, redacted (hashed token only).
+      A read; not audited.
+    signature: 'listSelfTokens(credential: string): ApiKeyRecord[]'
+    returns: ApiKeyRecord[]
+    params:
+      - name: credential
+        type: string
+  - name: revokeSelfToken
+    description: >-
+      Authenticate the caller, confirm the token identified by tokenId is among the caller's OWN
+      tokens (ownerSubject.userId = caller), revoke it, and append a redacted token.revoke.self
+      audit event. A token the caller does not own is rejected (no cross-user revocation, no
+      key:manage escalation).
+    signature: 'revokeSelfToken(credential: string, tokenId: string): void'
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: tokenId
+        type: string
 status: complete
 createdAt: '2026-07-08T20:17:23.976Z'
-updatedAt: '2026-07-10T17:18:03.055Z'
+updatedAt: '2026-07-14T11:04:16.712Z'

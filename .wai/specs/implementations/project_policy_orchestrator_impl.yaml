@@ -237,48 +237,51 @@ methods:
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
-          If the caller holds neither a grant covering the project (mcp:write for the project or an
-          instance-wide wildcard) nor an instance-admin grant, deny
-        type: branch
-        condition: >-
-          the caller holds neither a grant covering the project (mcp:write for the project or an
-          instance-wide wildcard) nor an instance-admin grant
-        onFalseStep: 4
+          Resolve the caller's mcp:write scope over the organization tree — a unit-scoped grant
+          expands to its subtree's projects, a genuine instance grant is unrestricted
+        type: call
+        targetComponent: scope_specialist
+        targetMethod: resolveScope
       - stepNumber: 3
+        description: If the resolved mcp:write scope does not permit the target project, deny
+        type: branch
+        condition: the resolved mcp:write scope does not permit the target project
+        onFalseStep: 5
+      - stepNumber: 4
         description: Reject the evaluation
         type: throw
         error: >-
           Forbidden — evaluating a project's policy requires a grant covering the project or an
           instance-admin grant
-      - stepNumber: 4
+      - stepNumber: 5
         description: >-
           Resolve and bind the target project's isolated root within the principal's authorized set
           (rejects cross-project access)
         type: call
         targetComponent: project_registry
         targetMethod: resolveRoot
-      - stepNumber: 5
+      - stepNumber: 6
         description: Read the active instance pack/profile policy (or null when none has ever been configured)
         type: call
         targetComponent: policy_repository
         targetMethod: getPackPolicy
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           When no policy has been configured (null), substitute the documented permissive default as
           the effective policy
         type: local
-      - stepNumber: 7
+      - stepNumber: 8
         description: Probe the bound project's active declarative packs
         type: call
         targetComponent: pack_registry
         targetMethod: listProjectPacks
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Evaluate the project's active packs and recorded profile selection against the effective
           policy, building a PolicyEvaluationResult (missing required/default packs, blocked packs
           present, missing required profile ids, and human-readable messages). No side effects.
         type: local
-      - stepNumber: 9
+      - stepNumber: 10
         description: Return the policy evaluation result
         type: return
         outcome: policy evaluation result
@@ -291,47 +294,50 @@ methods:
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
-          If the caller holds neither a grant covering the project (mcp:write for the project or an
-          instance-wide wildcard) nor an instance-admin grant, deny
-        type: branch
-        condition: >-
-          the caller holds neither a grant covering the project (mcp:write for the project or an
-          instance-wide wildcard) nor an instance-admin grant
-        onFalseStep: 4
+          Resolve the caller's mcp:write scope over the organization tree — a unit-scoped grant
+          expands to its subtree's projects, a genuine instance grant is unrestricted
+        type: call
+        targetComponent: scope_specialist
+        targetMethod: resolveScope
       - stepNumber: 3
+        description: If the resolved mcp:write scope does not permit the target project, deny
+        type: branch
+        condition: the resolved mcp:write scope does not permit the target project
+        onFalseStep: 5
+      - stepNumber: 4
         description: Reject the reconciliation
         type: throw
         error: >-
           Forbidden — reconciling a project's policy requires a grant covering the project or an
           instance-admin grant
-      - stepNumber: 4
+      - stepNumber: 5
         description: >-
           Resolve and bind the target project's isolated root within the principal's authorized set
           (rejects cross-project access)
         type: call
         targetComponent: project_registry
         targetMethod: resolveRoot
-      - stepNumber: 5
+      - stepNumber: 6
         description: Read the active instance pack/profile policy (or null when none has ever been configured)
         type: call
         targetComponent: policy_repository
         targetMethod: getPackPolicy
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           When no policy has been configured (null), substitute the documented permissive default as
           the effective policy
         type: local
-      - stepNumber: 7
+      - stepNumber: 8
         description: Probe the bound project's active declarative packs
         type: call
         targetComponent: pack_registry
         targetMethod: listProjectPacks
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Evaluate the project against the effective policy, computing the missing required/default
           declarative packs
         type: local
-      - stepNumber: 9
+      - stepNumber: 10
         description: >-
           If the effective policy permits auto-reconciliation (enforcementMode 'auto_reconcile') and
           required/default packs are missing, apply them; otherwise skip to building the result
@@ -339,50 +345,50 @@ methods:
         condition: >-
           the effective policy permits auto-reconciliation (enforcementMode 'auto_reconcile') and
           required/default packs are missing
-        onFalseStep: 13
-      - stepNumber: 10
+        onFalseStep: 14
+      - stepNumber: 11
         description: >-
           Assemble the missing required/default declarative packs with their content from the
           server-global pack set
         type: local
-      - stepNumber: 11
+      - stepNumber: 12
         description: For each missing required/default declarative pack
         type: loop
         loopKind: forEach
         over: the missing required/default declarative packs
-        endStep: 12
-      - stepNumber: 12
+        endStep: 13
+      - stepNumber: 13
         description: >-
           Vendor and register the missing declarative pack into the bound project (the registry
           rejects code packs)
         type: call
         targetComponent: pack_registry
         targetMethod: installProjectPack
-      - stepNumber: 13
+      - stepNumber: 14
         description: >-
           Build the PolicyEvaluationResult reflecting the post-reconciliation compliance state,
           remaining gaps, and human-readable messages
         type: local
-      - stepNumber: 14
+      - stepNumber: 15
         description: Append a redacted audit event without letting a failure fail the reconciliation
         type: try
-        endStep: 16
+        endStep: 17
         catches:
           - error: audit append failure
-            step: 17
-      - stepNumber: 15
+            step: 18
+      - stepNumber: 16
         description: Append the redacted policy.reconcile audit event under the active retention policy
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 16
+      - stepNumber: 17
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 18
-      - stepNumber: 17
+        toStep: 19
+      - stepNumber: 18
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 18
+      - stepNumber: 19
         description: Return the policy evaluation result
         type: return
         outcome: policy evaluation result
@@ -473,4 +479,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-09T20:50:11.443Z'
-updatedAt: '2026-07-09T20:53:18.401Z'
+updatedAt: '2026-07-13T22:25:15.723Z'

@@ -9,6 +9,7 @@ import { authenticateCredential } from './auth.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { executeApprovedCreate } from './admin.js';
 import { resolveProjectRoot } from './projects.js';
+import { resolveScopeFor, permits } from './scope.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import { sendJson } from './httpio.js';
 import * as packs from './packs.js';
@@ -146,11 +147,17 @@ function sanitizeIdentityProvider(config: IdentityProviderConfig): IdentityProvi
     enabled: config.enabled,
     updatedAt: config.updatedAt,
   };
+  if (config.displayName !== undefined) clean.displayName = config.displayName;
   if (config.issuerUrl !== undefined) clean.issuerUrl = config.issuerUrl;
   if (config.clientId !== undefined) clean.clientId = config.clientId;
   if (config.clientSecretRef !== undefined) clean.clientSecretRef = config.clientSecretRef;
   if (config.allowedDomains !== undefined) clean.allowedDomains = config.allowedDomains;
   if (config.adminGroupClaims !== undefined) clean.adminGroupClaims = config.adminGroupClaims;
+  if (config.allowedRedirectUris !== undefined) clean.allowedRedirectUris = config.allowedRedirectUris;
+  if (config.authorizationEndpoint !== undefined) clean.authorizationEndpoint = config.authorizationEndpoint;
+  if (config.tokenEndpoint !== undefined) clean.tokenEndpoint = config.tokenEndpoint;
+  if (config.jwksUri !== undefined) clean.jwksUri = config.jwksUri;
+  if (config.userinfoEndpoint !== undefined) clean.userinfoEndpoint = config.userinfoEndpoint;
   return clean;
 }
 
@@ -227,32 +234,33 @@ export function removeIdentityProviderRecord(dataDir: string, id: string): void 
 // ── grant vocabulary + authorization helpers (mirrored from identity.ts) ─────
 //
 // '*' is the wildcard in BOTH projectId and permissions (per the grant model).
+// A grant that ALSO names an orgUnitId is UNIT-scoped by intent even when its
+// projectId is the '*' wildcard (the shape an operator enters for a delegated
+// unit/department admin) — it must never satisfy an instance-wide check here
+// (the `!orgUnitId` discipline of scope.ts / request.ts / web.ts and the
+// canonical identity.ts helpers; keep this copy in lockstep).
+//
+// Project-scoped methods (evaluateProjectPolicy, reconcileProjectPolicy)
+// authorize on the RESOLVED, org-unit-aware mcp:write scope (scope_specialist:
+// resolveScopeFor + permits) — a unit admin is first-class over the projects
+// placed in its subtree, and a genuine instance-wide grant resolves to
+// scope.all. Only the instance-WIDE capabilities (initializeProjectWithProfile,
+// setPackPolicy) stay on the flat carriesInstancePermission check by design.
 
 const PROJECT_CREATE_PERMISSION = 'project:create';
 const MCP_WRITE_PERMISSION = 'mcp:write';
 const POLICY_MANAGE_PERMISSION = 'policy:manage';
 
-/** Instance-admin = a grant over every project ('*') with every permission ('*'). */
-function isInstanceAdmin(principal: Principal): boolean {
-  return (principal.grants ?? []).some((g) => g.projectId === '*' && g.permissions.includes('*'));
-}
-
-/** True when the caller's grants cover `permission` for `projectId` (that project
- *  or instance-wide '*', carrying that permission or '*'). */
-function coversPermission(principal: Principal, projectId: string, permission: string): boolean {
-  return (principal.grants ?? []).some(
-    (g) =>
-      (g.projectId === '*' || g.projectId === projectId) &&
-      (g.permissions.includes('*') || g.permissions.includes(permission)),
-  );
-}
-
-// An instance-wide capability requires a grant scoped to ALL projects ('*')
-// carrying the permission (or the '*' wildcard). A project-scoped grant, even
-// one carrying the permission, does NOT confer instance-wide reach.
+// An instance-wide capability requires a grant scoped to ALL projects (a genuine
+// '*', no orgUnitId) carrying the permission (or the '*' wildcard). A project- or
+// unit-scoped grant, even one carrying the permission, does NOT confer
+// instance-wide reach.
 function carriesInstancePermission(principal: Principal, permission: string): boolean {
   return (principal.grants ?? []).some(
-    (g) => g.projectId === '*' && (g.permissions.includes('*') || g.permissions.includes(permission)),
+    (g) =>
+      g.projectId === '*' &&
+      !g.orgUnitId &&
+      (g.permissions.includes('*') || g.permissions.includes(permission)),
   );
 }
 
@@ -570,10 +578,11 @@ export function evaluateInitRequest(cfg: HostConfig, request: ProjectInitRequest
 }
 
 /**
- * Authenticate the caller and authorize by a grant covering the project (mcp:write
- * or an instance-wide wildcard) or an instance-admin grant, resolve the project,
- * and evaluate its active packs and recorded profile selection against the
- * effective policy without side effects.
+ * Authenticate the caller and authorize by the RESOLVED, org-unit-aware mcp:write
+ * scope covering the project (a grant on the project itself, a unit-scoped grant
+ * whose subtree contains it, or a genuine instance-wide wildcard — scope.all),
+ * resolve the project, and evaluate its active packs and recorded profile
+ * selection against the effective policy without side effects.
  */
 export function evaluateProjectPolicy(
   cfg: HostConfig,
@@ -581,7 +590,7 @@ export function evaluateProjectPolicy(
   projectId: string,
 ): PolicyEvaluationResult {
   const principal = requirePrincipal(cfg, credential);
-  if (!coversPermission(principal, projectId, MCP_WRITE_PERMISSION) && !isInstanceAdmin(principal)) {
+  if (!permits(resolveScopeFor(cfg, principal, MCP_WRITE_PERMISSION), projectId)) {
     throw new ForbiddenError(
       "evaluating a project's policy requires a grant covering the project or an instance-admin grant",
     );
@@ -601,12 +610,13 @@ export function evaluateProjectPolicy(
 }
 
 /**
- * Authenticate the caller and authorize by a grant covering the project (mcp:write
- * or an instance-wide wildcard) or an instance-admin grant, evaluate the project
- * against the effective policy, and — when the policy mode permits
- * auto-reconciliation ('auto_reconcile') — apply the missing required/default
- * declarative packs, auditing 'policy.reconcile'. Returns the post-reconciliation
- * evaluation.
+ * Authenticate the caller and authorize by the RESOLVED, org-unit-aware mcp:write
+ * scope covering the project (a grant on the project itself, a unit-scoped grant
+ * whose subtree contains it, or a genuine instance-wide wildcard — scope.all),
+ * evaluate the project against the effective policy, and — when the policy mode
+ * permits auto-reconciliation ('auto_reconcile') — apply the missing
+ * required/default declarative packs, auditing 'policy.reconcile'. Returns the
+ * post-reconciliation evaluation.
  */
 export function reconcileProjectPolicy(
   cfg: HostConfig,
@@ -614,7 +624,7 @@ export function reconcileProjectPolicy(
   projectId: string,
 ): PolicyEvaluationResult {
   const principal = requirePrincipal(cfg, credential);
-  if (!coversPermission(principal, projectId, MCP_WRITE_PERMISSION) && !isInstanceAdmin(principal)) {
+  if (!permits(resolveScopeFor(cfg, principal, MCP_WRITE_PERMISSION), projectId)) {
     throw new ForbiddenError(
       "reconciling a project's policy requires a grant covering the project or an instance-admin grant",
     );
