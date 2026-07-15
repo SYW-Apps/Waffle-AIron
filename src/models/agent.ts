@@ -70,6 +70,9 @@ export const AgentRecordSchema = z.object({
   /** Ids of related agents this agent should be aware of */
   dependencies: z.array(z.string()).default([]),
 
+  /** Rendered implementation guidance for this agent's variant-tagged components (deep variant integration); empty when none. */
+  variantGuidance: z.string().optional(),
+
   /** Why this agent was created — the architectural reason for its existence */
   creationReason: z.string(),
 

@@ -23,6 +23,8 @@ instructions: |
   * Prefer incremental, reviewable changes. Write/update tests for every change.
   * Stop and escalate to domain owner or Architect if task needs out-of-scope edits.
 
+  {{variantGuidance}}
+
   ## Spec-Driven Development (SDD)
   * Follow the **sdd-implement** and **sdd-narrative** skills (installed in your tool's skills directory).
   * Implementation must match L3 interfaces and L5 narratives exactly.

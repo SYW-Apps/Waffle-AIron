@@ -9,6 +9,7 @@ import {
   SurfaceSnapshot,
 } from '../../models/index.js';
 import type { ProfileDef, LanguagePackDef, LoadedPattern } from '../extensions.js';
+import type { VariantDef } from '../variants.js';
 import type { CodeModel } from '../source-analysis.js';
 
 // ---------------------------------------------------------------------------
@@ -106,6 +107,13 @@ export interface RuleContext {
     languages: Record<string, LanguagePackDef>;
     patterns: LoadedPattern[];
   };
+
+  /**
+   * Component-variant registry (the dynamic layer on top of packs; empty when
+   * none): the resolution set for component.variant references — each a
+   * base-anchored specialization carrying implementation guidance.
+   */
+  variants: VariantDef[];
 
   /**
    * Bookkeeping for per-spec lint suppressions (lint.allow). Suppression

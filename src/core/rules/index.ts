@@ -9,6 +9,7 @@ import {
 } from '../../models/index.js';
 import type { ValidationIssue } from '../validation.js';
 import { emptyExtensions, LoadedExtensions } from '../extensions.js';
+import type { VariantDef } from '../variants.js';
 import { ArchProfile, BUILTIN_PROFILES, RuleContext, SddRule, Severity } from './types.js';
 import { BUILTIN_TYPES, matchTypeRef, normalizeLanguage } from './type-analysis.js';
 
@@ -21,6 +22,7 @@ import { portalsRule } from './portals.js';
 import { stereotypeDepsRule } from './stereotype-deps.js';
 import { patternsRule } from './patterns.js';
 import { patternReferencesRule } from './pattern-references.js';
+import { variantReferencesRule } from './variant-references.js';
 import { profilesRule } from './profiles.js';
 import { publicSurfaceRule } from './public-surface.js';
 import { cyclesRule, reachabilityRule } from './graph.js';
@@ -60,6 +62,7 @@ export const SDD_RULES: SddRule[] = [
   patternsRule,
   profilesRule,
   patternReferencesRule,
+  variantReferencesRule,
   publicSurfaceRule,
   cyclesRule,
   // Semantic-edge family: dispatch/lifecycle validity BEFORE reachability so a
@@ -178,6 +181,8 @@ export interface BuildContextOptions {
   scopeSubsystem?: string;
   /** Loaded extension packs (pack profiles/languages/rules); empty when absent. */
   extensions?: LoadedExtensions;
+  /** Loaded component-variant registry (dynamic layer on top of packs); empty when absent. */
+  variants?: VariantDef[];
   /** Stored surface snapshots for cross-tree/remote reference resolution. */
   surfaceSnapshots?: import('../../models/index.js').SurfaceSnapshot[];
   /** Source-code model for structural conformance; empty when not built. */
@@ -360,6 +365,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     targetLanguageFor,
     isSpecInScope,
     ext: { profiles: extensions.profiles, languages: extensions.languages, patterns: extensions.patterns },
+    variants: opts.variants ?? [],
     surfaceSnapshots: opts.surfaceSnapshots ?? [],
     codeModel: opts.codeModel ?? emptyCodeModel(),
     lintAllows,

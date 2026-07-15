@@ -23,6 +23,7 @@ import { runDoctor } from '../commands/doctor.js';
 import { runDiagram } from '../commands/diagram.js';
 import { listRules } from '../commands/rules.js';
 import { listPatterns } from '../commands/patterns.js';
+import { listVariants } from '../commands/variants.js';
 import { addPack, listPacks, removePack } from '../commands/packs.js';
 import {
   runServe,
@@ -175,6 +176,9 @@ async function runRules(): Promise<void> {
 async function runPatterns(): Promise<void> {
   await listPatterns();
 }
+async function runVariants(): Promise<void> {
+  await listVariants();
+}
 async function runPacks(action: string, arg?: string, opts: { global?: boolean } = {}): Promise<void> {
   if (action === 'add') await addPack(arg!, opts);
   else if (action === 'list') await listPacks();
@@ -240,6 +244,22 @@ patternsCmd
   .description('List the reusable pattern definitions declared by loaded packs (id, version, source pack)')
   .action(async () => {
     await runPatterns();
+  });
+
+// ---------------------------------------------------------------------------
+// variants
+// ---------------------------------------------------------------------------
+
+const variantsCmd = program
+  .command('variants')
+  .description('Component variants — base-anchored kinds + implementation guidance (a dynamic layer on top of packs)');
+
+variantsCmd
+  .command('list')
+  .alias('ls')
+  .description('List the component variants in the registry (global + project) with their base and guidance')
+  .action(async () => {
+    await runVariants();
   });
 
 // ---------------------------------------------------------------------------

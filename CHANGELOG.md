@@ -34,6 +34,30 @@ in wairon's own spec tree — the pack loader, the conformance rule set as a
 proper in-memory **Repository**, and the `packs`/`rules`/`patterns` CLI — held to
 the same conformance gate as everything else. See `docs/extending-wairon.md`.
 
+### Component variants (new)
+
+A **variant** is a named, base-anchored specialization of a core stereotype — a
+"kind of `Adapter`/`Specialist`/…" (e.g. a `publisher`) — carrying implementation
+guidance. It gives components domain vocabulary and, crucially, tells the
+**implementer** "this is the same kind as those other components — reuse one
+shared approach instead of reinventing it per instance." The base stereotype
+stays authoritative for all generic semantics; the variant only adds vocabulary,
+a rule target, and the guidance. (A cross-cutting capability like `retriable` is
+*not* a variant — that stays a method `guarantee`.)
+
+- **A dynamic registry on top of packs.** Variants live outside packs — define
+  one on demand (no pack edit/release) and share it anywhere (a tiny portable
+  YAML). Loaded from `WAIRON_VARIANTS_DIR` (machine/org-wide) then `.wai/variants/`
+  (project wins), so a good variant is reusable across projects, orgs, tenants.
+- **One per component, strictly base-anchored.** A component declares a single
+  `variant`; `base` is required, so a variant is always "a kind of `<stereotype>`".
+  Resolution: `UNKNOWN_VARIANT` (undeclared) and `VARIANT_BASE_MISMATCH` (the
+  component's stereotype ≠ the variant's base, error).
+- **Deep implementer integration.** A component's variant guidance and its
+  same-variant siblings are injected into the generated owner/implementer agent
+  context, so same-variant components get implemented consistently. Listed by
+  `wairon variants list`; exposed to pack rules via `ctx.variants`.
+
 ### Hosted server: real SSO + web admin UI + agent tokens (new)
 
 The hosted server (`sdd_host`, `wairon host`) gains the pieces that make its

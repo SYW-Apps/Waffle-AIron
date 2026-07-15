@@ -300,6 +300,8 @@ export const ComponentSpecSchema = z.object({
   durability: DurabilitySchema.optional(),
   /** Pack-declared reusable patterns this component realizes (resolved against loaded packs; UNKNOWN_PATTERN_REF). */
   patterns: z.array(PatternRefSchema).optional(),
+  /** Optional component variant — a declared, base-anchored specialization of this component's stereotype (resolved against the variant registry; UNKNOWN_VARIANT / VARIANT_BASE_MISMATCH). */
+  variant: z.string().optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
   status: SpecStatusSchema.optional().default('complete'),

@@ -3,6 +3,7 @@ export * from './domains.js';
 export * from './templates.js';
 export * from './validation.js';
 export * from './extensions.js';
+export * from './variants.js';
 export * from './rules/index.js';
 export * from './specs.js';
 export * from './provision.js';

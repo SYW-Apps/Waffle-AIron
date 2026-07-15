@@ -16,6 +16,7 @@ import {
 import { buildRuleContext, makeScopeFilter, SddRule } from './rules/index.js';
 import { registerBuiltinRules, registerPackRules, ruleSequence } from './rules/repository.js';
 import { LoadedExtensions, loadProjectExtensions } from './extensions.js';
+import { loadProjectVariants } from './variants.js';
 import { loadSurfaceSnapshots } from './surfaces.js';
 import { buildCodeModel } from './source-analysis.js';
 import { findChainingParent } from './specs.js';
@@ -365,6 +366,7 @@ export function validateSddTree(
       projectType,
       scopeSubsystem,
       extensions,
+      variants: loadProjectVariants(),
       surfaceSnapshots,
       codeModel,
       issues,

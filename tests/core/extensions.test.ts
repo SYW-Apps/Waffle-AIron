@@ -6,6 +6,8 @@ import { validateSddTree } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { loadProjectExtensions } from '../../src/core/extensions.js';
 import { listSkillResources } from '../../src/core/skills.js';
+import { loadProjectVariants } from '../../src/core/variants.js';
+import { resolveAgentTopology } from '../../src/core/agent_resolver.js';
 
 // ---------------------------------------------------------------------------
 // Extension packs: declarative YAML packs (custom profiles + language tables),
@@ -348,6 +350,67 @@ skills:
       expect(packRes).toBeDefined();
       expect(packRes!.version).toBe('2.1.0');
       expect(packRes!.name).toBe('Domain Implementer');
+    } finally { proj.cleanup(); }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Component variants: a dynamic registry (on top of packs) of base-anchored
+// component kinds + implementation guidance, resolved by UNKNOWN_VARIANT /
+// VARIANT_BASE_MISMATCH and injected into the generated agent context.
+// ---------------------------------------------------------------------------
+
+describe('component variants', () => {
+  it('resolves a component variant and flags unknown / base-mismatched ones', () => {
+    const proj = createTempProject();
+    proj.writeFile('.wai/variants/publisher.yaml', `id: publisher
+base: Specialist
+guidance: Fan-out emitter; reuse the shared publisher helper.
+`);
+    proj.writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem');
+    proj.writeSpec('component', 'pub-a', 'schemaVersion: 1.0.0\nid: pub-a\nname: pub-a\ndescription: d\nsubsystem: sub-a\ncomponentType: Specialist\nvariant: publisher');
+    proj.writeSpec('component', 'bad-base', 'schemaVersion: 1.0.0\nid: bad-base\nname: bad-base\ndescription: d\nsubsystem: sub-a\ncomponentType: Adapter\nvariant: publisher');
+    proj.writeSpec('component', 'unknown-v', 'schemaVersion: 1.0.0\nid: unknown-v\nname: unknown-v\ndescription: d\nsubsystem: sub-a\ncomponentType: Specialist\nvariant: nope');
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.issues.some(i => i.code === 'UNKNOWN_VARIANT' && i.specId === 'unknown-v')).toBe(true);
+      expect(res.issues.some(i => i.code === 'VARIANT_BASE_MISMATCH' && i.specId === 'bad-base')).toBe(true);
+      expect(res.issues.some(i => (i.code === 'UNKNOWN_VARIANT' || i.code === 'VARIANT_BASE_MISMATCH') && i.specId === 'pub-a')).toBe(false);
+    } finally { proj.cleanup(); }
+  });
+
+  it('merges global (WAIRON_VARIANTS_DIR) and project variants, project winning', () => {
+    const globalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-global-variants-'));
+    fs.writeFileSync(path.join(globalDir, 'shared.yaml'), 'id: shared\nbase: Adapter\nguidance: global version\n');
+    fs.writeFileSync(path.join(globalDir, 'publisher.yaml'), 'id: publisher\nbase: Specialist\nguidance: global publisher\n');
+    process.env.WAIRON_VARIANTS_DIR = globalDir;
+    const proj = createTempProject();
+    proj.writeFile('.wai/variants/publisher.yaml', 'id: publisher\nbase: Specialist\nguidance: PROJECT publisher\n');
+    proj.activate();
+    try {
+      const byId = new Map(loadProjectVariants().map(v => [v.id, v]));
+      expect(byId.get('shared')?.guidance).toBe('global version');
+      expect(byId.get('publisher')?.guidance).toBe('PROJECT publisher');
+    } finally {
+      proj.cleanup();
+      delete process.env.WAIRON_VARIANTS_DIR;
+      try { fs.rmSync(globalDir, { recursive: true, force: true }); } catch { /* win */ }
+    }
+  });
+
+  it('injects variant guidance + same-variant siblings into the owner agent context', () => {
+    const proj = createTempProject();
+    proj.writeFile('.wai/variants/publisher.yaml', 'id: publisher\nbase: Specialist\nguidance: Fan-out emitter, reuse the shared helper.\n');
+    proj.writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem');
+    proj.writeSpec('component', 'pub-a', 'schemaVersion: 1.0.0\nid: pub-a\nname: pub-a\ndescription: d\nsubsystem: sub-a\ncomponentType: Specialist\nvariant: publisher');
+    proj.writeSpec('component', 'pub-b', 'schemaVersion: 1.0.0\nid: pub-b\nname: pub-b\ndescription: d\nsubsystem: sub-a\ncomponentType: Specialist\nvariant: publisher');
+    proj.activate();
+    try {
+      const owner = resolveAgentTopology().find(a => a.id === 'sub-a-owner');
+      expect(owner?.variantGuidance).toContain('publisher');
+      expect(owner?.variantGuidance).toContain('Fan-out emitter');
+      expect(owner?.variantGuidance).toContain('pub-b');
     } finally { proj.cleanup(); }
   });
 });
