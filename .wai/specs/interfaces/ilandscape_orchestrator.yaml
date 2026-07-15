@@ -3,17 +3,18 @@ name: Landscape Orchestrator Interface
 description: >-
   Contract for hosted-instance landscape ADMINISTRATION workflows: organization hierarchy, project
   placement, public-surface snapshots, cross-project relations (visibility-gated once units exist),
-  and landscape graph generation. Consumer-facing discovery/exchange lives on the surface exchange
-  orchestrator.
+  and landscape graph generation. Authorization resolves through the permission resolver —
+  project:admin over the relevant unit/project for writes, project:read visible scopes for reads
+  (actionable scopes plus their ancestor breadcrumb) — never stored grants. Consumer-facing
+  discovery/exchange lives on the surface exchange orchestrator.
 component: landscape_orchestrator
 methods:
   - name: upsertUnit
     description: >-
-      Authenticate the credential via the single auth authority; authorized by an instance-wide OR
-      unit-scoped landscape:manage grant — the caller's scope must cover the target unit (its id
-      when updating, or its parentId when creating a child unit; a super-admin creates top-level
-      units freely). Then create or update one organization unit and append a redacted audit event
-      (action unit.upsert, info).
+      Authenticate the credential; require project:admin over the target unit (its own id when
+      updating, or its parentId when creating a child; an instance-admin creates top-level units
+      freely). Then create or update one organization unit and append a redacted audit event
+      (unit.upsert, info).
     signature: 'upsertUnit(credential: string, unit: OrganizationUnitRecord): OrganizationUnitRecord'
     returns: OrganizationUnitRecord
     params:
@@ -25,11 +26,9 @@ methods:
       - atomic
   - name: placeProject
     description: >-
-      Authenticate the credential via the single auth authority; authorized by an instance-wide OR
-      unit-scoped landscape:manage grant — the caller's scope must cover the target unit
-      (placement.unitId in scope.unitIds; a super-admin places into any unit). Then place a hosted
-      project in the organization unit and append a redacted audit event (action project.place,
-      info).
+      Authenticate the credential; require project:admin over the target unit (placement.unitId; an
+      instance-admin places into any unit). Then place a hosted project in the organization unit and
+      append a redacted audit event (project.place, info).
     signature: 'placeProject(credential: string, placement: ProjectPlacement): ProjectPlacement'
     returns: ProjectPlacement
     params:
@@ -41,12 +40,11 @@ methods:
       - atomic
   - name: refreshPublicSurface
     description: >-
-      Authenticate the credential via the single auth authority; authorized by an instance-wide OR
-      unit-scoped landscape:manage grant — the caller's scope must permit the target project.
-      Resolve and bind the target project root, read its L0 publicInterfaces (leniently) plus the
-      referenced subsystem public interfaces through the host core adapter, build the redacted
-      public-surface snapshot, replace it in the public-surface repository, and append a redacted
-      audit event (action surface.refresh, info).
+      Authenticate the credential; require project:admin over the target project. Resolve and bind
+      the target project root, read its L0 publicInterfaces (leniently) plus the referenced
+      subsystem public interfaces through the host core adapter, build the redacted public-surface
+      snapshot, replace it in the public-surface repository, and append a redacted audit event
+      (surface.refresh, info).
     signature: 'refreshPublicSurface(credential: string, projectId: string): ProjectPublicSurfaceSnapshot'
     returns: ProjectPublicSurfaceSnapshot
     params:
@@ -56,17 +54,15 @@ methods:
         type: string
   - name: upsertRelation
     description: >-
-      Authenticate the credential via the single auth authority; authorized by an instance-wide OR
-      unit-scoped landscape:manage grant — the caller's scope must permit the relation's source
-      project. When the instance defines organization units, the target's surface must additionally
-      be VISIBLE to the source per the unit-graph visibility resolution (open-within-tenant, closed
-      groups, exposeTo grants; cross-tenant only via grants) — an invisible target is Forbidden even
-      when a snapshot exists; an instance with NO organization units retains the pre-visibility
-      behavior (the unit graph gates only once it exists). Then validate targetPublicInterface
-      against the target project's stored public-surface snapshot (reject an unknown interface ref;
-      when the target has no snapshot reject with guidance to run refreshPublicSurface first),
-      create or update the relation, and append a redacted audit event (action relation.upsert,
-      info).
+      Authenticate the credential; require project:admin over the relation's SOURCE project. When
+      the instance defines organization units, the target's surface must additionally be VISIBLE to
+      the source per the unit-graph visibility resolution (open-within-tenant, closed groups,
+      exposeTo grants; cross-tenant only via grants) — an invisible target is Forbidden even when a
+      snapshot exists; an instance with NO organization units retains the pre-visibility behavior
+      (the unit graph gates only once it exists). Then validate targetPublicInterface against the
+      target project's stored public-surface snapshot (reject an unknown interface ref; when the
+      target has no snapshot reject with guidance to run refreshPublicSurface first), create or
+      update the relation, and append a redacted audit event (relation.upsert, info).
     signature: 'upsertRelation(credential: string, relation: ProjectRelationRecord): ProjectRelationRecord'
     returns: ProjectRelationRecord
     params:
@@ -78,10 +74,9 @@ methods:
       - atomic
   - name: listRelations
     description: >-
-      Authenticate the credential via the single auth authority; authorized by an instance-wide OR
-      unit-scoped landscape:read grant (landscape:manage or the instance-admin wildcard also satisfy
-      it); results are filtered to the caller's scope. List cross-project relations whose source or
-      target project is within the caller's scope (a super-admin sees all). Reads are not audited.
+      Authenticate the credential; compute the caller's project:read visible scopes and deny when
+      empty. List cross-project relations whose source or target project is an actionable project in
+      the visible set (an instance-admin sees all). Reads are not audited.
     signature: 'listRelations(credential: string, projectId: string): ProjectRelationRecord[]'
     returns: ProjectRelationRecord[]
     params:
@@ -92,12 +87,12 @@ methods:
         optional: true
   - name: generateLandscape
     description: >-
-      Authenticate the credential via the single auth authority; authorized by an instance-wide OR
-      unit-scoped landscape:read grant (landscape:manage or the instance-admin wildcard also satisfy
-      it); results are filtered to the caller's scope. Gather organization units, placements,
-      projects, relations, and per-project public-surface snapshots, narrow them to the caller's
-      in-scope projects and units (a super-admin sees all), and return a landscape graph built only
-      from hosted metadata and redacted snapshots. Reads are not audited.
+      Authenticate the credential; compute the caller's project:read visible scopes (actionable
+      projects/units plus their ancestor unit breadcrumb) and deny when empty. Gather organization
+      units, placements, projects, relations, and per-project public-surface snapshots, narrow them
+      to the caller's in-scope projects/units — keeping ancestor-breadcrumb units for navigation,
+      marked non-actionable (context) — and return a landscape graph built only from hosted metadata
+      and redacted snapshots (an instance-admin sees the whole instance). Reads are not audited.
     signature: 'generateLandscape(credential: string, scope: string): LandscapeGraphModel'
     returns: LandscapeGraphModel
     params:
@@ -108,10 +103,9 @@ methods:
         optional: true
   - name: removeRelation
     description: >-
-      Authenticate the credential via the single auth authority; authorized by an instance-wide OR
-      unit-scoped landscape:manage grant — the caller's scope must permit the relation's source
-      project (resolved by looking up the relation by id; fail closed when absent). Then remove one
-      cross-project relation by id and append a redacted audit event (action relation.remove, info).
+      Authenticate the credential; resolve the relation by id (fail closed when absent) and require
+      project:admin over its source project. Then remove the relation and append a redacted audit
+      event (relation.remove, info).
     signature: 'removeRelation(credential: string, id: string): void'
     returns: void
     params:
@@ -121,4 +115,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-08T21:13:44.021Z'
-updatedAt: '2026-07-11T12:03:42.921Z'
+updatedAt: '2026-07-15T23:27:00.771Z'

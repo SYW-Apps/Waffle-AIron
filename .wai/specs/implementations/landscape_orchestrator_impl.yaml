@@ -3,9 +3,9 @@ name: Landscape Orchestrator Implementation
 description: >-
   Hosted-instance landscape ADMINISTRATION workflows: organization-unit administration, project
   placement, public-surface snapshot refresh, cross-project relation management (visibility-gated
-  once organization units exist), and landscape graph generation. Control-plane methods authenticate
-  the credential, gather organization data, and resolve landscape scope (landscape:read for reads,
-  landscape:manage for writes) expanding unit-scoped grants across each unit's recursive subtree.
+  once organization units exist), and landscape graph generation. Authorization resolves through the
+  permission resolver — project:admin over the relevant unit/project for writes, project:read
+  visible scopes for reads (actionable scopes plus their ancestor breadcrumb) — never stored grants.
   Cross-project reads never touch target private specs. Audit appends are best-effort.
   Consumer-facing discovery/exchange workflows live on the surface exchange orchestrator.
 contract: ilandscape_orchestrator
@@ -58,8 +58,10 @@ methods:
       - stepNumber: 9
         description: >-
           Narrow the gathered projects, placements, and relations to the caller's actionable
-          projects/units in the visible set; an instance-admin keeps everything (instance-wide
-          landscape)
+          projects/units in the visible set, AND keep the ancestor-breadcrumb (context) units so the
+          hierarchy stays navigable up to the root — context units are marked non-actionable
+          (read-only navigation, their non-visible children are never included); an instance-admin
+          keeps everything as actionable (instance-wide landscape)
         type: local
       - stepNumber: 10
         description: Initialize an empty public-surface snapshot collection
@@ -544,4 +546,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-09T22:10:36.787Z'
-updatedAt: '2026-07-15T21:47:56.716Z'
+updatedAt: '2026-07-15T23:27:05.266Z'

@@ -33,6 +33,14 @@ fields:
     type: string
     description: Optional lifecycle/status label for filtering and styling.
     optional: true
+  - name: actionable
+    type: boolean
+    description: >-
+      True when the caller can act on this scope (it is an actionable visible scope). False/absent
+      on an ancestor-breadcrumb (context) organization unit included only so the hierarchy stays
+      navigable up to the root — such a context unit is shown read-only and its non-visible children
+      are omitted. An instance-admin sees every node actionable.
+    optional: true
 methods: []
 createdAt: '2026-07-08T21:11:32.757Z'
-updatedAt: '2026-07-08T21:11:32.791Z'
+updatedAt: '2026-07-15T23:27:34.313Z'
