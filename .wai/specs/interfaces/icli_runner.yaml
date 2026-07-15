@@ -106,6 +106,13 @@ methods:
     signature: 'runPatterns(): void'
     returns: void
     params: []
+  - name: runVariants
+    description: >-
+      Handle `wairon variants list`, printing the component variants declared in the registry
+      (global + project).
+    signature: 'runVariants(): void'
+    returns: void
+    params: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-14T20:10:23.511Z'
+updatedAt: '2026-07-15T12:25:26.914Z'

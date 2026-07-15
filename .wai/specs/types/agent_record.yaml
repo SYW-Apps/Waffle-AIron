@@ -6,16 +6,20 @@ fields:
   - name: id
     type: string
     description: Stable agent identifier
+    optional: false
     key: primary
   - name: name
     type: string
     description: Display name of the agent
+    optional: false
   - name: template
     type: string
     description: Generation template (architect, domain-owner, implementer, …)
+    optional: false
   - name: creationReason
     type: string
     description: Why this agent exists in the topology
+    optional: false
   - name: domainRoot
     type: string
     description: Domain the agent belongs to (absent = global root)
@@ -23,9 +27,18 @@ fields:
   - name: ownedPaths
     type: string[]
     description: Glob patterns of the files this agent owns
+    optional: false
   - name: tags
     type: string[]
     description: Classification tags (meta, guardian, architect, …)
+    optional: false
+  - name: variantGuidance
+    type: string
+    description: >-
+      Rendered implementation guidance for this agent's variant-tagged components (deep variant
+      integration): each component's variant guidance + same-variant siblings, injected into the
+      agent context. Empty when none.
+    optional: true
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-03T00:00:00.000Z'
+updatedAt: '2026-07-15T12:23:47.402Z'

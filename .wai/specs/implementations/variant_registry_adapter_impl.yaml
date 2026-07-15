@@ -1,0 +1,18 @@
+id: variant_registry_adapter_impl
+name: Variant Registry Adapter Implementation
+description: Filesystem loader + merge for the component-variant registry, in src/core/variants.ts.
+contract: ivariant_registry_adapter
+sourcePath: src/core/variants.ts
+methods:
+  - name: loadProjectVariants
+    narrative: []
+    intent: >-
+      Reads variant definitions from the global variants directory (WAIRON_VARIANTS_DIR, else
+      ~/.wairon/variants) and the project's .wai/variants/ — each a *.yaml holding one variant or a
+      list — parses each against the VariantDef schema, and merges them with the project winning on
+      an id collision. A missing/unreadable directory is an empty set; a single malformed file is
+      skipped with a diagnostic, never fatal.
+detail: intent
+status: complete
+createdAt: '2026-07-15T12:24:24.647Z'
+updatedAt: '2026-07-15T12:26:32.734Z'

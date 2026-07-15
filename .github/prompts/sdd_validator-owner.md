@@ -19,7 +19,7 @@ You own and decide on everything within:
 .wai/specs/components/validator_core_adapter.yaml
 .wai/specs/components/validator_portal.yaml
 .wai/specs/components/validator_surfaces_adapter.yaml
-src/core/rules/index.ts
+src/core/rules/repository.ts
 src/core/source-analysis.ts
 src/core/validation.ts
 ```
@@ -45,6 +45,8 @@ delegate downward rather than holding it all yourself:
   `wairon generate` inside the subproject directory to materialize its layer.
 * Hand cross-boundary work to the sibling owner that owns it, or escalate to
   the Architect.
+
+
 
 ## Spec-Driven Development (SDD)
 * Follow the **sdd-implement** and **sdd-narrative** skills (installed in your tool's skills directory).

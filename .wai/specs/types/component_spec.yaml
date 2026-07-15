@@ -70,6 +70,12 @@ fields:
       against loaded packs' PatternDefs (UNKNOWN_PATTERN_REF when unresolved); pack rules enforce
       the actual pattern constraints.
     optional: true
+  - name: variant
+    type: string
+    description: >-
+      Optional component variant — a declared, base-anchored specialization of this component's
+      stereotype (resolved against the variant registry; UNKNOWN_VARIANT / VARIANT_BASE_MISMATCH).
+    optional: true
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-14T18:58:38.986Z'
+updatedAt: '2026-07-15T12:23:34.588Z'

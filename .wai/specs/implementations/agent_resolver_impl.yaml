@@ -36,11 +36,20 @@ methods:
         targetMethod: loadImplementationSpecs
       - stepNumber: 6
         description: >-
+          Load the component-variant registry (the dynamic layer on top of packs), so each
+          owner/implementer can carry its variant-tagged components' guidance + same-variant
+          siblings
+        type: call
+        targetComponent: variant_registry_adapter
+        targetMethod: loadProjectVariants
+      - stepNumber: 7
+        description: >-
           Build the LAYERED AgentRecord list: the system architect, one owner per local subsystem,
           and ONE delegating owner per chained subproject (projectPath) that routes work into the
           subproject without enumerating its internals; component implementers only when
-          generateComponentImplementers is enabled
+          generateComponentImplementers is enabled. Each owner/implementer carries the rendered
+          variantGuidance for its variant-tagged components.
         type: local
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-12T12:09:50.672Z'
+updatedAt: '2026-07-15T12:25:21.333Z'

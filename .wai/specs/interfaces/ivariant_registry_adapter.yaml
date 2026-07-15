@@ -1,0 +1,15 @@
+id: ivariant_registry_adapter
+name: Variant Registry Adapter Interface
+description: Loads and merges the component-variant registry (global + project) into the VariantDef set.
+component: variant_registry_adapter
+methods:
+  - name: loadProjectVariants
+    description: >-
+      Load the component-variant registry governing the current project: the global variants
+      (WAIRON_VARIANTS_DIR) then the project's .wai/variants/, project winning on an id collision.
+    signature: 'loadProjectVariants(): VariantDef[]'
+    returns: VariantDef[]
+    params: []
+status: complete
+createdAt: '2026-07-15T12:24:19.110Z'
+updatedAt: '2026-07-15T12:26:32.646Z'

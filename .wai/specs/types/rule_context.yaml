@@ -21,6 +21,12 @@ fields:
       Extension-pack data merged into validation: profiles, languages, and reusable pattern
       definitions.
     optional: false
+  - name: variants
+    type: VariantDef[]
+    description: >-
+      Component-variant registry (the dynamic layer on top of packs; empty when none) — the
+      resolution set for component.variant references, exposed to programmatic pack rules.
+    optional: false
 methods: []
 lint:
   allow:
@@ -30,4 +36,4 @@ lint:
         held by the rule registry, not a modeled method parameter; the type documents that contract
         for the design record.
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-07-14T20:17:43.048Z'
+updatedAt: '2026-07-15T12:23:36.051Z'

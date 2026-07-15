@@ -19,6 +19,7 @@ You own and decide on everything within:
 .wai/specs/components/pack_source_adapter.yaml
 .wai/specs/components/spec_loader.yaml
 .wai/specs/components/state_hash_specialist.yaml
+.wai/specs/components/variant_registry_adapter.yaml
 src/core/agent_resolver.ts
 src/core/specs.ts
 src/core/index.ts
@@ -26,6 +27,7 @@ src/core/diagram.ts
 src/core/extensions.ts
 src/core/lockfile.ts
 src/core/statehash.ts
+src/core/variants.ts
 ```
 
 ## Responsibilities
@@ -49,6 +51,8 @@ delegate downward rather than holding it all yourself:
   `wairon generate` inside the subproject directory to materialize its layer.
 * Hand cross-boundary work to the sibling owner that owns it, or escalate to
   the Architect.
+
+
 
 ## Spec-Driven Development (SDD)
 * Follow the **sdd-implement** and **sdd-narrative** skills (installed in your tool's skills directory).

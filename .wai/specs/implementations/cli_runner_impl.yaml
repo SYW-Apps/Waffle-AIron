@@ -498,6 +498,17 @@ methods:
         description: Return after list
         type: return
         outcome: listed
+  - name: runVariants
+    narrative:
+      - stepNumber: 1
+        description: List the component variants via the variants adapter
+        type: call
+        targetComponent: cli_variants_adapter
+        targetMethod: listVariants
+      - stepNumber: 2
+        description: Return after list
+        type: return
+        outcome: listed
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-14T20:10:29.793Z'
+updatedAt: '2026-07-15T12:25:27.118Z'
