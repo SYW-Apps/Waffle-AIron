@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import * as fs from 'node:fs';
@@ -183,8 +183,8 @@ describe('project policy orchestrator (sdd_host)', () => {
     expect(setPackPolicy(cfg, instMgr, samplePolicy()).id).toBeTruthy();
 
     // A creator scoped to unit A may NOT create into unit B; nothing is provisioned.
-    const unitA = seedUnit(dataDir, 'A');
-    const unitB = seedUnit(dataDir, 'B');
+    const unitA = seedUnit(dataDir, 'unit-a');
+    const unitB = seedUnit(dataDir, 'unit-b');
     allow(dataDir, 'u-s2pc', 'project:create', 'unit', unitA.id);
     const projCreator = mintUserToken(dataDir, { id: 's2-pc', userId: 'u-s2pc' });
     expect(() =>

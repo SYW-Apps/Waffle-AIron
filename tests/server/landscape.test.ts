@@ -56,7 +56,10 @@ const MASTER = 'master-credential-secret-value';
 const SUBJECT: PrincipalSubject = { userId: 'u-test', kind: 'human', issuer: 'local' };
 
 function unitRec(over: Partial<OrganizationUnitRecord> = {}): OrganizationUnitRecord {
-  return { id: '', name: 'Unit', kind: 'team', status: 'active', createdAt: '', createdBy: SUBJECT, ...over };
+  const name = over.name ?? 'Unit';
+  // The slug (the qualified-id segment) derives from the name unless supplied.
+  const slug = over.slug ?? name.toLowerCase().replace(/[^a-z0-9-]+/g, '-');
+  return { id: '', name, slug, kind: 'team', status: 'active', createdAt: '', createdBy: SUBJECT, ...over };
 }
 
 function placementRec(over: Partial<ProjectPlacement> = {}): ProjectPlacement {

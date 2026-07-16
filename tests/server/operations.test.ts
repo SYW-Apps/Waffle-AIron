@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import * as fs from 'node:fs';
@@ -17,7 +17,7 @@ import {
 import { routeAdmin } from '../../src/server/http.js';
 import { createProject } from '../../src/server/admin.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
-import { upsertOrganizationUnit, placeProject as placeProjectInUnit } from '../../src/server/organization.js';
+import { placeProject as placeProjectInUnit } from '../../src/server/organization.js';
 import { mintUserToken, allow, seedUnit, createPlacedProject } from './helpers.js';
 import { UnauthenticatedError, ForbiddenError } from '../../src/server/errors.js';
 import type {
@@ -342,8 +342,8 @@ describe('operations orchestrator (sdd_host)', () => {
   });
 
   it('scoped project:read: a unit-scoped operator sees health/usage only for their subtree projects', () => {
-    const unitA = seedUnit(dataDir, 'A');
-    const unitB = seedUnit(dataDir, 'B');
+    const unitA = seedUnit(dataDir, 'unit-a');
+    const unitB = seedUnit(dataDir, 'unit-b');
     createProject(cfg, MASTER, 'in-proj', unitA.id);
     createProject(cfg, MASTER, 'out-proj', unitB.id);
 

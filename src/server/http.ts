@@ -8,7 +8,7 @@ import { handleWebRequest, sessionCookieValue, startDevSession, setSessionCookie
 import * as admin from './admin.js';
 import * as packs from './packs.js';
 import { ensureInstanceIdentity } from './instance.js';
-import { upsertOrganizationUnit, getOrganizationUnit } from './organization.js';
+import { createUnit, getOrganizationUnit } from './organization.js';
 import * as identity from './identity.js';
 import * as projectlifecycle from './projectlifecycle.js';
 import * as policy from './policy.js';
@@ -120,11 +120,18 @@ function webCsrfHeaderPresent(req: IncomingMessage): boolean {
 const WEB_MUTATION_PATHS = new Set<string>([
   '/web/admin/users',
   '/web/admin/users/status',
-  '/web/admin/users/grants',
   '/web/admin/providers',
   '/web/admin/providers/remove',
   '/web/admin/org/units',
+  '/web/admin/org/units/remove',
   '/web/admin/org/placements',
+  '/web/admin/roles',
+  '/web/admin/roles/update',
+  '/web/admin/roles/remove',
+  '/web/admin/roles/bind',
+  '/web/admin/roles/unbind',
+  '/web/admin/permissions',
+  '/web/admin/permissions/remove',
   '/web/tokens',
   '/web/tokens/revoke',
   '/web/projects',
@@ -534,7 +541,7 @@ export function initHostInstance(cfg: HostConfig): void {
   ensureInstanceIdentity(cfg.dataDir);
   if (cfg.devMode && !getOrganizationUnit(cfg.dataDir, DEV_UNIT_ID)) {
     const system: PrincipalSubject = { userId: 'system', kind: 'service', issuer: 'local' };
-    upsertOrganizationUnit(cfg.dataDir, {
+    createUnit(cfg.dataDir, {
       id: DEV_UNIT_ID,
       name: 'Local Development',
       kind: 'team',

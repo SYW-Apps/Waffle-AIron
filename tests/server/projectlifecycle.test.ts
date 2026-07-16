@@ -15,7 +15,7 @@ import {
 } from '../../src/server/projectlifecycle.js';
 import { createProject } from '../../src/server/admin.js';
 import { setPackPolicyRecord } from '../../src/server/policy.js';
-import { upsertOrganizationUnit, placeProject as placeProjectInUnit } from '../../src/server/organization.js';
+import { createUnit, placeProject as placeProjectInUnit } from '../../src/server/organization.js';
 import { listProjectPacks } from '../../src/server/packs.js';
 import { UnauthenticatedError, ForbiddenError } from '../../src/server/errors.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
@@ -133,9 +133,10 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
 
   /** Create an organization unit (projects must be placed somewhere). */
   function seedUnit(name: string): OrganizationUnitRecord {
-    return upsertOrganizationUnit(dataDir, {
+    return createUnit(dataDir, {
       id: '',
       name,
+      slug: name,
       kind: 'team',
       status: 'active',
       createdAt: '',
@@ -409,8 +410,8 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
   });
 
   it('a project-scoped approval:decide lists/decides only its own project; a unit-scoped one only its subtree', () => {
-    const unitA = seedUnit('A');
-    const unitB = seedUnit('B');
+    const unitA = seedUnit('unit-a');
+    const unitB = seedUnit('unit-b');
     createProject(cfg, MASTER, 'in-proj', unitA.id);
     createProject(cfg, MASTER, 'out-proj', unitB.id);
 

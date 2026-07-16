@@ -1,7 +1,7 @@
 import * as crypto from 'node:crypto';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
 import { setAssignment } from '../../src/server/permissions.js';
-import { upsertOrganizationUnit } from '../../src/server/organization.js';
+import { createUnit } from '../../src/server/organization.js';
 import { createProject } from '../../src/server/admin.js';
 import type {
   ApiKeyRecord,
@@ -67,9 +67,11 @@ export function allow(
   });
 }
 
-/** Create an organization unit (projects must be placed somewhere). */
+/** Create an organization unit (projects must be placed somewhere). The name
+ *  doubles as the slug, so the qualified id is parentId + '.' + name (or the
+ *  name itself for a root unit). */
 export function seedUnit(dataDir: string, name: string, over: Partial<OrganizationUnitRecord> = {}): OrganizationUnitRecord {
-  return upsertOrganizationUnit(dataDir, {
+  return createUnit(dataDir, {
     id: '',
     name,
     slug: name,

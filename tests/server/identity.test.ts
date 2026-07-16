@@ -15,7 +15,7 @@ import {
 import { createWebSession, getWebSessionById } from '../../src/server/websessions.js';
 import { createProjectRecord } from '../../src/server/projects.js';
 import { upsertUser as repoUpsertUser } from '../../src/server/users.js';
-import { upsertOrganizationUnit, placeProject } from '../../src/server/organization.js';
+import { createUnit, placeProject } from '../../src/server/organization.js';
 import { mintUserToken, allow } from './helpers.js';
 import { ensureInstanceIdentity } from '../../src/server/instance.js';
 import { appendAuditEvent, queryAuditEvents as auditQuery, DEFAULT_AUDIT_POLICY } from '../../src/server/audit.js';
@@ -60,27 +60,33 @@ function mkUser(over: Partial<HostedUserRecord> & Pick<HostedUserRecord, 'id'>):
 // ── organization scaffolding for Phase 6 scoped-administration tests ──────────
 const ORG_SUB: PrincipalSubject = { userId: 'org-admin', kind: 'human', issuer: 'local' };
 
-function unit(id: string, parentId?: string): OrganizationUnitRecord {
-  return { id, name: id, kind: 'team', parentId, status: 'active', createdAt: '2026-01-01T00:00:00.000Z', createdBy: ORG_SUB };
+function unit(slug: string, parentId?: string): OrganizationUnitRecord {
+  return { id: '', slug, name: slug, kind: 'team', parentId, status: 'active', createdAt: '', createdBy: ORG_SUB };
 }
 function placement(projectId: string, unitId: string): ProjectPlacement {
   return { id: `${projectId}@${unitId}`, projectId, unitId, role: 'owner', createdAt: '2026-01-01T00:00:00.000Z', createdBy: ORG_SUB };
 }
 
+// The QUALIFIED dot-path unit ids the registry computes (parent id + '.' + slug).
+const ACME = 'acme';
+const ENG = 'acme.eng';
+const WEB = 'acme.eng.web';
+const SALES = 'acme.sales';
+
 /**
- * A small org used by the scoped-administration tests, mirroring scope.test.ts:
+ * A small org used by the scoped-administration tests:
  *   acme(root) → eng → web ; acme → sales
- * with projects p-web@web, p-eng@eng, p-sales@sales. A grant scoped to 'eng'
- * therefore covers units {eng, web} and projects {p-web, p-eng} — but never sales.
+ * with projects p-web@WEB, p-eng@ENG, p-sales@SALES. An assignment scoped to ENG
+ * therefore covers units {ENG, WEB} and projects {p-web, p-eng} — never sales.
  */
 function seedOrg(dataDir: string): void {
-  upsertOrganizationUnit(dataDir, unit('acme'));
-  upsertOrganizationUnit(dataDir, unit('eng', 'acme'));
-  upsertOrganizationUnit(dataDir, unit('web', 'eng'));
-  upsertOrganizationUnit(dataDir, unit('sales', 'acme'));
-  placeProject(dataDir, placement('p-web', 'web'));
-  placeProject(dataDir, placement('p-eng', 'eng'));
-  placeProject(dataDir, placement('p-sales', 'sales'));
+  createUnit(dataDir, unit('acme'));
+  createUnit(dataDir, unit('eng', ACME));
+  createUnit(dataDir, unit('web', ENG));
+  createUnit(dataDir, unit('sales', ACME));
+  placeProject(dataDir, placement('p-web', WEB));
+  placeProject(dataDir, placement('p-eng', ENG));
+  placeProject(dataDir, placement('p-sales', SALES));
 }
 
 describe('identity orchestrator (sdd_host)', () => {
@@ -401,7 +407,7 @@ describe('identity orchestrator (sdd_host)', () => {
   it('S2: a project-scoped admin gets FILTERED audit access to its project, not 403; instance-level sees all', () => {
     // The scoped project must exist AND be placed — the resolver enumerates the
     // org tree, so an unplaced project is in nobody's visibility view.
-    const tenant = upsertOrganizationUnit(dataDir, unit('tenant'));
+    const tenant = createUnit(dataDir, unit('tenant'));
     createProjectRecord(dataDir, 'acme');
     placeProject(dataDir, placement('acme', tenant.id));
 
@@ -426,8 +432,8 @@ describe('identity orchestrator (sdd_host)', () => {
 
   // ── scoped administration (unit-scoped assignments) ──────────────────────────
   //
-  // A project:admin assignment scoped to org unit 'eng' covers units {eng, web}
-  // and projects {p-web, p-eng}; 'sales' / 'p-sales' are out of scope. MASTER is
+  // A project:admin assignment scoped to org unit ENG covers units {ENG, WEB}
+  // and projects {p-web, p-eng}; SALES / 'p-sales' are out of scope. MASTER is
   // the bootstrap instance-admin → full reach.
 
   it('queryAuditEvents: a unit-scoped admin sees only its subtree events, never another unit\'s or instance-level ones', () => {
@@ -437,7 +443,7 @@ describe('identity orchestrator (sdd_host)', () => {
     appendAuditEvent(dataDir, mkEvent({ action: 'a.sales', projectId: 'p-sales' }), DEFAULT_AUDIT_POLICY);
     appendAuditEvent(dataDir, mkEvent({ action: 'a.global' }), DEFAULT_AUDIT_POLICY); // no projectId
 
-    const caller = tokenWith('project:admin', 'unit', 'eng');
+    const caller = tokenWith('project:admin', 'unit', ENG);
 
     const events = identity.queryAuditEvents(cfg, caller, {});
     expect(new Set(events.map((e) => e.projectId))).toEqual(new Set(['p-web', 'p-eng']));
@@ -458,11 +464,11 @@ describe('identity orchestrator (sdd_host)', () => {
 
   it('listUsers: a unit-scoped admin sees only in-scope-unit users; MASTER sees all (incl. no-unit users)', () => {
     seedOrg(dataDir);
-    repoUpsertUser(dataDir, mkUser({ id: 'u-web', unitId: 'web' }));
-    repoUpsertUser(dataDir, mkUser({ id: 'u-sales', unitId: 'sales' }));
+    repoUpsertUser(dataDir, mkUser({ id: 'u-web', unitId: WEB }));
+    repoUpsertUser(dataDir, mkUser({ id: 'u-sales', unitId: SALES }));
     repoUpsertUser(dataDir, mkUser({ id: 'u-nounit' })); // no home unit
 
-    const caller = tokenWith('project:admin', 'unit', 'eng');
+    const caller = tokenWith('project:admin', 'unit', ENG);
     expect(identity.listUsers(cfg, caller).map((u) => u.id)).toEqual(['u-web']);
 
     // A user with no home unit is visible only to an instance-level admin.
@@ -471,10 +477,10 @@ describe('identity orchestrator (sdd_host)', () => {
 
   it('setUserStatus: a unit-scoped admin may act on an in-scope user but is 403 on an out-of-scope one; MASTER may do both', () => {
     seedOrg(dataDir);
-    repoUpsertUser(dataDir, mkUser({ id: 'u-web', unitId: 'web' }));
-    repoUpsertUser(dataDir, mkUser({ id: 'u-sales', unitId: 'sales' }));
+    repoUpsertUser(dataDir, mkUser({ id: 'u-web', unitId: WEB }));
+    repoUpsertUser(dataDir, mkUser({ id: 'u-sales', unitId: SALES }));
 
-    const caller = tokenWith('project:admin', 'unit', 'eng');
+    const caller = tokenWith('project:admin', 'unit', ENG);
 
     // In-scope: allowed.
     expect(identity.setUserStatus(cfg, caller, 'u-web', 'suspended').status).toBe('suspended');
@@ -487,21 +493,21 @@ describe('identity orchestrator (sdd_host)', () => {
 
   it('upsertUser: a unit-scoped admin may only create/update users within its subtree; MASTER anywhere', () => {
     seedOrg(dataDir);
-    const caller = tokenWith('project:admin', 'unit', 'eng');
+    const caller = tokenWith('project:admin', 'unit', ENG);
 
-    // Create an in-scope user (home unit web) → allowed.
-    expect(identity.upsertUser(cfg, caller, mkUser({ id: 'nw', unitId: 'web' })).id).toBe('nw');
-    // Create an out-of-scope user (home unit sales) → 403.
-    expect(() => identity.upsertUser(cfg, caller, mkUser({ id: 'ns', unitId: 'sales' }))).toThrow(ForbiddenError);
+    // Create an in-scope user (home unit WEB) → allowed.
+    expect(identity.upsertUser(cfg, caller, mkUser({ id: 'nw', unitId: WEB })).id).toBe('nw');
+    // Create an out-of-scope user (home unit SALES) → 403.
+    expect(() => identity.upsertUser(cfg, caller, mkUser({ id: 'ns', unitId: SALES }))).toThrow(ForbiddenError);
     // Create a user with no home unit → 403 for a scoped admin (instance root).
     expect(() => identity.upsertUser(cfg, caller, mkUser({ id: 'nn' }))).toThrow(ForbiddenError);
     // A scoped admin cannot CAPTURE a foreign user by rewriting their home unit
     // into scope: the existing unit must also be covered.
-    repoUpsertUser(dataDir, mkUser({ id: 'u-foreign', unitId: 'sales' }));
-    expect(() => identity.upsertUser(cfg, caller, mkUser({ id: 'u-foreign', unitId: 'web' }))).toThrow(ForbiddenError);
+    repoUpsertUser(dataDir, mkUser({ id: 'u-foreign', unitId: SALES }));
+    expect(() => identity.upsertUser(cfg, caller, mkUser({ id: 'u-foreign', unitId: WEB }))).toThrow(ForbiddenError);
 
     // MASTER may create any of them.
-    expect(identity.upsertUser(cfg, MASTER, mkUser({ id: 'ms', unitId: 'sales' })).id).toBe('ms');
+    expect(identity.upsertUser(cfg, MASTER, mkUser({ id: 'ms', unitId: SALES })).id).toBe('ms');
   });
 
   it('mintToken: even a unit-scoped admin may not mint for another user (a token IS its owner, live)', () => {
@@ -509,7 +515,7 @@ describe('identity orchestrator (sdd_host)', () => {
     createProjectRecord(dataDir, 'p-web');
     // A unit admin's own reach is irrelevant: the minted token would resolve the
     // OWNER's live permission, which could exceed the minter's — instance-admin only.
-    const caller = tokenWith('project:admin', 'unit', 'eng');
+    const caller = tokenWith('project:admin', 'unit', ENG);
     expect(() =>
       identity.mintToken(cfg, caller, { ownerUserId: 'u-o', label: 't', projects: ['p-web'] }),
     ).toThrow(/instance admin/i);

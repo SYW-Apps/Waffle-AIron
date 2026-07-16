@@ -40,7 +40,11 @@ import type {
   IdentityProviderConfig,
   LandscapeGraphModel,
   OrganizationUnitRecord,
+  PermissionAssignment,
   PrincipalSubject,
+  Role,
+  ScopeKind,
+  UnitDisposition,
   WebContext,
   WebGraphModel,
   WebGraphNode,
@@ -1983,6 +1987,81 @@ function adminPlaceProject(cfg: HostConfig, sessionId: string, body: Body, res: 
   sendJson(res, 200, { ok: true });
 }
 
+/** Remove an organization unit per its disposition (migrate/alternative/absorb/
+ *  cascade); forwards to web_admin_orchestrator.removeUnit. */
+function adminRemoveUnit(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  webadmin.removeUnit(cfg, sessionId, String(body?.unitId ?? ''), (body?.disposition ?? {}) as UnitDisposition);
+  sendJson(res, 200, { ok: true });
+}
+
+/** The optional {scopeKind, scopeId} pair from a request body (role bindings). */
+function bodyScope(body: Body): { scopeKind?: ScopeKind; scopeId?: string } {
+  return {
+    scopeKind: body?.scopeKind ? (String(body.scopeKind) as ScopeKind) : undefined,
+    scopeId: body?.scopeId !== undefined ? String(body.scopeId) : undefined,
+  };
+}
+
+/** List permission roles; forwards to web_admin_orchestrator.listRoles. */
+function adminListRoles(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
+  sendJson(res, 200, { roles: webadmin.listRoles(cfg, sessionId) });
+}
+
+/** Create a permission role; forwards to web_admin_orchestrator.createRole. */
+function adminCreateRole(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, webadmin.createRole(cfg, sessionId, body as Role));
+}
+
+/** Update a permission role; forwards to web_admin_orchestrator.updateRole. */
+function adminUpdateRole(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, webadmin.updateRole(cfg, sessionId, body as Role));
+}
+
+/** Delete a permission role by id; forwards to web_admin_orchestrator.deleteRole. */
+function adminDeleteRole(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  webadmin.deleteRole(cfg, sessionId, String(body?.id ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+
+/** Bind a role to a user at a scope; forwards to web_admin_orchestrator.bindRole. */
+function adminBindRole(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  const scope = bodyScope(body);
+  sendJson(res, 200, webadmin.bindRole(cfg, sessionId, String(body?.userId ?? ''), String(body?.roleId ?? ''), scope.scopeKind, scope.scopeId));
+}
+
+/** Unbind a role from a user at a scope; forwards to web_admin_orchestrator.unbindRole. */
+function adminUnbindRole(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  const scope = bodyScope(body);
+  sendJson(res, 200, webadmin.unbindRole(cfg, sessionId, String(body?.userId ?? ''), String(body?.roleId ?? ''), scope.scopeKind, scope.scopeId));
+}
+
+/** List permission assignments filtered by scope/subject query params; forwards
+ *  to web_admin_orchestrator.listAssignments. */
+function adminListAssignments(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  const q = (name: string): string | undefined => url.searchParams.get(name) ?? undefined;
+  sendJson(res, 200, {
+    assignments: webadmin.listAssignments(
+      cfg,
+      sessionId,
+      q('scopeKind') as ScopeKind | undefined,
+      q('scopeId'),
+      q('subjectKind') as 'user' | 'everyone' | undefined,
+      q('subjectId'),
+    ),
+  });
+}
+
+/** Upsert a permission assignment; forwards to web_admin_orchestrator.setAssignment. */
+function adminSetAssignment(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, webadmin.setAssignment(cfg, sessionId, body as PermissionAssignment));
+}
+
+/** Remove a permission assignment by id; forwards to web_admin_orchestrator.removeAssignment. */
+function adminRemoveAssignment(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  webadmin.removeAssignment(cfg, sessionId, String(body?.id ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+
 // ── Web project-lifecycle plane (session-scoped /web/projects*) ──────────────
 //
 // The human project-lifecycle surface of the unified web UI on the PUBLIC data
@@ -2246,9 +2325,53 @@ export async function handleWebRequest(
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'org' && parts[3] === 'units') {
         return adminUpsertOrgUnit(cfg, sessionId, body, res);
       }
+      // POST /web/admin/org/units/remove { unitId, disposition } — dispose of a
+      // unit (migrate/alternative/absorb/cascade); never a silent cascade.
+      if (req.method === 'POST' && parts.length === 5 && parts[2] === 'org' && parts[3] === 'units' && parts[4] === 'remove') {
+        return adminRemoveUnit(cfg, sessionId, body, res);
+      }
       // POST /web/admin/org/placements { projectId, unitId }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'org' && parts[3] === 'placements') {
         return adminPlaceProject(cfg, sessionId, body, res);
+      }
+
+      // ── Permission roles / assignments / bindings (permission_admin) ──────
+      // GET /web/admin/roles — stored (admin-defined) roles (instance-admin upstream).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'roles') {
+        return adminListRoles(cfg, sessionId, res);
+      }
+      // POST /web/admin/roles { ...Role } — create a role.
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'roles') {
+        return adminCreateRole(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/roles/update { ...Role } — update a role's metadata/permissions.
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'roles' && parts[3] === 'update') {
+        return adminUpdateRole(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/roles/remove { id } — delete a role (bindings become inert).
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'roles' && parts[3] === 'remove') {
+        return adminDeleteRole(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/roles/bind { userId, roleId, scopeKind?, scopeId? }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'roles' && parts[3] === 'bind') {
+        return adminBindRole(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/roles/unbind { userId, roleId, scopeKind?, scopeId? }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'roles' && parts[3] === 'unbind') {
+        return adminUnbindRole(cfg, sessionId, body, res);
+      }
+      // GET /web/admin/permissions?scopeKind=&scopeId=&subjectKind=&subjectId= —
+      // the assignment grid, scope-authorized upstream.
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'permissions') {
+        return adminListAssignments(cfg, sessionId, url, res);
+      }
+      // POST /web/admin/permissions { ...PermissionAssignment } — upsert one assignment.
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'permissions') {
+        return adminSetAssignment(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/permissions/remove { id } — remove one assignment.
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'permissions' && parts[3] === 'remove') {
+        return adminRemoveAssignment(cfg, sessionId, body, res);
       }
 
       // ── Existing scoped control-plane reads (unchanged) ───────────────────

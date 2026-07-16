@@ -1,6 +1,9 @@
 import { authenticateSession } from './auth.js';
 import * as identity from './identity.js';
 import * as organization from './organization.js';
+import * as permissionadmin from './permissionadmin.js';
+import { remapScope, removeAssignmentsForScopes } from './permissions.js';
+import { remapUnitReferences } from './users.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import { ForbiddenError } from './identity.js';
 import { isInstanceAdmin } from './authorization.js';
@@ -12,9 +15,14 @@ import type {
   HostedUserRecord,
   IdentityProviderConfig,
   OrganizationUnitRecord,
+  PermissionAssignment,
   Principal,
   PrincipalSubject,
   ProjectPlacement,
+  Role,
+  ScopeKind,
+  UnitDisposition,
+  UnitIdRemap,
 } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -195,10 +203,16 @@ export function upsertOrganizationUnit(
   record: OrganizationUnitRecord,
 ): OrganizationUnitRecord {
   const principal = requireInstanceAdminSession(cfg, sessionId); // steps 1–3
-  const stored = organization.upsertOrganizationUnit(cfg.dataDir, record); // step 4 (atomic)
-  // steps 5–8: best-effort append (tryAppendAudit wraps the try/jump/catch).
+  // steps 4–8: an existing record takes the metadata-update path; anything else
+  // is a create (the registry computes the qualified dot-path id from
+  // parent+slug and rejects collisions).
+  const existing = record.id ? organization.getOrganizationUnit(cfg.dataDir, record.id) : null;
+  const stored = existing
+    ? organization.updateUnit(cfg.dataDir, record)
+    : organization.createUnit(cfg.dataDir, record);
+  // steps 9–12: best-effort append (tryAppendAudit wraps the try/jump/catch).
   tryAppendAudit(cfg, buildOrgAuditEvent(principal, 'org.unit.upsert', stored.id));
-  return stored; // step 9
+  return stored; // step 13
 }
 
 /**
@@ -222,4 +236,207 @@ export function placeProject(cfg: HostConfig, sessionId: string, projectId: stri
   // steps 6–9: best-effort append.
   tryAppendAudit(cfg, buildOrgAuditEvent(principal, 'org.placement.set', projectId));
   // step 10: return once placed.
+}
+
+/** All unit ids in the subtree rooted at `rootId` (root included), resolved by
+ *  parentId links over the given unit collection. */
+function subtreeUnitIds(units: OrganizationUnitRecord[], rootId: string): Set<string> {
+  const subtree = new Set<string>([rootId]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const u of units) {
+      if (u.parentId !== undefined && subtree.has(u.parentId) && !subtree.has(u.id)) {
+        subtree.add(u.id);
+        grew = true;
+      }
+    }
+  }
+  return subtree;
+}
+
+/**
+ * Resolve the session to a Principal, require an instance-wide admin grant, then
+ * dispose of the organization unit per the UnitDisposition — a unit is never
+ * silently cascade-deleted:
+ *   - migrate     → content moves to an EXISTING target unit outside the subtree;
+ *   - alternative → a fresh replacement sibling (newSlug/newName) is created and
+ *                   content moves into it (how a rename/replace is expressed);
+ *   - absorb      → content moves to the unit's parent (a root cannot absorb);
+ *   - cascade     → the whole subtree and its placements are deleted, assignments
+ *                   scoped into it are removed (no resurrection at a reused
+ *                   path), and user references into it are cleared.
+ * Every non-cascade move rewrites external references (assignment scopes, user
+ * home units, role-binding scopes) via the returned id remap, then deletes the
+ * emptied unit. Appends a best-effort org.unit.remove (security) audit event.
+ */
+export function removeUnit(
+  cfg: HostConfig,
+  sessionId: string,
+  unitId: string,
+  disposition: UnitDisposition,
+): void {
+  const principal = requireInstanceAdminSession(cfg, sessionId); // steps 1–3
+  const unit = organization.getOrganizationUnit(cfg.dataDir, unitId); // step 4
+  if (!unit) {
+    throw new Error(`Unknown organization unit "${unitId}".`); // steps 5–6
+  }
+  const units = organization.listOrganizationUnits(cfg.dataDir);
+  const subtree = subtreeUnitIds(units, unitId);
+
+  // step 7: route on the disposition.
+  if (disposition.kind === 'cascade') {
+    // steps 26–28: delete every placement in the subtree.
+    for (const placement of organization.listProjectPlacements(cfg.dataDir)) {
+      if (subtree.has(placement.unitId)) {
+        organization.deletePlacement(cfg.dataDir, placement.id);
+      }
+    }
+    const doomed = [...subtree];
+    // step 29: remove assignments scoped into the deleted subtree.
+    removeAssignmentsForScopes(cfg.dataDir, doomed);
+    // step 30: clear user home units and role bindings scoped into it.
+    remapUnitReferences(cfg.dataDir, [], doomed);
+    // steps 31–32: delete every unit deepest-first (children before parents).
+    const depth = (u: OrganizationUnitRecord): number => u.id.split('.').length;
+    const doomedUnits = units.filter((u) => subtree.has(u.id)).sort((a, b) => depth(b) - depth(a));
+    for (const u of doomedUnits) {
+      organization.deleteUnit(cfg.dataDir, u.id);
+    }
+  } else {
+    // steps 8–16: resolve the destination unit id per the disposition.
+    let destination: string;
+    if (disposition.kind === 'alternative') {
+      if (!disposition.newSlug) {
+        throw new Error("An 'alternative' disposition requires newSlug for the replacement unit.");
+      }
+      // The replacement sibling copies the removed unit's posture so the
+      // rename/replace preserves visibility.
+      const replacement = organization.createUnit(cfg.dataDir, {
+        id: '',
+        name: disposition.newName ?? unit.name,
+        slug: disposition.newSlug,
+        kind: unit.kind,
+        ...(unit.parentId !== undefined ? { parentId: unit.parentId } : {}),
+        status: 'active',
+        ...(unit.visibility !== undefined ? { visibility: unit.visibility } : {}),
+        ...(unit.exposeTo !== undefined ? { exposeTo: unit.exposeTo } : {}),
+        createdAt: '',
+        createdBy: auditActor(principal),
+      });
+      destination = replacement.id;
+    } else if (disposition.kind === 'migrate') {
+      const target = disposition.targetUnitId;
+      if (!target || target === unitId || subtree.has(target) || !units.some((u) => u.id === target)) {
+        throw new Error('Invalid migrate target — must be an existing unit outside the removed subtree.');
+      }
+      destination = target;
+    } else {
+      // 'absorb': content moves to the parent, which a root does not have.
+      if (unit.parentId === undefined) {
+        throw new Error('Cannot absorb a root unit — it has no parent.');
+      }
+      destination = unit.parentId;
+    }
+
+    // steps 17–19: reparent every direct child subtree under the destination,
+    // accumulating the old->new id remap; the removed unit's own id maps to the
+    // destination (its direct references move there).
+    const remap: UnitIdRemap[] = [];
+    for (const child of units.filter((u) => u.parentId === unitId)) {
+      remap.push(...organization.reparentUnit(cfg.dataDir, child.id, destination));
+    }
+    remap.push({ oldId: unitId, newId: destination });
+
+    // steps 20–21: re-point the removed unit's own placements onto the
+    // destination (child-subtree placements already moved with the reparent).
+    for (const placement of organization.listProjectPlacements(cfg.dataDir, undefined, unitId)) {
+      organization.placeProject(cfg.dataDir, { ...placement, unitId: destination });
+    }
+
+    // steps 22–23: rewrite external references onto the new ids.
+    remapScope(cfg.dataDir, remap);
+    remapUnitReferences(cfg.dataDir, remap, []);
+
+    // step 24: the unit is now empty — delete it.
+    organization.deleteUnit(cfg.dataDir, unitId);
+  }
+
+  // steps 33–36: best-effort append.
+  tryAppendAudit(cfg, buildOrgAuditEvent(principal, 'org.unit.remove', unitId));
+  // step 37: return once the unit has been removed.
+}
+
+// ── roles / assignments / bindings (forward to permission_admin_orchestrator) ─
+
+/** Forward to permission_admin_orchestrator.listRoles with the session as the
+ *  credential (instance-admin only upstream). */
+export function listRoles(cfg: HostConfig, sessionId: string): Role[] {
+  return permissionadmin.listRoles(cfg, sessionId);
+}
+
+/** Forward to permission_admin_orchestrator.createRole with the session as the credential. */
+export function createRole(cfg: HostConfig, sessionId: string, role: Role): Role {
+  return permissionadmin.createRole(cfg, sessionId, role);
+}
+
+/** Forward to permission_admin_orchestrator.updateRole with the session as the credential. */
+export function updateRole(cfg: HostConfig, sessionId: string, role: Role): Role {
+  return permissionadmin.updateRole(cfg, sessionId, role);
+}
+
+/** Forward to permission_admin_orchestrator.deleteRole with the session as the credential. */
+export function deleteRole(cfg: HostConfig, sessionId: string, roleId: string): void {
+  permissionadmin.deleteRole(cfg, sessionId, roleId);
+}
+
+/** Forward to permission_admin_orchestrator.listAssignments with the session as
+ *  the credential (project:admin over the scope upstream). */
+export function listAssignments(
+  cfg: HostConfig,
+  sessionId: string,
+  scopeKind?: ScopeKind,
+  scopeId?: string,
+  subjectKind?: 'user' | 'everyone',
+  subjectId?: string,
+): PermissionAssignment[] {
+  return permissionadmin.listAssignments(cfg, sessionId, scopeKind, scopeId, subjectKind, subjectId);
+}
+
+/** Forward to permission_admin_orchestrator.setAssignment with the session as the credential. */
+export function setAssignment(
+  cfg: HostConfig,
+  sessionId: string,
+  assignment: PermissionAssignment,
+): PermissionAssignment {
+  return permissionadmin.setAssignment(cfg, sessionId, assignment);
+}
+
+/** Forward to permission_admin_orchestrator.removeAssignment with the session as the credential. */
+export function removeAssignment(cfg: HostConfig, sessionId: string, assignmentId: string): void {
+  permissionadmin.removeAssignment(cfg, sessionId, assignmentId);
+}
+
+/** Forward to permission_admin_orchestrator.bindRole with the session as the credential. */
+export function bindRole(
+  cfg: HostConfig,
+  sessionId: string,
+  userId: string,
+  roleId: string,
+  scopeKind?: ScopeKind,
+  scopeId?: string,
+): HostedUserRecord {
+  return permissionadmin.bindRole(cfg, sessionId, userId, roleId, scopeKind, scopeId);
+}
+
+/** Forward to permission_admin_orchestrator.unbindRole with the session as the credential. */
+export function unbindRole(
+  cfg: HostConfig,
+  sessionId: string,
+  userId: string,
+  roleId: string,
+  scopeKind?: ScopeKind,
+  scopeId?: string,
+): HostedUserRecord {
+  return permissionadmin.unbindRole(cfg, sessionId, userId, roleId, scopeKind, scopeId);
 }

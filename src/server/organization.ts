@@ -5,6 +5,7 @@ import type {
   OrganizationUnitRecord,
   ProjectPlacement,
   OrganizationState,
+  UnitIdRemap,
 } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -18,17 +19,21 @@ import type {
 //                            loaded from disk (missing file -> two empty
 //                            collections; corrupt -> storage error naming the
 //                            path). replaceAll swaps both in one assignment.
-//   - OrganizationRegistry : the write path — upsert a unit (id/createdAt
-//                            stamping, default status active, parentId
-//                            referential validation, unit-tree cycle rejection)
-//                            and place a project (id/createdAt stamping, unitId
-//                            referential validation). Performs NO authorization
-//                            (the orchestrator's job).
+//   - OrganizationRegistry : the write path — unit lifecycle (createUnit
+//                            computes the QUALIFIED DOT-PATH id from the parent
+//                            path plus slug and rejects collisions; updateUnit
+//                            applies metadata only; reparentUnit moves a whole
+//                            subtree and returns the old->new id remap;
+//                            deleteUnit removes one emptied unit) and placements
+//                            (placeProject stamping + unitId referential
+//                            validation, deletePlacement). Performs NO
+//                            authorization (the orchestrator's job).
 //   - OrganizationIndex    : the read path — hierarchy listing (direct children
 //                            of a parent, or all), membership listing (filtered
 //                            by project/unit), and by-id unit lookup; never
 //                            mutates.
-//   - facade               : the exported upsertOrganizationUnit / placeProject /
+//   - facade               : the exported createUnit / updateUnit / reparentUnit /
+//                            deleteUnit / placeProject / deletePlacement /
 //                            listOrganizationUnits / listProjectPlacements /
 //                            getOrganizationUnit functions; pure 1:1 forwarding
 //                            (writes -> registry, reads -> index).
@@ -86,22 +91,31 @@ function persistState(dataDir: string, state: OrganizationState): void {
   fs.renameSync(tmp, p);
 }
 
-/**
- * True when unit `startId`, following parent links through `units`, is reachable
- * from itself — i.e. the parent chain revisits a unit already seen (a cycle in
- * the unit tree, including a unit set as its own parent).
- */
-function chainHasCycle(units: OrganizationUnitRecord[], startId: string): boolean {
-  const seen = new Set<string>();
-  let cur: string | undefined = startId;
-  while (cur !== undefined && cur !== '') {
-    if (seen.has(cur)) return true;
-    seen.add(cur);
-    const u = units.find((x) => x.id === cur);
-    if (u === undefined) return false; // chain reached a non-existent (root-ward) node
-    cur = u.parentId;
+/** A unit's local segment: lowercase [a-z0-9-], dot-free ('.' separates the
+ *  qualified path), unique among siblings. */
+const SLUG_PATTERN = /^[a-z0-9-]+$/;
+
+/** The qualified dot-path id: the parent's qualified id + '.' + slug; a root
+ *  unit's id IS its slug. */
+function qualifiedId(parentId: string | undefined, slug: string): string {
+  return parentId ? `${parentId}.${slug}` : slug;
+}
+
+/** All unit ids in the subtree rooted at `rootId` (root included), resolved by
+ *  parentId links — never by id-prefix, so legacy opaque ids stay correct. */
+function subtreeIds(units: OrganizationUnitRecord[], rootId: string): Set<string> {
+  const subtree = new Set<string>([rootId]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const u of units) {
+      if (u.parentId !== undefined && subtree.has(u.parentId) && !subtree.has(u.id)) {
+        subtree.add(u.id);
+        grew = true;
+      }
+    }
   }
-  return false;
+  return subtree;
 }
 
 // ── store: authoritative in-memory holder of both collections ───────────────
@@ -145,55 +159,220 @@ class OrganizationRegistry {
   constructor(private readonly dataDir: string, private readonly store: OrganizationStore) {}
 
   /**
-   * Create or update one organization unit. On create, stamp a random id (when
-   * none is supplied) and createdAt; on update (an existing id), preserve both.
-   * Default status to active. Validate that parentId — when set — resolves to an
-   * existing unit, and reject any change that would introduce a cycle in the unit
-   * tree. Persist the full unit collection via write-temp-then-rename, refresh the
-   * store, and return the stored unit. Persistence failures leave the previous
-   * collections intact. Authorization is the orchestrator's job, not here.
+   * Create one organization unit: compute its QUALIFIED id from the parentId
+   * path plus slug (a root unit's id IS its slug — any incoming id is ignored),
+   * validate the slug shape and that parentId — when set — resolves to an
+   * existing unit, and reject a collision (an existing unit already holding the
+   * qualified id, or a sibling already using the slug). Stamp createdAt, default
+   * status to active, persist via write-temp-then-rename, refresh the store, and
+   * return the stored unit. Authorization is the orchestrator's job, not here.
    */
-  upsertUnit(unit: OrganizationUnitRecord): OrganizationUnitRecord {
+  createUnit(unit: OrganizationUnitRecord): OrganizationUnitRecord {
     const units = this.store.allUnits();
-    const existingIdx = unit.id ? units.findIndex((u) => u.id === unit.id) : -1;
-    const isUpdate = existingIdx >= 0;
-
-    const stored: OrganizationUnitRecord = isUpdate
-      ? {
-          ...unit,
-          id: units[existingIdx].id,
-          createdAt: units[existingIdx].createdAt,
-          status: unit.status || 'active',
-        }
-      : {
-          ...unit,
-          id: unit.id || crypto.randomUUID(),
-          createdAt: new Date().toISOString(),
-          status: unit.status || 'active',
-        };
-
-    if (stored.parentId !== undefined && stored.parentId !== '') {
-      if (!units.some((u) => u.id === stored.parentId)) {
-        throw new Error(
-          `Organization unit parentId "${stored.parentId}" does not resolve to an existing unit.`,
-        );
-      }
-    }
-
-    const next = isUpdate
-      ? units.map((u, i) => (i === existingIdx ? stored : u))
-      : [...units, stored];
-
-    if (stored.parentId !== undefined && stored.parentId !== '' && chainHasCycle(next, stored.id)) {
+    if (!unit.slug || !SLUG_PATTERN.test(unit.slug)) {
       throw new Error(
-        `Organization unit "${stored.id}" cannot be its own ancestor; the change would introduce a cycle in the unit tree.`,
+        `Organization unit slug "${unit.slug}" is invalid — lowercase [a-z0-9-] only (dot-free; '.' separates the qualified path).`,
+      );
+    }
+    const parentId = unit.parentId || undefined;
+    if (parentId !== undefined && !units.some((u) => u.id === parentId)) {
+      throw new Error(
+        `Organization unit parentId "${parentId}" does not resolve to an existing unit.`,
+      );
+    }
+    const id = qualifiedId(parentId, unit.slug);
+    if (units.some((u) => u.id === id)) {
+      throw new Error(`Organization unit "${id}" already exists — never a silent overwrite.`);
+    }
+    // Belt-and-braces sibling check: legacy units may hold ids that don't follow
+    // the qualified convention, so the id collision alone wouldn't catch them.
+    if (units.some((u) => (u.parentId || undefined) === parentId && u.slug === unit.slug)) {
+      throw new Error(
+        `A sibling unit already uses the slug "${unit.slug}" under ${parentId ?? 'the root'}.`,
       );
     }
 
+    const stored: OrganizationUnitRecord = {
+      ...unit,
+      id,
+      ...(parentId !== undefined ? { parentId } : {}),
+      createdAt: new Date().toISOString(),
+      status: unit.status || 'active',
+    };
+    if (parentId === undefined) delete stored.parentId;
+
+    const next = [...units, stored];
     const placements = this.store.allPlacements();
     persistState(this.dataDir, { units: next, placements });
     this.store.replaceAll(next, placements);
     return stored;
+  }
+
+  /**
+   * Update one existing unit's METADATA (name, kind, status, visibility,
+   * exposeTo) by id, preserving id, slug, parentId, createdAt, and createdBy.
+   * Any attempt to change slug or parentId is rejected — those are moves,
+   * performed via reparentUnit. Persist durably and refresh the store.
+   */
+  updateUnit(unit: OrganizationUnitRecord): OrganizationUnitRecord {
+    const units = this.store.allUnits();
+    const idx = units.findIndex((u) => u.id === unit.id);
+    if (idx < 0) {
+      throw new Error(`Organization unit "${unit.id}" not found.`);
+    }
+    const existing = units[idx];
+    if (unit.slug && unit.slug !== existing.slug) {
+      throw new Error(
+        `Organization unit slug cannot be changed here — a rename/move goes through reparentUnit (unit "${unit.id}").`,
+      );
+    }
+    if (unit.parentId !== undefined && (unit.parentId || undefined) !== (existing.parentId || undefined)) {
+      throw new Error(
+        `Organization unit parentId cannot be changed here — a move goes through reparentUnit (unit "${unit.id}").`,
+      );
+    }
+
+    const stored: OrganizationUnitRecord = {
+      ...existing,
+      name: unit.name || existing.name,
+      kind: unit.kind || existing.kind,
+      status: unit.status || existing.status,
+      ...(unit.visibility !== undefined ? { visibility: unit.visibility } : {}),
+      ...(unit.exposeTo !== undefined ? { exposeTo: unit.exposeTo } : {}),
+    };
+
+    const next = units.map((u, i) => (i === idx ? stored : u));
+    const placements = this.store.allPlacements();
+    persistState(this.dataDir, { units: next, placements });
+    this.store.replaceAll(next, placements);
+    return stored;
+  }
+
+  /**
+   * Move a unit and its WHOLE subtree under a new parent (an empty newParentId
+   * promotes it to a root): recompute every moved unit's qualified id from the
+   * new parent path, reject a cycle (moving under itself or a descendant) or an
+   * unresolved parent or an id collision outside the moving subtree, rewrite
+   * every exposeTo[] reference to a moved id across ALL units AND every
+   * placement's unitId (both collections persist together, so referential
+   * integrity holds atomically), and return the old->new UnitIdRemap for every
+   * moved unit so the caller rewrites EXTERNAL references (assignment scopes,
+   * user home units, role-binding scopes).
+   */
+  reparentUnit(unitId: string, newParentId?: string): UnitIdRemap[] {
+    const units = this.store.allUnits();
+    const unit = units.find((u) => u.id === unitId);
+    if (!unit) {
+      throw new Error(`Organization unit "${unitId}" not found.`);
+    }
+    const parentId = newParentId || undefined;
+    if (parentId !== undefined && !units.some((u) => u.id === parentId)) {
+      throw new Error(`New parent "${parentId}" does not resolve to an existing unit.`);
+    }
+
+    const moving = subtreeIds(units, unitId);
+    if (parentId !== undefined && moving.has(parentId)) {
+      throw new Error(
+        `Organization unit "${unitId}" cannot move under itself or one of its own descendants.`,
+      );
+    }
+
+    // Recompute qualified ids parent-first across the moving subtree.
+    const newIds = new Map<string, string>();
+    newIds.set(unitId, qualifiedId(parentId, unit.slug));
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const u of units) {
+        if (
+          moving.has(u.id) &&
+          !newIds.has(u.id) &&
+          u.parentId !== undefined &&
+          newIds.has(u.parentId)
+        ) {
+          newIds.set(u.id, `${newIds.get(u.parentId)}.${u.slug}`);
+          grew = true;
+        }
+      }
+    }
+
+    // Collision check: a recomputed id must not collide outside the moving
+    // subtree (inside it, old ids vacate in the same atomic write).
+    for (const [oldId, newId] of newIds) {
+      if (newId !== oldId && units.some((v) => !moving.has(v.id) && v.id === newId)) {
+        throw new Error(
+          `Moving "${oldId}" would collide with the existing unit "${newId}" — resolve the slug clash first.`,
+        );
+      }
+    }
+
+    const nextUnits = units.map((u) => {
+      let r = u;
+      if (moving.has(u.id)) {
+        r = { ...u, id: newIds.get(u.id)! };
+        if (u.id === unitId) {
+          if (parentId !== undefined) r.parentId = parentId;
+          else delete r.parentId;
+        } else {
+          r.parentId = newIds.get(u.parentId!)!;
+        }
+      }
+      // exposeTo references to a moved id follow the move — on every unit.
+      if (r.exposeTo && r.exposeTo.some((e) => newIds.has(e))) {
+        r = { ...r, exposeTo: r.exposeTo.map((e) => newIds.get(e) ?? e) };
+      }
+      return r;
+    });
+
+    const nextPlacements = this.store
+      .allPlacements()
+      .map((p) => (newIds.has(p.unitId) ? { ...p, unitId: newIds.get(p.unitId)! } : p));
+
+    persistState(this.dataDir, { units: nextUnits, placements: nextPlacements });
+    this.store.replaceAll(nextUnits, nextPlacements);
+
+    return [...newIds.entries()]
+      .filter(([oldId, newId]) => oldId !== newId)
+      .map(([oldId, newId]) => ({ oldId, newId }));
+  }
+
+  /**
+   * Delete one organization unit that has NO child units and NO project
+   * placements (the orchestrator empties it first), stripping the deleted id
+   * from every other unit's exposeTo[]. Deleting an absent unit is a no-op.
+   */
+  deleteUnit(unitId: string): void {
+    const units = this.store.allUnits();
+    if (!units.some((u) => u.id === unitId)) return; // no-op
+    if (units.some((u) => u.parentId === unitId)) {
+      throw new Error(`Organization unit "${unitId}" still has child units — empty it first.`);
+    }
+    const placements = this.store.allPlacements();
+    if (placements.some((p) => p.unitId === unitId)) {
+      throw new Error(`Organization unit "${unitId}" still has project placements — empty it first.`);
+    }
+    const next = units
+      .filter((u) => u.id !== unitId)
+      .map((u) =>
+        u.exposeTo && u.exposeTo.includes(unitId)
+          ? { ...u, exposeTo: u.exposeTo.filter((e) => e !== unitId) }
+          : u,
+      );
+    persistState(this.dataDir, { units: next, placements });
+    this.store.replaceAll(next, placements);
+  }
+
+  /**
+   * Remove one project placement by id — the placed project itself is untouched.
+   * Removing an absent placement is a no-op.
+   */
+  deletePlacement(placementId: string): void {
+    const placements = this.store.allPlacements();
+    const next = placements.filter((p) => p.id !== placementId);
+    if (next.length === placements.length) return; // no-op
+    const units = this.store.allUnits();
+    persistState(this.dataDir, { units, placements: next });
+    this.store.replaceAll(units, next);
   }
 
   /**
@@ -275,14 +454,46 @@ class OrganizationIndex {
 // the store/registry/index over it, and forwards. Writes go to the registry,
 // reads to the index.
 
-/** Create or update one organization unit through the repository facade (atomic). */
-export function upsertOrganizationUnit(
-  dataDir: string,
-  unit: OrganizationUnitRecord,
-): OrganizationUnitRecord {
+/** Create one organization unit through the repository facade (atomic) — the
+ *  registry computes the qualified dot-path id and rejects collisions. */
+export function createUnit(dataDir: string, unit: OrganizationUnitRecord): OrganizationUnitRecord {
   const store = new OrganizationStore(dataDir);
   store.load();
-  return new OrganizationRegistry(dataDir, store).upsertUnit(unit);
+  return new OrganizationRegistry(dataDir, store).createUnit(unit);
+}
+
+/** Update one organization unit's METADATA through the repository facade
+ *  (atomic) — slug/parent changes are rejected there; use reparentUnit. */
+export function updateUnit(dataDir: string, unit: OrganizationUnitRecord): OrganizationUnitRecord {
+  const store = new OrganizationStore(dataDir);
+  store.load();
+  return new OrganizationRegistry(dataDir, store).updateUnit(unit);
+}
+
+/** Move a unit's subtree under a new parent through the repository facade
+ *  (atomic), returning the old->new qualified-id remap for every moved unit. */
+export function reparentUnit(
+  dataDir: string,
+  unitId: string,
+  newParentId?: string,
+): UnitIdRemap[] {
+  const store = new OrganizationStore(dataDir);
+  store.load();
+  return new OrganizationRegistry(dataDir, store).reparentUnit(unitId, newParentId);
+}
+
+/** Delete one EMPTY organization unit through the repository facade. */
+export function deleteUnit(dataDir: string, unitId: string): void {
+  const store = new OrganizationStore(dataDir);
+  store.load();
+  new OrganizationRegistry(dataDir, store).deleteUnit(unitId);
+}
+
+/** Remove one project placement through the repository facade. */
+export function deletePlacement(dataDir: string, placementId: string): void {
+  const store = new OrganizationStore(dataDir);
+  store.load();
+  new OrganizationRegistry(dataDir, store).deletePlacement(placementId);
 }
 
 /** Create or update a project placement inside an organization unit (atomic). */

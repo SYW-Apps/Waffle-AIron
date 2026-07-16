@@ -3,8 +3,12 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import {
-  upsertOrganizationUnit,
+  createUnit,
+  updateUnit,
+  reparentUnit,
+  deleteUnit,
   placeProject,
+  deletePlacement,
   listOrganizationUnits,
   listProjectPlacements,
   getOrganizationUnit,
@@ -18,18 +22,24 @@ import type {
 
 // ---------------------------------------------------------------------------
 // Organization Repository (sdd_host) — the store/registry/index triad exercised
-// through the repository facade against a real <dataDir>/organization.json, so
-// id/createdAt stamping, parent/unit referential validation, unit-tree cycle
-// rejection, hierarchy/membership listing, atomic write-temp-then-rename, and
-// the missing/malformed-file storage semantics are covered end-to-end.
+// through the repository facade against a real <dataDir>/organization.json.
+//
+// The unit lifecycle is qualified-id based: createUnit computes the id from the
+// parent path plus slug (a root's id IS its slug) and rejects collisions;
+// updateUnit is metadata-only (slug/parent changes are MOVES via reparentUnit);
+// reparentUnit renames a whole subtree, follows exposeTo references and
+// placements, and returns the old->new id remap for external references;
+// deleteUnit removes one EMPTIED unit. Storage semantics (atomic
+// write-temp-then-rename, missing/malformed-file behavior) are pinned too.
 // ---------------------------------------------------------------------------
 
 const CREATOR: PrincipalSubject = { userId: 'u-admin', kind: 'human', issuer: 'local' };
 
 function mkUnit(over: Partial<OrganizationUnitRecord> = {}): OrganizationUnitRecord {
   return {
-    id: '', // registry stamps a random id when absent
+    id: '', // the registry computes the qualified id from parent + slug
     name: 'Engineering',
+    slug: 'eng',
     kind: 'department',
     status: '', // registry defaults to 'active' when empty
     createdAt: '1999-01-01T00:00:00.000Z', // placeholder; the registry stamps its own
@@ -73,86 +83,195 @@ describe('organization repository (sdd_host)', () => {
     fs.writeFileSync(orgPath, JSON.stringify(state));
   }
 
-  // ── upsertUnit: insert ──────────────────────────────────────────────────────
+  // ── createUnit: qualified-id computation ─────────────────────────────────────
 
-  it('upsertUnit inserts, stamping a random id and fresh createdAt, defaulting status to active, and persists', () => {
-    const stored = upsertOrganizationUnit(dataDir, mkUnit({ name: 'Platform' }));
+  it('createUnit computes the qualified id (a root id IS its slug), stamps createdAt, defaults status, persists', () => {
+    const root = createUnit(dataDir, mkUnit({ name: 'Platform', slug: 'platform' }));
+    expect(root.id).toBe('platform'); // any incoming id is ignored
+    expect(root.status).toBe('active'); // empty status defaulted
+    expect(root.createdAt).not.toBe('1999-01-01T00:00:00.000Z');
+    expect(Date.parse(root.createdAt)).not.toBeNaN();
 
-    expect(stored.id).toMatch(/[0-9a-f-]{36}/);
-    expect(stored.id).not.toBe('');
-    expect(stored.status).toBe('active'); // empty status defaulted
-    expect(stored.createdAt).not.toBe('1999-01-01T00:00:00.000Z');
-    expect(Date.parse(stored.createdAt)).not.toBeNaN();
-    expect(stored.name).toBe('Platform');
+    const child = createUnit(dataDir, mkUnit({ name: 'Team A', slug: 'team-a', parentId: 'platform' }));
+    expect(child.id).toBe('platform.team-a');
+    const grandchild = createUnit(dataDir, mkUnit({ name: 'Web', slug: 'web', parentId: child.id }));
+    expect(grandchild.id).toBe('platform.team-a.web');
 
     // Re-read from disk proves durability.
-    expect(getOrganizationUnit(dataDir, stored.id)).toEqual(stored);
+    expect(getOrganizationUnit(dataDir, 'platform.team-a')).toEqual(child);
     const raw = JSON.parse(fs.readFileSync(orgPath, 'utf8')) as OrganizationState;
-    expect(raw.units).toHaveLength(1);
+    expect(raw.units).toHaveLength(3);
     expect(raw.placements).toEqual([]);
   });
 
-  // ── upsertUnit: update round-trip ────────────────────────────────────────────
+  it('createUnit rejects an invalid slug (uppercase, dots, empty) — the slug is the id segment', () => {
+    for (const slug of ['', 'Has.Dot', 'UPPER', 'spa ce']) {
+      expect(() => createUnit(dataDir, mkUnit({ slug }))).toThrow(/slug/i);
+    }
+    expect(fs.existsSync(orgPath)).toBe(false); // nothing persisted
+  });
 
-  it('upsertUnit updates an existing unit, preserving id and createdAt while changing other fields', () => {
-    const created = upsertOrganizationUnit(dataDir, mkUnit({ name: 'Eng' }));
-
-    const updated = upsertOrganizationUnit(
-      dataDir,
-      mkUnit({ id: created.id, name: 'Engineering & Platform', kind: 'division', status: 'archived' }),
+  it('createUnit rejects a unit whose parentId does not resolve, persisting nothing', () => {
+    expect(() => createUnit(dataDir, mkUnit({ parentId: 'ghost-parent' }))).toThrow(
+      /does not resolve|existing unit/i,
     );
+    expect(fs.existsSync(orgPath)).toBe(false);
+  });
 
-    expect(updated.id).toBe(created.id); // preserved
-    expect(updated.createdAt).toBe(created.createdAt); // preserved
+  it('createUnit rejects a qualified-id/sibling-slug collision — never a silent overwrite; the slug reuses freely across parents', () => {
+    createUnit(dataDir, mkUnit({ slug: 'acme' }));
+    createUnit(dataDir, mkUnit({ slug: 'it', parentId: 'acme' }));
+
+    // The same slug under the same parent collides…
+    expect(() => createUnit(dataDir, mkUnit({ slug: 'it', parentId: 'acme' }))).toThrow(/already exists/i);
+    expect(() => createUnit(dataDir, mkUnit({ slug: 'acme' }))).toThrow(/already exists/i);
+
+    // …but reuses freely under a DIFFERENT parent: company_a.it and company_b.it coexist.
+    createUnit(dataDir, mkUnit({ slug: 'beta' }));
+    expect(createUnit(dataDir, mkUnit({ slug: 'it', parentId: 'beta' })).id).toBe('beta.it');
+  });
+
+  // ── updateUnit: metadata only ────────────────────────────────────────────────
+
+  it('updateUnit changes metadata (name/kind/status/visibility/exposeTo) preserving id, slug, parentId, createdAt, createdBy', () => {
+    const created = createUnit(dataDir, mkUnit({ name: 'Eng', slug: 'eng' }));
+
+    const updated = updateUnit(dataDir, {
+      ...created,
+      name: 'Engineering & Platform',
+      kind: 'division',
+      status: 'archived',
+      visibility: 'closed',
+      exposeTo: ['somewhere'],
+    });
+
+    expect(updated.id).toBe(created.id);
+    expect(updated.slug).toBe('eng');
+    expect(updated.createdAt).toBe(created.createdAt);
+    expect(updated.createdBy).toEqual(created.createdBy);
     expect(updated.name).toBe('Engineering & Platform');
     expect(updated.kind).toBe('division');
-    expect(updated.status).toBe('archived'); // caller-supplied status honored
+    expect(updated.status).toBe('archived');
+    expect(updated.visibility).toBe('closed');
+    expect(updated.exposeTo).toEqual(['somewhere']);
 
     // Still a single unit after the update.
     expect(listOrganizationUnits(dataDir)).toHaveLength(1);
     expect(getOrganizationUnit(dataDir, created.id)).toEqual(updated);
   });
 
-  // ── upsertUnit: referential validation ───────────────────────────────────────
+  it('updateUnit rejects an unknown id, and any slug or parentId change (those are MOVES via reparentUnit)', () => {
+    createUnit(dataDir, mkUnit({ slug: 'a' }));
+    createUnit(dataDir, mkUnit({ slug: 'b' }));
 
-  it('upsertUnit rejects a unit whose parentId does not resolve to an existing unit, persisting nothing', () => {
-    expect(() =>
-      upsertOrganizationUnit(dataDir, mkUnit({ parentId: 'ghost-parent' })),
-    ).toThrow(/does not resolve|existing unit/i);
-
-    expect(fs.existsSync(orgPath)).toBe(false); // nothing persisted
-  });
-
-  it('upsertUnit accepts a unit whose parentId resolves to an existing unit', () => {
-    const parent = upsertOrganizationUnit(dataDir, mkUnit({ name: 'Org', kind: 'organization' }));
-    const child = upsertOrganizationUnit(
-      dataDir,
-      mkUnit({ name: 'Team A', kind: 'team', parentId: parent.id }),
+    expect(() => updateUnit(dataDir, mkUnit({ id: 'ghost', slug: 'ghost' }))).toThrow(/not found/i);
+    expect(() => updateUnit(dataDir, { ...getOrganizationUnit(dataDir, 'a')!, slug: 'renamed' })).toThrow(
+      /reparentUnit/,
     );
-
-    expect(child.parentId).toBe(parent.id);
-    expect(listOrganizationUnits(dataDir, parent.id).map((u) => u.id)).toEqual([child.id]);
+    expect(() => updateUnit(dataDir, { ...getOrganizationUnit(dataDir, 'a')!, parentId: 'b' })).toThrow(
+      /reparentUnit/,
+    );
   });
 
-  // ── upsertUnit: cycle rejection ──────────────────────────────────────────────
+  // ── reparentUnit: subtree move + remap ───────────────────────────────────────
 
-  it('upsertUnit rejects a reparent that would make a unit its own ancestor (A -> B -> A)', () => {
-    const a = upsertOrganizationUnit(dataDir, mkUnit({ name: 'A' }));
-    const b = upsertOrganizationUnit(dataDir, mkUnit({ name: 'B', parentId: a.id }));
+  /** acme(root) → it → dev ; beta(root). A placement sits in acme.it.dev, and
+   *  beta exposes its subtree to acme.it. */
+  function seedMoveWorld(): void {
+    createUnit(dataDir, mkUnit({ slug: 'acme' }));
+    createUnit(dataDir, mkUnit({ slug: 'it', parentId: 'acme' }));
+    createUnit(dataDir, mkUnit({ slug: 'dev', parentId: 'acme.it' }));
+    createUnit(dataDir, mkUnit({ slug: 'beta', exposeTo: ['acme.it'] }));
+    placeProject(dataDir, mkPlacement({ id: 'pl-dev', projectId: 'p-dev', unitId: 'acme.it.dev' }));
+  }
 
-    // Reparent A under B: A -> B -> A is a cycle.
-    expect(() =>
-      upsertOrganizationUnit(dataDir, mkUnit({ id: a.id, name: 'A', parentId: b.id })),
-    ).toThrow(/cycle|ancestor/i);
+  it('reparentUnit moves the whole subtree, recomputes qualified ids, follows exposeTo + placements, and returns the remap', () => {
+    seedMoveWorld();
 
-    // The rejected reparent left A a root (parentId unchanged).
-    expect(getOrganizationUnit(dataDir, a.id)?.parentId).toBeUndefined();
+    const remap = reparentUnit(dataDir, 'acme.it', 'beta');
+
+    // Old->new for the moved unit AND every descendant.
+    expect(remap).toEqual(
+      expect.arrayContaining([
+        { oldId: 'acme.it', newId: 'beta.it' },
+        { oldId: 'acme.it.dev', newId: 'beta.it.dev' },
+      ]),
+    );
+    expect(remap).toHaveLength(2);
+
+    // The tree reflects the move; the old ids are gone.
+    expect(getOrganizationUnit(dataDir, 'acme.it')).toBeNull();
+    expect(getOrganizationUnit(dataDir, 'beta.it')?.parentId).toBe('beta');
+    expect(getOrganizationUnit(dataDir, 'beta.it.dev')?.parentId).toBe('beta.it');
+
+    // The exposeTo reference followed the move…
+    expect(getOrganizationUnit(dataDir, 'beta')?.exposeTo).toEqual(['beta.it']);
+    // …and so did the placement (both collections persist together).
+    expect(listProjectPlacements(dataDir, 'p-dev').map((p) => p.unitId)).toEqual(['beta.it.dev']);
+  });
+
+  it('reparentUnit with an empty newParentId promotes the subtree to a root', () => {
+    seedMoveWorld();
+    const remap = reparentUnit(dataDir, 'acme.it');
+    expect(remap).toEqual(
+      expect.arrayContaining([
+        { oldId: 'acme.it', newId: 'it' },
+        { oldId: 'acme.it.dev', newId: 'it.dev' },
+      ]),
+    );
+    const promoted = getOrganizationUnit(dataDir, 'it')!;
+    expect(promoted.parentId).toBeUndefined();
+  });
+
+  it('reparentUnit rejects an unknown unit, an unresolved parent, a cycle, and an outside-id collision', () => {
+    seedMoveWorld();
+
+    expect(() => reparentUnit(dataDir, 'ghost', 'beta')).toThrow(/not found/i);
+    expect(() => reparentUnit(dataDir, 'acme.it', 'ghost')).toThrow(/does not resolve/i);
+    // Moving under itself or its own descendant is a cycle.
+    expect(() => reparentUnit(dataDir, 'acme.it', 'acme.it')).toThrow(/itself|descendant/i);
+    expect(() => reparentUnit(dataDir, 'acme.it', 'acme.it.dev')).toThrow(/itself|descendant/i);
+
+    // A collision outside the moving subtree rejects the whole move.
+    createUnit(dataDir, mkUnit({ slug: 'it', parentId: 'beta' })); // beta.it already exists
+    expect(() => reparentUnit(dataDir, 'acme.it', 'beta')).toThrow(/collide/i);
+    // Nothing moved.
+    expect(getOrganizationUnit(dataDir, 'acme.it')).not.toBeNull();
+  });
+
+  // ── deleteUnit / deletePlacement ─────────────────────────────────────────────
+
+  it('deleteUnit removes one EMPTY unit and strips it from other units\' exposeTo; occupied units are refused', () => {
+    seedMoveWorld();
+
+    // Occupied: child units / placements refuse the delete.
+    expect(() => deleteUnit(dataDir, 'acme.it')).toThrow(/child units/i);
+    expect(() => deleteUnit(dataDir, 'acme.it.dev')).toThrow(/placements/i);
+
+    // Empty it first, then delete bottom-up.
+    deletePlacement(dataDir, 'pl-dev');
+    deleteUnit(dataDir, 'acme.it.dev');
+    deleteUnit(dataDir, 'acme.it');
+    expect(getOrganizationUnit(dataDir, 'acme.it')).toBeNull();
+    // beta's exposeTo entry for the deleted unit was stripped.
+    expect(getOrganizationUnit(dataDir, 'beta')?.exposeTo).toEqual([]);
+
+    // Deleting an absent unit is a no-op, never an error.
+    expect(() => deleteUnit(dataDir, 'acme.it')).not.toThrow();
+  });
+
+  it('deletePlacement removes one placement (the project record untouched); absent id is a no-op', () => {
+    createUnit(dataDir, mkUnit({ slug: 'u1' }));
+    const placed = placeProject(dataDir, mkPlacement({ unitId: 'u1' }));
+    deletePlacement(dataDir, placed.id);
+    expect(listProjectPlacements(dataDir)).toEqual([]);
+    expect(() => deletePlacement(dataDir, 'ghost')).not.toThrow();
   });
 
   // ── placeProject ─────────────────────────────────────────────────────────────
 
   it('placeProject stamps a random id and fresh createdAt inside an existing unit, and persists', () => {
-    const unit = upsertOrganizationUnit(dataDir, mkUnit({ name: 'Org' }));
+    const unit = createUnit(dataDir, mkUnit({ name: 'Org', slug: 'org' }));
 
     const placed = placeProject(dataDir, mkPlacement({ projectId: 'proj-42', unitId: unit.id, role: 'shared' }));
 
@@ -181,10 +300,10 @@ describe('organization repository (sdd_host)', () => {
   it('listUnits returns all units unfiltered and only direct children when a parent is given', () => {
     seed({
       units: [
-        mkUnit({ id: 'root', name: 'Org', kind: 'organization' }),
-        mkUnit({ id: 'c1', name: 'Dept 1', parentId: 'root' }),
-        mkUnit({ id: 'c2', name: 'Dept 2', parentId: 'root' }),
-        mkUnit({ id: 'gc1', name: 'Team', parentId: 'c1' }), // grandchild
+        mkUnit({ id: 'root', slug: 'root', name: 'Org', kind: 'organization' }),
+        mkUnit({ id: 'c1', slug: 'c1', name: 'Dept 1', parentId: 'root' }),
+        mkUnit({ id: 'c2', slug: 'c2', name: 'Dept 2', parentId: 'root' }),
+        mkUnit({ id: 'gc1', slug: 'gc1', name: 'Team', parentId: 'c1' }), // grandchild
       ],
       placements: [],
     });
@@ -201,7 +320,7 @@ describe('organization repository (sdd_host)', () => {
   // ── getUnit: hit / null ──────────────────────────────────────────────────────
 
   it('getUnit returns the record for a hit and null for a miss', () => {
-    seed({ units: [mkUnit({ id: 'u-x', name: 'X' })], placements: [] });
+    seed({ units: [mkUnit({ id: 'u-x', slug: 'u-x', name: 'X' })], placements: [] });
 
     expect(getOrganizationUnit(dataDir, 'u-x')?.id).toBe('u-x');
     expect(getOrganizationUnit(dataDir, 'nope')).toBeNull();
@@ -211,7 +330,7 @@ describe('organization repository (sdd_host)', () => {
 
   function seedForPlacements(): void {
     seed({
-      units: [mkUnit({ id: 'u1' }), mkUnit({ id: 'u2' })],
+      units: [mkUnit({ id: 'u1', slug: 'u1' }), mkUnit({ id: 'u2', slug: 'u2' })],
       placements: [
         mkPlacement({ id: 'pl1', projectId: 'p1', unitId: 'u1' }),
         mkPlacement({ id: 'pl2', projectId: 'p1', unitId: 'u2' }),

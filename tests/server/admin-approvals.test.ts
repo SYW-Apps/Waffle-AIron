@@ -10,7 +10,7 @@ import { initializeProject } from '../../src/server/projectlifecycle.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
 import { existingProjectRoot } from '../../src/server/projects.js';
 import { setAssignment } from '../../src/server/permissions.js';
-import { upsertOrganizationUnit } from '../../src/server/organization.js';
+import { createUnit } from '../../src/server/organization.js';
 import type {
   ApiKeyRecord,
   ApprovalRequest,
@@ -138,8 +138,8 @@ describe('admin approval endpoints (sdd_host http)', () => {
   }
 
   function seedUnit(name: string): OrganizationUnitRecord {
-    return upsertOrganizationUnit(dataDir, {
-      id: '', name, kind: 'team', status: 'active', createdAt: '', createdBy: subject(),
+    return createUnit(dataDir, {
+      id: '', name, slug: name, kind: 'team', status: 'active', createdAt: '', createdBy: subject(),
     });
   }
 

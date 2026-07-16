@@ -14,7 +14,7 @@ import { createCredential, hashToken } from '../../src/server/credentials.js';
 import { lockProject } from '../../src/server/projectlifecycle.js';
 import { listApprovalRequests } from '../../src/server/approvals.js';
 import { setAssignment } from '../../src/server/permissions.js';
-import { upsertOrganizationUnit } from '../../src/server/organization.js';
+import { createUnit } from '../../src/server/organization.js';
 import type {
   ApiKeyRecord,
   Capability,
@@ -167,8 +167,8 @@ describe('handleMcpRequest project-lifecycle dispatch (end-to-end)', () => {
   const toolText = (r: RpcResponse): string => r.result?.content?.[0]?.text ?? '';
 
   it('initialize with an approval-valued permission → pending-approval outcome + persisted + audited', async () => {
-    const unit = upsertOrganizationUnit(dataDir, {
-      id: '', name: 'Makers', kind: 'team', status: 'active', createdAt: '', createdBy: subject(),
+    const unit = createUnit(dataDir, {
+      id: '', name: 'Makers', slug: 'makers', kind: 'team', status: 'active', createdAt: '', createdBy: subject(),
     });
     const token = agentToken('agent-init', 'demo', 'u-agent');
     allow('u-agent', 'project:create', 'unit', unit.id, 'approval');
@@ -205,8 +205,8 @@ describe('handleMcpRequest project-lifecycle dispatch (end-to-end)', () => {
   }, 20_000);
 
   it('initialize with NO project:create reach → isError Forbidden (execute-primary denies, it does not queue)', async () => {
-    const unit = upsertOrganizationUnit(dataDir, {
-      id: '', name: 'Closed', kind: 'team', status: 'active', createdAt: '', createdBy: subject(),
+    const unit = createUnit(dataDir, {
+      id: '', name: 'Closed', slug: 'closed', kind: 'team', status: 'active', createdAt: '', createdBy: subject(),
     });
     const token = agentToken('agent-denied', 'demo', 'u-denied');
 

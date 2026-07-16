@@ -33,7 +33,7 @@ import * as webproject from '../../src/server/webproject.js';
 import { AdminAuthError } from '../../src/server/admin.js';
 import { createCredential, hashToken, findByTokenHash } from '../../src/server/credentials.js';
 import { queryAuditEvents as auditQuery } from '../../src/server/audit.js';
-import { upsertOrganizationUnit, placeProject, listProjectPlacements } from '../../src/server/organization.js';
+import { createUnit as createOrgUnit, placeProject, listProjectPlacements } from '../../src/server/organization.js';
 import * as webadmin from '../../src/server/webadmin.js';
 import { replacePublicSurfaceSnapshot } from '../../src/server/surfaces.js';
 import { validateProjectAsComplete } from '../../src/server/adapters.js';
@@ -514,7 +514,7 @@ describe('web graph orchestrator (sdd_host)', () => {
     seedProjectTree(rec.rootPath);
     // The web project listing gates the graph — a project must be PLACED to be
     // in anyone's visibility view.
-    upsertOrganizationUnit(dataDir, { id: 'unit-g', name: 'G', kind: 'team', status: 'active', createdAt: now, createdBy });
+    createOrgUnit(dataDir, { id: '', slug: 'unit-g', name: 'G', kind: 'team', status: 'active', createdAt: now, createdBy });
     placeProject(dataDir, { id: 'pl-g', projectId: 'proj-a', unitId: 'unit-g', role: 'owner', createdAt: now, createdBy });
     const s = session(['proj-a']);
 
@@ -554,7 +554,7 @@ describe('web graph orchestrator (sdd_host)', () => {
   });
 
   it('landscape tier: reshapes the scoped landscape and level-filters (scope instance)', () => {
-    upsertOrganizationUnit(dataDir, { id: 'unit-1', name: 'Team One', kind: 'team', status: 'active', createdAt: now, createdBy });
+    createOrgUnit(dataDir, { id: '', slug: 'unit-1', name: 'Team One', kind: 'team', status: 'active', createdAt: now, createdBy });
     createProjectRecord(dataDir, 'proj-a');
     placeProject(dataDir, { id: 'pl-1', projectId: 'proj-a', unitId: 'unit-1', role: 'owner', createdAt: now, createdBy });
     replacePublicSurfaceSnapshot(dataDir, {
@@ -598,7 +598,7 @@ describe('web graph orchestrator (sdd_host)', () => {
   it('getProjectCanvas returns the real interactive canvas HTML for an authorized project', () => {
     const rec = createProjectRecord(dataDir, 'proj-a');
     seedProjectTree(rec.rootPath);
-    upsertOrganizationUnit(dataDir, { id: 'unit-c', name: 'C', kind: 'team', status: 'active', createdAt: now, createdBy });
+    createOrgUnit(dataDir, { id: '', slug: 'unit-c', name: 'C', kind: 'team', status: 'active', createdAt: now, createdBy });
     placeProject(dataDir, { id: 'pl-c', projectId: 'proj-a', unitId: 'unit-c', role: 'owner', createdAt: now, createdBy });
     const s = session(['proj-a']);
 
@@ -951,7 +951,7 @@ describe('web portal HTTP mount (sdd_host)', () => {
 
     // The canvas gate goes through the visibility view: the project must be
     // PLACED and the subject must have project:read reach.
-    upsertOrganizationUnit(dataDir, { id: 'unit-cv', name: 'CV', kind: 'team', status: 'active', createdAt: new Date().toISOString(), createdBy: SUBJECT });
+    createOrgUnit(dataDir, { id: '', slug: 'unit-cv', name: 'CV', kind: 'team', status: 'active', createdAt: new Date().toISOString(), createdBy: SUBJECT });
     placeProject(dataDir, { id: 'pl-cv', projectId: 'proj-a', unitId: 'unit-cv', role: 'owner', createdAt: new Date().toISOString(), createdBy: SUBJECT });
     allow(dataDir, 'u-1', 'project:read', 'project', 'proj-a');
 
@@ -1096,6 +1096,7 @@ describe('web admin orchestrator (sdd_host)', () => {
     const unit = webadmin.upsertOrganizationUnit(cfg, admin, {
       id: '',
       name: 'Team One',
+      slug: 'team-one',
       kind: 'team',
       status: 'active',
       createdAt: '',
@@ -1113,6 +1114,7 @@ describe('web admin orchestrator (sdd_host)', () => {
       webadmin.upsertOrganizationUnit(cfg, viewer, {
         id: '',
         name: 'X',
+        slug: 'x',
         kind: 'team',
         status: 'active',
         createdAt: '',
@@ -1125,8 +1127,9 @@ describe('web admin orchestrator (sdd_host)', () => {
   it('placeProject binds a project to a unit through the repository and audits', () => {
     const admin = adminSession();
     const unit = webadmin.upsertOrganizationUnit(cfg, admin, {
-      id: 'unit-1',
+      id: '',
       name: 'Team',
+      slug: 'unit-1',
       kind: 'team',
       status: 'active',
       createdAt: '',
@@ -1176,6 +1179,7 @@ describe('web admin orchestrator (sdd_host)', () => {
       webadmin.upsertOrganizationUnit(cfg, unitAdmin, {
         id: '',
         name: 'X',
+        slug: 'x2',
         kind: 'team',
         status: 'active',
         createdAt: '',
@@ -1193,8 +1197,9 @@ describe('web admin orchestrator (sdd_host)', () => {
     const admin = adminSession();
     // Unit U owns proj-in-unit; proj-other belongs to a different tenant (unplaced).
     const unit = webadmin.upsertOrganizationUnit(cfg, admin, {
-      id: 'unit-u',
+      id: '',
       name: 'U',
+      slug: 'unit-u',
       kind: 'team',
       status: 'active',
       createdAt: '',
@@ -1408,7 +1413,7 @@ describe('web admin routes over HTTP (sdd_host)', () => {
 
   it('org-unit create forwards through the web admin orchestrator and is CSRF-gated', async () => {
     const cookie = adminCookie();
-    const unitBody = JSON.stringify({ name: 'Team', kind: 'team', createdBy: { userId: 'u-1', kind: 'human', issuer: 'local' } });
+    const unitBody = JSON.stringify({ name: 'Team', slug: 'team', kind: 'team', createdBy: { userId: 'u-1', kind: 'human', issuer: 'local' } });
 
     // A cookie-authenticated POST WITHOUT the CSRF header → 403 (never dispatched).
     const noCsrf = await raw({ method: 'POST', path: '/web/admin/org/units', headers: { cookie, 'content-type': 'application/json' }, body: unitBody });

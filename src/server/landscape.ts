@@ -8,7 +8,8 @@ import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import { resolveProjectRoot, listProjectRecords } from './projects.js';
 import { hostCore } from './adapters.js';
 import {
-  upsertOrganizationUnit,
+  createUnit,
+  updateUnit,
   placeProject as placeProjectInUnit,
   listOrganizationUnits,
   listProjectPlacements,
@@ -521,20 +522,14 @@ export function upsertUnit(
   // hole (updating a foreign unit while only its NEW parent is covered would
   // graft that unit's whole subtree + projects into the caller's reach):
   //   - existing unit → the caller must already cover it (its CURRENT position);
-  //     if reparenting, the new parent must also be covered.
+  //     metadata updates only — a MOVE (slug/parent change) is reparentUnit's
+  //     job and the registry rejects it here.
   //   - new unit → requires project:admin over its parent; a new ROOT unit
   //     requires instance-level project:admin (an instance-admin bypasses).
   const existing = unit.id ? getOrganizationUnit(cfg.dataDir, unit.id) : null;
   if (existing) {
     if (!permitsCap(cfg, principal, PROJECT_ADMIN_CAPABILITY, 'unit', unit.id)) {
       throw new ForbiddenError('managing an existing unit requires project:admin over that unit');
-    }
-    if (
-      unit.parentId &&
-      unit.parentId !== existing.parentId &&
-      !permitsCap(cfg, principal, PROJECT_ADMIN_CAPABILITY, 'unit', unit.parentId)
-    ) {
-      throw new ForbiddenError('reparenting a unit requires project:admin over the new parent');
     }
   } else if (unit.parentId) {
     if (!permitsCap(cfg, principal, PROJECT_ADMIN_CAPABILITY, 'unit', unit.parentId)) {
@@ -543,7 +538,9 @@ export function upsertUnit(
   } else if (!permitsCap(cfg, principal, PROJECT_ADMIN_CAPABILITY, 'instance', '')) {
     throw new ForbiddenError('creating a ROOT organization unit requires instance-level project:admin');
   }
-  const stored = upsertOrganizationUnit(cfg.dataDir, unit);
+  // An existing record takes the metadata-update path; anything else is a create
+  // (the registry computes the qualified id and rejects collisions).
+  const stored = existing ? updateUnit(cfg.dataDir, unit) : createUnit(cfg.dataDir, unit);
   tryAppendAudit(cfg, buildAuditEvent(principal, 'unit.upsert', 'info', 'landscape', { target: stored.id }));
   return stored;
 }
@@ -1016,9 +1013,16 @@ export function handleLandscapeRequest(
   const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent); // ['landscape', ...]
   try {
     if (parts[1] === 'units') {
-      // PUT /landscape/units/{id}
+      // PUT /landscape/units/{id} — the path segment IS the qualified dot-path
+      // id. When the body carries no slug/parent, derive them from the id (its
+      // last dot-segment / its prefix) so the PUT-by-id shape works unchanged
+      // under qualified ids.
       if (req.method === 'PUT' && parts.length === 3) {
-        const unit = { ...(body as OrganizationUnitRecord), id: parts[2] };
+        const qualifiedId = parts[2];
+        const unit = { ...(body as OrganizationUnitRecord), id: qualifiedId };
+        if (!unit.slug) unit.slug = qualifiedId.split('.').pop() ?? qualifiedId;
+        const lastDot = qualifiedId.lastIndexOf('.');
+        if (unit.parentId === undefined && lastDot > 0) unit.parentId = qualifiedId.slice(0, lastDot);
         return sendJson(res, 200, upsertUnit(cfg, credential, unit));
       }
     }
