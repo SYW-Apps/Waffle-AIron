@@ -27,9 +27,10 @@ methods:
       Return the persisted instance exposure policy read through the store, or null when
       exposure-policy.json has never been written (callers substitute the safe default — web UI off,
       TLS required).
+    symbol: getExposurePolicyRecord
 detail: intent
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-09T20:47:47.802Z'
-updatedAt: '2026-07-16T15:28:37.685Z'
+updatedAt: '2026-07-16T17:42:38.874Z'

@@ -46,7 +46,8 @@ methods:
       hosted data root via write-temp-then-rename (a crash never truncates the file), refresh the
       store, and return the stored policy. No stamping — the exposure posture is a plain settings
       object.
+    symbol: setExposurePolicyRecord
 detail: intent
 status: complete
 createdAt: '2026-07-09T20:47:44.803Z'
-updatedAt: '2026-07-16T15:28:36.472Z'
+updatedAt: '2026-07-16T17:42:39.432Z'

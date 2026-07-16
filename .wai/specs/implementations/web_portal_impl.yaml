@@ -364,6 +364,7 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: listGlobalPacks
     detail: calls-only
+    symbol: opsListGlobalPacks
   - name: adminInstallGlobalPack
     narrative:
       - stepNumber: 1
@@ -372,6 +373,7 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: installGlobalPack
     detail: calls-only
+    symbol: opsInstallGlobalPack
   - name: adminRemoveGlobalPack
     narrative:
       - stepNumber: 1
@@ -380,6 +382,7 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: removeGlobalPack
     detail: calls-only
+    symbol: opsRemoveGlobalPack
   - name: projectPacksList
     narrative:
       - stepNumber: 1
@@ -388,6 +391,7 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: listProjectPacks
     detail: calls-only
+    symbol: opsListProjectPacks
   - name: projectPackInstall
     narrative:
       - stepNumber: 1
@@ -396,6 +400,7 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: installProjectPack
     detail: calls-only
+    symbol: opsInstallProjectPack
   - name: projectPackRemove
     narrative:
       - stepNumber: 1
@@ -404,6 +409,7 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: removeProjectPack
     detail: calls-only
+    symbol: opsRemoveProjectPack
   - name: adminGetPackPolicy
     narrative:
       - stepNumber: 1
@@ -412,6 +418,7 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: getPackPolicy
     detail: calls-only
+    symbol: opsGetPackPolicy
   - name: adminSetPackPolicy
     narrative:
       - stepNumber: 1
@@ -420,6 +427,7 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: setPackPolicy
     detail: calls-only
+    symbol: opsSetPackPolicy
   - name: projectPolicyEvaluate
     narrative:
       - stepNumber: 1
@@ -428,6 +436,7 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: evaluateProjectPolicy
     detail: calls-only
+    symbol: opsPolicyEvaluate
   - name: projectPolicyReconcile
     narrative:
       - stepNumber: 1
@@ -436,6 +445,7 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: reconcileProjectPolicy
     detail: calls-only
+    symbol: opsPolicyReconcile
   - name: projectProducersList
     narrative:
       - stepNumber: 1
@@ -444,6 +454,7 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: listProducers
     detail: calls-only
+    symbol: opsListProducers
   - name: projectProducerConfigure
     narrative:
       - stepNumber: 1
@@ -452,6 +463,7 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: configureProducer
     detail: calls-only
+    symbol: opsConfigureProducer
   - name: projectProducerRemove
     narrative:
       - stepNumber: 1
@@ -460,6 +472,7 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: removeProducer
     detail: calls-only
+    symbol: opsRemoveProducer
   - name: projectProducerRun
     narrative:
       - stepNumber: 1
@@ -468,6 +481,7 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: produceProducer
     detail: calls-only
+    symbol: opsRunProducer
   - name: projectGitStatus
     narrative:
       - stepNumber: 1
@@ -476,6 +490,7 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: getGitBinding
     detail: calls-only
+    symbol: opsGitStatus
   - name: projectGitBind
     narrative:
       - stepNumber: 1
@@ -484,6 +499,7 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: enableGit
     detail: calls-only
+    symbol: opsGitBind
   - name: projectGitUnbind
     narrative:
       - stepNumber: 1
@@ -492,6 +508,7 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: disableGit
     detail: calls-only
+    symbol: opsGitUnbind
   - name: projectGitSync
     narrative:
       - stepNumber: 1
@@ -500,6 +517,7 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: syncGit
     detail: calls-only
+    symbol: opsGitSync
   - name: projectGitCommit
     narrative:
       - stepNumber: 1
@@ -508,6 +526,7 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: commitProject
     detail: calls-only
+    symbol: opsGitCommit
   - name: projectGitSyncConfig
     narrative:
       - stepNumber: 1
@@ -518,6 +537,7 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: configureGitSync
     detail: calls-only
+    symbol: opsGitSyncConfig
   - name: adminAuditQuery
     narrative:
       - stepNumber: 1
@@ -528,6 +548,7 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: queryAuditEvents
     detail: calls-only
+    symbol: opsAuditQuery
   - name: adminAuditCount
     narrative:
       - stepNumber: 1
@@ -536,6 +557,7 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: countAuditEvents
     detail: calls-only
+    symbol: opsAuditCount
   - name: adminGetExposure
     narrative:
       - stepNumber: 1
@@ -544,6 +566,7 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: getExposurePolicy
     detail: calls-only
+    symbol: opsGetExposure
   - name: adminSetExposure
     narrative:
       - stepNumber: 1
@@ -552,6 +575,7 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: setExposurePolicy
     detail: calls-only
+    symbol: opsSetExposure
   - name: adminListGitBacking
     narrative:
       - stepNumber: 1
@@ -560,6 +584,7 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: listBackingBindings
     detail: calls-only
+    symbol: opsListGitBacking
   - name: adminBindGitBacking
     narrative:
       - stepNumber: 1
@@ -568,6 +593,7 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: bindBackingScope
     detail: calls-only
+    symbol: opsBindGitBacking
   - name: adminUnbindGitBacking
     narrative:
       - stepNumber: 1
@@ -576,6 +602,7 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: unbindBackingScope
     detail: calls-only
+    symbol: opsUnbindGitBacking
   - name: adminSyncGitBacking
     narrative:
       - stepNumber: 1
@@ -584,7 +611,8 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: syncBackingScope
     detail: calls-only
+    symbol: opsSyncGitBacking
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-07-16T15:41:37.604Z'
+updatedAt: '2026-07-16T17:43:00.336Z'

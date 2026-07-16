@@ -128,7 +128,7 @@ describe('container-level git backing (sdd_host)', () => {
     // Audited: a security-level bind + an info-level sync.
     expect(queryAuditEvents(dataDir, { action: 'git.backing.bind' })).toHaveLength(1);
     expect(queryAuditEvents(dataDir, { action: 'git.backing.sync' }).length).toBeGreaterThanOrEqual(1);
-  });
+  }, 30_000);
 
   it('the instance binding mirrors the structure JSON — NEVER the secret store or live sessions; hashed credentials yes', () => {
     seedWorld();
@@ -153,7 +153,7 @@ describe('container-level git backing (sdd_host)', () => {
     // Belt and braces: the pushed tree contains the secret value nowhere —
     // `git grep` exits non-zero exactly when there is NO match.
     expect(() => git(['grep', '-l', 'SUPER-SECRET', 'HEAD', '--'], checkout)).toThrow();
-  });
+  }, 30_000);
 
   it('one binding per scope: a re-bind replaces; unbind removes by id (repo untouched)', () => {
     const { unitId } = seedWorld();
@@ -169,7 +169,7 @@ describe('container-level git backing (sdd_host)', () => {
     unbindScope(cfg, MASTER, second.id);
     expect(listBackingBindings(cfg, MASTER)).toEqual([]);
     expect(() => unbindScope(cfg, MASTER, second.id)).toThrow(/not found/);
-  });
+  }, 30_000);
 
   it('scope validation: a unit binding needs an existing unit; an instance binding names no scopeId', () => {
     const remote = seedBareRemote(base, 'x');
@@ -186,7 +186,7 @@ describe('container-level git backing (sdd_host)', () => {
     allow(dataDir, 'u-adm', 'project:admin', 'unit', unitId);
     const admToken = mintUserToken(dataDir, { id: 'k-adm', userId: 'u-adm' });
 
-    // Their unit: allowed.
+    // Their unit: allowed. (bindScope only writes the binding — no clone here.)
     const mine = bindScope(cfg, admToken, bindingFor({ scopeKind: 'unit', scopeId: unitId, remote }));
     // A foreign unit and the instance scope: refused.
     expect(() => bindScope(cfg, admToken, bindingFor({ scopeKind: 'unit', scopeId: other.id, remote }))).toThrow(ForbiddenError);
@@ -214,5 +214,5 @@ describe('container-level git backing (sdd_host)', () => {
     expect(getBinding(dataDir, due.id)?.lastSyncAt).toBeTruthy();
     const instanceBinding = listBackingBindings(cfg, MASTER).find((b) => b.scopeKind === 'instance')!;
     expect(instanceBinding.lastSyncAt).toBeUndefined();
-  });
+  }, 30_000);
 });

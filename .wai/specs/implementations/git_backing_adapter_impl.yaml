@@ -28,6 +28,13 @@ methods:
           Stage the working copy, and when the index holds changes commit with the bot identity and
           push the branch (WAIRON_GIT_TOKEN); return false without committing when clean
         type: local
+lint:
+  allow:
+    - code: UNDECLARED_DEPENDENCY
+      reason: >-
+        Uses the shared secrets utility (utils/secrets.ts, spec-homed under sdd_host's
+        secret_registry) for the git bot token, exactly like the per-project git_adapter_impl —
+        placement debt (shared infrastructure candidate), not a sanctioned cross-subsystem reach.
 status: complete
 createdAt: '2026-07-16T15:40:11.338Z'
-updatedAt: '2026-07-16T15:48:49.314Z'
+updatedAt: '2026-07-16T17:42:37.281Z'

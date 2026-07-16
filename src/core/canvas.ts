@@ -463,7 +463,12 @@ body[data-theme="light"] {
 body { margin:0; background:var(--bg); color:var(--ink); font:13px/1.45 "Inter", system-ui, "Segoe UI", sans-serif; overflow:hidden; }
 body[data-theme="syw"] { background-image: var(--syw-deep-space); background-attachment: fixed; }
 
-header { display:flex; align-items:center; gap:10px; padding:0 14px; height:52px; background:var(--chrome); border-bottom:1px solid var(--chrome-border); position:relative; z-index:20; }
+header { display:flex; align-items:center; gap:10px; padding:0 14px; height:52px; background:var(--chrome); border-bottom:1px solid var(--chrome-border); position:relative; z-index:20; overflow-x:auto; scrollbar-width:thin; }
+/* Responsive overflow: on a narrow header the toolbar buttons must stay
+   REACHABLE (scroll) rather than wrapping off the right edge. Groups keep their
+   own shape; nothing shrinks below its content width. */
+header > * { flex:0 0 auto; }
+header .toolbar, header .tabs, header .grp { display:flex; align-items:center; gap:6px; flex:0 0 auto; }
 header .brand { font-weight:800; font-size:17px; letter-spacing:.02em; }
 #crumbs { display:flex; align-items:center; gap:4px; max-width:34vw; overflow-x:auto; white-space:nowrap; scrollbar-width:thin; }
 #crumbs .crumb { border:none; background:transparent; color:var(--dim); cursor:pointer; font:inherit; font-size:12.5px; padding:4px 7px; border-radius:7px; }
@@ -551,12 +556,22 @@ body:not(.panel-closed) #panelToggle { background:var(--accent); color:#fff; bor
 #panel .issue.warning { border-left-color:var(--warn); }
 #panel .issue code { font-size:10.5px; color:var(--dim); }
 
-body.presentation header, body.presentation #panel, body.presentation .legend { display:none; }
-body.presentation #panelResizer { display:none; }
+/* Presentation mode = the canvas page, focused: the header chrome and legend
+   are hidden, but the details panel stays TOGGLE-ABLE (the current settings are
+   still applied). It does NOT force browser fullscreen (F11) — exiting is one
+   step, not two. */
+body.presentation header, body.presentation .legend { display:none; }
+/* The details panel hides by default in presentation, but the floating details
+   toggle brings it back without leaving presentation mode. */
+body.presentation #panel, body.presentation #panelResizer { display:none; }
+body.presentation.show-details #panel { display:block; }
+body.presentation.show-details #panelResizer { display:block; }
 body.presentation #wrap { height:100vh; }
-#exitPresent { display:none; position:fixed; top:10px; right:10px; z-index:100; border:1px solid var(--chrome-border); background:var(--chrome); color:var(--ink); border-radius:9px; padding:7px 13px; cursor:pointer; opacity:0.06; transition:opacity .15s ease; font:inherit; }
-#exitPresent:hover { opacity:1; box-shadow:var(--syw-glow); }
-body.presentation #exitPresent { display:block; }
+#exitPresent, #presentDetails { display:none; position:fixed; top:10px; z-index:100; border:1px solid var(--chrome-border); background:var(--chrome); color:var(--ink); border-radius:9px; padding:7px 13px; cursor:pointer; opacity:0.06; transition:opacity .15s ease; font:inherit; }
+#exitPresent { right:10px; }
+#presentDetails { right:190px; }
+#exitPresent:hover, #presentDetails:hover { opacity:1; box-shadow:var(--syw-glow); }
+body.presentation #exitPresent, body.presentation #presentDetails { display:block; }
 
 @media (max-width: 860px) {
   #wrap { position:relative; }
@@ -666,6 +681,7 @@ body.presentation #exitPresent { display:block; }
   <div id="panelResizer" title="Drag to resize details sidebar"></div>
   <div id="panel"></div>
 </div>
+<button id="presentDetails">Details</button>
 <button id="exitPresent">✕ Exit presentation</button>
 <div id="flowModal">
   <div class="box">
@@ -2513,18 +2529,24 @@ var MODEL = __MODEL_JSON__;
     persist();
   });
 
+  // Presentation mode is CSS-only — it does NOT trigger browser F11 fullscreen,
+  // so exiting is a single step (the ✕ button), not "exit F11 then exit
+  // presentation". The details panel stays reachable via a floating toggle, so
+  // presentation is "the canvas focused with the current settings", not a
+  // stripped view.
   function setPresentation(on) {
-    if (document.body.classList) document.body.classList[on ? 'add' : 'remove']('presentation');
-    if (inBrowser) {
-      try {
-        if (on && document.documentElement && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
-        else if (!on && document.exitFullscreen && document.fullscreenElement) document.exitFullscreen();
-      } catch (e) { /* fullscreen unavailable */ }
+    if (document.body.classList) {
+      document.body.classList[on ? 'add' : 'remove']('presentation');
+      if (!on) document.body.classList.remove('show-details');
     }
     setTimeout(function () { cy.resize(); cy.fit(undefined, 40); }, 60);
   }
   document.getElementById('presentBtn').addEventListener('click', function () { setPresentation(true); });
   document.getElementById('exitPresent').addEventListener('click', function () { setPresentation(false); });
+  document.getElementById('presentDetails').addEventListener('click', function () {
+    if (document.body.classList) document.body.classList.toggle('show-details');
+    setTimeout(function () { cy.resize(); cy.fit(undefined, 40); }, 60);
+  });
 
   function wireDropdown(ddId, btnId) {
     var dd = document.getElementById(ddId);

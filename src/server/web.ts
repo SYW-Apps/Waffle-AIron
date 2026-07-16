@@ -907,7 +907,27 @@ nav.tabs button.active { background:var(--hover-bg); color:var(--accent); }
 
 /* ---- admin view ---- */
 .admin-wrap { height:100%; display:flex; flex-direction:column; }
-.subtabs { display:flex; gap:2px; padding:8px 14px; border-bottom:1px solid var(--chrome-border); background:var(--chrome); flex:0 0 auto; }
+.subtabs { display:flex; gap:2px; padding:8px 14px; border-bottom:1px solid var(--chrome-border); background:var(--chrome); flex:0 0 auto; overflow-x:auto; flex-wrap:nowrap; scrollbar-width:thin; }
+.subtabs button { flex:0 0 auto; white-space:nowrap; }
+nav.tabs { overflow-x:auto; flex-wrap:nowrap; }
+nav.tabs button { flex:0 0 auto; white-space:nowrap; }
+/* Responsive button-group overflow: any .btnrow that is too narrow scrolls
+   horizontally instead of hiding buttons off the right edge (the overflow bug). */
+.btnrow { display:flex; gap:6px; overflow-x:auto; flex-wrap:nowrap; scrollbar-width:thin; }
+.btnrow > * { flex:0 0 auto; white-space:nowrap; }
+/* Environment hierarchy tree (root → orgs → units → projects). */
+ul.envtree { list-style:none; margin:0; padding:0 0 0 18px; }
+ul.envtree.envtree { }
+.envnode { margin:1px 0; }
+.envrow { display:flex; align-items:center; gap:7px; padding:5px 8px; border-radius:8px; }
+.envrow:hover { background:var(--hover-bg); }
+.envnode.breadcrumb > .envrow { opacity:0.6; }
+.envtwist { width:14px; text-align:center; color:var(--dim); cursor:pointer; user-select:none; font-size:11px; }
+.envicon { color:var(--dim); font-size:11px; }
+.envlabel { font-size:13px; font-weight:600; cursor:pointer; }
+.envnode[data-kind="unit"] > .envrow .envlabel { cursor:default; }
+.envkind { font-size:10.5px; color:var(--dim); text-transform:uppercase; letter-spacing:.04em; }
+.envkids { margin-left:4px; border-left:1px solid var(--chrome-border); }
 .subtabs button { border:1px solid transparent; background:transparent; color:var(--dim); padding:6px 12px; border-radius:8px; cursor:pointer; font-size:12px; font-weight:600; }
 .subtabs button.active { background:var(--hover-bg); color:var(--accent); border-color:var(--chrome-border); }
 .admin-body { flex:1; min-height:0; overflow:auto; padding:16px 20px; }
@@ -982,7 +1002,8 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   <header id="topbar">
     <span class="brand syw-gradient-text">wairon</span>
     <nav class="tabs" id="navTabs">
-      <button data-view="canvas" class="active">Canvas</button>
+      <button data-view="environment" class="active">Environment</button>
+      <button data-view="canvas">Canvas</button>
       <button data-view="specs">Specs</button>
       <button data-view="projects">Projects</button>
       <button data-view="admin" id="navAdmin" hidden>Admin</button>
@@ -1001,8 +1022,13 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     </div>
   </header>
   <div id="wrap">
+    <!-- Environment view (the whole-environment permission-filtered hierarchy) -->
+    <div class="view active" id="view-environment">
+      <div class="pane-r"><div id="envBody" style="max-width:1000px;margin:0 auto;padding:8px 0"><div class="hint">Loading…</div></div></div>
+    </div>
+
     <!-- Canvas view (existing embedded architecture canvas) -->
-    <div class="view active" id="view-canvas">
+    <div class="view" id="view-canvas">
       <iframe id="cv" title="Architecture canvas" referrerpolicy="same-origin"></iframe>
       <div class="empty" id="empty" hidden><div class="box"><h3>No project in scope</h3><p>There are no projects you can view yet.</p></div></div>
     </div>
@@ -1026,16 +1052,30 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
         <div class="subtabs" id="adminSubtabs">
           <button data-panel="approvals" class="active">Approvals</button>
           <button data-panel="users">Users</button>
+          <button data-panel="roles">Roles</button>
+          <button data-panel="permissions">Permissions</button>
           <button data-panel="providers">Identity Providers</button>
           <button data-panel="org">Organization</button>
+          <button data-panel="packs">Packs</button>
+          <button data-panel="policy">Policy</button>
+          <button data-panel="audit">Audit</button>
+          <button data-panel="backups">Backups</button>
+          <button data-panel="exposure">Exposure</button>
           <button data-panel="landscape">Landscape</button>
           <button data-panel="health">Health</button>
         </div>
         <div class="admin-body">
           <div class="apanel active" id="ap-approvals"><div class="hint">Loading…</div></div>
           <div class="apanel" id="ap-users"><div class="hint">Loading…</div></div>
+          <div class="apanel" id="ap-roles"><div class="hint">Loading…</div></div>
+          <div class="apanel" id="ap-permissions"><div class="hint">Loading…</div></div>
           <div class="apanel" id="ap-providers"><div class="hint">Loading…</div></div>
           <div class="apanel" id="ap-org"><div class="hint">Loading…</div></div>
+          <div class="apanel" id="ap-packs"><div class="hint">Loading…</div></div>
+          <div class="apanel" id="ap-policy"><div class="hint">Loading…</div></div>
+          <div class="apanel" id="ap-audit"><div class="hint">Loading…</div></div>
+          <div class="apanel" id="ap-backups"><div class="hint">Loading…</div></div>
+          <div class="apanel" id="ap-exposure"><div class="hint">Loading…</div></div>
           <div class="apanel" id="ap-landscape"><div class="hint">Loading…</div></div>
           <div class="apanel" id="ap-health"><div class="hint">Loading…</div></div>
         </div>
@@ -1186,8 +1226,10 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       sel.value = selectedProjectId;
       // Hide the picker when there is nothing to choose (or in local single-project mode).
       $('projCtl').style.display = (!isLocal && pids.length > 0) ? 'flex' : 'none';
-      setView('canvas');
-      loadCanvas();
+      // Local dev mode lands on the single project's canvas; hosted lands on the
+      // whole-environment hierarchy so a user starts from the top and drills in.
+      if (isLocal) { setView('canvas'); loadCanvas(); }
+      else { setView('environment'); }
     });
   }
 
@@ -1223,12 +1265,13 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   var currentView = 'canvas';
   function setView(name) {
     currentView = name;
-    ['canvas', 'specs', 'projects', 'admin', 'connect'].forEach(function (v) {
+    ['environment', 'canvas', 'specs', 'projects', 'admin', 'connect'].forEach(function (v) {
       var el = $('view-' + v); if (el) el.classList.toggle('active', v === name);
     });
     Array.prototype.forEach.call($('navTabs').children, function (b) {
       b.classList.toggle('active', b.getAttribute('data-view') === name);
     });
+    if (name === 'environment') renderEnvironment();
     if (name === 'specs') loadSpecList();
     if (name === 'projects') renderProjects();
     if (name === 'admin') loadAdminPanel(currentPanel);
@@ -1241,6 +1284,83 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       setView(v);
     });
   });
+
+  // ---- environment hierarchy (root → orgs → units → projects) -------------
+  // The whole-environment tree, permission-filtered SERVER-side: getGraph on the
+  // landscape tier returns only nodes the caller may see (actionable scopes plus
+  // the ancestor breadcrumbs that keep them navigable to the root). Breadcrumb
+  // (non-actionable) nodes render read-only; actionable projects open the canvas.
+  function renderEnvironment() {
+    var box = $('envBody');
+    box.innerHTML = '<div class="hint">Loading the environment…</div>';
+    api('/web/graph?tier=landscape&level=1').then(function (r) {
+      if (r.status === 401) throw new Error('Session expired — sign in again.');
+      if (!r.ok) throw new Error('environment ' + r.status);
+      return r.json();
+    }).then(function (g) {
+      var nodes = (g.nodes || []).filter(function (n) { return n.kind === 'unit' || n.kind === 'project'; });
+      if (!nodes.length) { box.innerHTML = '<div class="hint">No organization units or projects in your scope yet.</div>'; return; }
+      var byParent = {};
+      var byId = {};
+      nodes.forEach(function (n) { byId[n.id] = n; });
+      nodes.forEach(function (n) {
+        // Treat a parent that is not itself in the visible set as a root (the
+        // breadcrumb chain always reaches a shown ancestor or the top).
+        var key = (n.parentId && byId[n.parentId]) ? n.parentId : '__root__';
+        (byParent[key] = byParent[key] || []).push(n);
+      });
+      function sortNodes(a, b) { return (a.kind + (a.label || a.id)).localeCompare(b.kind + (b.label || b.id)); }
+      function renderLevel(parentKey) {
+        var kids = (byParent[parentKey] || []).slice().sort(sortNodes);
+        if (!kids.length) return '';
+        var out = '<ul class="envtree">';
+        kids.forEach(function (n) {
+          var hasKids = !!(byParent[n.id] && byParent[n.id].length);
+          var act = n.actionable ? '' : ' breadcrumb';
+          var icon = n.kind === 'unit' ? '▸' : '●';
+          var badge = n.kind === 'project'
+            ? '<span class="pill ' + (n.status === 'active' ? 'ok' : 'warn') + '">' + esc(n.status || 'project') + '</span>'
+            : '<span class="envkind">unit</span>';
+          out += '<li class="envnode' + act + '" data-id="' + esc(n.id) + '" data-kind="' + esc(n.kind) + '"' + (n.actionable && n.kind === 'project' ? ' data-open="' + esc(n.projectId || n.id) + '"' : '') + '>'
+            + '<div class="envrow">'
+            + '<span class="envtwist"' + (hasKids ? ' data-tw="1"' : '') + '>' + (hasKids ? '▾' : '') + '</span>'
+            + '<span class="envicon">' + icon + '</span>'
+            + '<span class="envlabel">' + esc(n.label || n.id) + '</span>'
+            + badge
+            + (n.actionable ? '' : ' <span class="hint" style="font-size:11px">(read-only)</span>')
+            + '</div>';
+          if (hasKids) out += '<div class="envkids">' + renderLevel(n.id) + '</div>';
+          out += '</li>';
+        });
+        return out + '</ul>';
+      }
+      box.innerHTML = '<h2 style="margin:0 0 4px">Environment</h2>'
+        + '<p style="color:var(--dim);margin:0 0 12px;font-size:12.5px">Everything you can see, from the root down. Click a project to open its canvas. Collapse a unit with its ▾.</p>'
+        + renderLevel('__root__');
+      // Expand/collapse.
+      Array.prototype.forEach.call(box.querySelectorAll('[data-tw]'), function (tw) {
+        tw.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          var li = tw.parentNode.parentNode;
+          var kids = li.querySelector('.envkids');
+          if (!kids) return;
+          var collapsed = kids.style.display === 'none';
+          kids.style.display = collapsed ? '' : 'none';
+          tw.textContent = collapsed ? '▾' : '▸';
+        });
+      });
+      // Open a project's canvas.
+      Array.prototype.forEach.call(box.querySelectorAll('[data-open]'), function (li) {
+        li.querySelector('.envlabel').addEventListener('click', function () {
+          var pid = li.getAttribute('data-open');
+          selectedProjectId = pid;
+          var sel = $('projSel'); if (sel) { sel.value = pid; }
+          setView('canvas');
+          loadCanvas();
+        });
+      });
+    }).catch(function (e) { box.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+  }
 
   // ---- embedded canvas ----------------------------------------------------
   function loadCanvas() {
@@ -1326,12 +1446,13 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   });
 
   // ---- admin view (control-plane pages) -----------------------------------
+  var ADMIN_PANELS = ['approvals', 'users', 'roles', 'permissions', 'providers', 'org', 'packs', 'policy', 'audit', 'backups', 'exposure', 'landscape', 'health'];
   var currentPanel = 'approvals';
   Array.prototype.forEach.call($('adminSubtabs').children, function (b) {
     b.addEventListener('click', function () {
       currentPanel = b.getAttribute('data-panel');
       Array.prototype.forEach.call($('adminSubtabs').children, function (x) { x.classList.toggle('active', x === b); });
-      ['approvals', 'users', 'providers', 'org', 'landscape', 'health'].forEach(function (p) { $('ap-' + p).classList.toggle('active', p === currentPanel); });
+      ADMIN_PANELS.forEach(function (p) { $('ap-' + p).classList.toggle('active', p === currentPanel); });
       loadAdminPanel(currentPanel);
     });
   });
@@ -1361,10 +1482,24 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
     } else if (panel === 'users') {
       renderUsersPanel(el);
+    } else if (panel === 'roles') {
+      renderRolesPanel(el);
+    } else if (panel === 'permissions') {
+      renderPermissionsPanel(el);
     } else if (panel === 'providers') {
       renderProvidersPanel(el);
     } else if (panel === 'org') {
       renderOrgPanel(el);
+    } else if (panel === 'packs') {
+      renderPacksPanel(el);
+    } else if (panel === 'policy') {
+      renderPolicyPanel(el);
+    } else if (panel === 'audit') {
+      renderAuditPanel(el);
+    } else if (panel === 'backups') {
+      renderBackupsPanel(el);
+    } else if (panel === 'exposure') {
+      renderExposurePanel(el);
     } else if (panel === 'landscape') {
       adminGet('landscape').then(function (g) {
         var units = (g.nodes || []).filter(function (n) { return n.nodeKind === 'unit'; });
@@ -1708,6 +1843,375 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     });
   }
 
+  // ---- Roles (admin) ------------------------------------------------------
+  // The permission model's role templates. Built-in reserved roles (e.g.
+  // sso-admin) are intrinsic — the server refuses to create/edit/delete them, so
+  // only admin-defined roles are listed here.
+  var CAPS = ['project:read', 'project:create', 'project:write', 'project:admin', 'approval:decide'];
+  var VALUES = ['yes', 'approval', 'no', 'inherit'];
+  function renderRolesPanel(el) {
+    el.innerHTML = '<div class="hint">Loading…</div>';
+    adminGet('roles').then(function (d) {
+      var roles = d.roles || [];
+      var html = '<div class="toolbar"><button class="mini" id="rNew">New role</button></div><div id="rForm"></div>';
+      if (!roles.length) html += '<div class="hint">No admin-defined roles yet. Built-in roles (like sso-admin) are intrinsic and not listed.</div>';
+      else {
+        html += '<table class="grid"><thead><tr><th>Role</th><th>ID</th><th>Permissions</th><th></th></tr></thead><tbody>';
+        roles.forEach(function (r, i) {
+          var perms = (r.permissions || []).map(function (p) { return esc(p.capability) + '=' + esc(p.value); }).join(', ');
+          html += '<tr><td>' + esc(r.name || r.id) + '</td><td>' + esc(r.id) + '</td><td>' + perms + '</td>'
+            + '<td style="white-space:nowrap"><button class="mini" data-edit="' + i + '">Edit</button> <button class="mini danger" data-del="' + esc(r.id) + '">Delete</button></td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+      el.innerHTML = html;
+      $('rNew').addEventListener('click', function () { roleForm(el, null); });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-edit]'), function (b) {
+        b.addEventListener('click', function () { roleForm(el, roles[+b.getAttribute('data-edit')]); });
+      });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-del]'), function (b) {
+        b.addEventListener('click', function () {
+          if (!confirm('Delete role "' + b.getAttribute('data-del') + '"? Bindings to it become inert.')) return;
+          postAndParse('/web/admin/roles/remove', { id: b.getAttribute('data-del') }).then(function () { renderRolesPanel(el); })
+            .catch(function (e) { alert(e.message); });
+        });
+      });
+    }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+  }
+  function roleForm(el, r) {
+    var box = $('rForm'); var creating = !r; r = r || {};
+    var permByCap = {};
+    (r.permissions || []).forEach(function (p) { permByCap[p.capability] = p.value; });
+    var html = '<div class="formcard"><h3>' + (creating ? 'New role' : 'Edit ' + esc(r.name || r.id)) + '</h3>';
+    html += '<div class="frow">'
+      + fcol('Role ID', '<input id="rId" value="' + esc(r.id || '') + '"' + (creating ? '' : ' readonly') + ' placeholder="lowercase-slug" />')
+      + fcol('Name', '<input id="rName" value="' + esc(r.name || '') + '" />')
+      + '</div>';
+    html += '<p style="color:var(--dim);font-size:12px;margin:6px 0">Roles GRANT only (yes / approval); a role never denies, so no / inherit is non-deciding. Leave a capability at "(none)" to omit it.</p>';
+    html += '<table class="grid"><thead><tr><th>Capability</th><th>Value</th></tr></thead><tbody>';
+    CAPS.forEach(function (cap) {
+      var cur = permByCap[cap];
+      var sel = '<select data-cap="' + esc(cap) + '">' + opt('', '(none)', !cur)
+        + ['yes', 'approval', 'inherit'].map(function (v) { return opt(v, v, cur === v); }).join('') + '</select>';
+      html += '<tr><td>' + esc(cap) + '</td><td>' + sel + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="rSave">' + (creating ? 'Create role' : 'Save') + '</button> <button class="mini" id="rCancel">Cancel</button> <span class="msg" id="rMsg"></span></div></div>';
+    box.innerHTML = html;
+    $('rCancel').addEventListener('click', function () { box.innerHTML = ''; });
+    $('rSave').addEventListener('click', function () {
+      var msg = $('rMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
+      var perms = [];
+      Array.prototype.forEach.call(box.querySelectorAll('[data-cap]'), function (s) {
+        if (s.value) perms.push({ capability: s.getAttribute('data-cap'), value: s.value });
+      });
+      var rec = { id: $('rId').value.trim(), name: $('rName').value.trim() || $('rId').value.trim(), permissions: perms, createdAt: r.createdAt || '' };
+      var path = creating ? '/web/admin/roles' : '/web/admin/roles/update';
+      postAndParse(path, rec).then(function () { renderRolesPanel(el); })
+        .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+    });
+  }
+
+  // ---- Permissions (admin) ------------------------------------------------
+  // The assignment grid (subject × scope × capability → value) plus per-user
+  // role bindings — THE surface for granting anything in the permission model.
+  function renderPermissionsPanel(el) {
+    el.innerHTML = '<div class="hint">Loading…</div>';
+    Promise.all([
+      adminGet('org/units').then(function (d) { return d.units || []; }),
+      adminGet('users').then(function (d) { return d.users || []; }),
+      adminGet('roles').then(function (d) { return d.roles || []; }).catch(function () { return []; }),
+    ]).then(function (res) {
+      var units = res[0], users = res[1], roles = res[2];
+      var html = '<div class="cards"><div class="stat"><div class="k">Grant a permission</div><div class="v" style="font-size:13px;color:var(--dim)">subject × scope × capability → value</div></div></div>';
+      // ── assignment form ──
+      html += '<div class="formcard"><h3>Set an assignment</h3><div class="frow">'
+        + fcol('Subject', '<select id="paSubjKind">' + opt('user', 'a user', true) + opt('everyone', 'everyone (scope default)', false) + '</select>')
+        + fcol('User', '<select id="paUser">' + users.map(function (u) { return opt(u.id, (u.displayName || (u.subject && u.subject.userId) || u.id), false); }).join('') + '</select>')
+        + '</div><div class="frow">'
+        + fcol('Scope', '<select id="paScopeKind">' + opt('instance', 'instance', false) + opt('unit', 'a unit', true) + opt('project', 'a project', false) + '</select>')
+        + fcol('Unit', '<select id="paUnit">' + units.map(function (u) { return opt(u.id, u.name + ' (' + u.id + ')', false); }).join('') + '</select>')
+        + fcol('Project', (function () { var pids = Array.prototype.map.call($('projSel').options, function (o) { return o.value; }); return '<select id="paProject">' + pids.map(function (p) { return opt(p, p, false); }).join('') + '</select>'; })())
+        + '</div><div class="frow">'
+        + fcol('Capability', '<select id="paCap">' + CAPS.map(function (c) { return opt(c, c, c === 'project:read'); }).join('') + '</select>')
+        + fcol('Value', '<select id="paVal">' + VALUES.map(function (v) { return opt(v, v, v === 'yes'); }).join('') + '</select>')
+        + '</div>';
+      html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="paSet">Set assignment</button> <span class="msg" id="paMsg"></span></div></div>';
+      // ── role binding form ──
+      html += '<div class="formcard"><h3>Bind a role to a user</h3><div class="frow">'
+        + fcol('User', '<select id="pbUser">' + users.map(function (u) { return opt(u.id, (u.displayName || (u.subject && u.subject.userId) || u.id), false); }).join('') + '</select>')
+        + fcol('Role', '<select id="pbRole">' + [{ id: 'sso-admin', name: 'sso-admin (built-in)' }].concat(roles).map(function (r) { return opt(r.id, r.name || r.id, false); }).join('') + '</select>')
+        + '</div><div class="frow">'
+        + fcol('Scope', '<select id="pbScopeKind">' + opt('instance', 'instance', true) + opt('unit', 'a unit', false) + '</select>')
+        + fcol('Unit', '<select id="pbUnit">' + units.map(function (u) { return opt(u.id, u.name + ' (' + u.id + ')', false); }).join('') + '</select>')
+        + '</div><div class="rowbtns"><button class="btn-primary" style="width:auto" id="pbBind">Bind</button> <button class="mini" id="pbUnbind">Unbind</button> <span class="msg" id="pbMsg"></span></div></div>';
+      // ── existing assignments listing ──
+      html += '<div class="formcard"><h3>Assignments <button class="mini" id="paReload" style="font-weight:400">Reload</button></h3><div id="paList"><div class="hint">Loading…</div></div></div>';
+      el.innerHTML = html;
+
+      function toggleScope(kindSel, unitSel, projSel) {
+        var k = $(kindSel).value;
+        var u = $(unitSel); if (u) u.parentNode.parentNode.style.display = k === 'unit' ? '' : 'none';
+        if (projSel) { var p = $(projSel); if (p) p.parentNode.parentNode.style.display = k === 'project' ? '' : 'none'; }
+      }
+      function toggleSubject() { var u = $('paUser'); u.parentNode.parentNode.style.display = $('paSubjKind').value === 'user' ? '' : 'none'; }
+      $('paScopeKind').addEventListener('change', function () { toggleScope('paScopeKind', 'paUnit', 'paProject'); });
+      $('paSubjKind').addEventListener('change', toggleSubject);
+      $('pbScopeKind').addEventListener('change', function () { toggleScope('pbScopeKind', 'pbUnit', null); });
+      toggleScope('paScopeKind', 'paUnit', 'paProject'); toggleSubject(); toggleScope('pbScopeKind', 'pbUnit', null);
+
+      function scopeFields(kindSel, unitSel, projSel) {
+        var k = $(kindSel).value, out = { scopeKind: k };
+        if (k === 'unit') out.scopeId = $(unitSel).value;
+        else if (k === 'project' && projSel) out.scopeId = $(projSel).value;
+        return out;
+      }
+      $('paSet').addEventListener('click', function () {
+        var msg = $('paMsg'); msg.className = 'msg'; msg.textContent = 'Setting…';
+        var a = Object.assign({ id: '', subjectKind: $('paSubjKind').value, capability: $('paCap').value, value: $('paVal').value, createdAt: '' }, scopeFields('paScopeKind', 'paUnit', 'paProject'));
+        if (a.subjectKind === 'user') a.subjectId = $('paUser').value;
+        postAndParse('/web/admin/permissions', a).then(function () { msg.className = 'msg ok'; msg.textContent = 'Set.'; loadAssignments(); })
+          .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+      });
+      $('pbBind').addEventListener('click', function () { bindRole('/web/admin/roles/bind', 'Bound.'); });
+      $('pbUnbind').addEventListener('click', function () { bindRole('/web/admin/roles/unbind', 'Unbound.'); });
+      function bindRole(path, okText) {
+        var msg = $('pbMsg'); msg.className = 'msg'; msg.textContent = '…';
+        var b = Object.assign({ userId: $('pbUser').value, roleId: $('pbRole').value }, scopeFields('pbScopeKind', 'pbUnit', null));
+        postAndParse(path, b).then(function () { msg.className = 'msg ok'; msg.textContent = okText; })
+          .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+      }
+      $('paReload').addEventListener('click', loadAssignments);
+      function loadAssignments() {
+        var host = $('paList'); host.innerHTML = '<div class="hint">Loading…</div>';
+        api('/web/admin/permissions').then(function (r) { return r.ok ? r.json() : { assignments: [] }; }).then(function (d) {
+          var rows = d.assignments || [];
+          if (!rows.length) { host.innerHTML = '<div class="hint">No assignments yet.</div>'; return; }
+          var t = '<table class="grid"><thead><tr><th>Subject</th><th>Scope</th><th>Capability</th><th>Value</th><th></th></tr></thead><tbody>';
+          rows.forEach(function (a) {
+            var subj = a.subjectKind === 'everyone' ? 'everyone' : a.subjectId;
+            var scope = a.scopeKind + (a.scopeId ? ' ' + a.scopeId : '');
+            t += '<tr><td>' + esc(subj) + '</td><td>' + esc(scope) + '</td><td>' + esc(a.capability) + '</td><td><span class="pill">' + esc(a.value) + '</span></td>'
+              + '<td><button class="mini danger" data-rm="' + esc(a.id) + '">Remove</button></td></tr>';
+          });
+          host.innerHTML = t + '</tbody></table>';
+          Array.prototype.forEach.call(host.querySelectorAll('[data-rm]'), function (b) {
+            b.addEventListener('click', function () {
+              postAndParse('/web/admin/permissions/remove', { id: b.getAttribute('data-rm') }).then(loadAssignments).catch(function (e) { alert(e.message); });
+            });
+          });
+        }).catch(function (e) { host.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+      }
+      loadAssignments();
+    }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+  }
+
+  // ---- Packs (admin: server-global declarative packs) ---------------------
+  function renderPacksPanel(el) {
+    el.innerHTML = '<div class="hint">Loading…</div>';
+    adminGet('packs').then(function (d) {
+      var packs = d.packs || [];
+      var html = '<div class="toolbar"><button class="mini" id="pkNew">Install a declarative pack</button></div><div id="pkForm"></div>';
+      html += '<p style="color:var(--dim);font-size:12px;margin:6px 0">Only DECLARATIVE packs (profiles + language/platform tables) install here. Code packs stay filesystem-only.</p>';
+      if (!packs.length) html += '<div class="hint">No server-global packs installed.</div>';
+      else {
+        html += '<table class="grid"><thead><tr><th>Name</th><th>Tier</th><th>Profiles</th><th>Languages</th><th></th></tr></thead><tbody>';
+        packs.forEach(function (p) {
+          var shadow = p.shadowed ? ' <span class="pill warn">shadowed</span>' : '';
+          var rm = p.tier === 'instance' ? '<button class="mini danger" data-rm="' + esc(p.name) + '">Remove</button>' : '<span class="hint">image (immutable)</span>';
+          html += '<tr><td>' + esc(p.name) + shadow + '</td><td>' + esc(p.tier || '—') + '</td><td>' + (p.profiles || 0) + '</td><td>' + (p.languages || 0) + '</td><td>' + rm + '</td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+      el.innerHTML = html;
+      $('pkNew').addEventListener('click', function () {
+        $('pkForm').innerHTML = '<div class="formcard"><h3>Install a declarative pack</h3>'
+          + '<div class="frow">' + fcol('Pack name', '<input id="pkName" placeholder="my-pack" />') + '</div>'
+          + '<div class="frow">' + fcol('Content (YAML)', '<textarea id="pkContent" rows="8" style="width:100%;font-family:monospace"></textarea>', true) + '</div>'
+          + '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="pkSave">Install</button> <button class="mini" id="pkCancel">Cancel</button> <span class="msg" id="pkMsg"></span></div></div>';
+        $('pkCancel').addEventListener('click', function () { $('pkForm').innerHTML = ''; });
+        $('pkSave').addEventListener('click', function () {
+          var msg = $('pkMsg'); msg.className = 'msg'; msg.textContent = 'Installing…';
+          postAndParse('/web/admin/packs', { name: $('pkName').value.trim(), content: $('pkContent').value })
+            .then(function () { renderPacksPanel(el); }).catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+        });
+      });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-rm]'), function (b) {
+        b.addEventListener('click', function () {
+          if (!confirm('Remove server-global pack "' + b.getAttribute('data-rm') + '"?')) return;
+          postAndParse('/web/admin/packs/remove', { name: b.getAttribute('data-rm') }).then(function () { renderPacksPanel(el); }).catch(function (e) { alert(e.message); });
+        });
+      });
+    }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+  }
+
+  // ---- Policy (admin: the instance pack/profile policy) -------------------
+  function renderPolicyPanel(el) {
+    el.innerHTML = '<div class="hint">Loading…</div>';
+    adminGet('policy').then(function (p) {
+      var modes = ['warn', 'block', 'auto_reconcile'];
+      var html = '<div class="formcard"><h3>Instance pack &amp; profile policy</h3>';
+      html += '<div class="frow">'
+        + fcol('Required global packs (comma-sep)', '<input id="poReq" value="' + esc((p.requiredGlobalPacks || []).join(', ')) + '" />')
+        + fcol('Default project packs (comma-sep)', '<input id="poDef" value="' + esc((p.defaultProjectPacks || []).join(', ')) + '" />')
+        + '</div><div class="frow">'
+        + fcol('Allowed profiles (comma-sep)', '<input id="poAllowed" value="' + esc((p.allowedProfileIds || []).join(', ')) + '" />')
+        + fcol('Required profiles (comma-sep)', '<input id="poReqProf" value="' + esc((p.requiredProfileIds || []).join(', ')) + '" />')
+        + '</div><div class="frow">'
+        + fcol('Blocked packs (comma-sep)', '<input id="poBlocked" value="' + esc((p.blockedPackNames || []).join(', ')) + '" />')
+        + fcol('Enforcement', '<select id="poMode">' + modes.map(function (m) { return opt(m, m, (p.enforcementMode || 'warn') === m); }).join('') + '</select>')
+        + fcol('Require profile selection', '<select id="poRequireSel">' + opt('false', 'no', !p.requireProfileSelection) + opt('true', 'yes', !!p.requireProfileSelection) + '</select>')
+        + '</div>';
+      html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="poSave">Save policy</button> <span class="msg" id="poMsg"></span></div></div>';
+      el.innerHTML = html;
+      $('poSave').addEventListener('click', function () {
+        var msg = $('poMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
+        var rec = Object.assign({}, p, {
+          requiredGlobalPacks: commaList($('poReq').value),
+          defaultProjectPacks: commaList($('poDef').value),
+          allowedProfileIds: commaList($('poAllowed').value),
+          requiredProfileIds: commaList($('poReqProf').value),
+          blockedPackNames: commaList($('poBlocked').value),
+          enforcementMode: $('poMode').value,
+          requireProfileSelection: $('poRequireSel').value === 'true',
+        });
+        postAndParse('/web/admin/policy', rec).then(function () { msg.className = 'msg ok'; msg.textContent = 'Saved.'; })
+          .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+      });
+    }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+  }
+
+  // ---- Audit (admin: scope-filtered redacted viewer) ----------------------
+  function renderAuditPanel(el) {
+    var html = '<div class="formcard"><h3>Audit log</h3><div class="frow">'
+      + fcol('Project', '<input id="auProj" placeholder="(all in scope)" />')
+      + fcol('Category', '<input id="auCat" placeholder="(any)" />')
+      + fcol('Action', '<input id="auAction" placeholder="(any)" />')
+      + fcol('Min level', '<select id="auLevel">' + opt('', '(any)', true) + opt('info', 'info', false) + opt('security', 'security', false) + '</select>')
+      + '</div><div class="rowbtns"><button class="mini" id="auGo">Search</button> <span class="msg" id="auMsg"></span></div></div>';
+    html += '<div id="auList"><div class="hint">Search to load audit events.</div></div>';
+    el.innerHTML = html;
+    function query() {
+      var qp = [];
+      if ($('auProj').value.trim()) qp.push('projectId=' + encodeURIComponent($('auProj').value.trim()));
+      if ($('auCat').value.trim()) qp.push('category=' + encodeURIComponent($('auCat').value.trim()));
+      if ($('auAction').value.trim()) qp.push('action=' + encodeURIComponent($('auAction').value.trim()));
+      if ($('auLevel').value) qp.push('minimumLevel=' + encodeURIComponent($('auLevel').value));
+      qp.push('limit=200');
+      return qp.join('&');
+    }
+    $('auGo').addEventListener('click', function () {
+      var msg = $('auMsg'); msg.className = 'msg'; msg.textContent = 'Searching…';
+      adminGet('audit?' + query()).then(function (d) {
+        msg.textContent = '';
+        var rows = d.events || [];
+        if (!rows.length) { $('auList').innerHTML = '<div class="hint">No matching audit events in your scope.</div>'; return; }
+        var t = '<table class="grid"><thead><tr><th>When</th><th>Level</th><th>Action</th><th>Actor</th><th>Project</th><th>Target</th></tr></thead><tbody>';
+        rows.forEach(function (e2) {
+          var lv = e2.level === 'security' ? 'warn' : 'ok';
+          t += '<tr><td style="white-space:nowrap">' + esc(e2.timestamp) + '</td><td><span class="pill ' + lv + '">' + esc(e2.level) + '</span></td><td>' + esc(e2.action) + '</td><td>' + esc(e2.actor && (e2.actor.displayName || e2.actor.userId) || '—') + '</td><td>' + esc(e2.projectId || '—') + '</td><td>' + esc(e2.target || '—') + '</td></tr>';
+        });
+        $('auList').innerHTML = t + '</tbody></table>';
+      }).catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+    });
+  }
+
+  // ---- Backups (admin: container-level git backing) -----------------------
+  function renderBackupsPanel(el) {
+    el.innerHTML = '<div class="hint">Loading…</div>';
+    Promise.all([
+      adminGet('git-backing').then(function (d) { return d.bindings || []; }),
+      adminGet('org/units').then(function (d) { return d.units || []; }).catch(function () { return []; }),
+    ]).then(function (res) {
+      var bindings = res[0], units = res[1];
+      var html = '<div class="toolbar"><button class="mini" id="bkNew">Bind a backup repo</button></div><div id="bkForm"></div>';
+      html += '<p style="color:var(--dim);font-size:12px;margin:6px 0">A unit binding mirrors its subtree projects\' .wai/ trees; the instance binding backs up the whole instance structure. The secret store is never mirrored.</p>';
+      if (!bindings.length) html += '<div class="hint">No backup repositories bound.</div>';
+      else {
+        html += '<table class="grid"><thead><tr><th>Scope</th><th>Remote</th><th>Branch</th><th>Sync</th><th>Last</th><th></th></tr></thead><tbody>';
+        bindings.forEach(function (b) {
+          var scope = b.scopeKind === 'instance' ? 'instance' : ('unit ' + b.scopeId);
+          var sync = b.periodicSyncMinutes !== undefined ? ('every ' + b.periodicSyncMinutes + 'm') : 'manual';
+          html += '<tr><td>' + esc(scope) + '</td><td>' + esc(b.remote) + '</td><td>' + esc(b.branch) + '</td><td>' + esc(sync) + '</td><td>' + esc(b.lastSyncAt || '—') + '</td>'
+            + '<td style="white-space:nowrap"><button class="mini" data-sync="' + esc(b.id) + '">Sync now</button> <button class="mini danger" data-rm="' + esc(b.id) + '">Remove</button></td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+      el.innerHTML = html;
+      $('bkNew').addEventListener('click', function () {
+        var unitOpts = units.map(function (u) { return opt(u.id, u.name + ' (' + u.id + ')', false); }).join('');
+        $('bkForm').innerHTML = '<div class="formcard"><h3>Bind a backup repository</h3><div class="frow">'
+          + fcol('Scope', '<select id="bkKind">' + opt('unit', 'a unit subtree', true) + opt('instance', 'the whole instance', false) + '</select>')
+          + fcol('Unit', '<select id="bkUnit">' + unitOpts + '</select>')
+          + '</div><div class="frow">'
+          + fcol('Remote URL', '<input id="bkRemote" placeholder="git remote URL" />')
+          + fcol('Branch', '<input id="bkBranch" value="main" />')
+          + fcol('Sync every (min, blank=manual)', '<input id="bkInterval" placeholder="" />')
+          + '</div><div class="rowbtns"><button class="btn-primary" style="width:auto" id="bkSave">Bind</button> <button class="mini" id="bkCancel">Cancel</button> <span class="msg" id="bkMsg"></span></div></div>';
+        function tog() { $('bkUnit').parentNode.parentNode.style.display = $('bkKind').value === 'unit' ? '' : 'none'; }
+        $('bkKind').addEventListener('change', tog); tog();
+        $('bkCancel').addEventListener('click', function () { $('bkForm').innerHTML = ''; });
+        $('bkSave').addEventListener('click', function () {
+          var msg = $('bkMsg'); msg.className = 'msg'; msg.textContent = 'Binding…';
+          var rec = { id: '', scopeKind: $('bkKind').value, remote: $('bkRemote').value.trim(), branch: $('bkBranch').value.trim() || 'main', createdAt: '', createdBy: (ctx && ctx.subject) || { userId: '', kind: 'human', issuer: 'local' } };
+          if (rec.scopeKind === 'unit') rec.scopeId = $('bkUnit').value;
+          var iv = $('bkInterval').value.trim(); if (iv) rec.periodicSyncMinutes = Number(iv);
+          postAndParse('/web/admin/git-backing', rec).then(function () { renderBackupsPanel(el); }).catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+        });
+      });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-sync]'), function (b) {
+        b.addEventListener('click', function () {
+          b.disabled = true; b.textContent = 'Syncing…';
+          postAndParse('/web/admin/git-backing/sync', { id: b.getAttribute('data-sync') }).then(function () { renderBackupsPanel(el); }).catch(function (e) { alert(e.message); b.disabled = false; b.textContent = 'Sync now'; });
+        });
+      });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-rm]'), function (b) {
+        b.addEventListener('click', function () {
+          if (!confirm('Remove this backup binding? The repository itself is untouched.')) return;
+          postAndParse('/web/admin/git-backing/remove', { id: b.getAttribute('data-rm') }).then(function () { renderBackupsPanel(el); }).catch(function (e) { alert(e.message); });
+        });
+      });
+    }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+  }
+
+  // ---- Exposure (admin: instance web/TLS posture) -------------------------
+  function renderExposurePanel(el) {
+    el.innerHTML = '<div class="hint">Loading…</div>';
+    adminGet('exposure').then(function (x) {
+      function toggle(id, label, val) {
+        return fcol(label, '<select id="' + id + '">' + opt('false', 'off', !val) + opt('true', 'on', !!val) + '</select>');
+      }
+      var html = '<div class="formcard"><h3>Instance exposure</h3>';
+      html += '<p style="color:var(--dim);font-size:12px;margin:0 0 8px">The exposure posture gates the whole web/admin surface. Changes take effect on the next server start for mount flags; the web UI flag gates immediately.</p>';
+      html += '<div class="frow">'
+        + toggle('exWebUi', 'Web UI enabled', x.webUiEnabled)
+        + toggle('exTls', 'Require TLS', x.requireTls)
+        + toggle('exAdminUi', 'Browser admin UI', x.adminUiEnabled)
+        + '</div><div class="frow">'
+        + toggle('exIdentity', 'Identity/audit API', x.identityApiEnabled)
+        + toggle('exLandscape', 'Landscape API', x.landscapeApiEnabled)
+        + toggle('exPolicy', 'Project-policy API', x.projectPolicyApiEnabled)
+        + toggle('exOps', 'Operations API', x.operationsApiEnabled)
+        + '</div>';
+      html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="exSave">Save exposure</button> <span class="msg" id="exMsg"></span></div></div>';
+      el.innerHTML = html;
+      $('exSave').addEventListener('click', function () {
+        var msg = $('exMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
+        var rec = Object.assign({}, x, {
+          webUiEnabled: $('exWebUi').value === 'true',
+          requireTls: $('exTls').value === 'true',
+          adminUiEnabled: $('exAdminUi').value === 'true',
+          identityApiEnabled: $('exIdentity').value === 'true',
+          landscapeApiEnabled: $('exLandscape').value === 'true',
+          projectPolicyApiEnabled: $('exPolicy').value === 'true',
+          operationsApiEnabled: $('exOps').value === 'true',
+        });
+        postAndParse('/web/admin/exposure', rec).then(function () { msg.className = 'msg ok'; msg.textContent = 'Saved.'; })
+          .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+      });
+    }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+  }
+
   // ---- Connect an agent (self-service; any signed-in user) ----------------
   function renderConnect() {
     var box = $('connectBody');
@@ -1801,8 +2305,10 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       html += '<div class="formcard"><h3>Create a project</h3>';
       html += '<div class="frow">'
         + fcol('Project ID', '<input id="npId" placeholder="lowercase letters, digits, hyphen" />')
-        + fcol('Organization unit', '<input id="npUnit" placeholder="optional — required if you are unit-scoped" />')
+        + fcol('Organization unit', '<input id="npUnit" placeholder="required owner unit id" />')
+        + fcol('Profiles (comma-sep, optional)', '<input id="npProfiles" placeholder="e.g. backend, strict" />')
         + '</div>';
+      html += '<p style="color:var(--dim);font-size:12px;margin:2px 0 8px">The instance pack policy applies at creation (required/default packs, profile requirements). A profile selection is required only if the policy demands one.</p>';
       html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="npCreate">Create project</button> <span class="msg" id="npMsg"></span></div></div>';
     }
     html += '<div class="formcard"><h3>Your projects <span class="msg" id="plNote" style="font-weight:400"></span></h3><div id="plList"><div class="hint">Loading…</div></div></div>';
@@ -1814,8 +2320,9 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
         if (!id) { msg.className = 'msg bad'; msg.textContent = 'Project ID is required.'; return; }
         var payload = { id: id };
         var unit = $('npUnit').value.trim(); if (unit) payload.unitId = unit;
+        var profs = commaList($('npProfiles').value); if (profs.length) payload.profileSelection = { profileIds: profs };
         postAndParse('/web/projects', payload)
-          .then(function () { msg.className = 'msg ok'; msg.textContent = 'Created.'; $('npId').value = ''; $('npUnit').value = ''; loadProjects(); })
+          .then(function () { msg.className = 'msg ok'; msg.textContent = 'Created.'; $('npId').value = ''; $('npUnit').value = ''; $('npProfiles').value = ''; loadProjects(); })
           .catch(function (e) { msg.className = 'msg bad'; msg.textContent = projectErr(e); });
       });
     }
@@ -1836,15 +2343,20 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       if (!projs.length) { host.innerHTML = '<div class="hint">No projects in your scope yet.</div>'; return; }
       var rows = projs.map(function (p) {
         var st = p.status === 'active' ? 'ok' : 'warn';
-        var actions = canManage
+        var actions = (canManage
           ? '<button class="mini" data-lock="' + esc(p.id) + '">Lock</button> '
             + '<button class="mini" data-promote="' + esc(p.id) + '">Promote</button> '
-            + '<button class="mini danger" data-destroy="' + esc(p.id) + '">Destroy</button>'
-          : '<span class="hint">read-only</span>';
+            + '<button class="mini danger" data-destroy="' + esc(p.id) + '">Destroy</button> '
+          : '')
+          + '<button class="mini" data-ops="' + esc(p.id) + '">Ops</button>';
         return '<tr><td>' + esc(p.id) + '</td><td><span class="pill ' + st + '">' + esc(p.status || '—') + '</span></td>'
-          + '<td style="white-space:nowrap">' + actions + '</td></tr>';
+          + '<td class="btnrow" style="white-space:nowrap">' + actions + '</td></tr>'
+          + '<tr class="opsrow" id="ops-' + esc(p.id) + '" hidden><td colspan="3"></td></tr>';
       }).join('');
       host.innerHTML = '<table class="grid"><thead><tr><th>Project</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
+      Array.prototype.forEach.call(host.querySelectorAll('[data-ops]'), function (b) {
+        b.addEventListener('click', function () { toggleProjectOps(b.getAttribute('data-ops')); });
+      });
       Array.prototype.forEach.call(host.querySelectorAll('[data-lock]'), function (b) {
         b.addEventListener('click', function () { projectAction('/web/projects/lock', { projectId: b.getAttribute('data-lock') }, b, 'Locking…', 'Lock'); });
       });
@@ -1876,6 +2388,127 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       btn.disabled = false; btn.textContent = label;
       if (note) { note.className = 'msg bad'; note.textContent = projectErr(e); }
     });
+  }
+
+  // ---- per-project ops (packs / policy / producers / git) -----------------
+  // Reachable by any signed-in user; every action is authorized per project
+  // server-side (project:read for the pack listing, project:write for policy and
+  // git commit/sync, project:admin for pack install and producers).
+  function toggleProjectOps(pid) {
+    var row = $('ops-' + pid);
+    if (!row) return;
+    if (!row.hidden) { row.hidden = true; return; }
+    row.hidden = false;
+    var cell = row.firstChild;
+    cell.innerHTML = '<div class="opsbox" style="padding:10px 6px"><div class="btnrow" style="margin-bottom:8px">'
+      + '<button class="mini" data-op="git" data-p="' + esc(pid) + '">Git backing</button>'
+      + '<button class="mini" data-op="packs" data-p="' + esc(pid) + '">Packs</button>'
+      + '<button class="mini" data-op="policy" data-p="' + esc(pid) + '">Policy</button>'
+      + '<button class="mini" data-op="producers" data-p="' + esc(pid) + '">Producers</button>'
+      + '</div><div id="opsBody-' + esc(pid) + '"><div class="hint">Pick a section.</div></div></div>';
+    Array.prototype.forEach.call(cell.querySelectorAll('[data-op]'), function (b) {
+      b.addEventListener('click', function () { projectOpsSection(pid, b.getAttribute('data-op')); });
+    });
+    projectOpsSection(pid, 'git');
+  }
+  function projectOpsSection(pid, section) {
+    var body = $('opsBody-' + pid);
+    if (!body) return;
+    body.innerHTML = '<div class="hint">Loading…</div>';
+    var enc = encodeURIComponent(pid);
+    if (section === 'git') {
+      api('/web/projects/git?projectId=' + enc).then(function (r) { return r.json(); }).then(function (s) {
+        var html;
+        if (!s.enabled) {
+          html = '<div class="frow">' + fcol('Remote URL', '<input id="gRemote-' + esc(pid) + '" placeholder="git remote URL" />')
+            + fcol('Branch', '<input id="gBranch-' + esc(pid) + '" value="main" />') + '</div>'
+            + '<div class="rowbtns"><button class="mini" id="gBind-' + esc(pid) + '">Bind repository</button> <span class="msg" id="gMsg-' + esc(pid) + '"></span></div>'
+            + '<p class="hint">wairon commits ONLY the .wai/ tree — the repo can be shared with the project\'s own code.</p>';
+        } else {
+          html = '<table class="grid"><tbody>'
+            + '<tr><td>Remote</td><td>' + esc(s.remote) + '</td></tr>'
+            + '<tr><td>Branch</td><td>' + esc(s.branch) + ' (working: ' + esc(s.workingBranch) + ')</td></tr>'
+            + '<tr><td>.wai/ changes</td><td>' + (s.dirty ? '<span class="pill warn">unpublished</span>' : '<span class="pill ok">clean</span>') + '</td></tr>'
+            + '<tr><td>Periodic sync</td><td>' + (s.periodicSyncMinutes !== undefined ? ('every ' + s.periodicSyncMinutes + 'm') : 'manual') + '</td></tr>'
+            + '</tbody></table>'
+            + '<div class="btnrow" style="margin-top:8px"><button class="mini" id="gCommit-' + esc(pid) + '">Commit .wai/ now</button>'
+            + '<button class="mini" id="gSync-' + esc(pid) + '">Sync from default</button>'
+            + '<button class="mini danger" id="gUnbind-' + esc(pid) + '">Unbind</button></div>'
+            + '<span class="msg" id="gMsg-' + esc(pid) + '"></span>';
+        }
+        body.innerHTML = html;
+        var msg = function () { return $('gMsg-' + pid); };
+        var reload = function () { projectOpsSection(pid, 'git'); };
+        if (!s.enabled) {
+          $('gBind-' + pid).addEventListener('click', function () {
+            msg().textContent = 'Binding…';
+            postAndParse('/web/projects/git', { projectId: pid, remote: $('gRemote-' + pid).value.trim(), branch: $('gBranch-' + pid).value.trim() || 'main' }).then(reload).catch(function (e) { msg().className = 'msg bad'; msg().textContent = e.message; });
+          });
+        } else {
+          $('gCommit-' + pid).addEventListener('click', function () {
+            msg().className = 'msg'; msg().textContent = 'Committing…';
+            postAndParse('/web/projects/git/commit', { projectId: pid }).then(function (d) { msg().className = 'msg ok'; msg().textContent = d.published ? 'Published ' + (d.commitSha || '').slice(0, 12) : 'Nothing to publish (clean).'; reload(); }).catch(function (e) { msg().className = 'msg bad'; msg().textContent = e.message; });
+          });
+          $('gSync-' + pid).addEventListener('click', function () {
+            msg().className = 'msg'; msg().textContent = 'Syncing…';
+            postAndParse('/web/projects/git/sync', { projectId: pid }).then(function () { msg().className = 'msg ok'; msg().textContent = 'Synced.'; }).catch(function (e) { msg().className = 'msg bad'; msg().textContent = e.message; });
+          });
+          $('gUnbind-' + pid).addEventListener('click', function () {
+            if (!confirm('Unbind the repository for "' + pid + '"? The checkout stays.')) return;
+            postAndParse('/web/projects/git/disconnect', { projectId: pid }).then(reload).catch(function (e) { msg().className = 'msg bad'; msg().textContent = e.message; });
+          });
+        }
+      }).catch(function (e) { body.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+    } else if (section === 'packs') {
+      api('/web/projects/packs?projectId=' + enc).then(function (r) { if (r.status === 403) throw new Error('Requires project:read.'); return r.json(); }).then(function (d) {
+        var packs = d.packs || [];
+        var html = packs.length
+          ? '<table class="grid"><thead><tr><th>Pack</th><th>Profiles</th><th></th></tr></thead><tbody>' + packs.map(function (p) { return '<tr><td>' + esc(p.name) + '</td><td>' + (p.profiles || 0) + '</td><td><button class="mini danger" data-rmp="' + esc(p.name) + '">Remove</button></td></tr>'; }).join('') + '</tbody></table>'
+          : '<div class="hint">No project packs.</div>';
+        html += '<div class="rowbtns" style="margin-top:8px"><input id="ppName-' + esc(pid) + '" placeholder="pack name" style="max-width:180px" /> <input id="ppContent-' + esc(pid) + '" placeholder="YAML content" style="flex:1" /> <button class="mini" id="ppAdd-' + esc(pid) + '">Install</button> <span class="msg" id="ppMsg-' + esc(pid) + '"></span></div>';
+        body.innerHTML = html;
+        var reload = function () { projectOpsSection(pid, 'packs'); };
+        $('ppAdd-' + pid).addEventListener('click', function () {
+          var m = $('ppMsg-' + pid); m.className = 'msg'; m.textContent = 'Installing…';
+          postAndParse('/web/projects/packs', { projectId: pid, name: $('ppName-' + pid).value.trim(), content: $('ppContent-' + pid).value }).then(reload).catch(function (e) { m.className = 'msg bad'; m.textContent = e.message; });
+        });
+        Array.prototype.forEach.call(body.querySelectorAll('[data-rmp]'), function (b) {
+          b.addEventListener('click', function () { postAndParse('/web/projects/packs/remove', { projectId: pid, name: b.getAttribute('data-rmp') }).then(reload).catch(function (e) { alert(e.message); }); });
+        });
+      }).catch(function (e) { body.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+    } else if (section === 'policy') {
+      api('/web/projects/policy?projectId=' + enc).then(function (r) { if (r.status === 403) throw new Error('Requires project:write.'); return r.json(); }).then(function (ev) {
+        var ok = ev.compliant !== false && (!ev.violations || !ev.violations.length);
+        var html = '<div class="cards"><div class="stat"><div class="k">Compliance</div><div class="v">' + (ok ? '<span class="pill ok">compliant</span>' : '<span class="pill warn">drift</span>') + '</div></div></div>';
+        if (ev.messages && ev.messages.length) html += '<ul>' + ev.messages.map(function (m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul>';
+        html += '<div class="rowbtns"><button class="mini" id="polRec-' + esc(pid) + '">Reconcile</button> <span class="msg" id="polMsg-' + esc(pid) + '"></span></div>';
+        body.innerHTML = html;
+        $('polRec-' + pid).addEventListener('click', function () {
+          var m = $('polMsg-' + pid); m.className = 'msg'; m.textContent = 'Reconciling…';
+          postAndParse('/web/projects/policy/reconcile', { projectId: pid }).then(function () { projectOpsSection(pid, 'policy'); }).catch(function (e) { m.className = 'msg bad'; m.textContent = e.message; });
+        });
+      }).catch(function (e) { body.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+    } else if (section === 'producers') {
+      api('/web/projects/producers?projectId=' + enc).then(function (r) { if (r.status === 403) throw new Error('Requires project:admin.'); return r.json(); }).then(function (d) {
+        var prods = d.producers || [];
+        var html = prods.length
+          ? '<table class="grid"><thead><tr><th>Target</th><th>Parent page</th><th></th></tr></thead><tbody>' + prods.map(function (p) { return '<tr><td>' + esc(p.target || p.id) + '</td><td>' + esc(p.parentPageId || '—') + '</td><td class="btnrow"><button class="mini" data-run="' + esc(p.target || p.id) + '">Run</button> <button class="mini danger" data-rmpr="' + esc(p.target || p.id) + '">Remove</button></td></tr>'; }).join('') + '</tbody></table>'
+          : '<div class="hint">No producers configured.</div>';
+        html += '<div class="rowbtns" style="margin-top:8px"><select id="prTarget-' + esc(pid) + '">' + opt('notion', 'notion', true) + opt('miro', 'miro', false) + '</select> <input id="prPage-' + esc(pid) + '" placeholder="parent page id" style="flex:1" /> <button class="mini" id="prAdd-' + esc(pid) + '">Configure</button> <span class="msg" id="prMsg-' + esc(pid) + '"></span></div>';
+        body.innerHTML = html;
+        var reload = function () { projectOpsSection(pid, 'producers'); };
+        $('prAdd-' + pid).addEventListener('click', function () {
+          var m = $('prMsg-' + pid); m.className = 'msg'; m.textContent = 'Configuring…';
+          postAndParse('/web/projects/producers', { projectId: pid, target: $('prTarget-' + pid).value, parentPageId: $('prPage-' + pid).value.trim() }).then(reload).catch(function (e) { m.className = 'msg bad'; m.textContent = e.message; });
+        });
+        Array.prototype.forEach.call(body.querySelectorAll('[data-run]'), function (b) {
+          b.addEventListener('click', function () { b.disabled = true; b.textContent = 'Running…'; postAndParse('/web/projects/producers/run', { projectId: pid, target: b.getAttribute('data-run') }).then(function () { b.textContent = 'Done'; }).catch(function (e) { alert(e.message); b.disabled = false; b.textContent = 'Run'; }); });
+        });
+        Array.prototype.forEach.call(body.querySelectorAll('[data-rmpr]'), function (b) {
+          b.addEventListener('click', function () { postAndParse('/web/projects/producers/remove', { projectId: pid, target: b.getAttribute('data-rmpr') }).then(reload).catch(function (e) { alert(e.message); }); });
+        });
+      }).catch(function (e) { body.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+    }
   }
 
   boot();
