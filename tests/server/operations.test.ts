@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+﻿import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import * as fs from 'node:fs';
@@ -18,6 +18,7 @@ import { routeAdmin } from '../../src/server/http.js';
 import { createProject } from '../../src/server/admin.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
 import { upsertOrganizationUnit, placeProject as placeProjectInUnit } from '../../src/server/organization.js';
+import { mintUserToken, allow, seedUnit, createPlacedProject } from './helpers.js';
 import { UnauthenticatedError, ForbiddenError } from '../../src/server/errors.js';
 import type {
   ApiKeyRecord,
@@ -284,34 +285,30 @@ describe('operations orchestrator (sdd_host)', () => {
   }
 
   let tokenSeq = 0;
-  function mintToken(grants: ProjectGrant[]): string {
-    const token = 'wk_' + crypto.randomBytes(8).toString('hex');
-    const record: ApiKeyRecord = {
-      id: `tok-${tokenSeq++}`,
-      keyHash: hashToken(token),
-      role: 'editor',
-      projects: grants.map((g) => g.projectId),
-      grants,
-      createdAt: new Date().toISOString(),
-      ownerSubject: SUBJECT,
-    };
-    createCredential(dataDir, record);
-    return token;
-  }
-
-  const opsToken = () => mintToken([{ projectId: '*', permissions: ['operations:read'] }]);
-  const plainToken = () => mintToken([{ projectId: '*', permissions: ['mcp:write'] }]);
-  // A PROJECT-SCOPED operations:read grant (S2): carries the permission but is
-  // scoped to one tenant — it must NOT confer instance-wide operations reach.
-  const projOpsToken = () => mintToken([{ projectId: 'acme', permissions: ['operations:read'] }]);
+  /** Operations reads = project:read reach (resolved live from the grid). */
+  const opsToken = () => {
+    allow(dataDir, 'u-ops', 'project:read', 'instance', undefined);
+    return mintUserToken(dataDir, { id: `tok-${tokenSeq++}`, userId: 'u-ops' });
+  };
+  /** A token with NO project:read reach anywhere (write authority only). */
+  const plainToken = () => {
+    allow(dataDir, 'u-plain', 'project:write', 'instance', undefined);
+    return mintUserToken(dataDir, { id: `tok-${tokenSeq++}`, userId: 'u-plain' });
+  };
+  // A PROJECT-SCOPED project:read (S2): carries reach for exactly one placed
+  // project — it must NOT confer instance-wide operations reach.
+  const projOpsToken = () => {
+    allow(dataDir, 'u-proj-ops', 'project:read', 'project', 'acme');
+    return mintUserToken(dataDir, { id: `tok-${tokenSeq++}`, userId: 'u-proj-ops' });
+  };
 
   /** Overwrite projects.json directly (used to seed a ghost record). */
   function seedRegistry(records: HostedProjectRecord[]): void {
     fs.writeFileSync(path.join(dataDir, 'projects.json'), JSON.stringify(records, null, 2) + '\n');
   }
 
-  it('getHealthReport: operations:read → ok; plain token → 403; unauthenticated → 401; admin → ok', () => {
-    createProject(cfg, MASTER, 'proj-a');
+  it('getHealthReport: project:read reach → ok; plain token → 403; unauthenticated → 401; admin → ok', () => {
+    createPlacedProject(cfg, MASTER, 'proj-a');
 
     const report = getHealthReport(cfg, opsToken());
     expect(report.status).toBe('ok');
@@ -327,42 +324,31 @@ describe('operations orchestrator (sdd_host)', () => {
     expect(getHealthReport(cfg, MASTER).status).toBe('ok');
   });
 
-  it('scoped model: a project-scoped operations:read grant sees only its project slice, not the whole instance', () => {
-    createProject(cfg, MASTER, 'proj-a');
+  it('scoped model: a project-scoped project:read sees only its project slice, not the whole instance', () => {
+    createPlacedProject(cfg, MASTER, 'proj-a');
+    createPlacedProject(cfg, MASTER, 'acme');
 
-    // Under Phase 6 a project-scoped operations:read grant is no longer a blanket
-    // 403 — it has reach, narrowed to its own project. 'acme' is not hosted, so the
-    // scoped operator sees zero projects (never the instance's 'proj-a').
-    // (Deliberate replacement of the old instance-wide-only rejection behavior.)
-    expect(getHealthReport(cfg, projOpsToken()).usage?.[0].projectCount).toBe(0);
-    expect(getUsage(cfg, projOpsToken())[0].projectCount).toBe(0);
-    expect(evaluateQuota(cfg, projOpsToken())[0].projectCount).toBe(0);
+    // A project-scoped read is not a blanket 403 — it has reach, narrowed to its
+    // own project: the scoped operator sees ONLY 'acme', never 'proj-a'.
+    expect(getHealthReport(cfg, projOpsToken()).usage?.[0].projectCount).toBe(1);
+    expect(getUsage(cfg, projOpsToken())[0].projectCount).toBe(1);
+    expect(evaluateQuota(cfg, projOpsToken())[0].projectCount).toBe(1);
 
-    // A grant with NO operations:read reach at all is still 403.
+    // A subject with NO project:read reach at all is still 403.
     expect(() => getHealthReport(cfg, plainToken())).toThrow(ForbiddenError);
 
-    // The instance-wide ({projectId:'*'}) grant sees the whole instance.
-    expect(getHealthReport(cfg, opsToken()).usage?.[0].projectCount).toBe(1);
+    // The instance-level read sees the whole instance (both projects).
+    expect(getHealthReport(cfg, opsToken()).usage?.[0].projectCount).toBe(2);
   });
 
-  it('scoped operations:read: a unit-scoped operator sees health/usage only for their subtree projects', () => {
-    createProject(cfg, MASTER, 'in-proj');
-    createProject(cfg, MASTER, 'out-proj');
+  it('scoped project:read: a unit-scoped operator sees health/usage only for their subtree projects', () => {
+    const unitA = seedUnit(dataDir, 'A');
+    const unitB = seedUnit(dataDir, 'B');
+    createProject(cfg, MASTER, 'in-proj', unitA.id);
+    createProject(cfg, MASTER, 'out-proj', unitB.id);
 
-    const unitA = upsertOrganizationUnit(dataDir, {
-      id: '', name: 'A', kind: 'team', status: 'active', createdAt: '', createdBy: SUBJECT,
-    });
-    const unitB = upsertOrganizationUnit(dataDir, {
-      id: '', name: 'B', kind: 'team', status: 'active', createdAt: '', createdBy: SUBJECT,
-    });
-    placeProjectInUnit(dataDir, {
-      id: '', projectId: 'in-proj', unitId: unitA.id, role: 'owner', createdAt: '', createdBy: SUBJECT,
-    });
-    placeProjectInUnit(dataDir, {
-      id: '', projectId: 'out-proj', unitId: unitB.id, role: 'owner', createdAt: '', createdBy: SUBJECT,
-    });
-
-    const tokenA = mintToken([{ projectId: '', orgUnitId: unitA.id, permissions: ['operations:read'] }]);
+    allow(dataDir, 'u-unit-a', 'project:read', 'unit', unitA.id);
+    const tokenA = mintUserToken(dataDir, { id: 'tok-unit-a', userId: 'u-unit-a' });
 
     // Usage: the instance snapshot counts only the in-scope project; instance-wide sees both.
     expect(getUsage(cfg, tokenA)[0].projectCount).toBe(1);
@@ -392,7 +378,7 @@ describe('operations orchestrator (sdd_host)', () => {
   }
 
   it('getHealthReport: an instance pack shadowing an image pack surfaces as a pack-shadowing warning', () => {
-    createProject(cfg, MASTER, 'proj-a');
+    createPlacedProject(cfg, MASTER, 'proj-a');
     seedPack(imagePacksDir, 'overlap');
     seedPack(instancePacksDir, 'overlap'); // same name in both tiers → instance shadows image
 
@@ -404,7 +390,7 @@ describe('operations orchestrator (sdd_host)', () => {
   });
 
   it('getHealthReport: a project referencing a pack absent from both tiers fails missing-pack-references', () => {
-    const rec = createProject(cfg, MASTER, 'proj-a');
+    const rec = createProject(cfg, MASTER, 'proj-a', seedUnit(dataDir, 'unit-proj-a').id);
     writeProfileSelection(rec.rootPath, ['ghost-pack'], ['prof-y']);
 
     const report = getHealthReport(cfg, MASTER);
@@ -417,7 +403,7 @@ describe('operations orchestrator (sdd_host)', () => {
   });
 
   it('getHealthReport: a clean instance with resolvable references adds no new findings', () => {
-    const rec = createProject(cfg, MASTER, 'proj-a');
+    const rec = createProject(cfg, MASTER, 'proj-a', seedUnit(dataDir, 'unit-proj-a').id);
     seedPack(imagePacksDir, 'baked'); // distinct names → no shadowing
     seedPack(instancePacksDir, 'installed');
     writeProfileSelection(rec.rootPath, ['baked', 'installed'], ['prof-ok']);
@@ -429,8 +415,8 @@ describe('operations orchestrator (sdd_host)', () => {
   });
 
   it('getUsage: returns the instance snapshot with the active project count', () => {
-    createProject(cfg, MASTER, 'proj-a');
-    createProject(cfg, MASTER, 'proj-b');
+    createPlacedProject(cfg, MASTER, 'proj-a');
+    createPlacedProject(cfg, MASTER, 'proj-b');
     const usage = getUsage(cfg, opsToken());
     expect(usage[0].scope).toBe('instance');
     expect(usage[0].projectCount).toBe(2);
@@ -438,7 +424,7 @@ describe('operations orchestrator (sdd_host)', () => {
   });
 
   it('evaluateQuota: disabled default → no messages; a configured warn policy annotates', () => {
-    createProject(cfg, MASTER, 'proj-a');
+    createPlacedProject(cfg, MASTER, 'proj-a');
 
     // No cfg.quotaPolicy → disabled default → advisory annotation is a no-op.
     expect(evaluateQuota(cfg, opsToken())[0].quotaMessages).toEqual([]);
@@ -536,7 +522,7 @@ describe('operations portal (sdd_host http)', () => {
   }
 
   it('the three operations endpoints respond with the correct statuses through routeAdmin', async () => {
-    createProject(cfg, MASTER, 'proj-a');
+    createPlacedProject(cfg, MASTER, 'proj-a');
 
     const health = await api('GET', '/operations/health', { cred: MASTER });
     expect(health.status).toBe(200);

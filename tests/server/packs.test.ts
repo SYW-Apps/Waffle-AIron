@@ -6,6 +6,7 @@ import { invalidateSpecCache } from '../../src/core/specs.js';
 import * as admin from '../../src/server/admin.js';
 import { AdminAuthError } from '../../src/server/admin.js';
 import * as packs from '../../src/server/packs.js';
+import { createPlacedProject } from './helpers.js';
 import { loadProjectConfig } from '../../src/config/loader.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import type { HostConfig } from '../../src/server/types.js';
@@ -101,7 +102,7 @@ describe('hosted pack management (sdd_host)', () => {
 
   describe('project scope', () => {
     it('vendors the pack into .wai/packs, registers it in project.yaml, lists it, and removes it', () => {
-      admin.createProject(cfg, ADMIN, 'demo');
+      createPlacedProject(cfg, ADMIN, 'demo');
 
       const desc = packs.installProjectPack(cfg, ADMIN, 'demo', 'acme', DECLARATIVE_PACK);
       expect(desc.scope).toBe('project');

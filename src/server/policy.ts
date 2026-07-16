@@ -701,7 +701,7 @@ export function setPackPolicy(
 ): InstancePackPolicy {
   const principal = requirePrincipal(cfg, credential);
   if (!carriesInstancePermission(cfg, principal, POLICY_MANAGE_CAPABILITY)) {
-    throw new ForbiddenError('policy administration requires a policy:manage grant or an instance-admin grant');
+    throw new ForbiddenError('policy administration requires instance-level project:admin');
   }
 
   const stamped: InstancePackPolicy = { ...policy, updatedBy: principalSubject(principal) };

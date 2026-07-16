@@ -120,9 +120,12 @@ function permitsCap(
   return authorize(cfg.dataDir, principal, capability, scopeKind, scopeId).value === 'yes';
 }
 
-/** The caller's project:read view for control-plane listings: an instance-admin
- *  sees everything; otherwise the ACTIONABLE units + projects from the resolver's
- *  visibility view (breadcrumb ancestors excluded — navigation is not reach). */
+/** The caller's landscape read view for control-plane listings: an
+ *  instance-admin sees everything; otherwise the UNION of the ACTIONABLE units +
+ *  projects from the caller's project:read AND project:admin visibility views —
+ *  an admin can always read what they administer (the documented
+ *  manage-confers-read behavior), while breadcrumb ancestors stay excluded
+ *  (navigation is not reach). */
 function readView(
   cfg: HostConfig,
   principal: Principal,
@@ -130,18 +133,36 @@ function readView(
   if (isInstanceAdmin(principal)) {
     return { all: true, projectIds: new Set(), unitIds: new Set() };
   }
-  const scopes = visibleScopes(cfg.dataDir, principal, PROJECT_READ_CAPABILITY);
+  const read = visibleScopes(cfg.dataDir, principal, PROJECT_READ_CAPABILITY);
+  const admin = visibleScopes(cfg.dataDir, principal, PROJECT_ADMIN_CAPABILITY);
   return {
     all: false,
-    projectIds: new Set(actionableProjectIds(scopes)),
-    unitIds: new Set(actionableUnitIds(scopes)),
+    projectIds: new Set([...actionableProjectIds(read), ...actionableProjectIds(admin)]),
+    unitIds: new Set([...actionableUnitIds(read), ...actionableUnitIds(admin)]),
   };
 }
 
-/** A scoped caller with neither an in-scope project nor an in-scope unit has no
- *  reach at all — the control-plane reads treat that as Forbidden. */
-function viewIsEmpty(view: { all: boolean; projectIds: Set<string>; unitIds: Set<string> }): boolean {
-  return !view.all && view.projectIds.size === 0 && view.unitIds.size === 0;
+/**
+ * Reject a caller with NO landscape reach at all. An empty visibility view can
+ * also mean an EMPTY ORG TREE: a caller holding an instance-level project:read
+ * or project:admin still has reach (they would see every future scope), so they
+ * get an empty result rather than a 403 — only a caller with neither an
+ * actionable scope nor instance-level authority is Forbidden.
+ */
+function requireLandscapeReach(
+  cfg: HostConfig,
+  principal: Principal,
+  view: { all: boolean; projectIds: Set<string>; unitIds: Set<string> },
+  what: string,
+): void {
+  if (view.all || view.projectIds.size > 0 || view.unitIds.size > 0) return;
+  if (
+    permitsCap(cfg, principal, PROJECT_READ_CAPABILITY, 'instance', '') ||
+    permitsCap(cfg, principal, PROJECT_ADMIN_CAPABILITY, 'instance', '')
+  ) {
+    return;
+  }
+  throw new ForbiddenError(`${what} requires project:read reach`);
 }
 
 /**
@@ -686,9 +707,7 @@ export function listRelations(
 ): ProjectRelationRecord[] {
   const principal = requirePrincipal(cfg, credential);
   const view = readView(cfg, principal);
-  if (viewIsEmpty(view)) {
-    throw new ForbiddenError('listing cross-project relations requires project:read reach');
-  }
+  requireLandscapeReach(cfg, principal, view, 'listing cross-project relations');
   const relations = listProjectRelations(cfg.dataDir, projectId);
   if (view.all) return relations;
   // A relation is visible when its source OR target project is in the caller's
@@ -714,9 +733,7 @@ export function generateLandscape(
   const units = listOrganizationUnits(cfg.dataDir);
   const placements = listProjectPlacements(cfg.dataDir);
   const view = readView(cfg, principal);
-  if (viewIsEmpty(view)) {
-    throw new ForbiddenError('generating the landscape requires project:read reach');
-  }
+  requireLandscapeReach(cfg, principal, view, 'generating the landscape');
 
   const projects = listProjectRecords(cfg.dataDir);
   const relations = listProjectRelations(cfg.dataDir);

@@ -21,6 +21,10 @@ import {
 } from '../../src/server/landscape.js';
 import { routeAdmin } from '../../src/server/http.js';
 import { createProject } from '../../src/server/admin.js';
+import { mintUserToken, allow, seedUnit } from './helpers.js';
+import { createProjectRecord } from '../../src/server/projects.js';
+import { hostCore } from '../../src/server/adapters.js';
+import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
 import { upsertProjectRelation } from '../../src/server/relations.js';
 import { getPublicSurfaceSnapshot } from '../../src/server/surfaces.js';
@@ -96,26 +100,19 @@ describe('landscape orchestrator (sdd_host)', () => {
     }
   });
 
-  /** Mint a stored token with a unique id and the given grants. */
+  /** Assignment-model token factories: each mints a fresh owner whose authority
+   *  comes exclusively from the grid (legacy landscape:manage → project:admin,
+   *  landscape:read → project:read). */
   let tokenSeq = 0;
-  function mintToken(grants: ProjectGrant[]): string {
-    const token = 'wk_' + crypto.randomBytes(8).toString('hex');
-    const record: ApiKeyRecord = {
-      id: `tok-${tokenSeq++}`,
-      keyHash: hashToken(token),
-      role: 'editor',
-      projects: grants.map((g) => g.projectId),
-      grants,
-      createdAt: new Date().toISOString(),
-      ownerSubject: SUBJECT,
-    };
-    createCredential(dataDir, record);
-    return token;
+  function tokenWith(capability: 'project:admin' | 'project:read' | 'project:write', scopeKind: 'instance' | 'unit' | 'project', scopeId?: string): string {
+    const userId = `u-${capability.replace(':', '-')}-${tokenSeq}`;
+    allow(dataDir, userId, capability, scopeKind, scopeId);
+    return mintUserToken(dataDir, { id: `tok-${tokenSeq++}`, userId });
   }
 
-  const manageToken = () => mintToken([{ projectId: '*', permissions: ['landscape:manage'] }]);
-  const readToken = () => mintToken([{ projectId: '*', permissions: ['landscape:read'] }]);
-  const plainToken = () => mintToken([{ projectId: '*', permissions: ['mcp:write'] }]);
+  const manageToken = () => tokenWith('project:admin', 'instance');
+  const readToken = () => tokenWith('project:read', 'instance');
+  const plainToken = () => tokenWith('project:write', 'instance');
 
   /** Seed L0 publicInterfaces into a provisioned project's raw system spec. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -127,9 +124,14 @@ describe('landscape orchestrator (sdd_host)', () => {
     writeYamlFile(p, raw);
   }
 
-  /** Create a hosted project and return its record. */
+  /** Create a hosted project at the REGISTRY level (no placement) and return its
+   *  record — these suites build their own unit/placement topologies explicitly,
+   *  and several pin the legacy no-units / unplaced-project postures the doctor
+   *  migration still has to handle. */
   function project(id: string): HostedProjectRecord {
-    return createProject(cfg, MASTER, id);
+    const rec = createProjectRecord(dataDir, id);
+    runWithProjectRoot(rec.rootPath, () => hostCore.provisionProject(id));
+    return rec;
   }
 
   // ── organization-unit / placement admin gating + audit ────────────────────
@@ -476,23 +478,33 @@ describe('landscape orchestrator (sdd_host)', () => {
   // carries NO unit-management authority, and its reads see only its own project —
   // never the whole instance.
 
-  const projManageToken = () => mintToken([{ projectId: 'acme', permissions: ['landscape:manage'] }]);
-  const projReadToken = () => mintToken([{ projectId: 'acme', permissions: ['landscape:read'] }]);
+  const projManageToken = () => tokenWith('project:admin', 'project', 'acme');
+  const projReadToken = () => tokenWith('project:read', 'project', 'acme');
 
-  it('scoped model: a project-scoped landscape grant confers only its project scope — not unit management, not an instance-wide view', () => {
-    // A project-scoped grant carries no unit scope → it can never manage org units.
+  it('scoped model: a project-scoped assignment confers only its project scope — not unit management, not an instance-wide view', () => {
+    // A hosted, PLACED 'acme' anchors the project-scoped assignments (an
+    // unplaced project is in nobody's visible set — the resolver enumerates the
+    // org tree).
+    const tenant = seedUnit(dataDir, 'tenant');
+    project('acme');
+    project('other');
+    placeProject(cfg, MASTER, placementRec({ projectId: 'acme', unitId: tenant.id }));
+    placeProject(cfg, MASTER, placementRec({ projectId: 'other', unitId: tenant.id }));
+
+    // A project-scoped admin carries no root-unit authority → never manages roots.
     expect(() => upsertUnit(cfg, projManageToken(), unitRec({ name: 'X' }))).toThrow(ForbiddenError);
 
-    // A project-scoped landscape:read grant is NOT denied outright — it has reach —
-    // but its view is narrowed to its one project (here empty, since 'acme' is not a
-    // hosted project), never the whole instance.
+    // A project-scoped project:read is NOT denied outright — it has reach — but
+    // its view is narrowed to its one project, never the whole instance.
     const scopedGraph = generateLandscape(cfg, projReadToken());
-    expect(scopedGraph.nodes.some((n) => n.nodeKind === 'project')).toBe(false);
+    const scopedProjects = scopedGraph.nodes.filter((n) => n.nodeKind === 'project').map((n) => n.projectId);
+    expect(scopedProjects).toEqual(['acme']);
     expect(listRelations(cfg, projReadToken())).toEqual([]);
 
-    // The instance-wide ({projectId:'*'}) equivalents retain full access.
+    // The instance-level equivalents retain full access.
     expect(upsertUnit(cfg, manageToken(), unitRec({ name: 'X' })).id).toBeTruthy();
-    expect(Array.isArray(generateLandscape(cfg, readToken()).nodes)).toBe(true);
+    const fullProjects = generateLandscape(cfg, readToken()).nodes.filter((n) => n.nodeKind === 'project');
+    expect(fullProjects.length).toBe(2);
     expect(listRelations(cfg, readToken())).toEqual([]);
   });
 
@@ -503,10 +515,8 @@ describe('landscape orchestrator (sdd_host)', () => {
   // scope; writes require the target to fall inside it. A super-admin (MASTER /
   // instance-wide grant) is unaffected — the suites above already assert that.
 
-  const unitManageToken = (unitId: string) =>
-    mintToken([{ projectId: '', orgUnitId: unitId, permissions: ['landscape:manage'] }]);
-  const unitReadToken = (unitId: string) =>
-    mintToken([{ projectId: '', orgUnitId: unitId, permissions: ['landscape:read'] }]);
+  const unitManageToken = (unitId: string) => tokenWith('project:admin', 'unit', unitId);
+  const unitReadToken = (unitId: string) => tokenWith('project:read', 'unit', unitId);
 
   /** Seed a two-branch org: unit A (the in-scope subtree) and sibling unit B (out
    *  of scope) under a shared root, each owning a source + dst project with a
@@ -767,8 +777,9 @@ describe('landscape portal (sdd_host http)', () => {
     expect(place.json.projectId).toBe('proj-1');
     expect(place.json.unitId).toBe('team-1');
 
-    // Provision a real target project + surface for the relation.
-    const dst = createProject(cfg, MASTER, 'dst-proj');
+    // Provision a real target project + surface for the relation (placed into
+    // the unit the endpoints created — every project is placed at creation).
+    const dst = createProject(cfg, MASTER, 'dst-proj', 'team-1');
     seedSurface(dst.rootPath, 'dst-api');
 
     // POST /landscape/projects/{id}/public-surface/refresh → 200.

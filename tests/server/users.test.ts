@@ -8,14 +8,16 @@ import {
   listUsers,
   upsertUser,
   setUserStatus,
-  replaceUserGrants,
 } from '../../src/server/users.js';
-import type { HostedUserRecord, PrincipalSubject, ProjectGrant } from '../../src/server/types.js';
+import { setAssignment } from '../../src/server/permissions.js';
+import type { HostedUserRecord, PrincipalSubject, RoleBinding } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
 // User Repository (sdd_host) — the store/registry/index triad exercised through
 // the repository facade against a real <dataDir>/users.json, so persistence,
 // atomic swap, and the malformed-file storage error are covered end-to-end.
+// Permissions live in roleBindings + the assignment grid — never on the record
+// as grants (there is no replaceUserGrants).
 // ---------------------------------------------------------------------------
 
 function subject(over: Partial<PrincipalSubject> = {}): PrincipalSubject {
@@ -26,7 +28,7 @@ function mkUser(over: Partial<HostedUserRecord> & Pick<HostedUserRecord, 'id'>):
   return {
     subject: subject(),
     status: 'active',
-    grants: [],
+    roleBindings: [],
     createdAt: '2000-01-01T00:00:00.000Z', // placeholder; the store stamps its own on insert
     ...over,
   };
@@ -88,12 +90,12 @@ describe('user repository (sdd_host)', () => {
   // ── setStatus ──────────────────────────────────────────────────────────────
 
   it('sets a valid status while preserving all other fields', () => {
-    const grants: ProjectGrant[] = [{ projectId: 'proj-a', permissions: ['mcp:read'] }];
-    upsertUser(dataDir, mkUser({ id: 'u-1', grants, subject: subject({ email: 'a@b.co' }) }));
+    const roleBindings: RoleBinding[] = [{ roleId: 'sso-admin' }];
+    upsertUser(dataDir, mkUser({ id: 'u-1', roleBindings, subject: subject({ email: 'a@b.co' }) }));
 
     const suspended = setUserStatus(dataDir, 'u-1', 'suspended');
     expect(suspended.status).toBe('suspended');
-    expect(suspended.grants).toEqual(grants);
+    expect(suspended.roleBindings).toEqual(roleBindings);
     expect(suspended.subject.email).toBe('a@b.co');
     expect(getUserById(dataDir, 'u-1')?.status).toBe('suspended');
   });
@@ -106,25 +108,6 @@ describe('user repository (sdd_host)', () => {
     upsertUser(dataDir, mkUser({ id: 'u-1', status: 'active' }));
     expect(() => setUserStatus(dataDir, 'u-1', 'banned')).toThrow('Invalid user status');
     expect(getUserById(dataDir, 'u-1')?.status).toBe('active');
-  });
-
-  // ── replaceGrants ────────────────────────────────────────────────────────
-
-  it('replaces grants wholesale (no merging)', () => {
-    const initial: ProjectGrant[] = [{ projectId: 'proj-a', permissions: ['mcp:read'] }];
-    upsertUser(dataDir, mkUser({ id: 'u-1', grants: initial }));
-
-    const next: ProjectGrant[] = [
-      { projectId: 'proj-b', permissions: ['mcp:write'] },
-      { projectId: '*', permissions: ['mcp:read'] },
-    ];
-    const updated = replaceUserGrants(dataDir, 'u-1', next);
-    expect(updated.grants).toEqual(next); // proj-a is gone — wholesale replace
-    expect(getUserById(dataDir, 'u-1')?.grants).toEqual(next);
-  });
-
-  it('rejects replaceGrants on an unknown id', () => {
-    expect(() => replaceUserGrants(dataDir, 'nope', [])).toThrow('not found');
   });
 
   // ── getById ────────────────────────────────────────────────────────────────
@@ -157,11 +140,26 @@ describe('user repository (sdd_host)', () => {
   // ── list filters ────────────────────────────────────────────────────────
 
   function seedForList(): void {
-    // Inserted out of id-order to prove sorting.
-    upsertUser(dataDir, mkUser({ id: 'u-c', status: 'active', grants: [{ projectId: '*', permissions: ['mcp:read'] }] }));
-    upsertUser(dataDir, mkUser({ id: 'u-a', status: 'active', grants: [{ projectId: 'proj-x', permissions: ['mcp:read'] }] }));
-    upsertUser(dataDir, mkUser({ id: 'u-d', status: 'active', grants: [] }));
-    upsertUser(dataDir, mkUser({ id: 'u-b', status: 'suspended', grants: [{ projectId: 'proj-y', permissions: ['mcp:read'] }] }));
+    // Inserted out of id-order to prove sorting. Project membership lives in the
+    // permission grid (direct assignments), never on the user record.
+    upsertUser(dataDir, mkUser({ id: 'u-c', status: 'active' }));
+    upsertUser(dataDir, mkUser({ id: 'u-a', status: 'active' }));
+    upsertUser(dataDir, mkUser({ id: 'u-d', status: 'active' }));
+    upsertUser(dataDir, mkUser({ id: 'u-b', status: 'suspended' }));
+    setAssignment(dataDir, {
+      id: '', subjectKind: 'user', subjectId: 'u-a', scopeKind: 'project', scopeId: 'proj-x',
+      capability: 'project:read', value: 'yes', createdAt: '',
+    });
+    setAssignment(dataDir, {
+      id: '', subjectKind: 'user', subjectId: 'u-b', scopeKind: 'project', scopeId: 'proj-y',
+      capability: 'project:write', value: 'yes', createdAt: '',
+    });
+    // u-c holds an INSTANCE-scoped assignment — deliberately NOT a direct project
+    // assignment, so the project filter must not surface it.
+    setAssignment(dataDir, {
+      id: '', subjectKind: 'user', subjectId: 'u-c', scopeKind: 'instance',
+      capability: 'project:read', value: 'yes', createdAt: '',
+    });
   }
 
   it('lists all users sorted by id when unfiltered', () => {
@@ -174,18 +172,20 @@ describe('user repository (sdd_host)', () => {
     expect(listUsers(dataDir, 'active').map((r) => r.id)).toEqual(['u-a', 'u-c', 'u-d']);
   });
 
-  it('filters by project id, matching both direct and instance-wide (*) grants', () => {
+  it('filters by project id to users holding a DIRECT assignment at that project scope', () => {
     seedForList();
-    // proj-x: u-a holds it directly; u-c matches via its instance-wide '*' grant.
-    expect(listUsers(dataDir, undefined, 'proj-x').map((r) => r.id)).toEqual(['u-a', 'u-c']);
-    // proj-z: only the instance-wide grant holder matches any project.
-    expect(listUsers(dataDir, undefined, 'proj-z').map((r) => r.id)).toEqual(['u-c']);
+    // proj-x: only u-a holds a direct project-scoped assignment. u-c's broader
+    // instance-scoped assignment deliberately does NOT match — inherited reach is
+    // a resolver question, and the admin filter stays honest (direct only).
+    expect(listUsers(dataDir, undefined, 'proj-x').map((r) => r.id)).toEqual(['u-a']);
+    expect(listUsers(dataDir, undefined, 'proj-z').map((r) => r.id)).toEqual([]);
   });
 
   it('filters by status and project id together', () => {
     seedForList();
-    // active AND (proj-y or *): u-b holds proj-y but is suspended; u-c is active with '*'.
-    expect(listUsers(dataDir, 'active', 'proj-y').map((r) => r.id)).toEqual(['u-c']);
+    // proj-y's only direct holder (u-b) is suspended → the combined filter is empty.
+    expect(listUsers(dataDir, 'active', 'proj-y').map((r) => r.id)).toEqual([]);
+    expect(listUsers(dataDir, 'suspended', 'proj-y').map((r) => r.id)).toEqual(['u-b']);
   });
 
   // ── malformed store ────────────────────────────────────────────────────────

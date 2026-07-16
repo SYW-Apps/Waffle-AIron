@@ -10,20 +10,23 @@ import {
 } from '../../src/server/auth.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
 import { createWebSession, WEB_SESSION_PREFIX } from '../../src/server/websessions.js';
-import type { ApiKeyRecord, PrincipalSubject, ProjectGrant, WebSession } from '../../src/server/types.js';
+import { upsertUser } from '../../src/server/users.js';
+import { ensureInstanceIdentity } from '../../src/server/instance.js';
+import type { ApiKeyRecord, PrincipalSubject, WebSession } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
-// Auth Specialist (sdd_host) — subject/grant resolution, expiry/revocation, and
-// the dual-credential authenticateCredential entry point. Records are written to
-// a real credentials.json via createCredential so the salted-hash lookup and the
-// legacy-compatibility projection are exercised end-to-end.
+// Auth Specialist (sdd_host) — subject resolution, the LIVE permissionSubject
+// (roleBindings read fresh from the user record; instanceAdmin only for the
+// persisted built-in subjects / master), expiry/revocation/deactivation, and
+// the dual-credential authenticateCredential entry point. Records are written
+// to a real credentials.json via createCredential so the salted-hash lookup is
+// exercised end-to-end. A Principal carries NO permissions of its own.
 // ---------------------------------------------------------------------------
 
 const MASTER = 'master-credential-secret';
 
 function mkRecord(over: Partial<ApiKeyRecord> & Pick<ApiKeyRecord, 'id' | 'keyHash'>): ApiKeyRecord {
   return {
-    role: 'editor',
     projects: ['proj-a'],
     createdAt: '2026-07-01T00:00:00.000Z',
     ...over,
@@ -48,42 +51,68 @@ describe('auth specialist (sdd_host)', () => {
     }
   });
 
-  // ── authenticate: grant resolution ───────────────────────────────────────
+  // ── authenticate: subject + live permissionSubject resolution ─────────────
 
-  it('resolves subject and grants from the record when present', () => {
+  it('resolves the subject and a LIVE permissionSubject (roleBindings from the user record)', () => {
     const token = 'tok-explicit';
     const ownerSubject: PrincipalSubject = { userId: 'u-1', kind: 'human', issuer: 'local', email: 'a@b.co' };
-    const grants: ProjectGrant[] = [
-      { projectId: 'proj-a', permissions: ['mcp:read', 'mcp:write', 'key:manage'], role: 'maintainer' },
-    ];
-    createCredential(dataDir, mkRecord({ id: 'c-1', keyHash: hashToken(token), ownerSubject, grants }));
+    upsertUser(dataDir, {
+      id: 'u-1',
+      subject: ownerSubject,
+      status: 'active',
+      roleBindings: [{ roleId: 'sso-admin' }],
+      createdAt: new Date().toISOString(),
+    });
+    createCredential(dataDir, mkRecord({ id: 'c-1', keyHash: hashToken(token), ownerSubject }));
 
     const p = authenticate(dataDir, token);
     expect(p.authenticated).toBe(true);
     expect(p.tokenId).toBe('c-1');
-    expect(p.grants).toEqual(grants);
     expect(p.subject).toEqual(ownerSubject);
+    // The permissionSubject is resolved LIVE from the user record — the token
+    // itself stores no permissions.
+    expect(p.permissionSubject).toEqual({
+      subjectId: 'u-1',
+      roleBindings: [{ roleId: 'sso-admin' }],
+      instanceAdmin: false,
+    });
   });
 
-  it('falls back to the editor role projection for legacy records', () => {
-    const token = 'tok-editor';
-    createCredential(dataDir, mkRecord({ id: 'c-ed', keyHash: hashToken(token), role: 'editor', projects: ['proj-a', 'proj-b'] }));
+  it('resolves an owner with NO user record to an empty-bindings permissionSubject (never instanceAdmin)', () => {
+    const token = 'tok-norecord';
+    const ownerSubject: PrincipalSubject = { userId: 'svc-9', kind: 'service', issuer: 'local' };
+    createCredential(dataDir, mkRecord({ id: 'c-nr', keyHash: hashToken(token), ownerSubject }));
 
     const p = authenticate(dataDir, token);
     expect(p.authenticated).toBe(true);
-    expect(p.subject).toBeUndefined();
-    expect(p.grants).toEqual([
-      { projectId: 'proj-a', permissions: ['mcp:read', 'mcp:write'], role: 'editor' },
-      { projectId: 'proj-b', permissions: ['mcp:read', 'mcp:write'], role: 'editor' },
-    ]);
+    expect(p.permissionSubject).toEqual({ subjectId: 'svc-9', roleBindings: [], instanceAdmin: false });
   });
 
-  it('falls back to an instance-wide grant for a legacy admin record', () => {
-    const token = 'tok-admin';
-    createCredential(dataDir, mkRecord({ id: 'c-ad', keyHash: hashToken(token), role: 'admin', projects: ['*'] }));
+  it('rejects a token whose owner user record is DEACTIVATED (suspension revokes access live)', () => {
+    const token = 'tok-deact';
+    const ownerSubject: PrincipalSubject = { userId: 'u-gone', kind: 'human', issuer: 'local' };
+    upsertUser(dataDir, {
+      id: 'u-gone',
+      subject: ownerSubject,
+      status: 'suspended',
+      roleBindings: [],
+      createdAt: new Date().toISOString(),
+    });
+    createCredential(dataDir, mkRecord({ id: 'c-deact', keyHash: hashToken(token), ownerSubject }));
+
+    expect(authenticate(dataDir, token).authenticated).toBe(false);
+    expect(authenticateCredential(dataDir, token).authenticated).toBe(false);
+  });
+
+  it('a legacy literal builtin subject id never resolves instanceAdmin (the persisted UUIDs are the live ids)', () => {
+    ensureInstanceIdentity(dataDir);
+    const token = 'tok-legacy-builtin';
+    const ownerSubject: PrincipalSubject = { userId: 'builtin:superadmin', kind: 'human', issuer: 'local' };
+    createCredential(dataDir, mkRecord({ id: 'c-lb', keyHash: hashToken(token), ownerSubject }));
 
     const p = authenticate(dataDir, token);
-    expect(p.grants).toEqual([{ projectId: '*', permissions: ['*'], role: 'admin' }]);
+    expect(p.authenticated).toBe(true);
+    expect(p.permissionSubject?.instanceAdmin).toBe(false);
   });
 
   // ── authenticate: expiry / revocation ────────────────────────────────────
@@ -116,18 +145,20 @@ describe('auth specialist (sdd_host)', () => {
     expect(authenticate(dataDir, null).authenticated).toBe(false);
   });
 
-  // ── legacy parity: no new fields → identical core Principal ───────────────
+  // ── display projection: role/projects are display-only, never authority ────
 
-  it('authenticates a legacy record without new fields identically to before', () => {
-    const token = 'tok-legacy';
-    createCredential(dataDir, mkRecord({ id: 'c-leg', keyHash: hashToken(token), role: 'editor', projects: ['proj-a'] }));
+  it('keeps the record role/projects as a DISPLAY projection on the Principal', () => {
+    const token = 'tok-display';
+    createCredential(
+      dataDir,
+      mkRecord({ id: 'c-disp', keyHash: hashToken(token), role: 'editor', projects: ['proj-a', 'proj-b'] }),
+    );
 
     const p = authenticate(dataDir, token);
-    // The four original fields are unchanged; grants is additive, subject absent.
     expect({ tokenId: p.tokenId, role: p.role, projects: p.projects, authenticated: p.authenticated }).toEqual({
-      tokenId: 'c-leg',
+      tokenId: 'c-disp',
       role: 'editor',
-      projects: ['proj-a'],
+      projects: ['proj-a', 'proj-b'],
       authenticated: true,
     });
     expect(p.subject).toBeUndefined();
@@ -135,14 +166,14 @@ describe('auth specialist (sdd_host)', () => {
 
   // ── authenticateCredential: dual-credential entry point ───────────────────
 
-  it('accepts the master credential and returns the bootstrap admin principal', () => {
+  it('accepts the master credential and returns the bootstrap admin principal (instanceAdmin bypass)', () => {
     const p = authenticateCredential(dataDir, MASTER);
     expect(p.authenticated).toBe(true);
     expect(p.role).toBe('admin');
     expect(p.projects).toEqual(['*']);
     expect(p.subject?.kind).toBe('bootstrap');
     expect(p.subject?.userId).toBe('bootstrap');
-    expect(p.grants).toEqual([{ projectId: '*', permissions: ['*'], role: 'admin' }]);
+    expect(p.permissionSubject).toEqual({ subjectId: 'bootstrap', roleBindings: [], instanceAdmin: true });
   });
 
   it('accepts a valid bearer token via authenticateCredential (same as authenticate)', () => {
@@ -170,11 +201,15 @@ describe('auth specialist (sdd_host)', () => {
     expect(authenticate(dataDir, MASTER).authenticated).toBe(false);
   });
 
-  // ── authenticateMaster: unchanged behavior ───────────────────────────────
+  // ── authenticateMaster ─────────────────────────────────────────────────────
 
-  it('authenticateMaster still returns a plain admin principal with no subject/grants', () => {
+  it('authenticateMaster returns the bootstrap admin principal with the resolver bypass', () => {
     const p = authenticateMaster(MASTER);
-    expect(p).toEqual({ tokenId: 'admin:master', role: 'admin', projects: ['*'], authenticated: true });
+    expect(p.authenticated).toBe(true);
+    expect(p.role).toBe('admin');
+    expect(p.projects).toEqual(['*']);
+    expect(p.tokenId).toBe('admin:master');
+    expect(p.permissionSubject?.instanceAdmin).toBe(true);
     expect(authenticateMaster('wrong').authenticated).toBe(false);
   });
 
@@ -184,38 +219,40 @@ describe('auth specialist (sdd_host)', () => {
   // resolves to the same Principal shape a bearer token yields, so every scoped
   // endpoint authenticates a session with no per-endpoint change. Both
   // authenticateSession and the session branch of authenticateCredential share the
-  // one resolveSessionPrincipal code path.
+  // one resolveSessionPrincipal code path. Sessions store NO permissions.
 
   const SESSION_SUBJECT: PrincipalSubject = { userId: 'u-web', kind: 'human', issuer: 'oidc', displayName: 'Web User' };
-  const SESSION_GRANTS: ProjectGrant[] = [
-    { projectId: 'proj-a', permissions: ['mcp:read', 'mcp:write'], role: 'editor' },
-  ];
 
   function seedSession(over: Partial<WebSession> = {}): WebSession {
     return createWebSession(dataDir, {
       id: '', // the registry mints a reserved-prefix id
       subject: SESSION_SUBJECT,
-      grants: SESSION_GRANTS,
+      projects: ['proj-a'],
       createdAt: '1999-01-01T00:00:00.000Z',
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
       ...over,
     });
   }
 
-  it('authenticateSession resolves a live session to a Principal carrying its subject and grants', () => {
+  it('authenticateSession resolves a live session to a Principal with its subject and live permissionSubject', () => {
     const s = seedSession();
     const p = authenticateSession(dataDir, s.id);
     expect(p.authenticated).toBe(true);
     expect(p.subject).toEqual(SESSION_SUBJECT);
-    expect(p.grants).toEqual(SESSION_GRANTS);
-    // coarse compatibility projection derived from the grants (no '*' grant → editor)
+    expect(p.permissionSubject).toEqual({ subjectId: 'u-web', roleBindings: [], instanceAdmin: false });
+    // coarse compatibility projection: a non-admin keeps the session narrowing.
     expect(p.role).toBe('editor');
     expect(p.projects).toEqual(['proj-a']);
   });
 
-  it('authenticateSession derives an admin projection from an instance-wide grant', () => {
-    const s = seedSession({ grants: [{ projectId: '*', permissions: ['*'], role: 'admin' }] });
+  it('a session bound to the persisted built-in super-admin UUID projects the admin display role', () => {
+    const identity = ensureInstanceIdentity(dataDir);
+    const s = seedSession({
+      subject: { userId: identity.superadminUserId, kind: 'human', issuer: 'local' },
+      projects: ['*'],
+    });
     const p = authenticateSession(dataDir, s.id);
+    expect(p.permissionSubject?.instanceAdmin).toBe(true);
     expect(p.role).toBe('admin');
     expect(p.projects).toEqual(['*']);
   });
@@ -225,7 +262,6 @@ describe('auth specialist (sdd_host)', () => {
     const viaCredential = authenticateCredential(dataDir, s.id);
     expect(viaCredential.authenticated).toBe(true);
     expect(viaCredential.subject).toEqual(SESSION_SUBJECT);
-    expect(viaCredential.grants).toEqual(SESSION_GRANTS);
     // one shared code path → the two entry points return the same Principal
     expect(viaCredential).toEqual(authenticateSession(dataDir, s.id));
   });
@@ -240,6 +276,18 @@ describe('auth specialist (sdd_host)', () => {
     const ghost = `${WEB_SESSION_PREFIX}deadbeefdeadbeef`;
     expect(authenticateSession(dataDir, ghost).authenticated).toBe(false);
     expect(authenticateCredential(dataDir, ghost).authenticated).toBe(false);
+  });
+
+  it('rejects a DEACTIVATED session user as unauthenticated', () => {
+    upsertUser(dataDir, {
+      id: 'u-web',
+      subject: SESSION_SUBJECT,
+      status: 'deactivated',
+      roleBindings: [],
+      createdAt: new Date().toISOString(),
+    });
+    const s = seedSession();
+    expect(authenticateSession(dataDir, s.id).authenticated).toBe(false);
   });
 
   it('does not treat a bearer token as a session (authenticateSession accepts session ids only)', () => {

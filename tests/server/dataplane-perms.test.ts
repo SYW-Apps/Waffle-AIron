@@ -7,27 +7,27 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { handleMcpRequest } from '../../src/server/request.js';
 import { createProjectRecord } from '../../src/server/projects.js';
-import { createCredential, hashToken } from '../../src/server/credentials.js';
-import type { ApiKeyRecord, HostConfig, PrincipalSubject, ProjectGrant } from '../../src/server/types.js';
+import { mintUserToken, allow } from './helpers.js';
+import type { HostConfig } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
-// Host Request Orchestrator — Phase 6b granular data-plane permissions (sdd_host).
+// Host Request Orchestrator — granular data-plane permissions (sdd_host).
 //
 // Steps 25–27 of handleRequest: on the ordinary sdd_* dispatch path (NOT the
-// already-gated self-service / landscape branch), the tool is classified as a
-// read (sdd_get_ / sdd_validate_) or a write (sdd_add_ / sdd_update_ / sdd_delete_
-// / sdd_write_ / sdd_define_ / sdd_set_ / sdd_initialize_ / sdd_externalize_ /
-// sdd_internalize_ / sdd_move_, and unknown → write, fail safe). The principal's
-// grant FOR THE BOUND PROJECT must carry mcp:read for a read or mcp:write for a
-// write; a '*' permission or an instance-wide '*'/'*' grant covers both. A missing
+// already-gated project-lifecycle / landscape branch), the tool is classified as
+// a read (sdd_get_ / sdd_validate_) or a write (sdd_add_ / sdd_update_ /
+// sdd_delete_ / sdd_write_ / sdd_define_ / sdd_set_ / sdd_initialize_ /
+// sdd_externalize_ / sdd_internalize_ / sdd_move_, and unknown → write, fail
+// safe). The caller's RESOLVED permission for the BOUND project must be
+// yes-valued project:read for a read or project:write for a write. A missing
 // permission is an isError tool result (HTTP still 200) and the tool is NOT
 // dispatched.
 //
-// Consults principal.grants — NOT the coarse role/projects projection — so a
-// read-only token (mcp:read only) is refused writes.
+// Resolves through the permission resolver over the token OWNER's assignments —
+// the token itself carries nothing — so a read-only owner is refused writes.
 //
 // Driven end-to-end over a real HTTP listener with auth enabled and real minted
-// credentials, mirroring request-selfservice.test.ts.
+// credentials, mirroring request-projectlifecycle.test.ts.
 // ---------------------------------------------------------------------------
 
 const call = (name: string, args: Record<string, unknown> = {}) => ({
@@ -36,10 +36,6 @@ const call = (name: string, args: Record<string, unknown> = {}) => ({
   method: 'tools/call',
   params: { name, arguments: args },
 });
-
-function subject(over: Partial<PrincipalSubject> = {}): PrincipalSubject {
-  return { userId: 'u-x', kind: 'human', issuer: 'local', ...over };
-}
 
 // A representative sample across every write and read prefix in the classifier.
 const WRITE_TOOLS = [
@@ -111,34 +107,23 @@ describe('handleMcpRequest granular data-plane permissions (end-to-end)', () => 
     }
   });
 
-  /** Mint a stored token with known projects + grants; returns the plaintext bearer. */
-  function mintToken(opts: { id: string; projects: string[]; grants: ProjectGrant[] }): string {
-    const token = 'wk_' + crypto.randomBytes(8).toString('hex');
-    const record: ApiKeyRecord = {
-      id: opts.id,
-      keyHash: hashToken(token),
-      role: 'editor',
-      projects: opts.projects,
-      grants: opts.grants,
-      createdAt: new Date().toISOString(),
-      ownerSubject: subject({ userId: 'u-' + opts.id }),
-    };
-    createCredential(dataDir, record);
-    return token;
-  }
-
-  const readOnly = () =>
-    mintToken({ id: 'read-only', projects: ['demo'], grants: [{ projectId: 'demo', permissions: ['mcp:read'] }] });
-  const readWrite = () =>
-    mintToken({
-      id: 'read-write',
-      projects: ['demo'],
-      grants: [{ projectId: 'demo', permissions: ['mcp:read', 'mcp:write'] }],
-    });
-  const wildcardPerm = () =>
-    mintToken({ id: 'wild-perm', projects: ['demo'], grants: [{ projectId: 'demo', permissions: ['*'] }] });
-  const instanceWide = () =>
-    mintToken({ id: 'instance-wide', projects: ['*'], grants: [{ projectId: '*', permissions: ['*'] }] });
+  /** A token whose OWNER holds only project:read over the bound project. */
+  const readOnly = () => {
+    allow(dataDir, 'u-read-only', 'project:read', 'project', 'demo');
+    return mintUserToken(dataDir, { id: 'read-only', userId: 'u-read-only', projects: ['demo'] });
+  };
+  /** A token whose OWNER holds project:read + project:write over the project. */
+  const readWrite = () => {
+    allow(dataDir, 'u-read-write', 'project:read', 'project', 'demo');
+    allow(dataDir, 'u-read-write', 'project:write', 'project', 'demo');
+    return mintUserToken(dataDir, { id: 'read-write', userId: 'u-read-write', projects: ['demo'] });
+  };
+  /** A token whose OWNER holds instance-level read+write (covers every project). */
+  const instanceWide = () => {
+    allow(dataDir, 'u-instance', 'project:read', 'instance', undefined);
+    allow(dataDir, 'u-instance', 'project:write', 'instance', undefined);
+    return mintUserToken(dataDir, { id: 'instance-wide', userId: 'u-instance', projects: ['*'] });
+  };
 
   const post = (bodyObj: unknown, token: string) =>
     fetch(`http://127.0.0.1:${port}/mcp?project=demo`, {
@@ -177,7 +162,7 @@ describe('handleMcpRequest granular data-plane permissions (end-to-end)', () => 
       const body = (await res.json()) as RpcResponse;
       expect(res.status).toBe(200); // an authorization denial is a tool result, not an HTTP error
       expect(body.result?.isError).toBe(true);
-      expect(toolText(body)).toContain(`mcp:write required for ${tool}`);
+      expect(toolText(body)).toContain(`project:write required for ${tool}`);
     }
   }, 20_000);
 
@@ -218,17 +203,7 @@ describe('handleMcpRequest granular data-plane permissions (end-to-end)', () => 
     expect(isPermRefusal(writeBody)).toBe(false);
   }, 20_000);
 
-  it("a '*'-permission grant covers both read and write", async () => {
-    const tok = wildcardPerm();
-
-    const readBody = (await (await post(call('sdd_get_status'), tok)).json()) as RpcResponse;
-    expect(isPermRefusal(readBody)).toBe(false);
-
-    const writeBody = (await (await post(call('sdd_add_subsystem'), tok)).json()) as RpcResponse;
-    expect(isPermRefusal(writeBody)).toBe(false);
-  }, 20_000);
-
-  it("an instance-wide '*'/'*' grant covers both read and write", async () => {
+  it('an instance-level read+write owner covers both on every project', async () => {
     const tok = instanceWide();
 
     const readBody = (await (await post(call('sdd_get_status'), tok)).json()) as RpcResponse;
@@ -238,12 +213,22 @@ describe('handleMcpRequest granular data-plane permissions (end-to-end)', () => 
     expect(isPermRefusal(writeBody)).toBe(false);
   }, 20_000);
 
+  it('an approval-valued project:write does NOT pass the data-plane gate (only yes acts)', async () => {
+    allow(dataDir, 'u-approval', 'project:read', 'project', 'demo');
+    allow(dataDir, 'u-approval', 'project:write', 'project', 'demo', 'approval');
+    const tok = mintUserToken(dataDir, { id: 'approval-tok', userId: 'u-approval', projects: ['demo'] });
+
+    const writeBody = (await (await post(call('sdd_add_subsystem'), tok)).json()) as RpcResponse;
+    expect(writeBody.result?.isError).toBe(true);
+    expect(toolText(writeBody)).toContain('project:write required for sdd_add_subsystem');
+  }, 20_000);
+
   it('classifies every write prefix as a write (read-only token → refused)', async () => {
     const tok = readOnly();
     for (const tool of WRITE_TOOLS) {
       const body = (await (await post(call(tool), tok)).json()) as RpcResponse;
       expect(body.result?.isError).toBe(true);
-      expect(toolText(body)).toContain(`mcp:write required for ${tool}`);
+      expect(toolText(body)).toContain(`project:write required for ${tool}`);
     }
   }, 30_000);
 
@@ -261,6 +246,6 @@ describe('handleMcpRequest granular data-plane permissions (end-to-end)', () => 
     const tok = readOnly();
     const body = (await (await post(call('sdd_frobnicate_everything'), tok)).json()) as RpcResponse;
     expect(body.result?.isError).toBe(true);
-    expect(toolText(body)).toContain('mcp:write required for sdd_frobnicate_everything');
+    expect(toolText(body)).toContain('project:write required for sdd_frobnicate_everything');
   }, 20_000);
 });
