@@ -10,7 +10,8 @@ import {
   setUserStatus,
 } from '../../src/server/users.js';
 import { setAssignment } from '../../src/server/permissions.js';
-import type { HostedUserRecord, PrincipalSubject, RoleBinding } from '../../src/server/types.js';
+import { listUsers as orchestratorListUsers } from '../../src/server/identity.js';
+import type { HostConfig, HostedUserRecord, PrincipalSubject, RoleBinding } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
 // User Repository (sdd_host) — the store/registry/index triad exercised through
@@ -172,20 +173,26 @@ describe('user repository (sdd_host)', () => {
     expect(listUsers(dataDir, 'active').map((r) => r.id)).toEqual(['u-a', 'u-c', 'u-d']);
   });
 
-  it('filters by project id to users holding a DIRECT assignment at that project scope', () => {
+  // The project filter is NOT a repository concern anymore: the user store owns
+  // no project reference, so the identity ORCHESTRATOR intersects the listing
+  // with the grid's direct assignments. Pinned here next to the grid seeding.
+  it('orchestrator project filter matches users holding a DIRECT assignment at that project scope', () => {
     seedForList();
-    // proj-x: only u-a holds a direct project-scoped assignment. u-c's broader
-    // instance-scoped assignment deliberately does NOT match — inherited reach is
-    // a resolver question, and the admin filter stays honest (direct only).
-    expect(listUsers(dataDir, undefined, 'proj-x').map((r) => r.id)).toEqual(['u-a']);
-    expect(listUsers(dataDir, undefined, 'proj-z').map((r) => r.id)).toEqual([]);
-  });
-
-  it('filters by status and project id together', () => {
-    seedForList();
-    // proj-y's only direct holder (u-b) is suspended → the combined filter is empty.
-    expect(listUsers(dataDir, 'active', 'proj-y').map((r) => r.id)).toEqual([]);
-    expect(listUsers(dataDir, 'suspended', 'proj-y').map((r) => r.id)).toEqual(['u-b']);
+    const MASTER = 'master-credential-secret-value';
+    process.env.WAIRON_ADMIN_TOKEN = MASTER;
+    try {
+      const cfg: HostConfig = { host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: true };
+      // proj-x: only u-a holds a direct project-scoped assignment. u-c's broader
+      // instance-scoped assignment deliberately does NOT match — inherited reach
+      // is a resolver question, and the admin filter stays honest (direct only).
+      expect(orchestratorListUsers(cfg, MASTER, 'proj-x').map((r) => r.id)).toEqual(['u-a']);
+      expect(orchestratorListUsers(cfg, MASTER, 'proj-z').map((r) => r.id)).toEqual([]);
+      // proj-y's only direct holder is u-b (suspended is still listed — status is
+      // a separate axis the directory shows; deactivation revokes credentials).
+      expect(orchestratorListUsers(cfg, MASTER, 'proj-y').map((r) => r.id)).toEqual(['u-b']);
+    } finally {
+      delete process.env.WAIRON_ADMIN_TOKEN;
+    }
   });
 
   // ── malformed store ────────────────────────────────────────────────────────

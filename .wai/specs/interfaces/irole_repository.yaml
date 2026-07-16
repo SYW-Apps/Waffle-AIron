@@ -30,13 +30,6 @@ methods:
     params:
       - name: roleId
         type: string
-  - name: getRole
-    description: 'Facade: look up one role through the index.'
-    signature: 'getRole(roleId: string): Role | null'
-    returns: Role | null
-    params:
-      - name: roleId
-        type: string
   - name: listRoles
     description: 'Facade: list roles through the index.'
     signature: 'listRoles(): Role[]'
@@ -44,4 +37,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-07-15T20:27:40.646Z'
-updatedAt: '2026-07-15T22:22:07.541Z'
+updatedAt: '2026-07-16T15:03:12.939Z'

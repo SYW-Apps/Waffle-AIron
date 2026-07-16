@@ -8,7 +8,8 @@ description: >-
 subsystem: sdd_host
 componentType: Registry
 owns: []
-dependsOn: []
+dependsOn:
+  - instance_identity_store
 status: complete
 createdAt: '2026-07-16T00:23:54.754Z'
-updatedAt: '2026-07-16T07:27:54.133Z'
+updatedAt: '2026-07-16T15:04:52.931Z'

@@ -157,11 +157,6 @@ function registryDelete(dataDir: string, roleId: string): void {
 
 // ── Index (read path) ──────────────────────────────────────────────────────
 
-/** Return the stored role whose id matches exactly, or null when absent. */
-function indexGetRole(dataDir: string, roleId: string): Role | null {
-  return load(dataDir).find((r) => r.id === roleId) ?? null;
-}
-
 /** Return every stored role, sorted by id for stable listing. */
 function indexListRoles(dataDir: string): Role[] {
   return load(dataDir).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
@@ -182,11 +177,6 @@ export function updateRole(dataDir: string, role: Role): Role {
 /** Delete one role through the repository facade. */
 export function deleteRole(dataDir: string, roleId: string): void {
   registryDelete(dataDir, roleId);
-}
-
-/** Look up one role through the repository facade, or null when absent. */
-export function getRole(dataDir: string, roleId: string): Role | null {
-  return indexGetRole(dataDir, roleId);
 }
 
 /** List the stored (admin-defined) roles through the repository facade. */

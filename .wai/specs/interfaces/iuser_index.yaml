@@ -20,16 +20,15 @@ methods:
       - name: externalSubject
         type: string
   - name: list
-    description: List hosted users, optionally narrowed by status or project id.
-    signature: 'list(status: string, projectId: string): HostedUserRecord[]'
+    description: >-
+      List hosted users, optionally narrowed by status. There is no project filter: project
+      membership is a permission-grid question the identity orchestrator answers.
+    signature: 'list(status: string): HostedUserRecord[]'
     returns: HostedUserRecord[]
     params:
       - name: status
         type: string
         optional: true
-      - name: projectId
-        type: string
-        optional: true
 status: complete
 createdAt: '2026-07-08T20:16:24.537Z'
-updatedAt: '2026-07-09T17:43:42.809Z'
+updatedAt: '2026-07-16T15:08:29.311Z'

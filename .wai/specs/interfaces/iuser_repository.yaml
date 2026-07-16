@@ -22,14 +22,14 @@ methods:
       - name: externalSubject
         type: string
   - name: list
-    description: List hosted users for admin UI and audit investigation workflows.
-    signature: 'list(status: string, projectId: string): HostedUserRecord[]'
+    description: >-
+      List hosted users for admin UI and audit investigation workflows, optionally narrowed by
+      status. There is no project filter: project membership is a permission-grid question the
+      identity orchestrator answers.
+    signature: 'list(status: string): HostedUserRecord[]'
     returns: HostedUserRecord[]
     params:
       - name: status
-        type: string
-        optional: true
-      - name: projectId
         type: string
         optional: true
   - name: upsert
@@ -67,4 +67,4 @@ methods:
       - atomic
 status: complete
 createdAt: '2026-07-08T20:16:35.931Z'
-updatedAt: '2026-07-15T22:49:40.502Z'
+updatedAt: '2026-07-16T15:08:27.496Z'

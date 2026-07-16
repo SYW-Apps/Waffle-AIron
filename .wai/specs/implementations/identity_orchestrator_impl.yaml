@@ -351,17 +351,34 @@ methods:
         type: throw
         error: Forbidden — user administration required
       - stepNumber: 5
-        description: List hosted users, optionally narrowed to one project's grant holders
+        description: >-
+          List hosted users through the repository, optionally narrowed by status (the user store
+          owns NO project filter — membership is a grid question)
         type: call
         targetComponent: user_repository
         targetMethod: list
       - stepNumber: 6
         description: >-
-          Filter the returned users to those whose home unit is an actionable unit in the visible
-          set (an instance-admin keeps every user); honor any optional project narrowing already
-          applied
-        type: local
+          If a caller-supplied project filter is present, resolve its holders from the permission
+          grid; otherwise skip to the scope filter
+        type: branch
+        condition: a caller-supplied project filter is present
+        onFalseStep: 8
       - stepNumber: 7
+        description: >-
+          List the DIRECT user assignments at that project scope through the permission repository
+          and narrow the listing to those subject ids (user records carry no project reference of
+          their own)
+        type: call
+        targetComponent: permission_repository
+        targetMethod: listAssignments
+      - stepNumber: 8
+        description: >-
+          Filter the returned users to those whose home unit is an actionable unit in the visible
+          set (an instance-admin keeps every user), intersected with the grid-resolved project
+          holders when a project filter was supplied
+        type: local
+      - stepNumber: 9
         description: Return the hosted user records filtered to the caller's scope
         type: return
         outcome: scoped hosted user records
@@ -910,4 +927,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-07-16T00:27:10.846Z'
+updatedAt: '2026-07-16T15:06:43.067Z'

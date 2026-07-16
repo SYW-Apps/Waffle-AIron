@@ -1,8 +1,9 @@
 id: user_index
 name: User Index
 description: >-
-  Read-path projection over hosted users, supporting lookup by Wairon user id, external subject,
-  status, and project grant without owning writes.
+  Read-path projection over hosted users, supporting lookup by Wairon user id, external subject, and
+  status without owning writes. Project-membership filtering is NOT a user-store question: it lives
+  on the identity orchestrator, which intersects this listing with the permission grid.
 subsystem: sdd_host
 componentType: Index
 owns: []
@@ -12,4 +13,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-08T20:14:40.372Z'
-updatedAt: '2026-07-10T08:19:21.803Z'
+updatedAt: '2026-07-16T15:05:24.755Z'

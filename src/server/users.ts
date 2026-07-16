@@ -1,6 +1,5 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { listAssignments } from './permissions.js';
 import type { HostedUserRecord, UnitIdRemap } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -192,29 +191,16 @@ function indexFindByExternalSubject(
 }
 
 /**
- * List users filtered by the optional status and the optional project id, sorted
- * by id for stable pagination.
- *
- * The project filter matches users holding a direct permission assignment scoped
- * to that project. Grants are gone, so a user record no longer carries any
- * project reference of its own — "who is on project X" is now a question for the
- * permission grid, and answering it from the grid keeps the admin filter honest
- * rather than silently widening to every user. It deliberately does NOT resolve
- * inherited access (a broader unit/instance grant): that is a resolver question,
- * and admins inspect effective access through the assignment views.
+ * List users filtered by the optional status, sorted by id for stable
+ * pagination. There is NO project filter here: a user record carries no project
+ * reference of its own — "who is on project X" is a permission-grid question,
+ * answered by the identity orchestrator intersecting this listing with the
+ * grid's direct assignments.
  */
-function indexList(dataDir: string, status?: string, projectId?: string): HostedUserRecord[] {
+function indexList(dataDir: string, status?: string): HostedUserRecord[] {
   let records = loadStore(dataDir);
   if (status) {
     records = records.filter((r) => r.status === status);
-  }
-  if (projectId) {
-    const holders = new Set(
-      listAssignments(dataDir, [projectId], 'user')
-        .map((a) => a.subjectId)
-        .filter((id): id is string => id !== undefined),
-    );
-    records = records.filter((r) => holders.has(r.id));
   }
   return records.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
@@ -235,9 +221,9 @@ export function findUserByExternalSubject(
   return indexFindByExternalSubject(dataDir, issuer, externalSubject);
 }
 
-/** List hosted users, optionally narrowed by status or project id. */
-export function listUsers(dataDir: string, status?: string, projectId?: string): HostedUserRecord[] {
-  return indexList(dataDir, status, projectId);
+/** List hosted users, optionally narrowed by status. */
+export function listUsers(dataDir: string, status?: string): HostedUserRecord[] {
+  return indexList(dataDir, status);
 }
 
 /** Create or update a hosted user through the repository facade (atomic). */

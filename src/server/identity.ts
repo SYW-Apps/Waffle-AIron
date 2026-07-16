@@ -21,6 +21,7 @@ import {
   setUserStatus as repoSetUserStatus,
   findUserByExternalSubject as repoFindUserByExternalSubject,
 } from './users.js';
+import { listAssignments } from './permissions.js';
 import {
   appendAuditEvent,
   queryAuditEvents as repoQueryAuditEvents,
@@ -486,8 +487,9 @@ export function revokeSelfToken(cfg: HostConfig, credential: string | null, toke
  * instance-admin sees all, a scoped caller sees only users whose home unit is
  * within their actionable units (a user with no home unit is visible only to an
  * instance-admin). The optional project filter narrows to users holding a DIRECT
- * assignment at that project scope (resolved by the user repository from the
- * permission grid). No audit event (a read).
+ * assignment at that project scope — resolved HERE from the permission grid,
+ * since user records carry no project reference of their own (the user store
+ * owns no project filter). No audit event (a read).
  */
 export function listUsers(
   cfg: HostConfig,
@@ -495,16 +497,27 @@ export function listUsers(
   project?: string,
 ): HostedUserRecord[] {
   const principal = requirePrincipal(cfg, credential);
+  // The grid answers project membership: users holding a DIRECT assignment at
+  // that exact project scope.
+  const narrowToProject = (users: HostedUserRecord[]): HostedUserRecord[] => {
+    if (!project) return users;
+    const holders = new Set(
+      listAssignments(cfg.dataDir, [project], 'user')
+        .map((a) => a.subjectId)
+        .filter((id): id is string => id !== undefined),
+    );
+    return users.filter((u) => holders.has(u.id));
+  };
   // An instance-level admin (bypass OR delegated) sees every user, including
   // no-home-unit users a unit filter could never surface.
   if (hasInstanceProjectAdmin(cfg, principal)) {
-    return repoListUsers(cfg.dataDir, undefined, project);
+    return narrowToProject(repoListUsers(cfg.dataDir));
   }
   const units = new Set(actionableUnitIds(visibleScopes(cfg.dataDir, principal, PROJECT_ADMIN_CAPABILITY)));
   if (units.size === 0) {
     throw new ForbiddenError('user administration requires project:admin over at least one unit');
   }
-  const users = repoListUsers(cfg.dataDir, undefined, project);
+  const users = narrowToProject(repoListUsers(cfg.dataDir));
   return users.filter((u) => u.unitId !== undefined && units.has(u.unitId));
 }
 
