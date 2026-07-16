@@ -11,6 +11,7 @@ import * as packs from '../server/packs.js';
 import * as permissionadmin from '../server/permissionadmin.js';
 import { mintToken } from '../server/identity.js';
 import { upsertUnit as landscapeUpsertUnit } from '../server/landscape.js';
+import { migratePermissionModel } from '../server/migration.js';
 import { AdminAuthError, LockValidationError } from '../server/admin.js';
 import { startHostServer } from '../server/http.js';
 import { registerLocalDevProject } from '../server/projects.js';
@@ -401,6 +402,33 @@ export async function runHostUnit(action: string, options: HostOptions = {}): Pr
     }
   } catch (e) {
     throw mapAdminError(e);
+  }
+}
+
+// ── wairon host doctor ────────────────────────────────────────────────────────
+
+/**
+ * Inspect a hosted data dir for pre-permission-model shapes and (with --fix)
+ * migrate them in place: stored grants → grid assignments, ownerless keys →
+ * synthesized service owners carrying their legacy authority, units → slugs +
+ * qualified dot-path ids with every reference remapped, unplaced projects →
+ * the 'unassigned' root unit, legacy builtin sessions/keys → revoked. This
+ * migration is REQUIRED at rollout: without it every existing user and token
+ * resolves to zero permissions under the live-owner model.
+ */
+export async function runHostDoctor(options: HostOptions & { fix?: boolean } = {}): Promise<void> {
+  const cfg = resolveHostConfig(options);
+  const report = migratePermissionModel(cfg.dataDir, options.fix === true);
+  if (report.findings.length === 0) {
+    logger.success('Hosted data is on the permission model — nothing to migrate.');
+    return;
+  }
+  logger.info(`${report.findings.length} finding(s)${report.applied ? ' — applied' : ' (dry run; re-run with --fix to apply)'}:`);
+  for (const f of report.findings) {
+    logger.info(`  [${f.area.padEnd(8)}] ${f.detail}`);
+  }
+  if (!report.applied) {
+    logger.warn('NOT applied. Without --fix, pre-permission-model users and tokens resolve to ZERO permissions.');
   }
 }
 

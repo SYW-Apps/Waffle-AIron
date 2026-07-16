@@ -31,6 +31,7 @@ import {
   runHostProject,
   runHostUnit,
   runHostPermission,
+  runHostDoctor,
   runHostKey,
   runHostLock,
   runHostPromote,
@@ -479,6 +480,15 @@ hostCmd
   .option('--data-dir <path>', 'data root')
   .action(async (action: string, opts) => {
     await runHostUnit(action, { slug: opts.slug, name: opts.name, kind: opts.kind, parent: opts.parent, dataDir: opts.dataDir });
+  });
+
+hostCmd
+  .command('doctor')
+  .description('migrate a hosted data dir to the permission model (grants → assignments, owners, unit ids, placements); dry-run without --fix')
+  .option('--fix', 'apply the migration (REQUIRED at rollout — legacy users/tokens otherwise resolve to zero permissions)')
+  .option('--data-dir <path>', 'data root')
+  .action(async (opts) => {
+    await runHostDoctor({ fix: opts.fix, dataDir: opts.dataDir });
   });
 
 hostCmd
