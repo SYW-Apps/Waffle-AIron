@@ -14,38 +14,34 @@ import {
   serveApp,
   __resetLoginThrottle,
 } from '../../src/server/web.js';
-import { authenticateSession, verifyBuiltinAdmin, BUILTIN_SUPERADMIN_USER_ID } from '../../src/server/auth.js';
+import { authenticateSession, verifyBuiltinAdmin } from '../../src/server/auth.js';
 import * as identity from '../../src/server/identity.js';
-import { ForbiddenError, UnauthenticatedError } from '../../src/server/identity.js';
+import { UnauthenticatedError } from '../../src/server/identity.js';
+import { isInstanceAdmin } from '../../src/server/authorization.js';
+import { ensureInstanceIdentity, getInstanceIdentity } from '../../src/server/instance.js';
+import { SSO_ADMIN_ROLE_ID } from '../../src/server/roles.js';
 import { upsertIdentityProviderRecord } from '../../src/server/policy.js';
-import { findUserByExternalSubject, upsertUser as repoUpsertUser, getUserById } from '../../src/server/users.js';
-import { getWebSessionById, createWebSession } from '../../src/server/websessions.js';
-import { createProjectRecord } from '../../src/server/projects.js';
+import { findUserByExternalSubject, getUserById } from '../../src/server/users.js';
+import { getWebSessionById } from '../../src/server/websessions.js';
 import { hashToken, findByTokenHash } from '../../src/server/credentials.js';
 import { queryAuditEvents as auditQuery } from '../../src/server/audit.js';
 import { routeData } from '../../src/server/http.js';
-import type {
-  HostConfig,
-  HostedUserRecord,
-  IdentityProviderConfig,
-  ProjectGrant,
-} from '../../src/server/types.js';
+import type { HostConfig, IdentityProviderConfig } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
 // Crown-jewel auth (sdd_host): the three identity tiers.
 //
 // 1. Built-in super-admin: WAIRON_ADMIN_USER/_PASSWORD → a web password login
-//    minting the ONLY instance-wide *:* session (constant-time verification,
-//    disabled when either env value is unset, transient failed-attempt throttle).
-// 2. SSO admin: provider adminGroupClaims → the ENUMERATED instance-wide bundle
-//    {*, [user:admin, project:create, audit:read]} — never *:*.
-// 3. SSO user: empty grants until an admin assigns.
+//    resolving to the PERSISTED boot-reserved super-admin UUID — the only
+//    instance-admin session (constant-time verification, disabled when either
+//    env value is unset, transient failed-attempt throttle).
+// 2. SSO admin: provider adminGroupClaims → the built-in sso-admin ROLE binding
+//    (project:admin + project:create @instance, OVERRIDABLE — never the bypass).
+// 3. SSO user: no bindings until an admin assigns roles/assignments.
 //
-// Plus the *:* HARD RESERVATION: no user-record grant and no minted user token
-// may ever carry {projectId '*', no orgUnitId, permissions ⊇ '*'} — rejected
-// unconditionally, even for a super-admin/master caller.
-//
-// The OIDC stub provider mirrors web.test.ts / identity-sso.test.ts.
+// The reserved-subject guard (built-in ids unclaimable) is pinned in
+// identity.test.ts / instance.test.ts. The OIDC stub provider mirrors
+// web.test.ts / identity-sso.test.ts.
 // ---------------------------------------------------------------------------
 
 const MASTER = 'master-credential-secret-value';
@@ -57,12 +53,6 @@ const ADMIN_GROUP = 'wairon-admins';
 
 const ADMIN_USER = 'root-operator';
 const ADMIN_PASSWORD = 'a-very-strong-builtin-password';
-
-const SSO_ADMIN_BUNDLE: ProjectGrant = {
-  projectId: '*',
-  permissions: ['user:admin', 'project:create', 'audit:read'],
-};
-const RESERVED: ProjectGrant = { projectId: '*', permissions: ['*'] };
 
 // A real RSA signing key; its public half is published in the stub JWKS so the
 // adapter verifies the RS256-signed id_tokens end-to-end during sign-in.
@@ -164,6 +154,7 @@ describe('built-in super-admin password login (sdd_host)', () => {
     dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-builtin-login-'));
     process.env.WAIRON_ADMIN_TOKEN = MASTER;
     process.env.WAIRON_DATA_DIR = dataDir;
+    ensureInstanceIdentity(dataDir); // the lifecycle init seeds this at boot
     __resetLoginThrottle();
     cfg = {
       host: '127.0.0.1',
@@ -187,9 +178,9 @@ describe('built-in super-admin password login (sdd_host)', () => {
     }
   });
 
-  it('verifyBuiltinAdmin: full match → the stable subject; any mismatch or unset env → null', () => {
+  it('verifyBuiltinAdmin: full match → the persisted boot-reserved subject; any mismatch or unset env → null', () => {
     expect(verifyBuiltinAdmin(cfg, ADMIN_USER, ADMIN_PASSWORD)).toEqual({
-      userId: BUILTIN_SUPERADMIN_USER_ID,
+      userId: getInstanceIdentity(dataDir)!.superadminUserId,
       kind: 'human',
       issuer: 'local',
     });
@@ -203,26 +194,27 @@ describe('built-in super-admin password login (sdd_host)', () => {
     expect(verifyBuiltinAdmin({ ...cfg, builtinAdminPassword: undefined }, ADMIN_USER, ADMIN_PASSWORD)).toBeNull();
   });
 
-  it('right creds → a resolvable *:* session; the principal IS instance-admin (security audit)', () => {
+  it('right creds → a permission-free session whose subject IS the instance-admin (security audit)', () => {
+    const builtin = getInstanceIdentity(dataDir)!.superadminUserId;
     const sessionId = signInWithPassword(cfg, ADMIN_USER, ADMIN_PASSWORD);
     expect(sessionId).toMatch(/^ws_[0-9a-f]+$/);
 
     const session = getWebSessionById(dataDir, sessionId)!;
-    expect(session.subject).toEqual({ userId: BUILTIN_SUPERADMIN_USER_ID, kind: 'human', issuer: 'local' });
-    expect(session.grants).toEqual([RESERVED]); // the ONLY *:* in the system
+    expect(session.subject).toEqual({ userId: builtin, kind: 'human', issuer: 'local' });
+    expect(session.projects).toEqual(['*']); // narrowing only — NO stored permissions
 
     const principal = authenticateSession(dataDir, sessionId);
     expect(principal.authenticated).toBe(true);
-    expect(identity.isInstanceAdmin(principal)).toBe(true);
+    expect(isInstanceAdmin(principal)).toBe(true); // by persisted-UUID identity
     expect(getCurrentContext(cfg, sessionId).isAdmin).toBe(true);
 
     // NO hosted user record was created — the built-in admin is not a user record.
-    expect(getUserById(dataDir, BUILTIN_SUPERADMIN_USER_ID)).toBeNull();
+    expect(getUserById(dataDir, builtin)).toBeNull();
 
     const events = auditQuery(dataDir, { action: 'web.signin.password' });
     expect(events).toHaveLength(1);
     expect(events[0].level).toBe('security');
-    expect(events[0].actor.userId).toBe(BUILTIN_SUPERADMIN_USER_ID);
+    expect(events[0].actor.userId).toBe(builtin);
   });
 
   it('wrong password / wrong user → Unauthenticated, and no session is minted', () => {
@@ -296,6 +288,7 @@ describe('POST /web/login HTTP mount (sdd_host)', () => {
     dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-builtin-http-'));
     process.env.WAIRON_ADMIN_TOKEN = MASTER;
     process.env.WAIRON_DATA_DIR = dataDir;
+    ensureInstanceIdentity(dataDir); // the lifecycle init seeds this at boot
     __resetLoginThrottle();
     fs.writeFileSync(
       path.join(dataDir, 'exposure-policy.json'),
@@ -347,7 +340,7 @@ describe('POST /web/login HTTP mount (sdd_host)', () => {
     const ctx = await raw({ method: 'GET', path: '/web/context', headers: { cookie: `wairon_session=${sessionId}` } });
     expect(ctx.status).toBe(200);
     const parsed = JSON.parse(ctx.body);
-    expect(parsed.subject.userId).toBe(BUILTIN_SUPERADMIN_USER_ID);
+    expect(parsed.subject.userId).toBe(getInstanceIdentity(dataDir)!.superadminUserId);
     expect(parsed.isAdmin).toBe(true);
   }, 20_000);
 
@@ -374,110 +367,14 @@ describe('POST /web/login HTTP mount (sdd_host)', () => {
   }, 20_000);
 });
 
-// ── Piece 2: the *:* hard reservation ─────────────────────────────────────────
+// (The old *:* hard-reservation describe is gone with the grant model: the
+// modern equivalent — the RESERVED-SUBJECT guard, which keeps the built-in
+// identities unclaimable by user records and token owners — is pinned in
+// identity.test.ts and instance.test.ts.)
 
-describe('hard reservation: *:* can never land on a user record or minted token (sdd_host)', () => {
-  let dataDir: string;
-  let cfg: HostConfig;
-  const savedEnv = { ...process.env };
+// ── Tiers 2 + 3: adminGroupClaims → the built-in sso-admin ROLE binding ───────
 
-  const mkUser = (over: Partial<HostedUserRecord> = {}): HostedUserRecord => ({
-    id: 'u-1',
-    subject: { userId: 'u-1', kind: 'human', issuer: 'local' },
-    status: 'active',
-    grants: [],
-    createdAt: new Date().toISOString(),
-    ...over,
-  });
-
-  beforeEach(() => {
-    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-reserve-'));
-    process.env.WAIRON_ADMIN_TOKEN = MASTER;
-    process.env.WAIRON_DATA_DIR = dataDir;
-    cfg = { host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: true };
-  });
-  afterEach(() => {
-    process.env = { ...savedEnv };
-    try {
-      fs.rmSync(dataDir, { recursive: true, force: true });
-    } catch {
-      /* windows file locks */
-    }
-  });
-
-  it('isSuperAdminGrant matches exactly the reserved shape', () => {
-    expect(identity.isSuperAdminGrant(RESERVED)).toBe(true);
-    expect(identity.isSuperAdminGrant({ projectId: '*', permissions: ['mcp:read', '*'] })).toBe(true);
-    // Enumerated instance-wide bundle → NOT reserved.
-    expect(identity.isSuperAdminGrant(SSO_ADMIN_BUNDLE)).toBe(false);
-    // Unit-scoped '*' is bounded to its subtree → NOT reserved.
-    expect(identity.isSuperAdminGrant({ projectId: '*', permissions: ['*'], orgUnitId: 'unit-1' })).toBe(false);
-    // Project-scoped wildcard permissions → NOT reserved.
-    expect(identity.isSuperAdminGrant({ projectId: 'proj-a', permissions: ['*'] })).toBe(false);
-  });
-
-  it('replaceUserGrants rejects *:* EVEN for master and for a *:* super-admin session', () => {
-    repoUpsertUser(dataDir, mkUser());
-
-    expect(() => identity.replaceUserGrants(cfg, MASTER, 'u-1', [RESERVED])).toThrow(ForbiddenError);
-    expect(() => identity.replaceUserGrants(cfg, MASTER, 'u-1', [RESERVED])).toThrow(/reserved to the built-in admin/i);
-
-    // A super-admin *:* SESSION (the built-in admin's own shape) is refused too.
-    const admin = createWebSession(dataDir, {
-      id: '',
-      subject: { userId: BUILTIN_SUPERADMIN_USER_ID, kind: 'human', issuer: 'local' },
-      grants: [RESERVED],
-      createdAt: '',
-      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
-    });
-    expect(() => identity.replaceUserGrants(cfg, admin.id, 'u-1', [RESERVED])).toThrow(ForbiddenError);
-
-    // The record was never touched.
-    expect(getUserById(dataDir, 'u-1')!.grants).toEqual([]);
-  });
-
-  it('replaceUserGrants still allows an enumerated instance-wide bundle and scoped grants (as master)', () => {
-    repoUpsertUser(dataDir, mkUser());
-    expect(identity.replaceUserGrants(cfg, MASTER, 'u-1', [SSO_ADMIN_BUNDLE]).grants).toEqual([SSO_ADMIN_BUNDLE]);
-    const scoped: ProjectGrant = { projectId: 'proj-a', permissions: ['mcp:read', 'mcp:write'] };
-    expect(identity.replaceUserGrants(cfg, MASTER, 'u-1', [scoped]).grants).toEqual([scoped]);
-  });
-
-  it('upsertUser rejects a record carrying *:*, even as master', () => {
-    expect(() => identity.upsertUser(cfg, MASTER, mkUser({ grants: [RESERVED] }))).toThrow(ForbiddenError);
-    expect(getUserById(dataDir, 'u-1')).toBeNull(); // nothing stored
-
-    // A record with the enumerated bundle (or none) is fine.
-    expect(identity.upsertUser(cfg, MASTER, mkUser({ grants: [SSO_ADMIN_BUNDLE] })).grants).toEqual([SSO_ADMIN_BUNDLE]);
-  });
-
-  it('mintToken rejects a *:* delegation EVEN for master; the enumerated bundle mints fine', () => {
-    createProjectRecord(dataDir, 'proj-a');
-
-    expect(() =>
-      identity.mintToken(cfg, MASTER, { ownerUserId: 'svc-1', label: 't', grants: [RESERVED] }),
-    ).toThrow(/reserved to the built-in admin/i);
-
-    const bundleToken = identity.mintToken(cfg, MASTER, {
-      ownerUserId: 'svc-1',
-      label: 't',
-      grants: [SSO_ADMIN_BUNDLE],
-    });
-    expect(bundleToken).toMatch(/^wk_/);
-    expect(findByTokenHash(dataDir, hashToken(bundleToken))!.grants).toEqual([SSO_ADMIN_BUNDLE]);
-
-    const scopedToken = identity.mintToken(cfg, MASTER, {
-      ownerUserId: 'svc-1',
-      label: 't',
-      grants: [{ projectId: 'proj-a', permissions: ['mcp:read'] }],
-    });
-    expect(scopedToken).toMatch(/^wk_/);
-  });
-});
-
-// ── Tiers 2 + 3: adminGroupClaims → the enumerated SSO-admin bundle ──────────
-
-describe('adminGroupClaims → SSO-admin bundle provisioning (sdd_host)', () => {
+describe('adminGroupClaims → sso-admin role provisioning (sdd_host)', () => {
   let dataDir: string;
   let cfg: HostConfig;
   const savedEnv = { ...process.env };
@@ -500,37 +397,37 @@ describe('adminGroupClaims → SSO-admin bundle provisioning (sdd_host)', () => 
     }
   });
 
-  it('web sign-in with a matching group provisions the ENUMERATED bundle — isAdmin stays FALSE, no *:*', async () => {
+  it('web sign-in with a matching group binds the sso-admin ROLE — never the instance-admin bypass', async () => {
     upsertIdentityProviderRecord(dataDir, providerConfig({ adminGroupClaims: [ADMIN_GROUP] }));
     stubClaims({ iss: issuerUrl, sub: 'ext-1', email: 'alice@corp.example', groups: [ADMIN_GROUP, 'devs'] });
 
     const sessionId = await webLogin(cfg);
 
-    // The user record carries EXACTLY the enumerated bundle — not *:*.
+    // The user record carries EXACTLY the built-in role binding — no grants field.
     const user = findUserByExternalSubject(dataDir, PROVIDER_ID, 'ext-1')!;
-    expect(user.grants).toEqual([SSO_ADMIN_BUNDLE]);
+    expect(user.roleBindings).toEqual([{ roleId: SSO_ADMIN_ROLE_ID }]);
 
-    // The session carries the bundle; the principal is NOT instance-admin.
+    // The session stores NO permissions; the principal is NOT the bypass — but
+    // the sso-admin role resolves project:admin@instance LIVE, so the delegated
+    // admin CAN reach the instance-level admin surfaces (overridably).
     const session = getWebSessionById(dataDir, sessionId)!;
-    expect(session.grants).toEqual([SSO_ADMIN_BUNDLE]);
+    expect(session.projects).toEqual(['*']);
     const principal = authenticateSession(dataDir, sessionId);
-    expect(identity.isInstanceAdmin(principal)).toBe(false);
-    expect(session.grants.some((g) => identity.isSuperAdminGrant(g))).toBe(false);
-    // The UI affordance flag (WebContext.isAdmin = any instance-wide grant) shows
-    // the Admin tab for the delegated SSO admin — but the SECURITY boundary is
-    // isInstanceAdmin (requires the '*' permission), which is false above: the
-    // instance-admin-only surfaces (IdP/org config) still refuse this session.
-    expect(getCurrentContext(cfg, sessionId).isAdmin).toBe(true);
-    expect(() => identity.listIdentityProviders(cfg, sessionId)).toThrow(ForbiddenError);
+    expect(isInstanceAdmin(principal)).toBe(false);
+    // WebContext.isAdmin = the env-anchored bypass only; delegated admin chrome
+    // is driven client-side by their project:admin visible scopes.
+    expect(getCurrentContext(cfg, sessionId).isAdmin).toBe(false);
+    // The role's resolved instance-level project:admin authorizes IdP reads.
+    expect(Array.isArray(identity.listIdentityProviders(cfg, sessionId))).toBe(true);
   });
 
-  it('web sign-in with no matching group stays empty-grants (tier 3)', async () => {
+  it('web sign-in with no matching group stays binding-free (tier 3)', async () => {
     upsertIdentityProviderRecord(dataDir, providerConfig({ adminGroupClaims: [ADMIN_GROUP] }));
     stubClaims({ iss: issuerUrl, sub: 'ext-1', email: 'alice@corp.example', groups: ['devs'] });
 
     const sessionId = await webLogin(cfg);
-    expect(findUserByExternalSubject(dataDir, PROVIDER_ID, 'ext-1')!.grants).toEqual([]);
-    expect(getWebSessionById(dataDir, sessionId)!.grants).toEqual([]);
+    expect(findUserByExternalSubject(dataDir, PROVIDER_ID, 'ext-1')!.roleBindings).toEqual([]);
+    expect(getWebSessionById(dataDir, sessionId)!.projects).toEqual(['*']);
   });
 
   it('unset adminGroupClaims never matches — groups alone confer nothing', async () => {
@@ -538,76 +435,54 @@ describe('adminGroupClaims → SSO-admin bundle provisioning (sdd_host)', () => 
     stubClaims({ iss: issuerUrl, sub: 'ext-1', email: 'alice@corp.example', groups: [ADMIN_GROUP] });
 
     await webLogin(cfg);
-    expect(findUserByExternalSubject(dataDir, PROVIDER_ID, 'ext-1')!.grants).toEqual([]);
+    expect(findUserByExternalSubject(dataDir, PROVIDER_ID, 'ext-1')!.roleBindings).toEqual([]);
   });
 
-  it('a follow-on login after removal from the group DROPS the bundle; other grants survive', async () => {
+  it('a follow-on login after removal from the group UNBINDS sso-admin; other bindings survive', async () => {
     upsertIdentityProviderRecord(dataDir, providerConfig({ adminGroupClaims: [ADMIN_GROUP] }));
 
-    // Login 1: in the group → bundle.
+    // Login 1: in the group → the sso-admin binding.
     stubClaims({ iss: issuerUrl, sub: 'ext-1', email: 'alice@corp.example', groups: [ADMIN_GROUP] });
     await webLogin(cfg);
-    expect(findUserByExternalSubject(dataDir, PROVIDER_ID, 'ext-1')!.grants).toEqual([SSO_ADMIN_BUNDLE]);
+    expect(findUserByExternalSubject(dataDir, PROVIDER_ID, 'ext-1')!.roleBindings).toEqual([
+      { roleId: SSO_ADMIN_ROLE_ID },
+    ]);
 
-    // An admin additionally hands the user a scoped grant in between.
-    const scoped: ProjectGrant = { projectId: 'proj-a', permissions: ['mcp:read'] };
-    createProjectRecord(dataDir, 'proj-a');
-    identity.replaceUserGrants(cfg, MASTER, USER_ID, [SSO_ADMIN_BUNDLE, scoped]);
+    // An admin additionally binds a CUSTOM role in between.
+    const provisioned = findUserByExternalSubject(dataDir, PROVIDER_ID, 'ext-1')!;
+    identity.upsertUser(cfg, MASTER, {
+      ...provisioned,
+      roleBindings: [{ roleId: SSO_ADMIN_ROLE_ID }, { roleId: 'custom-role' }],
+    });
 
-    // Login 2: dropped from the group → the bundle goes, the scoped grant stays.
+    // Login 2: dropped from the group → sso-admin goes, the custom binding stays.
     stubClaims({ iss: issuerUrl, sub: 'ext-1', email: 'alice@corp.example', groups: ['devs'] });
-    const session2 = await webLogin(cfg);
-    const after = findUserByExternalSubject(dataDir, PROVIDER_ID, 'ext-1')!;
-    expect(after.grants).toEqual([scoped]);
-    expect(getWebSessionById(dataDir, session2)!.grants).toEqual([scoped]);
+    await webLogin(cfg);
+    expect(findUserByExternalSubject(dataDir, PROVIDER_ID, 'ext-1')!.roleBindings).toEqual([
+      { roleId: 'custom-role' },
+    ]);
   });
 
-  it('headless completeSsoLogin provisions/refreshes the bundle identically (token path)', async () => {
+  it('headless completeSsoLogin provisions/refreshes the binding identically (token path)', async () => {
     upsertIdentityProviderRecord(dataDir, providerConfig({ adminGroupClaims: [ADMIN_GROUP] }));
 
-    // In the group → token + record carry the bundle (never *:*).
+    // In the group → the record carries the binding; the token carries NOTHING
+    // (it acts as the owner's live permission).
     stubClaims({ iss: issuerUrl, sub: 'ext-1', email: 'alice@corp.example', groups: [ADMIN_GROUP] });
     const url1 = await identity.startSsoLogin(cfg, PROVIDER_ID, 'https://cli.example/cb');
     const token1 = await identity.completeSsoLogin(cfg, stateFrom(url1), 'code-1');
     const rec1 = findByTokenHash(dataDir, hashToken(token1))!;
-    expect(rec1.grants).toEqual([SSO_ADMIN_BUNDLE]);
-    expect(rec1.grants!.some((g) => identity.isSuperAdminGrant(g))).toBe(false);
-    expect(findUserByExternalSubject(dataDir, PROVIDER_ID, 'ext-1')!.grants).toEqual([SSO_ADMIN_BUNDLE]);
+    expect(rec1.projects).toEqual(['*']);
+    expect(findUserByExternalSubject(dataDir, PROVIDER_ID, 'ext-1')!.roleBindings).toEqual([
+      { roleId: SSO_ADMIN_ROLE_ID },
+    ]);
 
-    // Dropped from the group → the next login's token carries no bundle.
+    // Dropped from the group → the binding is removed on the next login, and the
+    // EXISTING token1 loses its admin reach immediately (resolved live).
     stubClaims({ iss: issuerUrl, sub: 'ext-1', email: 'alice@corp.example', groups: [] });
     const url2 = await identity.startSsoLogin(cfg, PROVIDER_ID, 'https://cli.example/cb');
-    const token2 = await identity.completeSsoLogin(cfg, stateFrom(url2), 'code-2');
-    expect(findByTokenHash(dataDir, hashToken(token2))!.grants).toEqual([]);
-    expect(findUserByExternalSubject(dataDir, PROVIDER_ID, 'ext-1')!.grants).toEqual([]);
-  });
-
-  it('REINFORCE: no SSO path can ever yield *:* — even a legacy record carrying it is filtered at mint', async () => {
-    upsertIdentityProviderRecord(dataDir, providerConfig({ adminGroupClaims: [ADMIN_GROUP] }));
-
-    // A legacy user record that (through the repository, predating the orchestrator
-    // guard) carries the reserved grant plus a scoped one.
-    const scoped: ProjectGrant = { projectId: 'proj-a', permissions: ['mcp:read'] };
-    repoUpsertUser(dataDir, {
-      id: USER_ID,
-      subject: { userId: USER_ID, kind: 'human', issuer: PROVIDER_ID, externalSubject: 'ext-1' },
-      status: 'active',
-      grants: [RESERVED, scoped],
-      createdAt: new Date().toISOString(),
-    });
-
-    // Web session: the reserved grant is filtered out of the minted session.
-    stubClaims({ iss: issuerUrl, sub: 'ext-1', email: 'alice@corp.example', groups: ['devs'] });
-    const sessionId = await webLogin(cfg);
-    const session = getWebSessionById(dataDir, sessionId)!;
-    expect(session.grants).toEqual([scoped]);
-    expect(identity.isInstanceAdmin(authenticateSession(dataDir, sessionId))).toBe(false);
-
-    // Headless token: the reserved grant is filtered out of the minted credential.
-    const url = await identity.startSsoLogin(cfg, PROVIDER_ID, 'https://cli.example/cb');
-    const token = await identity.completeSsoLogin(cfg, stateFrom(url), 'code');
-    const rec = findByTokenHash(dataDir, hashToken(token))!;
-    expect(rec.grants).toEqual([scoped]);
-    expect(rec.role).toBe('editor'); // the compatibility projection follows the filtered grants
+    await identity.completeSsoLogin(cfg, stateFrom(url2), 'code-2');
+    expect(findUserByExternalSubject(dataDir, PROVIDER_ID, 'ext-1')!.roleBindings).toEqual([]);
+    expect(() => identity.listIdentityProviders(cfg, token1)).toThrow(/project:admin/i);
   });
 });

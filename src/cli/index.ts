@@ -29,6 +29,7 @@ import {
   runServe,
   runDev,
   runHostProject,
+  runHostUnit,
   runHostKey,
   runHostLock,
   runHostPromote,
@@ -465,6 +466,18 @@ hostCmd
   .option('--data-dir <path>', 'data root (default WAIRON_DATA_DIR or ~/.wairon/data)')
   .action(async (action: string, opts) => {
     await runHostProject(action, { id: opts.id, unit: opts.unit, dataDir: opts.dataDir });
+  });
+
+hostCmd
+  .command('unit <action>')
+  .description('create an organization unit (projects are placed into units at creation)')
+  .option('--slug <slug>', 'unit slug (REQUIRED for create; a root unit\'s id IS its slug)')
+  .option('--name <name>', 'display name (defaults to the slug)')
+  .option('--kind <kind>', 'unit kind (business_entity | department | team | …)', 'team')
+  .option('--parent <unitId>', 'qualified id of the parent unit (omit for a root unit)')
+  .option('--data-dir <path>', 'data root')
+  .action(async (action: string, opts) => {
+    await runHostUnit(action, { slug: opts.slug, name: opts.name, kind: opts.kind, parent: opts.parent, dataDir: opts.dataDir });
   });
 
 hostCmd

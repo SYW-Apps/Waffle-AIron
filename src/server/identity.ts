@@ -140,10 +140,19 @@ export function isInAdminGroup(provider: IdentityProviderConfig, groups: string[
   return claims.length > 0 && groups.some((g) => claims.includes(g));
 }
 
-/** The caller's audit-read view: an instance-admin reads instance-wide;
+/** True when the caller resolves a yes-valued project:admin at the instance
+ *  root — the env-anchored bypass OR a delegated instance-wide admin. Grants
+ *  instance-WIDE visibility for listings/audit (delegated admins administer the
+ *  whole instance even though their authority stays overridable). */
+function hasInstanceProjectAdmin(cfg: HostConfig, principal: Principal): boolean {
+  if (isInstanceAdmin(principal)) return true;
+  return authorize(cfg.dataDir, principal, PROJECT_ADMIN_CAPABILITY, 'instance', '').value === 'yes';
+}
+
+/** The caller's audit-read view: an instance-level admin reads instance-wide;
  *  otherwise the ACTIONABLE projects of their project:admin visibility view. */
 function auditReadView(cfg: HostConfig, principal: Principal): { all: boolean; projectIds: string[] } {
-  if (isInstanceAdmin(principal)) return { all: true, projectIds: [] };
+  if (hasInstanceProjectAdmin(cfg, principal)) return { all: true, projectIds: [] };
   return {
     all: false,
     projectIds: actionableProjectIds(visibleScopes(cfg.dataDir, principal, PROJECT_ADMIN_CAPABILITY)),
@@ -486,7 +495,9 @@ export function listUsers(
   project?: string,
 ): HostedUserRecord[] {
   const principal = requirePrincipal(cfg, credential);
-  if (isInstanceAdmin(principal)) {
+  // An instance-level admin (bypass OR delegated) sees every user, including
+  // no-home-unit users a unit filter could never surface.
+  if (hasInstanceProjectAdmin(cfg, principal)) {
     return repoListUsers(cfg.dataDir, undefined, project);
   }
   const units = new Set(actionableUnitIds(visibleScopes(cfg.dataDir, principal, PROJECT_ADMIN_CAPABILITY)));

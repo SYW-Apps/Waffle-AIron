@@ -8,6 +8,7 @@ import { logger } from '../utils/logger.js';
 import { WaironError } from '../utils/errors.js';
 import * as admin from '../server/admin.js';
 import * as packs from '../server/packs.js';
+import { upsertUnit as landscapeUpsertUnit } from '../server/landscape.js';
 import { AdminAuthError, LockValidationError } from '../server/admin.js';
 import { startHostServer } from '../server/http.js';
 import { registerLocalDevProject } from '../server/projects.js';
@@ -34,6 +35,9 @@ export interface HostOptions {
   noAuth?: boolean;
   id?: string;
   unit?: string;
+  slug?: string;
+  parent?: string;
+  kind?: string;
   project?: string;
   role?: string;
   remote?: string;
@@ -346,6 +350,39 @@ export async function runHostProject(action: string, options: HostOptions = {}):
       }
       default:
         throw new WaironError(`Unknown project action "${action}" (create | list | destroy).`);
+    }
+  } catch (e) {
+    throw mapAdminError(e);
+  }
+}
+
+// ── wairon host unit <action> ─────────────────────────────────────────────────
+
+export async function runHostUnit(action: string, options: HostOptions = {}): Promise<void> {
+  const cfg = resolveHostConfig(options);
+  const cred = masterCredential();
+  try {
+    switch (action) {
+      case 'create': {
+        if (!options.slug) throw new WaironError('`--slug <slug>` is required for `host unit create`.');
+        // A unit's qualified dot-path id is its parent's id + '.' + slug; a root
+        // unit's id IS its slug.
+        const qualifiedId = options.parent ? `${options.parent}.${options.slug}` : options.slug;
+        const stored = landscapeUpsertUnit(cfg, cred, {
+          id: qualifiedId,
+          name: options.name ?? options.slug,
+          slug: options.slug,
+          kind: options.kind ?? 'team',
+          ...(options.parent ? { parentId: options.parent } : {}),
+          status: 'active',
+          createdAt: '',
+          createdBy: { userId: 'master', kind: 'service', issuer: 'local' },
+        });
+        logger.success(`Created organization unit "${stored.id}".`);
+        break;
+      }
+      default:
+        throw new WaironError(`Unknown unit action "${action}" (create).`);
     }
   } catch (e) {
     throw mapAdminError(e);

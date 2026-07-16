@@ -72,6 +72,7 @@ export function seedUnit(dataDir: string, name: string, over: Partial<Organizati
   return upsertOrganizationUnit(dataDir, {
     id: '',
     name,
+    slug: name,
     kind: 'team',
     status: 'active',
     createdAt: '',

@@ -60,7 +60,9 @@ async function main() {
   console.log(`data dir: ${DATA}`);
 
   step('Control plane (in-process): provision an isolated project + mint a scoped editor key');
-  console.log('  ' + cli(['host', 'project', 'create', '--id', 'demo']).replace(/\s+/g, ' '));
+  // Every project is placed in an organization unit at creation, so seed one first.
+  console.log('  ' + cli(['host', 'unit', 'create', '--slug', 'demo-team']).replace(/\s+/g, ' '));
+  console.log('  ' + cli(['host', 'project', 'create', '--id', 'demo', '--unit', 'demo-team']).replace(/\s+/g, ' '));
   const key = (cli(['host', 'key', 'mint', '--project', 'demo', '--role', 'editor']).match(/wk_[a-f0-9]+/) || [])[0];
   ok(!!key, `minted key ${key ? key.slice(0, 12) + '…' : '(none!)'}`);
   ok(existsSync(specPath), 'isolated .wai/ tree provisioned');
