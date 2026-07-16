@@ -4,6 +4,7 @@ import { Badge, Button, EmptyState, ErrorNote, Spinner, TextInput, useAsync } fr
 import type { CanvasComponent, CanvasModel, CanvasType } from '../canvas/model';
 import { mountCanvas, type CanvasHandle } from '../canvas/renderer';
 import { mountErd, type ErdHandle } from '../canvas/erd';
+import { FlowModal } from './FlowModal';
 
 /**
  * In-React canvas (the "Beta" renderer). Fetches a project's {@link CanvasModel}
@@ -34,6 +35,8 @@ export function CanvasView({ projectId }: { projectId: string }) {
   const [selectedComponent, setSelectedComponent] = useState<CanvasComponent | null>(null);
   const [selectedType, setSelectedType] = useState<CanvasType | null>(null);
   const [query, setQuery] = useState('');
+  // The method whose L5 narrative flow the FlowModal is showing (null = closed).
+  const [flowTarget, setFlowTarget] = useState<{ component: string; method: string } | null>(null);
 
   const model = state.data;
   const emptyForMode =
@@ -75,6 +78,12 @@ export function CanvasView({ projectId }: { projectId: string }) {
   useEffect(() => {
     handleRef.current?.setQuery(query);
   }, [query, mode, model]);
+
+  // Dismiss the flow modal on a project reload or view-mode switch — a stale
+  // target could point at a component that is no longer in scope.
+  useEffect(() => {
+    setFlowTarget(null);
+  }, [model, mode]);
 
   function clearSelection() {
     handleRef.current?.select(null);
@@ -149,18 +158,46 @@ export function CanvasView({ projectId }: { projectId: string }) {
       </div>
 
       {mode === 'components' && selectedComponent && (
-        <DetailsPanel component={selectedComponent} onClose={clearSelection} />
+        <DetailsPanel
+          component={selectedComponent}
+          onClose={clearSelection}
+          onViewFlow={(method) => setFlowTarget({ component: selectedComponent.id, method })}
+        />
       )}
       {mode === 'types' && selectedType && model && (
         <TypeDetailsPanel type={selectedType} model={model} onClose={clearSelection} />
+      )}
+
+      {flowTarget && model && (
+        <FlowModal
+          model={model}
+          component={flowTarget.component}
+          method={flowTarget.method}
+          onClose={() => setFlowTarget(null)}
+        />
       )}
     </div>
   );
 }
 
-/** Right-hand side panel describing the selected component. */
-function DetailsPanel({ component, onClose }: { component: CanvasComponent; onClose: () => void }) {
+/** Right-hand side panel describing the selected component. Each interface
+ *  method that has an L5 narrative gets a "View flow" affordance; methods
+ *  specified only as an intent (prose, no steps) show that prose inline. Any
+ *  narrative without a matching contract method is listed under "Flows". */
+function DetailsPanel({
+  component,
+  onClose,
+  onViewFlow,
+}: {
+  component: CanvasComponent;
+  onClose: () => void;
+  onViewFlow: (method: string) => void;
+}) {
   const c = component;
+  const narrMethods = new Set(c.narratives.map((n) => n.method));
+  const intentByMethod = new Map(c.intents.map((i) => [i.method, i.text]));
+  const ifaceMethods = new Set(c.interfaces.flatMap((i) => i.methods.map((m) => m.name)));
+  const orphanNarrs = c.narratives.filter((n) => !ifaceMethods.has(n.method));
   return (
     <aside className="beta-details">
       <div className="beta-details-head">
@@ -192,12 +229,28 @@ function DetailsPanel({ component, onClose }: { component: CanvasComponent; onCl
                 <div className="beta-iface-name">{iface.name}</div>
                 {iface.methods.length > 0 && (
                   <ul className="beta-method-list">
-                    {iface.methods.map((m) => (
-                      <li key={m.name} className="beta-method">
-                        <code>{m.name}</code>
-                        {m.returns && <span className="beta-method-returns"> → {m.returns}</span>}
-                      </li>
-                    ))}
+                    {iface.methods.map((m) => {
+                      const hasFlow = narrMethods.has(m.name);
+                      const intent = !hasFlow ? intentByMethod.get(m.name) : undefined;
+                      return (
+                        <li key={m.name} className="beta-method">
+                          <div className="beta-method-row">
+                            <code>{m.name}</code>
+                            {m.returns && <span className="beta-method-returns"> → {m.returns}</span>}
+                            {hasFlow && (
+                              <button
+                                className="beta-flow-btn"
+                                onClick={() => onViewFlow(m.name)}
+                                title="View the L5 narrative flow"
+                              >
+                                View flow
+                              </button>
+                            )}
+                          </div>
+                          {intent && <p className="beta-method-intent">“{intent}”</p>}
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </li>
@@ -205,6 +258,26 @@ function DetailsPanel({ component, onClose }: { component: CanvasComponent; onCl
           </ul>
         )}
       </div>
+
+      {orphanNarrs.length > 0 && (
+        <div className="beta-details-section">
+          <div className="beta-details-label">Flows</div>
+          <ul className="beta-method-list beta-method-list-flush">
+            {orphanNarrs.map((n) => (
+              <li key={n.method} className="beta-method beta-method-row">
+                <code>{n.method}</code>
+                <button
+                  className="beta-flow-btn"
+                  onClick={() => onViewFlow(n.method)}
+                  title="View the L5 narrative flow"
+                >
+                  View flow
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {(c.dependsOn.length > 0 || c.owns.length > 0) && (
         <div className="beta-details-section">
