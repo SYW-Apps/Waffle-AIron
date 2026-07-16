@@ -27,9 +27,12 @@ import type { Role } from './types.js';
  * instance-admin bypass, which is env-anchored to the built-in super-admin and
  * can never be conferred by a role, an assignment, or a minted token.
  */
+/** The reserved id of the built-in SSO-admin role (see BUILTIN_ROLES). */
+export const SSO_ADMIN_ROLE_ID = 'sso-admin';
+
 export const BUILTIN_ROLES: Role[] = [
   {
-    id: 'sso-admin',
+    id: SSO_ADMIN_ROLE_ID,
     name: 'SSO Admin',
     description:
       "Built-in role bound automatically to users in an identity provider's admin groups. Grants instance-wide project administration and project creation — never the env-anchored instance-admin bypass.",

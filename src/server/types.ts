@@ -841,6 +841,20 @@ export interface HostConfig {
   builtinAdminPassword?: string;
 }
 
+/** Singleton instance-identity record persisted at <dataDir>/instance.json:
+ *  the boot-reserved UUIDs identifying the built-in subjects. Seeded ONCE by the
+ *  lifecycle init entrypoint at first boot and never rotated; instance-admin
+ *  recognition compares issuer 'local' AND userId === one of these persisted
+ *  UUIDs, so an account NAME is never a subject id. */
+export interface InstanceIdentity {
+  /** Boot-reserved random UUID that IS the built-in super-admin's local userId. */
+  superadminUserId: string;
+  /** Boot-reserved random UUID for the devMode synthetic local-developer subject. */
+  localDevUserId: string;
+  /** ISO timestamp of the first-boot seeding. */
+  createdAt: string;
+}
+
 /** Outcome of a gated promote — never an actual merge. */
 export interface PromoteResult {
   status: 'ready' | 'stale' | 'not-locked';

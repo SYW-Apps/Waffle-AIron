@@ -7,13 +7,15 @@ import { sendJson, bearerToken } from './httpio.js';
 import { handleWebRequest, sessionCookieValue, startDevSession, setSessionCookie } from './web.js';
 import * as admin from './admin.js';
 import * as packs from './packs.js';
+import { ensureInstanceIdentity } from './instance.js';
+import { upsertOrganizationUnit, getOrganizationUnit } from './organization.js';
 import * as identity from './identity.js';
 import * as projectlifecycle from './projectlifecycle.js';
 import * as policy from './policy.js';
 import * as landscape from './landscape.js';
 import * as operations from './operations.js';
 import { AdminAuthError, LockValidationError } from './admin.js';
-import type { ApprovalDecision, HostConfig, HostExposurePolicy, Role } from './types.js';
+import type { ApprovalDecision, HostConfig, HostExposurePolicy, PrincipalSubject, Role } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Host HTTP Portal + Host Server (sdd_host)
@@ -515,6 +517,37 @@ export interface HostServerHandle {
   close(): void;
 }
 
+/** The stable id of the synthetic local development unit `wairon dev` boots
+ *  with, so dev projects can always be placed (unitId is required at creation). */
+export const DEV_UNIT_ID = 'local';
+
+/**
+ * One-time boot initialization — the sdd_host lifecycle init entrypoint, run
+ * BEFORE the listeners bind (idempotent):
+ *   1. Seed-or-load the persisted instance identity: the first boot generates
+ *      the boot-reserved built-in subject UUIDs into <dataDir>/instance.json;
+ *      every later boot loads them unchanged.
+ *   2. Under devMode, ensure the synthetic local development organization unit
+ *      exists so dev projects can always be placed.
+ */
+export function initHostInstance(cfg: HostConfig): void {
+  ensureInstanceIdentity(cfg.dataDir);
+  if (cfg.devMode && !getOrganizationUnit(cfg.dataDir, DEV_UNIT_ID)) {
+    const system: PrincipalSubject = { userId: 'system', kind: 'service', issuer: 'local' };
+    upsertOrganizationUnit(cfg.dataDir, {
+      id: DEV_UNIT_ID,
+      name: 'Local Development',
+      kind: 'team',
+      slug: DEV_UNIT_ID, // a root unit's qualified id IS its slug
+      status: 'active',
+      createdAt: '',
+      createdBy: system,
+    });
+  }
+}
+// ihost_server.init — the lifecycle entrypoint's contract name.
+export { initHostInstance as init };
+
 /** Bind the data-plane and admin-plane listeners and begin accepting connections. */
 /** The literal placeholder shipped in .env.example — never a real credential. */
 export const PLACEHOLDER_ADMIN_TOKEN = 'replace-with-a-random-64-hex-character-token';
@@ -542,6 +575,10 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
       );
     }
   }
+  // Lifecycle init runs BEFORE the listeners bind: seed the persisted instance
+  // identity (and, under devMode, the synthetic local development unit).
+  initHostInstance(cfg);
+
   const dataServer = http.createServer((req, res) => routeData(cfg, req, res));
   const adminServer = http.createServer((req, res) => {
     void routeAdmin(cfg, req, res);

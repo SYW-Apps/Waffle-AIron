@@ -11,6 +11,7 @@ import {
 import { findByTokenHash, hashToken } from './credentials.js';
 import { getWebSessionById, WEB_SESSION_PREFIX } from './websessions.js';
 import { getUserById } from './users.js';
+import { getInstanceIdentity } from './instance.js';
 import { resolveSecret } from '../utils/secrets.js';
 
 // ---------------------------------------------------------------------------
@@ -28,34 +29,41 @@ import { resolveSecret } from '../utils/secrets.js';
 // owner's LIVE permission and can never outlive or exceed it.
 // ---------------------------------------------------------------------------
 
-/** The stable userId of the env-anchored built-in super-admin web-login account. */
-export const BUILTIN_SUPERADMIN_USER_ID = 'builtin:superadmin';
+/** LEGACY reserved literal — the built-in super-admin's former guessable
+ *  userId. No longer a live subject id (the persisted boot-reserved UUID is),
+ *  but it stays UNCLAIMABLE by user records for defense-in-depth. */
+export const LEGACY_SUPERADMIN_USER_ID = 'builtin:superadmin';
 
-/** The stable userId of the synthetic local-developer subject (`wairon dev`). */
-export const BUILTIN_LOCALDEV_USER_ID = 'builtin:localdev';
+/** LEGACY reserved literal — the synthetic local-developer subject's former
+ *  guessable userId. No longer a live subject id; stays unclaimable. */
+export const LEGACY_LOCALDEV_USER_ID = 'builtin:localdev';
 
-/** The issuer the env-anchored built-in subjects are minted under. */
+/** The issuer the built-in subjects are minted under. */
 const LOCAL_ISSUER = 'local';
 
 /**
- * Subject ids that confer the env-anchored instance-admin BYPASS. They are
- * reserved: a hosted user record may never claim one (see assertSubjectNotReserved),
- * or creating such a user would silently mint an un-overridable super-admin.
+ * Legacy literal subject ids that are reserved forever: a hosted user record may
+ * never claim one (isReservedSubject), or legacy data referencing them could
+ * collide with a resurrected identity. The LIVE built-in ids are the persisted
+ * boot-reserved UUIDs in <dataDir>/instance.json (UUID = unguessable, this
+ * guard = unclaimable).
  */
 export const RESERVED_SUBJECT_IDS: readonly string[] = [
-  BUILTIN_SUPERADMIN_USER_ID,
-  BUILTIN_LOCALDEV_USER_ID,
+  LEGACY_SUPERADMIN_USER_ID,
+  LEGACY_LOCALDEV_USER_ID,
 ];
 
 /**
- * True ONLY for the env-anchored subjects that hold the resolver bypass:
+ * True ONLY for the subjects that hold the resolver bypass:
  *   - the built-in super-admin, matched on the FULL tuple (issuer 'local' AND
- *     userId 'builtin:superadmin') so an SSO provider issuing that userId under
- *     its own issuer can never collide into the bypass;
- *   - the synthetic local-developer subject, likewise matched on the full tuple.
- *     It exists only when `wairon dev` minted it (startDevSession is devMode-only
- *     and is the sole minter), and the reserved-id guard stops a user record from
- *     impersonating it;
+ *     userId === the PERSISTED boot-reserved super-admin UUID) so an SSO
+ *     provider issuing that userId under its own issuer can never collide into
+ *     the bypass — and an unseeded instance recognizes NOBODY (fail closed);
+ *   - the synthetic local-developer subject, likewise matched on the full tuple
+ *     against the persisted local-developer UUID. It exists only when
+ *     `wairon dev` minted it (startDevSession is devMode-only and is the sole
+ *     minter), and the reserved-id guard stops a user record from impersonating
+ *     it;
  *   - the bootstrap/master credential.
  *
  * instanceAdmin is determined by SUBJECT IDENTITY, never by a roleBinding or an
@@ -63,18 +71,28 @@ export const RESERVED_SUBJECT_IDS: readonly string[] = [
  * admin holds project:admin@instance, which resolves as a normal OVERRIDABLE
  * permission, not the bypass.
  */
-function isInstanceAdminSubject(subject: PrincipalSubject | undefined): boolean {
+function isInstanceAdminSubject(dataDir: string, subject: PrincipalSubject | undefined): boolean {
   if (!subject) return false;
   if (subject.kind === 'bootstrap' && subject.issuer === 'bootstrap') return true;
   if (subject.issuer !== LOCAL_ISSUER) return false;
-  return (
-    subject.userId === BUILTIN_SUPERADMIN_USER_ID || subject.userId === BUILTIN_LOCALDEV_USER_ID
-  );
+  const identity = getInstanceIdentity(dataDir);
+  if (!identity) return false; // unseeded instance: no recognizable built-ins
+  return subject.userId === identity.superadminUserId || subject.userId === identity.localDevUserId;
 }
 
-/** True when a subject claims one of the env-reserved built-in identities. */
-export function isReservedSubject(subject: PrincipalSubject): boolean {
-  return subject.issuer === LOCAL_ISSUER && RESERVED_SUBJECT_IDS.includes(subject.userId);
+/**
+ * Reserved-subject guard: true when the candidate userId is an id user records
+ * may NEVER claim — the persisted boot-reserved super-admin or local-developer
+ * UUID, or a legacy reserved literal ('builtin:superadmin' / 'builtin:localdev').
+ * Defense-in-depth companion to the UUID scheme (UUID = unguessable, guard =
+ * unclaimable); identity.upsertUser enforces it on every user write so an
+ * admin-created user can never inherit the built-in bypass.
+ */
+export function isReservedSubject(dataDir: string, userId: string): boolean {
+  if (RESERVED_SUBJECT_IDS.includes(userId)) return true;
+  const identity = getInstanceIdentity(dataDir);
+  if (!identity) return false;
+  return userId === identity.superadminUserId || userId === identity.localDevUserId;
 }
 
 /**
@@ -91,7 +109,7 @@ function resolvePermissionSubject(
   subject: PrincipalSubject | undefined,
 ): PermissionSubject | null {
   const subjectId = subject?.userId ?? '';
-  if (isInstanceAdminSubject(subject)) {
+  if (isInstanceAdminSubject(dataDir, subject)) {
     // The env-anchored subjects have no user record — bindings are irrelevant
     // because the resolver bypasses the walk for them entirely.
     return { subjectId, roleBindings: [], instanceAdmin: true };
@@ -239,9 +257,11 @@ function hashedEquals(a: string, b: string): boolean {
  * evaluated before branching, so no user-enumeration or early-exit timing signal
  * exists. When either configured value is unset, password login is DISABLED and
  * every attempt resolves to null (the server still starts — SSO-only posture). On a
- * full match, returns the stable built-in super-admin subject; on any mismatch
- * returns null. Never throws and performs no session, grant, throttle, or audit
- * work — the web orchestrator owns the session mint and the failed-attempt throttle.
+ * full match, returns the stable built-in super-admin subject (userId = the
+ * PERSISTED boot-reserved super-admin UUID — never an account-name-derived id);
+ * on any mismatch, or when the instance identity has never been seeded, returns
+ * null. Never throws and performs no session, throttle, or audit work — the web
+ * orchestrator owns the session mint and the failed-attempt throttle.
  */
 export function verifyBuiltinAdmin(cfg: HostConfig, user: string, password: string): PrincipalSubject | null {
   const configuredUser = cfg.builtinAdminUser ?? '';
@@ -255,8 +275,12 @@ export function verifyBuiltinAdmin(cfg: HostConfig, user: string, password: stri
   if (!(userMatches && passwordMatches)) {
     return null; // steps 5–6: same path/timing for a wrong user and a wrong password
   }
-  // steps 7–8: the stable built-in super-admin subject.
-  return { userId: BUILTIN_SUPERADMIN_USER_ID, kind: 'human', issuer: 'local' };
+  // step 7: the persisted boot-reserved built-in subject UUIDs (fail closed when
+  // the instance has never been seeded — the lifecycle init entrypoint seeds them).
+  const identity = getInstanceIdentity(cfg.dataDir);
+  if (!identity) return null;
+  // steps 8–9: the stable built-in super-admin subject.
+  return { userId: identity.superadminUserId, kind: 'human', issuer: 'local' };
 }
 
 /** The single control-plane entry point accepting three credential kinds: a browser

@@ -6,21 +6,20 @@ import {
   resolveEnabledProvider,
   tryAppendAudit,
   buildSsoAuditEvent,
-  applySsoAdminBundle,
   isInAdminGroup,
-  isSuperAdminGrant,
-  ssoAdminBundleGrant,
   ANONYMOUS_SSO_ACTOR,
   type SsoStatePayload,
 } from './identity.js';
+import { SSO_ADMIN_ROLE_ID } from './roles.js';
 import * as webadmin from './webadmin.js';
 import * as webproject from './webproject.js';
 import { listIdentityProviderRecords } from './policy.js';
+import { getInstanceIdentity } from './instance.js';
 import { assertAllowedRedirectUri } from './idp.js';
 import { getHealthReport, getUsage } from './operations.js';
 import { listPendingRequests, decideRequest } from './projectlifecycle.js';
 import { UnauthenticatedError, ForbiddenError, AdminAuthError } from './errors.js';
-import { findUserByExternalSubject, upsertUser, replaceUserGrants as repoReplaceUserGrants } from './users.js';
+import { findUserByExternalSubject, upsertUser } from './users.js';
 import {
   createWebSession,
   removeWebSession,
@@ -94,9 +93,18 @@ const WRITE_PERMISSIONS = ['mcp:write', 'project:create'];
 // leaked dev session can only touch that one local tree. These constants are the
 // sole source of those conventions (subject id, project id, session lifetime).
 
-/** The synthetic identity behind the local dev session: a service principal issued
- *  locally. Its userId is the subject key startDevSession lists/reuses by. */
-const DEV_SUBJECT: PrincipalSubject = { userId: 'local-dev', kind: 'service', issuer: 'local' };
+/** The synthetic identity behind the local dev session: the PERSISTED
+ *  boot-reserved local-developer UUID (issuer 'local', seeded by the lifecycle
+ *  init entrypoint), which the auth specialist recognizes as instance-admin by
+ *  its full tuple. Throws when the instance identity has never been seeded —
+ *  the dev server always runs init before serving. */
+function devSubject(cfg: HostConfig): PrincipalSubject {
+  const identity = getInstanceIdentity(cfg.dataDir);
+  if (!identity) {
+    throw new Error('instance identity is not seeded — the lifecycle init entrypoint must run before dev sessions mint');
+  }
+  return { userId: identity.localDevUserId, kind: 'human', issuer: 'local' };
+}
 
 /** The fixed hosted-project id the dev server registers the cwd under. */
 const DEV_PROJECT_ID = 'local';
@@ -174,11 +182,13 @@ export async function startSignIn(
  * Complete a browser SSO sign-in: verify the signed state (tampered/expired is
  * rejected), resolve the bound enabled provider, exchange the code and resolve the
  * external subject, look up the hosted user by issuer + external subject, provision
- * a first-login active user with EMPTY grants when absent, reject re-login for an
- * existing deactivated user before creating a session, create a browser session
- * bound to the resolved subject and the user's CURRENT grants (prior sessions left
- * intact — multi-device), append a best-effort web.signin (security) audit event,
- * and return the new session id. Unauthenticated by nature — no caller credential.
+ * a first-login active user (binding the built-in sso-admin role when the verified
+ * groups match adminGroupClaims) when absent, reject re-login for an existing
+ * deactivated user before creating a session, refresh the sso-admin role binding
+ * against the verified membership, and create a permission-free browser session
+ * bound to the resolved subject (prior sessions left intact — multi-device);
+ * append a best-effort web.signin (security) audit event and return the new
+ * session id. Unauthenticated by nature — no caller credential.
  * `expectedNonce` is the value of the browser's SSO-nonce cookie: it MUST equal
  * the nonce inside the signed state, proving the completing browser is the one
  * that started the flow (login-CSRF defense). Async: exchangeCode does provider
@@ -220,9 +230,12 @@ export async function completeSignIn(cfg: HostConfig, state: string, code: strin
       id: subject.userId,
       subject,
       status: 'active',
-      // first-login: the enumerated SSO-admin bundle (never *:*) when the verified
-      // groups match adminGroupClaims, otherwise empty — an admin assigns grants.
-      grants: inAdminGroup ? [ssoAdminBundleGrant()] : [],
+      // first-login: bind the built-in sso-admin ROLE when the verified groups
+      // match adminGroupClaims, otherwise no bindings — an admin assigns roles
+      // and grid assignments later. Permissions never live on the user record;
+      // the role resolves through the permission resolver (project:admin +
+      // project:create @instance, OVERRIDABLE — never the instance-admin bypass).
+      roleBindings: inAdminGroup ? [{ roleId: SSO_ADMIN_ROLE_ID }] : [],
       createdAt: new Date().toISOString(),
     };
     user = upsertUser(cfg.dataDir, provisioned); // step 15
@@ -236,24 +249,30 @@ export async function completeSignIn(cfg: HostConfig, state: string, code: strin
     throw new ForbiddenError('deactivated user may not sign in');
   }
 
-  // steps 18–19: refresh the stored grants when they disagree with the admin-group
-  // membership — entering the group appends the enumerated bundle, leaving it
-  // drops the bundle on this login (server-driven, straight through the repository;
-  // the bundle is enumerated, so the *:* hard reservation is preserved).
-  const applied = applySsoAdminBundle(user.grants, inAdminGroup);
-  if (applied.changed) {
-    user = repoReplaceUserGrants(cfg.dataDir, user.id, applied.grants);
+  // steps 18–19: refresh the sso-admin ROLE BINDING when it disagrees with the
+  // verified admin-group membership — entering the group binds the role, leaving
+  // it unbinds it on this login (server-driven, straight through the repository).
+  const bindings = user.roleBindings ?? [];
+  const hasSsoAdmin = bindings.some((b) => b.roleId === SSO_ADMIN_ROLE_ID);
+  if (hasSsoAdmin !== inAdminGroup) {
+    user = upsertUser(cfg.dataDir, {
+      ...user,
+      roleBindings: inAdminGroup
+        ? [...bindings, { roleId: SSO_ADMIN_ROLE_ID }]
+        : bindings.filter((b) => b.roleId !== SSO_ADMIN_ROLE_ID),
+    });
   }
 
   // Build the new WebSession (the repository mints the reserved-prefix id and
-  // stamps createdAt/lastSeenAt). Grants = the user's CURRENT grants with any
-  // reserved instance-wide super-admin (*:*) grant filtered out — *:* is reserved
-  // to the built-in admin account, so no SSO login can ever mint a session carrying
-  // it. Prior sessions are LEFT INTACT so one principal may hold concurrent sessions.
+  // stamps createdAt/lastSeenAt). The session stores NO permissions and no
+  // narrowing ('*'): the auth specialist resolves the subject's permissionSubject
+  // (roleBindings + instanceAdmin) LIVE on every request, so revocations take
+  // effect immediately. Prior sessions are LEFT INTACT so one principal may hold
+  // concurrent sessions.
   const session: WebSession = {
     id: '', // web_session_repository mints a ws_-prefixed id
     subject: user.subject,
-    grants: user.grants.filter((g) => !isSuperAdminGrant(g)),
+    projects: ['*'],
     createdAt: '', // stamped by the registry
     expiresAt: new Date(Date.now() + WEB_SESSION_TTL_MS).toISOString(),
     providerId,
@@ -414,10 +433,11 @@ export function getCurrentContext(cfg: HostConfig, sessionId: string): WebContex
  * Mint (or reuse) the local-developer session for the single-project dev server and
  * return its id. REFUSED unless the server is in local developer mode (cfg.devMode)
  * — this is the ONLY unauthenticated session-minting path and it exists solely for
- * `wairon dev` (loopback, auth off). The session is bound to a synthetic
- * local-developer subject with a grant on the ONE local project (never an
- * instance-wide '*' grant), so a leaked dev session is scoped to that one local
- * project. Reuses an existing dev session rather than churning the store on every
+ * `wairon dev` (loopback, auth off). The session is bound to the persisted
+ * boot-reserved local-developer subject, narrowed to the ONE local project; it
+ * carries NO permissions of its own — the auth specialist resolves THIS subject's
+ * permissionSubject (instanceAdmin = full local access) live at authentication.
+ * Reuses an existing dev session rather than churning the store on every
  * cookieless hit.
  */
 export function startDevSession(cfg: HostConfig): string {
@@ -427,19 +447,21 @@ export function startDevSession(cfg: HostConfig): string {
   }
 
   // step 3: list existing sessions for the synthetic local-developer subject.
-  const existing = listWebSessionsBySubject(cfg.dataDir, DEV_SUBJECT.userId);
+  const dev = devSubject(cfg);
+  const existing = listWebSessionsBySubject(cfg.dataDir, dev.userId);
 
   // steps 4–5: reuse an existing dev session (no churn).
   if (existing.length > 0) {
     return existing[0].id;
   }
 
-  // step 6: build a new session bound to the local-developer subject with a single
-  // PROJECT-SCOPED grant on the one local project (never instance-wide '*').
+  // step 6: build a new session bound to the local-developer subject, narrowed to
+  // the one local project (never instance-wide '*'); the session stores NO
+  // permissions — authentication resolves them live from the subject identity.
   const session: WebSession = {
     id: '', // web_session_repository mints a ws_-prefixed id
-    subject: DEV_SUBJECT,
-    grants: [{ projectId: DEV_PROJECT_ID, permissions: ['mcp:read', 'mcp:write'] }],
+    subject: dev,
+    projects: [DEV_PROJECT_ID],
     createdAt: '', // stamped by the registry
     expiresAt: new Date(Date.now() + DEV_SESSION_TTL_MS).toISOString(),
   };
