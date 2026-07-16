@@ -2,22 +2,22 @@ id: iproject_policy_orchestrator
 name: Project Policy Orchestrator Interface
 description: >-
   Contract for profile-aware hosted project initialization and pack/profile policy enforcement.
-  Credential-bearing methods authenticate the caller and authorize by Principal grants; two
-  pre-authorized entries (executeApprovedInit, evaluateInitRequest) serve the self-service approval
-  chain and are never exposed on a portal. Identity-provider (SSO) configuration is deferred to
-  Phase 5.
+  Credential-bearing methods authenticate the caller and resolve their permissions through the
+  authorization seam; two pre-authorized entries (executeApprovedInit, evaluateInitRequest) serve
+  the project-lifecycle chain and are never exposed on a portal. Identity-provider (SSO)
+  configuration is deferred to Phase 5.
 component: project_policy_orchestrator
 methods:
   - name: initializeProjectWithProfile
     description: >-
-      Authenticate the caller credential and authorize project creation via an INSTANCE-WIDE
-      project:create grant (projectId '*') or the instance-admin wildcard — a project-scoped grant
-      carrying project:create does NOT suffice — then perform the same profile-aware initialization
-      body as executeApprovedInit: validate the request against the active pack policy (throwing on
-      violations under an enforcing policy), create the hosted project, apply the instance's
-      required/default declarative packs via the pack registry, record the resolved profile
-      selection into the project's config, and audit the initialization. Returns the created hosted
-      project record.
+      Authenticate the caller credential and resolve the caller's project:create permission over the
+      request's required owner unit via the authorization seam — the resolved value must be yes (an
+      approval-valued caller must use the execute-primary project-lifecycle path instead) — then
+      perform the same profile-aware initialization body as executeApprovedInit: validate the
+      request against the active pack policy (throwing on violations under an enforcing policy),
+      create the hosted project, apply the instance's required/default declarative packs via the
+      pack registry, record the resolved profile selection into the project's config, and audit the
+      initialization. Returns the created hosted project record.
     signature: >-
       initializeProjectWithProfile(credential: string, request: ProjectInitRequest):
       HostedProjectRecord
@@ -85,8 +85,8 @@ methods:
       - atomic
   - name: executeApprovedInit
     description: >-
-      Pre-authorized entry for the self-service approval workflow: performs NO authentication — the
-      caller (self_service_orchestrator) has already enforced approval-based authorization; never
+      Pre-authorized entry for the project-lifecycle chain: performs NO authentication — the caller
+      (project_lifecycle_orchestrator) has already enforced permission-based authorization; never
       exposed on any portal. Validates the request against the active pack policy (under an
       enforcing policy, throws on violations), creates the hosted project via
       admin_orchestrator.executeApprovedCreate, applies the instance's requiredGlobalPacks and
@@ -105,8 +105,8 @@ methods:
       authenticated upstream): read the active pack policy (or the documented permissive default
       when unset) and evaluate the ProjectInitRequest against it — flagging a missing required
       profile selection, requested blocked packs, and unknown profile ids — returning a
-      PolicyEvaluationResult. Used by self-service to gate a project-init request before an approval
-      is created; never exposed on any portal.
+      PolicyEvaluationResult. Used by the project lifecycle orchestrator to gate a project-init
+      request before executing it or creating an approval; never exposed on any portal.
     signature: 'evaluateInitRequest(request: ProjectInitRequest): PolicyEvaluationResult'
     returns: PolicyEvaluationResult
     params:
@@ -114,4 +114,4 @@ methods:
         type: ProjectInitRequest
 status: complete
 createdAt: '2026-07-08T21:59:46.667Z'
-updatedAt: '2026-07-10T15:15:57.724Z'
+updatedAt: '2026-07-16T00:14:02.046Z'

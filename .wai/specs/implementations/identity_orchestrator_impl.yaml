@@ -563,38 +563,57 @@ methods:
         error: Forbidden — user administration requires project:admin over the target user's home unit
       - stepNumber: 6
         description: >-
+          Check the target record's subject id against the reserved built-in subject ids (the
+          persisted boot-reserved UUIDs and the legacy 'builtin:*' literals)
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: isReservedSubject
+      - stepNumber: 7
+        description: If the target subject id is reserved, reject
+        type: branch
+        condition: the target record's subject id is reserved
+        onTrueStep: 8
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Reject the reserved subject id
+        type: throw
+        error: >-
+          Forbidden — the built-in subject ids are reserved and can never be claimed by a user
+          record
+      - stepNumber: 9
+        description: >-
           Build the redacted audit event with action user.create when no record existed, or
           user.update otherwise
         type: local
-      - stepNumber: 7
+      - stepNumber: 10
         description: >-
           Create or update the hosted user (subject, status, home unit, roleBindings) through the
           repository
         type: call
         targetComponent: user_repository
         targetMethod: upsert
-      - stepNumber: 8
+      - stepNumber: 11
         description: Append the audit event without letting a failure fail the upsert
         type: try
-        endStep: 10
+        endStep: 13
         catches:
           - error: audit append failure
-            step: 11
-      - stepNumber: 9
+            step: 14
+      - stepNumber: 12
         description: >-
           Append the redacted user.create or user.update audit event under the active retention
           policy
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 10
+      - stepNumber: 13
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 12
-      - stepNumber: 11
+        toStep: 15
+      - stepNumber: 14
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 12
+      - stepNumber: 15
         description: Return the stored user record
         type: return
         outcome: stored user record
@@ -891,4 +910,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-07-15T23:18:51.389Z'
+updatedAt: '2026-07-16T00:27:10.846Z'

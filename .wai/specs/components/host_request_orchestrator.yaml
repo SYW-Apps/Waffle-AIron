@@ -3,12 +3,12 @@ name: Host Request Orchestrator
 description: >-
   Per-request data-plane orchestrator: authenticate the bearer token, resolve and bind the
   authorized project scope (rejecting cross-project access), then dispatch the sdd_* tool call into
-  the reused MCP tool surface within that scope. It also dispatches the execute-primary self-service
-  MCP tools (sdd_host_initialize_project, sdd_host_lock_project, sdd_host_promote_project,
-  sdd_host_get_approval_status, sdd_host_await_approval) to the self-service orchestrator, and the
-  four hosted landscape MCP tools to the surface exchange orchestrator, both already gated —
-  bypassing the ordinary data-plane permission check. Appends a redacted audit event per handled
-  call.
+  the reused MCP tool surface within that scope. It also dispatches the execute-primary
+  project-lifecycle MCP tools (sdd_host_initialize_project, sdd_host_lock_project,
+  sdd_host_promote_project, sdd_host_get_approval_status, sdd_host_await_approval) to the project
+  lifecycle orchestrator, and the four hosted landscape MCP tools to the surface exchange
+  orchestrator, both already gated — bypassing the ordinary data-plane permission check. Appends a
+  redacted audit event per handled call.
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
@@ -18,9 +18,9 @@ dependsOn:
   - host_mcp_adapter
   - host_core_adapter
   - audit_repository
-  - self_service_orchestrator
+  - project_lifecycle_orchestrator
   - surface_exchange_orchestrator
   - authorization_specialist
 status: complete
 createdAt: '2026-07-04T12:33:41.786Z'
-updatedAt: '2026-07-15T22:16:43.373Z'
+updatedAt: '2026-07-16T00:13:32.905Z'

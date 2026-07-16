@@ -1,0 +1,33 @@
+kind: entity
+id: instance_identity
+name: InstanceIdentity
+description: >-
+  Singleton instance-identity record persisted at <dataDir>/instance.json: the boot-reserved UUIDs
+  identifying the built-in subjects. Seeded ONCE by the sdd_host lifecycle init entrypoint at first
+  boot and never rotated; instance-admin recognition compares issuer 'local' AND userId === one of
+  these persisted UUIDs, so the account NAME is never a subject id and stops being an attack
+  surface. The legacy literals 'builtin:superadmin'/'builtin:localdev' remain reserved (unclaimable
+  by user records, enforced via the reserved-subject guard) for defense-in-depth but are no longer
+  live subject ids.
+subsystem: sdd_host
+fields:
+  - name: superadminUserId
+    type: string
+    description: >-
+      Boot-reserved cryptographically random UUID that IS the built-in super-admin's local userId
+      (issuer 'local'). Generated once at first boot; never derived from an account name.
+    optional: false
+  - name: localDevUserId
+    type: string
+    description: >-
+      Boot-reserved cryptographically random UUID for the devMode synthetic local-developer subject
+      (issuer 'local'). Seeded alongside the super-admin id.
+    optional: false
+  - name: createdAt
+    type: string
+    description: ISO timestamp of the first-boot seeding.
+    optional: false
+methods: []
+componentClass: instance_identity_repository
+createdAt: '2026-07-16T00:23:50.511Z'
+updatedAt: '2026-07-16T00:23:50.517Z'

@@ -300,7 +300,9 @@ methods:
       method: GET
       path: /web/projects
   - name: projectCreate
-    description: Create a project; forwards to web_project_orchestrator.createProject.
+    description: >-
+      Create a project placed in the REQUIRED owner unit; forwards to
+      web_project_orchestrator.createProject.
     signature: 'projectCreate(request: HttpRequest): HttpResponse'
     returns: HttpResponse
     params:
@@ -505,4 +507,4 @@ methods:
       path: /web/admin/roles/unbind
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-07-15T22:49:36.540Z'
+updatedAt: '2026-07-16T00:18:57.545Z'

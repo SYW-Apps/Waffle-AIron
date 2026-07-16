@@ -1,0 +1,18 @@
+id: instance_identity_repository
+name: Instance Identity Repository
+description: >-
+  Facade for the persisted singleton instance identity (<dataDir>/instance.json): ensureSeeded
+  (first boot generates and persists the boot-reserved built-in subject UUIDs; later boots return
+  the existing record unchanged) and get (the read used by authentication's instance-admin
+  comparison and the reserved-subject guard). Seeded from the sdd_host lifecycle init entrypoint
+  before the listeners bind. Consumers use the facade only, never the inner blocks.
+subsystem: sdd_host
+componentType: Repository
+owns:
+  - instance_identity_store
+  - instance_identity_registry
+  - instance_identity_index
+dependsOn: []
+status: complete
+createdAt: '2026-07-16T00:24:04.420Z'
+updatedAt: '2026-07-16T07:27:54.190Z'

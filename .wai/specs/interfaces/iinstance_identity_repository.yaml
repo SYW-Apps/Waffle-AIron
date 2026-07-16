@@ -1,0 +1,30 @@
+id: iinstance_identity_repository
+name: Instance Identity Repository Interface
+description: >-
+  Facade contract for the persisted singleton instance identity. Consumers (the lifecycle init
+  entrypoint, the auth specialist) use only this facade.
+component: instance_identity_repository
+methods:
+  - name: ensureSeeded
+    description: >-
+      Seed-or-load the boot-reserved built-in subject UUIDs: first boot generates and persists them;
+      every later boot returns the existing record unchanged. Called once from the sdd_host
+      lifecycle init entrypoint before the listeners bind.
+    signature: 'ensureSeeded(now: string): InstanceIdentity'
+    returns: InstanceIdentity
+    params:
+      - name: now
+        type: string
+    guarantees:
+      - idempotent
+      - atomic
+  - name: get
+    description: >-
+      Return the persisted instance identity (null when never seeded — callers treat an unseeded
+      instance as having NO recognizable built-in subjects and fail closed).
+    signature: 'get(): InstanceIdentity | null'
+    returns: InstanceIdentity | null
+    params: []
+status: complete
+createdAt: '2026-07-16T00:24:17.189Z'
+updatedAt: '2026-07-16T07:27:54.504Z'

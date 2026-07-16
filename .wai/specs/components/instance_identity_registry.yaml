@@ -1,0 +1,14 @@
+id: instance_identity_registry
+name: Instance Identity Registry
+description: >-
+  Write path for the singleton InstanceIdentity: first-boot seeding generates cryptographically
+  random UUIDs for the built-in subjects and persists the record atomically to instance.json;
+  re-seeding is a no-op returning the existing record (create-once, idempotent). Ids are never
+  regenerated or rotated.
+subsystem: sdd_host
+componentType: Registry
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-07-16T00:23:54.754Z'
+updatedAt: '2026-07-16T07:27:54.133Z'

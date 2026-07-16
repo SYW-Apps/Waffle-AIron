@@ -1,26 +1,24 @@
-id: iself_service_orchestrator
-name: Self-Service Orchestrator Interface
+id: iproject_lifecycle_orchestrator
+name: Project Lifecycle Orchestrator Interface
 description: >-
-  Approval-backed self-service contract for project init/lock/promote requested over MCP, CLI, or
-  UI. Every method authenticates the caller credential and authorizes by grants; privileged actions
-  execute only after an authorized decision. Decisions ride the admin portal until the admin UI
-  lands.
-component: self_service_orchestrator
+  Project lifecycle contract for initialize/lock/promote requested over MCP, CLI, or UI.
+  Execute-primary: every method authenticates the caller credential and resolves the caller's
+  permission — yes executes the action directly and returns its natural result, approval creates a
+  pending ApprovalRequest (the security exception), no raises Forbidden. Approved requests
+  auto-execute on decision.
+component: project_lifecycle_orchestrator
 methods:
-  - name: requestProjectInitialization
+  - name: initializeProject
     description: >-
       Execute-primary project initialization. Authenticate the caller, validate the
       ProjectInitRequest structurally, evaluate it against the active instance pack policy
       (enforce-mode violations reject immediately; warn-mode findings ride the summary), then
-      resolve the caller's project:create permission over the target unit (or instance for a
-      top-level project): yes -> initialize the project directly via the policy orchestrator's
-      pre-authorized executeApprovedInit and return a completed SelfServiceOutcome; approval ->
-      create a pending project:init ApprovalRequest and return a pending-approval outcome; no ->
-      Forbidden.
-    signature: >-
-      requestProjectInitialization(credential: string, request: ProjectInitRequest):
-      SelfServiceOutcome
-    returns: SelfServiceOutcome
+      resolve the caller's project:create permission over the required owner unit: yes -> initialize
+      the project directly via the policy orchestrator's pre-authorized executeApprovedInit and
+      return a completed ProjectActionOutcome; approval -> create a pending project:init
+      ApprovalRequest and return a pending-approval outcome; no -> Forbidden.
+    signature: 'initializeProject(credential: string, request: ProjectInitRequest): ProjectActionOutcome'
+    returns: ProjectActionOutcome
     params:
       - name: credential
         type: string
@@ -28,15 +26,15 @@ methods:
         type: ProjectInitRequest
     guarantees:
       - atomic
-  - name: requestProjectLock
+  - name: lockProject
     description: >-
       Execute-primary project lock. Authenticate the caller and resolve their project:write
       permission over the project: yes -> lock directly via the admin plane's pre-authorized
-      executeApprovedLock and return a completed SelfServiceOutcome carrying the lock record;
+      executeApprovedLock and return a completed ProjectActionOutcome carrying the lock record;
       approval -> create a pending project:lock ApprovalRequest and return a pending-approval
       outcome; no -> Forbidden.
-    signature: 'requestProjectLock(credential: string, projectId: string): SelfServiceOutcome'
-    returns: SelfServiceOutcome
+    signature: 'lockProject(credential: string, projectId: string): ProjectActionOutcome'
+    returns: ProjectActionOutcome
     params:
       - name: credential
         type: string
@@ -44,15 +42,15 @@ methods:
         type: string
     guarantees:
       - atomic
-  - name: requestProjectPromotion
+  - name: promoteProject
     description: >-
       Execute-primary project promotion. Authenticate the caller and resolve their project:write
       permission over the project: yes -> promote directly via the admin plane's pre-authorized
-      executeApprovedPromote and return a completed SelfServiceOutcome carrying the promote result;
-      approval -> create a pending project:promote ApprovalRequest and return a pending-approval
-      outcome; no -> Forbidden.
-    signature: 'requestProjectPromotion(credential: string, projectId: string): SelfServiceOutcome'
-    returns: SelfServiceOutcome
+      executeApprovedPromote and return a completed ProjectActionOutcome carrying the promote
+      result; approval -> create a pending project:promote ApprovalRequest and return a
+      pending-approval outcome; no -> Forbidden.
+    signature: 'promoteProject(credential: string, projectId: string): ProjectActionOutcome'
+    returns: ProjectActionOutcome
     params:
       - name: credential
         type: string
@@ -60,13 +58,13 @@ methods:
         type: string
     guarantees:
       - atomic
-  - name: getRequestStatus
+  - name: getApprovalStatus
     description: >-
       Authenticate the caller, lazily expire overdue pending requests, then return one approval
       request visible only to its original requester (matching subject or requesting token id) or to
       a caller whose resolved approval:decide permission over the request's project is yes; never
       exposes unrelated requests.
-    signature: 'getRequestStatus(credential: string, requestId: string): ApprovalRequest'
+    signature: 'getApprovalStatus(credential: string, requestId: string): ApprovalRequest'
     returns: ApprovalRequest
     params:
       - name: credential
@@ -90,8 +88,9 @@ methods:
   - name: decideRequest
     description: >-
       Authenticate the caller and resolve their approval:decide permission over the decided
-      request's project (must be yes); reject self-approval (decidedBy MUST differ from
-      requestedBy); record the approve/deny decision; then AUTO-EXECUTE an approved request
+      request's project (must be yes); reject self-approval (decidedBy MUST differ from requestedBy
+      — a yes-permission caller executes directly and never enters the approval path, so this guard
+      cannot deadlock); record the approve/deny decision; then AUTO-EXECUTE an approved request
       immediately by dispatching by kind to the pre-authorized entrypoints (project:init ->
       executeApprovedInit; project:lock/project:promote -> the admin plane) and mark it completed.
       Audit at security level. A re-evaluation failure at execution leaves the approval approved,
@@ -139,5 +138,5 @@ methods:
       - name: timeoutSeconds
         type: number
 status: complete
-createdAt: '2026-07-09T07:19:58.825Z'
-updatedAt: '2026-07-15T20:58:05.139Z'
+createdAt: '2026-07-16T00:08:59.412Z'
+updatedAt: '2026-07-16T07:27:54.607Z'

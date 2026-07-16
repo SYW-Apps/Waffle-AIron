@@ -53,6 +53,46 @@ methods:
         outcome: stopped
     conformance: anchored
     symbol: close
+  - name: init
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Seed-or-load the boot-reserved built-in subject UUIDs (first boot generates and persists
+          them to instance.json; later boots return the record unchanged)
+        type: call
+        targetComponent: instance_identity_repository
+        targetMethod: ensureSeeded
+        assertsGuarantees:
+          - idempotent
+      - stepNumber: 2
+        description: If devMode is not enabled, skip the synthetic local development unit
+        type: branch
+        condition: config.devMode is enabled
+        onTrueStep: 3
+        onFalseStep: 6
+      - stepNumber: 3
+        description: Look up the synthetic local development unit
+        type: call
+        targetComponent: organization_repository
+        targetMethod: getUnit
+      - stepNumber: 4
+        description: If the synthetic local development unit already exists, skip creation
+        type: branch
+        condition: the synthetic local development unit already exists
+        onTrueStep: 6
+        onFalseStep: 5
+      - stepNumber: 5
+        description: >-
+          Create the synthetic local development unit so dev projects can always be placed (unitId
+          is required at creation)
+        type: call
+        targetComponent: organization_repository
+        targetMethod: createUnit
+      - stepNumber: 6
+        description: Return once the instance is initialized
+        type: return
+        outcome: initialized
+    detail: full
 status: complete
 createdAt: '2026-07-04T12:54:36.977Z'
-updatedAt: '2026-07-11T19:14:22.190Z'
+updatedAt: '2026-07-16T00:25:05.630Z'

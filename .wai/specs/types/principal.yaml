@@ -35,14 +35,14 @@ fields:
     description: >-
       The resolved permission subject (subjectId + roleBindings + instanceAdmin) for hierarchical
       authorization. instanceAdmin (the resolver bypass, NON-overridable) is true ONLY for the
-      env-anchored built-in super-admin subject (issuer 'local', userId 'builtin:superadmin'), the
-      bootstrap/master credential, and — under devMode only — the synthetic local-developer subject.
-      A regular user is NEVER instanceAdmin: a delegated instance-wide admin holds a
-      project:admin@instance assignment (or the sso-admin role), which resolves as a normal
-      OVERRIDABLE permission, not the bypass. There is no '*'@instance assignment. Replaces the
-      former grants field; precise authorization is expressed through the permission resolver over
-      this subject.
+      built-in super-admin subject (issuer 'local', userId === the persisted boot-reserved
+      super-admin UUID seeded at first boot), the bootstrap/master credential, and — under devMode
+      only — the synthetic local-developer subject (its persisted boot-reserved UUID). A regular
+      user is NEVER instanceAdmin: a delegated instance-wide admin holds a project:admin@instance
+      assignment (or the sso-admin role), which resolves as a normal OVERRIDABLE permission, not the
+      bypass. There is no '*'@instance assignment. Replaces the former grants field; precise
+      authorization is expressed through the permission resolver over this subject.
     optional: true
 methods: []
 createdAt: '2026-07-04T12:44:18.529Z'
-updatedAt: '2026-07-15T23:17:56.118Z'
+updatedAt: '2026-07-16T00:26:22.158Z'

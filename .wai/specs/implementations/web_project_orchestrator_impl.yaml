@@ -10,8 +10,8 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Forward to the admin orchestrator passing the sessionId as the credential (project:create
-          scope enforced there)
+          Forward to the admin orchestrator passing the sessionId as the credential and the REQUIRED
+          owner unitId (project:create permission over the target unit enforced there)
         type: call
         targetComponent: admin_orchestrator
         targetMethod: createProject
@@ -20,8 +20,8 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Forward to the admin orchestrator passing the sessionId as the credential (lock:create
-          scope enforced there)
+          Forward to the admin orchestrator passing the sessionId as the credential (project:write
+          permission enforced there)
         type: call
         targetComponent: admin_orchestrator
         targetMethod: lockProject
@@ -30,8 +30,8 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Forward to the admin orchestrator passing the sessionId as the credential
-          (promote:mark-ready scope enforced there)
+          Forward to the admin orchestrator passing the sessionId as the credential (project:write
+          permission enforced there)
         type: call
         targetComponent: admin_orchestrator
         targetMethod: promoteProject
@@ -40,8 +40,8 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Forward to the admin orchestrator passing the sessionId as the credential (project:destroy
-          scope enforced there)
+          Forward to the admin orchestrator passing the sessionId as the credential (project:admin
+          permission enforced there)
         type: call
         targetComponent: admin_orchestrator
         targetMethod: destroyProject
@@ -78,4 +78,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-13T20:36:25.016Z'
-updatedAt: '2026-07-15T21:39:56.982Z'
+updatedAt: '2026-07-16T00:19:25.006Z'

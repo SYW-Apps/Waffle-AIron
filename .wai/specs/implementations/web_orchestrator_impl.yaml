@@ -371,12 +371,12 @@ methods:
       - stepNumber: 6
         description: >-
           Build a new WebSession bound to the synthetic local-developer subject (issuer 'local',
-          userId 'builtin:localdev', kind 'human'), narrowed to the one local project (projects =
-          [the local project id]); the session carries NO permissions — in devMode the auth
-          specialist resolves THIS subject's permissionSubject with instanceAdmin = true (full local
-          access) live at authentication, matching the dev-subject identity check in
-          authenticateSession. This path is devMode-only and never mints a session in a hosted
-          deployment. expiresAt = now + the session TTL.
+          userId = the PERSISTED boot-reserved local-developer UUID seeded at first boot, kind
+          'human'), narrowed to the one local project (projects = [the local project id]); the
+          session carries NO permissions — in devMode the auth specialist resolves THIS subject's
+          permissionSubject with instanceAdmin = true (full local access) live at authentication,
+          matching the dev-subject identity check in authenticateSession. This path is devMode-only
+          and never mints a session in a hosted deployment. expiresAt = now + the session TTL.
         type: local
       - stepNumber: 7
         description: Persist the new local-developer session through the web session repository
@@ -536,4 +536,4 @@ lint:
         declared edges are design-ahead, not stale.
 status: complete
 createdAt: '2026-07-11T11:36:44.225Z'
-updatedAt: '2026-07-15T23:19:30.046Z'
+updatedAt: '2026-07-16T00:26:24.984Z'

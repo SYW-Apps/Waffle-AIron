@@ -81,10 +81,13 @@ methods:
   - name: upsertUser
     description: >-
       Authenticate the caller, require project:admin over the target user's home unit (both the
-      incoming and, on update, the existing home unit), create or update the hosted user (subject,
-      status, home unit, roleBindings) through the user repository, and append a redacted audit
-      event distinguishing creation from update. User PERMISSIONS are managed via role bindings +
-      the assignment grid (permission_admin_orchestrator), never stored on the user record.
+      incoming and, on update, the existing home unit), REJECT a record claiming a reserved built-in
+      subject id (the persisted boot-reserved UUIDs or the legacy 'builtin:*' literals, via the auth
+      specialist's reserved-subject guard — an admin-created user must never inherit the built-in
+      bypass), create or update the hosted user (subject, status, home unit, roleBindings) through
+      the user repository, and append a redacted audit event distinguishing creation from update.
+      User PERMISSIONS are managed via role bindings + the assignment grid
+      (permission_admin_orchestrator), never stored on the user record.
     signature: 'upsertUser(credential: string, record: HostedUserRecord): HostedUserRecord'
     returns: HostedUserRecord
     params:
@@ -254,4 +257,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-08T20:17:23.976Z'
-updatedAt: '2026-07-15T23:13:51.767Z'
+updatedAt: '2026-07-16T00:26:28.277Z'

@@ -2,11 +2,12 @@ id: project_policy_orchestrator_impl
 name: Project Policy Orchestrator Implementation
 description: >-
   Profile-aware project initialization and pack/profile policy enforcement. Credential-bearing
-  methods authenticate the caller and authorize by Principal grants; two pre-authorized entries
-  (executeApprovedInit, evaluateInitRequest) perform no authentication because the self-service
-  approval chain has already authorized them and are never portal-exposed. A null active policy
-  resolves to the documented permissive default (empty pack lists, requireProfileSelection false,
-  enforcementMode 'warn'). Audit appends are best-effort and never fail the primary action.
+  methods authenticate the caller and resolve their permissions through the authorization seam; two
+  pre-authorized entries (executeApprovedInit, evaluateInitRequest) perform no authentication
+  because the project-lifecycle chain has already authorized them and are never portal-exposed. A
+  null active policy resolves to the documented permissive default (empty pack lists,
+  requireProfileSelection false, enforcementMode 'warn'). Audit appends are best-effort and never
+  fail the primary action.
 contract: iproject_policy_orchestrator
 sourcePath: src/server/policy.ts
 methods:
@@ -18,31 +19,40 @@ methods:
         targetComponent: auth_specialist
         targetMethod: authenticateCredential
       - stepNumber: 2
-        description: If the caller holds neither a project:create grant nor an instance-admin grant, deny
-        type: branch
-        condition: the caller holds neither a project:create grant nor an instance-admin grant
-        onFalseStep: 4
+        description: >-
+          Resolve the caller's project:create permission over the request's required owner unit
+          through the authorization seam
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
       - stepNumber: 3
+        description: >-
+          If the effective value is not yes, deny (an approval-valued caller must use the
+          execute-primary project-lifecycle path)
+        type: branch
+        condition: the effective value is not yes
+        onFalseStep: 5
+      - stepNumber: 4
         description: Reject the initialization
         type: throw
-        error: Forbidden — creating a project requires a project:create grant or an instance-admin grant
-      - stepNumber: 4
+        error: Forbidden — creating a project requires project:create authority over the target unit
+      - stepNumber: 5
         description: Read the active instance pack/profile policy (or null when none has ever been configured)
         type: call
         targetComponent: policy_repository
         targetMethod: getPackPolicy
-      - stepNumber: 5
+      - stepNumber: 6
         description: >-
           When no policy has been configured (null), substitute the documented permissive default
           (empty requiredGlobalPacks/defaultProjectPacks, requireProfileSelection false,
           enforcementMode 'warn') as the effective policy
         type: local
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           Evaluate the request against the effective policy: detect a missing required profile
           selection, requested blocked packs, and unknown profile ids, collecting any violations
         type: local
-      - stepNumber: 7
+      - stepNumber: 8
         description: >-
           If the effective policy enforces (enforcementMode 'block') and the evaluation found
           violations, reject
@@ -50,64 +60,66 @@ methods:
         condition: >-
           the effective policy enforces (enforcementMode 'block') and the evaluation found
           violations
-        onFalseStep: 9
-      - stepNumber: 8
+        onFalseStep: 10
+      - stepNumber: 9
         description: Reject the non-compliant initialization
         type: throw
         error: policy violation — project initialization rejected under the active pack policy
-      - stepNumber: 9
-        description: Create the hosted project via the admin plane's pre-authorized create entry
+      - stepNumber: 10
+        description: >-
+          Create the hosted project via the admin plane's pre-authorized create entry, passing the
+          request's required ownerUnitId so the project is placed at creation
         type: call
         targetComponent: admin_orchestrator
         targetMethod: executeApprovedCreate
-      - stepNumber: 10
+      - stepNumber: 11
         description: Bind the created project's isolated root for pack application
         type: local
-      - stepNumber: 11
+      - stepNumber: 12
         description: >-
           Assemble the effective declarative pack set from the policy (requiredGlobalPacks then
           defaultProjectPacks), resolving each pack's declarative content from the server-global
           pack set
         type: local
-      - stepNumber: 12
+      - stepNumber: 13
         description: For each required/default declarative pack in the assembled set
         type: loop
         loopKind: forEach
         over: the assembled required/default declarative packs
-        endStep: 13
-      - stepNumber: 13
+        endStep: 14
+      - stepNumber: 14
         description: >-
           Vendor and register the declarative pack into the bound project (the registry rejects code
           packs)
         type: call
         targetComponent: pack_registry
         targetMethod: installProjectPack
-      - stepNumber: 14
+      - stepNumber: 15
         description: >-
           Record the resolved ProjectProfileSelection (the request's selected profile ids plus the
           policy's required profile ids and required/default pack names, stamped selectedBy from the
           caller and selectedAt) into the project's config
         type: local
-      - stepNumber: 15
+      - stepNumber: 16
         description: Append a redacted audit event without letting a failure fail the initialization
         type: try
-        endStep: 17
+        endStep: 18
         catches:
           - error: audit append failure
-            step: 18
-      - stepNumber: 16
+            step: 19
+      - stepNumber: 17
         description: Append the redacted project.init.policy audit event under the active retention policy
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 17
+      - stepNumber: 18
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 19
-      - stepNumber: 18
+        toStep: 20
+      - stepNumber: 19
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 19
+      - stepNumber: 20
         description: Return the created hosted project record
         type: return
         outcome: created hosted project record
@@ -116,8 +128,8 @@ methods:
       - stepNumber: 1
         description: >-
           Read the active instance pack/profile policy (or null when none has ever been configured);
-          this entry performs no authentication — the self-service approval chain has already
-          authorized it
+          this entry performs no authentication — the project-lifecycle chain has already authorized
+          it
         type: call
         targetComponent: policy_repository
         targetMethod: getPackPolicy
@@ -146,7 +158,9 @@ methods:
         type: throw
         error: policy violation — project initialization rejected under the active pack policy
       - stepNumber: 6
-        description: Create the hosted project via the admin plane's pre-authorized create entry
+        description: >-
+          Create the hosted project via the admin plane's pre-authorized create entry, passing the
+          request's required ownerUnitId so the project is placed at creation
         type: call
         targetComponent: admin_orchestrator
         targetMethod: executeApprovedCreate
@@ -479,4 +493,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-09T20:50:11.443Z'
-updatedAt: '2026-07-15T21:41:22.402Z'
+updatedAt: '2026-07-16T00:19:21.350Z'

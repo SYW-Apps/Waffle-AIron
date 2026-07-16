@@ -6,13 +6,13 @@ methods:
   - name: createScopedServer
     description: >-
       Create the request-scoped MCP server reusing the sdd_* tool surface unchanged, WITH the hosted
-      data-plane tools (self-service approvals + the four landscape discovery/exchange tools)
-      advertised in tools/list for discovery — their execution is intercepted by the host request
-      orchestrator before any call reaches this server, so the advertised registrations carry
-      descriptor stubs that only answer outside a hosted request (where the tools are unsupported by
-      design).
+      data-plane tools (the execute-primary project-lifecycle tools + the four landscape
+      discovery/exchange tools) advertised in tools/list for discovery — their execution is
+      intercepted by the host request orchestrator before any call reaches this server, so the
+      advertised registrations carry descriptor stubs that only answer outside a hosted request
+      (where the tools are unsupported by design).
     signature: 'createScopedServer(): McpServer'
     returns: McpServer
 status: complete
 createdAt: '2026-07-04T12:49:36.270Z'
-updatedAt: '2026-07-11T10:31:59.562Z'
+updatedAt: '2026-07-16T00:14:54.434Z'

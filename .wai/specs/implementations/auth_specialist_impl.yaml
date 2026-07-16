@@ -1,6 +1,9 @@
 id: auth_specialist_impl
 name: Auth Specialist Implementation
-description: Credential verification into a Principal for both planes.
+description: >-
+  Credential verification into a Principal for both planes. Instance-admin recognition and the
+  reserved-subject guard compare against the persisted boot-reserved built-in subject UUIDs read
+  through the instance identity repository.
 contract: iauth_specialist
 sourcePath: src/server/auth.ts
 methods:
@@ -164,10 +167,17 @@ methods:
         outcome: null — no match
       - stepNumber: 7
         description: >-
-          Assemble the stable built-in super-admin subject (userId 'builtin:superadmin', kind
-          'human', issuer 'local')
-        type: local
+          Read the persisted instance identity (the boot-reserved built-in subject UUIDs); when the
+          instance has never been seeded, resolve to null (fail closed)
+        type: call
+        targetComponent: instance_identity_repository
+        targetMethod: get
       - stepNumber: 8
+        description: >-
+          Assemble the stable built-in super-admin subject (kind 'human', issuer 'local', userId =
+          the persisted boot-reserved super-admin UUID — never an account-name-derived id)
+        type: local
+      - stepNumber: 9
         description: Return the built-in super-admin subject
         type: return
         outcome: built-in super-admin subject
@@ -207,20 +217,26 @@ methods:
       - stepNumber: 8
         description: >-
           Look up the record's owner user to read its roleBindings (null when the credential
-          resolves to no user record)
+          resolves to no user record); a DEACTIVATED owner user rejects as unauthenticated
         type: call
         targetComponent: user_repository
         targetMethod: getById
       - stepNumber: 9
+        description: Read the persisted instance identity for the instance-admin comparison
+        type: call
+        targetComponent: instance_identity_repository
+        targetMethod: get
+      - stepNumber: 10
         description: >-
           Assemble the Principal: tokenId, the record's ownerSubject, the record's projects
           narrowing, and the resolved permissionSubject — subjectId + the user's roleBindings (empty
           when no user record) + instanceAdmin. instanceAdmin is true ONLY when the subject is the
-          built-in super-admin identified by its FULL tuple (issuer 'local' AND userId
-          'builtin:superadmin') or the master/bootstrap subject — determined by subject identity,
-          never by a roleBinding or assignment; a token owner user record is never instanceAdmin.
+          built-in super-admin identified by its FULL tuple (issuer 'local' AND userId === the
+          persisted boot-reserved super-admin UUID) or the master/bootstrap subject — determined by
+          subject identity, never by a roleBinding or assignment; a token owner user record is never
+          instanceAdmin.
         type: local
-      - stepNumber: 10
+      - stepNumber: 11
         description: Return the authenticated principal
         type: return
         outcome: authenticated principal
@@ -257,21 +273,27 @@ methods:
       - stepNumber: 6
         description: >-
           Look up the session subject's user to read its roleBindings (null for the built-in
-          super-admin)
+          super-admin); a DEACTIVATED session user rejects as unauthenticated
         type: call
         targetComponent: user_repository
         targetMethod: getById
       - stepNumber: 7
+        description: Read the persisted instance identity for the instance-admin comparison
+        type: call
+        targetComponent: instance_identity_repository
+        targetMethod: get
+      - stepNumber: 8
         description: >-
           Assemble the Principal from the session's subject, its projects narrowing, and resolved
           permissionSubject (roleBindings from the user record — empty for the built-in
           super-admin), never carrying the raw session id as the token id. instanceAdmin is true
           ONLY when the subject is the built-in super-admin by its FULL tuple (issuer 'local' AND
-          userId 'builtin:superadmin') or, when devMode is enabled, the synthetic local-developer
-          subject (issuer 'local', userId 'builtin:localdev') — so a `wairon dev` session resolves
-          as instance-admin; a regular user is never instanceAdmin.
+          userId === the persisted boot-reserved super-admin UUID) or, when devMode is enabled, the
+          synthetic local-developer subject (issuer 'local', userId === the persisted boot-reserved
+          local-developer UUID) — so a `wairon dev` session resolves as instance-admin; a regular
+          user is never instanceAdmin.
         type: local
-      - stepNumber: 8
+      - stepNumber: 9
         description: Return the resolved Principal
         type: return
         outcome: authenticated principal
@@ -280,116 +302,143 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
+          Read the persisted instance identity (the boot-reserved built-in subject UUIDs) for
+          instance-admin resolution on every path
+        type: call
+        targetComponent: instance_identity_repository
+        targetMethod: get
+      - stepNumber: 2
+        description: >-
           If the presented credential carries the reserved web-session prefix, resolve it as a
           browser session; otherwise fall through to the master/token paths (shares one private
           session-resolution helper with authenticateSession)
         type: branch
         condition: the credential is a web session id (reserved session prefix)
-        onTrueStep: 2
-        onFalseStep: 8
-      - stepNumber: 2
+        onTrueStep: 3
+        onFalseStep: 9
+      - stepNumber: 3
         description: Look up the session by id
         type: call
         targetComponent: web_session_repository
         targetMethod: getById
-      - stepNumber: 3
+      - stepNumber: 4
         description: If no session record exists, or the session has expired, reject
         type: branch
         condition: no session record or the session is expired
-        onTrueStep: 4
-        onFalseStep: 5
-      - stepNumber: 4
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
         description: Return an unauthenticated principal
         type: return
         outcome: unauthenticated
-      - stepNumber: 5
+      - stepNumber: 6
         description: >-
           Look up the session subject's user to read its roleBindings (null for the built-in
-          super-admin)
+          super-admin); a DEACTIVATED session user rejects as unauthenticated
         type: call
         targetComponent: user_repository
         targetMethod: getById
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           Assemble the Principal from the session's subject, its projects narrowing, and resolved
           permissionSubject (roleBindings + instanceAdmin true ONLY for the built-in super-admin by
-          its FULL tuple [issuer 'local' AND userId 'builtin:superadmin'] or, when devMode is
-          enabled, the synthetic local-developer subject [issuer 'local', userId
-          'builtin:localdev']) — a session resolves to the same Principal shape a bearer token
-          yields.
+          its FULL tuple [issuer 'local' AND userId === the persisted boot-reserved super-admin
+          UUID] or, when devMode is enabled, the synthetic local-developer subject [issuer 'local',
+          userId === the persisted boot-reserved local-developer UUID]) — a session resolves to the
+          same Principal shape a bearer token yields.
         type: local
-      - stepNumber: 7
+      - stepNumber: 8
         description: Return the authenticated principal (from the session)
         type: return
         outcome: authenticated principal
-      - stepNumber: 8
+      - stepNumber: 9
         description: Constant-time compare the presented credential's hash against the configured master hash
         type: local
-      - stepNumber: 9
+      - stepNumber: 10
         description: If the master credential does not match, fall through to the token path
         type: branch
         condition: master credential matches
-        onTrueStep: 10
-        onFalseStep: 12
-      - stepNumber: 10
+        onTrueStep: 11
+        onFalseStep: 13
+      - stepNumber: 11
         description: >-
           Assemble the bootstrap admin Principal (admin role, all projects, bootstrap subject,
           permissionSubject with instanceAdmin true)
         type: local
-      - stepNumber: 11
+      - stepNumber: 12
         description: Return the bootstrap admin principal
         type: return
         outcome: bootstrap admin principal
-      - stepNumber: 12
+      - stepNumber: 13
         description: Compute the salted hash of the presented token
         type: local
-      - stepNumber: 13
+      - stepNumber: 14
         description: Look up a credential record by token hash
         type: call
         targetComponent: credential_registry
         targetMethod: findByToken
-      - stepNumber: 14
+      - stepNumber: 15
         description: If no record matches, reject
         type: branch
         condition: no matching record
-        onTrueStep: 15
-        onFalseStep: 16
-      - stepNumber: 15
+        onTrueStep: 16
+        onFalseStep: 17
+      - stepNumber: 16
         description: Return an unauthenticated principal
         type: return
         outcome: unauthenticated
-      - stepNumber: 16
+      - stepNumber: 17
         description: Check the record's expiresAt and revokedAt fields
         type: local
-      - stepNumber: 17
+      - stepNumber: 18
         description: If the record is expired or revoked, reject
         type: branch
         condition: the record is expired or revoked
-        onTrueStep: 18
-        onFalseStep: 19
-      - stepNumber: 18
+        onTrueStep: 19
+        onFalseStep: 20
+      - stepNumber: 19
         description: Return an unauthenticated principal
         type: return
         outcome: unauthenticated
-      - stepNumber: 19
+      - stepNumber: 20
         description: >-
           Look up the record's owner user to read its roleBindings (null when the credential
-          resolves to no user record)
+          resolves to no user record); a DEACTIVATED owner user rejects as unauthenticated
         type: call
         targetComponent: user_repository
         targetMethod: getById
-      - stepNumber: 20
+      - stepNumber: 21
         description: >-
           Assemble the Principal with the record's ownerSubject, its projects narrowing, and
           resolved permissionSubject (subjectId + roleBindings + instanceAdmin — true ONLY for the
-          built-in super-admin by its FULL tuple [issuer 'local' AND userId 'builtin:superadmin'] or
-          the master/bootstrap subject, never for a token owner user record).
+          built-in super-admin by its FULL tuple [issuer 'local' AND userId === the persisted
+          boot-reserved super-admin UUID] or the master/bootstrap subject, never for a token owner
+          user record).
         type: local
-      - stepNumber: 21
+      - stepNumber: 22
         description: Return the authenticated principal
         type: return
         outcome: authenticated principal
     detail: full
+  - name: isReservedSubject
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the persisted boot-reserved built-in subject UUIDs through the instance identity
+          repository
+        type: call
+        targetComponent: instance_identity_repository
+        targetMethod: get
+      - stepNumber: 2
+        description: >-
+          Compare the candidate userId against the persisted super-admin and local-developer UUIDs
+          and the legacy reserved literals 'builtin:superadmin' / 'builtin:localdev'
+        type: local
+      - stepNumber: 3
+        description: Return true when the id is reserved (unclaimable by user records), false otherwise
+        type: return
+        outcome: whether the id is reserved
+    detail: full
 status: complete
 createdAt: '2026-07-04T12:54:26.477Z'
-updatedAt: '2026-07-15T23:14:33.504Z'
+updatedAt: '2026-07-16T00:26:08.872Z'

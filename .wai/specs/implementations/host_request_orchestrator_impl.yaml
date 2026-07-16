@@ -2,9 +2,9 @@ id: host_request_orchestrator_impl
 name: Host Request Orchestrator Implementation
 description: >-
   Per-request data-plane workflow: authenticate, resolve and bind the authorized project scope, then
-  dispatch the sdd_* call — routing the execute-primary self-service tools
+  dispatch the sdd_* call — routing the execute-primary project-lifecycle tools
   (sdd_host_initialize_project, sdd_host_lock_project, sdd_host_promote_project,
-  sdd_host_get_approval_status, sdd_host_await_approval) to the self-service orchestrator, the
+  sdd_host_get_approval_status, sdd_host_await_approval) to the project lifecycle orchestrator, the
   hosted landscape discovery tools to the surface exchange orchestrator (currentProjectId = the
   bound project), and every other tool to the scoped MCP server after enforcing the granular
   data-plane permission through the authorization specialist (project:read for reads, project:write
@@ -85,10 +85,12 @@ methods:
         type: local
       - stepNumber: 10
         description: >-
-          If the called tool is an execute-primary self-service tool or a hosted landscape tool,
-          dispatch it to the matching orchestrator instead of the scoped MCP server
+          If the called tool is an execute-primary project-lifecycle tool or a hosted landscape
+          tool, dispatch it to the matching orchestrator instead of the scoped MCP server
         type: branch
-        condition: the called tool is one of the sdd_host_* self-service tools or the hosted landscape tools
+        condition: >-
+          the called tool is one of the sdd_host_* project-lifecycle tools or the hosted landscape
+          tools
         onTrueStep: 11
         onFalseStep: 32
       - stepNumber: 11
@@ -118,10 +120,10 @@ methods:
       - stepNumber: 12
         description: >-
           Execute-or-request project initialization, passing the credential and decoded tool
-          arguments; returns a SelfServiceOutcome
+          arguments; returns a ProjectActionOutcome
         type: call
-        targetComponent: self_service_orchestrator
-        targetMethod: requestProjectInitialization
+        targetComponent: project_lifecycle_orchestrator
+        targetMethod: initializeProject
       - stepNumber: 13
         description: Continue to shape the response
         type: jump
@@ -129,8 +131,8 @@ methods:
       - stepNumber: 14
         description: Execute-or-request a project lock, passing the credential and project id
         type: call
-        targetComponent: self_service_orchestrator
-        targetMethod: requestProjectLock
+        targetComponent: project_lifecycle_orchestrator
+        targetMethod: lockProject
       - stepNumber: 15
         description: Continue to shape the response
         type: jump
@@ -138,8 +140,8 @@ methods:
       - stepNumber: 16
         description: Execute-or-request a project promotion, passing the credential and project id
         type: call
-        targetComponent: self_service_orchestrator
-        targetMethod: requestProjectPromotion
+        targetComponent: project_lifecycle_orchestrator
+        targetMethod: promoteProject
       - stepNumber: 17
         description: Continue to shape the response
         type: jump
@@ -147,8 +149,8 @@ methods:
       - stepNumber: 18
         description: Get the approval-request status, passing the credential and request id
         type: call
-        targetComponent: self_service_orchestrator
-        targetMethod: getRequestStatus
+        targetComponent: project_lifecycle_orchestrator
+        targetMethod: getApprovalStatus
       - stepNumber: 19
         description: Continue to shape the response
         type: jump
@@ -158,7 +160,7 @@ methods:
           Long-poll for a decision on the caller's approval request, passing the credential, request
           id, and timeout
         type: call
-        targetComponent: self_service_orchestrator
+        targetComponent: project_lifecycle_orchestrator
         targetMethod: awaitApproval
       - stepNumber: 21
         description: Continue to shape the response
@@ -207,7 +209,7 @@ methods:
         type: jump
         toStep: 30
       - stepNumber: 30
-        description: Shape the self-service or landscape result into the JSON-RPC tool response envelope
+        description: Shape the project-lifecycle or landscape result into the JSON-RPC tool response envelope
         type: local
       - stepNumber: 31
         description: >-
@@ -286,4 +288,4 @@ methods:
     symbol: handleMcpRequest
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-07-15T23:15:12.564Z'
+updatedAt: '2026-07-16T00:14:10.048Z'

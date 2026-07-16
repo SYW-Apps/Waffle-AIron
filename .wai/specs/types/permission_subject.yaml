@@ -18,12 +18,14 @@ fields:
   - name: instanceAdmin
     type: boolean
     description: >-
-      True ONLY for the env-anchored built-in super-admin subject (issuer 'local', userId
-      'builtin:superadmin'), the master credential, or (devMode only) the synthetic local-developer
-      subject — the resolver then bypasses to yes. A regular user is NEVER instanceAdmin, even a
-      delegated instance-wide project:admin (that resolves as a normal overridable permission). It
-      is determined by subject identity, never by an assignment.
+      True ONLY for the built-in super-admin subject (issuer 'local', userId === the persisted
+      boot-reserved super-admin UUID seeded at first boot), the master credential, or (devMode only)
+      the synthetic local-developer subject (issuer 'local', userId === the persisted boot-reserved
+      local-developer UUID) — the resolver then bypasses to yes. A regular user is NEVER
+      instanceAdmin, even a delegated instance-wide project:admin (that resolves as a normal
+      overridable permission). It is determined by subject identity compared against the persisted
+      instance identity, never by an assignment and never by an account name.
     optional: false
 methods: []
 createdAt: '2026-07-15T20:25:25.002Z'
-updatedAt: '2026-07-15T23:07:27.761Z'
+updatedAt: '2026-07-16T00:26:18.407Z'

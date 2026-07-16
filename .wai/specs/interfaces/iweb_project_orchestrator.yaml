@@ -19,9 +19,9 @@ methods:
         type: string
   - name: createProject
     description: >-
-      Create a hosted project; forwards to admin_orchestrator.createProject with the session as the
-      credential (project:create scope enforced there; an optional target org unit is required for a
-      unit-scoped creator).
+      Create a hosted project placed in the REQUIRED owner unit; forwards to
+      admin_orchestrator.createProject with the session as the credential (project:create permission
+      over the target unit enforced there).
     signature: 'createProject(sessionId: string, id: string, unitId: string): HostedProjectRecord'
     returns: HostedProjectRecord
     params:
@@ -31,12 +31,12 @@ methods:
         type: string
       - name: unitId
         type: string
-        optional: true
+        description: REQUIRED target organization unit that owns the new project.
   - name: lockProject
     description: >-
       Lock a project (validate-as-complete then write the StateId-scoped lock); forwards to
-      admin_orchestrator.lockProject with the session as the credential (lock:create scope enforced
-      there).
+      admin_orchestrator.lockProject with the session as the credential (project:write permission
+      enforced there).
     signature: 'lockProject(sessionId: string, projectId: string): LockRecord'
     returns: LockRecord
     params:
@@ -47,7 +47,7 @@ methods:
   - name: promoteProject
     description: >-
       Mark a locked project ready-for-promotion after the StateId re-check; forwards to
-      admin_orchestrator.promoteProject with the session as the credential (promote:mark-ready scope
+      admin_orchestrator.promoteProject with the session as the credential (project:write permission
       enforced there).
     signature: 'promoteProject(sessionId: string, projectId: string): PromoteResult'
     returns: PromoteResult
@@ -59,7 +59,7 @@ methods:
   - name: destroyProject
     description: >-
       Deregister a project and its tree; forwards to admin_orchestrator.destroyProject with the
-      session as the credential (project:destroy scope enforced there).
+      session as the credential (project:admin permission enforced there).
     signature: 'destroyProject(sessionId: string, id: string): void'
     returns: void
     params:
@@ -69,4 +69,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-13T20:36:24.967Z'
-updatedAt: '2026-07-13T20:37:54.262Z'
+updatedAt: '2026-07-16T00:18:53.725Z'

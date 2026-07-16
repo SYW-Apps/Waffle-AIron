@@ -31,7 +31,7 @@ dependsOn:
   - web_graph_orchestrator
   - identity_orchestrator
   - operations_orchestrator
-  - self_service_orchestrator
+  - project_lifecycle_orchestrator
 status: complete
 createdAt: '2026-07-11T11:31:49.793Z'
-updatedAt: '2026-07-15T23:18:01.507Z'
+updatedAt: '2026-07-16T00:13:44.733Z'

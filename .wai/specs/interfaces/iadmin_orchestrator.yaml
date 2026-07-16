@@ -8,12 +8,13 @@ component: admin_orchestrator
 methods:
   - name: createProject
     description: >-
-      Authenticate the caller (bootstrap master or a user token). Resolve the caller's
-      project:create scope over the organization tree: a super-admin (instance-wide grant) may
-      create any project and optionally place it in a target unit; a unit-scoped creator holding
-      project:create for an organization unit MUST supply a target unit within their scope, and the
-      new project is auto-placed there. Allocate the project, bootstrap its isolated spec tree, and
-      place it when a target unit is given.
+      Authenticate the caller (bootstrap master or a user token). Validate the REQUIRED target
+      unitId (every project is placed at creation so the permission resolver can always enumerate it
+      — a fresh instance must create its first organization unit before creating projects; wairon
+      dev provisions a synthetic local unit at boot). Resolve the caller's project:create permission
+      over the target unit via the authorization seam (must be yes; an approval-valued caller must
+      use the execute-primary project-lifecycle path). Allocate the project, bootstrap its isolated
+      spec tree, and place it in the target unit.
     signature: 'createProject(credential: string, id: string, unitId: string): HostedProjectRecord'
     returns: HostedProjectRecord
     params:
@@ -24,14 +25,13 @@ methods:
       - name: unitId
         type: string
         description: >-
-          Optional target organization unit to place the new project in. Required (and must be
-          within scope) for a unit-scoped creator; optional for a super-admin.
-        optional: true
+          REQUIRED target organization unit that owns the new project; the caller's project:create
+          permission is resolved over it and the project is auto-placed there.
   - name: destroyProject
     description: >-
-      Authenticate the caller (bootstrap master or a user token), require the caller's
-      project:destroy scope to permit the target project (a super-admin permits any), and deregister
-      the project and its tree.
+      Authenticate the caller (bootstrap master or a user token), resolve the caller's project:admin
+      permission over the target project via the authorization seam (must be yes; an instance-admin
+      permits any), and deregister the project and its tree.
     signature: 'destroyProject(credential: string, id: string): void'
     returns: void
   - name: listProjects
@@ -41,12 +41,12 @@ methods:
   - name: mintKey
     description: >-
       Authenticate the master credential and mint a project-scoped API key. REFUSES any request that
-      would produce an instance-wide super-admin credential: the legacy admin role projects to a
-      {projectId '*', permissions '*'} grant and the '*' project wildcard is instance-wide, so role
-      admin and project '*' are both rejected — only project-scoped, non-super-admin keys are
-      mintable. The env-anchored built-in admin account (the WAIRON_ADMIN_TOKEN master credential
-      and the WAIRON_ADMIN_USER web login) is the only instance-wide *:* super-admin; those
-      principals are not minted keys and their authentication paths are unaffected.
+      would produce an instance-wide super-admin credential: the legacy role 'admin' and the '*'
+      project wildcard are instance-wide and both are rejected — only project-scoped,
+      non-super-admin keys are mintable. The env-anchored built-in admin account (the
+      WAIRON_ADMIN_TOKEN master credential and the WAIRON_ADMIN_USER web login) is the only
+      instance-wide super-admin; those principals are not minted keys and their authentication paths
+      are unaffected.
     signature: 'mintKey(credential: string, project: string, role: string): string'
     returns: string
   - name: revokeKey
@@ -59,16 +59,18 @@ methods:
     returns: ApiKeyRecord[]
   - name: lockProject
     description: >-
-      Authenticate the caller (bootstrap master or a user token), require the caller's lock:create
-      scope to permit the target project, bind the project scope, validate-as-complete, and on
-      success promote statuses and write the StateId-scoped lock record.
+      Authenticate the caller (bootstrap master or a user token), resolve the caller's project:write
+      permission over the target project via the authorization seam (must be yes), bind the project
+      scope, validate-as-complete, and on success promote statuses and write the StateId-scoped lock
+      record.
     signature: 'lockProject(credential: string, project: string): LockRecord'
     returns: LockRecord
   - name: promoteProject
     description: >-
-      Authenticate the caller (bootstrap master or a user token), require the caller's
-      promote:mark-ready scope to permit the target project, bind scope, read the lock, re-check the
-      current StateId, and mark ready-for-promotion only when it still matches; reject stale locks.
+      Authenticate the caller (bootstrap master or a user token), resolve the caller's project:write
+      permission over the target project via the authorization seam (must be yes), bind scope, read
+      the lock, re-check the current StateId, and mark ready-for-promotion only when it still
+      matches; reject stale locks.
     signature: 'promoteProject(credential: string, project: string): PromoteResult'
     returns: PromoteResult
   - name: generateDiagram
@@ -128,18 +130,25 @@ methods:
   - name: executeApprovedCreate
     description: >-
       Pre-authorized entry for the approval workflow: performs the same privileged action as
-      createProject but WITHOUT credential authentication — the caller (self_service_orchestrator)
-      has already enforced approval-based authorization. Never exposed on any portal.
-    signature: 'executeApprovedCreate(id: string): HostedProjectRecord'
+      createProject but WITHOUT credential authentication — the caller
+      (project_lifecycle_orchestrator) has already enforced permission-based authorization. Creates
+      the project and places it in the REQUIRED owner unit. Never exposed on any portal.
+    signature: 'executeApprovedCreate(id: string, unitId: string): HostedProjectRecord'
     returns: HostedProjectRecord
     params:
       - name: id
         type: string
+      - name: unitId
+        type: string
+        description: >-
+          REQUIRED owner organization unit the new project is placed in (from
+          ProjectInitRequest.ownerUnitId).
   - name: executeApprovedLock
     description: >-
       Pre-authorized entry for the approval workflow: performs the same privileged action as
-      lockProject but WITHOUT credential authentication — the caller (self_service_orchestrator) has
-      already enforced approval-based authorization. Never exposed on any portal.
+      lockProject but WITHOUT credential authentication — the caller
+      (project_lifecycle_orchestrator) has already enforced permission-based authorization. Never
+      exposed on any portal.
     signature: 'executeApprovedLock(projectId: string): LockRecord'
     returns: LockRecord
     params:
@@ -148,8 +157,9 @@ methods:
   - name: executeApprovedPromote
     description: >-
       Pre-authorized entry for the approval workflow: performs the same privileged action as
-      promoteProject but WITHOUT credential authentication — the caller (self_service_orchestrator)
-      has already enforced approval-based authorization. Never exposed on any portal.
+      promoteProject but WITHOUT credential authentication — the caller
+      (project_lifecycle_orchestrator) has already enforced permission-based authorization. Never
+      exposed on any portal.
     signature: 'executeApprovedPromote(projectId: string): PromoteResult'
     returns: PromoteResult
     params:
@@ -157,4 +167,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-07-14T11:42:59.964Z'
+updatedAt: '2026-07-16T00:18:49.045Z'

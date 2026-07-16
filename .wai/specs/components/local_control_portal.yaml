@@ -8,7 +8,7 @@ subsystem: sdd_host
 componentType: Portal
 owns: []
 dependsOn:
-  - self_service_orchestrator
+  - project_lifecycle_orchestrator
   - project_policy_orchestrator
   - identity_orchestrator
   - landscape_orchestrator
@@ -16,4 +16,4 @@ dependsOn:
 portalType: CLI
 status: complete
 createdAt: '2026-07-09T07:20:21.724Z'
-updatedAt: '2026-07-10T22:59:16.439Z'
+updatedAt: '2026-07-16T00:13:42.851Z'

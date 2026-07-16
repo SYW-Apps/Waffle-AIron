@@ -36,6 +36,10 @@ You own and decide on everything within:
 .wai/specs/components/identity_orchestrator.yaml
 .wai/specs/components/identity_portal.yaml
 .wai/specs/components/identity_provider_adapter.yaml
+.wai/specs/components/instance_identity_index.yaml
+.wai/specs/components/instance_identity_registry.yaml
+.wai/specs/components/instance_identity_repository.yaml
+.wai/specs/components/instance_identity_store.yaml
 .wai/specs/components/landscape_diagram_specialist.yaml
 .wai/specs/components/landscape_orchestrator.yaml
 .wai/specs/components/landscape_portal.yaml
@@ -58,6 +62,7 @@ You own and decide on everything within:
 .wai/specs/components/policy_registry.yaml
 .wai/specs/components/policy_repository.yaml
 .wai/specs/components/policy_store.yaml
+.wai/specs/components/project_lifecycle_orchestrator.yaml
 .wai/specs/components/project_policy_orchestrator.yaml
 .wai/specs/components/project_policy_portal.yaml
 .wai/specs/components/project_registry.yaml
@@ -75,7 +80,6 @@ You own and decide on everything within:
 .wai/specs/components/role_repository.yaml
 .wai/specs/components/role_store.yaml
 .wai/specs/components/secret_registry.yaml
-.wai/specs/components/self_service_orchestrator.yaml
 .wai/specs/components/surface_exchange_orchestrator.yaml
 .wai/specs/components/user_index.yaml
 .wai/specs/components/user_registry.yaml
@@ -103,6 +107,7 @@ src/server/adapters.ts
 src/server/request.ts
 src/server/identity.ts
 src/server/idp.ts
+src/server/instance.ts
 src/server/landscape.ts
 src/server/organization.ts
 src/server/packs.ts
@@ -110,12 +115,12 @@ src/server/permissionadmin.ts
 src/server/permissions.ts
 src/server/permission_resolver.ts
 src/server/policy.ts
+src/server/projectlifecycle.ts
 src/server/projects.ts
 src/server/relations.ts
 src/server/surfaces.ts
 src/server/roles.ts
 src/utils/secrets.ts
-src/server/selfservice.ts
 src/server/users.ts
 src/server/visibility.ts
 src/server/webadmin.ts

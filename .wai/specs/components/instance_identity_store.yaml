@@ -1,0 +1,13 @@
+id: instance_identity_store
+name: Instance Identity Store
+description: >-
+  Authoritative in-memory copy of the singleton InstanceIdentity record, loaded from instance.json
+  under the hosted data root. Administrative instance state, not part of any project's SDD subsystem
+  tree.
+subsystem: sdd_host
+componentType: Store
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-07-16T00:23:52.450Z'
+updatedAt: '2026-07-16T07:27:54.243Z'

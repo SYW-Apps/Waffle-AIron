@@ -484,6 +484,13 @@ methods:
         targetComponent: host_core_adapter
         targetMethod: provisionProject
       - stepNumber: 4
+        description: >-
+          Place the new project in the required owner organization unit (from the request's
+          ownerUnitId)
+        type: call
+        targetComponent: organization_repository
+        targetMethod: placeProject
+      - stepNumber: 5
         description: Return the created project record
         type: return
         outcome: created project record
@@ -595,8 +602,8 @@ methods:
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
-          Resolve the target scope for authorization: the provided unitId (kind 'unit') when
-          present, otherwise the instance root (kind 'instance')
+          Validate the REQUIRED target unitId (reject when missing or not an existing organization
+          unit) and resolve the target scope for authorization (kind 'unit')
         type: local
       - stepNumber: 3
         description: >-
@@ -607,8 +614,8 @@ methods:
         targetMethod: authorize
       - stepNumber: 4
         description: >-
-          If the effective value is not yes, deny (an approval-only caller must use the self-service
-          request path)
+          If the effective value is not yes, deny (an approval-valued caller must use the
+          execute-primary project-lifecycle path)
         type: branch
         condition: the effective value is not yes
         onTrueStep: 5
@@ -631,19 +638,11 @@ methods:
         targetComponent: host_core_adapter
         targetMethod: provisionProject
       - stepNumber: 9
-        description: >-
-          If a target unitId was provided, auto-place the new project in that unit; otherwise skip
-          placement
-        type: branch
-        condition: a target unitId was provided
-        onTrueStep: 10
-        onFalseStep: 11
-      - stepNumber: 10
-        description: Place the newly created project in the target organization unit
+        description: Place the newly created project in the required target organization unit
         type: call
         targetComponent: organization_repository
         targetMethod: placeProject
-      - stepNumber: 11
+      - stepNumber: 10
         description: Return the created project record
         type: return
         outcome: created project record
@@ -830,4 +829,4 @@ lint:
         host_core_adapter — documented shortcut on the lock/promote path; refactor candidate.
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-07-15T21:35:39.095Z'
+updatedAt: '2026-07-16T00:19:33.827Z'

@@ -2,11 +2,11 @@ id: policy_store
 name: Policy Store
 description: >-
   Authoritative in-memory representation of hosted instance policy records, including pack/profile
-  enforcement policy and future self-service defaults.
+  enforcement policy and future instance-policy defaults.
 subsystem: sdd_host
 componentType: Store
 owns: []
 dependsOn: []
 status: complete
 createdAt: '2026-07-08T21:59:02.612Z'
-updatedAt: '2026-07-09T20:53:22.958Z'
+updatedAt: '2026-07-16T00:14:59.189Z'

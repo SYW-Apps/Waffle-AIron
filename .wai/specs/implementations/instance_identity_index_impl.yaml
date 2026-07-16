@@ -1,0 +1,15 @@
+id: instance_identity_index_impl
+name: Instance Identity Index Implementation
+description: Read path over the instance identity store's in-memory record.
+contract: iinstance_identity_index
+sourcePath: src/server/instance.ts
+methods:
+  - name: get
+    narrative: []
+    intent: >-
+      Return the store's in-memory instance identity record by reference, or null when the instance
+      has never been seeded; never touches the filesystem.
+detail: intent
+status: complete
+createdAt: '2026-07-16T00:24:44.114Z'
+updatedAt: '2026-07-16T07:27:54.658Z'
