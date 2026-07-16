@@ -48,7 +48,7 @@ export function Home() {
         <iframe
           className="canvas-frame"
           title="Architecture canvas"
-          src={`/web/canvas?projectId=${encodeURIComponent(selected)}`}
+          src={`/web/canvas?projectId=${encodeURIComponent(selected)}&_embed=true`}
         />
       ) : (
         <div className="empty-state">

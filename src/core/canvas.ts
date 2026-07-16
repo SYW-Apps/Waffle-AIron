@@ -561,6 +561,10 @@ body:not(.panel-closed) #panelToggle { background:var(--accent); color:#fff; bor
    still applied). It does NOT force browser fullscreen (F11) — exiting is one
    step, not two. */
 body.presentation header, body.presentation .legend { display:none; }
+/* Embed mode (?_embed=true): the canvas is rendered inside the wairon web app's
+   own chrome, so its redundant brand mark is hidden — the interactive toolbar
+   (views, search, settings) stays. Keeps the iframe from showing a second logo. */
+body.embed header .brand { display:none; }
 /* The details panel hides by default in presentation, but the floating details
    toggle brings it back without leaving presentation mode. */
 body.presentation #panel, body.presentation #panelResizer { display:none; }
@@ -722,6 +726,12 @@ var MODEL = __MODEL_JSON__;
   var store = (typeof localStorage !== 'undefined') ? localStorage : null;
   var inBrowser = (typeof window !== 'undefined');
   var STORE_KEY = 'wairon:canvas2:' + MODEL.system.name;
+
+  // Embed mode: when the canvas is iframed inside the wairon web app
+  // (?_embed=true), hide its own brand mark so the app's chrome isn't doubled.
+  if (inBrowser && document.body && new URLSearchParams(window.location.search).get('_embed') === 'true') {
+    document.body.classList.add('embed');
+  }
 
   // ---- indexes -------------------------------------------------------------
   var compById = {};
