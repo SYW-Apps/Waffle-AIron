@@ -466,6 +466,68 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
 .canvas-bar { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); flex: 0 0 auto; }
 .canvas-frame { flex: 1; border: none; width: 100%; background: var(--bg); }
 
+/* ── Beta (in-React) canvas ──────────────────────────────────────────────── */
+.beta-canvas { flex: 1; min-height: 0; display: flex; }
+.beta-canvas-stage { position: relative; flex: 1; min-width: 0; background: var(--bg); }
+.beta-canvas-cy { position: absolute; inset: 0; }
+.beta-canvas-toolbar {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 5;
+  pointer-events: none;
+}
+.beta-canvas-toolbar > * { pointer-events: auto; }
+.beta-canvas-search { width: 240px; max-width: 50%; }
+.beta-canvas-search .input {
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.beta-canvas-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  pointer-events: none;
+}
+.beta-canvas-overlay > * { pointer-events: auto; }
+
+.beta-details {
+  width: 320px;
+  flex: 0 0 320px;
+  border-left: 1px solid var(--border);
+  background: var(--panel);
+  overflow-y: auto;
+  padding: 16px;
+}
+.beta-details-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.beta-details-head h3 { font-size: 16px; }
+.beta-stereo { color: var(--accent); font-size: 12px; font-weight: 600; }
+.beta-details-badges { margin: 12px 0; }
+.beta-details-desc { color: var(--ink-dim); font-size: 13px; line-height: 1.5; margin: 0 0 14px; }
+.beta-details-section { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border-soft); }
+.beta-details-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-subtle);
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.beta-iface-list, .beta-method-list { list-style: none; margin: 0; padding: 0; }
+.beta-iface { margin-bottom: 10px; }
+.beta-iface-name { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+.beta-method-list { padding-left: 10px; border-left: 1px solid var(--border); display: flex; flex-direction: column; gap: 3px; }
+.beta-method { font-size: 12px; color: var(--ink-dim); }
+.beta-method code { color: var(--ink); }
+.beta-method-returns { color: var(--ink-subtle); }
+
 /* ── Boot / login ────────────────────────────────────────────────────────── */
 .boot, .login-wrap {
   height: 100%;
