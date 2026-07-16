@@ -31,6 +31,6 @@ methods:
         type: string
       - name: syncedAt
         type: string
-status: draft
+status: complete
 createdAt: '2026-07-16T15:38:52.993Z'
-updatedAt: '2026-07-16T15:38:52.995Z'
+updatedAt: '2026-07-16T15:48:49.082Z'

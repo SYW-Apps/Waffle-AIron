@@ -5,8 +5,9 @@ import * as path from 'node:path';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import * as admin from '../../src/server/admin.js';
 import { AdminAuthError } from '../../src/server/admin.js';
+import { UnauthenticatedError } from '../../src/server/errors.js';
 import * as packs from '../../src/server/packs.js';
-import { createPlacedProject } from './helpers.js';
+import { createPlacedProject, mintUserToken } from './helpers.js';
 import { loadProjectConfig } from '../../src/config/loader.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import type { HostConfig } from '../../src/server/types.js';
@@ -93,9 +94,13 @@ describe('hosted pack management (sdd_host)', () => {
       expect(() => packs.installGlobalPack(cfg, ADMIN, '../escape', DECLARATIVE_PACK)).toThrow(/Invalid pack name/);
     });
 
-    it('rejects a bad admin credential before any effect', () => {
-      expect(() => packs.installGlobalPack(cfg, 'wrong', 'acme', DECLARATIVE_PACK)).toThrow(AdminAuthError);
-      expect(() => packs.listGlobalPacks(cfg, null)).toThrow(AdminAuthError);
+    it('rejects a bad credential (401) and an authenticated non-admin (403) before any effect', () => {
+      // An unknown credential is unauthenticated under the resolver model.
+      expect(() => packs.installGlobalPack(cfg, 'wrong', 'acme', DECLARATIVE_PACK)).toThrow(UnauthenticatedError);
+      expect(() => packs.listGlobalPacks(cfg, null)).toThrow(UnauthenticatedError);
+      // An authenticated caller WITHOUT instance-level project:admin is refused.
+      const plain = mintUserToken(dataDir, { id: 'k-plain', userId: 'u-plain' });
+      expect(() => packs.installGlobalPack(cfg, plain, 'acme', DECLARATIVE_PACK)).toThrow(AdminAuthError);
       expect(fs.existsSync(path.join(dataDir, 'packs', 'acme.yaml'))).toBe(false);
     });
   });

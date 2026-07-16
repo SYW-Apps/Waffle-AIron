@@ -1056,6 +1056,36 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
       description: 'Hosted landscape: fetch a visible target project\'s CONTRACT-GRADE surface snapshot (full method contracts, dispatch tables, type closure) at your audience-distance ceiling, origin "exchanged" — save it under .wai/surfaces/ (wairon surface import) so your adapters validate against the declared contract.',
       inputSchema: { projectId: z.string().describe('The visible target project id') },
     }, hostedStub);
+    reg<Record<string, never>>(server, 'sdd_host_pack_list', {
+      description: 'Hosted project ops: list the BOUND project\'s registered extension packs (requires project:read over it).',
+      inputSchema: {},
+    }, hostedStub);
+    reg<{ name: string; content: string }>(server, 'sdd_host_pack_install', {
+      description: 'Hosted project ops: install a DECLARATIVE extension pack (profiles + language/platform tables — never rule/code packs) into the BOUND project (requires project:admin over it).',
+      inputSchema: {
+        name: z.string().describe('Pack name (letters, digits, dot, underscore, hyphen)'),
+        content: z.string().describe('The declarative pack YAML content'),
+      },
+    }, hostedStub);
+    reg<Record<string, never>>(server, 'sdd_host_policy_evaluate', {
+      description: 'Hosted project ops: evaluate the BOUND project\'s packs and profile selection against the instance pack policy — compliance without side effects (requires project:write over it).',
+      inputSchema: {},
+    }, hostedStub);
+    reg<Record<string, never>>(server, 'sdd_host_policy_reconcile', {
+      description: 'Hosted project ops: reconcile the BOUND project against the instance pack policy — under auto_reconcile enforcement the missing required/default declarative packs are applied (requires project:write over it).',
+      inputSchema: {},
+    }, hostedStub);
+    reg<{ target: string }>(server, 'sdd_host_produce', {
+      description: 'Hosted project ops: run a configured producer projection (Notion/Miro) of the BOUND project to the named target (requires project:admin over it).',
+      inputSchema: { target: z.string().describe('The configured producer target (e.g. notion, miro)') },
+    }, hostedStub);
+    reg<{ subsystem?: string; message?: string }>(server, 'sdd_host_commit_project', {
+      description: 'Hosted project ops: publish a DELIBERATE, .wai/-scoped commit+push of the BOUND project\'s specs to its bound repository (commit = local save, push = the actual backup; a clean scope publishes nothing). The data plane binds ONE project, so there is no project argument. Requires project:write over it.',
+      inputSchema: {
+        subsystem: z.string().optional().describe('Narrow staging to .wai/specs/<subsystem>/ (a convenience — git history stays per-repo)'),
+        message: z.string().optional().describe('Commit message; defaults to a timestamped wairon message'),
+      },
+    }, hostedStub);
   }
 
   return server;

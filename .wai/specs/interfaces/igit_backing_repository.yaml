@@ -42,6 +42,6 @@ methods:
     params:
       - name: bindingId
         type: string
-status: draft
+status: complete
 createdAt: '2026-07-16T15:39:09.744Z'
-updatedAt: '2026-07-16T15:39:09.746Z'
+updatedAt: '2026-07-16T15:48:49.145Z'

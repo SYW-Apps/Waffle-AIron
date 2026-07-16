@@ -18,6 +18,7 @@ import type {
   AuditRetentionPolicy,
   HostConfig,
   HostedProjectRecord,
+  HostExposurePolicy,
   IdentityProviderConfig,
   InstancePackPolicy,
   PolicyEvaluationResult,
@@ -94,6 +95,66 @@ export function setPackPolicyRecord(dataDir: string, policy: InstancePackPolicy)
   fs.writeFileSync(tmp, JSON.stringify(stored, null, 2) + '\n');
   fs.renameSync(tmp, p);
   return stored;
+}
+
+// ── exposure-policy storage (third policy collection) ────────────────────────
+//
+// The instance EXPOSURE policy (webUiEnabled/requireTls posture) joins the
+// policy repository as its third file-backed collection at
+// <dataDir>/exposure-policy.json — the same file the HTTP gate reads, now with
+// a proper read/replace path so the web admin surface can edit it.
+
+function exposurePolicyPath(dataDir: string): string {
+  return path.join(dataDir, 'exposure-policy.json');
+}
+
+/** The compatible default exposure posture: everything mounted on the loopback
+ *  admin listener (matching pre-exposure-policy behavior), TLS required, and the
+ *  unified web UI OFF — a NEW public surface stays opt-in, so an existing
+ *  instance is entirely unaffected until an operator turns it on. */
+export const COMPATIBLE_DEFAULT_EXPOSURE: HostExposurePolicy = {
+  adminApiMode: 'local_only',
+  adminUiEnabled: true,
+  identityApiEnabled: true,
+  landscapeApiEnabled: true,
+  projectPolicyApiEnabled: true,
+  cliControlEnabled: true,
+  requireTls: true,
+  operationsApiEnabled: true,
+  webUiEnabled: false,
+};
+
+/**
+ * Read the persisted instance exposure policy, or null when none has ever been
+ * configured (callers substitute the safe default — web UI off, TLS required);
+ * an unreadable file or structurally invalid JSON fails with a storage error
+ * naming the path.
+ */
+export function getExposurePolicyRecord(dataDir: string): HostExposurePolicy | null {
+  const p = exposurePolicyPath(dataDir);
+  let raw: string;
+  try {
+    raw = fs.readFileSync(p, 'utf8');
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw new Error(`Failed to read exposure policy store at ${p}: ${(e as Error).message}`);
+  }
+  try {
+    return JSON.parse(raw) as HostExposurePolicy;
+  } catch (e) {
+    throw new Error(`Exposure policy store at ${p} contains malformed JSON: ${(e as Error).message}`);
+  }
+}
+
+/** Persist the instance exposure policy wholesale via write-temp-then-rename
+ *  and return it. No stamping — the exposure posture is a plain settings object. */
+export function setExposurePolicyRecord(dataDir: string, policy: HostExposurePolicy): HostExposurePolicy {
+  const p = exposurePolicyPath(dataDir);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  const tmp = `${p}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(policy, null, 2) + '\n');
+  fs.renameSync(tmp, p);
+  return policy;
 }
 
 /**

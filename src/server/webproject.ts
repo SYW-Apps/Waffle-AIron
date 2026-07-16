@@ -2,13 +2,19 @@ import { authenticateSession } from './auth.js';
 import { visibleScopes, actionableProjectIds, isInstanceAdmin } from './authorization.js';
 import { listProjectRecords } from './projects.js';
 import {
-  createProject as adminCreateProject,
   lockProject as adminLockProject,
   promoteProject as adminPromoteProject,
   destroyProject as adminDestroyProject,
 } from './admin.js';
+import { initializeProjectWithProfile } from './policy.js';
 import type { LockRecord } from '../core/lockfile.js';
-import type { HostConfig, HostedProjectRecord, PromoteResult } from './types.js';
+import type {
+  HostConfig,
+  HostedProjectRecord,
+  ProjectInitRequest,
+  ProjectProfileSelection,
+  PromoteResult,
+} from './types.js';
 
 // ---------------------------------------------------------------------------
 // Web Project Orchestrator (sdd_host)
@@ -56,17 +62,27 @@ export function listProjects(cfg: HostConfig, sessionId: string): HostedProjectR
 }
 
 /**
- * Create a hosted project placed in the REQUIRED owner unit. Forwards to
- * admin_orchestrator.createProject passing the sessionId as the credential —
- * project:create permission over the target unit is enforced there.
+ * Create a hosted project placed in the REQUIRED owner unit, optionally with a
+ * profile selection. Builds a ProjectInitRequest and forwards to
+ * project_policy_orchestrator.initializeProjectWithProfile with the session as
+ * the credential, so the instance pack policy (required/default packs, profile
+ * requirements, enforcement mode) applies to a web create exactly as it does to
+ * the MCP init — project:create over the unit is enforced there.
  */
 export function createProject(
   cfg: HostConfig,
   sessionId: string,
   id: string,
   unitId: string,
+  profileSelection?: ProjectProfileSelection,
 ): HostedProjectRecord {
-  return adminCreateProject(cfg, sessionId, id, unitId); // step 1 (forward)
+  // step 1: the init request (id, REQUIRED owner unit, optional profile).
+  const request: ProjectInitRequest = {
+    id,
+    ownerUnitId: unitId,
+    ...(profileSelection !== undefined ? { profileSelection } : {}),
+  };
+  return initializeProjectWithProfile(cfg, sessionId, request); // steps 2–3 (forward)
 }
 
 /**

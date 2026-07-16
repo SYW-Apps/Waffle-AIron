@@ -27,6 +27,6 @@ lint:
         runPeriodicBackingSync is invoked by the host supervisor's periodic timer, scheduled in
         host_server.start — a composition-root bootstrap method outside the modeled HTTP call chains
         (see host_server's matching allow).
-status: draft
+status: complete
 createdAt: '2026-07-16T15:38:36.519Z'
-updatedAt: '2026-07-16T15:42:28.944Z'
+updatedAt: '2026-07-16T15:48:48.640Z'

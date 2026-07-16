@@ -24,6 +24,12 @@ You own and decide on everything within:
 .wai/specs/components/auth_specialist.yaml
 .wai/specs/components/credential_registry.yaml
 .wai/specs/components/diagnostics_specialist.yaml
+.wai/specs/components/git_backing_adapter.yaml
+.wai/specs/components/git_backing_index.yaml
+.wai/specs/components/git_backing_orchestrator.yaml
+.wai/specs/components/git_backing_registry.yaml
+.wai/specs/components/git_backing_repository.yaml
+.wai/specs/components/git_backing_store.yaml
 .wai/specs/components/host_core_adapter.yaml
 .wai/specs/components/host_git_adapter.yaml
 .wai/specs/components/host_http_portal.yaml
@@ -63,6 +69,7 @@ You own and decide on everything within:
 .wai/specs/components/policy_repository.yaml
 .wai/specs/components/policy_store.yaml
 .wai/specs/components/project_lifecycle_orchestrator.yaml
+.wai/specs/components/project_ops_orchestrator.yaml
 .wai/specs/components/project_policy_orchestrator.yaml
 .wai/specs/components/project_policy_portal.yaml
 .wai/specs/components/project_registry.yaml
@@ -103,6 +110,7 @@ src/server/authorization.ts
 src/server/auth.ts
 src/server/credentials.ts
 src/server/operations.ts
+src/server/gitbacking.ts
 src/server/adapters.ts
 src/server/request.ts
 src/server/identity.ts
@@ -116,6 +124,7 @@ src/server/permissions.ts
 src/server/permission_resolver.ts
 src/server/policy.ts
 src/server/projectlifecycle.ts
+src/server/projectops.ts
 src/server/projects.ts
 src/server/relations.ts
 src/server/surfaces.ts

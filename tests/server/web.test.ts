@@ -1611,8 +1611,10 @@ describe('web project orchestrator (sdd_host)', () => {
     expect(webproject.listProjects(cfg, session('u-proj')).map((r) => r.id)).toEqual(['web-proj']);
   });
 
-  it('createProject forwards with the session: a permission-holder succeeds, a viewer gets AdminAuthError (403)', () => {
-    // The instance admin creates a project into the required unit (provisioned + placed).
+  it('createProject forwards with the session: a permission-holder succeeds, a viewer is Forbidden (403)', () => {
+    // The instance admin creates a project into the required unit (provisioned +
+    // placed) — the create routes through the POLICY-AWARE initialization, so
+    // the instance pack policy applies to web creates exactly as to MCP init.
     const unit = seedUnit(dataDir, 'team');
     const rec = webproject.createProject(cfg, superAdmin(), 'new-proj', unit.id);
     expect(rec.id).toBe('new-proj');
@@ -1620,7 +1622,7 @@ describe('web project orchestrator (sdd_host)', () => {
 
     // A viewer (project:read only) holds no project:create authority → refused, nothing allocated.
     allow(dataDir, 'viewer', 'project:read', 'unit', unit.id);
-    expect(() => webproject.createProject(cfg, session('viewer'), 'denied', unit.id)).toThrow(AdminAuthError);
+    expect(() => webproject.createProject(cfg, session('viewer'), 'denied', unit.id)).toThrow(ForbiddenError);
     expect(listProjectRecords(dataDir).some((r) => r.id === 'denied')).toBe(false);
   }, 20_000);
 

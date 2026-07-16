@@ -19,6 +19,7 @@ import {
   existingProjectRoot,
 } from './projects.js';
 import { hostCore, hostGit, hostProducer, validateProjectAsComplete } from './adapters.js';
+import type { GitBackingStatus, GitPublish } from '../git/index.js';
 import { setSecret as storeSecret, listSecretKeys } from '../utils/secrets.js';
 import type { ProducerConfig } from '../producers/index.js';
 import type {
@@ -232,9 +233,13 @@ export function executeApprovedLock(cfg: HostConfig, projectId: string): LockRec
     hostCore.promoteAllComplete();
     const stateId = hostCore.computeStateId();
 
-    // Git-backed: commit the promoted working tree and push the working branch;
-    // returns the commit + compare URL a human opens the PR from. No-op if native.
-    const publish = hostGit.publish(`wairon lock: ${projectId}`);
+    // Git-backed: the lock is the semantic checkpoint — the auto-publish
+    // trigger. Commit ONLY the .wai/ tree (pathspec-scoped, never the shared
+    // repo's own code) with a message referencing the validated StateId, and
+    // push; returns the commit + compare URL a human opens the PR from. No-op
+    // for native projects, and a backup failure never fails the lock (publish
+    // itself no-ops rather than throwing on a clean scope).
+    const publish = hostGit.publish(`wairon lock: ${projectId} @ ${stateId}`);
 
     const record: LockRecord = {
       stateId,
@@ -255,10 +260,18 @@ export function executeApprovedLock(cfg: HostConfig, projectId: string): LockRec
 }
 
 // ── Git backing ─────────────────────────────────────────────────────────────
+//
+// The per-project binding is to the project's REAL repository: wairon manages
+// ONLY the .wai/ tree inside it (commits are pathspec-scoped, never
+// `git add -A`), so the repository is safely shared with the team's own code.
 
-/** Enable git backing on a fresh project (clones the remote onto a working branch). */
+/** Bind a fresh project to its REAL repository (clones the remote onto an
+ *  isolated working branch). Binding is project administration. */
 export function enableGit(cfg: HostConfig, credential: string | null, project: string, remote: string, branch: string): HostedProjectRecord {
-  requireAdmin(credential);
+  const principal = requirePrincipal(cfg, credential);
+  if (authorize(cfg.dataDir, principal, 'project:admin', 'project', project).value !== 'yes') {
+    throw new AdminAuthError('Forbidden — binding a repository requires project:admin over the project');
+  }
   if (existingProjectRoot(cfg.dataDir, project)) {
     throw new Error(`Project "${project}" already exists; destroy it first to git-enable a fresh clone.`);
   }
@@ -267,9 +280,12 @@ export function enableGit(cfg: HostConfig, credential: string | null, project: s
   return rec;
 }
 
-/** Disable git backing for a project (leaves the checkout in place). */
+/** Disable git backing for a project (clears the binding; the checkout stays). */
 export function disableGit(cfg: HostConfig, credential: string | null, project: string): void {
-  requireAdmin(credential);
+  const principal = requirePrincipal(cfg, credential);
+  if (authorize(cfg.dataDir, principal, 'project:admin', 'project', project).value !== 'yes') {
+    throw new AdminAuthError('Forbidden — unbinding a repository requires project:admin over the project');
+  }
   const root = existingProjectRoot(cfg.dataDir, project);
   if (!root) throw new Error(`Unknown project "${project}".`);
   runWithProjectRoot(root, () => hostGit.disable());
@@ -277,10 +293,100 @@ export function disableGit(cfg: HostConfig, credential: string | null, project: 
 
 /** Sync a project's default branch into its working branch. */
 export function syncGit(cfg: HostConfig, credential: string | null, project: string): void {
-  requireAdmin(credential);
+  const principal = requirePrincipal(cfg, credential);
+  if (authorize(cfg.dataDir, principal, 'project:write', 'project', project).value !== 'yes') {
+    throw new AdminAuthError('Forbidden — syncing a project\'s repository requires project:write over it');
+  }
   const root = existingProjectRoot(cfg.dataDir, project);
   if (!root) throw new Error(`Unknown project "${project}".`);
   runWithProjectRoot(root, () => hostGit.sync());
+}
+
+/**
+ * Publish a DELIBERATE, SCOPED backup commit: stage ONLY .wai/ (or the finer
+ * .wai/specs/<subsystem>/ subpath when given), commit, and push — commit is the
+ * local save, push is the actual backup; both happen. A clean scope publishes
+ * nothing. CAVEAT: a subsystem-scoped commit is a staging convenience only —
+ * git history is per-repo, so the log still interleaves all commits; the
+ * project is the clean unit.
+ */
+export function commitProject(
+  cfg: HostConfig,
+  credential: string | null,
+  project: string,
+  subsystem?: string,
+  message?: string,
+): GitPublish {
+  const principal = requirePrincipal(cfg, credential);
+  if (authorize(cfg.dataDir, principal, 'project:write', 'project', project).value !== 'yes') {
+    throw new AdminAuthError('Forbidden — committing a project\'s specs requires project:write over it');
+  }
+  const root = existingProjectRoot(cfg.dataDir, project);
+  if (!root) throw new Error(`Unknown project "${project}".`);
+  const scope = subsystem ? `.wai/specs/${subsystem}/` : '.wai/';
+  const msg =
+    message ??
+    `wairon commit: ${project}${subsystem ? ` (${subsystem})` : ''} @ ${new Date().toISOString()}`;
+  return runWithProjectRoot(root, () => hostGit.publish(msg, scope));
+}
+
+/** Read a project's git-backing status (remote/branch, sync setting, scoped
+ *  .wai/ dirtiness). A read; not audited. */
+export function getGitBinding(cfg: HostConfig, credential: string | null, project: string): GitBackingStatus {
+  const principal = requirePrincipal(cfg, credential);
+  if (authorize(cfg.dataDir, principal, 'project:admin', 'project', project).value !== 'yes') {
+    throw new AdminAuthError('Forbidden — reading a project\'s git binding requires project:admin over it');
+  }
+  const root = existingProjectRoot(cfg.dataDir, project);
+  if (!root) throw new Error(`Unknown project "${project}".`);
+  return runWithProjectRoot(root, () => hostGit.status());
+}
+
+/** Persist a project's periodic-sync setting (interval + skip-if-clean; an
+ *  absent interval disables periodic sync). Binding administration. */
+export function configureGitSync(
+  cfg: HostConfig,
+  credential: string | null,
+  project: string,
+  periodicSyncMinutes?: number,
+  skipIfClean?: boolean,
+): void {
+  const principal = requirePrincipal(cfg, credential);
+  if (authorize(cfg.dataDir, principal, 'project:admin', 'project', project).value !== 'yes') {
+    throw new AdminAuthError('Forbidden — configuring the periodic sync requires project:admin over the project');
+  }
+  const root = existingProjectRoot(cfg.dataDir, project);
+  if (!root) throw new Error(`Unknown project "${project}".`);
+  runWithProjectRoot(root, () => hostGit.configureSync(periodicSyncMinutes, skipIfClean));
+}
+
+/**
+ * Pre-authorized sweep for the host supervisor's periodic backup timer — NO
+ * authentication; never exposed on any portal. For each git-bound project whose
+ * binding enables periodic sync and whose interval has elapsed, publish a
+ * .wai/-scoped commit+push, skipping clean projects (skip-if-clean) so a quiet
+ * project never commits noise. One project's failure never aborts the sweep.
+ */
+export function runPeriodicGitSync(cfg: HostConfig): void {
+  for (const rec of listProjectRecords(cfg.dataDir)) {
+    try {
+      runWithProjectRoot(rec.rootPath, () => {
+        const backing = hostGit.status();
+        if (!backing.enabled || backing.periodicSyncMinutes === undefined) return;
+        const due =
+          backing.lastSyncAt === undefined ||
+          Date.now() - Date.parse(backing.lastSyncAt) >= backing.periodicSyncMinutes * 60_000;
+        if (!due) return;
+        if (backing.skipIfClean !== false && backing.dirty !== true) return;
+        hostGit.publish(`wairon periodic sync: ${rec.id} @ ${new Date().toISOString()}`);
+      });
+    } catch (err) {
+      console.error(
+        `[git-sync] periodic publish failed for "${rec.id}": ` +
+          (err instanceof Error ? err.message : String(err)),
+      );
+    }
+  }
 }
 
 // ── Producers ───────────────────────────────────────────────────────────────
@@ -291,13 +397,22 @@ function boundProject(cfg: HostConfig, project: string): string {
   return root;
 }
 
+/** A producer publishes the project's specs to an external target — project
+ *  administration. Shared gate for the four producer methods. */
+function requireProducerAdmin(cfg: HostConfig, credential: string | null, project: string, verb: string): void {
+  const principal = requirePrincipal(cfg, credential);
+  if (authorize(cfg.dataDir, principal, 'project:admin', 'project', project).value !== 'yes') {
+    throw new AdminAuthError(`Forbidden — ${verb} requires project:admin over the project`);
+  }
+}
+
 export function configureProducer(cfg: HostConfig, credential: string | null, project: string, target: string, parentPageId: string): void {
-  requireAdmin(credential);
+  requireProducerAdmin(cfg, credential, project, 'configuring a producer');
   runWithProjectRoot(boundProject(cfg, project), () => hostProducer.configure(target, parentPageId));
 }
 
 export async function produceProducer(cfg: HostConfig, credential: string | null, project: string, target: string): Promise<void> {
-  requireAdmin(credential);
+  requireProducerAdmin(cfg, credential, project, 'running a producer');
   const root = boundProject(cfg, project);
   const base = process.env['WAIRON_PUBLIC_URL'] || `http://${cfg.host}:${cfg.port}`;
   const diagramUrl = `${base}/view/diagram?token=${signViewToken(project, 'canvas')}`;
@@ -305,12 +420,12 @@ export async function produceProducer(cfg: HostConfig, credential: string | null
 }
 
 export function removeProducer(cfg: HostConfig, credential: string | null, project: string, target: string): void {
-  requireAdmin(credential);
+  requireProducerAdmin(cfg, credential, project, 'removing a producer');
   runWithProjectRoot(boundProject(cfg, project), () => hostProducer.remove(target));
 }
 
 export function listProducers(cfg: HostConfig, credential: string | null, project: string): ProducerConfig[] {
-  requireAdmin(credential);
+  requireProducerAdmin(cfg, credential, project, 'listing producers');
   return runWithProjectRoot(boundProject(cfg, project), () => hostProducer.list());
 }
 

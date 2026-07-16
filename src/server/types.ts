@@ -499,6 +499,31 @@ export interface UnitDisposition {
   newName?: string;
 }
 
+/** A CONTAINER-level backup binding, distinct from the per-project real-repo
+ *  binding (GitConfig): binds an organization unit's subtree — or the whole
+ *  instance structure — to its own backing repository. A unit binding mirrors
+ *  every subtree project's .wai/ tree into the container repo; an instance
+ *  binding mirrors the hosted instance structure itself (the flat JSON in the
+ *  data root that no per-project repo covers) for real backup and restore. The
+ *  secret store is NEVER mirrored; credentials appear only as hashed records. */
+export interface GitBackingBinding {
+  id: string;
+  /** 'unit' (a container repo for the unit's subtree) or 'instance'. */
+  scopeKind: 'unit' | 'instance';
+  /** The qualified unit id for scopeKind 'unit'; absent for 'instance'. */
+  scopeId?: string;
+  remote: string;
+  branch: string;
+  /** Interval for the periodic backup sweep; absent = manual sync only. */
+  periodicSyncMinutes?: number;
+  /** The sweep skips the commit when the mirrored content is unchanged (default true). */
+  skipIfClean?: boolean;
+  /** ISO-8601 timestamp of the last successful sync. */
+  lastSyncAt?: string;
+  createdAt: string;
+  createdBy: PrincipalSubject;
+}
+
 /** Maps an organization unit's previous qualified id to its new one after a
  *  reparent or rename. reparentUnit returns one per moved unit (the unit plus
  *  every descendant) so callers rewrite every reference to the old id —

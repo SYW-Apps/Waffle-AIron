@@ -14,7 +14,8 @@ import * as projectlifecycle from './projectlifecycle.js';
 import * as policy from './policy.js';
 import * as landscape from './landscape.js';
 import * as operations from './operations.js';
-import { AdminAuthError, LockValidationError } from './admin.js';
+import { AdminAuthError, LockValidationError, runPeriodicGitSync } from './admin.js';
+import { runPeriodicBackingSync } from './gitbacking.js';
 import type { ApprovalDecision, DisplayRole, HostConfig, HostExposurePolicy, PrincipalSubject } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -132,6 +133,24 @@ const WEB_MUTATION_PATHS = new Set<string>([
   '/web/admin/roles/unbind',
   '/web/admin/permissions',
   '/web/admin/permissions/remove',
+  '/web/admin/packs',
+  '/web/admin/packs/remove',
+  '/web/admin/policy',
+  '/web/admin/exposure',
+  '/web/admin/git-backing',
+  '/web/admin/git-backing/remove',
+  '/web/admin/git-backing/sync',
+  '/web/projects/packs',
+  '/web/projects/packs/remove',
+  '/web/projects/policy/reconcile',
+  '/web/projects/producers',
+  '/web/projects/producers/remove',
+  '/web/projects/producers/run',
+  '/web/projects/git',
+  '/web/projects/git/disconnect',
+  '/web/projects/git/sync',
+  '/web/projects/git/commit',
+  '/web/projects/git/sync-config',
   '/web/tokens',
   '/web/tokens/revoke',
   '/web/projects',
@@ -268,22 +287,8 @@ export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResp
 // <dataDir>/exposure-policy.json is read (a partial object is fine — its flags
 // override the compatible default). Env/flag plumbing can come later.
 
-/** The compatible default: everything mounted on the loopback admin listener,
- *  matching pre-exposure-policy behavior. */
-const COMPATIBLE_DEFAULT_EXPOSURE: HostExposurePolicy = {
-  adminApiMode: 'local_only',
-  adminUiEnabled: true,
-  identityApiEnabled: true,
-  landscapeApiEnabled: true,
-  projectPolicyApiEnabled: true,
-  cliControlEnabled: true,
-  requireTls: true,
-  operationsApiEnabled: true,
-  // The unified web UI is a NEW public surface on the data plane, so it is
-  // OPT-IN: false here keeps existing instances unaffected (every /web path and
-  // the app shell answer 404 until an operator turns it on).
-  webUiEnabled: false,
-};
+// The compatible default posture lives with the exposure repository
+// (policy.ts) so the admin edit surface and this gate share one source.
 
 /** Read an optional <dataDir>/exposure-policy.json override (a partial policy);
  *  absent/malformed yields undefined so the compatible default stands. */
@@ -302,7 +307,7 @@ function readExposurePolicyFile(dataDir: string): Partial<HostExposurePolicy> | 
  *  default so unset flags keep current (mounted) behavior. */
 export function resolveExposurePolicy(cfg: HostConfig): HostExposurePolicy {
   const override = cfg.exposurePolicy ?? readExposurePolicyFile(cfg.dataDir);
-  return { ...COMPATIBLE_DEFAULT_EXPOSURE, ...(override ?? {}) };
+  return { ...policy.COMPATIBLE_DEFAULT_EXPOSURE, ...(override ?? {}) };
 }
 
 // ── Admin plane ───────────────────────────────────────────────────────────
@@ -592,8 +597,31 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
   });
   dataServer.listen(cfg.port, cfg.host);
   adminServer.listen(cfg.adminPort, cfg.adminHost);
+
+  // Periodic git-backup timer: each tick sweeps the git-bound projects (a
+  // .wai/-scoped commit+push per due project, skip-if-clean — a quiet project
+  // never commits noise) AND the container-level backup bindings whose interval
+  // has elapsed. Both sweeps are pre-authorized internals; per-item failures
+  // are recorded inside them and never abort a sweep. unref() so the timer
+  // never keeps a closing process alive.
+  const GIT_SYNC_TICK_MS = 60_000;
+  const gitSyncTimer = setInterval(() => {
+    try {
+      runPeriodicGitSync(cfg);
+    } catch (err) {
+      console.error('[git-sync] project sweep failed: ' + (err instanceof Error ? err.message : String(err)));
+    }
+    try {
+      runPeriodicBackingSync(cfg);
+    } catch (err) {
+      console.error('[git-backing] backing sweep failed: ' + (err instanceof Error ? err.message : String(err)));
+    }
+  }, GIT_SYNC_TICK_MS);
+  gitSyncTimer.unref();
+
   return {
     close() {
+      clearInterval(gitSyncTimer);
       dataServer.close();
       adminServer.close();
     },

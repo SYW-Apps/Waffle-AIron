@@ -15,6 +15,7 @@ import {
   getApprovalStatus,
   awaitApproval,
 } from './projectlifecycle.js';
+import * as projectops from './projectops.js';
 import {
   listReachableProjectsForMcp,
   listReachableProjectInterfacesForMcp,
@@ -151,6 +152,19 @@ const LANDSCAPE_DISCOVERY_TOOLS = new Set<string>([
   'sdd_landscape_list_reachable_project_interfaces',
   'sdd_landscape_list_visible_surfaces',
   'sdd_landscape_get_project_surface',
+]);
+
+/** The six hosted project-ops tools the data plane handles directly, routing
+ *  them to the project ops orchestrator — ALWAYS bound to THE one authorized
+ *  project (instance-level operations are deliberately absent from the data
+ *  plane). Each is resolver-gated upstream by its owning orchestrator. */
+const PROJECT_OPS_TOOLS = new Set<string>([
+  'sdd_host_pack_list',
+  'sdd_host_pack_install',
+  'sdd_host_policy_evaluate',
+  'sdd_host_policy_reconcile',
+  'sdd_host_produce',
+  'sdd_host_commit_project',
 ]);
 
 /** The MCP tool-result envelope — the exact shape the scoped sdd_* server returns:
@@ -293,7 +307,10 @@ export async function dispatchProjectLifecycleTool(
   const msg = jsonRpcRequest(body);
   if (!msg || msg.method !== 'tools/call') return undefined;
   const name = msg.params?.name;
-  if (typeof name !== 'string' || !(PROJECT_LIFECYCLE_TOOLS.has(name) || LANDSCAPE_DISCOVERY_TOOLS.has(name))) {
+  if (
+    typeof name !== 'string' ||
+    !(PROJECT_LIFECYCLE_TOOLS.has(name) || LANDSCAPE_DISCOVERY_TOOLS.has(name) || PROJECT_OPS_TOOLS.has(name))
+  ) {
     return undefined;
   }
 
@@ -342,6 +359,39 @@ export async function dispatchProjectLifecycleTool(
         // Contract-grade surface fetch: currentProjectId = the BOUND project;
         // targetProjectId from arguments.projectId. Visibility-gated.
         value = getProjectSurfaceForMcp(cfg, credential, projectId, String(args.projectId ?? ''));
+        break;
+      // ── Hosted project ops — always the BOUND project (no project argument
+      // exists on the data plane); resolver-gated by the owning orchestrators.
+      case 'sdd_host_pack_list':
+        value = projectops.listProjectPacks(cfg, credential, projectId);
+        break;
+      case 'sdd_host_pack_install':
+        value = projectops.installProjectPack(
+          cfg,
+          credential,
+          projectId,
+          String(args.name ?? ''),
+          String(args.content ?? ''),
+        );
+        break;
+      case 'sdd_host_policy_evaluate':
+        value = projectops.evaluateProjectPolicy(cfg, credential, projectId);
+        break;
+      case 'sdd_host_policy_reconcile':
+        value = projectops.reconcileProjectPolicy(cfg, credential, projectId);
+        break;
+      case 'sdd_host_produce':
+        await projectops.produceProducer(cfg, credential, projectId, String(args.target ?? ''));
+        value = { ok: true };
+        break;
+      case 'sdd_host_commit_project':
+        value = projectops.commitProject(
+          cfg,
+          credential,
+          projectId,
+          typeof args.subsystem === 'string' && args.subsystem ? args.subsystem : undefined,
+          typeof args.message === 'string' && args.message ? args.message : undefined,
+        );
         break;
       default: // 'sdd_host_get_approval_status'
         value = getApprovalStatus(cfg, credential, String(args.requestId ?? ''));

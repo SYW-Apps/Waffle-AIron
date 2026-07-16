@@ -8,6 +8,6 @@ componentType: Index
 owns: []
 dependsOn:
   - git_backing_store
-status: draft
+status: complete
 createdAt: '2026-07-16T15:38:11.370Z'
-updatedAt: '2026-07-16T15:38:11.372Z'
+updatedAt: '2026-07-16T15:48:48.580Z'

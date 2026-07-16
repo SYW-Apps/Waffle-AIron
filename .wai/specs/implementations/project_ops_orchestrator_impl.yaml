@@ -204,6 +204,6 @@ methods:
         targetComponent: git_backing_orchestrator
         targetMethod: syncBackingScope
 detail: calls-only
-status: draft
+status: complete
 createdAt: '2026-07-16T15:31:04.418Z'
-updatedAt: '2026-07-16T15:41:20.700Z'
+updatedAt: '2026-07-16T15:48:49.648Z'

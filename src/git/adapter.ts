@@ -57,15 +57,26 @@ export function integrateDefault(defaultBranch: string): void {
   git(['merge', '--no-edit', `origin/${defaultBranch}`]);
 }
 
-/** Stage and commit the working tree; return the resulting commit SHA. */
-export function commitAll(message: string): string {
-  git(['add', '-A']);
-  try {
-    git(['commit', '-m', message]);
-  } catch {
-    /* nothing to commit — return the existing HEAD */
-  }
+/**
+ * Stage ONLY the given subpath (pathspec-confined — never the whole tree) and
+ * commit; returns the new commit SHA, or null when nothing under the subpath
+ * changed (a clean scope never produces an empty commit). There is deliberately
+ * NO stage-everything operation anymore: `git add -A` was the bug that made a
+ * repository shared with the project's own codebase unsafe — wairon must never
+ * commit a team's own files.
+ */
+export function commitScoped(subpath: string, message: string): string | null {
+  git(['add', '--', subpath]);
+  const staged = git(['diff', '--cached', '--name-only', '--', subpath]);
+  if (!staged) return null;
+  git(['commit', '-m', message, '--', subpath]);
   return git(['rev-parse', 'HEAD']);
+}
+
+/** True when the given subpath holds no uncommitted changes (scoped
+ *  `status --porcelain -- <subpath>`), backing the skip-if-clean sweep check. */
+export function isClean(subpath: string): boolean {
+  return git(['status', '--porcelain', '--', subpath]) === '';
 }
 
 export function push(branch: string): void {

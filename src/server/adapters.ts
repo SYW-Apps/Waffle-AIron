@@ -59,12 +59,15 @@ export function createScopedServer(): McpServer {
   return createMcpServer({ hostedTools: true });
 }
 
-// host_git_adapter → sdd_git (git_portal)
+// host_git_adapter → sdd_git (git_portal). publish forwards the SCOPED subpath
+// (default .wai/) so staging never touches a shared repository's own code.
 export const hostGit = {
   enable: gitPortal.enable,
   disable: gitPortal.disable,
   sync: gitPortal.sync,
   publish: gitPortal.publish,
+  status: gitPortal.status,
+  configureSync: gitPortal.configureSync,
 };
 
 // host_producer_adapter → sdd_producers (producer_portal)

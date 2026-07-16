@@ -161,5 +161,110 @@ describe('git-backed projects (sdd_git)', () => {
     expect(() => admin.lockProject(cfg, 'wrong', 'demo')).toThrow(AdminAuthError);
     expect(() => admin.syncGit(cfg, 'wrong', 'demo')).toThrow(AdminAuthError);
     expect(() => admin.disableGit(cfg, 'wrong', 'demo')).toThrow(AdminAuthError);
+    expect(() => admin.commitProject(cfg, 'wrong', 'demo')).toThrow(AdminAuthError);
+    expect(() => admin.getGitBinding(cfg, 'wrong', 'demo')).toThrow(AdminAuthError);
+    expect(() => admin.configureGitSync(cfg, 'wrong', 'demo', 5)).toThrow(AdminAuthError);
+  });
+
+  // ── the .wai/-scoped commit primitive (the `git add -A` fix) ────────────────
+
+  it("commitProject stages ONLY .wai/ — a shared repo's own code is NEVER committed by wairon", () => {
+    admin.enableGit(cfg, ADMIN, 'demo', remote, 'main');
+    const root = projectRoot();
+
+    // The team's own code lands in the shared repo alongside a spec edit.
+    fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'src', 'app.ts'), 'export const team = "owns this";');
+    const idx = path.join(root, '.wai', 'specs', '.index.yaml');
+    fs.writeFileSync(idx, fs.readFileSync(idx, 'utf8').replace(/vision:.*/, 'vision: scoped commit test'));
+
+    const publish = admin.commitProject(cfg, ADMIN, 'demo', undefined, 'save specs');
+    expect(publish.published).toBe(true);
+    expect(publish.commitSha).toMatch(/^[0-9a-f]{40}$/);
+
+    // The commit carries the spec edit and NOTHING outside .wai/.
+    const committed = git(['show', '--name-only', '--pretty=format:', publish.commitSha!], root);
+    expect(committed).toContain('.wai/specs/.index.yaml');
+    expect(committed).not.toContain('src/app.ts');
+    // The team's file is still uncommitted in the working tree (untouched —
+    // porcelain reports the untracked src/ directory).
+    expect(git(['status', '--porcelain', '--', 'src/'], root)).toContain('?? src/');
+    // And the push happened (commit = local save, push = the actual backup).
+    expect(git(['log', '-1', '--pretty=%s', 'wairon/work'], remote)).toBe('save specs');
+  });
+
+  it('commitProject on a clean scope publishes nothing (a quiet project never commits noise)', () => {
+    admin.enableGit(cfg, ADMIN, 'demo', remote, 'main');
+    const publish = admin.commitProject(cfg, ADMIN, 'demo');
+    expect(publish.published).toBe(false);
+    expect(publish.commitSha).toBeUndefined();
+  });
+
+  it('a subsystem-scoped commit stages only .wai/specs/<subsystem>/ (staging convenience)', () => {
+    admin.enableGit(cfg, ADMIN, 'demo', remote, 'main');
+    const root = projectRoot();
+    fs.mkdirSync(path.join(root, '.wai', 'specs', 'billing'), { recursive: true });
+    fs.mkdirSync(path.join(root, '.wai', 'specs', 'auth'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.wai', 'specs', 'billing', '.index.yaml'), 'name: billing\n');
+    fs.writeFileSync(path.join(root, '.wai', 'specs', 'auth', '.index.yaml'), 'name: auth\n');
+
+    const publish = admin.commitProject(cfg, ADMIN, 'demo', 'billing');
+    expect(publish.published).toBe(true);
+    const committed = git(['show', '--name-only', '--pretty=format:', publish.commitSha!], root);
+    expect(committed).toContain('.wai/specs/billing/.index.yaml');
+    expect(committed).not.toContain('.wai/specs/auth/.index.yaml');
+  });
+
+  it("the lock's auto-publish message references the validated StateId", () => {
+    admin.enableGit(cfg, ADMIN, 'demo', remote, 'main');
+    const root = projectRoot();
+    const idx = path.join(root, '.wai', 'specs', '.index.yaml');
+    fs.writeFileSync(idx, fs.readFileSync(idx, 'utf8').replace(/vision:.*/, 'vision: stateid message test'));
+    invalidateSpecCache();
+
+    const rec = admin.lockProject(cfg, ADMIN, 'demo');
+    const subject = git(['log', '-1', '--pretty=%s', 'wairon/work'], root);
+    expect(subject).toContain('wairon lock: demo @');
+    expect(subject).toContain(rec.stateId);
+  });
+
+  it('getGitBinding reports scoped dirtiness and the sync setting; configureGitSync persists it', () => {
+    admin.enableGit(cfg, ADMIN, 'demo', remote, 'main');
+    const root = projectRoot();
+
+    // Clean at first; a foreign (non-.wai) change does NOT make the scope dirty.
+    expect(admin.getGitBinding(cfg, ADMIN, 'demo')).toMatchObject({ enabled: true, dirty: false });
+    fs.writeFileSync(path.join(root, 'TEAM.md'), 'not wairon business');
+    expect(admin.getGitBinding(cfg, ADMIN, 'demo').dirty).toBe(false);
+
+    // A .wai/ change flips the SCOPED dirtiness.
+    const idx = path.join(root, '.wai', 'specs', '.index.yaml');
+    fs.writeFileSync(idx, fs.readFileSync(idx, 'utf8').replace(/vision:.*/, 'vision: dirty now'));
+    expect(admin.getGitBinding(cfg, ADMIN, 'demo').dirty).toBe(true);
+
+    // The periodic-sync setting round-trips (and skipIfClean defaults true).
+    admin.configureGitSync(cfg, ADMIN, 'demo', 15);
+    expect(admin.getGitBinding(cfg, ADMIN, 'demo')).toMatchObject({ periodicSyncMinutes: 15, skipIfClean: true });
+
+    // A project that is NOT git-backed reports enabled:false, and configuring
+    // sync there is rejected.
+    expect(() => admin.configureGitSync(cfg, ADMIN, 'demo2', 5)).toThrow(/Unknown project/);
+  });
+
+  it('runPeriodicGitSync publishes a due dirty project and skips a clean one (skip-if-clean)', () => {
+    admin.enableGit(cfg, ADMIN, 'demo', remote, 'main');
+    const root = projectRoot();
+    admin.configureGitSync(cfg, ADMIN, 'demo', 1); // due immediately (no lastSyncAt)
+
+    // Clean → the sweep publishes nothing.
+    admin.runPeriodicGitSync(cfg);
+    expect(admin.getGitBinding(cfg, ADMIN, 'demo').lastSyncAt).toBeUndefined();
+
+    // Dirty → the sweep publishes a .wai/-scoped commit and stamps lastSyncAt.
+    const idx = path.join(root, '.wai', 'specs', '.index.yaml');
+    fs.writeFileSync(idx, fs.readFileSync(idx, 'utf8').replace(/vision:.*/, 'vision: periodic sweep'));
+    admin.runPeriodicGitSync(cfg);
+    expect(admin.getGitBinding(cfg, ADMIN, 'demo').lastSyncAt).toBeTruthy();
+    expect(git(['log', '-1', '--pretty=%s', 'wairon/work'], root)).toContain('wairon periodic sync: demo');
   });
 });

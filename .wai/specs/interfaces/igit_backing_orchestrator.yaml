@@ -67,6 +67,6 @@ methods:
     signature: 'runPeriodicBackingSync(): void'
     returns: void
     params: []
-status: draft
+status: complete
 createdAt: '2026-07-16T15:39:32.918Z'
-updatedAt: '2026-07-16T15:39:32.920Z'
+updatedAt: '2026-07-16T15:48:49.029Z'

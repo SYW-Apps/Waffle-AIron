@@ -19,6 +19,6 @@ methods:
         type: GitBackingBinding[]
     guarantees:
       - atomic
-status: draft
+status: complete
 createdAt: '2026-07-16T15:38:48.260Z'
-updatedAt: '2026-07-16T15:38:48.263Z'
+updatedAt: '2026-07-16T15:48:49.201Z'

@@ -13,6 +13,7 @@ import {
 import { SSO_ADMIN_ROLE_ID } from './types.js';
 import * as webadmin from './webadmin.js';
 import * as webproject from './webproject.js';
+import * as projectops from './projectops.js';
 import { listIdentityProviderRecords } from './policy.js';
 import { assertAllowedRedirectUri } from './idp.js';
 import { getHealthReport, getUsage } from './operations.js';
@@ -34,13 +35,18 @@ import { sendJson } from './httpio.js';
 import type { ValidationIssue } from '../core/validation.js';
 import type {
   ApprovalDecision,
+  AuditQuery,
+  GitBackingBinding,
   HostConfig,
   HostedUserRecord,
+  HostExposurePolicy,
   IdentityProviderConfig,
+  InstancePackPolicy,
   LandscapeGraphModel,
   OrganizationUnitRecord,
   PermissionAssignment,
   PrincipalSubject,
+  ProjectProfileSelection,
   Role,
   ScopeKind,
   UnitDisposition,
@@ -2071,10 +2077,22 @@ function projectList(cfg: HostConfig, sessionId: string, res: ServerResponse): v
   sendJson(res, 200, { projects: webproject.listProjects(cfg, sessionId) });
 }
 
-/** Create a project placed in the REQUIRED owner unit; forwards to
- *  web_project_orchestrator.createProject (missing/unknown unit rejects upstream). */
+/** Create a project placed in the REQUIRED owner unit, optionally with a
+ *  profile selection; forwards to web_project_orchestrator.createProject, which
+ *  routes through the policy-aware initialization (missing/unknown unit and
+ *  policy violations reject upstream). */
 function projectCreate(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(res, 201, webproject.createProject(cfg, sessionId, String(body?.id ?? ''), String(body?.unitId ?? '')));
+  sendJson(
+    res,
+    201,
+    webproject.createProject(
+      cfg,
+      sessionId,
+      String(body?.id ?? ''),
+      String(body?.unitId ?? ''),
+      body?.profileSelection as ProjectProfileSelection | undefined,
+    ),
+  );
 }
 
 /** Lock a project; forwards to web_project_orchestrator.lockProject. */
@@ -2091,6 +2109,149 @@ function projectPromote(cfg: HostConfig, sessionId: string, body: Body, res: Ser
 function projectDestroy(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
   webproject.destroyProject(cfg, sessionId, String(body?.id ?? ''));
   sendJson(res, 200, { ok: true });
+}
+
+// ── Project ops plane (packs / policy / producers / git / audit / exposure) ──
+//
+// Thin portal handlers forwarding to the project ops orchestrator with the
+// session as the credential; the OWNING orchestrators re-apply the exact
+// resolver authorization (instance-level project:admin for the global/instance
+// surfaces; project:admin / project:write / project:read over the project for
+// its surfaces). Cookie POSTs are CSRF-gated in http.ts like /web/logout.
+
+const q = (url: URL, name: string): string | undefined => url.searchParams.get(name) ?? undefined;
+
+function opsListGlobalPacks(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
+  sendJson(res, 200, { packs: projectops.listGlobalPacks(cfg, sessionId) });
+}
+function opsInstallGlobalPack(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, projectops.installGlobalPack(cfg, sessionId, String(body?.name ?? ''), String(body?.content ?? '')));
+}
+function opsRemoveGlobalPack(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  projectops.removeGlobalPack(cfg, sessionId, String(body?.name ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+function opsListProjectPacks(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  sendJson(res, 200, { packs: projectops.listProjectPacks(cfg, sessionId, q(url, 'projectId') ?? '') });
+}
+function opsInstallProjectPack(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, projectops.installProjectPack(cfg, sessionId, String(body?.projectId ?? ''), String(body?.name ?? ''), String(body?.content ?? '')));
+}
+function opsRemoveProjectPack(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  projectops.removeProjectPack(cfg, sessionId, String(body?.projectId ?? ''), String(body?.name ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+function opsGetPackPolicy(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
+  sendJson(res, 200, projectops.getPackPolicy(cfg, sessionId));
+}
+function opsSetPackPolicy(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, projectops.setPackPolicy(cfg, sessionId, body as InstancePackPolicy));
+}
+function opsPolicyEvaluate(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  sendJson(res, 200, projectops.evaluateProjectPolicy(cfg, sessionId, q(url, 'projectId') ?? ''));
+}
+function opsPolicyReconcile(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, projectops.reconcileProjectPolicy(cfg, sessionId, String(body?.projectId ?? '')));
+}
+function opsListProducers(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  sendJson(res, 200, { producers: projectops.listProducers(cfg, sessionId, q(url, 'projectId') ?? '') });
+}
+function opsConfigureProducer(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  projectops.configureProducer(cfg, sessionId, String(body?.projectId ?? ''), String(body?.target ?? ''), String(body?.parentPageId ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+function opsRemoveProducer(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  projectops.removeProducer(cfg, sessionId, String(body?.projectId ?? ''), String(body?.target ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+async function opsRunProducer(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): Promise<void> {
+  await projectops.produceProducer(cfg, sessionId, String(body?.projectId ?? ''), String(body?.target ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+function opsGitStatus(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  sendJson(res, 200, projectops.getGitBinding(cfg, sessionId, q(url, 'projectId') ?? ''));
+}
+function opsGitBind(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, projectops.enableGit(cfg, sessionId, String(body?.projectId ?? ''), String(body?.remote ?? ''), String(body?.branch ?? '')));
+}
+function opsGitUnbind(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  projectops.disableGit(cfg, sessionId, String(body?.projectId ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+function opsGitSync(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  projectops.syncGit(cfg, sessionId, String(body?.projectId ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+function opsGitCommit(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(
+    res,
+    200,
+    projectops.commitProject(
+      cfg,
+      sessionId,
+      String(body?.projectId ?? ''),
+      typeof body?.subsystem === 'string' && body.subsystem ? body.subsystem : undefined,
+      typeof body?.message === 'string' && body.message ? body.message : undefined,
+    ),
+  );
+}
+function opsGitSyncConfig(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  projectops.configureGitSync(
+    cfg,
+    sessionId,
+    String(body?.projectId ?? ''),
+    typeof body?.periodicSyncMinutes === 'number' ? body.periodicSyncMinutes : undefined,
+    typeof body?.skipIfClean === 'boolean' ? body.skipIfClean : undefined,
+  );
+  sendJson(res, 200, { ok: true });
+}
+function opsListGitBacking(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
+  sendJson(res, 200, { bindings: projectops.listBackingBindings(cfg, sessionId) });
+}
+function opsBindGitBacking(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, projectops.bindBackingScope(cfg, sessionId, body as GitBackingBinding));
+}
+function opsUnbindGitBacking(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  projectops.unbindBackingScope(cfg, sessionId, String(body?.id ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+function opsSyncGitBacking(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, { published: projectops.syncBackingScope(cfg, sessionId, String(body?.id ?? '')) });
+}
+/** Build an AuditQuery from the viewer's query params (all optional). */
+function auditQueryFrom(url: URL): AuditQuery {
+  const query: AuditQuery = {};
+  const projectId = q(url, 'projectId');
+  const actorUserId = q(url, 'actorUserId');
+  const category = q(url, 'category');
+  const action = q(url, 'action');
+  const outcome = q(url, 'outcome');
+  const minimumLevel = q(url, 'minimumLevel');
+  const from = q(url, 'from');
+  const to = q(url, 'to');
+  const limit = q(url, 'limit');
+  if (projectId) query.projectId = projectId;
+  if (actorUserId) query.actorUserId = actorUserId;
+  if (category) query.category = category;
+  if (action) query.action = action;
+  if (outcome) query.outcome = outcome;
+  if (minimumLevel) query.minimumLevel = minimumLevel;
+  if (from) query.from = from;
+  if (to) query.to = to;
+  if (limit !== undefined) query.limit = Number(limit);
+  return query;
+}
+function opsAuditQuery(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  sendJson(res, 200, { events: projectops.queryAuditEvents(cfg, sessionId, auditQueryFrom(url)) });
+}
+function opsAuditCount(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  sendJson(res, 200, { count: projectops.countAuditEvents(cfg, sessionId, auditQueryFrom(url)) });
+}
+function opsGetExposure(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
+  sendJson(res, 200, projectops.getExposurePolicy(cfg, sessionId));
+}
+function opsSetExposure(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, projectops.setExposurePolicy(cfg, sessionId, body as HostExposurePolicy));
 }
 
 /**
@@ -2268,6 +2429,69 @@ export async function handleWebRequest(
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'destroy') {
         return projectDestroy(cfg, sessionId, body, res);
       }
+
+      // ── Per-project ops (packs / policy / producers / git) ────────────────
+      // GET /web/projects/packs?projectId= — the project's registered packs (project:read).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'packs') {
+        return opsListProjectPacks(cfg, sessionId, url, res);
+      }
+      // POST /web/projects/packs { projectId, name, content } — declarative install (project:admin).
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'packs') {
+        return opsInstallProjectPack(cfg, sessionId, body, res);
+      }
+      // POST /web/projects/packs/remove { projectId, name }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'remove') {
+        return opsRemoveProjectPack(cfg, sessionId, body, res);
+      }
+      // GET /web/projects/policy?projectId= — pack/profile compliance (project:write).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'policy') {
+        return opsPolicyEvaluate(cfg, sessionId, url, res);
+      }
+      // POST /web/projects/policy/reconcile { projectId }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'policy' && parts[3] === 'reconcile') {
+        return opsPolicyReconcile(cfg, sessionId, body, res);
+      }
+      // GET /web/projects/producers?projectId= — configured producer targets (project:admin).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'producers') {
+        return opsListProducers(cfg, sessionId, url, res);
+      }
+      // POST /web/projects/producers { projectId, target, parentPageId }
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'producers') {
+        return opsConfigureProducer(cfg, sessionId, body, res);
+      }
+      // POST /web/projects/producers/remove { projectId, target }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'producers' && parts[3] === 'remove') {
+        return opsRemoveProducer(cfg, sessionId, body, res);
+      }
+      // POST /web/projects/producers/run { projectId, target }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'producers' && parts[3] === 'run') {
+        return opsRunProducer(cfg, sessionId, body, res);
+      }
+      // GET /web/projects/git?projectId= — the git-backing status (project:admin).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'git') {
+        return opsGitStatus(cfg, sessionId, url, res);
+      }
+      // POST /web/projects/git { projectId, remote, branch } — bind the REAL repo.
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'git') {
+        return opsGitBind(cfg, sessionId, body, res);
+      }
+      // POST /web/projects/git/disconnect { projectId }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'git' && parts[3] === 'disconnect') {
+        return opsGitUnbind(cfg, sessionId, body, res);
+      }
+      // POST /web/projects/git/sync { projectId } — integrate the default branch (project:write).
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'git' && parts[3] === 'sync') {
+        return opsGitSync(cfg, sessionId, body, res);
+      }
+      // POST /web/projects/git/commit { projectId, subsystem?, message? } — the
+      // deliberate .wai/-scoped commit+push (project:write).
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'git' && parts[3] === 'commit') {
+        return opsGitCommit(cfg, sessionId, body, res);
+      }
+      // POST /web/projects/git/sync-config { projectId, periodicSyncMinutes?, skipIfClean? }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'git' && parts[3] === 'sync-config') {
+        return opsGitSyncConfig(cfg, sessionId, body, res);
+      }
     }
 
     // ── Admin control-plane, session-scoped (slice 3) ────────────────────────
@@ -2366,6 +2590,62 @@ export async function handleWebRequest(
       // POST /web/admin/permissions/remove { id } — remove one assignment.
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'permissions' && parts[3] === 'remove') {
         return adminRemoveAssignment(cfg, sessionId, body, res);
+      }
+
+      // ── Instance ops (packs / policy / audit / exposure / git backing) ────
+      // GET /web/admin/packs — server-global packs (instance-level project:admin).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'packs') {
+        return opsListGlobalPacks(cfg, sessionId, res);
+      }
+      // POST /web/admin/packs { name, content } — declarative install, instance tier.
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'packs') {
+        return opsInstallGlobalPack(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/packs/remove { name }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'remove') {
+        return opsRemoveGlobalPack(cfg, sessionId, body, res);
+      }
+      // GET /web/admin/policy — the instance pack/profile policy (any authenticated read).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'policy') {
+        return opsGetPackPolicy(cfg, sessionId, res);
+      }
+      // POST /web/admin/policy { ...InstancePackPolicy } — replace it (instance-level project:admin).
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'policy') {
+        return opsSetPackPolicy(cfg, sessionId, body, res);
+      }
+      // GET /web/admin/audit?projectId=&category=&action=&minimumLevel=&from=&to=&limit= —
+      // the scoped, redacted audit viewer (filtered to project:admin visible scopes).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'audit') {
+        return opsAuditQuery(cfg, sessionId, url, res);
+      }
+      // GET /web/admin/audit/count — the scoped audit-event count for pagination.
+      if (req.method === 'GET' && parts.length === 4 && parts[2] === 'audit' && parts[3] === 'count') {
+        return opsAuditCount(cfg, sessionId, url, res);
+      }
+      // GET /web/admin/exposure — the effective instance exposure policy.
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'exposure') {
+        return opsGetExposure(cfg, sessionId, res);
+      }
+      // POST /web/admin/exposure { ...HostExposurePolicy } — replace it (audited).
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'exposure') {
+        return opsSetExposure(cfg, sessionId, body, res);
+      }
+      // GET /web/admin/git-backing — the container-level backup bindings in reach.
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'git-backing') {
+        return opsListGitBacking(cfg, sessionId, res);
+      }
+      // POST /web/admin/git-backing { ...GitBackingBinding } — bind a unit container
+      // repo or the instance-structure backup repo.
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'git-backing') {
+        return opsBindGitBacking(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/git-backing/remove { id }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'git-backing' && parts[3] === 'remove') {
+        return opsUnbindGitBacking(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/git-backing/sync { id } — run the mirror sync now.
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'git-backing' && parts[3] === 'sync') {
+        return opsSyncGitBacking(cfg, sessionId, body, res);
       }
 
       // ── Existing scoped control-plane reads (unchanged) ───────────────────

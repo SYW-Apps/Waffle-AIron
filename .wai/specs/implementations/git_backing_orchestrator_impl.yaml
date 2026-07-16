@@ -318,6 +318,6 @@ methods:
         type: return
         outcome: sweep completed
 detail: full
-status: draft
+status: complete
 createdAt: '2026-07-16T15:40:54.973Z'
-updatedAt: '2026-07-16T15:40:54.975Z'
+updatedAt: '2026-07-16T15:48:49.424Z'

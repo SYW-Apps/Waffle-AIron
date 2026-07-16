@@ -56,6 +56,10 @@ export interface HostOptions {
   user?: string;
   capability?: string;
   instance?: boolean;
+  subsystem?: string;
+  message?: string;
+  interval?: string | number;
+  skipIfClean?: boolean;
   remote?: string;
   branch?: string;
   target?: string;
@@ -737,8 +741,43 @@ export async function runHostGit(action: string, options: HostOptions = {}): Pro
         logger.success(`Synced "${options.project}" (default → working branch).`);
         break;
       }
+      case 'commit': {
+        if (!options.project) throw new WaironError('`--project <id>` is required for `host git commit`.');
+        const publish = admin.commitProject(cfg, cred, options.project, options.subsystem, options.message);
+        if (!publish.published) {
+          logger.info('Nothing to publish — the scoped .wai/ path is clean (or the project is not git-backed).');
+        } else {
+          logger.success(`Published ${publish.commitSha?.slice(0, 12)}…${publish.compareUrl ? ` (${publish.compareUrl})` : ''}`);
+        }
+        break;
+      }
+      case 'status': {
+        if (!options.project) throw new WaironError('`--project <id>` is required for `host git status`.');
+        const s = admin.getGitBinding(cfg, cred, options.project);
+        if (!s.enabled) {
+          logger.info('Not git-backed.');
+        } else {
+          logger.info(`  remote:   ${s.remote}`);
+          logger.info(`  branch:   ${s.branch} (working: ${s.workingBranch})`);
+          logger.info(`  dirty:    ${s.dirty === true ? 'yes (.wai/ has unpublished changes)' : 'no'}`);
+          logger.info(`  sync:     ${s.periodicSyncMinutes !== undefined ? `every ${s.periodicSyncMinutes}m (skip-if-clean: ${s.skipIfClean !== false})` : 'manual only'}`);
+          if (s.lastSyncAt) logger.info(`  last:     ${s.lastSyncAt}`);
+        }
+        break;
+      }
+      case 'sync-config': {
+        if (!options.project) throw new WaironError('`--project <id>` is required for `host git sync-config`.');
+        const minutes = options.interval !== undefined ? Number(options.interval) : undefined;
+        admin.configureGitSync(cfg, cred, options.project, minutes, options.skipIfClean);
+        logger.success(
+          minutes !== undefined
+            ? `Periodic sync every ${minutes}m for "${options.project}".`
+            : `Periodic sync disabled for "${options.project}".`,
+        );
+        break;
+      }
       default:
-        throw new WaironError(`Unknown git action "${action}" (enable | disable | sync).`);
+        throw new WaironError(`Unknown git action "${action}" (enable | disable | sync | commit | status | sync-config).`);
     }
   } catch (e) {
     throw mapAdminError(e);

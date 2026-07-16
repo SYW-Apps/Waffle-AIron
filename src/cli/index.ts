@@ -548,13 +548,26 @@ hostCmd
 
 hostCmd
   .command('git <action>')
-  .description('enable | disable | sync git backing (repo becomes the source of truth; lock opens a PR)')
+  .description('enable | disable | sync | commit | status | sync-config — bind a project to its REAL repo (wairon commits ONLY .wai/)')
   .option('--project <id>', 'project id')
   .option('--remote <url>', 'git remote URL (for enable)')
   .option('--branch <name>', 'default branch PRs target (for enable)', 'main')
+  .option('--subsystem <id>', 'narrow a commit to .wai/specs/<subsystem>/ (staging convenience — history stays per-repo)')
+  .option('-m, --message <message>', 'commit message (for commit)')
+  .option('--interval <minutes>', 'periodic-sync interval in minutes (for sync-config; omit to disable)')
+  .option('--no-skip-if-clean', 'commit on every periodic tick even when the scoped path is clean (for sync-config)')
   .option('--data-dir <path>', 'data root')
   .action(async (action: string, opts) => {
-    await runHostGit(action, { project: opts.project, remote: opts.remote, branch: opts.branch, dataDir: opts.dataDir });
+    await runHostGit(action, {
+      project: opts.project,
+      remote: opts.remote,
+      branch: opts.branch,
+      subsystem: opts.subsystem,
+      message: opts.message,
+      interval: opts.interval,
+      skipIfClean: opts.skipIfClean,
+      dataDir: opts.dataDir,
+    });
   });
 
 hostCmd

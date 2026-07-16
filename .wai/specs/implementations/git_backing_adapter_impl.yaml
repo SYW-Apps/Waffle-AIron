@@ -28,6 +28,6 @@ methods:
           Stage the working copy, and when the index holds changes commit with the bot identity and
           push the branch (WAIRON_GIT_TOKEN); return false without committing when clean
         type: local
-status: draft
+status: complete
 createdAt: '2026-07-16T15:40:11.338Z'
-updatedAt: '2026-07-16T15:40:11.340Z'
+updatedAt: '2026-07-16T15:48:49.314Z'

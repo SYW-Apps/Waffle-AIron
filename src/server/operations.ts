@@ -3,16 +3,25 @@ import { authenticateCredential } from './auth.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { listProjectRecords } from './projects.js';
 import { sendJson } from './httpio.js';
-import { visibleScopes, actionableProjectIds, isInstanceAdmin } from './authorization.js';
+import { authorize, visibleScopes, actionableProjectIds, isInstanceAdmin } from './authorization.js';
+import {
+  COMPATIBLE_DEFAULT_EXPOSURE,
+  getExposurePolicyRecord,
+  setExposurePolicyRecord,
+} from './policy.js';
+import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import * as packs from './packs.js';
 import { listProjectRelations } from './relations.js';
 import { getPublicSurfaceSnapshot } from './surfaces.js';
 import type {
+  AuditEvent,
   DiagnosticCheckResult,
   HostConfig,
   HostedProjectRecord,
+  HostExposurePolicy,
   InstanceHealthReport,
   Principal,
+  PrincipalSubject,
   ProjectPackReference,
   ResourceQuotaPolicy,
   ResourceUsageSnapshot,
@@ -414,6 +423,81 @@ export function evaluateQuota(
   const usage = collectUsage(projects, scope);
   const policy = resolveQuotaPolicy(cfg);
   return evaluateUsage(usage, policy);
+}
+
+// ── instance exposure policy (the operations plane's ONLY mutation) ──────────
+//
+// The exposure posture (webUiEnabled/requireTls, admin-plane mount flags) gates
+// the whole web surface, so both the read and the replace require INSTANCE-level
+// project:admin, and the replace is audited at security level.
+
+/** The subject behind an action for audit provenance. */
+function principalSubject(principal: Principal): PrincipalSubject {
+  return (
+    principal.subject ?? { userId: 'token:' + principal.tokenId, kind: 'service', issuer: 'local' }
+  );
+}
+
+/** Append a redacted audit event best-effort — never fails the primary action. */
+function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
+  try {
+    appendAuditEvent(cfg.dataDir, event, DEFAULT_AUDIT_POLICY);
+  } catch (err) {
+    console.error(
+      `[operations] audit append failed for "${event.action}": ` +
+        (err instanceof Error ? err.message : String(err)),
+    );
+  }
+}
+
+function requireInstanceExposureAdmin(cfg: HostConfig, credential: string | null): Principal {
+  const principal = requirePrincipal(cfg, credential);
+  if (authorize(cfg.dataDir, principal, 'project:admin', 'instance', '').value !== 'yes') {
+    throw new ForbiddenError('exposure administration requires instance-level project:admin');
+  }
+  return principal;
+}
+
+/**
+ * Authenticate, require instance-level project:admin, and return the EFFECTIVE
+ * instance exposure policy: the persisted record merged over the compatible
+ * default (web UI off, TLS required), so unset flags read as their defaults.
+ * A read; not audited.
+ */
+export function getExposurePolicy(cfg: HostConfig, credential: string | null): HostExposurePolicy {
+  requireInstanceExposureAdmin(cfg, credential);
+  return { ...COMPATIBLE_DEFAULT_EXPOSURE, ...(getExposurePolicyRecord(cfg.dataDir) ?? {}) };
+}
+
+/**
+ * Authenticate, require instance-level project:admin, replace the instance
+ * exposure policy wholesale through the policy repository (normalized over the
+ * compatible default so the persisted record is always complete), and audit at
+ * security level — the exposure posture gates the whole web surface.
+ */
+export function setExposurePolicy(
+  cfg: HostConfig,
+  credential: string | null,
+  exposure: HostExposurePolicy,
+): HostExposurePolicy {
+  const principal = requireInstanceExposureAdmin(cfg, credential);
+  const stored = setExposurePolicyRecord(cfg.dataDir, {
+    ...COMPATIBLE_DEFAULT_EXPOSURE,
+    ...exposure,
+  });
+  const event: AuditEvent = {
+    id: '',
+    timestamp: '',
+    level: 'security',
+    category: 'admin',
+    action: 'exposure.set',
+    outcome: 'success',
+    actor: principalSubject(principal),
+    target: 'exposure-policy',
+  };
+  if (principal.tokenId) event.tokenId = principal.tokenId;
+  tryAppendAudit(cfg, event);
+  return stored;
 }
 
 // ── Operations Portal (HTTP) ─────────────────────────────────────────────────

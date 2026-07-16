@@ -19,6 +19,6 @@ methods:
       Persist the complete binding collection via write-temp-then-rename so a crashed write leaves
       the prior state fully intact, then swap the in-memory representation in one assignment.
 detail: intent
-status: draft
+status: complete
 createdAt: '2026-07-16T15:39:47.904Z'
-updatedAt: '2026-07-16T15:39:47.906Z'
+updatedAt: '2026-07-16T15:48:49.592Z'
