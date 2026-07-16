@@ -2,7 +2,8 @@ import { authenticateSession } from './auth.js';
 import * as identity from './identity.js';
 import * as organization from './organization.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
-import { ForbiddenError, isInstanceAdmin } from './identity.js';
+import { ForbiddenError } from './identity.js';
+import { isInstanceAdmin } from './authorization.js';
 import { listSecretKeys } from '../utils/secrets.js';
 import type {
   ApiKeyRecord,
@@ -13,7 +14,6 @@ import type {
   OrganizationUnitRecord,
   Principal,
   PrincipalSubject,
-  ProjectGrant,
   ProjectPlacement,
 } from './types.js';
 
@@ -61,17 +61,6 @@ export function upsertUser(cfg: HostConfig, sessionId: string, record: HostedUse
  *  (a deactivation revokes the user's tokens and web sessions upstream). */
 export function setUserStatus(cfg: HostConfig, sessionId: string, userId: string, status: string): HostedUserRecord {
   return identity.setUserStatus(cfg, sessionId, userId, status);
-}
-
-/** Forward to identity_orchestrator.replaceUserGrants with the session as the
- *  credential (privilege-escalation guarded upstream). */
-export function replaceUserGrants(
-  cfg: HostConfig,
-  sessionId: string,
-  userId: string,
-  grants: ProjectGrant[],
-): HostedUserRecord {
-  return identity.replaceUserGrants(cfg, sessionId, userId, grants);
 }
 
 // ── identity-provider (SSO) administration (forward to identity_orchestrator) ─

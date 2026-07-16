@@ -12,7 +12,6 @@ import {
   createCredential,
   revokeCredential,
   revokeAllForOwner,
-  listCredentials,
   listByOwner,
 } from './credentials.js';
 import {
@@ -20,7 +19,6 @@ import {
   listUsers as repoListUsers,
   upsertUser as repoUpsertUser,
   setUserStatus as repoSetUserStatus,
-  replaceUserGrants as repoReplaceUserGrants,
   findUserByExternalSubject as repoFindUserByExternalSubject,
 } from './users.js';
 import {
@@ -32,8 +30,15 @@ import {
 } from './audit.js';
 import { listProjectRecords } from './projects.js';
 import { removeAllWebSessionsForSubject } from './websessions.js';
-import { listOrganizationUnits } from './organization.js';
-import { resolveScopeFor, permits } from './scope.js';
+import {
+  authorize,
+  visibleScopes,
+  isInstanceAdmin,
+  actionableProjectIds,
+  actionableUnitIds,
+} from './authorization.js';
+import { isReservedSubject } from './auth.js';
+import { SSO_ADMIN_ROLE_ID } from './roles.js';
 import { sendJson } from './httpio.js';
 import type {
   ApiKeyRecord,
@@ -45,21 +50,19 @@ import type {
   IdentityProviderConfig,
   Principal,
   PrincipalSubject,
-  ProjectGrant,
-  Role,
-  ScopeResolution,
 } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Identity Orchestrator + Portal (sdd_host)
 //
 // The identity control-plane workflows: authenticate the caller credential
-// (bootstrap master or user-bound token) via the auth specialist, authorize by
-// grants, then manage user-bound MCP/API tokens, user grants, and admin-only
-// audit access. Exported as plain functions so both the HTTP identity portal
-// (handleIdentityRequest, below) and any in-process caller reach the same logic
-// — mirroring admin.ts. Every audit append is best-effort: an append failure is
-// recorded as a server diagnostic and never fails the primary action.
+// (bootstrap master or user-bound token) via the auth specialist, resolve the
+// caller's permission through the authorization seam, then manage user-bound
+// MCP/API tokens, hosted users, and audit access. Exported as plain functions so
+// both the HTTP identity portal (handleIdentityRequest, below) and any
+// in-process caller reach the same logic — mirroring admin.ts. Every audit
+// append is best-effort: an append failure is recorded as a server diagnostic
+// and never fails the primary action.
 //
 // Phase 1 exposure decision: the identity control plane rides the ADMIN-plane
 // listener (127.0.0.1 by default) until HostExposurePolicy lands in a later
@@ -73,9 +76,10 @@ export interface TokenMintRequest {
   ownerUserId: string;
   /** Human-readable token label for administration and audit views. */
   label: string;
-  /** Project and instance permissions to grant to the token; the caller must be
-   *  able to delegate each. */
-  grants: ProjectGrant[];
+  /** The token's project NARROWING (which projects it may name), or ['*'] for
+   *  the owner's full accessible set. NOT a grant: the token acts as the OWNER's
+   *  live permission, resolved fresh on every request. */
+  projects?: string[];
   /** Optional ISO-8601 token expiry. */
   expiresAt?: string;
 }
@@ -85,89 +89,48 @@ export interface TokenMintRequest {
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 export { UnauthenticatedError, ForbiddenError };
 
-// ── authorization helpers ──────────────────────────────────────────────────
+// ── authorization helpers (hierarchical resolver) ───────────────────────────
 //
-// '*' is the wildcard in BOTH projectId and permissions (per the grant model).
+// Every decision resolves through the authorization seam (authorization.ts):
+// user administration = project:admin over the target user's home unit; audit
+// reads = project:admin over the caller's actionable projects; IdP config and
+// audit administration = project:admin at the instance root. isInstanceAdmin is
+// the env-anchored resolver bypass (built-in super-admin / master / devMode
+// subject) — a delegated instance-wide project:admin is NOT instanceAdmin.
 
-/** Instance-admin = a grant scoped to every project ('*') carrying every
- *  permission ('*'). The bootstrap principal and the legacy admin-role
- *  projection both yield exactly this grant. */
-export function isInstanceAdmin(principal: Principal): boolean {
-  // A grant that also names an orgUnitId is UNIT-scoped by intent even when its
-  // projectId is the '*' wildcard (the shape an operator enters for a delegated
-  // unit/department admin) — it must NOT confer instance-admin. This mirrors the
-  // `!orgUnitId` discipline in scope.ts / request.ts / web.ts.
-  return (principal.grants ?? []).some(
-    (g) => g.projectId === '*' && !g.orgUnitId && g.permissions.includes('*'),
-  );
-}
+/** The capability the legacy user:admin / audit:read / key:manage / grant
+ *  permissions all map onto. */
+const PROJECT_ADMIN_CAPABILITY = 'project:admin';
+const PROJECT_READ_CAPABILITY = 'project:read';
+const PROJECT_WRITE_CAPABILITY = 'project:write';
 
-// ── the *:* hard reservation ────────────────────────────────────────────────
-//
-// The double-wildcard grant {projectId '*', no orgUnitId, permissions include '*'}
-// is env-reserved to the BUILT-IN admin account (WAIRON_ADMIN_USER/_PASSWORD →
-// web_orchestrator.signInWithPassword) and the master-token principal — neither of
-// which is a user record. No user-record grant and no minted user token may EVER
-// carry it, so every user-facing grant write path below rejects it UNCONDITIONALLY,
-// even for a super-admin/master caller. Enumerated instance-wide bundles (e.g.
-// user:admin/project:create/audit:read over '*') remain assignable by a super-admin.
-
-/** True when a grant is THE reserved instance-wide super-admin shape: projectId
- *  '*', no orgUnitId (a unit-scoped '*' is bounded to its subtree), and a
- *  permissions list including the '*' wildcard. */
-export function isSuperAdminGrant(g: ProjectGrant): boolean {
-  return g.projectId === '*' && !g.orgUnitId && g.permissions.includes('*');
-}
-
-/** Reject any reserved *:* grant UNCONDITIONALLY — even a super-admin/master
- *  caller may not place it on a user record or minted token. */
-function assertNoReservedSuperAdminGrant(grants: ProjectGrant[]): void {
-  if (grants.some(isSuperAdminGrant)) {
-    throw new ForbiddenError('instance-wide super-admin (*:*) is reserved to the built-in admin account');
+/** Require a yes-valued project:admin at the instance root (a delegated
+ *  instance-wide admin passes; an instance-admin bypasses). */
+function requireInstanceProjectAdmin(cfg: HostConfig, principal: Principal, what: string): void {
+  if (authorize(cfg.dataDir, principal, PROJECT_ADMIN_CAPABILITY, 'instance', '').value !== 'yes') {
+    throw new ForbiddenError(`${what} requires instance-level project:admin`);
   }
 }
 
-// ── the enumerated SSO-admin bundle (provider adminGroupClaims) ─────────────
-//
-// An SSO login whose verified id_token groups intersect the provider's
-// adminGroupClaims is provisioned/refreshed with this ENUMERATED instance-wide
-// bundle — deliberately NOT *:* (that shape is hard-reserved above), so an SSO
-// admin can administer users/projects/audit but can never touch IdP/org config
-// (instance-admin-only surfaces gate on the genuine *:*).
-
-/** The permissions of the SSO-admin bundle, in canonical order. */
-const SSO_ADMIN_BUNDLE_PERMISSIONS = ['user:admin', 'project:create', 'audit:read'] as const;
-
-/** A fresh instance-wide SSO-admin bundle grant (never *:*). */
-export function ssoAdminBundleGrant(): ProjectGrant {
-  return { projectId: '*', permissions: [...SSO_ADMIN_BUNDLE_PERMISSIONS] };
+/** Require a yes-valued project:admin over a user's home unit — a user with no
+ *  home unit resolves at the instance root (manageable only by an instance-level
+ *  admin, fail closed). */
+function requireAdminOverHomeUnit(cfg: HostConfig, principal: Principal, unitId: string | undefined): void {
+  const kind = unitId ? 'unit' : 'instance';
+  if (authorize(cfg.dataDir, principal, PROJECT_ADMIN_CAPABILITY, kind, unitId ?? '').value !== 'yes') {
+    throw new ForbiddenError("user administration requires project:admin over the target user's home unit");
+  }
 }
 
-/** True when a grant IS the server-managed SSO-admin bundle: instance-wide
- *  (projectId '*', no orgUnitId) carrying exactly the bundle's permission set. */
-function isSsoAdminBundleGrant(g: ProjectGrant): boolean {
-  return (
-    g.projectId === '*' &&
-    !g.orgUnitId &&
-    g.permissions.length === SSO_ADMIN_BUNDLE_PERMISSIONS.length &&
-    SSO_ADMIN_BUNDLE_PERMISSIONS.every((p) => g.permissions.includes(p))
-  );
-}
-
-/** Apply the adminGroupClaims decision to a user's stored grants: entering the
- *  admin group appends the enumerated bundle, leaving it drops the bundle again;
- *  all other grants are preserved untouched. Returns the (possibly unchanged)
- *  grants plus whether a repository write is needed. Exported so the web plane's
- *  completeSignIn applies the identical rule. */
-export function applySsoAdminBundle(
-  grants: ProjectGrant[],
-  inAdminGroup: boolean,
-): { grants: ProjectGrant[]; changed: boolean } {
-  const hasBundle = grants.some(isSsoAdminBundleGrant);
-  if (inAdminGroup === hasBundle) return { grants, changed: false };
-  return inAdminGroup
-    ? { grants: [...grants, ssoAdminBundleGrant()], changed: true }
-    : { grants: grants.filter((g) => !isSsoAdminBundleGrant(g)), changed: true };
+/** Reject a user/owner id that claims a reserved built-in subject id (the
+ *  persisted boot-reserved UUIDs or the legacy 'builtin:*' literals) — an
+ *  admin-created record must never inherit the built-in bypass. */
+function assertNotReservedSubjectId(cfg: HostConfig, ids: (string | undefined)[]): void {
+  for (const id of ids) {
+    if (id && isReservedSubject(cfg.dataDir, id)) {
+      throw new ForbiddenError('the built-in subject ids are reserved and can never be claimed by a user record or token owner');
+    }
+  }
 }
 
 /** True when the verified groups intersect the provider's adminGroupClaims (an
@@ -177,57 +140,15 @@ export function isInAdminGroup(provider: IdentityProviderConfig, groups: string[
   return claims.length > 0 && groups.some((g) => claims.includes(g));
 }
 
-/** True when the caller's grants cover `permission` for `projectId` — a grant
- *  scoped to that project (or instance-wide '*') carrying that permission (or '*'). */
-function coversPermission(principal: Principal, projectId: string, permission: string): boolean {
-  return (principal.grants ?? []).some(
-    (g) =>
-      (g.projectId === '*' || g.projectId === projectId) &&
-      (g.permissions.includes('*') || g.permissions.includes(permission)),
-  );
-}
-
-/** True when the caller may delegate every grant in `grants` — for each grant,
- *  the caller must hold each of its permissions over that grant's scope (a
- *  unit-scoped grant → the unit is in the caller's scope for that permission; a
- *  project grant → the project is). A '*' projectId requires instance-admin.
- *  Super-admin delegates anything. Shared by mintToken and replaceUserGrants so
- *  neither can hand out authority the caller doesn't itself hold. */
-function callerMayDelegateGrants(cfg: HostConfig, principal: Principal, grants: ProjectGrant[]): boolean {
-  if (isInstanceAdmin(principal)) return true;
-  const memo = new Map<string, ScopeResolution>();
-  const scopeFor = (permission: string): ScopeResolution => {
-    let s = memo.get(permission);
-    if (s === undefined) {
-      s = resolveScopeFor(cfg, principal, permission);
-      memo.set(permission, s);
-    }
-    return s;
+/** The caller's audit-read view: an instance-admin reads instance-wide;
+ *  otherwise the ACTIONABLE projects of their project:admin visibility view. */
+function auditReadView(cfg: HostConfig, principal: Principal): { all: boolean; projectIds: string[] } {
+  if (isInstanceAdmin(principal)) return { all: true, projectIds: [] };
+  return {
+    all: false,
+    projectIds: actionableProjectIds(visibleScopes(cfg.dataDir, principal, PROJECT_ADMIN_CAPABILITY)),
   };
-  const covers = (g: ProjectGrant, p: string): boolean => {
-    const s = scopeFor(p);
-    if (s.all) return true;
-    if (g.orgUnitId !== undefined && g.orgUnitId !== '') return s.unitIds.includes(g.orgUnitId);
-    return permits(s, g.projectId);
-  };
-  return grants.every((g) => (g.projectId === '*' ? false : g.permissions.every((p) => covers(g, p))));
 }
-
-// Phase 6 scoped administration: an instance-wide ('*') grant carrying the
-// permission resolves to scope.all (super-admin); a UNIT-scoped grant carrying
-// it resolves to that unit subtree's projects+units; a specific-project grant
-// resolves to just that project. A caller with neither an in-scope project nor
-// an in-scope unit (and not super-admin) has no authority and is denied outright.
-function scopeIsEmpty(scope: ScopeResolution): boolean {
-  return !scope.all && scope.projectIds.length === 0 && scope.unitIds.length === 0;
-}
-
-/** Permission that authorizes user administration. The published grant
- *  vocabulary (docs/design/hosted-professional-use.md §1.2) does not yet name a
- *  user-admin permission; this is the chosen identifier for it. */
-const USER_ADMIN_PERMISSION = 'user:admin';
-const AUDIT_READ_PERMISSION = 'audit:read';
-const KEY_MANAGE_PERMISSION = 'key:manage';
 
 // ── audit helpers ──────────────────────────────────────────────────────────
 
@@ -315,25 +236,29 @@ export function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
 
 /**
  * Gather the audit events the caller may read for `query`, constrained to their
- * resolved audit:read scope. A super-admin (scope.all) reads instance-wide. A
- * scoped caller reads only events tagged with one of their in-scope project ids:
- * the audit query carries a single projectId, so a caller-supplied projectId is
- * intersected with the in-scope set (an out-of-scope filter yields nothing) and
- * an unfiltered read runs the query once per in-scope project and merges. Events
- * with no projectId (instance-level) are never surfaced to a scoped caller. The
- * result is ordered newest-first and the query's limit is applied to the merge,
- * so a scoped caller can NEVER see an out-of-scope project's events.
+ * audit-read view. An instance-admin reads instance-wide. A scoped caller reads
+ * only events tagged with one of their actionable project ids: the audit query
+ * carries a single projectId, so a caller-supplied projectId is intersected with
+ * the in-view set (an out-of-view filter yields nothing) and an unfiltered read
+ * runs the query once per in-view project and merges. Events with no projectId
+ * (instance-level) are never surfaced to a scoped caller. The result is ordered
+ * newest-first and the query's limit is applied to the merge, so a scoped caller
+ * can NEVER see an out-of-view project's events.
  */
-function scopedAuditEvents(cfg: HostConfig, scope: ScopeResolution, query: AuditQuery): AuditEvent[] {
-  if (scope.all) return repoQueryAuditEvents(cfg.dataDir, query);
+function scopedAuditEvents(
+  cfg: HostConfig,
+  view: { all: boolean; projectIds: string[] },
+  query: AuditQuery,
+): AuditEvent[] {
+  if (view.all) return repoQueryAuditEvents(cfg.dataDir, query);
 
-  const inScope = new Set(scope.projectIds);
+  const inScope = new Set(view.projectIds);
   const targets =
     query.projectId !== undefined
       ? inScope.has(query.projectId)
         ? [query.projectId]
         : []
-      : scope.projectIds;
+      : view.projectIds;
 
   // Query per in-scope project without the limit, then merge, order newest-first,
   // and apply the limit globally so the top-N is correct across projects.
@@ -353,111 +278,47 @@ function requirePrincipal(cfg: HostConfig, credential: string | null): Principal
   return principal;
 }
 
-/** Derive the coarse role/projects compatibility projection from precise grants:
- *  any instance-wide ('*') grant → admin over ['*']; otherwise editor over the
- *  distinct granted project ids. Mirrors auth.ts's forward projection in reverse. */
-function compatibilityProjection(grants: ProjectGrant[]): { role: Role; projects: string[] } {
-  // Instance-wide super-admin is '*' WITHOUT an orgUnitId (a unit-scoped '*'
-  // grant is bounded to its subtree — mirrors scope.ts and auth.ts).
-  if (grants.some((g) => g.projectId === '*' && !g.orgUnitId)) {
-    return { role: 'admin', projects: ['*'] };
-  }
-  const projects = [...new Set(grants.map((g) => g.projectId))];
-  return { role: 'editor', projects };
-}
-
 // ── orchestrator methods ────────────────────────────────────────────────────
 
 /**
- * Authenticate the caller, then authorize token delegation strictly against the
- * caller's OWN scope: instance-admin may delegate anything; otherwise, for every
- * requested grant the caller must hold BOTH key:manage AND each requested
- * permission for the target project (so callers only delegate what they hold),
- * AND — expanding the caller's unit-scoped grants across each unit's recursive
- * subtree — the caller's resolved scope for every requested permission must cover
- * the grant's target (its specific projectId, or its orgUnitId, or a super-admin
- * scope). Validate the requested projects/units exist, mint a user-bound token,
- * persist only its hashed record with owner/grant metadata, and append a redacted
- * audit event. Returns the plaintext token exactly once.
+ * Authenticate the caller and require INSTANCE-ADMIN. A minted token carries NO
+ * permissions of its own — it acts as its OWNER's LIVE permission, resolved
+ * fresh on every request — so minting for another user is confused-deputy
+ * territory: a delegated admin could otherwise mint a token whose live authority
+ * exceeds their own. Only the instance super-admin (who dominates every owner)
+ * may mint here; delegated minting-with-dominance is deferred. Rejects a
+ * reserved owner id (the built-in subjects can never own a mintable bearer), a
+ * deactivated owner (deactivation must stay revoked), and unknown projects in
+ * the narrowing. Persists only the hashed record with owner/narrowing metadata
+ * and appends a redacted audit event. Returns the plaintext token exactly once.
  */
 export function mintToken(cfg: HostConfig, credential: string | null, request: TokenMintRequest): string {
   const principal = requirePrincipal(cfg, credential);
 
-  const admin = isInstanceAdmin(principal);
-  const grants = request.grants ?? [];
-  // HARD RESERVATION (steps 2–3): a requested *:* grant is rejected before any
-  // authorization — unconditional, even for a super-admin/master caller.
-  assertNoReservedSuperAdminGrant(grants);
-  // A grant carrying no permissions is malformed: it would still project to an
-  // editor token for the project (compatibility projection), so an empty
-  // permissions[] must NOT vacuously pass the delegation check below.
-  if (grants.some((g) => g.projectId !== '*' && (g.permissions?.length ?? 0) === 0)) {
-    throw new ForbiddenError('each requested grant must carry at least one permission');
+  if (!isInstanceAdmin(principal)) {
+    throw new ForbiddenError('minting a token for another user requires the instance admin');
   }
 
-  // Resolve the caller's own scope per permission once (org data is gathered
-  // inside resolveScopeFor); a requested grant's target is delegable for a
-  // permission only when the caller is super-admin for it, the requested
-  // projectId is in that scope, or the requested orgUnitId is in that scope.
-  const scopeMemo = new Map<string, ScopeResolution>();
-  const callerScope = (permission: string): ScopeResolution => {
-    let s = scopeMemo.get(permission);
-    if (s === undefined) {
-      s = resolveScopeFor(cfg, principal, permission);
-      scopeMemo.set(permission, s);
-    }
-    return s;
-  };
-  const scopeCovers = (grant: ProjectGrant, permission: string): boolean => {
-    const s = callerScope(permission);
-    if (s.all) return true;
-    if (grant.orgUnitId !== undefined && grant.orgUnitId !== '') {
-      return s.unitIds.includes(grant.orgUnitId);
-    }
-    return permits(s, grant.projectId);
-  };
+  // Reserved-subject guard: a token owned by a built-in subject id would BE an
+  // instance-admin bearer — the env-anchored paths are the only super-admin routes.
+  assertNotReservedSubjectId(cfg, [request.ownerUserId]);
 
-  // Instance-admin may delegate anything; otherwise, for every requested grant
-  // the caller must hold key:manage AND each permission for the project (S5), and
-  // that permission's resolved scope must cover the grant's target. An
-  // instance-wide ('*') delegation still requires instance-admin.
-  const mayDelegate =
-    admin ||
-    grants.every((g) =>
-      g.projectId === '*'
-        ? admin
-        : coversPermission(principal, g.projectId, KEY_MANAGE_PERMISSION) &&
-          g.permissions.every((p) => coversPermission(principal, g.projectId, p)) &&
-          g.permissions.every((p) => scopeCovers(g, p)),
-    );
-  if (!mayDelegate) {
-    throw new ForbiddenError('caller may not delegate the requested grants');
-  }
-
-  // Validate every referenced target exists: a specific projectId among the known
-  // hosted projects, and an orgUnitId among the organization units ('*' already
-  // gated to instance-admin above).
+  // The token's project NARROWING (never a grant): which projects it may name.
+  // ['*'] (or omitted) = the owner's full accessible set, still resolved live.
+  const projects = request.projects?.length ? request.projects : ['*'];
   const knownProjects = new Set(listProjectRecords(cfg.dataDir).map((p) => p.id));
-  const knownUnits = new Set(listOrganizationUnits(cfg.dataDir).map((u) => u.id));
-  for (const g of grants) {
-    if (g.orgUnitId !== undefined && g.orgUnitId !== '') {
-      if (!knownUnits.has(g.orgUnitId)) {
-        throw new Error(`unknown organization unit "${g.orgUnitId}"`);
-      }
-    } else if (g.projectId !== '*' && g.projectId !== '') {
-      if (!knownProjects.has(g.projectId)) {
-        throw new Error(`unknown project "${g.projectId}"`);
-      }
+  for (const p of projects) {
+    if (p !== '*' && !knownProjects.has(p)) {
+      throw new Error(`unknown project "${p}"`);
     }
   }
 
   // Refuse minting a token for a user record that has been deactivated — else
-  // deactivation could be undone by an authorized delegator minting fresh tokens
-  // for the inactive owner. A token's owner id can be EITHER a record id or the
-  // record's subject.userId (they diverge for admin-created users), so resolve
-  // by both — matching the revocation sweep — or the guard is dodgeable with the
-  // other id. A request.ownerUserId with no user record (a service principal) is
-  // allowed.
+  // deactivation could be undone by minting fresh tokens for the inactive owner.
+  // A token's owner id can be EITHER a record id or the record's subject.userId
+  // (they diverge for admin-created users), so resolve by both — matching the
+  // revocation sweep — or the guard is dodgeable with the other id. A
+  // request.ownerUserId with no user record (a service principal) is allowed.
   const owner =
     getUserById(cfg.dataDir, request.ownerUserId) ??
     repoListUsers(cfg.dataDir).find((u) => u.subject?.userId === request.ownerUserId) ??
@@ -466,17 +327,17 @@ export function mintToken(cfg: HostConfig, credential: string | null, request: T
     throw new ForbiddenError('cannot mint a token for a deactivated user');
   }
 
-  // Mint the token and compute its salted hash (same shape as the admin key-mint).
+  // Mint the token and compute its salted hash. The record carries the owner's
+  // REAL subject when a user record exists (so the deactivation sweep and the
+  // live permission resolution key on the same identity), else a synthesized
+  // service identity for a record-less service principal.
   const token = 'wk_' + crypto.randomBytes(24).toString('hex');
-  const projection = compatibilityProjection(grants);
   const record: ApiKeyRecord = {
     id: crypto.randomBytes(6).toString('hex'),
     keyHash: hashToken(token),
-    role: projection.role,
-    projects: projection.projects,
+    projects,
     createdAt: new Date().toISOString(),
-    ownerSubject: { userId: request.ownerUserId, kind: 'service', issuer: 'local' },
-    grants,
+    ownerSubject: owner?.subject ?? { userId: request.ownerUserId, kind: 'service', issuer: 'local' },
     label: request.label,
   };
   if (principal.subject) record.createdBySubject = principal.subject;
@@ -493,28 +354,15 @@ export function mintToken(cfg: HostConfig, credential: string | null, request: T
 }
 
 /**
- * Authenticate the caller, authorize key management for the target token's project
- * scope (or instance-admin), revoke the credential record, and append a redacted
- * audit event.
+ * Authenticate the caller and require INSTANCE-ADMIN, revoke the credential
+ * record, and append a redacted audit event. (Self-revocation of one's OWN
+ * tokens rides revokeSelfToken; this is the administrative kill switch.)
  */
 export function revokeToken(cfg: HostConfig, credential: string | null, tokenId: string): void {
   const principal = requirePrincipal(cfg, credential);
 
-  const admin = isInstanceAdmin(principal);
-  const target = listCredentials(cfg.dataDir, '*').find((r) => r.id === tokenId);
-  const targetProjects = target?.projects ?? [];
-  // Authorize on the RESOLVED, org-unit-aware key:manage scope (mirrors
-  // mintSelfToken): a unit admin manages tokens scoped to its subtree's projects
-  // but never another tenant's — the flat coversPermission would let a
-  // unit-scoped '*'+orgUnitId grant manage ANY project's token. A token scoped
-  // instance-wide ('*') still requires instance-admin.
-  const manageScope = resolveScopeFor(cfg, principal, KEY_MANAGE_PERMISSION);
-  const mayManage =
-    admin ||
-    (targetProjects.length > 0 &&
-      targetProjects.every((p) => (p === '*' ? admin : permits(manageScope, p))));
-  if (!mayManage) {
-    throw new ForbiddenError('caller may not manage this token');
+  if (!isInstanceAdmin(principal)) {
+    throw new ForbiddenError('revoking another user\'s token requires the instance admin');
   }
 
   revokeCredential(cfg.dataDir, tokenId);
@@ -537,14 +385,14 @@ export function revokeToken(cfg: HostConfig, credential: string | null, tokenId:
 
 /**
  * Self-service single-project MCP token mint. Authenticate the caller (a ws_ session
- * or bearer token) to their principal; require the caller's OWN grants to already
- * cover mcp:read on projectId (and mcp:write when write) — self-scoped, so key:manage
- * is neither required nor consulted (the token can never exceed the caller's own
- * access). Mint a token OWNED BY the caller (ownerSubject AND createdBySubject = the
- * caller's subject, so deactivating the caller revokes it via revokeAllForOwner)
- * scoped to EXACTLY ONE project carrying mcp:read (plus mcp:write when write), persist
- * only its hashed record with the role/projects compatibility projection, append a
- * best-effort token.mint.self (security) audit event, and return the plaintext once.
+ * or bearer token) to their principal; require the caller's OWN resolved permission
+ * to already cover project:read on projectId (and project:write when write) — the
+ * token can never exceed the caller's own access at mint time, and it acts as the
+ * OWNER's LIVE permission afterwards. Mint a token OWNED BY the caller
+ * (ownerSubject AND createdBySubject = the caller's subject, so deactivating the
+ * caller revokes it via revokeAllForOwner) NARROWED to exactly one project, persist
+ * only its hashed record, append a best-effort token.mint.self (security) audit
+ * event, and return the plaintext once.
  */
 export function mintSelfToken(
   cfg: HostConfig,
@@ -554,37 +402,28 @@ export function mintSelfToken(
 ): string {
   const principal = requirePrincipal(cfg, credential);
 
-  // Self-scoped authorization on the RESOLVED, org-unit-aware scope: the caller must
-  // ALREADY hold the permission over this exact project. Using the resolved scope
-  // (not the flat coversPermission) bounds a '*'+orgUnitId unit grant to its own
-  // subtree, so a unit admin can mint for their unit's projects but NEVER another
-  // tenant's. No key:manage — the token is no broader than the caller's own
-  // authority. Mirrors mintToken's scopeCovers gate.
-  if (!permits(resolveScopeFor(cfg, principal, 'mcp:read'), projectId)) {
-    throw new ForbiddenError('caller lacks mcp:read on the requested project');
+  // Self-scoped authorization through the resolver: the caller must ALREADY hold
+  // a yes-valued permission over this exact project (a unit-scoped assignment
+  // covers its own subtree, never another tenant's).
+  if (authorize(cfg.dataDir, principal, PROJECT_READ_CAPABILITY, 'project', projectId).value !== 'yes') {
+    throw new ForbiddenError('caller lacks project:read on the requested project');
   }
-  if (write && !permits(resolveScopeFor(cfg, principal, 'mcp:write'), projectId)) {
-    throw new ForbiddenError('caller lacks mcp:write on the requested project');
+  if (write && authorize(cfg.dataDir, principal, PROJECT_WRITE_CAPABILITY, 'project', projectId).value !== 'yes') {
+    throw new ForbiddenError('caller lacks project:write on the requested project');
   }
 
-  // Mint the token owned by the caller, scoped to exactly the one project. The grant
-  // shape carries only { projectId, permissions } — the same shape a session/bearer
-  // resolves back to — so the minted token authenticates to precisely that scope.
+  // Mint the token owned by the caller, NARROWED to exactly the one project. It
+  // stores no permissions: the data-plane gate resolves the owner's live
+  // permission per request, so revoking the owner's access cuts the token off.
   const token = 'wk_' + crypto.randomBytes(24).toString('hex');
-  const grants: ProjectGrant[] = [
-    { projectId, permissions: write ? ['mcp:read', 'mcp:write'] : ['mcp:read'] },
-  ];
-  const projection = compatibilityProjection(grants);
   const owner = auditActor(principal);
   const record: ApiKeyRecord = {
     id: crypto.randomBytes(6).toString('hex'),
     keyHash: hashToken(token),
-    role: projection.role,
-    projects: projection.projects,
+    projects: [projectId],
     createdAt: new Date().toISOString(),
     ownerSubject: owner,
     createdBySubject: owner,
-    grants,
     label: `agent token (${projectId})`,
   };
   createCredential(cfg.dataDir, record);
@@ -633,66 +472,13 @@ export function revokeSelfToken(cfg: HostConfig, credential: string | null, toke
 }
 
 /**
- * Authenticate the caller, authorize grant administration by an instance-wide OR
- * unit-scoped user:admin grant: the caller's scope must permit the target user's
- * home unit, and — the privilege-escalation guard — a non-super-admin caller may
- * not assign grants exceeding its own authority (no instance-wide '*', no org unit
- * or project outside its scope). Replace the user's grants wholesale through the
- * repository, and append a redacted audit event. A super-admin bypasses both checks.
- */
-export function replaceUserGrants(
-  cfg: HostConfig,
-  credential: string | null,
-  userId: string,
-  grants: ProjectGrant[],
-): HostedUserRecord {
-  const principal = requirePrincipal(cfg, credential);
-  // HARD RESERVATION (steps 2–3): an incoming *:* grant is rejected before any
-  // authorization — unconditional, even for a super-admin/master caller.
-  assertNoReservedSuperAdminGrant(grants);
-  const scope = resolveScopeFor(cfg, principal, USER_ADMIN_PERMISSION);
-
-  // Read the target's current home unit (and separate not-found from a scope
-  // denial) before authorizing.
-  const existing = getUserById(cfg.dataDir, userId);
-  if (existing === null) {
-    throw new Error(`Hosted user "${userId}" not found.`);
-  }
-
-  // (1) Target visibility: a scope.all caller — a true super-admin OR a delegated
-  //     instance-wide user:admin — may manage any user. Otherwise the target's
-  //     home unit must be in scope (a user with no home unit is super-admin-only).
-  if (!scope.all && !(existing.unitId !== undefined && scope.unitIds.includes(existing.unitId))) {
-    throw new ForbiddenError("grant administration requires scope over the target user's home unit");
-  }
-
-  // (2) Delegation guard: ONLY a genuine super-admin ('*'/'*') may assign
-  //     arbitrary authority. A delegated instance-wide user:admin has scope.all
-  //     for target VISIBILITY but is NOT omnipotent — it, like every non-admin,
-  //     may not assign grants exceeding the authority it itself holds (else it
-  //     could self-grant '*' → full admin on next SSO login). Gate on
-  //     isInstanceAdmin, matching mintToken (the two must not diverge).
-  if (!isInstanceAdmin(principal) && !callerMayDelegateGrants(cfg, principal, grants)) {
-    throw new ForbiddenError("grant administration may not assign authority the caller does not itself hold");
-  }
-
-  const updated = repoReplaceUserGrants(cfg.dataDir, userId, grants);
-
-  tryAppendAudit(
-    cfg,
-    buildAuditEvent(principal, 'user.grants.replace', 'security', 'admin', { target: userId }),
-  );
-
-  return updated;
-}
-
-/**
- * Authenticate the caller, authorize user administration by an instance-wide OR
- * unit-scoped user:admin grant, and list hosted users FILTERED to the caller's
- * scope: a super-admin sees all, a scoped caller sees only users whose home unit
- * is within scope.unitIds (a user with no home unit is visible only to a
- * super-admin). Optionally narrowed to one project's grant holders. No audit
- * event (a read).
+ * Authenticate the caller, authorize user administration via project:admin over
+ * the caller's actionable units, and list hosted users FILTERED to that view: an
+ * instance-admin sees all, a scoped caller sees only users whose home unit is
+ * within their actionable units (a user with no home unit is visible only to an
+ * instance-admin). The optional project filter narrows to users holding a DIRECT
+ * assignment at that project scope (resolved by the user repository from the
+ * permission grid). No audit event (a read).
  */
 export function listUsers(
   cfg: HostConfig,
@@ -700,21 +486,23 @@ export function listUsers(
   project?: string,
 ): HostedUserRecord[] {
   const principal = requirePrincipal(cfg, credential);
-  const scope = resolveScopeFor(cfg, principal, USER_ADMIN_PERMISSION);
-  if (scopeIsEmpty(scope)) {
-    throw new ForbiddenError('user administration required');
+  if (isInstanceAdmin(principal)) {
+    return repoListUsers(cfg.dataDir, undefined, project);
+  }
+  const units = new Set(actionableUnitIds(visibleScopes(cfg.dataDir, principal, PROJECT_ADMIN_CAPABILITY)));
+  if (units.size === 0) {
+    throw new ForbiddenError('user administration requires project:admin over at least one unit');
   }
   const users = repoListUsers(cfg.dataDir, undefined, project);
-  if (scope.all) return users;
-  const inScope = new Set(scope.unitIds);
-  return users.filter((u) => u.unitId !== undefined && inScope.has(u.unitId));
+  return users.filter((u) => u.unitId !== undefined && units.has(u.unitId));
 }
 
 /**
- * Authenticate the caller, authorize audit read access by an instance-wide OR
- * unit-scoped audit:read grant, and return redacted audit events matching the
- * query FILTERED to the caller's scope: a super-admin reads instance-wide, a
- * scoped caller reads only their in-scope projects' events. No audit event (a read).
+ * Authenticate the caller, authorize audit read access via project:admin (the
+ * capability the legacy audit:read maps onto), and return redacted audit events
+ * matching the query FILTERED to the caller's view: an instance-admin reads
+ * instance-wide, a scoped caller reads only their actionable projects' events.
+ * No audit event (a read).
  */
 export function queryAuditEvents(
   cfg: HostConfig,
@@ -722,23 +510,21 @@ export function queryAuditEvents(
   query: AuditQuery,
 ): AuditEvent[] {
   const principal = requirePrincipal(cfg, credential);
-  const scope = resolveScopeFor(cfg, principal, AUDIT_READ_PERMISSION);
-  if (scopeIsEmpty(scope)) {
-    throw new ForbiddenError('audit read access required');
+  const view = auditReadView(cfg, principal);
+  if (!view.all && view.projectIds.length === 0) {
+    throw new ForbiddenError('audit read access requires project:admin over at least one project');
   }
-  return scopedAuditEvents(cfg, scope, query);
+  return scopedAuditEvents(cfg, view, query);
 }
 
 /**
- * Authenticate the caller, require an instance-wide admin grant, apply the active
+ * Authenticate the caller, require instance-level project:admin, apply the active
  * retention policy, append a redacted audit event for the prune itself, and return
  * the number of events removed.
  */
 export function pruneAuditEvents(cfg: HostConfig, credential: string | null): number {
   const principal = requirePrincipal(cfg, credential);
-  if (!isInstanceAdmin(principal)) {
-    throw new ForbiddenError('audit administration requires an instance-wide admin grant');
-  }
+  requireInstanceProjectAdmin(cfg, principal, 'audit administration');
 
   const policy = resolveAuditPolicy(cfg);
   const removed = repoPruneAuditEvents(cfg.dataDir, policy, new Date().toISOString());
@@ -749,12 +535,15 @@ export function pruneAuditEvents(cfg: HostConfig, credential: string | null): nu
 }
 
 /**
- * Authenticate the caller, authorize user administration by an instance-wide OR
- * unit-scoped user:admin grant whose scope permits the target user's home unit
- * (both the incoming record's home unit and, on update, the existing record's),
- * create or update the hosted user through the repository, and append a redacted
- * audit event distinguishing creation from update. A super-admin bypasses the
- * home-unit check; a user with no home unit is manageable only by a super-admin.
+ * Authenticate the caller, resolve the caller's project:admin permission over the
+ * target user's home unit (both the incoming record's and, on update, the
+ * existing record's — a user with no home unit resolves at the instance root),
+ * REJECT a record claiming a reserved built-in subject id (the persisted
+ * boot-reserved UUIDs or the legacy 'builtin:*' literals — an admin-created user
+ * must never inherit the built-in bypass), create or update the hosted user
+ * through the repository, and append a redacted audit event distinguishing
+ * creation from update. User PERMISSIONS live in roleBindings + the assignment
+ * grid, never on the record.
  */
 export function upsertUser(
   cfg: HostConfig,
@@ -762,28 +551,23 @@ export function upsertUser(
   record: HostedUserRecord,
 ): HostedUserRecord {
   const principal = requirePrincipal(cfg, credential);
-  // HARD RESERVATION (steps 2–3): a record carrying a *:* grant is rejected before
-  // any authorization — unconditional, even for a super-admin/master caller.
-  assertNoReservedSuperAdminGrant(record.grants ?? []);
-  const scope = resolveScopeFor(cfg, principal, USER_ADMIN_PERMISSION);
 
   // Distinguish creation from update, and read the existing home unit, by probing
   // for an existing record first.
   const existing = getUserById(cfg.dataDir, record.id);
   const existed = existing !== null;
 
-  // A scoped (non-super-admin) admin may only manage users within its unit
-  // subtree: the incoming record's home unit — and, on update, the existing
-  // record's home unit — must both be in scope.
-  if (!scope.all) {
-    const inScope = new Set(scope.unitIds);
-    const incomingInScope = record.unitId !== undefined && inScope.has(record.unitId);
-    const existingInScope =
-      !existed || (existing!.unitId !== undefined && inScope.has(existing!.unitId));
-    if (!incomingInScope || !existingInScope) {
-      throw new ForbiddenError("user administration requires scope over the target user's home unit");
-    }
+  // The caller must cover the incoming record's home unit — and, on an update
+  // that involves a different existing home unit, that one too (else a scoped
+  // admin could capture a foreign user by rewriting their unit).
+  requireAdminOverHomeUnit(cfg, principal, record.unitId);
+  if (existed && existing!.unitId !== record.unitId) {
+    requireAdminOverHomeUnit(cfg, principal, existing!.unitId);
   }
+
+  // Reserved-subject guard: neither the record id nor its subject id may claim a
+  // built-in identity (UUID = unguessable, this guard = unclaimable).
+  assertNotReservedSubjectId(cfg, [record.id, record.subject?.userId]);
 
   const action = existed ? 'user.update' : 'user.create';
 
@@ -809,21 +593,15 @@ export function setUserStatus(
   status: string,
 ): HostedUserRecord {
   const principal = requirePrincipal(cfg, credential);
-  const scope = resolveScopeFor(cfg, principal, USER_ADMIN_PERMISSION);
 
-  // Look up the target to read its home unit (and separate not-found from a scope
-  // denial). A scoped admin may only act on a user within its unit subtree; a user
-  // with no home unit is manageable only by a super-admin.
+  // Look up the target to read its home unit (and separate not-found from a
+  // permission denial). The caller must cover the target's home unit; a user
+  // with no home unit resolves at the instance root (instance-level admins only).
   const existing = getUserById(cfg.dataDir, userId);
   if (existing === null) {
     throw new Error(`Hosted user "${userId}" not found.`);
   }
-  if (!scope.all) {
-    const inScope = new Set(scope.unitIds);
-    if (existing.unitId === undefined || !inScope.has(existing.unitId)) {
-      throw new ForbiddenError("user administration requires scope over the target user's home unit");
-    }
-  }
+  requireAdminOverHomeUnit(cfg, principal, existing.unitId);
 
   const updated = repoSetUserStatus(cfg.dataDir, userId, status);
 
@@ -913,9 +691,11 @@ export async function startSsoLogin(cfg: HostConfig, providerId: string, redirec
  * Complete a headless SSO login: verify the signed state (tampered/expired is
  * rejected), resolve the bound enabled provider, exchange the code and resolve the
  * external subject, look up the hosted user by issuer + external subject, provision
- * a first-login active user with EMPTY grants when absent (an admin assigns grants
- * afterwards), reject re-login for an existing deactivated user before minting,
- * mint a user-bound token for the resolved user persisting only its hashed record,
+ * a first-login active user when absent (binding the built-in sso-admin role when
+ * the verified groups match adminGroupClaims, and recording displayName/email from
+ * the verified claims), reject re-login for an existing deactivated user before
+ * minting, refresh the sso-admin binding + claims on re-login, mint a user-bound
+ * token (acting as the owner's LIVE permission) persisting only its hashed record,
  * append a best-effort sso.login (security) audit event, and return the plaintext
  * token exactly once. Unauthenticated by nature — no caller credential.
  */
@@ -945,10 +725,17 @@ export async function completeSsoLogin(cfg: HostConfig, state: string, code: str
       id: subject.userId,
       subject,
       status: 'active',
-      // first-login: the enumerated SSO-admin bundle (never *:*) when the verified
-      // groups match adminGroupClaims, otherwise empty — an admin assigns grants.
-      grants: inAdminGroup ? [ssoAdminBundleGrant()] : [],
+      // first-login: bind the built-in sso-admin ROLE when the verified groups
+      // match adminGroupClaims, otherwise no bindings — an admin assigns roles
+      // and grid assignments later. The role resolves through the permission
+      // resolver (project:admin + project:create @instance, OVERRIDABLE — never
+      // the instance-admin bypass).
+      roleBindings: inAdminGroup ? [{ roleId: SSO_ADMIN_ROLE_ID }] : [],
       createdAt: new Date().toISOString(),
+      // displayName/email come from the VERIFIED id_token claims (resolveSubject),
+      // so admin views can show a name instead of the opaque subject id.
+      ...(subject.displayName ? { displayName: subject.displayName } : {}),
+      ...(subject.email ? { email: subject.email } : {}),
     };
     user = repoUpsertUser(cfg.dataDir, provisioned);
   }
@@ -960,31 +747,40 @@ export async function completeSsoLogin(cfg: HostConfig, state: string, code: str
     throw new ForbiddenError('deactivated user may not sign in');
   }
 
-  // steps 18–19: refresh the stored grants when they disagree with the admin-group
-  // membership — entering the group appends the enumerated bundle, leaving it
-  // drops the bundle on this login (server-driven, straight through the repository;
-  // the bundle is enumerated, so the *:* hard reservation is preserved).
-  const applied = applySsoAdminBundle(user.grants, inAdminGroup);
-  if (applied.changed) {
-    user = repoReplaceUserGrants(cfg.dataDir, user.id, applied.grants);
+  // steps 18–19: refresh the sso-admin ROLE BINDING when it disagrees with the
+  // verified admin-group membership — entering the group binds the role, leaving
+  // it unbinds it on this login (server-driven, straight through the repository) —
+  // and refresh displayName/email from the verified claims on every re-login.
+  const bindings = user.roleBindings ?? [];
+  const hasSsoAdmin = bindings.some((b) => b.roleId === SSO_ADMIN_ROLE_ID);
+  const identityDrifted =
+    (subject.displayName !== undefined && subject.displayName !== user.displayName) ||
+    (subject.email !== undefined && subject.email !== user.email);
+  if (hasSsoAdmin !== inAdminGroup || identityDrifted) {
+    user = repoUpsertUser(cfg.dataDir, {
+      ...user,
+      roleBindings: inAdminGroup
+        ? hasSsoAdmin
+          ? bindings
+          : [...bindings, { roleId: SSO_ADMIN_ROLE_ID }]
+        : bindings.filter((b) => b.roleId !== SSO_ADMIN_ROLE_ID),
+      ...(subject.displayName ? { displayName: subject.displayName } : {}),
+      ...(subject.email ? { email: subject.email } : {}),
+    });
   }
 
-  // Mint a user-bound token (same record shape as mintToken) carrying the resolved
-  // user's CURRENT grants — with any reserved instance-wide super-admin (*:*) grant
-  // filtered out (env-reserved to the built-in admin account; no SSO login can ever
-  // mint a credential carrying it) — and their role/projects projection.
-  const effectiveGrants = user.grants.filter((g) => !isSuperAdminGrant(g));
+  // Mint a user-bound token (same record shape as mintToken). It carries NO
+  // permissions and no narrowing: it acts as the owner's LIVE permission,
+  // resolved by the auth specialist + resolver on every request — so a later
+  // role/assignment revocation cuts this token down immediately.
   const token = 'wk_' + crypto.randomBytes(24).toString('hex');
-  const projection = compatibilityProjection(effectiveGrants);
   const record: ApiKeyRecord = {
     id: crypto.randomBytes(6).toString('hex'),
     keyHash: hashToken(token),
-    role: projection.role,
-    projects: projection.projects,
+    projects: ['*'],
     createdAt: new Date().toISOString(),
     ownerSubject: user.subject,
     createdBySubject: user.subject,
-    grants: effectiveGrants,
     label: `SSO login (${providerId})`,
   };
   createCredential(cfg.dataDir, record);
@@ -1000,7 +796,7 @@ export async function completeSsoLogin(cfg: HostConfig, state: string, code: str
 // ── identity-provider (SSO) administration (instance-admin only) ──────────────
 
 /**
- * Authenticate the caller, require an instance-wide admin grant, and return every
+ * Authenticate the caller, require instance-level project:admin, and return every
  * configured identity provider by forwarding to the policy repository. Not audited
  * (a read).
  */
@@ -1009,9 +805,7 @@ export function listIdentityProviders(
   credential: string | null,
 ): IdentityProviderConfig[] {
   const principal = requirePrincipal(cfg, credential);
-  if (!isInstanceAdmin(principal)) {
-    throw new ForbiddenError('identity-provider administration requires an instance-wide admin grant');
-  }
+  requireInstanceProjectAdmin(cfg, principal, 'identity-provider administration');
   return listIdentityProviderRecords(cfg.dataDir);
 }
 
@@ -1027,9 +821,7 @@ export function upsertIdentityProvider(
   config: IdentityProviderConfig,
 ): IdentityProviderConfig {
   const principal = requirePrincipal(cfg, credential);
-  if (!isInstanceAdmin(principal)) {
-    throw new ForbiddenError('identity-provider administration requires an instance-wide admin grant');
-  }
+  requireInstanceProjectAdmin(cfg, principal, 'identity-provider administration');
 
   const stored = upsertIdentityProviderRecord(cfg.dataDir, config);
 
@@ -1045,9 +837,7 @@ export function upsertIdentityProvider(
  */
 export function removeIdentityProvider(cfg: HostConfig, credential: string | null, id: string): void {
   const principal = requirePrincipal(cfg, credential);
-  if (!isInstanceAdmin(principal)) {
-    throw new ForbiddenError('identity-provider administration requires an instance-wide admin grant');
-  }
+  requireInstanceProjectAdmin(cfg, principal, 'identity-provider administration');
 
   removeIdentityProviderRecord(cfg.dataDir, id);
 
@@ -1055,11 +845,11 @@ export function removeIdentityProvider(cfg: HostConfig, credential: string | nul
 }
 
 /**
- * Authenticate the caller, authorize audit read access by an instance-wide OR
- * unit-scoped audit:read grant (same authorization as queryAuditEvents), and
- * return the count of redacted audit events matching the query SCOPED to the
- * caller: a super-admin counts instance-wide, a scoped caller counts only their
- * in-scope projects' events. No audit event (a read).
+ * Authenticate the caller, authorize audit read access via project:admin (same
+ * authorization as queryAuditEvents), and return the count of redacted audit
+ * events matching the query SCOPED to the caller: an instance-admin counts
+ * instance-wide, a scoped caller counts only their actionable projects' events.
+ * No audit event (a read).
  */
 export function countAuditEvents(
   cfg: HostConfig,
@@ -1067,13 +857,13 @@ export function countAuditEvents(
   query: AuditQuery,
 ): number {
   const principal = requirePrincipal(cfg, credential);
-  const scope = resolveScopeFor(cfg, principal, AUDIT_READ_PERMISSION);
-  if (scopeIsEmpty(scope)) {
-    throw new ForbiddenError('audit read access required');
+  const view = auditReadView(cfg, principal);
+  if (!view.all && view.projectIds.length === 0) {
+    throw new ForbiddenError('audit read access requires project:admin over at least one project');
   }
-  if (scope.all) return repoCountAuditEvents(cfg.dataDir, query);
-  // A count ignores the query limit; scope the query to the in-scope projects.
-  return scopedAuditEvents(cfg, scope, { ...query, limit: undefined }).length;
+  if (view.all) return repoCountAuditEvents(cfg.dataDir, query);
+  // A count ignores the query limit; scope the query to the in-view projects.
+  return scopedAuditEvents(cfg, view, { ...query, limit: undefined }).length;
 }
 
 // ── Identity Portal (HTTP) ──────────────────────────────────────────────────
@@ -1180,10 +970,6 @@ export async function handleIdentityRequest(
     // GET /identity/users?project=
     if (req.method === 'GET' && parts.length === 2 && parts[1] === 'users') {
       return sendJson(res, 200, listUsers(cfg, credential, url.searchParams.get('project') ?? undefined));
-    }
-    // PUT /identity/users/{id}/grants
-    if (req.method === 'PUT' && parts.length === 4 && parts[1] === 'users' && parts[3] === 'grants') {
-      return sendJson(res, 200, replaceUserGrants(cfg, credential, parts[2], body.grants as ProjectGrant[]));
     }
     // PUT /identity/users/{id}/status
     if (req.method === 'PUT' && parts.length === 4 && parts[1] === 'users' && parts[3] === 'status') {

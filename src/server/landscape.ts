@@ -25,7 +25,13 @@ import {
   findPublicInterface,
 } from './surfaces.js';
 import { sendJson } from './httpio.js';
-import { resolveScope, resolveScopeFor, permits } from './scope.js';
+import {
+  authorize,
+  visibleScopes,
+  isInstanceAdmin,
+  actionableProjectIds,
+  actionableUnitIds,
+} from './authorization.js';
 import { resolveVisibility, isVisible, audienceDistance, audienceCovers } from './visibility.js';
 import { hostSurfaces } from './adapters.js';
 import * as yamlLib from 'js-yaml';
@@ -45,7 +51,6 @@ import type {
   ProjectRelationRecord,
   PublicInterfaceSummary,
   ReachableProjectRef,
-  ScopeResolution,
   VisibleSurfaceEntry,
   SurfaceArtifact,
 } from './types.js';
@@ -82,22 +87,19 @@ import type { SurfaceSnapshot } from '../models/index.js';
 // request orchestrator's MCP dispatch reach the same logic.
 // ---------------------------------------------------------------------------
 
-const LANDSCAPE_MANAGE_PERMISSION = 'landscape:manage';
-const LANDSCAPE_READ_PERMISSION = 'landscape:read';
-/** The data-plane permissions that scope an agent/session credential to a
- *  project — accepted as observer authority by the consumer-facing exchange. */
-const MCP_READ_PERMISSION = 'mcp:read';
-const MCP_WRITE_PERMISSION = 'mcp:write';
+/** Landscape/unit administration maps onto project:admin; control-plane reads
+ *  onto project:read (the legacy landscape:manage / landscape:read permissions). */
+const PROJECT_ADMIN_CAPABILITY = 'project:admin';
+const PROJECT_READ_CAPABILITY = 'project:read';
+const PROJECT_WRITE_CAPABILITY = 'project:write';
 
-// ── authorization helpers (scope-aware — Phase 6 tenancy) ────────────────────
+// ── authorization helpers (hierarchical resolver) ─────────────────────────────
 //
-// Every control-plane method resolves the caller's landscape scope for the
-// permission it needs (landscape:manage for writes, landscape:read for reads),
-// via scope_specialist over the org unit tree + placements. A '*'/'*' bootstrap
-// or an instance-wide ({projectId:'*'}) grant carrying the permission resolves to
-// `all` (super-admin, unfiltered). A unit-scoped grant expands to that unit's
-// recursive subtree of units + every project placed in it: reads FILTER to that
-// scope and writes require the write target to fall inside it.
+// Every control-plane method resolves the caller's permission through the
+// authorization seam (project:admin for writes, project:read for reads). An
+// instance-admin bypasses to yes; a unit-scoped assignment covers that unit's
+// recursive subtree of units + every project placed in it: reads FILTER to the
+// visible set and writes point-check the write target.
 
 /** Authenticate the caller credential or throw (401-mapping). */
 function requirePrincipal(cfg: HostConfig, credential: string | null): Principal {
@@ -106,59 +108,55 @@ function requirePrincipal(cfg: HostConfig, credential: string | null): Principal
   return principal;
 }
 
-/** A scoped caller with neither an in-scope project nor an in-scope unit has no
- *  reach at all — the control-plane reads treat that as Forbidden. */
-function scopeIsEmpty(scope: ScopeResolution): boolean {
-  return !scope.all && scope.projectIds.length === 0 && scope.unitIds.length === 0;
+/** yes-check shorthand: the caller's resolved permission for a capability at a
+ *  target scope must be yes (approval never acts on the landscape plane). */
+function permitsCap(
+  cfg: HostConfig,
+  principal: Principal,
+  capability: string,
+  scopeKind: 'instance' | 'unit' | 'project',
+  scopeId: string,
+): boolean {
+  return authorize(cfg.dataDir, principal, capability, scopeKind, scopeId).value === 'yes';
 }
 
-/**
- * Resolve the caller's landscape READ scope: the union of their landscape:read and
- * landscape:manage scopes over the pre-gathered org tree — a manage grant (unit-
- * scoped or instance-wide) also confers read over the same subtree, and the
- * instance-admin/instance-wide wildcard yields `all`. Pure over the supplied
- * units/placements (no extra I/O).
- */
-function resolveLandscapeReadScope(
+/** The caller's project:read view for control-plane listings: an instance-admin
+ *  sees everything; otherwise the ACTIONABLE units + projects from the resolver's
+ *  visibility view (breadcrumb ancestors excluded — navigation is not reach). */
+function readView(
+  cfg: HostConfig,
   principal: Principal,
-  units: OrganizationUnitRecord[],
-  placements: ProjectPlacement[],
-): ScopeResolution {
-  const grants = principal.grants ?? [];
-  const read = resolveScope(grants, LANDSCAPE_READ_PERMISSION, units, placements);
-  if (read.all) return read;
-  const manage = resolveScope(grants, LANDSCAPE_MANAGE_PERMISSION, units, placements);
-  if (manage.all) return manage;
+): { all: boolean; projectIds: Set<string>; unitIds: Set<string> } {
+  if (isInstanceAdmin(principal)) {
+    return { all: true, projectIds: new Set(), unitIds: new Set() };
+  }
+  const scopes = visibleScopes(cfg.dataDir, principal, PROJECT_READ_CAPABILITY);
   return {
     all: false,
-    projectIds: [...new Set([...read.projectIds, ...manage.projectIds])],
-    unitIds: [...new Set([...read.unitIds, ...manage.unitIds])],
+    projectIds: new Set(actionableProjectIds(scopes)),
+    unitIds: new Set(actionableUnitIds(scopes)),
   };
 }
 
+/** A scoped caller with neither an in-scope project nor an in-scope unit has no
+ *  reach at all — the control-plane reads treat that as Forbidden. */
+function viewIsEmpty(view: { all: boolean; projectIds: Set<string>; unitIds: Set<string> }): boolean {
+  return !view.all && view.projectIds.size === 0 && view.unitIds.size === 0;
+}
+
 /**
- * Require the caller's RESOLVED, org-unit-aware scope to cover the OBSERVER
- * project it claims to act as (the data plane's bound project, or the portal's
- * path parameter). The observer identity drives every reachability/visibility
+ * Require the caller's RESOLVED permission to cover the OBSERVER project it
+ * claims to act as (the data plane's bound project, or the portal's path
+ * parameter). The observer identity drives every reachability/visibility
  * resolution in the consumer-facing exchange, so an unverified claim would let a
- * credential read the discovery neighbourhood of a project it is not scoped to —
- * in particular, a unit-scoped '*'+orgUnitId grant projects a flat '*' into the
- * coarse role/projects set and can BIND another tenant's project on the data
- * plane. Accepts any of the caller's mcp:read / mcp:write (agent or session,
- * data plane) or landscape:read / landscape:manage (operator) scopes over the
- * observer project; a genuine instance-wide grant resolves to scope.all and
- * passes for any project.
+ * credential read the discovery neighbourhood of a project it is not scoped to.
+ * A yes-valued project:read or project:write over the observer project passes;
+ * an instance-admin passes for any project (the resolver bypass).
  */
 function requireObserverScope(cfg: HostConfig, principal: Principal, observerProjectId: string): void {
-  const units = listOrganizationUnits(cfg.dataDir);
-  const placements = listProjectPlacements(cfg.dataDir);
-  const grants = principal.grants ?? [];
-  const covered = [
-    MCP_READ_PERMISSION,
-    MCP_WRITE_PERMISSION,
-    LANDSCAPE_READ_PERMISSION,
-    LANDSCAPE_MANAGE_PERMISSION,
-  ].some((permission) => permits(resolveScope(grants, permission, units, placements), observerProjectId));
+  const covered =
+    permitsCap(cfg, principal, PROJECT_READ_CAPABILITY, 'project', observerProjectId) ||
+    permitsCap(cfg, principal, PROJECT_WRITE_CAPABILITY, 'project', observerProjectId);
   if (!covered) {
     throw new ForbiddenError('caller lacks scope over the current project');
   }
@@ -488,9 +486,9 @@ export function buildLandscapeGraph(
 // ── Landscape Orchestrator ───────────────────────────────────────────────────
 
 /**
- * Authenticate the caller, require a landscape:manage or instance-admin grant,
- * create or update one organization unit, and append a redacted unit.upsert audit
- * event (info, best-effort).
+ * Authenticate the caller, resolve their project:admin permission over the unit
+ * being managed (must be yes), create or update one organization unit, and append
+ * a redacted unit.upsert audit event (info, best-effort).
  */
 export function upsertUnit(
   cfg: HostConfig,
@@ -498,27 +496,31 @@ export function upsertUnit(
   unit: OrganizationUnitRecord,
 ): OrganizationUnitRecord {
   const principal = requirePrincipal(cfg, credential);
-  const scope = resolveScopeFor(cfg, principal, LANDSCAPE_MANAGE_PERMISSION);
   // Authorize by whether the unit ALREADY exists, to close the reparent-capture
-  // hole (updating a foreign unit while only its NEW parent is in scope would
-  // graft that unit's whole subtree + projects into the caller's scope):
-  //   - existing unit → the caller must already own it (its CURRENT position);
-  //     if reparenting, the new parent must also be in scope.
-  //   - new unit → requires an in-scope parent (a new root requires super-admin).
-  if (!scope.all) {
-    const existing = unit.id ? getOrganizationUnit(cfg.dataDir, unit.id) : null;
-    if (existing) {
-      if (!scope.unitIds.includes(unit.id)) {
-        throw new ForbiddenError('managing an existing unit requires landscape:manage scope over that unit');
-      }
-      if (unit.parentId && unit.parentId !== existing.parentId && !scope.unitIds.includes(unit.parentId)) {
-        throw new ForbiddenError('reparenting a unit requires landscape:manage scope over the new parent');
-      }
-    } else if (!unit.parentId || !scope.unitIds.includes(unit.parentId)) {
-      throw new ForbiddenError(
-        'creating an organization unit requires landscape:manage scope over its parent (a new root requires a super-admin)',
-      );
+  // hole (updating a foreign unit while only its NEW parent is covered would
+  // graft that unit's whole subtree + projects into the caller's reach):
+  //   - existing unit → the caller must already cover it (its CURRENT position);
+  //     if reparenting, the new parent must also be covered.
+  //   - new unit → requires project:admin over its parent; a new ROOT unit
+  //     requires instance-level project:admin (an instance-admin bypasses).
+  const existing = unit.id ? getOrganizationUnit(cfg.dataDir, unit.id) : null;
+  if (existing) {
+    if (!permitsCap(cfg, principal, PROJECT_ADMIN_CAPABILITY, 'unit', unit.id)) {
+      throw new ForbiddenError('managing an existing unit requires project:admin over that unit');
     }
+    if (
+      unit.parentId &&
+      unit.parentId !== existing.parentId &&
+      !permitsCap(cfg, principal, PROJECT_ADMIN_CAPABILITY, 'unit', unit.parentId)
+    ) {
+      throw new ForbiddenError('reparenting a unit requires project:admin over the new parent');
+    }
+  } else if (unit.parentId) {
+    if (!permitsCap(cfg, principal, PROJECT_ADMIN_CAPABILITY, 'unit', unit.parentId)) {
+      throw new ForbiddenError('creating an organization unit requires project:admin over its parent');
+    }
+  } else if (!permitsCap(cfg, principal, PROJECT_ADMIN_CAPABILITY, 'instance', '')) {
+    throw new ForbiddenError('creating a ROOT organization unit requires instance-level project:admin');
   }
   const stored = upsertOrganizationUnit(cfg.dataDir, unit);
   tryAppendAudit(cfg, buildAuditEvent(principal, 'unit.upsert', 'info', 'landscape', { target: stored.id }));
@@ -536,18 +538,17 @@ export function placeProject(
   placement: ProjectPlacement,
 ): ProjectPlacement {
   const principal = requirePrincipal(cfg, credential);
-  const scope = resolveScopeFor(cfg, principal, LANDSCAPE_MANAGE_PERMISSION);
-  // The caller's scope must cover BOTH the target unit AND the project being
-  // placed. Checking only the destination unit was a scope-capture hole: a unit
-  // admin could adopt any project into their unit and thereby pull it into their
-  // scope (→ destroy/lock/promote/audit it). The project's authority comes from
-  // its CURRENT placements, so require it already be in the caller's scope; a
-  // super-admin places anything anywhere.
-  if (!scope.all && !scope.unitIds.includes(placement.unitId)) {
-    throw new ForbiddenError('placing a project requires landscape:manage scope over the target unit');
+  // The caller must cover BOTH the target unit AND the project being placed.
+  // Checking only the destination unit was a scope-capture hole: a unit admin
+  // could adopt any project into their unit and thereby pull it into their
+  // reach (→ destroy/lock/promote/audit it). The project's authority comes from
+  // its CURRENT placements, so require project:admin over it as it stands; an
+  // instance-admin places anything anywhere (the resolver bypass).
+  if (!permitsCap(cfg, principal, PROJECT_ADMIN_CAPABILITY, 'unit', placement.unitId)) {
+    throw new ForbiddenError('placing a project requires project:admin over the target unit');
   }
-  if (!scope.all && !permits(scope, placement.projectId)) {
-    throw new ForbiddenError('placing a project requires landscape:manage scope over the project being placed');
+  if (!permitsCap(cfg, principal, PROJECT_ADMIN_CAPABILITY, 'project', placement.projectId)) {
+    throw new ForbiddenError('placing a project requires project:admin over the project being placed');
   }
   if (!getOrganizationUnit(cfg.dataDir, placement.unitId)) {
     throw new Error('the target organization unit does not exist');
@@ -577,10 +578,9 @@ export function refreshPublicSurface(
   projectId: string,
 ): ProjectPublicSurfaceSnapshot {
   const principal = requirePrincipal(cfg, credential);
-  const scope = resolveScopeFor(cfg, principal, LANDSCAPE_MANAGE_PERMISSION);
-  if (!permits(scope, projectId)) {
+  if (!permitsCap(cfg, principal, PROJECT_ADMIN_CAPABILITY, 'project', projectId)) {
     throw new ForbiddenError(
-      "refreshing a project's public surface requires landscape:manage scope over the project",
+      "refreshing a project's public surface requires project:admin over the project",
     );
   }
 
@@ -627,10 +627,9 @@ export function upsertRelation(
   relation: ProjectRelationRecord,
 ): ProjectRelationRecord {
   const principal = requirePrincipal(cfg, credential);
-  const scope = resolveScopeFor(cfg, principal, LANDSCAPE_MANAGE_PERMISSION);
-  if (!permits(scope, relation.sourceProjectId)) {
+  if (!permitsCap(cfg, principal, PROJECT_ADMIN_CAPABILITY, 'project', relation.sourceProjectId)) {
     throw new ForbiddenError(
-      'managing a cross-project relation requires landscape:manage scope over its source project',
+      'managing a cross-project relation requires project:admin over its source project',
     );
   }
 
@@ -686,18 +685,16 @@ export function listRelations(
   projectId?: string,
 ): ProjectRelationRecord[] {
   const principal = requirePrincipal(cfg, credential);
-  const units = listOrganizationUnits(cfg.dataDir);
-  const placements = listProjectPlacements(cfg.dataDir);
-  const scope = resolveLandscapeReadScope(principal, units, placements);
-  if (scopeIsEmpty(scope)) {
-    throw new ForbiddenError('listing cross-project relations requires landscape:read scope');
+  const view = readView(cfg, principal);
+  if (viewIsEmpty(view)) {
+    throw new ForbiddenError('listing cross-project relations requires project:read reach');
   }
   const relations = listProjectRelations(cfg.dataDir, projectId);
-  if (scope.all) return relations;
+  if (view.all) return relations;
   // A relation is visible when its source OR target project is in the caller's
-  // scope (per ilandscape_orchestrator.listRelations).
+  // view (per ilandscape_orchestrator.listRelations).
   return relations.filter(
-    (r) => scope.projectIds.includes(r.sourceProjectId) || scope.projectIds.includes(r.targetProjectId),
+    (r) => view.projectIds.has(r.sourceProjectId) || view.projectIds.has(r.targetProjectId),
   );
 }
 
@@ -716,26 +713,26 @@ export function generateLandscape(
 
   const units = listOrganizationUnits(cfg.dataDir);
   const placements = listProjectPlacements(cfg.dataDir);
-  const readScope = resolveLandscapeReadScope(principal, units, placements);
-  if (scopeIsEmpty(readScope)) {
-    throw new ForbiddenError('generating the landscape requires landscape:read scope');
+  const view = readView(cfg, principal);
+  if (viewIsEmpty(view)) {
+    throw new ForbiddenError('generating the landscape requires project:read reach');
   }
 
   const projects = listProjectRecords(cfg.dataDir);
   const relations = listProjectRelations(cfg.dataDir);
 
-  // Narrow the inputs to the caller's scope BEFORE projecting the graph (a
-  // super-admin keeps everything). Relations are kept only when BOTH endpoints
-  // are in scope so the scoped graph never carries a dangling edge to — or leaks
+  // Narrow the inputs to the caller's view BEFORE projecting the graph (an
+  // instance-admin keeps everything). Relations are kept only when BOTH endpoints
+  // are in view so the scoped graph never carries a dangling edge to — or leaks
   // the id of — an out-of-scope project. Equivalent to filtering the built graph's
-  // nodes to scope and dropping edges that reference a dropped node.
+  // nodes to the view and dropping edges that reference a dropped node.
   let scopedUnits = units;
   let scopedProjects = projects;
   let scopedPlacements = placements;
   let scopedRelations = relations;
-  if (!readScope.all) {
-    const projSet = new Set(readScope.projectIds);
-    const unitSet = new Set(readScope.unitIds);
+  if (!view.all) {
+    const projSet = view.projectIds;
+    const unitSet = view.unitIds;
     scopedUnits = units.filter((u) => unitSet.has(u.id));
     scopedProjects = projects.filter((p) => projSet.has(p.id));
     scopedPlacements = placements.filter((pl) => unitSet.has(pl.unitId) && projSet.has(pl.projectId));
@@ -751,7 +748,7 @@ export function generateLandscape(
   }
 
   const graph = buildLandscapeGraph(scopedUnits, scopedProjects, scopedPlacements, snapshots, scopedRelations);
-  if (!readScope.all) {
+  if (!view.all) {
     // Coherence: a narrowed unit whose parent is out of scope would otherwise leave
     // a `contains` edge pointing at an absent parent node. Drop any edge whose
     // endpoints are not both present nodes so the scoped graph never dangles or
@@ -936,10 +933,9 @@ export function exportProjectSurface(
   maxAudience: string,
 ): SurfaceArtifact {
   const principal = requirePrincipal(cfg, credential);
-  const scope = resolveScopeFor(cfg, principal, LANDSCAPE_MANAGE_PERMISSION);
-  if (!permits(scope, projectId)) {
+  if (!permitsCap(cfg, principal, PROJECT_ADMIN_CAPABILITY, 'project', projectId)) {
     throw new ForbiddenError(
-      "exporting a project's surface artifact requires landscape:manage scope over the project",
+      "exporting a project's surface artifact requires project:admin over the project",
     );
   }
   if (format !== 'native' && format !== 'openapi') {
@@ -971,13 +967,12 @@ export function exportProjectSurface(
  */
 export function removeRelation(cfg: HostConfig, credential: string | null, id: string): void {
   const principal = requirePrincipal(cfg, credential);
-  const scope = resolveScopeFor(cfg, principal, LANDSCAPE_MANAGE_PERMISSION);
   // Resolve the relation to point-check its source project. A missing relation
-  // yields no source, which a scoped caller can never cover — fail closed.
+  // yields no source, which a non-admin caller can never cover — fail closed.
   const target = listProjectRelations(cfg.dataDir).find((r) => r.id === id);
-  if (!permits(scope, target?.sourceProjectId ?? '')) {
+  if (!permitsCap(cfg, principal, PROJECT_ADMIN_CAPABILITY, 'project', target?.sourceProjectId ?? '')) {
     throw new ForbiddenError(
-      'removing a cross-project relation requires landscape:manage scope over its source project',
+      'removing a cross-project relation requires project:admin over its source project',
     );
   }
   removeProjectRelation(cfg.dataDir, id);

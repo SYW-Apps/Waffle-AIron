@@ -41,7 +41,6 @@ import type {
   LandscapeGraphModel,
   OrganizationUnitRecord,
   PrincipalSubject,
-  ProjectGrant,
   WebContext,
   WebGraphModel,
   WebGraphNode,
@@ -82,9 +81,6 @@ import type {
 /** Browser session lifetime: long enough for a working session, short enough to
  *  bound a stolen cookie. The auth specialist rejects a session past its expiry. */
 const WEB_SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
-
-/** The write permissions that make a caller a project author in the web client. */
-const WRITE_PERMISSIONS = ['mcp:write', 'project:create'];
 
 // ── Local developer server (`wairon dev`) conventions ────────────────────────
 //
@@ -349,12 +345,14 @@ export function signInWithPassword(cfg: HostConfig, user: string, password: stri
     throw new UnauthenticatedError();
   }
 
-  // step 7: success clears the throttle; the session carries the ONLY *:* grant.
+  // step 7: success clears the throttle. The session stores NO permissions —
+  // the subject IS the persisted built-in super-admin, so the auth specialist
+  // resolves instanceAdmin (the resolver bypass) live at authentication.
   loginThrottle.delete(key);
   const session: WebSession = {
     id: '', // web_session_repository mints a ws_-prefixed id
     subject,
-    grants: [{ projectId: '*', permissions: ['*'] }],
+    projects: ['*'],
     createdAt: '', // stamped by the registry
     expiresAt: new Date(now + WEB_SESSION_TTL_MS).toISOString(),
   };
@@ -384,8 +382,7 @@ export function signOut(cfg: HostConfig, sessionId: string): void {
 /**
  * Resolve the session to a Principal via the single auth authority's session
  * bridge (an expired/absent session is rejected), record activity by touching
- * lastSeenAt to now, then derive the capability flags and assemble the WebContext.
- * Reads only; not audited.
+ * lastSeenAt to now, and assemble the slim WebContext. Reads only; not audited.
  */
 export function getCurrentContext(cfg: HostConfig, sessionId: string): WebContext {
   const principal = authenticateSession(cfg.dataDir, sessionId); // step 1
@@ -393,37 +390,16 @@ export function getCurrentContext(cfg: HostConfig, sessionId: string): WebContex
 
   touchWebSession(cfg.dataDir, sessionId, new Date().toISOString()); // step 2
 
-  // step 3: derive the capability flags from the principal's grants.
-  const grants = principal.grants ?? [];
-  // Instance admin = a genuine '*' grant, not a unit-scoped '*'+orgUnitId one.
-  const isAdmin = grants.some((g) => g.projectId === '*' && !g.orgUnitId);
-  // A write permission — or the '*' wildcard (which the permission model treats as
-  // covering every permission) — makes the caller a project author.
-  const canWriteProjects = grants.some(
-    (g) => g.permissions.includes('*') || WRITE_PERMISSIONS.some((p) => g.permissions.includes(p)),
-  );
-  // Union of the projects NAMED in the caller's grants and the projects their
-  // RESOLVED, org-unit-aware scope surfaces. Deriving this from named ids alone
-  // left a super-admin ('*' grant, no named ids) or a unit admin ('*'+orgUnitId)
-  // with an EMPTY selector; the resolved scope adds the actual project records
-  // they can read (all, or the unit subtree). Named ids keep dev mode's single
-  // 'local' project (not a hosted record) and any specifically-granted project.
-  const namedProjectIds = grants.filter((g) => g.projectId !== '*').map((g) => g.projectId);
-  const scopedProjectIds = webproject.listProjects(cfg, sessionId).map((r) => r.id);
-  const visibleProjectIds = [...new Set([...namedProjectIds, ...scopedProjectIds])];
-  const visibleUnitIds = [
-    ...new Set(grants.filter((g) => g.orgUnitId !== undefined && g.orgUnitId !== '').map((g) => g.orgUnitId as string)),
-  ];
-
+  // step 3: the coarse instance-admin flag comes from the resolved permission
+  // subject (the env-anchored super-admin / master / devMode subject — the
+  // resolver bypass). The context carries NO permission projections: the client
+  // lists projects via /web/projects (resolver-filtered server-side) and drives
+  // delegated/SSO admin chrome from its project:admin visible scopes.
   return {
     subject: principal.subject ?? { userId: principal.tokenId, kind: 'service', issuer: 'local' },
-    grants,
-    isAdmin,
-    canWriteProjects,
-    visibleProjectIds,
-    visibleUnitIds,
+    isAdmin: principal.permissionSubject?.instanceAdmin === true,
     // local signals the reused client to hide the tenancy/login chrome. It is the
-    // server posture (cfg.devMode), never a session/grant property — only the local
+    // server posture (cfg.devMode), never a session property — only the local
     // developer server sets it, so the hosted UI always sees local=false.
     local: !!cfg.devMode,
   }; // step 4
@@ -1187,22 +1163,28 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     $('whoLbl').textContent = (ctx.subject && (ctx.subject.displayName || ctx.subject.email || ctx.subject.userId)) || 'signed in';
     $('adminBadge').hidden = !ctx.isAdmin;
     $('navAdmin').hidden = !ctx.isAdmin;      // the Admin tab appears only for admins
-    // Role-aware: developers who cannot author see a read-only marker AND the spec
-    // editor's write affordances are disabled (below).
-    $('roBadge').hidden = !!ctx.canWriteProjects;
+    // The context carries no permission projections anymore: write authority is
+    // enforced per request server-side (the resolver). Scope-aware read-only
+    // chrome returns with the roles/assignments UI.
+    $('roBadge').hidden = true;
 
-    var pids = ctx.visibleProjectIds || [];
-    var sel = $('projSel'); sel.innerHTML = '';
-    pids.forEach(function (pid) {
-      var o = document.createElement('option'); o.value = pid; o.textContent = pid; sel.appendChild(o);
+    // The project selector comes from /web/projects — the resolver-filtered
+    // listing of projects this principal can act on (dev mode lists the single
+    // registered "local" project the same way).
+    api('/web/projects').then(function (r) { return r.ok ? r.json() : []; }).then(function (list) {
+      var pids = (list || []).map(function (rec) { return rec.id; });
+      var sel = $('projSel'); sel.innerHTML = '';
+      pids.forEach(function (pid) {
+        var o = document.createElement('option'); o.value = pid; o.textContent = pid; sel.appendChild(o);
+      });
+      // Default the selection to the first visible project.
+      selectedProjectId = pids.length ? pids[0] : '';
+      sel.value = selectedProjectId;
+      // Hide the picker when there is nothing to choose (or in local single-project mode).
+      $('projCtl').style.display = (!isLocal && pids.length > 0) ? 'flex' : 'none';
+      setView('canvas');
+      loadCanvas();
     });
-    // Default the selection to the first visible project.
-    selectedProjectId = pids.length ? pids[0] : '';
-    sel.value = selectedProjectId;
-    // Hide the picker when there is nothing to choose (or in local single-project mode).
-    $('projCtl').style.display = (!isLocal && pids.length > 0) ? 'flex' : 'none';
-    setView('canvas');
-    loadCanvas();
   }
 
   // ---- small helpers ------------------------------------------------------
@@ -1295,7 +1277,10 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     selectedSpec = { kind: kind, id: id };
     var insp = $('insp'); insp.innerHTML = '<div class="hint">Loading ' + esc(id) + '…</div>';
     mcp('sdd_get_spec', { kind: kind, id: id }).then(function (spec) {
-      var canWrite = !!(ctx && ctx.canWriteProjects);
+      // Write authority is enforced per request by the resolver server-side; a
+      // save from a read-only principal is refused with a clear error. Scope-
+      // aware read-only chrome returns with the roles/assignments UI.
+      var canWrite = true;
       var desc = (spec && spec.description) || '';
       insp.innerHTML =
         '<h2>' + esc((spec && spec.name) || id) + '</h2>'
@@ -1468,16 +1453,22 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       var html = '<div class="toolbar"><button class="mini" id="uNew">New user</button></div><div id="uForm"></div>';
       if (!users.length) html += '<div class="hint">No users in your scope yet.</div>';
       else {
-        html += '<table class="grid"><thead><tr><th>User</th><th>Status</th><th>Unit</th><th>Grants</th><th></th></tr></thead><tbody>';
+        html += '<table class="grid"><thead><tr><th>User</th><th>Status</th><th>Unit</th><th>Roles</th><th></th></tr></thead><tbody>';
         users.forEach(function (u, i) {
           var st = u.status === 'active' ? 'ok' : 'warn';
-          var grants = (u.grants || []).map(function (g) { return esc(g.projectId) + ':' + esc((g.permissions || []).join('/')); }).join(', ');
-          html += '<tr><td>' + esc(u.subject && u.subject.userId) + '</td>'
+          // Permissions live in role bindings + the assignment grid — the record
+          // carries no grants. (A dedicated roles/assignments editor is the next
+          // UI phase; bindings are shown read-only here.)
+          var roles = (u.roleBindings || []).map(function (b) {
+            return esc(b.roleId) + (b.scopeId ? '@' + esc(b.scopeId) : '');
+          }).join(', ');
+          var who = esc((u.displayName || (u.subject && u.subject.userId)) || '')
+            + (u.email ? ' <span class="hint">' + esc(u.email) + '</span>' : '');
+          html += '<tr><td>' + who + '</td>'
             + '<td><span class="pill ' + st + '">' + esc(u.status) + '</span></td>'
             + '<td>' + esc(u.unitId || '—') + '</td>'
-            + '<td>' + (grants || '<span class="hint">none</span>') + '</td>'
+            + '<td>' + (roles || '<span class="hint">none</span>') + '</td>'
             + '<td style="white-space:nowrap"><button class="mini" data-edit="' + i + '">Edit</button> '
-            + '<button class="mini" data-grants="' + i + '">Grants</button> '
             + '<button class="mini" data-setstatus="' + i + '">Status</button></td></tr>';
         });
         html += '</tbody></table>';
@@ -1486,9 +1477,6 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       $('uNew').addEventListener('click', function () { userForm(el, null); });
       Array.prototype.forEach.call(el.querySelectorAll('[data-edit]'), function (b) {
         b.addEventListener('click', function () { userForm(el, users[+b.getAttribute('data-edit')]); });
-      });
-      Array.prototype.forEach.call(el.querySelectorAll('[data-grants]'), function (b) {
-        b.addEventListener('click', function () { grantsForm(el, users[+b.getAttribute('data-grants')]); });
       });
       Array.prototype.forEach.call(el.querySelectorAll('[data-setstatus]'), function (b) {
         b.addEventListener('click', function () { statusForm(el, users[+b.getAttribute('data-setstatus')]); });
@@ -1526,7 +1514,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
         id: $('uId').value.trim() || subject.userId,
         subject: subject,
         status: $('uStatus').value,
-        grants: (user && user.grants) || [],
+        roleBindings: (user && user.roleBindings) || [],
         createdAt: (user && user.createdAt) || new Date().toISOString(),
       };
       var unit = $('uUnit').value.trim(); if (unit) rec.unitId = unit;
@@ -1550,51 +1538,6 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
         .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
     });
   }
-  function grantsForm(el, user) {
-    var box = $('uForm');
-    var grants = ((user && user.grants) || []).map(function (g) {
-      return { projectId: g.projectId, permissions: (g.permissions || []).join(', '), orgUnitId: g.orgUnitId || '' };
-    });
-    function draw() {
-      var html = '<div class="formcard"><h3>Grants — ' + esc(user.subject && user.subject.userId) + '</h3><div id="gRows">';
-      grants.forEach(function (g, i) {
-        html += '<div class="grant-row">'
-          + '<input data-g="proj" data-i="' + i + '" value="' + esc(g.projectId) + '" placeholder="projectId or *" />'
-          + '<input data-g="perm" data-i="' + i + '" value="' + esc(g.permissions) + '" placeholder="mcp:read, mcp:write, *" />'
-          + '<input data-g="unit" data-i="' + i + '" value="' + esc(g.orgUnitId) + '" placeholder="org unit (optional)" />'
-          + '<button class="mini danger" data-del="' + i + '">Remove</button></div>';
-      });
-      html += '</div><div class="rowbtns"><button class="mini" id="gAdd">Add grant</button> <button class="btn-primary" style="width:auto" id="gSave">Save grants</button> <button class="mini" id="gCancel">Cancel</button> <span class="msg" id="gMsg"></span></div></div>';
-      box.innerHTML = html;
-      function sync() {
-        Array.prototype.forEach.call(box.querySelectorAll('[data-g]'), function (inp) {
-          var i = +inp.getAttribute('data-i'); var f = inp.getAttribute('data-g');
-          if (f === 'proj') grants[i].projectId = inp.value;
-          else if (f === 'perm') grants[i].permissions = inp.value;
-          else grants[i].orgUnitId = inp.value;
-        });
-      }
-      Array.prototype.forEach.call(box.querySelectorAll('[data-del]'), function (b) {
-        b.addEventListener('click', function () { sync(); grants.splice(+b.getAttribute('data-del'), 1); draw(); });
-      });
-      $('gAdd').addEventListener('click', function () { sync(); grants.push({ projectId: '', permissions: '', orgUnitId: '' }); draw(); });
-      $('gCancel').addEventListener('click', function () { box.innerHTML = ''; });
-      $('gSave').addEventListener('click', function () {
-        sync();
-        var msg = $('gMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
-        var out = grants.filter(function (g) { return g.projectId.trim(); }).map(function (g) {
-          var o = { projectId: g.projectId.trim(), permissions: commaList(g.permissions) };
-          if (g.orgUnitId && g.orgUnitId.trim()) o.orgUnitId = g.orgUnitId.trim();
-          return o;
-        });
-        postAndParse('/web/admin/users/grants', { userId: user.id, grants: out })
-          .then(function () { renderUsersPanel(el); })
-          .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
-      });
-    }
-    draw();
-  }
-
   // ---- Identity Providers / SSO (admin) -----------------------------------
   function renderProvidersPanel(el) {
     el.innerHTML = '<div class="hint">Loading…</div>';
@@ -1743,7 +1686,9 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   }
   function placementForm(el, units) {
     var box = $('oForm');
-    var pids = (ctx && ctx.visibleProjectIds) || [];
+    // The project ids come from the already-populated selector (fed by
+    // /web/projects, the resolver-filtered listing).
+    var pids = Array.prototype.map.call($('projSel').options, function (o) { return o.value; });
     var projCtl = pids.length ? '<select id="plProj">' + pids.map(function (pid) { return opt(pid, pid, false); }).join('') + '</select>' : '<input id="plProj" placeholder="projectId" />';
     var unitOpts = units.map(function (u) { return opt(u.id, u.name + ' (' + u.id + ')', false); }).join('');
     var html = '<div class="formcard"><h3>Place a project into a unit</h3>';
@@ -1762,7 +1707,9 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   // ---- Connect an agent (self-service; any signed-in user) ----------------
   function renderConnect() {
     var box = $('connectBody');
-    var pids = (ctx && ctx.visibleProjectIds) || [];
+    // The project ids come from the already-populated selector (fed by
+    // /web/projects, the resolver-filtered listing).
+    var pids = Array.prototype.map.call($('projSel').options, function (o) { return o.value; });
     var html = '<h2 style="margin:0 0 4px">Connect an agent</h2>';
     html += '<p style="color:var(--dim);margin:0 0 12px;font-size:12.5px">Mint a single-project MCP token to hand to an AI agent.</p>';
     html += '<div class="note">This token is <strong>separate from your login</strong>. It is an agent credential scoped to exactly one project — signing out never affects it, and it can never sign in to this web UI. It is <strong>owned by you</strong>, so deactivating your account revokes it. Copy it now; the full token is shown only once.</div>';
@@ -1835,12 +1782,11 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   }
 
   // ---- Projects (lifecycle management; any signed-in user) ----------------
-  // Lists the caller's in-scope projects (GET /web/projects — scoped read). Create
-  // and the per-row Lock / Promote / Destroy actions are shown only to callers whose
-  // capability flags mark them project authors/admins, but the SERVER enforces the
-  // real per-action grant scope, so a 403 is surfaced gracefully rather than trusted
-  // to the client's flags.
-  function projectsCanManage() { return !!(ctx && (ctx.canWriteProjects || ctx.isAdmin)); }
+  // Lists the caller's in-scope projects (GET /web/projects — resolver-filtered).
+  // The management affordances are always offered; the SERVER resolves the real
+  // per-action permission, so a 403 is surfaced gracefully rather than trusted
+  // to client-side flags. Scope-aware chrome returns with the roles UI.
+  function projectsCanManage() { return true; }
 
   function renderProjects() {
     var box = $('projectsBody');
@@ -1977,11 +1923,6 @@ function adminUpsertUser(cfg: HostConfig, sessionId: string, body: Body, res: Se
 /** Set a hosted user's lifecycle status; forwards to web_admin_orchestrator.setUserStatus. */
 function adminSetUserStatus(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
   sendJson(res, 200, webadmin.setUserStatus(cfg, sessionId, String(body?.userId ?? ''), String(body?.status ?? '')));
-}
-
-/** Replace a hosted user's grants; forwards to web_admin_orchestrator.replaceUserGrants. */
-function adminReplaceUserGrants(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(res, 200, webadmin.replaceUserGrants(cfg, sessionId, String(body?.userId ?? ''), (body?.grants ?? []) as ProjectGrant[]));
 }
 
 /** List identity-provider (SSO) configurations; forwards to web_admin_orchestrator.listIdentityProviders. */
@@ -2276,10 +2217,6 @@ export async function handleWebRequest(
       // POST /web/admin/users/status { userId, status }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'users' && parts[3] === 'status') {
         return adminSetUserStatus(cfg, sessionId, body, res);
-      }
-      // POST /web/admin/users/grants { userId, grants }
-      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'users' && parts[3] === 'grants') {
-        return adminReplaceUserGrants(cfg, sessionId, body, res);
       }
       // POST /web/admin/users { ...HostedUserRecord }
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'users') {

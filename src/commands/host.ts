@@ -13,7 +13,7 @@ import { startHostServer } from '../server/http.js';
 import { registerLocalDevProject } from '../server/projects.js';
 import { upsertIdentityProviderRecord } from '../server/policy.js';
 import { setSecret } from '../utils/secrets.js';
-import type { HostConfig, HostExposurePolicy, IdentityProviderConfig, Role } from '../server/types.js';
+import type { HostConfig, HostExposurePolicy, IdentityProviderConfig, DisplayRole } from '../server/types.js';
 
 // ---------------------------------------------------------------------------
 // CLI Host Client Adapter + host command runners (sdd_cli → sdd_host)
@@ -361,7 +361,7 @@ export async function runHostKey(action: string, options: HostOptions = {}): Pro
     switch (action) {
       case 'mint': {
         if (!options.project) throw new WaironError('`--project <id|*>` is required for `host key mint`.');
-        const role = (options.role ?? 'editor') as Role;
+        const role = (options.role ?? 'editor') as DisplayRole;
         if (role !== 'editor' && role !== 'admin') throw new WaironError('`--role` must be editor or admin.');
         const key = admin.mintKey(cfg, cred, options.project, role);
         logger.success('API key minted (shown once — store it now):');
@@ -375,7 +375,7 @@ export async function runHostKey(action: string, options: HostOptions = {}): Pro
         if (!list.length) {
           logger.info('No keys.');
         } else {
-          for (const r of list) logger.info(`  ${r.id}  ${r.role.padEnd(6)} ${r.projects.join(',')}`);
+          for (const r of list) logger.info(`  ${r.id}  ${(r.role ?? 'editor').padEnd(6)} ${r.projects.join(',')}`);
         }
         break;
       }

@@ -15,7 +15,7 @@ import * as policy from './policy.js';
 import * as landscape from './landscape.js';
 import * as operations from './operations.js';
 import { AdminAuthError, LockValidationError } from './admin.js';
-import type { ApprovalDecision, HostConfig, HostExposurePolicy, PrincipalSubject, Role } from './types.js';
+import type { ApprovalDecision, DisplayRole, HostConfig, HostExposurePolicy, PrincipalSubject } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Host HTTP Portal + Host Server (sdd_host)
@@ -427,7 +427,7 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
 
     if (parts[1] === 'keys') {
       if (req.method === 'GET' && parts.length === 2) return sendJson(res, 200, admin.listKeys(cfg, cred, url.searchParams.get('project') ?? '*'));
-      if (req.method === 'POST' && parts.length === 2) return sendJson(res, 201, { key: admin.mintKey(cfg, cred, body.project, (body.role ?? 'editor') as Role) });
+      if (req.method === 'POST' && parts.length === 2) return sendJson(res, 201, { key: admin.mintKey(cfg, cred, body.project, (body.role ?? 'editor') as DisplayRole) });
       if (req.method === 'DELETE' && parts.length === 3) {
         admin.revokeKey(cfg, cred, parts[2]);
         return sendJson(res, 200, { ok: true });
