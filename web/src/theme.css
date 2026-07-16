@@ -528,6 +528,36 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
 .beta-method code { color: var(--ink); }
 .beta-method-returns { color: var(--ink-subtle); }
 
+/* ── Beta canvas — Types / ERD view ──────────────────────────────────────────
+   The Components|Types mode toggle reuses the shared `.seg`/`.seg-btn` chrome
+   but sits compactly in the floating canvas toolbar (content-width, not the
+   stretched grid the toggle uses elsewhere). The rest styles the ERD's type
+   details panel (fields with PK/FK/U key badges + reference/cardinality notes). */
+.beta-canvas-modeseg { flex: 0 0 auto; background: var(--panel); box-shadow: var(--shadow); }
+.beta-canvas-modeseg .seg-btn { flex: 0 0 auto; padding: 6px 12px; }
+
+.beta-field-list, .beta-usedby-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.beta-field { display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px; font-size: 12px; }
+.beta-field-name { color: var(--ink); }
+.beta-field-type { color: var(--ink-dim); }
+.beta-field-ref { color: var(--ink-subtle); font-size: 11px; }
+.beta-key {
+  flex: 0 0 auto;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  padding: 1px 5px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  color: var(--accent);
+  background: var(--panel-soft);
+}
+.beta-key-pk { color: var(--warn); border-color: var(--warn); }
+.beta-key-fk { color: var(--accent); border-color: var(--border-strong); }
+.beta-key-u { color: var(--accent-purple); border-color: var(--accent-purple); }
+.beta-card { color: var(--ink-subtle); font-size: 11px; }
+.beta-method-list-flush { padding-left: 0; border-left: none; }
+
 /* ── Boot / login ────────────────────────────────────────────────────────── */
 .boot, .login-wrap {
   height: 100%;
