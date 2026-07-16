@@ -75,7 +75,7 @@ describe('local dev session (startDevSession) (sdd_host)', () => {
     const s = getWebSessionById(dataDir, id1)!;
     // The subject is the PERSISTED boot-reserved local-developer UUID — never a
     // guessable literal like 'local-dev'.
-    expect(s.subject).toEqual({ userId: devUserId, kind: 'human', issuer: 'local' });
+    expect(s.subject).toEqual({ userId: devUserId, kind: 'human', issuer: 'local', displayName: 'Local developer' });
     // NARROWED to the one local project — never instance-wide '*'. The session
     // stores NO permissions; they resolve live from the subject identity.
     expect(s.projects).toEqual(['local']);

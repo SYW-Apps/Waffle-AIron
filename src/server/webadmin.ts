@@ -7,7 +7,7 @@ import { remapUnitReferences } from './users.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import { authorize } from './authorization.js';
 import { ForbiddenError } from './identity.js';
-import { listSecretKeys } from '../utils/secrets.js';
+import { listSecretKeys, setSecret as storeSecret } from '../utils/secrets.js';
 import type {
   ApiKeyRecord,
   AuditEvent,
@@ -198,6 +198,21 @@ export function listOrganizationUnits(cfg: HostConfig, sessionId: string): Organ
 export function listSecretRefs(cfg: HostConfig, sessionId: string): string[] {
   requireInstanceAdminSession(cfg, sessionId);
   return listSecretKeys();
+}
+
+/**
+ * Resolve the session to a Principal, require INSTANCE-level project:admin, and
+ * set (or update) one integration secret by key — e.g. `git-token`, the PAT the
+ * git adapters inject into an https remote for clone/fetch/push. The VALUE is
+ * stored write-only in the secret store and never read back over the API (only
+ * the key NAMES are listable). Setting the same key again replaces the value, so
+ * a rotated PAT is a re-set. Audited at security level (the key, never the value).
+ */
+export function setSecret(cfg: HostConfig, sessionId: string, key: string, value: string): void {
+  const principal = requireInstanceAdminSession(cfg, sessionId);
+  if (!key.trim()) throw new Error('A secret key is required.');
+  storeSecret(key.trim(), value);
+  tryAppendAudit(cfg, buildOrgAuditEvent(principal, 'secret.set', key.trim()));
 }
 
 /**

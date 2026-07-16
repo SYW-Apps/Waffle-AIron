@@ -183,6 +183,9 @@ describe('built-in super-admin password login (sdd_host)', () => {
       userId: getInstanceIdentity(dataDir)!.superadminUserId,
       kind: 'human',
       issuer: 'local',
+      // A friendly display name (the configured admin username) so the UI shows
+      // a name, not the opaque boot-reserved UUID.
+      displayName: ADMIN_USER,
     });
     expect(verifyBuiltinAdmin(cfg, ADMIN_USER, 'wrong')).toBeNull();
     expect(verifyBuiltinAdmin(cfg, 'wrong', ADMIN_PASSWORD)).toBeNull();
@@ -200,7 +203,7 @@ describe('built-in super-admin password login (sdd_host)', () => {
     expect(sessionId).toMatch(/^ws_[0-9a-f]+$/);
 
     const session = getWebSessionById(dataDir, sessionId)!;
-    expect(session.subject).toEqual({ userId: builtin, kind: 'human', issuer: 'local' });
+    expect(session.subject).toEqual({ userId: builtin, kind: 'human', issuer: 'local', displayName: ADMIN_USER });
     expect(session.projects).toEqual(['*']); // narrowing only — NO stored permissions
 
     const principal = authenticateSession(dataDir, sessionId);

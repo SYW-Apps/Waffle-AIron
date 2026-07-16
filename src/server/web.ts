@@ -928,6 +928,12 @@ ul.envtree.envtree { }
 .envnode[data-kind="unit"] > .envrow .envlabel { cursor:default; }
 .envkind { font-size:10.5px; color:var(--dim); text-transform:uppercase; letter-spacing:.04em; }
 .envkids { margin-left:4px; border-left:1px solid var(--chrome-border); }
+/* Per-project ops tabs — the SAME look as the admin subtabs, with a clear
+   active state (the previous plain buttons gave no current-tab feedback). */
+.optabs { display:flex; gap:2px; margin-bottom:8px; overflow-x:auto; flex-wrap:nowrap; scrollbar-width:thin; border-bottom:1px solid var(--chrome-border); padding-bottom:6px; }
+.optabs button { flex:0 0 auto; white-space:nowrap; border:1px solid transparent; background:transparent; color:var(--dim); padding:6px 12px; border-radius:8px; cursor:pointer; font-size:12px; font-weight:600; }
+.optabs button:hover { background:var(--hover-bg); color:var(--ink); }
+.optabs button.active { background:var(--hover-bg); color:var(--accent); border-color:var(--chrome-border); }
 .subtabs button { border:1px solid transparent; background:transparent; color:var(--dim); padding:6px 12px; border-radius:8px; cursor:pointer; font-size:12px; font-weight:600; }
 .subtabs button.active { background:var(--hover-bg); color:var(--accent); border-color:var(--chrome-border); }
 .admin-body { flex:1; min-height:0; overflow:auto; padding:16px 20px; }
@@ -1055,7 +1061,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
           <button data-panel="roles">Roles</button>
           <button data-panel="permissions">Permissions</button>
           <button data-panel="providers">Identity Providers</button>
-          <button data-panel="org">Organization</button>
+          <button data-panel="org">Units</button>
           <button data-panel="packs">Packs</button>
           <button data-panel="policy">Policy</button>
           <button data-panel="audit">Audit</button>
@@ -1338,7 +1344,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
           var badge = n.kind === 'project'
             ? '<span class="pill ' + (n.status === 'active' ? 'ok' : 'warn') + '">' + esc(n.status || 'project') + '</span>'
             : '<span class="envkind">unit</span>';
-          out += '<li class="envnode' + act + '" data-id="' + esc(n.id) + '" data-kind="' + esc(n.kind) + '"' + (n.actionable && n.kind === 'project' ? ' data-open="' + esc(n.projectId || n.id) + '"' : '') + '>'
+          out += '<li class="envnode' + act + '" data-id="' + esc(n.id) + '" data-kind="' + esc(n.kind) + '"' + (n.kind === 'project' ? ' data-open="' + esc(n.projectId || n.id) + '"' : '') + '>'
             + '<div class="envrow">'
             + '<span class="envtwist"' + (hasKids ? ' data-tw="1"' : '') + '>' + (hasKids ? '▾' : '') + '</span>'
             + '<span class="envicon">' + icon + '</span>'
@@ -1618,8 +1624,9 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
           var roles = (u.roleBindings || []).map(function (b) {
             return esc(b.roleId) + (b.scopeId ? '@' + esc(b.scopeId) : '');
           }).join(', ');
-          var who = esc((u.displayName || (u.subject && u.subject.userId)) || '')
-            + (u.email ? ' <span class="hint">' + esc(u.email) + '</span>' : '');
+          // Prefer a human name, then email, then the opaque subject id.
+          var who = esc(u.displayName || u.email || (u.subject && u.subject.userId) || '')
+            + (u.email && u.displayName ? ' <span class="hint">' + esc(u.email) + '</span>' : '');
           html += '<tr><td>' + who + '</td>'
             + '<td><span class="pill ' + st + '">' + esc(u.status) + '</span></td>'
             + '<td>' + esc(u.unitId || '—') + '</td>'
@@ -1788,12 +1795,28 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     adminGet('org/units').then(function (d) {
       var units = d.units || [];
       var html = '<div class="toolbar"><button class="mini" id="oNew">New unit</button><button class="mini" id="oPlace">Place a project</button></div><div id="oForm"></div>';
+      html += '<p style="color:var(--dim);font-size:12px;margin:6px 0">Units nest into a hierarchy (business entity → department → team). The tree here is your whole organization structure — a unit id is its qualified dot-path (e.g. <code>acme.it.team-a</code>). Assign users a home unit and bind roles per unit on the Permissions tab.</p>';
       if (!units.length) html += '<div class="hint">No organization units yet.</div>';
       else {
-        html += '<table class="grid"><thead><tr><th>Name</th><th>ID</th><th>Kind</th><th>Parent</th><th>Visibility</th><th></th></tr></thead><tbody>';
-        units.forEach(function (u, i) {
-          html += '<tr><td>' + esc(u.name) + '</td><td>' + esc(u.id) + '</td><td>' + esc(u.kind) + '</td><td>' + esc(u.parentId || '—') + '</td><td>' + esc(u.visibility || 'inherit') + '</td>'
-            + '<td><button class="mini" data-edit="' + i + '">Edit</button></td></tr>';
+        // Order the units as a hierarchy: each child after its parent, indented
+        // by its depth in the qualified dot-path.
+        var byId = {}; units.forEach(function (u) { byId[u.id] = u; });
+        var roots = units.filter(function (u) { return !u.parentId || !byId[u.parentId]; });
+        var ordered = [];
+        (function walk(list, depth) {
+          list.slice().sort(function (a, b) { return (a.name || a.id).localeCompare(b.name || b.id); }).forEach(function (u) {
+            ordered.push({ u: u, depth: depth });
+            walk(units.filter(function (c) { return c.parentId === u.id; }), depth + 1);
+          });
+        })(roots, 0);
+        html += '<table class="grid"><thead><tr><th>Unit</th><th>ID</th><th>Kind</th><th>Visibility</th><th></th></tr></thead><tbody>';
+        ordered.forEach(function (row) {
+          var u = row.u;
+          var indent = '';
+          for (var k = 0; k < row.depth; k++) indent += '<span style="opacity:.35">│&nbsp;</span>';
+          var i = units.indexOf(u);
+          html += '<tr><td>' + indent + esc(u.name) + '</td><td><code>' + esc(u.id) + '</code></td><td>' + esc(u.kind) + '</td><td>' + esc(u.visibility || 'inherit') + '</td>'
+            + '<td style="white-space:nowrap"><button class="mini" data-edit="' + i + '">Edit</button> <button class="mini danger" data-remove="' + i + '">Remove</button></td></tr>';
         });
         html += '</tbody></table>';
       }
@@ -1803,40 +1826,84 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       Array.prototype.forEach.call(el.querySelectorAll('[data-edit]'), function (b) {
         b.addEventListener('click', function () { orgUnitForm(el, units, units[+b.getAttribute('data-edit')]); });
       });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-remove]'), function (b) {
+        b.addEventListener('click', function () { removeUnitForm(el, units, units[+b.getAttribute('data-remove')]); });
+      });
     }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
   }
   function orgUnitForm(el, units, u) {
     var box = $('oForm'); var creating = !u; u = u || {};
-    var parentOpts = opt('', '(none — root unit)', !u.parentId);
+    // A unit's id is its QUALIFIED dot-path (parent id + '.' + slug); the server
+    // computes it from the slug + parent. Slug/parent are immutable after
+    // creation (a move is a separate operation), so they are read-only on edit.
+    var parentOpts = opt('', '(none — a root/tenant unit)', !u.parentId);
     units.forEach(function (x) { if (x.id !== u.id) parentOpts += opt(x.id, x.name + ' (' + x.id + ')', u.parentId === x.id); });
     var vis = u.visibility || 'inherit';
     var visOpts = opt('inherit', 'inherit', vis === 'inherit') + opt('open', 'open', vis === 'open') + opt('closed', 'closed', vis === 'closed');
-    var html = '<div class="formcard"><h3>' + (creating ? 'New organization unit' : 'Edit ' + esc(u.name)) + '</h3>';
+    var ro = creating ? '' : ' disabled';
+    var html = '<div class="formcard"><h3>' + (creating ? 'New unit' : 'Edit ' + esc(u.name)) + '</h3>';
     html += '<div class="frow">'
-      + fcol('Name', '<input id="oName" value="' + esc(u.name || '') + '" />')
-      + fcol('Unit ID', '<input id="oId" value="' + esc(u.id || '') + '"' + (creating ? '' : ' readonly') + ' placeholder="optional — auto if blank" />')
+      + fcol('Name', '<input id="oName" value="' + esc(u.name || '') + '" placeholder="e.g. SYW Apps" />')
+      + fcol('Slug', '<input id="oSlug" value="' + esc(u.slug || '') + '"' + ro + ' placeholder="lowercase, [a-z0-9-], no dots" />')
       + '</div>';
     html += '<div class="frow">'
-      + fcol('Kind', '<select id="oKind">' + ['organization', 'department', 'team', 'domain'].map(function (k) { return opt(k, k, (u.kind || 'team') === k); }).join('') + '</select>')
-      + fcol('Parent unit', '<select id="oParent">' + parentOpts + '</select>')
+      + fcol('Kind', '<select id="oKind"' + ro + '>' + ['business_entity', 'department', 'team', 'portfolio', 'group'].map(function (k) { return opt(k, k.replace('_', ' '), (u.kind || 'team') === k); }).join('') + '</select>')
+      + fcol('Parent unit', '<select id="oParent"' + ro + '>' + parentOpts + '</select>')
       + fcol('Visibility', '<select id="oVis">' + visOpts + '</select>')
       + '</div>';
+    if (!creating) html += '<p class="hint" style="font-size:11px">Slug, kind, and parent are fixed after creation. Only the name and visibility can be edited here.</p>';
     html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="oSave">' + (creating ? 'Create unit' : 'Save') + '</button> <button class="mini" id="oCancel">Cancel</button> <span class="msg" id="oMsg"></span></div></div>';
     box.innerHTML = html;
     $('oCancel').addEventListener('click', function () { box.innerHTML = ''; });
     $('oSave').addEventListener('click', function () {
       var msg = $('oMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
+      // On EDIT the server preserves the id/slug/parent (metadata-only update),
+      // so we send the existing id; on CREATE we send the slug + parent and the
+      // server computes the qualified id.
       var rec = {
-        id: $('oId').value.trim(),
+        id: creating ? '' : u.id,
+        slug: creating ? $('oSlug').value.trim() : u.slug,
         name: $('oName').value.trim(),
-        kind: $('oKind').value.trim() || 'team',
+        kind: creating ? $('oKind').value : u.kind,
         status: u.status || 'active',
         createdAt: u.createdAt || '',
         createdBy: u.createdBy || (ctx && ctx.subject) || { userId: '', kind: 'human', issuer: 'local' },
       };
-      var par = $('oParent').value; if (par) rec.parentId = par;
+      if (creating) { var par = $('oParent').value; if (par) rec.parentId = par; }
+      else if (u.parentId) rec.parentId = u.parentId;
       var v = $('oVis').value; if (v) rec.visibility = v;
       postAndParse('/web/admin/org/units', rec).then(function () { renderOrgPanel(el); })
+        .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+    });
+  }
+  function removeUnitForm(el, units, u) {
+    var box = $('oForm');
+    var others = units.filter(function (x) { return x.id !== u.id; });
+    var targetOpts = others.map(function (x) { return opt(x.id, x.name + ' (' + x.id + ')', false); }).join('');
+    var html = '<div class="formcard"><h3>Remove ' + esc(u.name) + '</h3>';
+    html += '<p class="hint" style="font-size:12px">A unit is never silently deleted — choose what happens to its child units and placed projects.</p>';
+    html += '<div class="frow">' + fcol('Disposition', '<select id="rmKind">'
+      + opt('absorb', 'absorb — move content into the parent', true)
+      + opt('migrate', 'migrate — move content into another unit', false)
+      + opt('alternative', 'alternative — rename (new sibling, move content in)', false)
+      + opt('cascade', 'cascade — DELETE this unit and its whole subtree', false)
+      + '</select>') + '</div>';
+    html += '<div class="frow" id="rmMigrate" style="display:none">' + fcol('Target unit', '<select id="rmTarget">' + targetOpts + '</select>') + '</div>';
+    html += '<div class="frow" id="rmAlt" style="display:none">' + fcol('New slug', '<input id="rmSlug" placeholder="lowercase-slug" />') + fcol('New name', '<input id="rmName" placeholder="optional" />') + '</div>';
+    html += '<div class="rowbtns"><button class="btn-primary danger" style="width:auto" id="rmGo">Remove unit</button> <button class="mini" id="rmCancel">Cancel</button> <span class="msg" id="rmMsg"></span></div></div>';
+    box.innerHTML = html;
+    function tog() {
+      $('rmMigrate').style.display = $('rmKind').value === 'migrate' ? '' : 'none';
+      $('rmAlt').style.display = $('rmKind').value === 'alternative' ? '' : 'none';
+    }
+    $('rmKind').addEventListener('change', tog); tog();
+    $('rmCancel').addEventListener('click', function () { box.innerHTML = ''; });
+    $('rmGo').addEventListener('click', function () {
+      var msg = $('rmMsg'); msg.className = 'msg'; msg.textContent = 'Removing…';
+      var disp = { kind: $('rmKind').value };
+      if (disp.kind === 'migrate') disp.targetUnitId = $('rmTarget').value;
+      if (disp.kind === 'alternative') { disp.newSlug = $('rmSlug').value.trim(); var nm = $('rmName').value.trim(); if (nm) disp.newName = nm; }
+      postAndParse('/web/admin/org/units/remove', { unitId: u.id, disposition: disp }).then(function () { renderOrgPanel(el); })
         .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
     });
   }
@@ -2141,7 +2208,12 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       adminGet('org/units').then(function (d) { return d.units || []; }).catch(function () { return []; }),
     ]).then(function (res) {
       var bindings = res[0], units = res[1];
-      var html = '<div class="toolbar"><button class="mini" id="bkNew">Bind a backup repo</button></div><div id="bkForm"></div>';
+      // Git credentials: the shared PAT the git adapters inject into https
+      // remotes (clone/fetch/push). Write-only — set once, rotate any time.
+      var html = '<div class="formcard"><h3>Git credentials (Personal Access Token)</h3>'
+        + '<p class="hint" style="font-size:12px">Stored write-only as the <code>git-token</code> secret and injected into https remotes for clone/push. Set this before binding a private repo; re-set to rotate. Without it, private clones fail (<code>could not read Username</code>).</p>'
+        + '<div class="rowbtns"><input id="gitPat" type="password" placeholder="ghp_… / PAT" style="flex:1;max-width:360px" /> <button class="mini" id="gitPatSave">Save token</button> <span class="msg" id="gitPatMsg"></span></div></div>';
+      html += '<div class="toolbar"><button class="mini" id="bkNew">Bind a backup repo</button></div><div id="bkForm"></div>';
       html += '<p style="color:var(--dim);font-size:12px;margin:6px 0">A unit binding mirrors the .wai/ trees of its subtree projects; the instance binding backs up the whole instance structure. The secret store is never mirrored.</p>';
       if (!bindings.length) html += '<div class="hint">No backup repositories bound.</div>';
       else {
@@ -2155,6 +2227,12 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
         html += '</tbody></table>';
       }
       el.innerHTML = html;
+      $('gitPatSave').addEventListener('click', function () {
+        var m = $('gitPatMsg'); m.className = 'msg'; m.textContent = 'Saving…';
+        postAndParse('/web/admin/secrets', { key: 'git-token', value: $('gitPat').value })
+          .then(function () { m.className = 'msg ok'; m.textContent = 'Token saved.'; $('gitPat').value = ''; })
+          .catch(function (e) { m.className = 'msg bad'; m.textContent = e.message; });
+      });
       $('bkNew').addEventListener('click', function () {
         var unitOpts = units.map(function (u) { return opt(u.id, u.name + ' (' + u.id + ')', false); }).join('');
         $('bkForm').innerHTML = '<div class="formcard"><h3>Bind a backup repository</h3><div class="frow">'
@@ -2417,12 +2495,12 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     if (!row.hidden) { row.hidden = true; return; }
     row.hidden = false;
     var cell = row.firstChild;
-    cell.innerHTML = '<div class="opsbox" style="padding:10px 6px"><div class="btnrow" style="margin-bottom:8px">'
-      + '<button class="mini" data-op="git" data-p="' + esc(pid) + '">Git backing</button>'
-      + '<button class="mini" data-op="packs" data-p="' + esc(pid) + '">Packs</button>'
-      + '<button class="mini" data-op="policy" data-p="' + esc(pid) + '">Policy</button>'
-      + '<button class="mini" data-op="producers" data-p="' + esc(pid) + '">Producers</button>'
-      + '</div><div id="opsBody-' + esc(pid) + '"><div class="hint">Pick a section.</div></div></div>';
+    cell.innerHTML = '<div class="opsbox" style="padding:10px 6px"><div class="optabs" id="optabs-' + esc(pid) + '">'
+      + '<button data-op="git" data-p="' + esc(pid) + '">Git backing</button>'
+      + '<button data-op="packs" data-p="' + esc(pid) + '">Packs</button>'
+      + '<button data-op="policy" data-p="' + esc(pid) + '">Policy</button>'
+      + '<button data-op="producers" data-p="' + esc(pid) + '">Producers</button>'
+      + '</div><div id="opsBody-' + esc(pid) + '"><div class="hint">Loading…</div></div></div>';
     Array.prototype.forEach.call(cell.querySelectorAll('[data-op]'), function (b) {
       b.addEventListener('click', function () { projectOpsSection(pid, b.getAttribute('data-op')); });
     });
@@ -2431,6 +2509,9 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   function projectOpsSection(pid, section) {
     var body = $('opsBody-' + pid);
     if (!body) return;
+    // Highlight the active tab (subtab-style), like the primary admin subtabs.
+    var tabs = $('optabs-' + pid);
+    if (tabs) Array.prototype.forEach.call(tabs.children, function (b) { b.classList.toggle('active', b.getAttribute('data-op') === section); });
     body.innerHTML = '<div class="hint">Loading…</div>';
     var enc = encodeURIComponent(pid);
     if (section === 'git') {
@@ -2624,6 +2705,13 @@ function adminListOrgUnits(cfg: HostConfig, sessionId: string, res: ServerRespon
  *  web_admin_orchestrator.listSecretRefs — for the IdP form's clientSecretRef picker. */
 function adminListSecretRefs(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
   sendJson(res, 200, { refs: webadmin.listSecretRefs(cfg, sessionId) });
+}
+
+/** Set/update one integration secret (e.g. git-token); forwards to
+ *  web_admin_orchestrator.setSecret. The value is write-only (never read back). */
+function adminSetSecret(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  webadmin.setSecret(cfg, sessionId, String(body?.key ?? ''), String(body?.value ?? ''));
+  sendJson(res, 200, { ok: true });
 }
 
 /** Create or update an organization unit; forwards to web_admin_orchestrator.upsertOrganizationUnit. */
@@ -3188,6 +3276,10 @@ export async function handleWebRequest(
       // GET /web/admin/secrets — configured secret ref NAMES (instance-admin; never values).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'secrets') {
         return adminListSecretRefs(cfg, sessionId, res);
+      }
+      // POST /web/admin/secrets { key, value } — set/update an integration secret.
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'secrets') {
+        return adminSetSecret(cfg, sessionId, body, res);
       }
       // POST /web/admin/org/units { ...OrganizationUnitRecord }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'org' && parts[3] === 'units') {

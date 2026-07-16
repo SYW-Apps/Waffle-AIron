@@ -1609,6 +1609,22 @@ describe('web project orchestrator (sdd_host)', () => {
     expect(webproject.listProjects(cfg, 'ws_not-a-real-session')).toEqual([]);
   });
 
+  it('listProjects unions read/write/admin — a WRITE-only user still sees (and can open) the project', () => {
+    const unit = seedUnit(dataDir, 'team-a');
+    createProjectRecord(dataDir, 'proj-a');
+    placeProject(dataDir, { id: '', projectId: 'proj-a', unitId: unit.id, role: 'owner', createdAt: '', createdBy: SUBJECT });
+
+    // project:write ONLY (no project:read) must still surface the project — a
+    // user who can write specs has to be able to see the project and open its
+    // canvas (the canvas gate reuses this listing).
+    allow(dataDir, 'u-writer', 'project:write', 'project', 'proj-a');
+    expect(webproject.listProjects(cfg, session('u-writer')).map((r) => r.id)).toEqual(['proj-a']);
+
+    // project:admin-only likewise (the consumer-side capability union).
+    allow(dataDir, 'u-adm', 'project:admin', 'project', 'proj-a');
+    expect(webproject.listProjects(cfg, session('u-adm')).map((r) => r.id)).toEqual(['proj-a']);
+  });
+
   it('listProjects expands a unit-scoped assignment across the org subtree (placed projects only)', () => {
     const eng = seedUnit(dataDir, 'eng');
     const web = seedUnit(dataDir, 'web', { parentId: eng.id });

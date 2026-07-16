@@ -93,7 +93,7 @@ describe('instance identity (sdd_host)', () => {
 
     const identity = ensureInstanceIdentity(dataDir);
     const subject = verifyBuiltinAdmin(cfg, 'root-operator', 'a-very-strong-builtin-password');
-    expect(subject).toEqual({ userId: identity.superadminUserId, kind: 'human', issuer: 'local' });
+    expect(subject).toEqual({ userId: identity.superadminUserId, kind: 'human', issuer: 'local', displayName: 'root-operator' });
     // The subject id is the boot-reserved UUID — never the login name and never
     // the legacy literal.
     expect(subject!.userId).not.toBe('root-operator');

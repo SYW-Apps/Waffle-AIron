@@ -126,6 +126,7 @@ const WEB_MUTATION_PATHS = new Set<string>([
   '/web/admin/org/units',
   '/web/admin/org/units/remove',
   '/web/admin/org/placements',
+  '/web/admin/secrets',
   '/web/admin/roles',
   '/web/admin/roles/update',
   '/web/admin/roles/remove',

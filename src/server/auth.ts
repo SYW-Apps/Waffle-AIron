@@ -279,8 +279,15 @@ export function verifyBuiltinAdmin(cfg: HostConfig, user: string, password: stri
   // the instance has never been seeded — the lifecycle init entrypoint seeds them).
   const identity = getInstanceIdentity(cfg.dataDir);
   if (!identity) return null;
-  // steps 8–9: the stable built-in super-admin subject.
-  return { userId: identity.superadminUserId, kind: 'human', issuer: 'local' };
+  // steps 8–9: the stable built-in super-admin subject. Carry a friendly display
+  // name (the configured admin username) so the UI shows a name, not the opaque
+  // boot-reserved UUID.
+  return {
+    userId: identity.superadminUserId,
+    kind: 'human',
+    issuer: 'local',
+    displayName: configuredUser,
+  };
 }
 
 /**
@@ -296,7 +303,7 @@ export function localDevSubject(dataDir: string): PrincipalSubject {
   if (!identity) {
     throw new Error('instance identity is not seeded — the lifecycle init entrypoint must run before dev sessions mint');
   }
-  return { userId: identity.localDevUserId, kind: 'human', issuer: 'local' };
+  return { userId: identity.localDevUserId, kind: 'human', issuer: 'local', displayName: 'Local developer' };
 }
 
 /** The single control-plane entry point accepting three credential kinds: a browser

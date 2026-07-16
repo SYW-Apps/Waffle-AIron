@@ -38,11 +38,16 @@ import type {
 // ---------------------------------------------------------------------------
 
 /**
- * Resolve the session to a Principal, compute the caller's project:read visible
- * scopes over the organization tree, and return the hosted project records they
- * can act on. Breadcrumb (context) scopes are deliberately excluded: an ancestor
- * shown only for navigation is not a project the caller may open. An expired or
- * absent session yields an unauthenticated principal (an empty result), never a
+ * Resolve the session to a Principal, compute the caller's VISIBLE projects
+ * over the organization tree, and return the hosted project records they can act
+ * on. "Can act on" is the UNION of project:read, project:write, and
+ * project:admin actionable scopes: a user who can WRITE (or admin) a project
+ * must be able to SEE it and open its canvas even without an explicit
+ * project:read grant — capabilities are independent atoms in the resolver, so
+ * this consumer-side union is where "any access → visible" is expressed (the
+ * same pattern as the landscape readView's read ∪ admin). Breadcrumb (context)
+ * scopes are excluded: an ancestor shown only for navigation is not a project
+ * the caller may open. An expired/absent session → an empty result, never a
  * throw. A read; not audited.
  */
 export function listProjects(cfg: HostConfig, sessionId: string): HostedProjectRecord[] {
@@ -56,8 +61,13 @@ export function listProjects(cfg: HostConfig, sessionId: string): HostedProjectR
   // placed in any organization unit (which no unit-scoped permission can reach).
   if (isInstanceAdmin(principal)) return records;
 
-  // step 4: otherwise keep only the projects the caller can act on.
-  const inScope = new Set(actionableProjectIds(visibleScopes(cfg.dataDir, principal, 'project:read')));
+  // step 4: otherwise keep the projects the caller can act on in ANY way —
+  // read, write, or admin (the consumer-side capability union).
+  const inScope = new Set<string>([
+    ...actionableProjectIds(visibleScopes(cfg.dataDir, principal, 'project:read')),
+    ...actionableProjectIds(visibleScopes(cfg.dataDir, principal, 'project:write')),
+    ...actionableProjectIds(visibleScopes(cfg.dataDir, principal, 'project:admin')),
+  ]);
   return records.filter((r) => inScope.has(r.id));
 }
 
