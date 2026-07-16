@@ -59,15 +59,21 @@ export function Login({ onSignedIn }: { onSignedIn: () => void }) {
         {nothing && <p className="hint">No sign-in method is configured on this instance.</p>}
         {opts?.passwordLogin && (
           <div className="stack">
-            <input placeholder="Admin username" value={user} onChange={(e) => setUser(e.target.value)} />
             <input
+              className="input"
+              placeholder="Admin username"
+              value={user}
+              onChange={(e) => setUser(e.target.value)}
+            />
+            <input
+              className="input"
               type="password"
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && signInPassword()}
             />
-            <button className="primary" disabled={busy} onClick={signInPassword}>
+            <button className="btn btn-primary" disabled={busy} onClick={signInPassword}>
               Sign in
             </button>
           </div>
@@ -76,7 +82,7 @@ export function Login({ onSignedIn }: { onSignedIn: () => void }) {
           <div className="stack">
             {opts.passwordLogin && <div className="or">or</div>}
             {opts.providers.map((p) => (
-              <button key={p.id} disabled={busy} onClick={() => signInSso(p.id)}>
+              <button key={p.id} className="btn" disabled={busy} onClick={() => signInSso(p.id)}>
                 Sign in with {p.displayName}
               </button>
             ))}

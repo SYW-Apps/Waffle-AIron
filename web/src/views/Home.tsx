@@ -1,38 +1,39 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { get } from '../api';
+import { useAsync } from '../ui';
+import type { ProjectRecord } from '../types';
 
-interface ProjectRecord {
-  id: string;
-  status: string;
-}
-
-/** Interim landing view for the foundation milestone: lists the caller's
- *  visible projects and embeds the existing self-contained architecture canvas
- *  for the selected one via the same /web/canvas iframe the previous UI used.
- *  This is replaced by the canvas-first navigation in a later phase. */
+/** Canvas landing view. The selected project lives in the URL (?project=…) so a
+ *  view is a shareable link. When none is selected it defaults to the first
+ *  visible project. The full canvas-first navigation (drill-down, up/back,
+ *  cross-project relations) builds on this; today it embeds the existing
+ *  self-contained canvas for the selected project via the same-origin iframe. */
 export function Home() {
-  const [projects, setProjects] = useState<ProjectRecord[]>([]);
-  const [selected, setSelected] = useState<string>('');
-  const [err, setErr] = useState('');
+  const [params, setParams] = useSearchParams();
+  const selected = params.get('project') ?? '';
+  const projects = useAsync<{ projects: ProjectRecord[] }>(() => get('/web/projects'), []);
+  const list = projects.data?.projects ?? [];
 
+  // Default the URL to the first visible project once loaded and none is chosen.
   useEffect(() => {
-    get<{ projects: ProjectRecord[] }>('/web/projects')
-      .then((d) => {
-        const list = d.projects ?? [];
-        setProjects(list);
-        setSelected((s) => s || (list[0]?.id ?? ''));
-      })
-      .catch((e) => setErr(e instanceof Error ? e.message : String(e)));
-  }, []);
+    if (!selected && list.length > 0) {
+      setParams({ project: list[0].id }, { replace: true });
+    }
+  }, [selected, list, setParams]);
 
   return (
-    <div className="home">
-      <div className="home-bar">
-        {projects.length > 0 ? (
-          <label>
-            Project&nbsp;
-            <select value={selected} onChange={(e) => setSelected(e.target.value)}>
-              {projects.map((p) => (
+    <div className="canvas-view">
+      <div className="canvas-bar">
+        {list.length > 0 ? (
+          <label className="inline-field">
+            <span>Project</span>
+            <select
+              className="input"
+              value={selected}
+              onChange={(e) => setParams({ project: e.target.value })}
+            >
+              {list.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.id}
                 </option>
@@ -43,7 +44,6 @@ export function Home() {
           <span className="hint">No projects in your scope yet.</span>
         )}
       </div>
-      {err && <p className="err">{err}</p>}
       {selected ? (
         <iframe
           className="canvas-frame"
@@ -51,7 +51,7 @@ export function Home() {
           src={`/web/canvas?projectId=${encodeURIComponent(selected)}`}
         />
       ) : (
-        <div className="empty">
+        <div className="empty-state">
           <h3>Nothing to show yet</h3>
           <p className="hint">Once you can see a project, its architecture canvas appears here.</p>
         </div>
