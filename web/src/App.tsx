@@ -8,6 +8,7 @@ import { Users } from './views/Users';
 import { Roles } from './views/Roles';
 import { Units } from './views/Units';
 import { Projects } from './views/Projects';
+import { ProjectOps } from './views/ProjectOps';
 import { post } from './api';
 
 interface NavItem {
@@ -102,6 +103,7 @@ function Shell() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/projects" element={<Projects />} />
+            <Route path="/projects/:projectId" element={<ProjectOps />} />
             <Route path="/admin/users" element={<Users />} />
             <Route path="/admin/roles" element={<Roles />} />
             <Route path="/admin/units" element={<Units />} />

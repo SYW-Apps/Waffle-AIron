@@ -92,6 +92,44 @@ export interface WebContext {
   local?: boolean;
 }
 
+// ── Per-project ops ──────────────────────────────────────────────────────────
+
+export interface PackDescriptor {
+  name: string;
+  scope: 'global' | 'project';
+  ref: string;
+  profiles: number;
+  languages: number;
+  rules: number;
+  error?: string;
+  tier?: string;
+}
+
+export interface PolicyEvaluationResult {
+  compliant: boolean;
+  mode: string;
+  missingPackNames: string[];
+  blockedPackNames: string[];
+  missingProfileIds: string[];
+  messages: string[];
+}
+
+export interface ProducerConfig {
+  target: string;
+  parentPageId: string;
+}
+
+export interface GitBackingStatus {
+  enabled: boolean;
+  remote?: string;
+  branch?: string;
+  workingBranch?: string;
+  dirty?: boolean;
+  periodicSyncMinutes?: number;
+  skipIfClean?: boolean;
+  lastSyncAt?: string;
+}
+
 /** The best human label for a user or subject: name, then email, then a short id. */
 export function subjectLabel(s: { displayName?: string; email?: string; userId?: string }): string {
   if (s.displayName && s.displayName.trim()) return s.displayName;

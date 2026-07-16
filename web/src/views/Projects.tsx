@@ -132,6 +132,9 @@ export function Projects() {
                     <Button size="sm" variant="primary" onClick={() => nav(`/?project=${encodeURIComponent(p.id)}`)}>
                       Open canvas
                     </Button>
+                    <Button size="sm" onClick={() => nav(`/projects/${encodeURIComponent(p.id)}`)}>
+                      Ops
+                    </Button>
                     <AsyncButton size="sm" action={() => lock(p.id)} onError={toast.bad}>
                       Lock
                     </AsyncButton>

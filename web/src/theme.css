@@ -221,6 +221,12 @@ code { font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace; 
 .cap-name { min-width: 150px; display: inline-block; }
 .inline-field { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-dim); }
 .inline-field .input { width: auto; }
+textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace; font-size: 12.5px; line-height: 1.45; }
+.back-link { align-self: flex-start; padding-left: 0; margin-bottom: 4px; }
+.finding-list { margin: 0; padding-left: 18px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 6px 0 12px; font-size: 13px; }
+.kv dt { color: var(--ink-dim); font-weight: 600; }
+.kv dd { margin: 0; }
 
 /* ── Tabs ────────────────────────────────────────────────────────────────── */
 .tabstrip { display: flex; gap: 2px; border-bottom: 1px solid var(--border); }
