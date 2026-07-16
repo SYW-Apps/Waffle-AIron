@@ -135,6 +135,24 @@ code { font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace; 
   width: 100%;
 }
 .input:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus); }
+/* Native <select>: the OS-drawn option popup ignores the .input background and
+   renders white-on-white in dark mode. Force a solid, theme-correct surface on
+   the control AND the options, drop the native chrome, and draw our own caret. */
+select.input {
+  background-color: var(--panel);
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  padding-right: 30px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239a9aab' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  cursor: pointer;
+}
+select.input option, select.input optgroup {
+  background-color: var(--panel);
+  color: var(--ink);
+}
 .field { display: flex; flex-direction: column; gap: 5px; }
 .field-label { font-size: 12.5px; font-weight: 600; color: var(--ink-dim); }
 .preview-id { display: inline-block; padding: 6px 10px; background: var(--panel-soft); border: 1px dashed var(--border); border-radius: var(--radius-sm); color: var(--accent); }
