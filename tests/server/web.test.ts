@@ -14,6 +14,7 @@ import {
   getCurrentContext,
   getGraph,
   getProjectCanvas,
+  getWebProjectCanvasModel,
   serveApp,
   serveLegacyApp,
 } from '../../src/server/web.js';
@@ -620,6 +621,36 @@ describe('web graph orchestrator (sdd_host)', () => {
 
   it('getProjectCanvas rejects an absent/expired session before any project work', () => {
     expect(() => getProjectCanvas(cfg, 'ws_missing', 'proj-a')).toThrow(UnauthenticatedError);
+  });
+
+  // ── getWebProjectCanvasModel: the CanvasModel as JSON (data sibling of the HTML) ──
+
+  it('getWebProjectCanvasModel returns the bound project CanvasModel as data', () => {
+    const rec = createProjectRecord(dataDir, 'proj-a');
+    seedProjectTree(rec.rootPath);
+    createOrgUnit(dataDir, { id: '', slug: 'unit-cm', name: 'CM', kind: 'team', status: 'active', createdAt: now, createdBy });
+    placeProject(dataDir, { id: 'pl-cm', projectId: 'proj-a', unitId: 'unit-cm', role: 'owner', createdAt: now, createdBy });
+    const s = session(['proj-a']);
+
+    const model = getWebProjectCanvasModel(cfg, s.id, 'proj-a') as {
+      system: { name: string };
+      components: unknown[];
+      subsystems: unknown[];
+    };
+    // Structured data (not HTML): the seeded system, with component/subsystem arrays.
+    expect(model.system.name).toBe('GraphSys');
+    expect(Array.isArray(model.components)).toBe(true);
+    expect(Array.isArray(model.subsystems)).toBe(true);
+  });
+
+  it('getWebProjectCanvasModel throws Forbidden for a cross-project / unknown project id', () => {
+    createProjectRecord(dataDir, 'proj-a');
+    const s = session(['proj-a']);
+    expect(() => getWebProjectCanvasModel(cfg, s.id, 'proj-b')).toThrow(ForbiddenError);
+  });
+
+  it('getWebProjectCanvasModel rejects an absent/expired session before any project work', () => {
+    expect(() => getWebProjectCanvasModel(cfg, 'ws_missing', 'proj-a')).toThrow(UnauthenticatedError);
   });
 });
 

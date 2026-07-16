@@ -3,7 +3,7 @@ import { readLockRecord, writeLockRecord } from '../core/lockfile.js';
 import { loadSystemSpec, loadSubsystemSpecs, buildProjectGraph } from '../core/specs.js';
 import { provisionProject, promoteAllComplete } from '../core/provision.js';
 import { validateAsComplete } from '../core/validation.js';
-import { renderDiagram } from '../core/diagram.js';
+import { renderDiagram, buildCanvasDataModel } from '../core/diagram.js';
 import { loadProjectConfig } from '../config/loader.js';
 import { globalPacksDir, discoverPacks, loadExtensionPacks, DeclarativePackSchema } from '../core/extensions.js';
 import { createMcpServer } from '../mcp/server.js';
@@ -28,6 +28,9 @@ export const hostCore = {
   writeLockRecord,
   promoteAllComplete,
   renderDiagram,
+  // The full CanvasModel as data (the JSON sibling of renderDiagram('canvas')) —
+  // consumed by the web app's in-React canvas renderer.
+  buildCanvasDataModel,
   // L0/L1 reads used by the landscape plane to project a redacted public-surface
   // snapshot; thin forwarders to the core spec reads (request-scoped root).
   loadSystemSpec,

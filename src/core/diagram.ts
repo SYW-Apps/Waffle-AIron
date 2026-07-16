@@ -12,7 +12,7 @@ import {
   ImplementationSpec,
   PATTERN_TYPES,
 } from '../models/index.js';
-import { buildCanvasModel, renderCanvasHtml } from './canvas.js';
+import { buildCanvasModel, renderCanvasHtml, type CanvasModel } from './canvas.js';
 import { generateDrawioXml, generateExcalidrawScene } from './diagram-export.js';
 import { validateSddTree, type ValidationIssue } from './validation.js';
 import { loadProjectConfig } from '../config/loader.js';
@@ -38,6 +38,16 @@ export function renderDiagram(format: string): string {
     default:
       throw new Error(`Unsupported diagram format "${format}" (canvas | mermaid | drawio | excalidraw).`);
   }
+}
+
+/**
+ * The full CanvasModel for the current (request-scoped) project — the same model
+ * `renderDiagram('canvas')` renders to the standalone HTML, but returned as data
+ * so the React web app can mount the shared renderer directly (no iframe) and,
+ * later, receive it in on-demand scope slices. Pure derivation, no side effects.
+ */
+export function buildCanvasDataModel(): CanvasModel {
+  return buildCanvasModel(diagramIssues());
 }
 
 function diagramIssues(): ValidationIssue[] {

@@ -595,6 +595,27 @@ export function getWebProjectCanvas(cfg: HostConfig, sessionId: string, projectI
 }
 
 /**
+ * The full CanvasModel (data, not HTML) for one authorized project — the JSON
+ * sibling of getWebProjectCanvas. Same scoped authorization: authenticate the
+ * session, confirm the project is in the caller's resolved mcp:read set (cross-
+ * project → Forbidden), bind its isolated root, and build the model over the
+ * bound tree. Consumed by the web app's in-React canvas renderer so it mounts the
+ * shared renderer directly instead of iframing the static HTML.
+ */
+export function getWebProjectCanvasModel(cfg: HostConfig, sessionId: string, projectId: string): unknown {
+  const principal = authenticateSession(cfg.dataDir, sessionId);
+  if (!principal.authenticated) throw new UnauthenticatedError();
+  if (!webproject.listProjects(cfg, sessionId).some((r) => r.id === projectId)) {
+    throw new ForbiddenError('project not authorized or unknown');
+  }
+  const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
+  if (!root) {
+    throw new ForbiddenError('project not authorized or unknown');
+  }
+  return runWithProjectRoot(root, () => hostCore.buildCanvasDataModel());
+}
+
+/**
  * Reshape an already-scoped LandscapeGraphModel into a level-of-detail
  * WebGraphModel: orgUnit → kind 'unit' at level 0 (carrying its parent unit as
  * parentId, derived from the hierarchy edges), project → kind 'project' at level 0,
@@ -3160,6 +3181,14 @@ export async function handleWebRequest(
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       res.end(canvasHtml);
       return;
+    }
+
+    // GET /web/canvas-model?projectId= → the same authorized project's CanvasModel
+    // as JSON (the data sibling of /web/canvas). Lets the React app mount the shared
+    // canvas renderer directly rather than iframing the HTML. Cross-project → 403.
+    if (req.method === 'GET' && parts.length === 2 && parts[1] === 'canvas-model') {
+      const projectId = url.searchParams.get('projectId') ?? '';
+      return sendJson(res, 200, getWebProjectCanvasModel(cfg, sessionId, projectId));
     }
 
     // ── Agent-token self-service (any signed-in user) ────────────────────────
