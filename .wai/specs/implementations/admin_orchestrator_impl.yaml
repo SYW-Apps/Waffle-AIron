@@ -212,212 +212,6 @@ methods:
         description: Return the signed view link
         type: return
         outcome: signed view link
-  - name: enableGit
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the master credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateMaster
-      - stepNumber: 2
-        description: If not an admin principal, reject
-        type: branch
-        condition: not an admin principal
-        onFalseStep: 4
-      - stepNumber: 3
-        description: Return 403 Forbidden
-        type: return
-        outcome: 403 Forbidden
-      - stepNumber: 4
-        description: >-
-          Ensure the project record and an empty directory exist (no native provisioning) and bind
-          the root
-        type: local
-      - stepNumber: 5
-        description: Enable git backing (clone the remote onto the working branch)
-        type: call
-        targetComponent: host_git_adapter
-        targetMethod: enable
-      - stepNumber: 6
-        description: Return the project record
-        type: return
-        outcome: project record
-  - name: disableGit
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the master credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateMaster
-      - stepNumber: 2
-        description: If not an admin principal, reject
-        type: branch
-        condition: not an admin principal
-        onFalseStep: 4
-      - stepNumber: 3
-        description: Return 403 Forbidden
-        type: return
-        outcome: 403 Forbidden
-      - stepNumber: 4
-        description: Bind the project's isolated root
-        type: local
-      - stepNumber: 5
-        description: Disable git backing
-        type: call
-        targetComponent: host_git_adapter
-        targetMethod: disable
-      - stepNumber: 6
-        description: Return once disabled
-        type: return
-        outcome: disabled
-  - name: syncGit
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the master credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateMaster
-      - stepNumber: 2
-        description: If not an admin principal, reject
-        type: branch
-        condition: not an admin principal
-        onFalseStep: 4
-      - stepNumber: 3
-        description: Return 403 Forbidden
-        type: return
-        outcome: 403 Forbidden
-      - stepNumber: 4
-        description: Bind the project's isolated root
-        type: local
-      - stepNumber: 5
-        description: Sync the default branch into the working branch
-        type: call
-        targetComponent: host_git_adapter
-        targetMethod: sync
-      - stepNumber: 6
-        description: Return once synced
-        type: return
-        outcome: synced
-  - name: configureProducer
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the master credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateMaster
-      - stepNumber: 2
-        description: If not an admin principal, reject
-        type: branch
-        condition: not an admin principal
-        onFalseStep: 4
-      - stepNumber: 3
-        description: Return 403 Forbidden
-        type: return
-        outcome: 403 Forbidden
-      - stepNumber: 4
-        description: Bind the project's isolated root
-        type: local
-      - stepNumber: 5
-        description: Configure the producer target
-        type: call
-        targetComponent: host_producer_adapter
-        targetMethod: configure
-      - stepNumber: 6
-        description: Return once configured
-        type: return
-        outcome: configured
-  - name: produceProducer
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the master credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateMaster
-      - stepNumber: 2
-        description: If not an admin principal, reject
-        type: branch
-        condition: not an admin principal
-        onFalseStep: 4
-      - stepNumber: 3
-        description: Return 403 Forbidden
-        type: return
-        outcome: 403 Forbidden
-      - stepNumber: 4
-        description: Bind the project's isolated root
-        type: local
-      - stepNumber: 5
-        description: Mint a signed view token for the project's canvas
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: signViewToken
-      - stepNumber: 6
-        description: Compose the canvas link from the public base URL and token
-        type: local
-      - stepNumber: 7
-        description: Project and push the project to the target
-        type: call
-        targetComponent: host_producer_adapter
-        targetMethod: produce
-      - stepNumber: 8
-        description: Return once produced
-        type: return
-        outcome: produced
-  - name: removeProducer
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the master credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateMaster
-      - stepNumber: 2
-        description: If not an admin principal, reject
-        type: branch
-        condition: not an admin principal
-        onFalseStep: 4
-      - stepNumber: 3
-        description: Return 403 Forbidden
-        type: return
-        outcome: 403 Forbidden
-      - stepNumber: 4
-        description: Bind the project's isolated root
-        type: local
-      - stepNumber: 5
-        description: Remove the producer target
-        type: call
-        targetComponent: host_producer_adapter
-        targetMethod: remove
-      - stepNumber: 6
-        description: Return once removed
-        type: return
-        outcome: removed
-  - name: listProducers
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the master credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateMaster
-      - stepNumber: 2
-        description: If not an admin principal, reject
-        type: branch
-        condition: not an admin principal
-        onFalseStep: 4
-      - stepNumber: 3
-        description: Return 403 Forbidden
-        type: return
-        outcome: 403 Forbidden
-      - stepNumber: 4
-        description: Bind the project's isolated root
-        type: local
-      - stepNumber: 5
-        description: List configured producers
-        type: call
-        targetComponent: host_producer_adapter
-        targetMethod: list
-      - stepNumber: 6
-        description: Return the producer list
-        type: return
-        outcome: producer list
   - name: setSecret
     narrative:
       - stepNumber: 1
@@ -530,8 +324,10 @@ methods:
         targetMethod: computeStateId
       - stepNumber: 8
         description: >-
-          Publish to git: commit the promoted working tree and push, returning the commit + compare
-          URL (no-op for native projects)
+          Publish to git: commit ONLY the .wai/ tree (the lock is the semantic checkpoint — the
+          auto-publish trigger; the message references the validated StateId) and push, returning
+          the commit + compare URL (no-op for native projects; a backup failure never fails the
+          lock)
         type: call
         targetComponent: host_git_adapter
         targetMethod: publish
@@ -821,6 +617,416 @@ methods:
         type: return
         outcome: promote result
     detail: full
+  - name: enableGit
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          Resolve the caller's project:admin permission over the target project (binding a
+          repository is project administration)
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the git binding
+        type: throw
+        error: Forbidden — binding a repository requires project:admin over the project
+      - stepNumber: 5
+        description: >-
+          Ensure the project record and an empty directory exist (no native provisioning) and bind
+          the root
+        type: local
+      - stepNumber: 6
+        description: >-
+          Bind the project to its REAL repository (clone the remote onto the isolated working
+          branch); wairon will commit ONLY .wai/ inside it
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: enable
+      - stepNumber: 7
+        description: Return the project record
+        type: return
+        outcome: project record
+  - name: disableGit
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Resolve the caller's project:admin permission over the target project
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the git unbinding
+        type: throw
+        error: Forbidden — unbinding a repository requires project:admin over the project
+      - stepNumber: 5
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 6
+        description: Disable git backing (clear the binding; the working tree is untouched)
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: disable
+      - stepNumber: 7
+        description: Return once disabled
+        type: return
+        outcome: disabled
+  - name: syncGit
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Resolve the caller's project:write permission over the target project
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:write value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the git sync
+        type: throw
+        error: Forbidden — syncing a project's repository requires project:write over it
+      - stepNumber: 5
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 6
+        description: Sync the default branch into the working branch
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: sync
+      - stepNumber: 7
+        description: Return once synced
+        type: return
+        outcome: synced
+  - name: commitProject
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          Resolve the caller's project:write permission over the target project (a commit is a spec
+          write's save, not administration)
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:write value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the commit
+        type: throw
+        error: Forbidden — committing a project's specs requires project:write over it
+      - stepNumber: 5
+        description: >-
+          Bind the project's isolated root and resolve the staging scope: .wai/ by default, or
+          .wai/specs/<subsystem>/ when a subsystem is given (a subsystem scope is a staging
+          convenience only — git history stays per-repo); default the message when none is given
+        type: local
+      - stepNumber: 6
+        description: >-
+          Publish the scoped commit and push (commit = local save, push = the actual backup); a
+          clean scope publishes nothing
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: publish
+      - stepNumber: 7
+        description: Return the publish outcome
+        type: return
+        outcome: GitPublish
+  - name: getGitBinding
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Resolve the caller's project:admin permission over the target project
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the binding read
+        type: throw
+        error: Forbidden — reading a project's git binding requires project:admin over it
+      - stepNumber: 5
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 6
+        description: Read the git-backing status (remote/branch, sync setting, scoped dirtiness)
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: status
+      - stepNumber: 7
+        description: Return the status
+        type: return
+        outcome: git backing status
+  - name: configureGitSync
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          Resolve the caller's project:admin permission over the target project (the backup cadence
+          is binding administration)
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the sync configuration
+        type: throw
+        error: Forbidden — configuring the periodic sync requires project:admin over the project
+      - stepNumber: 5
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 6
+        description: Persist the periodic-sync setting into the project's git-backing config
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: configureSync
+      - stepNumber: 7
+        description: Return once persisted
+        type: return
+        outcome: sync setting persisted
+  - name: runPeriodicGitSync
+    narrative:
+      - stepNumber: 1
+        description: >-
+          List the hosted project records (pre-authorized internal sweep — the host supervisor's
+          timer is the only caller; never exposed on a portal)
+        type: call
+        targetComponent: project_registry
+        targetMethod: list
+      - stepNumber: 2
+        description: For each hosted project
+        type: loop
+        loopKind: forEach
+        over: the hosted project records
+        endStep: 7
+      - stepNumber: 3
+        description: Bind the iterated project's isolated root
+        type: local
+      - stepNumber: 4
+        description: Read the project's git-backing status
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: status
+      - stepNumber: 5
+        description: >-
+          Publish only when the binding enables periodic sync AND the scoped .wai/ path is dirty (or
+          skipIfClean is false) — a quiet project never commits noise
+        type: branch
+        condition: periodic sync is enabled and the scoped path is dirty (or skipIfClean is false)
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Publish the .wai/-scoped backup commit and push
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: publish
+      - stepNumber: 7
+        description: >-
+          Record any per-project failure as a server diagnostic and continue — one project's failure
+          never aborts the sweep
+        type: local
+      - stepNumber: 8
+        description: Return once the sweep completes
+        type: return
+        outcome: sweep completed
+  - name: configureProducer
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          Resolve the caller's project:admin permission over the target project (a producer
+          publishes the project's specs to an external target)
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the producer configuration
+        type: throw
+        error: Forbidden — configuring a producer requires project:admin over the project
+      - stepNumber: 5
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 6
+        description: Configure the producer target (tokens come from the secret store by ref, never inline)
+        type: call
+        targetComponent: host_producer_adapter
+        targetMethod: configure
+      - stepNumber: 7
+        description: Return once configured
+        type: return
+        outcome: configured
+  - name: produceProducer
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Resolve the caller's project:admin permission over the target project
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the producer run
+        type: throw
+        error: Forbidden — running a producer requires project:admin over the project
+      - stepNumber: 5
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 6
+        description: Mint a signed view token for the project's canvas
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: signViewToken
+      - stepNumber: 7
+        description: Compose the canvas link from the public base URL and token
+        type: local
+      - stepNumber: 8
+        description: Project and push the project to the target
+        type: call
+        targetComponent: host_producer_adapter
+        targetMethod: produce
+      - stepNumber: 9
+        description: Return once produced
+        type: return
+        outcome: produced
+  - name: removeProducer
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Resolve the caller's project:admin permission over the target project
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the producer removal
+        type: throw
+        error: Forbidden — removing a producer requires project:admin over the project
+      - stepNumber: 5
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 6
+        description: Remove the producer target
+        type: call
+        targetComponent: host_producer_adapter
+        targetMethod: remove
+      - stepNumber: 7
+        description: Return once removed
+        type: return
+        outcome: removed
+  - name: listProducers
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Resolve the caller's project:admin permission over the target project
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the producer listing
+        type: throw
+        error: Forbidden — listing producers requires project:admin over the project
+      - stepNumber: 5
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 6
+        description: List configured producers
+        type: call
+        targetComponent: host_producer_adapter
+        targetMethod: list
+      - stepNumber: 7
+        description: Return the producer list
+        type: return
+        outcome: producer list
 lint:
   allow:
     - code: UNDECLARED_DEPENDENCY
@@ -829,4 +1035,4 @@ lint:
         host_core_adapter — documented shortcut on the lock/promote path; refactor candidate.
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-07-16T00:19:33.827Z'
+updatedAt: '2026-07-16T15:27:40.368Z'

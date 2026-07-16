@@ -1,0 +1,59 @@
+kind: entity
+id: git_backing_binding
+name: Git Backing Binding
+description: >-
+  A CONTAINER-level backup binding, distinct from the per-project real-repo binding (git_config):
+  binds an organization unit's subtree — or the whole instance structure — to its own backing
+  repository. A unit binding mirrors every subtree project's .wai/ tree into the container repo (a
+  repo per org/department for teams and tenants that want their own); an instance binding mirrors
+  the hosted instance structure itself (organization, users, permissions, roles, instance identity,
+  project registry, relations, policies — the flat JSON in the data root that no per-project repo
+  covers) for real backup and restore. The secret store is NEVER mirrored; credentials appear only
+  as their hashed records.
+subsystem: sdd_host
+fields:
+  - name: id
+    type: string
+    description: Stable binding id.
+    optional: false
+    key: primary
+  - name: scopeKind
+    type: string
+    description: >-
+      'unit' (a container repo for the unit's subtree) or 'instance' (the instance-structure backup
+      repo).
+    optional: false
+  - name: scopeId
+    type: string
+    description: The qualified unit id for scopeKind 'unit'; absent for 'instance'.
+    optional: true
+  - name: remote
+    type: string
+    description: The backing repository remote URL.
+    optional: false
+  - name: branch
+    type: string
+    description: The branch the backup commits to.
+    optional: false
+  - name: periodicSyncMinutes
+    type: number
+    description: Interval for the periodic backup sweep; absent = manual sync only.
+    optional: true
+  - name: skipIfClean
+    type: boolean
+    description: The sweep skips the commit when the mirrored content is unchanged (default true).
+    optional: true
+  - name: lastSyncAt
+    type: string
+    description: ISO-8601 timestamp of the last successful sync.
+    optional: true
+  - name: createdAt
+    type: string
+    optional: false
+  - name: createdBy
+    type: PrincipalSubject
+    description: The administrator who bound the repository.
+    optional: false
+methods: []
+createdAt: '2026-07-16T15:37:56.601Z'
+updatedAt: '2026-07-16T15:37:56.662Z'

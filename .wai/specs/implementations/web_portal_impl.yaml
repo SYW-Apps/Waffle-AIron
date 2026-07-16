@@ -356,7 +356,235 @@ methods:
         targetComponent: web_admin_orchestrator
         targetMethod: unbindRole
     detail: calls-only
+  - name: adminListGlobalPacks
+    narrative:
+      - stepNumber: 1
+        description: Resolve the session credential and forward to the project ops orchestrator
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: listGlobalPacks
+    detail: calls-only
+  - name: adminInstallGlobalPack
+    narrative:
+      - stepNumber: 1
+        description: Parse { name, content } and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: installGlobalPack
+    detail: calls-only
+  - name: adminRemoveGlobalPack
+    narrative:
+      - stepNumber: 1
+        description: Parse { name } and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: removeGlobalPack
+    detail: calls-only
+  - name: projectPacksList
+    narrative:
+      - stepNumber: 1
+        description: Read projectId from the query and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: listProjectPacks
+    detail: calls-only
+  - name: projectPackInstall
+    narrative:
+      - stepNumber: 1
+        description: Parse { projectId, name, content } and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: installProjectPack
+    detail: calls-only
+  - name: projectPackRemove
+    narrative:
+      - stepNumber: 1
+        description: Parse { projectId, name } and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: removeProjectPack
+    detail: calls-only
+  - name: adminGetPackPolicy
+    narrative:
+      - stepNumber: 1
+        description: Forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: getPackPolicy
+    detail: calls-only
+  - name: adminSetPackPolicy
+    narrative:
+      - stepNumber: 1
+        description: Parse the InstancePackPolicy body and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: setPackPolicy
+    detail: calls-only
+  - name: projectPolicyEvaluate
+    narrative:
+      - stepNumber: 1
+        description: Read projectId from the query and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: evaluateProjectPolicy
+    detail: calls-only
+  - name: projectPolicyReconcile
+    narrative:
+      - stepNumber: 1
+        description: Parse { projectId } and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: reconcileProjectPolicy
+    detail: calls-only
+  - name: projectProducersList
+    narrative:
+      - stepNumber: 1
+        description: Read projectId from the query and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: listProducers
+    detail: calls-only
+  - name: projectProducerConfigure
+    narrative:
+      - stepNumber: 1
+        description: Parse { projectId, target, parentPageId } and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: configureProducer
+    detail: calls-only
+  - name: projectProducerRemove
+    narrative:
+      - stepNumber: 1
+        description: Parse { projectId, target } and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: removeProducer
+    detail: calls-only
+  - name: projectProducerRun
+    narrative:
+      - stepNumber: 1
+        description: Parse { projectId, target } and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: produceProducer
+    detail: calls-only
+  - name: projectGitStatus
+    narrative:
+      - stepNumber: 1
+        description: Read projectId from the query and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: getGitBinding
+    detail: calls-only
+  - name: projectGitBind
+    narrative:
+      - stepNumber: 1
+        description: Parse { projectId, remote, branch } and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: enableGit
+    detail: calls-only
+  - name: projectGitUnbind
+    narrative:
+      - stepNumber: 1
+        description: Parse { projectId } and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: disableGit
+    detail: calls-only
+  - name: projectGitSync
+    narrative:
+      - stepNumber: 1
+        description: Parse { projectId } and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: syncGit
+    detail: calls-only
+  - name: projectGitCommit
+    narrative:
+      - stepNumber: 1
+        description: Parse { projectId, subsystem?, message? } and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: commitProject
+    detail: calls-only
+  - name: projectGitSyncConfig
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse { projectId, periodicSyncMinutes?, skipIfClean? } and forward with the session as
+          the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: configureGitSync
+    detail: calls-only
+  - name: adminAuditQuery
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Build the AuditQuery from the query params (projectId/category/action/limit/offset) and
+          forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: queryAuditEvents
+    detail: calls-only
+  - name: adminAuditCount
+    narrative:
+      - stepNumber: 1
+        description: Build the AuditQuery from the query params and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: countAuditEvents
+    detail: calls-only
+  - name: adminGetExposure
+    narrative:
+      - stepNumber: 1
+        description: Forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: getExposurePolicy
+    detail: calls-only
+  - name: adminSetExposure
+    narrative:
+      - stepNumber: 1
+        description: Parse the HostExposurePolicy body and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: setExposurePolicy
+    detail: calls-only
+  - name: adminListGitBacking
+    narrative:
+      - stepNumber: 1
+        description: Forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: listBackingBindings
+    detail: calls-only
+  - name: adminBindGitBacking
+    narrative:
+      - stepNumber: 1
+        description: Parse the GitBackingBinding body and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: bindBackingScope
+    detail: calls-only
+  - name: adminUnbindGitBacking
+    narrative:
+      - stepNumber: 1
+        description: Parse { id } and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: unbindBackingScope
+    detail: calls-only
+  - name: adminSyncGitBacking
+    narrative:
+      - stepNumber: 1
+        description: Parse { id } and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: syncBackingScope
+    detail: calls-only
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-07-15T22:49:37.436Z'
+updatedAt: '2026-07-16T15:41:37.604Z'

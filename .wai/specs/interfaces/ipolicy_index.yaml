@@ -21,6 +21,11 @@ methods:
     signature: 'listIdentityProviders(): IdentityProviderConfig[]'
     returns: IdentityProviderConfig[]
     params: []
+  - name: getExposurePolicy
+    description: Return the persisted instance exposure policy, or null when none has ever been configured.
+    signature: 'getExposurePolicy(): HostExposurePolicy | null'
+    returns: HostExposurePolicy | null
+    params: []
 status: complete
 createdAt: '2026-07-09T20:46:22.136Z'
-updatedAt: '2026-07-10T08:16:29.309Z'
+updatedAt: '2026-07-16T15:28:23.653Z'

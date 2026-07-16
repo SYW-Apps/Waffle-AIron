@@ -4,16 +4,21 @@ description: >-
   Supervisor for the hosted instance lifecycle: one-time boot initialization (seeding the persisted
   instance identity and, under devMode, the synthetic local development unit) followed by the HTTP
   listener lifecycle serving both the data-plane and admin-plane portals — binds host/port(s),
-  accepts connections, manages graceful startup and shutdown. Owns the live server processes; holds
-  no domain logic and no persistence. It is also the control-plane exposure-enforcement point:
-  control-plane routers are mounted on the admin listener only as permitted by the resolved
-  HostExposurePolicy (secure default when unset), and a disabled surface is not served.
+  accepts connections, manages graceful startup and shutdown. It also owns the PERIODIC GIT-BACKUP
+  TIMER: on start it schedules the admin orchestrator's pre-authorized runPeriodicGitSync sweep
+  (git-bound projects with periodic sync enabled publish a .wai/-scoped commit+push, skip-if-clean)
+  and stops it on shutdown. Owns the live server processes and timers; holds no domain logic and no
+  persistence. It is also the control-plane exposure-enforcement point: control-plane routers are
+  mounted on the admin listener only as permitted by the resolved HostExposurePolicy (secure default
+  when unset), and a disabled surface is not served.
 subsystem: sdd_host
 componentType: Supervisor
 owns: []
 dependsOn:
   - instance_identity_repository
   - organization_repository
+  - admin_orchestrator
+  - git_backing_orchestrator
 lint:
   allow:
     - code: UNUSED_METHOD
@@ -24,4 +29,4 @@ lint:
         design.
 status: complete
 createdAt: '2026-07-04T12:33:41.732Z'
-updatedAt: '2026-07-16T00:28:22.478Z'
+updatedAt: '2026-07-16T15:41:38.553Z'

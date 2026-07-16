@@ -1,0 +1,24 @@
+id: git_backing_store_impl
+name: Git Backing Store Implementation
+description: >-
+  Disk-backed binding collection at &lt;dataDir&gt;/git-backing.json, mirroring the other hosted
+  stores' storage conventions.
+contract: igit_backing_store
+sourcePath: src/server/gitbacking.ts
+methods:
+  - name: load
+    narrative: []
+    intent: >-
+      Read and parse git-backing.json under the hosted data root as the authoritative binding
+      collection. A missing file yields an empty set (first boot is not an error); an unreadable
+      file or structurally invalid JSON fails with a storage error naming the path so the operator
+      can repair it — persisted bindings are never silently discarded.
+  - name: replaceAll
+    narrative: []
+    intent: >-
+      Persist the complete binding collection via write-temp-then-rename so a crashed write leaves
+      the prior state fully intact, then swap the in-memory representation in one assignment.
+detail: intent
+status: draft
+createdAt: '2026-07-16T15:39:47.904Z'
+updatedAt: '2026-07-16T15:39:47.906Z'

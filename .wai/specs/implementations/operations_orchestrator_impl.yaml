@@ -199,8 +199,96 @@ methods:
         type: return
         outcome: advisory quota-annotated usage snapshots
     detail: full
+  - name: getExposurePolicy
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          Resolve the caller's project:admin permission at instance scope (the exposure posture
+          gates the whole web surface)
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the exposure read
+        type: throw
+        error: Forbidden — exposure administration requires instance-level project:admin
+      - stepNumber: 5
+        description: Read the persisted exposure policy through the policy repository
+        type: call
+        targetComponent: policy_repository
+        targetMethod: getExposurePolicy
+      - stepNumber: 6
+        description: Substitute the safe default (web UI off, TLS required) when none has been configured
+        type: local
+      - stepNumber: 7
+        description: Return the exposure policy
+        type: return
+        outcome: exposure policy
+  - name: setExposurePolicy
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Resolve the caller's project:admin permission at instance scope
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the exposure change
+        type: throw
+        error: Forbidden — exposure administration requires instance-level project:admin
+      - stepNumber: 5
+        description: Replace the exposure policy wholesale through the policy repository
+        type: call
+        targetComponent: policy_repository
+        targetMethod: setExposurePolicy
+      - stepNumber: 6
+        description: Append a redacted audit event without letting a failure fail the change
+        type: try
+        endStep: 8
+        catches:
+          - error: audit append failure
+            step: 9
+      - stepNumber: 7
+        description: >-
+          Append the redacted exposure.set audit event (security level) under the active retention
+          policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 8
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 10
+      - stepNumber: 9
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 10
+        description: Return the stored exposure policy
+        type: return
+        outcome: stored exposure policy
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T11:27:00.178Z'
-updatedAt: '2026-07-15T21:40:18.241Z'
+updatedAt: '2026-07-16T15:29:27.790Z'

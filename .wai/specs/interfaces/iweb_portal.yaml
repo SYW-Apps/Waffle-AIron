@@ -301,8 +301,9 @@ methods:
       path: /web/projects
   - name: projectCreate
     description: >-
-      Create a project placed in the REQUIRED owner unit; forwards to
-      web_project_orchestrator.createProject.
+      Create a hosted project from { id, unitId, profileSelection? } — the REQUIRED owner unit plus
+      an optional profile selection; forwards to web_project_orchestrator.createProject, which
+      routes through the policy-aware initialization.
     signature: 'projectCreate(request: HttpRequest): HttpResponse'
     returns: HttpResponse
     params:
@@ -505,6 +506,344 @@ methods:
       transport: HTTP
       method: POST
       path: /web/admin/roles/unbind
+  - name: adminListGlobalPacks
+    description: List server-global packs; forwards to project_ops_orchestrator.listGlobalPacks.
+    signature: 'adminListGlobalPacks(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/admin/packs
+  - name: adminInstallGlobalPack
+    description: >-
+      Install a declarative pack server-wide; forwards to
+      project_ops_orchestrator.installGlobalPack.
+    signature: 'adminInstallGlobalPack(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/packs
+  - name: adminRemoveGlobalPack
+    description: Remove a server-global pack; forwards to project_ops_orchestrator.removeGlobalPack.
+    signature: 'adminRemoveGlobalPack(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/packs/remove
+  - name: projectPacksList
+    description: List one project's registered packs; forwards to project_ops_orchestrator.listProjectPacks.
+    signature: 'projectPacksList(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/projects/packs
+  - name: projectPackInstall
+    description: >-
+      Install a declarative pack into a project; forwards to
+      project_ops_orchestrator.installProjectPack.
+    signature: 'projectPackInstall(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/projects/packs
+  - name: projectPackRemove
+    description: >-
+      Remove one of a project's registered packs; forwards to
+      project_ops_orchestrator.removeProjectPack.
+    signature: 'projectPackRemove(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/projects/packs/remove
+  - name: adminGetPackPolicy
+    description: Read the instance pack/profile policy; forwards to project_ops_orchestrator.getPackPolicy.
+    signature: 'adminGetPackPolicy(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/admin/policy
+  - name: adminSetPackPolicy
+    description: Replace the instance pack/profile policy; forwards to project_ops_orchestrator.setPackPolicy.
+    signature: 'adminSetPackPolicy(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/policy
+  - name: projectPolicyEvaluate
+    description: >-
+      Evaluate one project's pack/profile compliance; forwards to
+      project_ops_orchestrator.evaluateProjectPolicy.
+    signature: 'projectPolicyEvaluate(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/projects/policy
+  - name: projectPolicyReconcile
+    description: >-
+      Reconcile one project against the instance pack policy; forwards to
+      project_ops_orchestrator.reconcileProjectPolicy.
+    signature: 'projectPolicyReconcile(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/projects/policy/reconcile
+  - name: projectProducersList
+    description: >-
+      List one project's configured producer targets; forwards to
+      project_ops_orchestrator.listProducers.
+    signature: 'projectProducersList(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/projects/producers
+  - name: projectProducerConfigure
+    description: >-
+      Configure a producer target (Notion/Miro) for a project; forwards to
+      project_ops_orchestrator.configureProducer.
+    signature: 'projectProducerConfigure(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/projects/producers
+  - name: projectProducerRemove
+    description: Remove a project's producer target; forwards to project_ops_orchestrator.removeProducer.
+    signature: 'projectProducerRemove(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/projects/producers/remove
+  - name: projectProducerRun
+    description: Run a configured producer projection; forwards to project_ops_orchestrator.produceProducer.
+    signature: 'projectProducerRun(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/projects/producers/run
+  - name: projectGitStatus
+    description: Read a project's git-backing status; forwards to project_ops_orchestrator.getGitBinding.
+    signature: 'projectGitStatus(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/projects/git
+  - name: projectGitBind
+    description: >-
+      Bind a project to its REAL repository (wairon commits only .wai/); forwards to
+      project_ops_orchestrator.enableGit.
+    signature: 'projectGitBind(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/projects/git
+  - name: projectGitUnbind
+    description: Disconnect a project's repository binding; forwards to project_ops_orchestrator.disableGit.
+    signature: 'projectGitUnbind(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/projects/git/disconnect
+  - name: projectGitSync
+    description: Sync the default branch into the working branch; forwards to project_ops_orchestrator.syncGit.
+    signature: 'projectGitSync(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/projects/git/sync
+  - name: projectGitCommit
+    description: >-
+      Publish a deliberate .wai/-scoped commit+push (optional subsystem subpath + message); forwards
+      to project_ops_orchestrator.commitProject.
+    signature: 'projectGitCommit(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/projects/git/commit
+  - name: projectGitSyncConfig
+    description: >-
+      Set a project's periodic-sync cadence (interval + skip-if-clean); forwards to
+      project_ops_orchestrator.configureGitSync.
+    signature: 'projectGitSyncConfig(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/projects/git/sync-config
+  - name: adminAuditQuery
+    description: >-
+      The scope-filtered, paginated, redacted audit viewer; forwards to
+      project_ops_orchestrator.queryAuditEvents (filters from query params).
+    signature: 'adminAuditQuery(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/admin/audit
+  - name: adminAuditCount
+    description: >-
+      The scoped audit-event count for pagination; forwards to
+      project_ops_orchestrator.countAuditEvents.
+    signature: 'adminAuditCount(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/admin/audit/count
+  - name: adminGetExposure
+    description: Read the instance exposure policy; forwards to project_ops_orchestrator.getExposurePolicy.
+    signature: 'adminGetExposure(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/admin/exposure
+  - name: adminSetExposure
+    description: Replace the instance exposure policy; forwards to project_ops_orchestrator.setExposurePolicy.
+    signature: 'adminSetExposure(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/exposure
+  - name: adminListGitBacking
+    description: >-
+      List the container-level backup bindings in the caller's admin reach; forwards to
+      project_ops_orchestrator.listBackingBindings.
+    signature: 'adminListGitBacking(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/admin/git-backing
+  - name: adminBindGitBacking
+    description: >-
+      Bind a unit container repo or the instance-structure backup repo; forwards to
+      project_ops_orchestrator.bindBackingScope.
+    signature: 'adminBindGitBacking(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/git-backing
+  - name: adminUnbindGitBacking
+    description: >-
+      Remove a container-level backup binding; forwards to
+      project_ops_orchestrator.unbindBackingScope.
+    signature: 'adminUnbindGitBacking(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/git-backing/remove
+  - name: adminSyncGitBacking
+    description: Run a container-level backup sync now; forwards to project_ops_orchestrator.syncBackingScope.
+    signature: 'adminSyncGitBacking(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/git-backing/sync
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-07-16T00:18:57.545Z'
+updatedAt: '2026-07-16T15:41:26.600Z'

@@ -9,10 +9,13 @@ description: >-
   served client reuses the scoped /mcp data plane with the session as its credential. The
   identity/admin/policy/landscape/operations control-plane portals, however, are bound to the
   LOOPBACK admin listener and are unreachable from a remote browser; so the admin control plane the
-  web UI needs (user, identity-provider/SSO, API-key, and organization-unit management) is exposed
-  HERE on the data plane under /web/admin/* and forwarded to the web admin orchestrator, which
-  re-applies the exact control-plane authorization. Session-lifecycle/SSO/graph routes forward to
-  the web orchestrator. The login screen is DYNAMIC: the unauthenticated pre-auth GET
+  web UI needs is exposed HERE on the data plane and forwarded with the session as the credential:
+  user, identity-provider/SSO, organization-unit, role, and permission-assignment management under
+  /web/admin/* to the web admin orchestrator; packs, pack policy, the audit viewer, and the exposure
+  editor under /web/admin/* and per-project packs/policy/producers/git under /web/projects/* to the
+  PROJECT OPS orchestrator, whose owning orchestrators re-apply the exact resolver authorization.
+  Session-lifecycle/SSO/graph routes forward to the web orchestrator; project lifecycle to the web
+  project orchestrator. The login screen is DYNAMIC: the unauthenticated pre-auth GET
   /web/login-options read (gated like every /web route) reports which sign-in methods exist — the
   password-login flag plus enabled-provider { id, displayName } pairs — so the served shell renders
   exactly the available options and never a free-text provider input. Served by the host server and
@@ -25,7 +28,8 @@ dependsOn:
   - web_orchestrator
   - web_admin_orchestrator
   - web_project_orchestrator
+  - project_ops_orchestrator
 portalType: HTTP_API
 status: complete
 createdAt: '2026-07-11T11:31:55.624Z'
-updatedAt: '2026-07-14T12:53:32.841Z'
+updatedAt: '2026-07-16T15:32:22.988Z'

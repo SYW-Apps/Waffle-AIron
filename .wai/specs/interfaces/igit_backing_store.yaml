@@ -1,0 +1,24 @@
+id: igit_backing_store
+name: Git Backing Store Interface
+description: Private storage contract for the container-level backing bindings collection.
+component: git_backing_store
+methods:
+  - name: load
+    description: >-
+      Load the persisted binding collection; a missing file yields an empty set, a malformed file
+      fails with a storage error naming the path.
+    signature: 'load(): GitBackingBinding[]'
+    returns: GitBackingBinding[]
+    params: []
+  - name: replaceAll
+    description: Swap the persisted collection wholesale via write-temp-then-rename.
+    signature: 'replaceAll(bindings: GitBackingBinding[]): void'
+    returns: void
+    params:
+      - name: bindings
+        type: GitBackingBinding[]
+    guarantees:
+      - atomic
+status: draft
+createdAt: '2026-07-16T15:38:48.260Z'
+updatedAt: '2026-07-16T15:38:48.263Z'

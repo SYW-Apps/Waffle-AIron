@@ -1,12 +1,11 @@
 id: ipolicy_repository
 name: Policy Repository Interface
 description: >-
-  Facade contract for durable hosted instance pack/profile enforcement policy and identity-provider
-  (SSO) configuration. Hosted workflows read and replace the active InstancePackPolicy and manage
-  the identity-provider collection through this repository instead of reaching into private policy
-  storage blocks. Pure 1:1 forwarding: getPackPolicy and listIdentityProviders to the index;
-  setPackPolicy, upsertIdentityProvider, and removeIdentityProvider to the registry. No logic lives
-  on this facade.
+  Facade contract for durable hosted instance pack/profile enforcement policy, identity-provider
+  (SSO) configuration, and the instance EXPOSURE policy (webUiEnabled/requireTls posture). Hosted
+  workflows read and replace these through this repository instead of reaching into private policy
+  storage blocks. Pure 1:1 forwarding: reads to the index, writes to the registry. No logic lives on
+  this facade.
 component: policy_repository
 methods:
   - name: getPackPolicy
@@ -59,6 +58,24 @@ methods:
         type: string
     guarantees:
       - atomic
+  - name: getExposurePolicy
+    description: >-
+      Forward to the index and return the persisted instance exposure policy, or null when none has
+      ever been configured (the portal substitutes the safe default — web UI off).
+    signature: 'getExposurePolicy(): HostExposurePolicy | null'
+    returns: HostExposurePolicy | null
+    params: []
+  - name: setExposurePolicy
+    description: >-
+      Forward to the registry to persist the supplied exposure policy wholesale (atomic
+      write-temp-then-rename to exposure-policy.json). Returns the stored policy.
+    signature: 'setExposurePolicy(policy: HostExposurePolicy): HostExposurePolicy'
+    returns: HostExposurePolicy
+    params:
+      - name: policy
+        type: HostExposurePolicy
+    guarantees:
+      - atomic
 status: complete
 createdAt: '2026-07-08T21:59:33.749Z'
-updatedAt: '2026-07-10T08:16:16.440Z'
+updatedAt: '2026-07-16T15:28:20.443Z'

@@ -6,9 +6,12 @@ description: >-
   the reused MCP tool surface within that scope. It also dispatches the execute-primary
   project-lifecycle MCP tools (sdd_host_initialize_project, sdd_host_lock_project,
   sdd_host_promote_project, sdd_host_get_approval_status, sdd_host_await_approval) to the project
-  lifecycle orchestrator, and the four hosted landscape MCP tools to the surface exchange
-  orchestrator, both already gated — bypassing the ordinary data-plane permission check. Appends a
-  redacted audit event per handled call.
+  lifecycle orchestrator, the four hosted landscape MCP tools to the surface exchange orchestrator,
+  and the project-ops MCP tools (sdd_host_pack_list, sdd_host_pack_install,
+  sdd_host_policy_evaluate, sdd_host_policy_reconcile, sdd_host_produce, sdd_host_commit_project —
+  all bound to THE one authorized project; instance-level operations are deliberately absent from
+  the data plane) to the project ops orchestrator — each already resolver-gated upstream, bypassing
+  the ordinary data-plane permission check. Appends a redacted audit event per handled call.
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
@@ -21,6 +24,7 @@ dependsOn:
   - project_lifecycle_orchestrator
   - surface_exchange_orchestrator
   - authorization_specialist
+  - project_ops_orchestrator
 status: complete
 createdAt: '2026-07-04T12:33:41.786Z'
-updatedAt: '2026-07-16T00:13:32.905Z'
+updatedAt: '2026-07-16T15:36:19.271Z'

@@ -1,0 +1,36 @@
+id: igit_backing_registry
+name: Git Backing Registry Interface
+description: Private write-path contract for container-level backing bindings. No authorization here.
+component: git_backing_registry
+methods:
+  - name: upsertBinding
+    description: >-
+      Create or replace the binding for a scope: stamp id/createdAt on create, validate the scope
+      shape ('unit' names a scopeId, 'instance' names none), and keep at most ONE binding per scope.
+      Persist atomically and return the stored binding.
+    signature: 'upsertBinding(binding: GitBackingBinding): GitBackingBinding'
+    returns: GitBackingBinding
+    params:
+      - name: binding
+        type: GitBackingBinding
+    guarantees:
+      - atomic
+  - name: removeBinding
+    description: Remove one binding by id; an absent id is a no-op. Persist atomically.
+    signature: 'removeBinding(bindingId: string): void'
+    returns: void
+    params:
+      - name: bindingId
+        type: string
+  - name: touchSync
+    description: Record lastSyncAt on a binding after a successful sweep. Persist atomically.
+    signature: 'touchSync(bindingId: string, syncedAt: string): void'
+    returns: void
+    params:
+      - name: bindingId
+        type: string
+      - name: syncedAt
+        type: string
+status: draft
+createdAt: '2026-07-16T15:38:52.993Z'
+updatedAt: '2026-07-16T15:38:52.995Z'

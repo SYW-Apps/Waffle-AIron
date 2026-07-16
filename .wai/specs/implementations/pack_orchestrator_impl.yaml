@@ -1,168 +1,208 @@
 id: pack_orchestrator_impl
 name: Pack Orchestrator Implementation
 description: >-
-  Control-plane pack-management workflows: master-credential auth, then delegate to the pack
-  registry at global scope, or bind the project's isolated root first for project scope. Installs
-  are declarative-only; the registry enforces the schema and rejects code packs.
+  Control-plane pack-management workflows: authenticate the caller credential, authorize through the
+  permission resolver (instance-level project:admin for server-global packs; project:admin over the
+  project for per-project install/remove, project:read for the per-project listing), then delegate
+  to the pack registry at global scope, or bind the project's isolated root first for project scope.
+  Installs are declarative-only; the registry enforces the schema and rejects code packs.
 contract: ipack_orchestrator
 sourcePath: src/server/packs.ts
 methods:
   - name: listGlobalPacks
     narrative:
       - stepNumber: 1
-        description: Authenticate the master credential
+        description: Authenticate the caller credential
         type: call
         targetComponent: auth_specialist
-        targetMethod: authenticateMaster
+        targetMethod: authenticateCredential
       - stepNumber: 2
-        description: If not an admin principal, reject
-        type: branch
-        condition: not an admin principal
-        onFalseStep: 4
+        description: >-
+          Resolve the caller's project:admin permission at instance scope (server-global packs are
+          instance configuration)
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
       - stepNumber: 3
-        description: Return 403 Forbidden
-        type: return
-        outcome: 403 Forbidden
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
       - stepNumber: 4
+        description: Reject the global pack listing
+        type: throw
+        error: Forbidden — managing server-global packs requires instance-level project:admin
+      - stepNumber: 5
         description: List the server-global packs
         type: call
         targetComponent: pack_registry
         targetMethod: listGlobalPacks
-      - stepNumber: 5
+      - stepNumber: 6
         description: Return the global pack descriptors
         type: return
         outcome: global pack list
   - name: installGlobalPack
     narrative:
       - stepNumber: 1
-        description: Authenticate the master credential
+        description: Authenticate the caller credential
         type: call
         targetComponent: auth_specialist
-        targetMethod: authenticateMaster
+        targetMethod: authenticateCredential
       - stepNumber: 2
-        description: If not an admin principal, reject
-        type: branch
-        condition: not an admin principal
-        onFalseStep: 4
+        description: Resolve the caller's project:admin permission at instance scope
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
       - stepNumber: 3
-        description: Return 403 Forbidden
-        type: return
-        outcome: 403 Forbidden
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
       - stepNumber: 4
+        description: Reject the global pack install
+        type: throw
+        error: Forbidden — managing server-global packs requires instance-level project:admin
+      - stepNumber: 5
         description: Install the declarative pack server-wide (the registry rejects code packs)
         type: call
         targetComponent: pack_registry
         targetMethod: installGlobalPack
-      - stepNumber: 5
+      - stepNumber: 6
         description: Return the installed pack descriptor
         type: return
         outcome: installed pack descriptor
   - name: removeGlobalPack
     narrative:
       - stepNumber: 1
-        description: Authenticate the master credential
+        description: Authenticate the caller credential
         type: call
         targetComponent: auth_specialist
-        targetMethod: authenticateMaster
+        targetMethod: authenticateCredential
       - stepNumber: 2
-        description: If not an admin principal, reject
-        type: branch
-        condition: not an admin principal
-        onFalseStep: 4
+        description: Resolve the caller's project:admin permission at instance scope
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
       - stepNumber: 3
-        description: Return 403 Forbidden
-        type: return
-        outcome: 403 Forbidden
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
       - stepNumber: 4
+        description: Reject the global pack removal
+        type: throw
+        error: Forbidden — managing server-global packs requires instance-level project:admin
+      - stepNumber: 5
         description: Remove the server-global pack
         type: call
         targetComponent: pack_registry
         targetMethod: removeGlobalPack
-      - stepNumber: 5
+      - stepNumber: 6
         description: Return once removed
         type: return
         outcome: removed
   - name: listProjectPacks
     narrative:
       - stepNumber: 1
-        description: Authenticate the master credential
+        description: Authenticate the caller credential
         type: call
         targetComponent: auth_specialist
-        targetMethod: authenticateMaster
+        targetMethod: authenticateCredential
       - stepNumber: 2
-        description: If not an admin principal, reject
-        type: branch
-        condition: not an admin principal
-        onFalseStep: 4
+        description: Resolve the caller's project:read permission over the target project
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
       - stepNumber: 3
-        description: Return 403 Forbidden
-        type: return
-        outcome: 403 Forbidden
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:read value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
       - stepNumber: 4
+        description: Reject the project pack listing
+        type: throw
+        error: Forbidden — listing a project's packs requires project:read over it
+      - stepNumber: 5
         description: Bind the project's isolated root
         type: local
-      - stepNumber: 5
+      - stepNumber: 6
         description: List the project's registered packs
         type: call
         targetComponent: pack_registry
         targetMethod: listProjectPacks
-      - stepNumber: 6
+      - stepNumber: 7
         description: Return the project pack descriptors
         type: return
         outcome: project pack list
   - name: installProjectPack
     narrative:
       - stepNumber: 1
-        description: Authenticate the master credential
+        description: Authenticate the caller credential
         type: call
         targetComponent: auth_specialist
-        targetMethod: authenticateMaster
+        targetMethod: authenticateCredential
       - stepNumber: 2
-        description: If not an admin principal, reject
-        type: branch
-        condition: not an admin principal
-        onFalseStep: 4
+        description: Resolve the caller's project:admin permission over the target project
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
       - stepNumber: 3
-        description: Return 403 Forbidden
-        type: return
-        outcome: 403 Forbidden
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
       - stepNumber: 4
+        description: Reject the project pack install
+        type: throw
+        error: Forbidden — installing a project pack requires project:admin over the project
+      - stepNumber: 5
         description: Bind the project's isolated root
         type: local
-      - stepNumber: 5
+      - stepNumber: 6
         description: Install the declarative pack into the project (the registry rejects code packs)
         type: call
         targetComponent: pack_registry
         targetMethod: installProjectPack
-      - stepNumber: 6
+      - stepNumber: 7
         description: Return the installed pack descriptor
         type: return
         outcome: installed pack descriptor
   - name: removeProjectPack
     narrative:
       - stepNumber: 1
-        description: Authenticate the master credential
+        description: Authenticate the caller credential
         type: call
         targetComponent: auth_specialist
-        targetMethod: authenticateMaster
+        targetMethod: authenticateCredential
       - stepNumber: 2
-        description: If not an admin principal, reject
-        type: branch
-        condition: not an admin principal
-        onFalseStep: 4
+        description: Resolve the caller's project:admin permission over the target project
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
       - stepNumber: 3
-        description: Return 403 Forbidden
-        type: return
-        outcome: 403 Forbidden
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
       - stepNumber: 4
+        description: Reject the project pack removal
+        type: throw
+        error: Forbidden — removing a project pack requires project:admin over the project
+      - stepNumber: 5
         description: Bind the project's isolated root
         type: local
-      - stepNumber: 5
+      - stepNumber: 6
         description: Remove one of the project's registered packs
         type: call
         targetComponent: pack_registry
         targetMethod: removeProjectPack
-      - stepNumber: 6
+      - stepNumber: 7
         description: Return once removed
         type: return
         outcome: removed
@@ -170,4 +210,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T18:47:13.157Z'
-updatedAt: '2026-07-15T06:53:07.615Z'
+updatedAt: '2026-07-16T15:19:35.035Z'

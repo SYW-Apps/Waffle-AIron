@@ -1,0 +1,323 @@
+id: iproject_ops_orchestrator
+name: Project Ops Orchestrator Interface
+description: >-
+  Contract for the operational forwarding seam. Every method takes the caller's credential first (a
+  browser session id or a bearer token — both resolve to a Principal upstream) and forwards 1:1 to
+  the owning orchestrator, whose resolver gate applies unchanged: global packs / instance policy /
+  exposure → instance-level project:admin; per-project pack install/remove, producers, git binding
+  administration → project:admin over the project; per-project pack listing → project:read; policy
+  evaluate/reconcile, git sync/commit → project:write; the audit reads filter to the caller's
+  project:admin visible scopes.
+component: project_ops_orchestrator
+methods:
+  - name: listGlobalPacks
+    description: Forward to pack_orchestrator.listGlobalPacks (instance-level project:admin upstream).
+    signature: 'listGlobalPacks(credential: string): PackDescriptor[]'
+    returns: PackDescriptor[]
+    params:
+      - name: credential
+        type: string
+  - name: installGlobalPack
+    description: >-
+      Forward to pack_orchestrator.installGlobalPack (declarative-only; instance-level project:admin
+      upstream).
+    signature: 'installGlobalPack(credential: string, name: string, content: string): PackDescriptor'
+    returns: PackDescriptor
+    params:
+      - name: credential
+        type: string
+      - name: name
+        type: string
+      - name: content
+        type: string
+  - name: removeGlobalPack
+    description: Forward to pack_orchestrator.removeGlobalPack (instance-level project:admin upstream).
+    signature: 'removeGlobalPack(credential: string, name: string): void'
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: name
+        type: string
+  - name: listProjectPacks
+    description: Forward to pack_orchestrator.listProjectPacks (project:read over the project upstream).
+    signature: 'listProjectPacks(credential: string, project: string): PackDescriptor[]'
+    returns: PackDescriptor[]
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+  - name: installProjectPack
+    description: >-
+      Forward to pack_orchestrator.installProjectPack (declarative-only; project:admin over the
+      project upstream).
+    signature: >-
+      installProjectPack(credential: string, project: string, name: string, content: string):
+      PackDescriptor
+    returns: PackDescriptor
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: name
+        type: string
+      - name: content
+        type: string
+  - name: removeProjectPack
+    description: Forward to pack_orchestrator.removeProjectPack (project:admin over the project upstream).
+    signature: 'removeProjectPack(credential: string, project: string, name: string): void'
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: name
+        type: string
+  - name: getPackPolicy
+    description: Forward to project_policy_orchestrator.getPackPolicy (any authenticated principal).
+    signature: 'getPackPolicy(credential: string): InstancePackPolicy'
+    returns: InstancePackPolicy
+    params:
+      - name: credential
+        type: string
+  - name: setPackPolicy
+    description: Forward to project_policy_orchestrator.setPackPolicy (instance-level project:admin upstream).
+    signature: 'setPackPolicy(credential: string, policy: InstancePackPolicy): InstancePackPolicy'
+    returns: InstancePackPolicy
+    params:
+      - name: credential
+        type: string
+      - name: policy
+        type: InstancePackPolicy
+  - name: evaluateProjectPolicy
+    description: >-
+      Forward to project_policy_orchestrator.evaluateProjectPolicy (project:write over the project
+      upstream).
+    signature: 'evaluateProjectPolicy(credential: string, projectId: string): PolicyEvaluationResult'
+    returns: PolicyEvaluationResult
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+  - name: reconcileProjectPolicy
+    description: >-
+      Forward to project_policy_orchestrator.reconcileProjectPolicy (project:write over the project
+      upstream).
+    signature: 'reconcileProjectPolicy(credential: string, projectId: string): PolicyEvaluationResult'
+    returns: PolicyEvaluationResult
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+  - name: listProducers
+    description: Forward to admin_orchestrator.listProducers (project:admin over the project upstream).
+    signature: 'listProducers(credential: string, project: string): ProducerConfig[]'
+    returns: ProducerConfig[]
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+  - name: configureProducer
+    description: Forward to admin_orchestrator.configureProducer (project:admin over the project upstream).
+    signature: >-
+      configureProducer(credential: string, project: string, target: string, parentPageId: string):
+      void
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: target
+        type: string
+      - name: parentPageId
+        type: string
+  - name: removeProducer
+    description: Forward to admin_orchestrator.removeProducer (project:admin over the project upstream).
+    signature: 'removeProducer(credential: string, project: string, target: string): void'
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: target
+        type: string
+  - name: produceProducer
+    description: Forward to admin_orchestrator.produceProducer (project:admin over the project upstream).
+    signature: 'produceProducer(credential: string, project: string, target: string): void'
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: target
+        type: string
+  - name: getGitBinding
+    description: Forward to admin_orchestrator.getGitBinding (project:admin over the project upstream).
+    signature: 'getGitBinding(credential: string, project: string): GitBackingStatus'
+    returns: GitBackingStatus
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+  - name: enableGit
+    description: Forward to admin_orchestrator.enableGit (project:admin over the project upstream).
+    signature: >-
+      enableGit(credential: string, project: string, remote: string, branch: string):
+      HostedProjectRecord
+    returns: HostedProjectRecord
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: remote
+        type: string
+      - name: branch
+        type: string
+  - name: disableGit
+    description: Forward to admin_orchestrator.disableGit (project:admin over the project upstream).
+    signature: 'disableGit(credential: string, project: string): void'
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+  - name: syncGit
+    description: Forward to admin_orchestrator.syncGit (project:write over the project upstream).
+    signature: 'syncGit(credential: string, project: string): void'
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+  - name: commitProject
+    description: >-
+      Forward to admin_orchestrator.commitProject — the deliberate .wai/-scoped commit+push
+      primitive (project:write over the project upstream).
+    signature: >-
+      commitProject(credential: string, project: string, subsystem: string, message: string):
+      GitPublish
+    returns: GitPublish
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: subsystem
+        type: string
+        optional: true
+      - name: message
+        type: string
+        optional: true
+  - name: configureGitSync
+    description: Forward to admin_orchestrator.configureGitSync (project:admin over the project upstream).
+    signature: >-
+      configureGitSync(credential: string, project: string, periodicSyncMinutes: number,
+      skipIfClean: boolean): void
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: periodicSyncMinutes
+        type: number
+        optional: true
+      - name: skipIfClean
+        type: boolean
+        optional: true
+  - name: queryAuditEvents
+    description: >-
+      Forward to identity_orchestrator.queryAuditEvents (filtered to the caller's project:admin
+      visible scopes upstream).
+    signature: 'queryAuditEvents(credential: string, query: AuditQuery): AuditEvent[]'
+    returns: AuditEvent[]
+    params:
+      - name: credential
+        type: string
+      - name: query
+        type: AuditQuery
+  - name: countAuditEvents
+    description: Forward to identity_orchestrator.countAuditEvents (scoped identically to queryAuditEvents).
+    signature: 'countAuditEvents(credential: string, query: AuditQuery): number'
+    returns: number
+    params:
+      - name: credential
+        type: string
+      - name: query
+        type: AuditQuery
+  - name: getExposurePolicy
+    description: Forward to operations_orchestrator.getExposurePolicy (instance-level project:admin upstream).
+    signature: 'getExposurePolicy(credential: string): HostExposurePolicy'
+    returns: HostExposurePolicy
+    params:
+      - name: credential
+        type: string
+  - name: setExposurePolicy
+    description: >-
+      Forward to operations_orchestrator.setExposurePolicy (instance-level project:admin upstream;
+      audited there).
+    signature: 'setExposurePolicy(credential: string, policy: HostExposurePolicy): HostExposurePolicy'
+    returns: HostExposurePolicy
+    params:
+      - name: credential
+        type: string
+      - name: policy
+        type: HostExposurePolicy
+  - name: listBackingBindings
+    description: >-
+      Forward to git_backing_orchestrator.listBackingBindings (filtered to the caller's
+      project:admin reach upstream).
+    signature: 'listBackingBindings(credential: string): GitBackingBinding[]'
+    returns: GitBackingBinding[]
+    params:
+      - name: credential
+        type: string
+  - name: bindBackingScope
+    description: >-
+      Forward to git_backing_orchestrator.bindScope (project:admin over the binding's scope
+      upstream).
+    signature: 'bindBackingScope(credential: string, binding: GitBackingBinding): GitBackingBinding'
+    returns: GitBackingBinding
+    params:
+      - name: credential
+        type: string
+      - name: binding
+        type: GitBackingBinding
+  - name: unbindBackingScope
+    description: >-
+      Forward to git_backing_orchestrator.unbindScope (project:admin over the binding's own scope
+      upstream).
+    signature: 'unbindBackingScope(credential: string, bindingId: string): void'
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: bindingId
+        type: string
+  - name: syncBackingScope
+    description: >-
+      Forward to git_backing_orchestrator.syncBackingScope (project:admin over the binding's own
+      scope upstream).
+    signature: 'syncBackingScope(credential: string, bindingId: string): boolean'
+    returns: boolean
+    params:
+      - name: credential
+        type: string
+      - name: bindingId
+        type: string
+status: draft
+createdAt: '2026-07-16T15:30:37.725Z'
+updatedAt: '2026-07-16T15:41:10.868Z'

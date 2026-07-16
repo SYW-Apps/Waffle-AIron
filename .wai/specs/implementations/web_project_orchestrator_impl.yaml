@@ -6,16 +6,6 @@ description: >-
 contract: iweb_project_orchestrator
 sourcePath: src/server/webproject.ts
 methods:
-  - name: createProject
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Forward to the admin orchestrator passing the sessionId as the credential and the REQUIRED
-          owner unitId (project:create permission over the target unit enforced there)
-        type: call
-        targetComponent: admin_orchestrator
-        targetMethod: createProject
-    detail: calls-only
   - name: lockProject
     narrative:
       - stepNumber: 1
@@ -75,7 +65,27 @@ methods:
         type: return
         outcome: scoped hosted project records
     detail: full
+  - name: createProject
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Build a ProjectInitRequest from the arguments (id, REQUIRED ownerUnitId, optional
+          profileSelection)
+        type: local
+      - stepNumber: 2
+        description: >-
+          Forward to the project policy orchestrator's profile-aware initialization with the session
+          as the credential — the instance pack policy and the project:create-over-unit gate apply
+          exactly as they do to the MCP init
+        type: call
+        targetComponent: project_policy_orchestrator
+        targetMethod: initializeProjectWithProfile
+      - stepNumber: 3
+        description: Return the created hosted project record
+        type: return
+        outcome: created project record
+    detail: full
 detail: calls-only
 status: complete
 createdAt: '2026-07-13T20:36:25.016Z'
-updatedAt: '2026-07-16T00:19:25.006Z'
+updatedAt: '2026-07-16T15:31:49.622Z'

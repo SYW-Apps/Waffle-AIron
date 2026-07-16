@@ -1,0 +1,16 @@
+id: git_backing_repository
+name: Git Backing Repository
+description: >-
+  Facade over the owned git backing store, registry, and index for container-level backup bindings
+  (unit container repos + the instance-structure backup repo). Pure 1:1 forwarding — writes to the
+  registry, reads to the index; consumers use this facade only, never the inner blocks.
+subsystem: sdd_host
+componentType: Repository
+owns:
+  - git_backing_store
+  - git_backing_registry
+  - git_backing_index
+dependsOn: []
+status: draft
+createdAt: '2026-07-16T15:38:20.672Z'
+updatedAt: '2026-07-16T15:38:20.674Z'

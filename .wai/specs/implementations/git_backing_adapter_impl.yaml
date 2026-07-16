@@ -1,0 +1,33 @@
+id: git_backing_adapter_impl
+name: Git Backing Adapter Implementation
+description: >-
+  git + filesystem I/O for container backup working copies under
+  &lt;dataDir&gt;/git-backing/&lt;bindingId&gt;/, using the bot committer identity and
+  WAIRON_GIT_TOKEN conventions.
+contract: igit_backing_adapter
+sourcePath: src/server/gitbacking.ts
+methods:
+  - name: cloneOrOpen
+    narrative:
+      - stepNumber: 1
+        description: >-
+          When the workdir holds no repository, git clone the remote at the branch into it;
+          otherwise fetch and checkout the branch. Return the workdir path.
+        type: local
+  - name: mirrorTree
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Replace the target directory's content with an exact copy of the source directory
+          (deletions included), so the backing repo reflects the current state
+        type: local
+  - name: commitAndPush
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Stage the working copy, and when the index holds changes commit with the bot identity and
+          push the branch (WAIRON_GIT_TOKEN); return false without committing when clean
+        type: local
+status: draft
+createdAt: '2026-07-16T15:40:11.338Z'
+updatedAt: '2026-07-16T15:40:11.340Z'

@@ -264,9 +264,7 @@ methods:
       - stepNumber: 4
         description: Reject the evaluation
         type: throw
-        error: >-
-          Forbidden — evaluating a project's policy requires a grant covering the project or an
-          instance-admin grant
+        error: Forbidden — evaluating a project's policy requires project:write over the project
       - stepNumber: 5
         description: >-
           Resolve and bind the target project's isolated root within the principal's authorized set
@@ -321,9 +319,7 @@ methods:
       - stepNumber: 4
         description: Reject the reconciliation
         type: throw
-        error: >-
-          Forbidden — reconciling a project's policy requires a grant covering the project or an
-          instance-admin grant
+        error: Forbidden — reconciling a project's policy requires project:write over the project
       - stepNumber: 5
         description: >-
           Resolve and bind the target project's isolated root within the principal's authorized set
@@ -445,52 +441,58 @@ methods:
         targetComponent: auth_specialist
         targetMethod: authenticateCredential
       - stepNumber: 2
-        description: If the caller holds neither a policy:manage grant nor an instance-admin grant, deny
-        type: branch
-        condition: the caller holds neither a policy:manage grant nor an instance-admin grant
-        onFalseStep: 4
+        description: >-
+          Resolve the caller's project:admin permission at instance scope (the pack policy governs
+          every project's initialization)
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
       - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
         description: Reject the policy administration
         type: throw
-        error: >-
-          Forbidden — policy administration requires a policy:manage grant or an instance-admin
-          grant
-      - stepNumber: 4
+        error: Forbidden — policy administration requires instance-level project:admin
+      - stepNumber: 5
         description: >-
           Stamp updatedBy on the supplied policy from the authenticated caller's principal subject
           (the registry stamps updatedAt)
         type: local
-      - stepNumber: 5
+      - stepNumber: 6
         description: Persist the replacement active pack/profile policy wholesale through the repository
         type: call
         targetComponent: policy_repository
         targetMethod: setPackPolicy
-      - stepNumber: 6
+      - stepNumber: 7
         description: Append a redacted audit event without letting a failure fail the policy change
         type: try
-        endStep: 8
+        endStep: 9
         catches:
           - error: audit append failure
-            step: 9
-      - stepNumber: 7
+            step: 10
+      - stepNumber: 8
         description: >-
           Append the redacted policy.set audit event at security level under the active retention
           policy
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 8
+      - stepNumber: 9
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 10
-      - stepNumber: 9
+        toStep: 11
+      - stepNumber: 10
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 10
+      - stepNumber: 11
         description: Return the stored policy
         type: return
         outcome: the stored policy
 detail: full
 status: complete
 createdAt: '2026-07-09T20:50:11.443Z'
-updatedAt: '2026-07-16T00:19:21.350Z'
+updatedAt: '2026-07-16T15:20:37.532Z'

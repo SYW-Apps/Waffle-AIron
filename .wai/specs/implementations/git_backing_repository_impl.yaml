@@ -1,0 +1,45 @@
+id: git_backing_repository_impl
+name: Git Backing Repository Implementation
+description: Pure 1:1 forwarding facade over the owned store/registry/index triad.
+contract: igit_backing_repository
+sourcePath: src/server/gitbacking.ts
+methods:
+  - name: upsertBinding
+    narrative:
+      - stepNumber: 1
+        description: Forward to the git backing registry
+        type: call
+        targetComponent: git_backing_registry
+        targetMethod: upsertBinding
+  - name: removeBinding
+    narrative:
+      - stepNumber: 1
+        description: Forward to the git backing registry
+        type: call
+        targetComponent: git_backing_registry
+        targetMethod: removeBinding
+  - name: touchSync
+    narrative:
+      - stepNumber: 1
+        description: Forward to the git backing registry
+        type: call
+        targetComponent: git_backing_registry
+        targetMethod: touchSync
+  - name: listBindings
+    narrative:
+      - stepNumber: 1
+        description: Forward to the git backing index
+        type: call
+        targetComponent: git_backing_index
+        targetMethod: listBindings
+  - name: getBinding
+    narrative:
+      - stepNumber: 1
+        description: Forward to the git backing index
+        type: call
+        targetComponent: git_backing_index
+        targetMethod: getBinding
+detail: calls-only
+status: draft
+createdAt: '2026-07-16T15:40:06.127Z'
+updatedAt: '2026-07-16T15:40:06.128Z'

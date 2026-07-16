@@ -35,6 +35,21 @@ methods:
         description: Begin accepting connections on both listeners
         type: local
       - stepNumber: 6
+        description: >-
+          Schedule the periodic git-backup timer: at each interval run the pre-authorized
+          .wai/-scoped backup sweep over the git-bound projects (skip-if-clean — a quiet project
+          never commits noise)
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: runPeriodicGitSync
+      - stepNumber: 7
+        description: >-
+          The same timer also sweeps the container-level backup bindings (unit container repos + the
+          instance-structure backup repo) whose interval has elapsed
+        type: call
+        targetComponent: git_backing_orchestrator
+        targetMethod: runPeriodicBackingSync
+      - stepNumber: 8
         description: Return the running server handle
         type: return
         outcome: running
@@ -42,12 +57,15 @@ methods:
   - name: stop
     narrative:
       - stepNumber: 1
-        description: Stop accepting new connections and drain in-flight requests
+        description: Cancel the periodic git-backup timer
         type: local
       - stepNumber: 2
-        description: Close the data-plane and admin-plane listeners
+        description: Stop accepting new connections and drain in-flight requests
         type: local
       - stepNumber: 3
+        description: Close the data-plane and admin-plane listeners
+        type: local
+      - stepNumber: 4
         description: Return once stopped
         type: return
         outcome: stopped
@@ -95,4 +113,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-04T12:54:36.977Z'
-updatedAt: '2026-07-16T00:25:05.630Z'
+updatedAt: '2026-07-16T15:41:49.407Z'

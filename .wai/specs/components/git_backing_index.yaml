@@ -1,0 +1,13 @@
+id: git_backing_index
+name: Git Backing Index
+description: >-
+  Read path over the git backing store: list all bindings, look one up by id, or resolve the binding
+  covering a scope. Never mutates.
+subsystem: sdd_host
+componentType: Index
+owns: []
+dependsOn:
+  - git_backing_store
+status: draft
+createdAt: '2026-07-16T15:38:11.370Z'
+updatedAt: '2026-07-16T15:38:11.372Z'

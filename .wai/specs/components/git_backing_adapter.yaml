@@ -1,0 +1,15 @@
+id: git_backing_adapter
+name: Git Backing Adapter
+description: >-
+  The only block doing git and filesystem I/O for CONTAINER-level backup repositories (which are not
+  bound to any single project root, so the per-project git subsystem cannot serve them):
+  clone-or-open a backing repo working copy under &lt;dataDir&gt;/git-backing/&lt;bindingId&gt;/,
+  mirror-export source trees into it, and commit+push the mirrored content (skip-if-clean). Uses the
+  same bot committer identity and token conventions as the per-project git adapter.
+subsystem: sdd_host
+componentType: Adapter
+owns: []
+dependsOn: []
+status: draft
+createdAt: '2026-07-16T15:38:24.176Z'
+updatedAt: '2026-07-16T15:38:24.178Z'

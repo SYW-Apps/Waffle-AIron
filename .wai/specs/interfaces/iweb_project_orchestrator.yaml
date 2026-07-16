@@ -2,9 +2,9 @@ id: iweb_project_orchestrator
 name: Web Project Orchestrator Interface
 description: >-
   Contract for the web UI's project-lifecycle workflows. Every method is session-authenticated.
-  listProjects is owned here (scoped read); create/lock/promote/destroy forward to the admin
-  orchestrator with the session as the credential, so its grant-scope authorization applies
-  unchanged.
+  listProjects is owned here (scoped read); create routes through the project policy orchestrator's
+  profile-aware initialization; lock/promote/destroy forward to the admin orchestrator with the
+  session as the credential, so the resolver authorization applies unchanged.
 component: web_project_orchestrator
 methods:
   - name: listProjects
@@ -19,10 +19,15 @@ methods:
         type: string
   - name: createProject
     description: >-
-      Create a hosted project placed in the REQUIRED owner unit; forwards to
-      admin_orchestrator.createProject with the session as the credential (project:create permission
-      over the target unit enforced there).
-    signature: 'createProject(sessionId: string, id: string, unitId: string): HostedProjectRecord'
+      Create a hosted project placed in the REQUIRED owner unit, optionally with a profile selection
+      — builds a ProjectInitRequest and forwards to
+      project_policy_orchestrator.initializeProjectWithProfile with the session as the credential,
+      so the instance pack policy (required/default packs, profile requirements, enforcement mode)
+      applies to a web create exactly as it does to the MCP init (project:create over the unit
+      enforced there).
+    signature: >-
+      createProject(sessionId: string, id: string, unitId: string, profileSelection:
+      ProjectProfileSelection): HostedProjectRecord
     returns: HostedProjectRecord
     params:
       - name: sessionId
@@ -32,6 +37,12 @@ methods:
       - name: unitId
         type: string
         description: REQUIRED target organization unit that owns the new project.
+      - name: profileSelection
+        type: ProjectProfileSelection
+        description: >-
+          Optional profile selection recorded into the project's config; a policy with
+          requireProfileSelection rejects a create without one.
+        optional: true
   - name: lockProject
     description: >-
       Lock a project (validate-as-complete then write the StateId-scoped lock); forwards to
@@ -69,4 +80,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-13T20:36:24.967Z'
-updatedAt: '2026-07-16T00:18:53.725Z'
+updatedAt: '2026-07-16T15:31:31.604Z'

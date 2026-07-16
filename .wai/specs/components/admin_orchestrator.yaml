@@ -2,10 +2,15 @@ id: admin_orchestrator
 name: Admin Orchestrator
 description: >-
   Owns the existing control-plane workflows: provision a new isolated project, mint/rotate/revoke
-  API keys, and the state-scoped lock and gated promote. Lock validates the tree as-complete via the
-  validator adapter, then records a lock scoped to the exact validated state id; promote re-checks
-  the current state id against the lock and refuses on any drift. Never merges to production itself.
-  Future user-bound identity and audit workflows are isolated in identity_orchestrator rather than
+  API keys, the state-scoped lock and gated promote, per-project git backing (bind to the project's
+  REAL repository — wairon commits ONLY .wai/, with the deliberate commitProject primitive, the lock
+  auto-publish, and the periodic skip-if-clean sweep), and per-project producer targets. Lock
+  validates the tree as-complete via the validator adapter, then records a lock scoped to the exact
+  validated state id; promote re-checks the current state id against the lock and refuses on any
+  drift. Never merges to production itself. Project/key/lifecycle methods authorize through the
+  permission resolver (project:create/write/admin over the relevant scope); git and producer
+  administration require project:admin over the project (sync/commit require project:write). Future
+  user-bound identity and audit workflows are isolated in identity_orchestrator rather than
   expanding this completed workflow component.
 subsystem: sdd_host
 componentType: Orchestrator
@@ -22,7 +27,13 @@ dependsOn:
   - organization_repository
   - authorization_specialist
 lint:
-  allow: []
+  allow:
+    - code: UNUSED_METHOD
+      reason: >-
+        runPeriodicGitSync is invoked by the host supervisor's periodic timer, scheduled in
+        host_server.start — a composition-root bootstrap method that is itself outside the modeled
+        HTTP call chains (see host_server's matching allow), so the walker cannot traverse into its
+        schedule step.
 status: complete
 createdAt: '2026-07-04T12:33:51.178Z'
-updatedAt: '2026-07-15T21:35:02.117Z'
+updatedAt: '2026-07-16T15:42:27.646Z'

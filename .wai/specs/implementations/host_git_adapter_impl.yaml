@@ -1,6 +1,9 @@
 id: host_git_adapter_impl
 name: Host Git Client Adapter Implementation
-description: Forwards the hosting server's git-backing calls to the git portal.
+description: >-
+  Forwards the hosting server's git-backing calls to the git portal, bound to the current project
+  root. publish forwards the SCOPED subpath (default .wai/) so staging never touches a shared
+  repository's own code.
 contract: ihost_git_adapter
 sourcePath: src/server/adapters.ts
 methods:
@@ -32,6 +35,20 @@ methods:
         type: call
         targetComponent: git_portal
         targetMethod: publish
+  - name: status
+    narrative:
+      - stepNumber: 1
+        description: Forward to the git portal
+        type: call
+        targetComponent: git_portal
+        targetMethod: status
+  - name: configureSync
+    narrative:
+      - stepNumber: 1
+        description: Forward to the git portal
+        type: call
+        targetComponent: git_portal
+        targetMethod: configureSync
 status: complete
 createdAt: '2026-07-04T16:33:53.912Z'
-updatedAt: '2026-07-04T16:37:37.358Z'
+updatedAt: '2026-07-16T15:22:36.592Z'

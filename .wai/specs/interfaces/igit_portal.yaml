@@ -19,10 +19,35 @@ methods:
     returns: void
   - name: publish
     description: >-
-      Commit the promoted working tree, push the working branch, and return the pushed commit +
-      compare URL; no-op (published=false) when not git-backed.
-    signature: 'publish(message: string): GitPublish'
+      Commit ONLY the scoped subpath of the working tree (default .wai/ — never the whole tree),
+      push the working branch, and return the pushed commit + compare URL; no-op (published=false)
+      when not git-backed or the scoped path is clean.
+    signature: 'publish(message: string, subpath: string): GitPublish'
     returns: GitPublish
+    params:
+      - name: message
+        type: string
+      - name: subpath
+        type: string
+        optional: true
+  - name: status
+    description: >-
+      The bound project's git-backing status (remote/branch, periodic-sync setting, scoped
+      dirtiness); enabled:false when not git-backed.
+    signature: 'status(): GitBackingStatus'
+    returns: GitBackingStatus
+    params: []
+  - name: configureSync
+    description: Persist the project's periodic-sync setting (interval + skip-if-clean).
+    signature: 'configureSync(periodicSyncMinutes: number, skipIfClean: boolean): void'
+    returns: void
+    params:
+      - name: periodicSyncMinutes
+        type: number
+        optional: true
+      - name: skipIfClean
+        type: boolean
+        optional: true
 status: complete
 createdAt: '2026-07-04T16:31:50.042Z'
-updatedAt: '2026-07-04T16:37:37.278Z'
+updatedAt: '2026-07-16T15:24:24.505Z'

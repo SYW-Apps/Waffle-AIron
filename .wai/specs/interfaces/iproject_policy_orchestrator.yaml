@@ -31,10 +31,10 @@ methods:
       - atomic
   - name: evaluateProjectPolicy
     description: >-
-      Authenticate the caller credential and authorize by a grant covering the project (mcp:write
-      for the project or an instance-wide wildcard) or an instance-admin grant, resolve the hosted
-      project, and evaluate its active packs and recorded profile selection against the active
-      instance pack policy without side effects.
+      Authenticate the caller credential and resolve the caller's project:write permission over the
+      target project through the authorization seam (must be yes; an instance-admin bypasses),
+      resolve the hosted project, and evaluate its active packs and recorded profile selection
+      against the active instance pack policy without side effects.
     signature: 'evaluateProjectPolicy(credential: string, projectId: string): PolicyEvaluationResult'
     returns: PolicyEvaluationResult
     params:
@@ -44,11 +44,13 @@ methods:
         type: string
   - name: reconcileProjectPolicy
     description: >-
-      Authenticate the caller credential and authorize by a grant covering the project (mcp:write
-      for the project or an instance-wide wildcard) or an instance-admin grant, evaluate the project
-      against the active instance pack policy, and — when the policy mode permits
-      auto-reconciliation — apply the allowed steps for missing required/default declarative packs,
-      auditing the reconciliation.
+      Authenticate the caller credential and resolve the caller's project:write permission over the
+      target project through the authorization seam (must be yes; an instance-admin bypasses),
+      evaluate the project against the active instance pack policy, and — when the policy mode
+      permits auto-reconciliation — apply the allowed steps for missing required/default declarative
+      packs, auditing the reconciliation. Reconciliation only ever applies the INSTANCE POLICY's own
+      required/default packs, never discretionary changes, which is why project:write (not
+      project:admin) suffices.
     signature: 'reconcileProjectPolicy(credential: string, projectId: string): PolicyEvaluationResult'
     returns: PolicyEvaluationResult
     params:
@@ -69,11 +71,11 @@ methods:
         type: string
   - name: setPackPolicy
     description: >-
-      Authenticate the caller credential and authorize policy administration via an INSTANCE-WIDE
-      policy:manage grant (projectId '*') or the instance-admin wildcard — a project-scoped
-      policy:manage grant does NOT suffice — stamp updatedBy from the authenticated caller, replace
-      the active pack/profile policy wholesale through the repository, and audit the change at
-      security level.
+      Authenticate the caller credential and resolve the caller's project:admin permission at
+      INSTANCE scope through the authorization seam (must be yes — the pack policy governs every
+      project's initialization; a project- or unit-scoped admin does NOT suffice), stamp updatedBy
+      from the authenticated caller, replace the active pack/profile policy wholesale through the
+      repository, and audit the change at security level.
     signature: 'setPackPolicy(credential: string, policy: InstancePackPolicy): InstancePackPolicy'
     returns: InstancePackPolicy
     params:
@@ -114,4 +116,4 @@ methods:
         type: ProjectInitRequest
 status: complete
 createdAt: '2026-07-08T21:59:46.667Z'
-updatedAt: '2026-07-16T00:14:02.046Z'
+updatedAt: '2026-07-16T15:20:12.632Z'

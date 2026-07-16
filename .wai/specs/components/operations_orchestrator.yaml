@@ -1,13 +1,15 @@
 id: operations_orchestrator
 name: Operations Orchestrator
 description: >-
-  Read-only workflow owner for hosted operational insight: it authenticates and authorizes each
-  caller, then assembles redacted instance health reports, resource usage snapshots, and advisory
-  (observe/warn) quota observations. It gathers the hosted project records, the two server-global
-  pack-tier listings, and per-project pack/profile references, delegates diagnostic and usage
-  derivation to the diagnostics specialist and quota evaluation to the quota specialist, and
-  performs no writes. Durable backup/restore is intentionally out of scope: operators rely on
-  platform-level data-volume snapshots per the hosted deployment guidance.
+  Workflow owner for hosted operational insight and instance posture: it authenticates and
+  authorizes each caller, then assembles redacted instance health reports, resource usage snapshots,
+  and advisory (observe/warn) quota observations — and owns the instance EXPOSURE-policy
+  administration (read/replace the webUiEnabled/requireTls posture, instance-level project:admin,
+  audited at security level). It gathers the hosted project records, the two server-global pack-tier
+  listings, and per-project pack/profile references, delegates diagnostic and usage derivation to
+  the diagnostics specialist and quota evaluation to the quota specialist. The exposure write is its
+  only mutation. Durable backup/restore is intentionally out of scope: operators rely on the
+  git-backing sweeps and platform-level data-volume snapshots per the hosted deployment guidance.
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
@@ -20,6 +22,8 @@ dependsOn:
   - authorization_specialist
   - project_relation_repository
   - public_surface_repository
+  - policy_repository
+  - audit_repository
 status: complete
 createdAt: '2026-07-09T09:09:26.722Z'
-updatedAt: '2026-07-15T21:39:46.354Z'
+updatedAt: '2026-07-16T15:29:01.719Z'

@@ -1,0 +1,209 @@
+id: project_ops_orchestrator_impl
+name: Project Ops Orchestrator Implementation
+description: >-
+  Pure 1:1 forwarding seam: every method passes the caller's credential (browser session id or
+  bearer token) straight to the owning orchestrator, whose resolver gate applies unchanged. No
+  authorization logic and no state here.
+contract: iproject_ops_orchestrator
+sourcePath: src/server/projectops.ts
+methods:
+  - name: listGlobalPacks
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator with the caller's credential
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: listGlobalPacks
+  - name: installGlobalPack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator with the caller's credential
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: installGlobalPack
+  - name: removeGlobalPack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator with the caller's credential
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: removeGlobalPack
+  - name: listProjectPacks
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator with the caller's credential
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: listProjectPacks
+  - name: installProjectPack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator with the caller's credential
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: installProjectPack
+  - name: removeProjectPack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator with the caller's credential
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: removeProjectPack
+  - name: getPackPolicy
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project policy orchestrator with the caller's credential
+        type: call
+        targetComponent: project_policy_orchestrator
+        targetMethod: getPackPolicy
+  - name: setPackPolicy
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project policy orchestrator with the caller's credential
+        type: call
+        targetComponent: project_policy_orchestrator
+        targetMethod: setPackPolicy
+  - name: evaluateProjectPolicy
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project policy orchestrator with the caller's credential
+        type: call
+        targetComponent: project_policy_orchestrator
+        targetMethod: evaluateProjectPolicy
+  - name: reconcileProjectPolicy
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project policy orchestrator with the caller's credential
+        type: call
+        targetComponent: project_policy_orchestrator
+        targetMethod: reconcileProjectPolicy
+  - name: listProducers
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator with the caller's credential
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: listProducers
+  - name: configureProducer
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator with the caller's credential
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: configureProducer
+  - name: removeProducer
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator with the caller's credential
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: removeProducer
+  - name: produceProducer
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator with the caller's credential
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: produceProducer
+  - name: getGitBinding
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator with the caller's credential
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: getGitBinding
+  - name: enableGit
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator with the caller's credential
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: enableGit
+  - name: disableGit
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator with the caller's credential
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: disableGit
+  - name: syncGit
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator with the caller's credential
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: syncGit
+  - name: commitProject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator with the caller's credential
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: commitProject
+  - name: configureGitSync
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator with the caller's credential
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: configureGitSync
+  - name: queryAuditEvents
+    narrative:
+      - stepNumber: 1
+        description: Forward to the identity orchestrator with the caller's credential
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: queryAuditEvents
+  - name: countAuditEvents
+    narrative:
+      - stepNumber: 1
+        description: Forward to the identity orchestrator with the caller's credential
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: countAuditEvents
+  - name: getExposurePolicy
+    narrative:
+      - stepNumber: 1
+        description: Forward to the operations orchestrator with the caller's credential
+        type: call
+        targetComponent: operations_orchestrator
+        targetMethod: getExposurePolicy
+  - name: setExposurePolicy
+    narrative:
+      - stepNumber: 1
+        description: Forward to the operations orchestrator with the caller's credential
+        type: call
+        targetComponent: operations_orchestrator
+        targetMethod: setExposurePolicy
+  - name: listBackingBindings
+    narrative:
+      - stepNumber: 1
+        description: Forward to the git backing orchestrator with the caller's credential
+        type: call
+        targetComponent: git_backing_orchestrator
+        targetMethod: listBackingBindings
+  - name: bindBackingScope
+    narrative:
+      - stepNumber: 1
+        description: Forward to the git backing orchestrator with the caller's credential
+        type: call
+        targetComponent: git_backing_orchestrator
+        targetMethod: bindScope
+  - name: unbindBackingScope
+    narrative:
+      - stepNumber: 1
+        description: Forward to the git backing orchestrator with the caller's credential
+        type: call
+        targetComponent: git_backing_orchestrator
+        targetMethod: unbindScope
+  - name: syncBackingScope
+    narrative:
+      - stepNumber: 1
+        description: Forward to the git backing orchestrator with the caller's credential
+        type: call
+        targetComponent: git_backing_orchestrator
+        targetMethod: syncBackingScope
+detail: calls-only
+status: draft
+createdAt: '2026-07-16T15:31:04.418Z'
+updatedAt: '2026-07-16T15:41:20.700Z'
