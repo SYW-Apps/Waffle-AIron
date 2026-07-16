@@ -130,6 +130,94 @@ export interface GitBackingStatus {
   lastSyncAt?: string;
 }
 
+// ── Identity providers / tokens / approvals / audit / instance policy ────────
+
+export interface IdentityProviderConfig {
+  id: string;
+  providerType: string;
+  displayName?: string;
+  issuerUrl?: string;
+  clientId?: string;
+  clientSecretRef?: string;
+  allowedDomains?: string[];
+  adminGroupClaims?: string[];
+  allowedRedirectUris?: string[];
+  authorizationEndpoint?: string;
+  tokenEndpoint?: string;
+  jwksUri?: string;
+  userinfoEndpoint?: string;
+  enabled: boolean;
+  updatedAt?: string;
+}
+
+export interface ApiKeyRecord {
+  id: string;
+  projects: string[];
+  createdAt: string;
+  label?: string;
+  ownerSubject?: PrincipalSubject;
+  expiresAt?: string;
+  revokedAt?: string;
+}
+
+export interface ApprovalRequest {
+  id: string;
+  kind: string;
+  status: string;
+  requestedBy: PrincipalSubject;
+  projectId?: string;
+  summary: string;
+  createdAt: string;
+  expiresAt?: string;
+}
+
+export interface AuditEvent {
+  id: string;
+  timestamp: string;
+  level: string;
+  category: string;
+  action: string;
+  outcome: string;
+  actor: PrincipalSubject;
+  projectId?: string;
+  target?: string;
+  metadata?: string;
+}
+
+export interface InstancePackPolicy {
+  id: string;
+  requiredGlobalPacks: string[];
+  defaultProjectPacks: string[];
+  allowedProfileIds?: string[];
+  requiredProfileIds?: string[];
+  blockedPackNames?: string[];
+  requireProfileSelection: boolean;
+  enforcementMode: string;
+}
+
+export interface HostExposurePolicy {
+  adminApiMode: string;
+  adminUiEnabled: boolean;
+  identityApiEnabled: boolean;
+  landscapeApiEnabled: boolean;
+  projectPolicyApiEnabled: boolean;
+  cliControlEnabled: boolean;
+  requireTls: boolean;
+  allowedOrigins?: string[];
+  allowedNetworks?: string[];
+  operationsApiEnabled: boolean;
+  webUiEnabled: boolean;
+}
+
+export interface GitBackingBinding {
+  id: string;
+  scopeKind: string;
+  scopeId?: string;
+  remote: string;
+  branch?: string;
+  lastSyncAt?: string;
+}
+
 /** The best human label for a user or subject: name, then email, then a short id. */
 export function subjectLabel(s: { displayName?: string; email?: string; userId?: string }): string {
   if (s.displayName && s.displayName.trim()) return s.displayName;

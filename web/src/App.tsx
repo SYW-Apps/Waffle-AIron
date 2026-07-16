@@ -10,6 +10,11 @@ import { Roles } from './views/Roles';
 import { Units } from './views/Units';
 import { Projects } from './views/Projects';
 import { ProjectOps } from './views/ProjectOps';
+import { Tokens } from './views/Tokens';
+import { Providers } from './views/Providers';
+import { Approvals } from './views/Approvals';
+import { Audit } from './views/Audit';
+import { Instance } from './views/Instance';
 import { post } from './api';
 
 interface NavItem {
@@ -22,12 +27,17 @@ interface NavItem {
 const MAIN_NAV: NavItem[] = [
   { to: '/', label: 'Canvas', icon: '◈', end: true },
   { to: '/projects', label: 'Projects', icon: '▦' },
+  { to: '/agents', label: 'Agents', icon: '⌁' },
 ];
 
 const ADMIN_NAV: NavItem[] = [
   { to: '/admin/users', label: 'Users', icon: '⦿' },
   { to: '/admin/roles', label: 'Roles', icon: '⛨' },
   { to: '/admin/units', label: 'Organization', icon: '⌂' },
+  { to: '/admin/providers', label: 'Sign-in (SSO)', icon: '⚿' },
+  { to: '/admin/approvals', label: 'Approvals', icon: '✓' },
+  { to: '/admin/audit', label: 'Audit', icon: '☰' },
+  { to: '/admin/instance', label: 'Instance', icon: '⚙' },
 ];
 
 function NavList(props: { items: NavItem[]; collapsed: boolean }) {
@@ -104,9 +114,14 @@ function Shell() {
             <Route path="/" element={<Home />} />
             <Route path="/projects" element={<Projects />} />
             <Route path="/projects/:projectId" element={<ProjectOps />} />
+            <Route path="/agents" element={<Tokens />} />
             <Route path="/admin/users" element={<Users />} />
             <Route path="/admin/roles" element={<Roles />} />
             <Route path="/admin/units" element={<Units />} />
+            <Route path="/admin/providers" element={<Providers />} />
+            <Route path="/admin/approvals" element={<Approvals />} />
+            <Route path="/admin/audit" element={<Audit />} />
+            <Route path="/admin/instance" element={<Instance />} />
             <Route path="/admin" element={<Navigate to="/admin/users" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
