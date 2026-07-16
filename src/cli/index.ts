@@ -30,6 +30,7 @@ import {
   runDev,
   runHostProject,
   runHostUnit,
+  runHostPermission,
   runHostKey,
   runHostLock,
   runHostPromote,
@@ -481,14 +482,40 @@ hostCmd
   });
 
 hostCmd
+  .command('permission <action>')
+  .description('set | list | remove a permission assignment (the subject×scope×capability grid)')
+  .option('--user <userId>', 'the subject user id (for set; optional filter for list)')
+  .option('--capability <capability>', 'project:read | project:create | project:write | project:admin | approval:decide')
+  .option('--value <value>', 'yes | approval | no | inherit', 'yes')
+  .option('--project <id>', 'anchor the assignment at a project scope')
+  .option('--unit <unitId>', 'anchor the assignment at an organization-unit scope')
+  .option('--instance', 'anchor the assignment at the instance scope (the default)')
+  .option('--id <assignmentId>', 'assignment id (for remove)')
+  .option('--data-dir <path>', 'data root')
+  .action(async (action: string, opts) => {
+    await runHostPermission(action, {
+      user: opts.user,
+      capability: opts.capability,
+      value: opts.value,
+      project: opts.project,
+      unit: opts.unit,
+      instance: opts.instance,
+      id: opts.id,
+      dataDir: opts.dataDir,
+    });
+  });
+
+hostCmd
   .command('key <action>')
   .description('mint | list | revoke an API key')
   .option('--project <id>', 'project id or * (for mint/list)')
-  .option('--role <role>', 'editor | admin (for mint)', 'editor')
+  .option('--owner <userId>', 'mint an owner-bound token acting as this user\'s live permission (assignment model)')
+  .option('--label <label>', 'display label for an owner-bound token')
+  .option('--role <role>', 'editor | admin (legacy ownerless mint)', 'editor')
   .option('--id <id>', 'key id (for revoke)')
   .option('--data-dir <path>', 'data root')
   .action(async (action: string, opts) => {
-    await runHostKey(action, { project: opts.project, role: opts.role, id: opts.id, dataDir: opts.dataDir });
+    await runHostKey(action, { project: opts.project, owner: opts.owner, label: opts.label, role: opts.role, id: opts.id, dataDir: opts.dataDir });
   });
 
 hostCmd

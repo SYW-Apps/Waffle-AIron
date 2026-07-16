@@ -8,13 +8,23 @@ import { logger } from '../utils/logger.js';
 import { WaironError } from '../utils/errors.js';
 import * as admin from '../server/admin.js';
 import * as packs from '../server/packs.js';
+import * as permissionadmin from '../server/permissionadmin.js';
+import { mintToken } from '../server/identity.js';
 import { upsertUnit as landscapeUpsertUnit } from '../server/landscape.js';
 import { AdminAuthError, LockValidationError } from '../server/admin.js';
 import { startHostServer } from '../server/http.js';
 import { registerLocalDevProject } from '../server/projects.js';
 import { upsertIdentityProviderRecord } from '../server/policy.js';
 import { setSecret } from '../utils/secrets.js';
-import type { HostConfig, HostExposurePolicy, IdentityProviderConfig, DisplayRole } from '../server/types.js';
+import type {
+  Capability,
+  DisplayRole,
+  HostConfig,
+  HostExposurePolicy,
+  IdentityProviderConfig,
+  PermissionValue,
+  ScopeKind,
+} from '../server/types.js';
 
 // ---------------------------------------------------------------------------
 // CLI Host Client Adapter + host command runners (sdd_cli → sdd_host)
@@ -40,6 +50,11 @@ export interface HostOptions {
   kind?: string;
   project?: string;
   role?: string;
+  owner?: string;
+  label?: string;
+  user?: string;
+  capability?: string;
+  instance?: boolean;
   remote?: string;
   branch?: string;
   target?: string;
@@ -389,6 +404,82 @@ export async function runHostUnit(action: string, options: HostOptions = {}): Pr
   }
 }
 
+// ── wairon host permission <action> ──────────────────────────────────────────
+
+const CAPABILITIES: Capability[] = ['project:read', 'project:create', 'project:write', 'project:admin', 'approval:decide'];
+const PERMISSION_VALUES: PermissionValue[] = ['yes', 'approval', 'no', 'inherit'];
+
+/** The assignment scope from the mutually exclusive --project/--unit/--instance flags. */
+function resolveScopeOptions(options: HostOptions): { kind: ScopeKind; id?: string } {
+  if (options.project) return { kind: 'project', id: options.project };
+  if (options.unit) return { kind: 'unit', id: options.unit };
+  return { kind: 'instance' };
+}
+
+export async function runHostPermission(action: string, options: HostOptions = {}): Promise<void> {
+  const cfg = resolveHostConfig(options);
+  const cred = masterCredential();
+  try {
+    switch (action) {
+      case 'set': {
+        if (!options.user) throw new WaironError('`--user <userId>` is required for `host permission set`.');
+        if (!options.capability || !CAPABILITIES.includes(options.capability as Capability)) {
+          throw new WaironError(`\`--capability\` must be one of: ${CAPABILITIES.join(', ')}.`);
+        }
+        const value = (options.value ?? 'yes') as PermissionValue;
+        if (!PERMISSION_VALUES.includes(value)) {
+          throw new WaironError(`\`--value\` must be one of: ${PERMISSION_VALUES.join(', ')}.`);
+        }
+        const scope = resolveScopeOptions(options);
+        const stored = permissionadmin.setAssignment(cfg, cred, {
+          id: '',
+          subjectKind: 'user',
+          subjectId: options.user,
+          scopeKind: scope.kind,
+          ...(scope.id !== undefined ? { scopeId: scope.id } : {}),
+          capability: options.capability as Capability,
+          value,
+          createdAt: '',
+        });
+        logger.success(
+          `Assignment ${stored.id}: ${options.user} ${options.capability}=${value} @ ${scope.kind}${scope.id ? ` ${scope.id}` : ''}`,
+        );
+        break;
+      }
+      case 'list': {
+        const scope = resolveScopeOptions(options);
+        const list = permissionadmin.listAssignments(
+          cfg,
+          cred,
+          options.project || options.unit || options.instance ? scope.kind : undefined,
+          scope.id,
+          options.user ? 'user' : undefined,
+          options.user,
+        );
+        if (!list.length) {
+          logger.info('No assignments.');
+        } else {
+          for (const a of list) {
+            const subject = a.subjectKind === 'everyone' ? 'everyone' : a.subjectId;
+            logger.info(`  ${a.id}  ${String(subject).padEnd(20)} ${a.capability.padEnd(16)} ${a.value.padEnd(9)} ${a.scopeKind}${a.scopeId ? ` ${a.scopeId}` : ''}`);
+          }
+        }
+        break;
+      }
+      case 'remove': {
+        if (!options.id) throw new WaironError('`--id <assignmentId>` is required for `host permission remove`.');
+        permissionadmin.removeAssignment(cfg, cred, options.id);
+        logger.success(`Removed assignment "${options.id}".`);
+        break;
+      }
+      default:
+        throw new WaironError(`Unknown permission action "${action}" (set | list | remove).`);
+    }
+  } catch (e) {
+    throw mapAdminError(e);
+  }
+}
+
 // ── wairon host key <action> ──────────────────────────────────────────────────
 
 export async function runHostKey(action: string, options: HostOptions = {}): Promise<void> {
@@ -398,6 +489,21 @@ export async function runHostKey(action: string, options: HostOptions = {}): Pro
     switch (action) {
       case 'mint': {
         if (!options.project) throw new WaironError('`--project <id|*>` is required for `host key mint`.');
+        // Owner-bound mint (the assignment-model path): the token carries NO
+        // permissions — it acts as the owner's LIVE permission, narrowed to the
+        // named project. Seed the owner's authority with `host permission set`.
+        if (options.owner) {
+          const key = mintToken(cfg, cred, {
+            ownerUserId: options.owner,
+            label: options.label ?? `cli token (${options.project})`,
+            projects: options.project === '*' ? ['*'] : [options.project],
+          });
+          logger.success(`API key minted for owner "${options.owner}" (shown once — store it now):`);
+          logger.blank();
+          console.log(`  ${chalk.bold(key)}`);
+          logger.blank();
+          break;
+        }
         const role = (options.role ?? 'editor') as DisplayRole;
         if (role !== 'editor' && role !== 'admin') throw new WaironError('`--role` must be editor or admin.');
         const key = admin.mintKey(cfg, cred, options.project, role);
@@ -405,6 +511,10 @@ export async function runHostKey(action: string, options: HostOptions = {}): Pro
         logger.blank();
         console.log(`  ${chalk.bold(key)}`);
         logger.blank();
+        logger.warn(
+          'This key has NO owner: under the permission model it resolves to ZERO permissions ' +
+            'on the data plane. Mint with `--owner <userId>` and seed authority with `host permission set`.',
+        );
         break;
       }
       case 'list': {
