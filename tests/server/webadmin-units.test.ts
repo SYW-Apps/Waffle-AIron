@@ -16,7 +16,7 @@ import {
 import { listAssignments } from '../../src/server/permissions.js';
 import { upsertUser, getUserById } from '../../src/server/users.js';
 import { queryAuditEvents } from '../../src/server/audit.js';
-import { allow, subjectOf } from './helpers.js';
+import { allow, mintUserToken, subjectOf } from './helpers.js';
 import type { HostConfig, OrganizationUnitRecord, ProjectPlacement, UnitDisposition } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
@@ -211,5 +211,37 @@ describe('web admin removeUnit dispositions (sdd_host)', () => {
       expiresAt: FUTURE(),
     }).id;
     expect(() => webadmin.removeUnit(cfg, nonAdmin, 'acme.it', { kind: 'cascade' })).toThrow(ForbiddenError);
+  });
+
+  // The instance-structure web-admin surfaces (org units, secret refs, IdP,
+  // removeUnit) gate on the RESOLVER's instance-level project:admin, not the
+  // env-super-admin bypass flag — so a DELEGATED instance admin (an SSO admin
+  // whose role binds project:admin@instance) reaches them, while a unit-scoped
+  // admin still cannot (the delegated-capture hole stays closed).
+  it('a delegated instance admin (project:admin@instance) reaches org administration; a unit-scoped admin does not', () => {
+    seedWorld();
+
+    // A delegated instance admin: project:admin at INSTANCE scope, no bypass flag.
+    allow(dataDir, 'sso-admin', 'project:admin', 'instance', undefined);
+    const delegated = createWebSession(dataDir, {
+      id: '', subject: { userId: 'sso-admin', kind: 'human', issuer: 'local' },
+      projects: ['*'], createdAt: '', expiresAt: FUTURE(),
+    }).id;
+    expect(webadmin.listOrganizationUnits(cfg, delegated).length).toBeGreaterThan(0);
+    expect(() => webadmin.listSecretRefs(cfg, delegated)).not.toThrow();
+    // They can dispose of a unit (an instance-wide rewrite) too.
+    expect(() => webadmin.removeUnit(cfg, delegated, 'acme.it', { kind: 'cascade' })).not.toThrow();
+
+    // A unit-scoped project:admin, however broad, does NOT reach the instance
+    // root — org administration is still refused.
+    allow(dataDir, 'unit-admin', 'project:admin', 'unit', 'beta');
+    const unitAdmin = createWebSession(dataDir, {
+      id: '', subject: { userId: 'unit-admin', kind: 'human', issuer: 'local' },
+      projects: ['*'], createdAt: '', expiresAt: FUTURE(),
+    }).id;
+    expect(() => webadmin.listOrganizationUnits(cfg, unitAdmin)).toThrow(ForbiddenError);
+    // A bearer token owned by the delegated admin reaches it identically (the
+    // web session and a token both resolve the owner's live permission).
+    mintUserToken(dataDir, { id: 'k-sso', userId: 'sso-admin' });
   });
 });

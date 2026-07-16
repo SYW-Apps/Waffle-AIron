@@ -5,6 +5,7 @@ import * as permissionadmin from './permissionadmin.js';
 import { remapScope, removeAssignmentsForScopes } from './permissions.js';
 import { remapUnitReferences } from './users.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
+import { authorize } from './authorization.js';
 import { ForbiddenError } from './identity.js';
 import { listSecretKeys } from '../utils/secrets.js';
 import type {
@@ -159,15 +160,21 @@ function buildOrgAuditEvent(principal: Principal, action: string, target: string
   return event;
 }
 
-/** Resolve the browser session to a Principal and require an instance-wide admin
- *  grant, or reject. Shared by every organization-unit method. */
+/** Resolve the browser session to a Principal and require INSTANCE-level
+ *  project:admin, or reject. Shared by the organization-unit, secret-ref, and
+ *  identity-provider methods — the instance-structure surfaces.
+ *
+ *  This is the resolver check `authorize(project:admin, instance)`, NOT the
+ *  env-super-admin bypass flag: the env super-admin, the master credential, and
+ *  a DELEGATED instance-wide admin (an SSO admin whose sso-admin role binds
+ *  project:admin at instance scope, or a direct project:admin@instance
+ *  assignment) all pass, matching the "instance ops → project:admin@instance"
+ *  rule. A unit-scoped project:admin, however broad, does NOT reach the instance
+ *  root, so it is still refused (closing the delegated-capture hole). */
 function requireInstanceAdminSession(cfg: HostConfig, sessionId: string): Principal {
   const principal = authenticateSession(cfg.dataDir, sessionId);
-  // Instance-admin is SUBJECT IDENTITY carried on the resolved permission
-  // subject (the env-anchored built-in / master / devMode bypass) — never a
-  // stored assignment, so this is a field check, not a resolver call.
-  if (principal.permissionSubject?.instanceAdmin !== true) {
-    throw new ForbiddenError('Forbidden — instance-admin required');
+  if (authorize(cfg.dataDir, principal, 'project:admin', 'instance', '').value !== 'yes') {
+    throw new ForbiddenError('Forbidden — instance-level project:admin required');
   }
   return principal;
 }

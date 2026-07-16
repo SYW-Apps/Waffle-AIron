@@ -637,6 +637,17 @@ describe('web portal client app shell (sdd_host)', () => {
     expect((html.match(/<style/gi) || []).length).toBe(1);
   });
 
+  it('the embedded client script is syntactically valid JS (a parse error would leave the page stuck on "Loading…")', () => {
+    // The whole client lives inside serveApp's template literal, so a valid
+    // template-literal escape (e.g. \') can still emit INVALID browser JS that
+    // kills the entire <script> — the page then never boots. Compile the served
+    // script body: new Function() throws SyntaxError on a parse error but never
+    // executes it (so document/fetch are never touched).
+    const body = /<script>([\s\S]*?)<\/script>/i.exec(html)?.[1];
+    expect(body, 'the shell must carry exactly one inline <script>').toBeTruthy();
+    expect(() => new Function(body as string)).not.toThrow();
+  });
+
   it('wires every same-origin endpoint the client drives', () => {
     expect(html).toContain('/web/context');
     expect(html).toContain('/web/canvas'); // the embedded real canvas, per project

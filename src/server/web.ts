@@ -1117,6 +1117,10 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   // ---- state --------------------------------------------------------------
   var ctx = null;
   var selectedProjectId = '';
+  // Whether the Admin tab is shown. True for the env super-admin (ctx.isAdmin)
+  // AND for a DELEGATED/SSO instance admin — detected by probing a resolver-gated
+  // instance-admin read, since the slim context carries no permission projection.
+  var adminVisible = false;
 
   // ---- boot ---------------------------------------------------------------
   function boot() {
@@ -1205,18 +1209,31 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     var isLocal = !!(ctx && ctx.local);
     $('topbar').hidden = isLocal;
     $('whoLbl').textContent = (ctx.subject && (ctx.subject.displayName || ctx.subject.email || ctx.subject.userId)) || 'signed in';
+    // The "admin" BADGE marks the env super-admin specifically; the Admin TAB
+    // shows for any instance-level admin (env super-admin OR a delegated/SSO
+    // admin who holds project:admin@instance). The slim context only carries the
+    // env-super flag, so a delegated admin is detected by probing a
+    // resolver-gated instance-admin read (/web/admin/roles → project:admin@instance).
     $('adminBadge').hidden = !ctx.isAdmin;
-    $('navAdmin').hidden = !ctx.isAdmin;      // the Admin tab appears only for admins
-    // The context carries no permission projections anymore: write authority is
-    // enforced per request server-side (the resolver). Scope-aware read-only
-    // chrome returns with the roles/assignments UI.
+    adminVisible = !!ctx.isAdmin;
+    $('navAdmin').hidden = !adminVisible;
+    if (!adminVisible) {
+      api('/web/admin/roles').then(function (r) {
+        if (r.ok) { adminVisible = true; $('navAdmin').hidden = false; }
+      }).catch(function () { /* not an instance admin — tab stays hidden */ });
+    }
+    // The context carries no permission projections: write authority is enforced
+    // per request server-side (the resolver). Per-project ops (git/packs/policy/
+    // producers) are reachable by any signed-in user from the Projects view and
+    // gated per project server-side.
     $('roBadge').hidden = true;
 
     // The project selector comes from /web/projects — the resolver-filtered
     // listing of projects this principal can act on (dev mode lists the single
     // registered "local" project the same way).
-    api('/web/projects').then(function (r) { return r.ok ? r.json() : []; }).then(function (list) {
-      var pids = (list || []).map(function (rec) { return rec.id; });
+    api('/web/projects').then(function (r) { return r.ok ? r.json() : {}; }).then(function (list) {
+      // The route returns { projects: [...] } — read the array off the wrapper.
+      var pids = ((list && list.projects) || []).map(function (rec) { return rec.id; });
       var sel = $('projSel'); sel.innerHTML = '';
       pids.forEach(function (pid) {
         var o = document.createElement('option'); o.value = pid; o.textContent = pid; sel.appendChild(o);
@@ -1280,7 +1297,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   Array.prototype.forEach.call($('navTabs').children, function (b) {
     b.addEventListener('click', function () {
       var v = b.getAttribute('data-view');
-      if (v === 'admin' && !(ctx && ctx.isAdmin)) return;
+      if (v === 'admin' && !adminVisible) return;
       setView(v);
     });
   });
@@ -2125,7 +2142,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     ]).then(function (res) {
       var bindings = res[0], units = res[1];
       var html = '<div class="toolbar"><button class="mini" id="bkNew">Bind a backup repo</button></div><div id="bkForm"></div>';
-      html += '<p style="color:var(--dim);font-size:12px;margin:6px 0">A unit binding mirrors its subtree projects\' .wai/ trees; the instance binding backs up the whole instance structure. The secret store is never mirrored.</p>';
+      html += '<p style="color:var(--dim);font-size:12px;margin:6px 0">A unit binding mirrors the .wai/ trees of its subtree projects; the instance binding backs up the whole instance structure. The secret store is never mirrored.</p>';
       if (!bindings.length) html += '<div class="hint">No backup repositories bound.</div>';
       else {
         html += '<table class="grid"><thead><tr><th>Scope</th><th>Remote</th><th>Branch</th><th>Sync</th><th>Last</th><th></th></tr></thead><tbody>';
@@ -2423,7 +2440,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
           html = '<div class="frow">' + fcol('Remote URL', '<input id="gRemote-' + esc(pid) + '" placeholder="git remote URL" />')
             + fcol('Branch', '<input id="gBranch-' + esc(pid) + '" value="main" />') + '</div>'
             + '<div class="rowbtns"><button class="mini" id="gBind-' + esc(pid) + '">Bind repository</button> <span class="msg" id="gMsg-' + esc(pid) + '"></span></div>'
-            + '<p class="hint">wairon commits ONLY the .wai/ tree — the repo can be shared with the project\'s own code.</p>';
+            + '<p class="hint">wairon commits ONLY the .wai/ tree — the repo can be shared with the project code.</p>';
         } else {
           html = '<table class="grid"><tbody>'
             + '<tr><td>Remote</td><td>' + esc(s.remote) + '</td></tr>'
