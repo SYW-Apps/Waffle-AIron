@@ -10,7 +10,7 @@ import type { PermissionAssignment, UnitIdRemap } from './types.js';
 // <dataDir>/permissions.json, mirroring the user repository's convention.
 //
 // Internally this is the owned store / registry / index triad from the specs:
-//   - store    (loadStore / replaceAll): authoritative record set, disk-backed.
+//   - store    (load / replaceAll): authoritative record set, disk-backed.
 //   - registry (registrySet/…):          the write path — mutate + atomic swap.
 //   - index    (indexList/…):            the read path — pure projection.
 // The exported functions are the permission_repository facade: 1:1 forwarding.
@@ -37,7 +37,7 @@ function assignmentKey(a: PermissionAssignment): string {
  * the operator can repair it — persisted permissions are never silently dropped
  * (silently dropping them would fail OPEN for denies).
  */
-function loadStore(dataDir: string): PermissionAssignment[] {
+function load(dataDir: string): PermissionAssignment[] {
   const p = storePath(dataDir);
   let raw: string;
   try {
@@ -81,7 +81,7 @@ function replaceAll(dataDir: string, assignments: PermissionAssignment[]): void 
  * is exactly what the resolver treats as non-deciding.
  */
 function registrySet(dataDir: string, assignment: PermissionAssignment): PermissionAssignment {
-  const assignments = loadStore(dataDir);
+  const assignments = load(dataDir);
   const key = assignmentKey(assignment);
   const idx = assignments.findIndex((a) => assignmentKey(a) === key);
 
@@ -112,7 +112,7 @@ function registrySet(dataDir: string, assignment: PermissionAssignment): Permiss
 
 /** Remove one assignment by id and persist atomically; an absent id is a no-op. */
 function registryRemove(dataDir: string, assignmentId: string): void {
-  const assignments = loadStore(dataDir);
+  const assignments = load(dataDir);
   const remaining = assignments.filter((a) => a.id !== assignmentId);
   if (remaining.length === assignments.length) return;
   replaceAll(dataDir, remaining);
@@ -126,7 +126,7 @@ function registryRemove(dataDir: string, assignmentId: string): void {
 function registryRemapScope(dataDir: string, remap: UnitIdRemap[]): void {
   if (remap.length === 0) return;
   const lookup = new Map(remap.map((r) => [r.oldId, r.newId]));
-  const assignments = loadStore(dataDir);
+  const assignments = load(dataDir);
   let changed = false;
   const rewritten = assignments.map((a) => {
     const next = a.scopeId ? lookup.get(a.scopeId) : undefined;
@@ -146,7 +146,7 @@ function registryRemapScope(dataDir: string, remap: UnitIdRemap[]): void {
 function registryRemoveForScopes(dataDir: string, scopeIds: string[]): void {
   if (scopeIds.length === 0) return;
   const doomed = new Set(scopeIds);
-  const assignments = loadStore(dataDir);
+  const assignments = load(dataDir);
   const remaining = assignments.filter((a) => !(a.scopeId && doomed.has(a.scopeId)));
   if (remaining.length === assignments.length) return;
   replaceAll(dataDir, remaining);
@@ -166,7 +166,7 @@ function indexList(
   subjectId?: string,
   capability?: string,
 ): PermissionAssignment[] {
-  let assignments = loadStore(dataDir);
+  let assignments = load(dataDir);
   if (scopeIds && scopeIds.length > 0) {
     const wanted = new Set(scopeIds);
     assignments = assignments.filter((a) => a.scopeId !== undefined && wanted.has(a.scopeId));
@@ -179,7 +179,7 @@ function indexList(
 
 /** Return one assignment by id, or null when absent. */
 function indexGet(dataDir: string, assignmentId: string): PermissionAssignment | null {
-  return loadStore(dataDir).find((a) => a.id === assignmentId) ?? null;
+  return load(dataDir).find((a) => a.id === assignmentId) ?? null;
 }
 
 // ── Repository facade (1:1 forwarding) ─────────────────────────────────────

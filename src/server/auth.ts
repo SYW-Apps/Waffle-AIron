@@ -283,6 +283,22 @@ export function verifyBuiltinAdmin(cfg: HostConfig, user: string, password: stri
   return { userId: identity.superadminUserId, kind: 'human', issuer: 'local' };
 }
 
+/**
+ * The synthetic local-developer subject behind `wairon dev` sessions: the
+ * PERSISTED boot-reserved local-developer UUID under issuer 'local' (which this
+ * specialist recognizes as instance-admin by its full tuple). Owned here —
+ * built-in subject recognition and minting live together. Throws when the
+ * instance identity has never been seeded: the dev server always runs the
+ * lifecycle init entrypoint before serving.
+ */
+export function localDevSubject(dataDir: string): PrincipalSubject {
+  const identity = getInstanceIdentity(dataDir);
+  if (!identity) {
+    throw new Error('instance identity is not seeded — the lifecycle init entrypoint must run before dev sessions mint');
+  }
+  return { userId: identity.localDevUserId, kind: 'human', issuer: 'local' };
+}
+
 /** The single control-plane entry point accepting three credential kinds: a browser
  *  web-session id (reserved prefix → resolved via the shared session helper, so a
  *  session authenticates every scoped endpoint exactly like a bearer token), the

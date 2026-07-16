@@ -38,7 +38,7 @@ import {
   actionableUnitIds,
 } from './authorization.js';
 import { isReservedSubject } from './auth.js';
-import { SSO_ADMIN_ROLE_ID } from './roles.js';
+import { SSO_ADMIN_ROLE_ID } from './types.js';
 import { sendJson } from './httpio.js';
 import type {
   ApiKeyRecord,

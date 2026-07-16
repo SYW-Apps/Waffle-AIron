@@ -1,6 +1,6 @@
 import * as crypto from 'crypto';
 import type { IncomingMessage, ServerResponse } from 'http';
-import { signSsoState, verifySsoState, authenticateSession, verifyBuiltinAdmin } from './auth.js';
+import { signSsoState, verifySsoState, authenticateSession, verifyBuiltinAdmin, localDevSubject } from './auth.js';
 import { resolveEndpoints, buildAuthorizationUrl, exchangeCode, resolveSubject, resolveGroups } from './idp.js';
 import {
   resolveEnabledProvider,
@@ -10,11 +10,10 @@ import {
   ANONYMOUS_SSO_ACTOR,
   type SsoStatePayload,
 } from './identity.js';
-import { SSO_ADMIN_ROLE_ID } from './roles.js';
+import { SSO_ADMIN_ROLE_ID } from './types.js';
 import * as webadmin from './webadmin.js';
 import * as webproject from './webproject.js';
 import { listIdentityProviderRecords } from './policy.js';
-import { getInstanceIdentity } from './instance.js';
 import { assertAllowedRedirectUri } from './idp.js';
 import { getHealthReport, getUsage } from './operations.js';
 import { listPendingRequests, decideRequest } from './projectlifecycle.js';
@@ -94,16 +93,11 @@ const WEB_SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
 // sole source of those conventions (subject id, project id, session lifetime).
 
 /** The synthetic identity behind the local dev session: the PERSISTED
- *  boot-reserved local-developer UUID (issuer 'local', seeded by the lifecycle
- *  init entrypoint), which the auth specialist recognizes as instance-admin by
- *  its full tuple. Throws when the instance identity has never been seeded —
- *  the dev server always runs init before serving. */
+ *  boot-reserved local-developer UUID, resolved through the auth specialist
+ *  (which owns built-in subject recognition — see auth.localDevSubject; it
+ *  throws when the instance identity has never been seeded). */
 function devSubject(cfg: HostConfig): PrincipalSubject {
-  const identity = getInstanceIdentity(cfg.dataDir);
-  if (!identity) {
-    throw new Error('instance identity is not seeded — the lifecycle init entrypoint must run before dev sessions mint');
-  }
-  return { userId: identity.localDevUserId, kind: 'human', issuer: 'local' };
+  return localDevSubject(cfg.dataDir);
 }
 
 /** The fixed hosted-project id the dev server registers the cwd under. */

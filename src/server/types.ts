@@ -45,6 +45,13 @@ export interface RolePermission {
   value: PermissionValue;
 }
 
+/** The reserved id of the built-in SSO-admin role — bound automatically by the
+ *  SSO flows when a user's verified groups intersect the provider's
+ *  adminGroupClaims. The role definition itself lives in BUILTIN_ROLES
+ *  (roles.ts); the id lives here so consumers reference it without taking an
+ *  edge onto the role repository. */
+export const SSO_ADMIN_ROLE_ID = 'sso-admin';
+
 /** A named, reusable permission template bound to users (optionally scoped).
  *  Most roles are admin-defined and stored; the BUILT-IN reserved roles are
  *  intrinsic constants always merged into the PermissionWorld. */

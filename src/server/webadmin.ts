@@ -6,7 +6,6 @@ import { remapScope, removeAssignmentsForScopes } from './permissions.js';
 import { remapUnitReferences } from './users.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import { ForbiddenError } from './identity.js';
-import { isInstanceAdmin } from './authorization.js';
 import { listSecretKeys } from '../utils/secrets.js';
 import type {
   ApiKeyRecord,
@@ -164,7 +163,10 @@ function buildOrgAuditEvent(principal: Principal, action: string, target: string
  *  grant, or reject. Shared by every organization-unit method. */
 function requireInstanceAdminSession(cfg: HostConfig, sessionId: string): Principal {
   const principal = authenticateSession(cfg.dataDir, sessionId);
-  if (!isInstanceAdmin(principal)) {
+  // Instance-admin is SUBJECT IDENTITY carried on the resolved permission
+  // subject (the env-anchored built-in / master / devMode bypass) — never a
+  // stored assignment, so this is a field check, not a resolver call.
+  if (principal.permissionSubject?.instanceAdmin !== true) {
     throw new ForbiddenError('Forbidden — instance-admin required');
   }
   return principal;

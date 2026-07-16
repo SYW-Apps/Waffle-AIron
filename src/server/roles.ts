@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { SSO_ADMIN_ROLE_ID } from './types.js';
 import type { Role } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -9,7 +10,7 @@ import type { Role } from './types.js';
 // <dataDir>/roles.json, mirroring the user repository's storage convention.
 //
 // Internally this is the owned store / registry / index triad from the specs:
-//   - store    (loadStore / replaceAll): authoritative record set, disk-backed.
+//   - store    (load / replaceAll): authoritative record set, disk-backed.
 //   - registry (registryCreate/…):       the write path — mutate + atomic swap.
 //   - index    (indexGetRole/…):         the read path — pure projection.
 // The exported functions are the role_repository facade: pure 1:1 forwarding.
@@ -27,8 +28,9 @@ import type { Role } from './types.js';
  * instance-admin bypass, which is env-anchored to the built-in super-admin and
  * can never be conferred by a role, an assignment, or a minted token.
  */
-/** The reserved id of the built-in SSO-admin role (see BUILTIN_ROLES). */
-export const SSO_ADMIN_ROLE_ID = 'sso-admin';
+// The reserved id itself lives in types.ts (so consumers reference it without
+// an edge onto this repository); republished here for the role-domain surface.
+export { SSO_ADMIN_ROLE_ID } from './types.js';
 
 export const BUILTIN_ROLES: Role[] = [
   {
@@ -63,7 +65,7 @@ function storePath(dataDir: string): string {
  * file or structurally invalid JSON fails with a storage error naming the path so
  * the operator can repair it — persisted roles are never silently discarded.
  */
-function loadStore(dataDir: string): Role[] {
+function load(dataDir: string): Role[] {
   const p = storePath(dataDir);
   let raw: string;
   try {
@@ -108,7 +110,7 @@ function registryCreate(dataDir: string, role: Role): Role {
   if (isBuiltinRoleId(role.id)) {
     throw new Error(`Role "${role.id}" is a reserved built-in role and cannot be created.`);
   }
-  const roles = loadStore(dataDir);
+  const roles = load(dataDir);
   if (roles.some((r) => r.id === role.id)) {
     throw new Error(`Role "${role.id}" already exists.`);
   }
@@ -127,7 +129,7 @@ function registryUpdate(dataDir: string, role: Role): Role {
   if (isBuiltinRoleId(role.id)) {
     throw new Error(`Role "${role.id}" is a reserved built-in role and cannot be modified.`);
   }
-  const roles = loadStore(dataDir);
+  const roles = load(dataDir);
   const idx = roles.findIndex((r) => r.id === role.id);
   if (idx === -1) {
     throw new Error(`Role "${role.id}" not found.`);
@@ -147,7 +149,7 @@ function registryDelete(dataDir: string, roleId: string): void {
   if (isBuiltinRoleId(roleId)) {
     throw new Error(`Role "${roleId}" is a reserved built-in role and cannot be deleted.`);
   }
-  const roles = loadStore(dataDir);
+  const roles = load(dataDir);
   const remaining = roles.filter((r) => r.id !== roleId);
   if (remaining.length === roles.length) return;
   replaceAll(dataDir, remaining);
@@ -157,12 +159,12 @@ function registryDelete(dataDir: string, roleId: string): void {
 
 /** Return the stored role whose id matches exactly, or null when absent. */
 function indexGetRole(dataDir: string, roleId: string): Role | null {
-  return loadStore(dataDir).find((r) => r.id === roleId) ?? null;
+  return load(dataDir).find((r) => r.id === roleId) ?? null;
 }
 
 /** Return every stored role, sorted by id for stable listing. */
 function indexListRoles(dataDir: string): Role[] {
-  return loadStore(dataDir).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  return load(dataDir).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
 // ── Repository facade (1:1 forwarding) ─────────────────────────────────────
