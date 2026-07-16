@@ -1,7 +1,8 @@
-import { useState } from 'react';
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import { SessionProvider, useSession } from './session';
+import { SettingsProvider, useSettings } from './settings';
 import { ToastProvider } from './ui';
+import { HeaderMenu } from './HeaderMenu';
 import { Login } from './views/Login';
 import { Home } from './views/Home';
 import { Users } from './views/Users';
@@ -24,34 +25,44 @@ const MAIN_NAV: NavItem[] = [
 ];
 
 const ADMIN_NAV: NavItem[] = [
-  { to: '/admin/users', label: 'Users', icon: '👤' },
-  { to: '/admin/roles', label: 'Roles', icon: '🛡' },
-  { to: '/admin/units', label: 'Organization', icon: '🏢' },
+  { to: '/admin/users', label: 'Users', icon: '⦿' },
+  { to: '/admin/roles', label: 'Roles', icon: '⛨' },
+  { to: '/admin/units', label: 'Organization', icon: '⌂' },
 ];
 
-function Sidebar(props: { adminVisible: boolean; open: boolean; onNavigate: () => void }) {
+function NavList(props: { items: NavItem[]; collapsed: boolean }) {
   return (
-    <aside className={`sidebar ${props.open ? 'sidebar-open' : ''}`}>
-      <div className="sidebar-brand">wairon</div>
-      <nav className="nav-group">
-        {MAIN_NAV.map((n) => (
-          <NavLink key={n.to} to={n.to} end={n.end} className="nav-item" onClick={props.onNavigate}>
-            <span className="nav-icon">{n.icon}</span>
-            {n.label}
-          </NavLink>
-        ))}
-      </nav>
+    <nav className="nav-group">
+      {props.items.map((n) => (
+        <NavLink key={n.to} to={n.to} end={n.end} className="nav-item" title={props.collapsed ? n.label : undefined}>
+          <span className="nav-icon">{n.icon}</span>
+          {!props.collapsed && <span className="nav-text">{n.label}</span>}
+        </NavLink>
+      ))}
+    </nav>
+  );
+}
+
+function Sidebar(props: { adminVisible: boolean; collapsed: boolean; onToggle: () => void }) {
+  return (
+    <aside className="sidebar">
+      <div className="sidebar-top">
+        {!props.collapsed && <span className="brand syw-gradient-text">wairon</span>}
+        <button
+          className="icon-btn sidebar-toggle"
+          onClick={props.onToggle}
+          aria-label={props.collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={props.collapsed ? 'Expand' : 'Collapse'}
+        >
+          ☰
+        </button>
+      </div>
+      <NavList items={MAIN_NAV} collapsed={props.collapsed} />
       {props.adminVisible && (
         <>
-          <div className="nav-label">Administration</div>
-          <nav className="nav-group">
-            {ADMIN_NAV.map((n) => (
-              <NavLink key={n.to} to={n.to} className="nav-item" onClick={props.onNavigate}>
-                <span className="nav-icon">{n.icon}</span>
-                {n.label}
-              </NavLink>
-            ))}
-          </nav>
+          {!props.collapsed && <div className="nav-label">Administration</div>}
+          {props.collapsed && <div className="nav-divider" />}
+          <NavList items={ADMIN_NAV} collapsed={props.collapsed} />
         </>
       )}
     </aside>
@@ -60,8 +71,7 @@ function Sidebar(props: { adminVisible: boolean; open: boolean; onNavigate: () =
 
 function Shell() {
   const { ctx, adminVisible } = useSession();
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const who = ctx?.subject.displayName || ctx?.subject.email || ctx?.subject.userId || 'signed in';
+  const { sidebarCollapsed, toggleSidebar } = useSettings();
   const local = !!ctx?.local;
 
   async function signOut() {
@@ -72,7 +82,7 @@ function Shell() {
     }
   }
 
-  // Local dev mode: no chrome at all — the canvas fills the viewport.
+  // Local dev mode (`wairon dev`): no chrome — the canvas fills the viewport.
   if (local) {
     return (
       <main className="view-full">
@@ -82,22 +92,12 @@ function Shell() {
   }
 
   return (
-    <div className={`shell ${drawerOpen ? 'drawer-open' : ''}`}>
-      <Sidebar adminVisible={adminVisible} open={drawerOpen} onNavigate={() => setDrawerOpen(false)} />
-      {drawerOpen && <div className="scrim scrim-drawer" onClick={() => setDrawerOpen(false)} />}
+    <div className={`shell ${sidebarCollapsed ? 'is-collapsed' : ''}`}>
+      <Sidebar adminVisible={adminVisible} collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
       <div className="main-col">
         <header className="topbar">
-          <button className="icon-btn hamburger" aria-label="Menu" onClick={() => setDrawerOpen((o) => !o)}>
-            ☰
-          </button>
           <span className="spacer" />
-          <div className="account">
-            <span className="who">{who}</span>
-            {ctx?.isAdmin && <span className="badge badge-accent">admin</span>}
-            <button className="btn btn-ghost btn-sm" onClick={signOut}>
-              Sign out
-            </button>
-          </div>
+          {ctx && <HeaderMenu ctx={ctx} onSignOut={signOut} />}
         </header>
         <main className="view">
           <Routes>
@@ -136,12 +136,14 @@ function Gate() {
 
 export function App() {
   return (
-    <BrowserRouter>
-      <SessionProvider>
-        <ToastProvider>
-          <Gate />
-        </ToastProvider>
-      </SessionProvider>
-    </BrowserRouter>
+    <SettingsProvider>
+      <BrowserRouter>
+        <SessionProvider>
+          <ToastProvider>
+            <Gate />
+          </ToastProvider>
+        </SessionProvider>
+      </BrowserRouter>
+    </SettingsProvider>
   );
 }
