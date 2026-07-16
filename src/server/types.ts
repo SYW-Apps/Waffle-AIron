@@ -372,12 +372,17 @@ export interface ProjectProfileSelection {
   selectedAt: string;
 }
 
-/** A self-service request to initialize a new hosted project. */
+/** A request to initialize a new hosted project (project-lifecycle tools,
+ *  admin UI, CLI, or MCP-assisted setup). */
 export interface ProjectInitRequest {
   id: string;
   displayName?: string;
   description?: string;
-  ownerUnitId?: string;
+  /** The organization unit that owns the project. REQUIRED — every project is
+   *  placed at creation so the permission resolver can always enumerate it; a
+   *  fresh instance must create its first organization unit before
+   *  initializing projects. */
+  ownerUnitId: string;
   environment?: string;
   profileSelection?: ProjectProfileSelection;
 }
@@ -843,12 +848,12 @@ export interface PromoteResult {
   message: string;
 }
 
-/** The standardized result of a self-service action (lock/promote/initialize).
+/** The standardized result of a project lifecycle action (initialize/lock/promote).
  *  EXECUTE-PRIMARY: when the caller is authorized the action RUNS and status is
  *  'completed' with the natural result; when their effective permission is
  *  'approval' the action is not run and status is 'pending-approval' carrying
  *  the created request. A 'no' permission never returns this — it raises Forbidden. */
-export interface SelfServiceOutcome {
+export interface ProjectActionOutcome {
   status: 'completed' | 'pending-approval';
   action: 'project:init' | 'project:lock' | 'project:promote';
   /** Human-readable outcome: the result detail when completed, or that a

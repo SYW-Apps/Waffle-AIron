@@ -1011,27 +1011,34 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     const hostedStub = (): CallToolResult =>
       errText('This hosted tool is dispatched by the hosting data plane before reaching the MCP server; it is unavailable outside a hosted request.');
 
-    reg<Record<string, never>>(server, 'sdd_host_request_project_lock', {
-      description: 'Hosted self-service: create an approval request to LOCK the bound project (validate-as-complete gate + commit-scoped lock record). Returns the approval request for tracking; an admin decides it.',
+    reg<Record<string, never>>(server, 'sdd_host_lock_project', {
+      description: 'Hosted project lifecycle (execute-primary): LOCK the bound project (validate-as-complete gate + commit-scoped lock record). Executes directly when your resolved permission is yes and returns the completed outcome; when it is approval, a pending approval request is created instead (await it with sdd_host_await_approval).',
       inputSchema: {},
     }, hostedStub);
-    reg<Record<string, never>>(server, 'sdd_host_request_project_promotion', {
-      description: 'Hosted self-service: create an approval request to PROMOTE the bound, locked project after a StateId re-check. Returns the approval request; an admin decides it.',
+    reg<Record<string, never>>(server, 'sdd_host_promote_project', {
+      description: 'Hosted project lifecycle (execute-primary): PROMOTE the bound, locked project after a StateId re-check. Executes directly when your resolved permission is yes; when it is approval, a pending approval request is created instead.',
       inputSchema: {},
     }, hostedStub);
-    reg<{ id: string }>(server, 'sdd_host_request_project_initialization', {
-      description: 'Hosted self-service: create an approval request to initialize a new hosted project (optionally into an organization unit, with a profile selection). Returns the approval request; an admin decides it.',
+    reg<{ id: string; ownerUnitId: string }>(server, 'sdd_host_initialize_project', {
+      description: 'Hosted project lifecycle (execute-primary): initialize a new hosted project into its REQUIRED owner organization unit (with an optional profile selection). Executes directly when your resolved permission is yes; when it is approval, a pending approval request is created instead.',
       inputSchema: {
         id: z.string().describe('Requested project id'),
         displayName: z.string().optional(),
         description: z.string().optional(),
-        ownerUnitId: z.string().optional().describe('Organization unit to place the project in'),
+        ownerUnitId: z.string().describe('REQUIRED organization unit that owns the new project (every project is placed at creation)'),
         environment: z.string().optional(),
       },
     }, hostedStub);
     reg<{ requestId: string }>(server, 'sdd_host_get_approval_status', {
-      description: 'Hosted self-service: read the status of one of your approval requests.',
+      description: 'Hosted project lifecycle: read the status of one of your approval requests.',
       inputSchema: { requestId: z.string() },
+    }, hostedStub);
+    reg<{ requestId: string; timeoutSeconds?: number }>(server, 'sdd_host_await_approval', {
+      description: 'Hosted project lifecycle: long-poll one of YOUR approval requests until it is decided (approved requests auto-execute, so an approval resolves as completed) or the timeout elapses. Returns the request in its current state.',
+      inputSchema: {
+        requestId: z.string(),
+        timeoutSeconds: z.number().optional().describe('How long to wait server-side (clamped; 0 returns the current state immediately)'),
+      },
     }, hostedStub);
     reg<Record<string, never>>(server, 'sdd_landscape_list_reachable_projects', {
       description: 'Hosted landscape: the projects reachable from the BOUND project through ACTIVE cross-project relations (directional, relations-only), each with the relation ids/kinds and target public interface ids.',

@@ -33,6 +33,7 @@ export interface HostOptions {
   dataDir?: string;
   noAuth?: boolean;
   id?: string;
+  unit?: string;
   project?: string;
   role?: string;
   remote?: string;
@@ -319,7 +320,12 @@ export async function runHostProject(action: string, options: HostOptions = {}):
     switch (action) {
       case 'create': {
         if (!options.id) throw new WaironError('`--id <id>` is required for `host project create`.');
-        const rec = admin.createProject(cfg, cred, options.id);
+        if (!options.unit) {
+          throw new WaironError(
+            '`--unit <unitId>` is required for `host project create` — every project is placed in an organization unit at creation.',
+          );
+        }
+        const rec = admin.createProject(cfg, cred, options.id, options.unit);
         logger.success(`Created project "${rec.id}" at ${chalk.gray(rec.rootPath)}`);
         break;
       }

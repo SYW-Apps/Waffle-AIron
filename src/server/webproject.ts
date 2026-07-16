@@ -56,15 +56,15 @@ export function listProjects(cfg: HostConfig, sessionId: string): HostedProjectR
 }
 
 /**
- * Create a hosted project. Forwards to admin_orchestrator.createProject passing
- * the sessionId as the credential — project:create permission (and the required
- * target org unit) is enforced there.
+ * Create a hosted project placed in the REQUIRED owner unit. Forwards to
+ * admin_orchestrator.createProject passing the sessionId as the credential —
+ * project:create permission over the target unit is enforced there.
  */
 export function createProject(
   cfg: HostConfig,
   sessionId: string,
   id: string,
-  unitId?: string,
+  unitId: string,
 ): HostedProjectRecord {
   return adminCreateProject(cfg, sessionId, id, unitId); // step 1 (forward)
 }
@@ -72,7 +72,7 @@ export function createProject(
 /**
  * Lock a project (validate-as-complete, then write the StateId-scoped lock).
  * Forwards to admin_orchestrator.lockProject passing the sessionId as the
- * credential — lock:create scope is enforced there.
+ * credential — project:write permission is enforced there.
  */
 export function lockProject(cfg: HostConfig, sessionId: string, projectId: string): LockRecord {
   return adminLockProject(cfg, sessionId, projectId); // step 1 (forward)
@@ -81,7 +81,7 @@ export function lockProject(cfg: HostConfig, sessionId: string, projectId: strin
 /**
  * Mark a locked project ready for promotion after the StateId re-check. Forwards
  * to admin_orchestrator.promoteProject passing the sessionId as the credential —
- * promote:mark-ready scope is enforced there.
+ * project:write permission is enforced there.
  */
 export function promoteProject(cfg: HostConfig, sessionId: string, projectId: string): PromoteResult {
   return adminPromoteProject(cfg, sessionId, projectId); // step 1 (forward)
@@ -89,7 +89,7 @@ export function promoteProject(cfg: HostConfig, sessionId: string, projectId: st
 
 /**
  * Deregister a project and its tree. Forwards to admin_orchestrator.destroyProject
- * passing the sessionId as the credential — project:destroy scope is enforced there.
+ * passing the sessionId as the credential — project:admin permission is enforced there.
  */
 export function destroyProject(cfg: HostConfig, sessionId: string, id: string): void {
   adminDestroyProject(cfg, sessionId, id); // step 1 (forward)

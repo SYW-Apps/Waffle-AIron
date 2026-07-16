@@ -6,27 +6,35 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { routeAdmin } from '../../src/server/http.js';
-import { requestProjectInitialization } from '../../src/server/selfservice.js';
+import { initializeProject } from '../../src/server/projectlifecycle.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
 import { existingProjectRoot } from '../../src/server/projects.js';
+import { setAssignment } from '../../src/server/permissions.js';
+import { upsertOrganizationUnit } from '../../src/server/organization.js';
 import type {
   ApiKeyRecord,
+  ApprovalRequest,
+  Capability,
   HostConfig,
+  OrganizationUnitRecord,
+  PermissionValue,
   PrincipalSubject,
-  ProjectGrant,
+  ScopeKind,
 } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
-// Admin approval endpoints (sdd_host) — Phase 2. Exercised through the REAL
-// admin-plane routing (http.ts routeAdmin) over a real HTTP listener bound to an
-// ephemeral port, so the routes, the path/body → ApprovalDecision assembly, and
-// the 401/403/404/400 error mapping are all covered end-to-end. The three routes
-// forward to the self-service orchestrator per admin_portal_impl:
-//   GET  /admin/approvals            → listPendingRequests
-//   POST /admin/approvals/{id}/decision → decideRequest
-//   POST /admin/approvals/{id}/execute  → executeApprovedRequest
+// Admin approval endpoints (sdd_host) — exercised through the REAL admin-plane
+// routing (http.ts routeAdmin) over a real HTTP listener bound to an ephemeral
+// port, so the routes, the path/body → ApprovalDecision assembly, and the
+// 401/403/404/400 error mapping are all covered end-to-end. The three routes
+// forward to the project lifecycle orchestrator per admin_portal_impl:
+//   GET  /admin/approvals               → listPendingRequests
+//   POST /admin/approvals/{id}/decision → decideRequest (approve AUTO-EXECUTES)
+//   POST /admin/approvals/{id}/execute  → executeApprovedRequest (manual retry)
 // The admin-plane credential is the bootstrap master (WAIRON_ADMIN_TOKEN), which
-// is an instance-admin and thus carries approval:decide implicitly.
+// is an instance-admin and thus carries approval:decide implicitly. Pending
+// requests are seeded from approval-valued requesters — execute-primary means a
+// yes-valued caller (like the admin) executes directly and never queues one.
 // ---------------------------------------------------------------------------
 
 const MASTER = 'master-credential-secret-value';
@@ -95,27 +103,56 @@ describe('admin approval endpoints (sdd_host http)', () => {
     return { status: res.status, json };
   }
 
-  /** Mint a stored non-admin token with a KNOWN id, given grants, and subject. */
-  function mintToken(opts: { id: string; grants: ProjectGrant[]; subject?: PrincipalSubject }): string {
+  /** Mint a stored grants-free non-admin token owned by `userId`. */
+  function mintToken(id: string, userId: string): string {
     const token = 'wk_' + crypto.randomBytes(8).toString('hex');
     const record: ApiKeyRecord = {
-      id: opts.id,
+      id,
       keyHash: hashToken(token),
-      role: 'editor',
-      projects: opts.grants.map((g) => g.projectId),
-      grants: opts.grants,
+      projects: ['*'],
       createdAt: new Date().toISOString(),
-      ...(opts.subject ? { ownerSubject: opts.subject } : {}),
+      ownerSubject: subject({ userId }),
     };
     createCredential(dataDir, record);
     return token;
   }
 
-  /** Seed a pending project:init request FROM a non-admin requester (userId), so
-   *  the admin (MASTER) deciding it is never the original requester. Returns the id. */
+  /** Seed one assignment in the permission grid. */
+  function allow(
+    userId: string,
+    capability: Capability,
+    scopeKind: ScopeKind,
+    scopeId: string | undefined,
+    value: PermissionValue,
+  ): void {
+    setAssignment(dataDir, {
+      id: '',
+      subjectKind: 'user',
+      subjectId: userId,
+      scopeKind,
+      ...(scopeId !== undefined ? { scopeId } : {}),
+      capability,
+      value,
+      createdAt: '',
+    });
+  }
+
+  function seedUnit(name: string): OrganizationUnitRecord {
+    return upsertOrganizationUnit(dataDir, {
+      id: '', name, kind: 'team', status: 'active', createdAt: '', createdBy: subject(),
+    });
+  }
+
+  /** Seed a pending project:init request FROM an approval-valued requester
+   *  (userId), so the admin (MASTER) deciding it is never the original
+   *  requester. Returns the request id. */
   function seedInitRequestFrom(userId: string, projectId: string): string {
-    const requester = mintToken({ id: `tok-${userId}`, grants: [], subject: subject({ userId }) });
-    return requestProjectInitialization(cfg, requester, { id: projectId }).id;
+    const unit = seedUnit(`unit-${projectId}`);
+    const requester = mintToken(`tok-${userId}`, userId);
+    allow(userId, 'project:create', 'unit', unit.id, 'approval');
+    const outcome = initializeProject(cfg, requester, { id: projectId, ownerUnitId: unit.id });
+    expect(outcome.status).toBe('pending-approval');
+    return outcome.approval!.id;
   }
 
   // ── listApprovals: GET /admin/approvals ──────────────────────────────────────
@@ -126,7 +163,7 @@ describe('admin approval endpoints (sdd_host http)', () => {
   });
 
   it('list rejects a non-privileged token with 403', async () => {
-    const plain = mintToken({ id: 'plain', grants: [{ projectId: 'proj-a', permissions: ['mcp:read'] }], subject: subject() });
+    const plain = mintToken('plain', 'u-plain');
     const res = await api('GET', '/admin/approvals', { cred: plain });
     expect(res.status).toBe(403);
   });
@@ -164,19 +201,25 @@ describe('admin approval endpoints (sdd_host http)', () => {
 
   // ── decideApproval: POST /admin/approvals/{id}/decision ──────────────────────
 
-  it('approves a pending request and stamps the caller-derived decidedBy', async () => {
+  it('approving AUTO-EXECUTES: the response is the completed request with the caller-derived decidedBy, and the project exists on disk', async () => {
     const id = seedInitRequestFrom('u-dec', 'dec-proj');
 
     const res = await api('POST', `/admin/approvals/${id}/decision`, { cred: MASTER, body: { approved: true } });
     expect(res.status).toBe(200);
-    expect(res.json.status).toBe('approved');
+    // Approved = done: the decision auto-executed and marked the request completed.
+    expect(res.json.status).toBe('completed');
     // The admin plane credential is the bootstrap admin, so decidedBy is derived
     // from the authenticated caller — never the (absent) client-supplied value.
     expect(res.json.decidedBy.userId).toBe('bootstrap');
     expect(res.json.decidedAt).toBeTruthy();
+
+    // Really provisioned on disk by the auto-execution.
+    const root = existingProjectRoot(dataDir, 'dec-proj');
+    expect(root).toBeTruthy();
+    expect(fs.existsSync(path.join(root!, '.wai', 'project.yaml'))).toBe(true);
   });
 
-  it('denies a pending request with a reason', async () => {
+  it('denies a pending request with a reason (nothing executes)', async () => {
     const id = seedInitRequestFrom('u-deny', 'deny-proj');
 
     const res = await api('POST', `/admin/approvals/${id}/decision`, {
@@ -186,13 +229,20 @@ describe('admin approval endpoints (sdd_host http)', () => {
     expect(res.status).toBe(200);
     expect(res.json.status).toBe('denied');
     expect(res.json.decisionReason).toBe('not now');
+    expect(existingProjectRoot(dataDir, 'deny-proj')).toBeNull();
   });
 
-  it('rejects self-approval with 403 when the request was made by the same admin identity', async () => {
-    // Seed the request AS the admin (MASTER) so the decider is the original requester.
-    const own = requestProjectInitialization(cfg, MASTER, { id: 'self-proj' });
+  it('rejects self-approval with 403 (the decider is the original requester)', async () => {
+    const unit = seedUnit('self-unit');
+    const selfTok = mintToken('self-tok', 'u-self');
+    allow('u-self', 'project:create', 'unit', unit.id, 'approval');
+    allow('u-self', 'approval:decide', 'instance', undefined, 'yes');
+    const outcome = initializeProject(cfg, selfTok, { id: 'self-proj', ownerUnitId: unit.id });
 
-    const res = await api('POST', `/admin/approvals/${own.id}/decision`, { cred: MASTER, body: { approved: true } });
+    const res = await api('POST', `/admin/approvals/${outcome.approval!.id}/decision`, {
+      cred: selfTok,
+      body: { approved: true },
+    });
     expect(res.status).toBe(403);
   });
 
@@ -202,15 +252,28 @@ describe('admin approval endpoints (sdd_host http)', () => {
     expect(res.status).toBe(400);
   });
 
-  // ── executeApproval: POST /admin/approvals/{id}/execute ──────────────────────
+  // ── executeApproval: POST /admin/approvals/{id}/execute (manual retry) ───────
 
-  it('executes an approved project:init end-to-end: the project exists on disk and the outcome is returned', async () => {
-    const id = seedInitRequestFrom('u-exec', 'exec-proj');
-    // Approve through the real decision endpoint first (admin ≠ requester).
-    const decided = await api('POST', `/admin/approvals/${id}/decision`, { cred: MASTER, body: { approved: true } });
-    expect(decided.status).toBe(200);
+  it('executes an APPROVED-but-not-completed request (the retry path behind auto-execution)', async () => {
+    // Seed an approved-but-unexecuted request directly — the state a failed
+    // auto-execution leaves behind.
+    const unit = seedUnit('manual-unit');
+    const approved: ApprovalRequest = {
+      id: 'man-1',
+      kind: 'project:init',
+      status: 'approved',
+      requestedBy: subject({ userId: 'u-man' }),
+      projectId: 'exec-proj',
+      summary: 'Initialize project exec-proj',
+      payloadType: 'ProjectInitRequest',
+      payload: JSON.stringify({ id: 'exec-proj', ownerUnitId: unit.id }),
+      createdAt: new Date().toISOString(),
+      decidedAt: new Date().toISOString(),
+      decidedBy: subject({ userId: 'bootstrap' }),
+    };
+    fs.writeFileSync(path.join(dataDir, 'approvals.json'), JSON.stringify([approved]));
 
-    const res = await api('POST', `/admin/approvals/${id}/execute`, { cred: MASTER });
+    const res = await api('POST', '/admin/approvals/man-1/execute', { cred: MASTER });
     expect(res.status).toBe(200);
     expect(String(res.json.outcome)).toContain('Initialized project "exec-proj"');
 

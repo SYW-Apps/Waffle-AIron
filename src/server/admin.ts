@@ -5,7 +5,7 @@ import { stateIdEquals } from '../core/statehash.js';
 import type { LockRecord } from '../core/lockfile.js';
 import { authenticateMaster, authenticateCredential, signViewToken } from './auth.js';
 import { authorize } from './authorization.js';
-import { placeProject as placeProjectInUnit } from './organization.js';
+import { placeProject as placeProjectInUnit, listOrganizationUnits } from './organization.js';
 import {
   hashToken,
   createCredential,
@@ -80,64 +80,77 @@ function principalSubject(principal: Principal): PrincipalSubject {
 }
 
 /**
- * Authenticate the caller and resolve their project:create scope over the
- * organization tree. A super-admin (bootstrap master or an instance-wide grant)
- * may create anywhere and optionally place the project; a unit-scoped creator
- * holding project:create for an organization unit MUST supply a target unit within
- * their scope, and the new project is auto-placed there so the creator retains
- * scope over it. A caller with no create authority, or a unit-scoped caller with a
- * missing/out-of-scope target unit, is rejected.
+ * Authenticate the caller, validate the REQUIRED target unit (every project is
+ * placed at creation so the permission resolver can always enumerate it — a
+ * fresh instance must create its first organization unit before creating
+ * projects; `wairon dev` provisions a synthetic local unit at boot), resolve the
+ * caller's project:create permission over that unit (must be yes; an
+ * approval-valued caller must use the execute-primary project-lifecycle path),
+ * then allocate, provision, and place the project.
  */
 export function createProject(
   cfg: HostConfig,
   credential: string | null,
   id: string,
-  unitId?: string,
+  unitId: string,
 ): HostedProjectRecord {
   const principal = requirePrincipal(cfg, credential);
 
-  // A creator targeting an organization unit must hold project:create over THAT
-  // unit; creating an unplaced project is an instance-level act, so it requires
-  // project:create at the instance root (an instance-admin passes either way).
-  const target: { kind: 'unit' | 'instance'; id: string } = unitId
-    ? { kind: 'unit', id: unitId }
-    : { kind: 'instance', id: '' };
-  if (authorize(cfg.dataDir, principal, 'project:create', target.kind, target.id).value !== 'yes') {
+  // Validate the REQUIRED target unit up front (missing or unknown rejects) and
+  // resolve the caller's project:create permission over it — a creator must hold
+  // project:create over THE unit the project is placed in (an instance-admin
+  // passes via the resolver bypass).
+  requireExistingUnit(cfg, unitId);
+  if (authorize(cfg.dataDir, principal, 'project:create', 'unit', unitId).value !== 'yes') {
     throw new AdminAuthError(
-      unitId
-        ? 'Forbidden — creating a project requires project:create over the target organization unit'
-        : 'Forbidden — creating an unplaced project requires instance-wide project:create',
+      'Forbidden — creating a project requires project:create over the target organization unit',
     );
   }
 
-  // Allocate, provision, and bind the isolated tree (steps 9–11).
-  const rec = executeApprovedCreate(cfg, id);
+  // Allocate, provision, place, and bind the isolated tree (steps 6–9).
+  return executeApprovedCreate(cfg, id, unitId, principalSubject(principal));
+}
 
-  // When a target unit was provided, auto-place the new project in it so the
-  // creator retains scope over what they just created (a super-admin may create
-  // without placing when no unit is given).
-  if (unitId) {
-    placeProjectInUnit(cfg.dataDir, {
-      id: '',
-      projectId: id,
-      unitId,
-      role: 'owner',
-      createdAt: '',
-      createdBy: principalSubject(principal),
-    });
+/** Reject a missing or unknown target organization unit. Every project is
+ *  placed at creation; a fresh instance must create its first unit before
+ *  creating projects (`wairon dev` provisions a synthetic local unit at boot). */
+function requireExistingUnit(cfg: HostConfig, unitId: string): void {
+  if (!unitId) {
+    throw new Error(
+      'A target organization unit is required — every project is placed at creation. ' +
+        'Create an organization unit first, then create the project into it.',
+    );
   }
-  return rec;
+  if (!listOrganizationUnits(cfg.dataDir).some((u) => u.id === unitId)) {
+    throw new Error(`Unknown organization unit "${unitId}".`);
+  }
 }
 
 /**
  * Pre-authorized entry for the approval workflow: the same privileged action as
  * createProject but WITHOUT credential authentication — the caller
- * (self_service_orchestrator) has already enforced approval-based authorization.
- * Never routed from any portal.
+ * (project_lifecycle_orchestrator) has already enforced permission-based
+ * authorization. Creates the project AND places it in the REQUIRED owner unit,
+ * so the approval path can never mint an unplaced project. Never routed from
+ * any portal.
  */
-export function executeApprovedCreate(cfg: HostConfig, id: string): HostedProjectRecord {
+export function executeApprovedCreate(
+  cfg: HostConfig,
+  id: string,
+  unitId: string,
+  placedBy?: PrincipalSubject,
+): HostedProjectRecord {
+  requireExistingUnit(cfg, unitId);
   const rec = createProjectRecord(cfg.dataDir, id);
   runWithProjectRoot(rec.rootPath, () => hostCore.provisionProject(id));
+  placeProjectInUnit(cfg.dataDir, {
+    id: '',
+    projectId: id,
+    unitId,
+    role: 'owner',
+    createdAt: '',
+    createdBy: placedBy ?? { userId: 'system', kind: 'service', issuer: 'local' },
+  });
   return rec;
 }
 
@@ -200,8 +213,8 @@ export function lockProject(cfg: HostConfig, credential: string | null, project:
 /**
  * Pre-authorized entry for the approval workflow: the same privileged action as
  * lockProject but WITHOUT credential authentication — the caller
- * (self_service_orchestrator) has already enforced approval-based authorization.
- * Never routed from any portal.
+ * (project_lifecycle_orchestrator) has already enforced permission-based
+ * authorization. Never routed from any portal.
  */
 export function executeApprovedLock(cfg: HostConfig, projectId: string): LockRecord {
   const root = existingProjectRoot(cfg.dataDir, projectId);
@@ -346,8 +359,8 @@ export function promoteProject(cfg: HostConfig, credential: string | null, proje
 /**
  * Pre-authorized entry for the approval workflow: the same privileged action as
  * promoteProject but WITHOUT credential authentication — the caller
- * (self_service_orchestrator) has already enforced approval-based authorization.
- * Never routed from any portal.
+ * (project_lifecycle_orchestrator) has already enforced permission-based
+ * authorization. Never routed from any portal.
  */
 export function executeApprovedPromote(cfg: HostConfig, projectId: string): PromoteResult {
   const root = existingProjectRoot(cfg.dataDir, projectId);

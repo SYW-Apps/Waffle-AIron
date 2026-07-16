@@ -18,7 +18,7 @@ import * as webproject from './webproject.js';
 import { listIdentityProviderRecords } from './policy.js';
 import { assertAllowedRedirectUri } from './idp.js';
 import { getHealthReport, getUsage } from './operations.js';
-import { listPendingRequests, decideRequest } from './selfservice.js';
+import { listPendingRequests, decideRequest } from './projectlifecycle.js';
 import { UnauthenticatedError, ForbiddenError, AdminAuthError } from './errors.js';
 import { findUserByExternalSubject, upsertUser, replaceUserGrants as repoReplaceUserGrants } from './users.js';
 import {
@@ -2035,11 +2035,10 @@ function projectList(cfg: HostConfig, sessionId: string, res: ServerResponse): v
   sendJson(res, 200, { projects: webproject.listProjects(cfg, sessionId) });
 }
 
-/** Create a project; forwards to web_project_orchestrator.createProject. The
- *  optional org unit is required for a unit-scoped creator (enforced upstream). */
+/** Create a project placed in the REQUIRED owner unit; forwards to
+ *  web_project_orchestrator.createProject (missing/unknown unit rejects upstream). */
 function projectCreate(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  const unitId = body?.unitId ? String(body.unitId) : undefined;
-  sendJson(res, 201, webproject.createProject(cfg, sessionId, String(body?.id ?? ''), unitId));
+  sendJson(res, 201, webproject.createProject(cfg, sessionId, String(body?.id ?? ''), String(body?.unitId ?? '')));
 }
 
 /** Lock a project; forwards to web_project_orchestrator.lockProject. */

@@ -9,11 +9,12 @@ import { resolveProjectRoot, existingProjectRoot } from './projects.js';
 import { createScopedServer, hostCore } from './adapters.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import {
-  requestProjectInitialization,
-  requestProjectLock,
-  requestProjectPromotion,
-  getRequestStatus,
-} from './selfservice.js';
+  initializeProject,
+  lockProject,
+  promoteProject,
+  getApprovalStatus,
+  awaitApproval,
+} from './projectlifecycle.js';
 import {
   listReachableProjectsForMcp,
   listReachableProjectInterfacesForMcp,
@@ -129,15 +130,17 @@ export function auditToolCall(
   }
 }
 
-// ── Data-plane self-service + surface-exchange dispatch (steps 10–28) ────────
+// ── Data-plane project-lifecycle + surface-exchange dispatch (steps 10–28) ───
 
-/** The four approval-backed self-service tools the data plane handles directly,
- *  bypassing the scoped sdd_* MCP server. Every other tool falls through to it. */
-const SELF_SERVICE_TOOLS = new Set<string>([
-  'sdd_host_request_project_initialization',
-  'sdd_host_request_project_lock',
-  'sdd_host_request_project_promotion',
+/** The five execute-primary project-lifecycle tools the data plane handles
+ *  directly, bypassing the scoped sdd_* MCP server. Every other tool falls
+ *  through to it. */
+const PROJECT_LIFECYCLE_TOOLS = new Set<string>([
+  'sdd_host_initialize_project',
+  'sdd_host_lock_project',
+  'sdd_host_promote_project',
   'sdd_host_get_approval_status',
+  'sdd_host_await_approval',
 ]);
 
 /** The four hosted landscape tools the data plane handles directly, routing
@@ -192,7 +195,7 @@ function toolErrorResult(err: unknown): McpToolResult {
 
 // ── Granular data-plane permission gate (step 25–27 of handleRequest) ────────
 //
-// On the ordinary sdd_* dispatch path (the self-service / landscape branch is
+// On the ordinary sdd_* dispatch path (the project-lifecycle / landscape branch is
 // already gated by its orchestrator), classify the tool and require the
 // principal's grant FOR THE BOUND PROJECT to carry the matching data-plane
 // permission before it reaches the scoped MCP server.
@@ -266,8 +269,8 @@ function dataPlanePermissionError(
 }
 
 /**
- * Steps 10–24: when the message is a `tools/call` for one of the four approval-backed
- * self-service tools or one of the two hosted landscape discovery tools, dispatch it to
+ * Steps 10–24: when the message is a `tools/call` for one of the five execute-primary
+ * project-lifecycle tools or one of the hosted landscape discovery tools, dispatch it to
  * the matching orchestrator — re-authenticating the RAW bearer credential (the
  * orchestrators are the single auth authority) — and shape the outcome into the standard
  * JSON-RPC tool-result envelope. Returns the full JSON-RPC response to send, or undefined
@@ -281,16 +284,16 @@ function dataPlanePermissionError(
  * as its decoded ProjectInitRequest arguments, and interface discovery reads its TARGET
  * project (the neighbour to inspect, still gated by reachability) from arguments.projectId.
  */
-export function dispatchSelfServiceTool(
+export async function dispatchProjectLifecycleTool(
   cfg: HostConfig,
   credential: string | null,
   projectId: string,
   body: unknown,
-): { jsonrpc: '2.0'; id: unknown; result: McpToolResult } | undefined {
+): Promise<{ jsonrpc: '2.0'; id: unknown; result: McpToolResult } | undefined> {
   const msg = jsonRpcRequest(body);
   if (!msg || msg.method !== 'tools/call') return undefined;
   const name = msg.params?.name;
-  if (typeof name !== 'string' || !(SELF_SERVICE_TOOLS.has(name) || LANDSCAPE_DISCOVERY_TOOLS.has(name))) {
+  if (typeof name !== 'string' || !(PROJECT_LIFECYCLE_TOOLS.has(name) || LANDSCAPE_DISCOVERY_TOOLS.has(name))) {
     return undefined;
   }
 
@@ -300,14 +303,23 @@ export function dispatchSelfServiceTool(
   try {
     let value: unknown;
     switch (name) {
-      case 'sdd_host_request_project_initialization':
-        value = requestProjectInitialization(cfg, credential, args as unknown as ProjectInitRequest);
+      case 'sdd_host_initialize_project':
+        value = initializeProject(cfg, credential, args as unknown as ProjectInitRequest);
         break;
-      case 'sdd_host_request_project_lock':
-        value = requestProjectLock(cfg, credential, projectId); // bound project; args ignored
+      case 'sdd_host_lock_project':
+        value = lockProject(cfg, credential, projectId); // bound project; args ignored
         break;
-      case 'sdd_host_request_project_promotion':
-        value = requestProjectPromotion(cfg, credential, projectId); // bound project; args ignored
+      case 'sdd_host_promote_project':
+        value = promoteProject(cfg, credential, projectId); // bound project; args ignored
+        break;
+      case 'sdd_host_await_approval':
+        // Long-poll for a decision on the caller's own approval request.
+        value = await awaitApproval(
+          cfg,
+          credential,
+          String(args.requestId ?? ''),
+          Number(args.timeoutSeconds ?? 0),
+        );
         break;
       case 'sdd_landscape_list_reachable_projects':
         // currentProjectId = the BOUND project; never taken from arguments.
@@ -332,7 +344,7 @@ export function dispatchSelfServiceTool(
         value = getProjectSurfaceForMcp(cfg, credential, projectId, String(args.projectId ?? ''));
         break;
       default: // 'sdd_host_get_approval_status'
-        value = getRequestStatus(cfg, credential, String(args.requestId ?? ''));
+        value = getApprovalStatus(cfg, credential, String(args.requestId ?? ''));
         break;
     }
     result = { content: [{ type: 'text', text: JSON.stringify(value) }] };
@@ -389,7 +401,7 @@ export async function handleMcpRequest(
   }
 
   // A JSON-RPC BATCH would let a second, unchecked request ride past the gates
-  // below: the permission gate, self-service dispatch, and audit each inspect a
+  // below: the permission gate, project-lifecycle dispatch, and audit each inspect a
   // SINGLE message, but the transport dispatches every message in a batch array.
   // A read-only (mcp:read) token could smuggle a write tool as the second element
   // — unauthorized AND unaudited. The hosted data plane authorizes and audits
@@ -410,11 +422,11 @@ export async function handleMcpRequest(
     // The project id is the basename of its isolated root (<dataDir>/projects/<id>).
     const projectId = path.basename(root);
 
-    // Steps 10–24: the four approval-backed self-service tools and the two hosted
+    // Steps 10–24: the five execute-primary project-lifecycle tools and the hosted
     // landscape discovery tools are handled here, bypassing the scoped sdd_* MCP
     // server. The response still flows through the SAME best-effort audit path
     // (auditToolCall) the scoped dispatch uses.
-    const dispatchedResponse = dispatchSelfServiceTool(cfg, cred, projectId, body);
+    const dispatchedResponse = await dispatchProjectLifecycleTool(cfg, cred, projectId, body);
     if (dispatchedResponse !== undefined) {
       sendJson(res, 200, dispatchedResponse);
       auditToolCall(cfg.dataDir, principal, projectId, body, deriveMcpOutcome(dispatchedResponse));

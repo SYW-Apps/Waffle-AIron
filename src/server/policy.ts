@@ -44,7 +44,7 @@ import type {
 //   2. Project Policy Orchestrator + Portal — profile-aware project init and
 //      pack/profile policy enforcement. Credential-bearing methods authenticate
 //      and authorize by Principal grants; two pre-authorized entries
-//      (executeApprovedInit, evaluateInitRequest) serve the self-service approval
+//      (executeApprovedInit, evaluateInitRequest) serve the project-lifecycle approval
 //      chain and are never portal-exposed. A null active policy resolves to the
 //      documented PERMISSIVE_DEFAULT_POLICY. Audit appends are best-effort and
 //      never fail the primary action.
@@ -267,7 +267,7 @@ function requirePrincipal(cfg: HostConfig, credential: string | null): Principal
   return principal;
 }
 
-// ── subject / audit helpers (mirrored from identity.ts / selfservice.ts) ─────
+// ── subject / audit helpers (mirrored from identity.ts / projectlifecycle.ts) ─
 
 /** The stable subject for a principal: its resolved subject, or a synthesized
  *  service identity keyed by the credential's token id for legacy credentials. */
@@ -501,7 +501,15 @@ function performInit(
     throw new Error('policy violation — project initialization rejected under the active pack policy');
   }
 
-  const record = executeApprovedCreate(cfg, request.id);
+  // Create AND place the project in its required owner unit (executeApprovedCreate
+  // validates the unit and writes the placement, so no init path can mint an
+  // unplaced project the permission resolver cannot see).
+  const record = executeApprovedCreate(
+    cfg,
+    request.id,
+    request.ownerUnitId,
+    principal ? principalSubject(principal) : undefined,
+  );
 
   installPacks(cfg, record.id, [
     ...policy.requiredGlobalPacks,
@@ -541,14 +549,22 @@ export function initializeProjectWithProfile(
   request: ProjectInitRequest,
 ): HostedProjectRecord {
   const principal = requirePrincipal(cfg, credential);
-  if (!carriesInstancePermission(cfg, principal, PROJECT_CREATE_CAPABILITY)) {
-    throw new ForbiddenError('creating a project requires a project:create grant or an instance-admin grant');
+  // Resolve project:create over the request's REQUIRED owner unit — the resolved
+  // value must be yes (an approval-valued caller must use the execute-primary
+  // project-lifecycle path instead).
+  if (!request.ownerUnitId) {
+    throw new Error(
+      'ProjectInitRequest.ownerUnitId is required — every project is placed in an organization unit at creation.',
+    );
+  }
+  if (authorize(cfg.dataDir, principal, PROJECT_CREATE_CAPABILITY, 'unit', request.ownerUnitId).value !== 'yes') {
+    throw new ForbiddenError('creating a project requires project:create authority over the target unit');
   }
   return performInit(cfg, request, principal);
 }
 
 /**
- * Pre-authorized entry for the self-service approval workflow: performs NO
+ * Pre-authorized entry for the project-lifecycle approval workflow: performs NO
  * authentication (the caller has already enforced approval-based authorization).
  * Runs the shared initialization body. Never exposed on any portal.
  */

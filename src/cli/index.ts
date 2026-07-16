@@ -461,9 +461,10 @@ hostCmd
   .command('project <action>')
   .description('create | list | destroy a hosted project')
   .option('--id <id>', 'project id (for create/destroy)')
+  .option('--unit <unitId>', 'owner organization unit (REQUIRED for create — every project is placed at creation)')
   .option('--data-dir <path>', 'data root (default WAIRON_DATA_DIR or ~/.wairon/data)')
   .action(async (action: string, opts) => {
-    await runHostProject(action, { id: opts.id, dataDir: opts.dataDir });
+    await runHostProject(action, { id: opts.id, unit: opts.unit, dataDir: opts.dataDir });
   });
 
 hostCmd

@@ -8,7 +8,7 @@ import { handleWebRequest, sessionCookieValue, startDevSession, setSessionCookie
 import * as admin from './admin.js';
 import * as packs from './packs.js';
 import * as identity from './identity.js';
-import * as selfservice from './selfservice.js';
+import * as projectlifecycle from './projectlifecycle.js';
 import * as policy from './policy.js';
 import * as landscape from './landscape.js';
 import * as operations from './operations.js';
@@ -357,7 +357,7 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
 
     if (parts[1] === 'projects') {
       if (req.method === 'GET' && parts.length === 2) return sendJson(res, 200, admin.listProjects(cfg, cred));
-      if (req.method === 'POST' && parts.length === 2) return sendJson(res, 201, admin.createProject(cfg, cred, body.id));
+      if (req.method === 'POST' && parts.length === 2) return sendJson(res, 201, admin.createProject(cfg, cred, body.id, String(body.unitId ?? '')));
       if (req.method === 'DELETE' && parts.length === 3) {
         admin.destroyProject(cfg, cred, parts[2]);
         return sendJson(res, 200, { ok: true });
@@ -441,18 +441,19 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
     }
 
     // ── Approval decision surface (Phase 2) ────────────────────────────────
-    // The human decision surface for approval-backed self-service until the admin
-    // UI lands: iadmin_portal.listApprovals/decideApproval/executeApproval forward
-    // 1:1 to the self-service orchestrator (admin_portal_impl → listPendingRequests
-    // / decideRequest / executeApprovedRequest). Owns its own error → status mapping
-    // (401/403/404/400), mirroring the identity mount, so approval faults never fall
-    // through to the admin catch (which maps only AdminAuthError/LockValidationError).
+    // The human decision surface for the project-lifecycle approval exception until
+    // the admin UI lands: iadmin_portal.listApprovals/decideApproval/executeApproval
+    // forward 1:1 to the project lifecycle orchestrator (admin_portal_impl →
+    // listPendingRequests / decideRequest / executeApprovedRequest). Owns its own
+    // error → status mapping (401/403/404/400), mirroring the identity mount, so
+    // approval faults never fall through to the admin catch (which maps only
+    // AdminAuthError/LockValidationError).
     if (parts[1] === 'approvals') {
       try {
         // GET /admin/approvals?status=&project=
         if (req.method === 'GET' && parts.length === 2) {
           // L3 (iadmin_portal.listApprovals) advertises a `status` filter, but the
-          // self_service_orchestrator contract only lists PENDING requests this
+          // project_lifecycle_orchestrator contract only lists PENDING requests this
           // phase (admin_portal_impl → listPendingRequests). Accept status=pending
           // explicitly and pass `project` through; reject any other status until
           // broader listing lands rather than silently returning pending-only.
@@ -462,7 +463,7 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
               error: `unsupported status "${status}": only pending approvals can be listed in this phase`,
             });
           }
-          return sendJson(res, 200, selfservice.listPendingRequests(cfg, cred, url.searchParams.get('project') ?? undefined));
+          return sendJson(res, 200, projectlifecycle.listPendingRequests(cfg, cred, url.searchParams.get('project') ?? undefined));
         }
         // POST /admin/approvals/{id}/decision  { approved: boolean, reason?: string }
         if (req.method === 'POST' && parts.length === 4 && parts[3] === 'decision') {
@@ -479,11 +480,11 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
             decidedAt: '',
           };
           if (typeof body.reason === 'string') decision.reason = body.reason;
-          return sendJson(res, 200, selfservice.decideRequest(cfg, cred, decision));
+          return sendJson(res, 200, projectlifecycle.decideRequest(cfg, cred, decision));
         }
         // POST /admin/approvals/{id}/execute
         if (req.method === 'POST' && parts.length === 4 && parts[3] === 'execute') {
-          return sendJson(res, 200, { outcome: selfservice.executeApprovedRequest(cfg, cred, parts[2]) });
+          return sendJson(res, 200, { outcome: projectlifecycle.executeApprovedRequest(cfg, cred, parts[2]) });
         }
         return sendJson(res, 404, { error: 'not found' });
       } catch (err) {
