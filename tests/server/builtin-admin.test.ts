@@ -11,7 +11,7 @@ import {
   completeSignIn,
   signInWithPassword,
   getCurrentContext,
-  serveApp,
+  serveLegacyApp,
   __resetLoginThrottle,
 } from '../../src/server/web.js';
 import { authenticateSession, verifyBuiltinAdmin } from '../../src/server/auth.js';
@@ -245,7 +245,7 @@ describe('built-in super-admin password login (sdd_host)', () => {
   });
 
   it('the login form and /web/login are wired into the served client shell', () => {
-    const html = serveApp('/');
+    const html = serveLegacyApp('/');
     expect(html).toContain('/web/login');
     expect(html).toContain('id="lu"');
     expect(html).toContain('id="lp"');

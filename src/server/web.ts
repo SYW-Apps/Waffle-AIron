@@ -1,4 +1,6 @@
 import * as crypto from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
 import type { IncomingMessage, ServerResponse } from 'http';
 import { signSsoState, verifySsoState, authenticateSession, verifyBuiltinAdmin, localDevSubject } from './auth.js';
 import { resolveEndpoints, buildAuthorizationUrl, exchangeCode, resolveSubject, resolveGroups } from './idp.js';
@@ -779,7 +781,44 @@ function nonceMatches(a: string | null, b: string | null): boolean {
  * picker, no account menu) and the single local project's canvas fills the
  * viewport with no chrome.
  */
-export function serveApp(_path: string): string {
+/**
+ * Locate the built, self-contained React web UI (dist/webapp.html, produced by
+ * `npm run build:web` + scripts/embed-web.mjs) and return its HTML, or null when
+ * it is not present. Resolved from __dirname with the same candidate-path pattern
+ * the canvas templates use, so it works from the bundled dist entry, the CLI
+ * entry, and `tsx` dev (reading web/dist directly). A cheap read-through — the
+ * app document is fetched once per navigation, so no caching is warranted.
+ */
+function loadReactBundle(): string | null {
+  const candidates = [
+    path.resolve(__dirname, 'webapp.html'), // dist/index.js -> dist/webapp.html
+    path.resolve(__dirname, '..', 'webapp.html'), // dist/cli/index.js -> dist/webapp.html
+    path.resolve(__dirname, '..', '..', 'web', 'dist', 'index.html'), // tsx dev: src/server -> web/dist
+  ];
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate)) return fs.readFileSync(candidate, 'utf8');
+    } catch {
+      /* try the next candidate */
+    }
+  }
+  return null;
+}
+
+/**
+ * Serve the web application document. Prefers the built React single-page bundle
+ * (dist/webapp.html); during the migration, when that bundle is absent it falls
+ * back to the legacy hand-written shell so the UI is never broken. The React app
+ * is route-agnostic (BrowserRouter reads window.location), so the same document
+ * is returned for every /web app path — the SPA renders the matching view.
+ */
+export function serveApp(pathname: string): string {
+  const bundle = loadReactBundle();
+  if (bundle) return bundle;
+  return serveLegacyApp(pathname);
+}
+
+export function serveLegacyApp(_path: string): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -3013,8 +3052,11 @@ export async function handleWebRequest(
   const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent); // ['web', ...] or []
   const sessionId = ctx.sessionId ?? '';
   try {
-    // GET / — the client app shell.
-    if (req.method === 'GET' && url.pathname === '/') {
+    // GET / (or any in-app client route that isn't a /web/* API path) — the
+    // single-page app document. http.ts only forwards genuine browser navigations
+    // (GET + Accept: text/html) here, so this SPA history-fallback lets BrowserRouter
+    // deep links (/projects, /admin/…) survive a refresh or a shared link.
+    if (req.method === 'GET' && (url.pathname === '/' || parts[0] !== 'web')) {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       res.end(serveApp(url.pathname));
       return;

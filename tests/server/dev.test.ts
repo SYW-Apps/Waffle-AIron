@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { startDevSession, getCurrentContext, serveApp } from '../../src/server/web.js';
+import { startDevSession, getCurrentContext, serveLegacyApp } from '../../src/server/web.js';
 import {
   registerLocalDevProject,
   listProjectRecords,
@@ -281,8 +281,8 @@ describe('dev-mode HTTP wiring (routeData) (sdd_host)', () => {
 
 // ── the dev UI reuses the ONE web client (serveApp) ──────────────────────────
 
-describe('dev mode reuses the single web client (serveApp) (sdd_host)', () => {
-  const html = serveApp('/');
+describe('dev mode reuses the single web client (serveLegacyApp) (sdd_host)', () => {
+  const html = serveLegacyApp('/');
 
   it('is exactly one self-contained document — the client is reused, not forked', () => {
     expect((html.match(/<!doctype html/gi) || []).length).toBe(1);

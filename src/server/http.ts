@@ -210,8 +210,20 @@ export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResp
   }
 
   // Unified web UI (opt-in): the app shell at '/' and the thin /web/* routes.
-  const isWebPath =
-    url.pathname === '/' || url.pathname === '/web' || url.pathname.startsWith('/web/');
+  // The web UI is a client-routed single-page app (BrowserRouter), so a browser
+  // navigation to an in-app path like /projects or /admin must also return the
+  // app document — the SPA then renders the matching view. This history-fallback
+  // is scoped to genuine browser navigations (GET + Accept: text/html) that are
+  // NOT an API surface, so JSON fetches to unknown routes still get a JSON 404 and
+  // asset requests (favicon, etc., which don't send text/html) fall through.
+  const isApiWebPath = url.pathname === '/web' || url.pathname.startsWith('/web/');
+  const isAppNavigation =
+    req.method === 'GET' &&
+    !isApiWebPath &&
+    !url.pathname.startsWith('/view') &&
+    !url.pathname.startsWith('/mcp') &&
+    (req.headers['accept'] ?? '').includes('text/html');
+  const isWebPath = url.pathname === '/' || isApiWebPath || isAppNavigation;
   if (isWebPath) {
     const exposure = resolveExposurePolicy(cfg);
     // LOCAL DEV MODE (`wairon dev`, strictly cfg.devMode): the web UI is always on,

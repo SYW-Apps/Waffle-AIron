@@ -15,6 +15,7 @@ import {
   getGraph,
   getProjectCanvas,
   serveApp,
+  serveLegacyApp,
 } from '../../src/server/web.js';
 import { allow, seedUnit } from './helpers.js';
 import { ensureInstanceIdentity } from '../../src/server/instance.js';
@@ -622,10 +623,16 @@ describe('web graph orchestrator (sdd_host)', () => {
   });
 });
 
-// ── Web portal: client app shell (serveApp, Phase 7 wave 4) ──────────────────
+// ── Web portal: legacy client app shell (serveLegacyApp) ─────────────────────
+//
+// serveApp now prefers the built React single-page bundle (dist/webapp.html) and
+// only falls back to this hand-written shell when the bundle is absent. These
+// guards still protect that fallback: while it ships, its inline script must
+// parse and its same-origin wiring must hold. They target serveLegacyApp directly
+// so they are independent of whether a web/dist bundle happens to be present.
 
-describe('web portal client app shell (sdd_host)', () => {
-  const html = serveApp('/');
+describe('web portal legacy client app shell (sdd_host)', () => {
+  const html = serveLegacyApp('/');
 
   it('returns exactly one self-contained HTML document', () => {
     expect(html.trimStart().slice(0, 15).toLowerCase()).toContain('<!doctype html');
@@ -717,6 +724,34 @@ describe('web portal client app shell (sdd_host)', () => {
     expect(html).not.toMatch(/url\(\s*["']?https?:/i);
     // And no bare http(s) URL anywhere in the served document.
     expect(html).not.toMatch(/https?:\/\//i);
+  });
+});
+
+// ── Web portal: app document dispatch (serveApp) ─────────────────────────────
+
+describe('web portal app document (serveApp, sdd_host)', () => {
+  it('always returns exactly one self-contained HTML document', () => {
+    // Regardless of whether the built React bundle is present (bundle) or absent
+    // (legacy fallback), serveApp must yield a single, self-contained document with
+    // no external asset loads — the CSP forbids them and the fallback must never
+    // ship a half-page. This holds for both branches, so it does not depend on
+    // whether web/dist was built in this environment.
+    const html = serveApp('/');
+    expect(html.trimStart().slice(0, 15).toLowerCase()).toContain('<!doctype html');
+    expect((html.match(/<!doctype html/gi) || []).length).toBe(1);
+    expect((html.match(/<\/html>/gi) || []).length).toBe(1);
+    expect(html).not.toMatch(/(?:src|href)\s*=\s*["']https?:/i);
+  });
+
+  it('prefers the built React bundle when web/dist/index.html is present', () => {
+    // The React SPA mounts into <div id="root">; the legacy shell never uses that
+    // marker. When the bundle has been built (as in a full `npm run build:web`),
+    // serveApp returns it. When it is absent, this environment has nothing to
+    // assert against, so the check is skipped rather than made flaky.
+    const bundlePath = path.resolve(process.cwd(), 'web/dist/index.html');
+    if (!fs.existsSync(bundlePath)) return;
+    const html = serveApp('/');
+    expect(html).toContain('id="root"');
   });
 });
 
