@@ -20,7 +20,7 @@ import type { ApiKeyRecord, ProjectRecord } from '../types';
  *  The plaintext token is shown once, on mint. */
 export function Tokens() {
   const toast = useToast();
-  const tokens = useAsync<{ tokens: ApiKeyRecord[] }>(() => get('/web/tokens'), []);
+  const tokens = useAsync<{ tokens: ApiKeyRecord[] }>(() => get('/web/tokens'), [], ['tokens']);
   const projects = useAsync<{ projects: ProjectRecord[] }>(() => get('/web/projects'), []);
   const [minting, setMinting] = useState(false);
   const [minted, setMinted] = useState<string | null>(null);

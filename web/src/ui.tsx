@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { InfoTip } from './components/InfoTip';
+import { useRealtime } from './realtime';
 
 /**
  * Shared UI primitives for the wairon web app. Everything here is intentionally
@@ -28,13 +29,16 @@ export interface Async<T> {
 
 /** Run an async loader on mount and whenever `deps` change; expose data/loading/
  *  error plus an idempotent reload. Stale responses from a superseded load are
- *  dropped, so rapid dependency changes never flash an out-of-order result. */
-export function useAsync<T>(loader: () => Promise<T>, deps: unknown[]): Async<T> {
+ *  dropped, so rapid dependency changes never flash an out-of-order result.
+ *  `channels` opts the load into realtime: a `change` on any listed channel
+ *  triggers a (debounced) reload, so the view stays live without polling. */
+export function useAsync<T>(loader: () => Promise<T>, deps: unknown[], channels?: string[]): Async<T> {
   const [data, setData] = useState<T | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | undefined>(undefined);
   const [nonce, setNonce] = useState(0);
   const reload = useCallback(() => setNonce((n) => n + 1), []);
+  const realtime = useRealtime();
 
   useEffect(() => {
     let live = true;
@@ -55,6 +59,23 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[]): Async<T>
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, nonce]);
+
+  // Realtime: reload when a subscribed channel changes. Coalesce a burst (several
+  // channels can fire for one action) into a single reload.
+  const channelKey = (channels ?? []).join('|');
+  useEffect(() => {
+    if (!channelKey) return;
+    let debounce: ReturnType<typeof setTimeout> | undefined;
+    const onChange = () => {
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(reload, 150);
+    };
+    const unsub = realtime.subscribe(channelKey.split('|'), onChange);
+    return () => {
+      if (debounce) clearTimeout(debounce);
+      unsub();
+    };
+  }, [channelKey, realtime, reload]);
 
   return { data, loading, error, reload };
 }

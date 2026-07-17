@@ -97,7 +97,7 @@ function RoleModal(props: { mode: 'create' | 'edit'; existing?: Role; onClose: (
 
 export function Roles() {
   const toast = useToast();
-  const roles = useAsync<{ roles: Role[] }>(() => get('/web/admin/roles'), []);
+  const roles = useAsync<{ roles: Role[] }>(() => get('/web/admin/roles'), [], ['roles']);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Role | null>(null);
 

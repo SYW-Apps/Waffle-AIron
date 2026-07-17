@@ -5,6 +5,7 @@ import * as path from 'path';
 import { handleMcpRequest, handleViewDiagram } from './request.js';
 import { sendJson, bearerToken } from './httpio.js';
 import { handleWebRequest, sessionCookieValue, startDevSession, setSessionCookie } from './web.js';
+import { getRealtimeHub, channelsForWebMutation, publishChange } from './realtime.js';
 import * as admin from './admin.js';
 import * as packs from './packs.js';
 import { ensureInstanceIdentity } from './instance.js';
@@ -270,7 +271,15 @@ export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResp
     }
 
     const proceed = (body: unknown): Promise<void> =>
-      handleWebRequest(cfg, req, res, body, url, { sessionId: sessionCredential, secureCookie });
+      handleWebRequest(cfg, req, res, body, url, { sessionId: sessionCredential, secureCookie }).then(() => {
+        // Realtime: after a state-changing web mutation succeeds, nudge the
+        // channels it touched so other sessions refetch. The event carries NO
+        // data (a bare refetch), and a spurious nudge after a failed mutation is
+        // harmless — the refetch just returns the unchanged, scope-filtered view.
+        if (req.method === 'POST' && res.statusCode < 400) {
+          for (const ch of channelsForWebMutation(url.pathname, body)) publishChange(ch);
+        }
+      });
     (req.method === 'POST' ? readBody(req) : Promise.resolve(undefined))
       .then(proceed)
       .catch((err) => {
@@ -608,6 +617,12 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
   const adminServer = http.createServer((req, res) => {
     void routeAdmin(cfg, req, res);
   });
+  // Realtime channel: the web app opens a session-authenticated WebSocket at
+  // /web/ws on the public data plane; the hub authenticates + authorizes each
+  // subscription and broadcasts bare change nudges.
+  dataServer.on('upgrade', (req, socket) => {
+    getRealtimeHub().handleUpgrade(cfg, req, socket);
+  });
   dataServer.listen(cfg.port, cfg.host);
   adminServer.listen(cfg.adminPort, cfg.adminHost);
 
@@ -635,6 +650,7 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
   return {
     close() {
       clearInterval(gitSyncTimer);
+      getRealtimeHub().closeAll();
       dataServer.close();
       adminServer.close();
     },

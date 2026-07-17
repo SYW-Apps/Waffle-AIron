@@ -188,7 +188,7 @@ function SecretsCard() {
 
 export function Providers() {
   const toast = useToast();
-  const providers = useAsync<{ providers: IdentityProviderConfig[] }>(() => get('/web/admin/providers'), []);
+  const providers = useAsync<{ providers: IdentityProviderConfig[] }>(() => get('/web/admin/providers'), [], ['providers']);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<IdentityProviderConfig | null>(null);
 

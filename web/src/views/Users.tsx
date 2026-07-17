@@ -270,8 +270,8 @@ function AccessModal(props: {
 
 export function Users() {
   const toast = useToast();
-  const users = useAsync<{ users: HostedUserRecord[] }>(() => get('/web/admin/users'), []);
-  const roles = useAsync<{ roles: Role[] }>(() => get('/web/admin/roles'), []);
+  const users = useAsync<{ users: HostedUserRecord[] }>(() => get('/web/admin/users'), [], ['users']);
+  const roles = useAsync<{ roles: Role[] }>(() => get('/web/admin/roles'), [], ['roles']);
   const units = useAsync<{ units: OrganizationUnitRecord[] }>(() => get('/web/admin/org/units'), []);
   const projects = useAsync<{ projects: ProjectRecord[] }>(() => get('/web/projects'), []);
   const [editingId, setEditingId] = useState<string | null>(null);

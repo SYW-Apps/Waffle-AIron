@@ -15,6 +15,7 @@ export function CanvasView({ projectId }: { projectId: string }) {
   const state = useAsync<unknown>(
     () => get('/web/canvas-model?projectId=' + encodeURIComponent(projectId)),
     [projectId],
+    [`project:${projectId}`, 'projects'],
   );
   const { appearance } = useSettings();
   // The classic engine ships a dark ('syw') and a 'light' theme; map the app's

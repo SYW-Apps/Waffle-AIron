@@ -303,7 +303,7 @@ function UnitRow(props: {
 // ── Units view ───────────────────────────────────────────────────────────────
 
 export function Units() {
-  const units = useAsync<{ units: OrganizationUnitRecord[] }>(() => get('/web/admin/org/units'), []);
+  const units = useAsync<{ units: OrganizationUnitRecord[] }>(() => get('/web/admin/org/units'), [], ['units']);
   const [creating, setCreating] = useState<{ parentId?: string } | null>(null);
   const [editing, setEditing] = useState<OrganizationUnitRecord | null>(null);
   const [removing, setRemoving] = useState<OrganizationUnitRecord | null>(null);

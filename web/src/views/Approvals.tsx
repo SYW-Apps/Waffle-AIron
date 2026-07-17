@@ -7,7 +7,7 @@ import { subjectLabel, type ApprovalRequest } from '../types';
  *  server-side. */
 export function Approvals() {
   const toast = useToast();
-  const approvals = useAsync<{ requests: ApprovalRequest[] }>(() => get('/web/admin/approvals'), []);
+  const approvals = useAsync<{ requests: ApprovalRequest[] }>(() => get('/web/admin/approvals'), [], ['approvals']);
 
   async function decide(requestId: string, approved: boolean) {
     await post('/web/admin/approvals/decide', { requestId, approved });

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import { SessionProvider, useSession } from './session';
 import { SettingsProvider, useSettings } from './settings';
+import { RealtimeProvider } from './realtime';
 import { ToastProvider } from './ui';
 import { HeaderMenu } from './HeaderMenu';
 import { Login } from './views/Login';
@@ -149,7 +150,11 @@ function Gate() {
       </div>
     );
   }
-  return <Shell />;
+  return (
+    <RealtimeProvider>
+      <Shell />
+    </RealtimeProvider>
+  );
 }
 
 export function App() {

@@ -115,7 +115,7 @@ function landscapeToCanvasModel(g: Graph): unknown {
  * landscape graph.
  */
 export function Environment() {
-  const state = useAsync<Graph>(() => get('/web/graph?tier=landscape&level=1'), []);
+  const state = useAsync<Graph>(() => get('/web/graph?tier=landscape&level=1'), [], ['landscape']);
   const { appearance } = useSettings();
   const nav = useNavigate();
   const canvasTheme = resolveMode(appearance) === 'light' ? 'light' : 'syw';

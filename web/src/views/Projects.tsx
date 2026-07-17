@@ -73,7 +73,7 @@ function CreateProjectModal(props: {
 export function Projects() {
   const toast = useToast();
   const nav = useNavigate();
-  const projects = useAsync<{ projects: ProjectRecord[] }>(() => get('/web/projects'), []);
+  const projects = useAsync<{ projects: ProjectRecord[] }>(() => get('/web/projects'), [], ['projects']);
   // Units are only listable by admins; a non-admin creator sees an empty picker
   // rather than a failed load, so tolerate a 403 here.
   const units = useAsync<{ units: OrganizationUnitRecord[] }>(
