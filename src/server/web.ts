@@ -30,6 +30,7 @@ import {
   listWebSessionsBySubject,
 } from './websessions.js';
 import { resolveProjectRoot } from './projects.js';
+import { listProjectPlacements } from './organization.js';
 import { runWithProjectRoot } from '../utils/fs.js';
 import { hostCore, validateProjectAsComplete } from './adapters.js';
 import { generateLandscape } from './landscape.js';
@@ -2872,7 +2873,16 @@ function adminRemoveAssignment(cfg: HostConfig, sessionId: string, body: Body, r
 
 /** List the projects the caller can manage; forwards to web_project_orchestrator.listProjects. */
 function projectList(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
-  sendJson(res, 200, { projects: webproject.listProjects(cfg, sessionId) });
+  const records = webproject.listProjects(cfg, sessionId);
+  // The project record itself carries no unit — a project's home unit is its
+  // 'owner' placement. Enrich each record with it so the UI can show where a
+  // project lives (only for projects the caller already sees).
+  const ownerUnit = new Map<string, string>();
+  for (const p of listProjectPlacements(cfg.dataDir)) {
+    if (p.role === 'owner' && !ownerUnit.has(p.projectId)) ownerUnit.set(p.projectId, p.unitId);
+  }
+  const enriched = records.map((r) => ({ ...r, unitId: ownerUnit.get(r.id) }));
+  sendJson(res, 200, { projects: enriched });
 }
 
 /** Create a project placed in the REQUIRED owner unit, optionally with a

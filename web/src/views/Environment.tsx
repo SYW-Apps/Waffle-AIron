@@ -32,13 +32,27 @@ interface Graph {
  * dependency edges. Reuses the classic engine — not a second renderer.
  */
 function landscapeToCanvasModel(g: Graph): unknown {
-  const toColons = (id: string) => id.replace(/\./g, '::');
-  const parentUnit = new Map<string, string>(); // projectNodeId → unit id (from placement edges)
-  for (const e of g.edges) if (e.edgeKind === 'placement') parentUnit.set(e.to, e.from);
+  // Classify edges by their ENDPOINT KINDS (robust) rather than the edgeKind
+  // string, which the landscape sets from the placement role ('owns'/'shared_with'
+  // /'contains') and relation kind — not literal 'placement'/'relation'.
+  const kindOf = new Map(g.nodes.map((n) => [n.id, n.kind]));
+  // A unit node id is 'unit:<qualified.dot.id>'; strip the prefix and map the
+  // dot-path onto the engine's '::' subsystem nesting.
+  const toColons = (unitNodeId: string) => unitNodeId.replace(/^unit:/, '').replace(/\./g, '::');
+  const realProjectId = (n: GNode) => n.projectId ?? n.id.replace(/^project:/, '');
 
   const units = g.nodes.filter((n) => n.kind === 'unit');
   const projects = g.nodes.filter((n) => n.kind === 'project');
-  const unplaced = projects.some((p) => !parentUnit.get(p.id));
+  const projById = new Map(projects.map((p) => [p.id, p]));
+
+  // Project node id → its owning unit node id (a unit→project edge; prefer the
+  // owner placement, edgeKind 'owns').
+  const unitOfProject = new Map<string, string>();
+  for (const e of g.edges) {
+    if (kindOf.get(e.from) === 'unit' && kindOf.get(e.to) === 'project') {
+      if (!unitOfProject.has(e.to) || e.edgeKind === 'owns') unitOfProject.set(e.to, e.from);
+    }
+  }
 
   const subsystems = units.map((u) => ({
     id: toColons(u.id),
@@ -46,41 +60,39 @@ function landscapeToCanvasModel(g: Graph): unknown {
     description: 'Organization unit',
     trustedLinks: [] as { subsystem: string; reason: string }[],
   }));
+  const unplaced = projects.some((p) => !unitOfProject.has(p.id));
   if (unplaced) {
     subsystems.push({ id: '__unassigned__', name: '(unassigned)', description: 'Projects not placed in a unit', trustedLinks: [] });
   }
 
-  // Relation edges (project → project) become dependsOn + model edges.
+  // Relations = project→project edges (any edgeKind). Map to real project ids.
   const depsOf = new Map<string, string[]>();
+  const edges: { from: string; to: string; cross: boolean }[] = [];
   for (const e of g.edges) {
-    if (e.edgeKind !== 'relation') continue;
-    (depsOf.get(e.from) ?? depsOf.set(e.from, []).get(e.from)!).push(e.to);
+    if (kindOf.get(e.from) !== 'project' || kindOf.get(e.to) !== 'project') continue;
+    const from = realProjectId(projById.get(e.from)!);
+    const to = realProjectId(projById.get(e.to)!);
+    (depsOf.get(from) ?? depsOf.set(from, []).get(from)!).push(to);
+    edges.push({ from, to, cross: unitOfProject.get(e.from) !== unitOfProject.get(e.to) });
   }
 
   const components = projects.map((p) => {
-    const unit = parentUnit.get(p.id);
+    const unitNode = unitOfProject.get(p.id);
+    const pid = realProjectId(p);
     return {
-      id: p.id,
+      id: pid,
       name: p.label,
       description: p.status ? 'Project · ' + p.status : 'Project',
-      subsystem: unit ? toColons(unit) : '__unassigned__',
+      subsystem: unitNode ? toColons(unitNode) : '__unassigned__',
       componentType: 'project',
       public: false,
       owns: [] as string[],
-      dependsOn: depsOf.get(p.id) ?? [],
+      dependsOn: depsOf.get(pid) ?? [],
       interfaces: [] as unknown[],
       narratives: [] as unknown[],
       intents: [] as unknown[],
     };
   });
-
-  const projById = new Map(projects.map((p) => [p.id, p]));
-  const edges: { from: string; to: string; cross: boolean }[] = [];
-  for (const e of g.edges) {
-    if (e.edgeKind !== 'relation') continue;
-    if (!projById.has(e.from) || !projById.has(e.to)) continue;
-    edges.push({ from: e.from, to: e.to, cross: parentUnit.get(e.from) !== parentUnit.get(e.to) });
-  }
 
   return {
     system: { name: 'Environment', diagram: { defaultView: 'architecture', showDatabases: false } },
