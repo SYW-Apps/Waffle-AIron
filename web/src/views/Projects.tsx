@@ -10,11 +10,11 @@ import {
   DataTable,
   Field,
   Modal,
-  Select,
   TextInput,
   useAsync,
   useToast,
 } from '../ui';
+import { UnitSelect } from '../components/UnitSelect';
 import type { OrganizationUnitRecord, ProjectRecord } from '../types';
 
 function statusTone(status: string): 'ok' | 'warn' | 'neutral' {
@@ -62,11 +62,7 @@ function CreateProjectModal(props: {
           {props.units.length === 0 ? (
             <span className="hint">No units exist yet — create one under Organization first.</span>
           ) : (
-            <Select
-              value={unitId}
-              onChange={setUnitId}
-              options={props.units.map((u) => ({ value: u.id, label: `${u.name} (${u.id})` }))}
-            />
+            <UnitSelect units={props.units} value={unitId} onChange={setUnitId} allowEmpty={false} placeholder="Choose the owner unit…" />
           )}
         </Field>
       </div>
@@ -220,11 +216,7 @@ function PlaceModal(props: {
           {props.units.length === 0 ? (
             <span className="hint">No units exist (or you can't list them). Create one under Organization first.</span>
           ) : (
-            <Select
-              value={unitId}
-              onChange={setUnitId}
-              options={props.units.map((u) => ({ value: u.id, label: `${u.name} (${u.id})` }))}
-            />
+            <UnitSelect units={props.units} value={unitId} onChange={setUnitId} allowEmpty={false} placeholder="Choose a unit…" />
           )}
         </Field>
       </div>

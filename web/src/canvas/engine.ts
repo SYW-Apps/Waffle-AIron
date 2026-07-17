@@ -2018,6 +2018,34 @@ export function mountCanvas(host, model, opts = {}) {
     }
     return null;
   }
+  // Intent prose (the detail dial's alternative to a step narrative).
+  function intentFor(compId, method) {
+    var c = compById[compId];
+    if (!c || !c.intents) return null;
+    for (var i = 0; i < c.intents.length; i++) {
+      if (c.intents[i].method === method) return c.intents[i].text;
+    }
+    return null;
+  }
+  // The method's L3 contract (signature/description/returns) if declared.
+  function methodInfo(compId, method) {
+    var c = compById[compId];
+    if (!c) return null;
+    for (var i = 0; i < c.interfaces.length; i++) {
+      var ms = c.interfaces[i].methods;
+      for (var j = 0; j < ms.length; j++) {
+        if (ms[j].name === method) return { intf: c.interfaces[i], m: ms[j] };
+      }
+    }
+    return null;
+  }
+  // A call target is "openable" when we can show SOMETHING for it: a step
+  // narrative, an intent paragraph, or at least its contract. This lets the user
+  // drill into intent-only / contract-only methods (see the explanation there),
+  // not just fully-narrated ones.
+  function openable(compId, method) {
+    return !!(narrativeFor(compId, method) || intentFor(compId, method) || methodInfo(compId, method));
+  }
   function flowTitle() {
     var top = flowStack[flowStack.length - 1];
     return top.comp + '.' + top.method;
@@ -2185,7 +2213,7 @@ export function mountCanvas(host, model, opts = {}) {
     graph.steps.forEach(function (s, i) {
       var id = 'n' + s.n;
       var isCall = (s.kind === 'call' || s.kind === 'dispatch') && !!s.call;
-      var callable = isCall && !!narrativeFor(s.call.component, s.call.method);
+      var callable = isCall && openable(s.call.component, s.call.method);
       var isCond = s.kind === 'branch' || s.kind === 'switch' || s.kind === 'loop';
       var label = flowStepLabel(s) + (isCall ? '\n\u2192 ' + s.call.component + '.' + s.call.method + '()' + (callable ? '  \u21B4' : '') : '');
       var cls = s.kind === 'branch' || s.kind === 'switch' ? 'flowcond'
@@ -2207,6 +2235,16 @@ export function mountCanvas(host, model, opts = {}) {
         classes: cls + (callable ? ' drill' : ''),
       });
     });
+    // No L5 narrative for the opened method: instead of an empty chart, show
+    // its intent paragraph (or contract description) as a single note node, so a
+    // drilled-in intent-only / contract-only method still explains itself.
+    if (!narrative) {
+      var noteText = intentFor(top.comp, top.method);
+      var miN = methodInfo(top.comp, top.method);
+      if (!noteText && miN) noteText = miN.m.description + (miN.m.returns ? '  \u2192 returns ' + miN.m.returns : '');
+      eles.push({ data: { id: 'intentNote', label: noteText || 'No narrative or intent recorded for this method.', w: 380, h: 120, tw: 340 }, position: { x: 0, y: 120 }, classes: 'flowintent' });
+      eles.push({ data: { id: 'fe-intent', source: 'start', target: 'intentNote', lbl: '' } });
+    }
     if (graph.first !== null) eles.push({ data: { id: 'fe-start', source: 'start', target: 'n' + graph.first, lbl: '' } });
     graph.edges.forEach(function (e, i) {
       var cls = e.kind === 'error' ? 'fErr'
@@ -2229,6 +2267,7 @@ export function mountCanvas(host, model, opts = {}) {
       { selector: '.flowend', style: { shape: 'round-rectangle', 'background-color': t.stereo.entry.fill, 'border-color': t.stereo.entry.stroke, color: t.stereo.entry.text, 'border-width': 2.5 } },
       { selector: '.flowthrow', style: { shape: 'round-rectangle', 'background-color': t.ghostFill, 'border-color': t.issue, color: t.issue, 'border-width': 2.5 } },
       { selector: '.flowjumpn', style: { 'background-color': t.ghostFill, 'border-color': t.ghostStroke, 'border-style': 'dotted', color: t.ghostText } },
+      { selector: '.flowintent', style: { shape: 'round-rectangle', width: 'label', height: 'label', padding: '16px', 'background-color': t.ghostFill, 'border-color': t.ghostStroke, 'border-style': 'dashed', color: t.innerText, 'text-max-width': 340, 'text-wrap': 'wrap', 'font-size': 11.5, 'text-valign': 'center', 'text-halign': 'center', 'font-style': 'italic' } },
       { selector: '.drill', style: { 'border-width': 2.5 } },
       { selector: 'edge', style: { 'curve-style': 'bezier', width: 1.6, 'line-color': t.pageEdge, 'target-arrow-shape': 'triangle', 'target-arrow-color': t.pageEdge, label: 'data(lbl)', 'font-size': 9.5, color: t.edgeText, 'text-background-color': t.bgLabel, 'text-background-opacity': 0.85, 'text-rotation': 'autorotate' } },
       // Long edges (false/case/exit, jumps, error paths) route orthogonally:
@@ -2274,20 +2313,38 @@ export function mountCanvas(host, model, opts = {}) {
     var top = flowStack[flowStack.length - 1];
     var narrative = narrativeFor(top.comp, top.method);
     var el = ROOT.getElementById('flowSteps');
-    var html = (narrative ? narrative.steps : []).map(function (s) {
+    if (!narrative) {
+      // No step-by-step narrative — show the method's contract + intent prose so
+      // a drilled-in intent-only / contract-only method still explains itself.
+      var intent = intentFor(top.comp, top.method);
+      var mi = methodInfo(top.comp, top.method);
+      var parts = ['<div class="fstep" style="opacity:.7">No step-by-step narrative \u2014 showing intent / contract:</div>'];
+      if (mi) {
+        parts.push('<div class="fstep"><code>' + escText(mi.m.signature) + '</code></div>');
+        parts.push('<div class="fstep">' + escText(mi.m.description) + (mi.m.returns ? ' \u2014 returns ' + escText(mi.m.returns) : '') + '</div>');
+      }
+      if (intent) parts.push('<div class="fstep" style="font-style:italic">' + escText(intent) + '</div>');
+      if (!mi && !intent) parts.push('<div class="fstep">No intent or contract recorded for this method.</div>');
+      el.innerHTML = parts.join('');
+      return;
+    }
+    var html = narrative.steps.map(function (s) {
       var callHtml = '';
       if (s.call) {
-        var callable = !!narrativeFor(s.call.component, s.call.method);
+        var callable = openable(s.call.component, s.call.method);
         callHtml = ' \u2192 <span class="call' + (callable ? ' drillstep' : '') + '" data-dc="' + s.call.component + '" data-dm="' + s.call.method + '">'
           + s.call.component + '.' + s.call.method + '()' + (callable ? ' \u21B4' : '') + '</span>';
       }
       return '<div class="fstep"><span class="num">' + s.n + '.</span> ' + escText(flowStepText(s)) + callHtml + '</div>';
-    }).join('') || '<div class="fstep">No narrative steps.</div>';
+    }).join('');
     el.innerHTML = html;
+    // Single click on the styled step link drills in (it looks like a hyperlink,
+    // so it behaves like one). The flowchart graph keeps double-click, since a
+    // single tap in a dense chart is too easy to land accidentally.
     var drills = el.querySelectorAll('.drillstep');
     for (var i = 0; i < drills.length; i++) {
       (function (d) {
-        d.addEventListener('dblclick', function () { drillFlow(d.getAttribute('data-dc'), d.getAttribute('data-dm')); });
+        d.addEventListener('click', function () { drillFlow(d.getAttribute('data-dc'), d.getAttribute('data-dm')); });
       })(drills[i]);
     }
   }

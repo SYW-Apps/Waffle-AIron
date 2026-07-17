@@ -15,7 +15,14 @@ import {
   useAsync,
   useToast,
 } from '../ui';
-import type { GitBackingBinding, HostExposurePolicy, InstancePackPolicy, PackDescriptor } from '../types';
+import { UnitSelect } from '../components/UnitSelect';
+import type {
+  GitBackingBinding,
+  HostExposurePolicy,
+  InstancePackPolicy,
+  OrganizationUnitRecord,
+  PackDescriptor,
+} from '../types';
 
 const csvToList = (s: string): string[] => s.split(',').map((x) => x.trim()).filter(Boolean);
 const listToCsv = (l?: string[]): string => (l ?? []).join(', ');
@@ -214,6 +221,10 @@ function ExposureForm(props: { policy: HostExposurePolicy; onSaved: () => void; 
 function BackupsTab() {
   const toast = useToast();
   const bindings = useAsync<{ bindings: GitBackingBinding[] }>(() => get('/web/admin/git-backing'), []);
+  const units = useAsync<{ units: OrganizationUnitRecord[] }>(
+    () => get<{ units: OrganizationUnitRecord[] }>('/web/admin/org/units').catch(() => ({ units: [] as OrganizationUnitRecord[] })),
+    [],
+  );
   const [adding, setAdding] = useState(false);
   const [scopeKind, setScopeKind] = useState('unit');
   const [scopeId, setScopeId] = useState('');
@@ -287,7 +298,15 @@ function BackupsTab() {
               <Select value={scopeKind} onChange={setScopeKind} options={[{ value: 'unit', label: 'Organization unit subtree' }, { value: 'instance', label: 'Whole instance structure' }]} />
             </Field>
             {scopeKind !== 'instance' && (
-              <Field label="Unit id"><TextInput value={scopeId} onChange={setScopeId} placeholder="company_a.it" /></Field>
+              <Field label="Unit subtree" hint="The unit whose subtree is mirrored. Backs up structure only — never secrets or sessions.">
+                <UnitSelect
+                  units={units.data?.units ?? []}
+                  value={scopeId}
+                  onChange={setScopeId}
+                  allowEmpty={false}
+                  placeholder="Choose a unit…"
+                />
+              </Field>
             )}
             <Field label="Remote URL"><TextInput value={remote} onChange={setRemote} placeholder="https://github.com/org/backup.git" /></Field>
             <Field label="Branch"><TextInput value={branch} onChange={setBranch} /></Field>

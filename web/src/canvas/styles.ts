@@ -184,5 +184,7 @@ header input[type="search"]::placeholder { color:var(--dim); }
 #flowModal.steps #flowSteps { display:block; }
 #flowSteps .fstep { border:1px solid var(--line); border-radius:9px; background:var(--card); padding:9px 12px; margin:8px 0; font-size:12.5px; }
 #flowSteps .fstep .num { display:inline-block; min-width:22px; font-weight:700; color:var(--accent); }
-#flowSteps .fstep .call { color:var(--accent); cursor:pointer; text-decoration:underline dotted; }
+#flowSteps .fstep .call { color:var(--dim); }
+#flowSteps .fstep .call.drillstep { color:var(--accent); cursor:pointer; text-decoration:underline; }
+#flowSteps .fstep .call.drillstep:hover { opacity:.82; }
 #flowModal .hintbar { padding:6px 14px; color:var(--dim); font-size:11px; border-top:1px solid var(--line); }`;

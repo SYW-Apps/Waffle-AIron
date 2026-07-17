@@ -12,6 +12,7 @@ import {
   useAsync,
   useToast,
 } from '../ui';
+import { UnitSelect } from '../components/UnitSelect';
 import type { OrganizationUnitRecord } from '../types';
 
 interface TreeNode {
@@ -93,13 +94,6 @@ function UnitModal(props: {
     if (!legal.includes(kind)) setKind(legal[0]);
   }
 
-  const parentOptions = [
-    { value: '', label: '(top-level — a business entity)' },
-    ...props.units
-      .filter((u) => u.id !== props.existing?.id)
-      .map((u) => ({ value: u.id, label: `${u.name} (${u.id}) · ${u.kind}` })),
-  ];
-
   const previewId = isEdit ? props.existing!.id : parentId ? `${parentId}.${slug}` : slug;
 
   async function save() {
@@ -133,7 +127,13 @@ function UnitModal(props: {
         </Field>
         {!isEdit && (
           <Field label="Parent unit" hint="A top-level unit must be a business entity.">
-            <Select value={parentId} onChange={changeParent} options={parentOptions} />
+            <UnitSelect
+              units={props.units.filter((u) => u.id !== props.existing?.id)}
+              value={parentId}
+              onChange={changeParent}
+              allowEmpty
+              emptyLabel="(top-level — a business entity)"
+            />
           </Field>
         )}
         <Field
@@ -177,23 +177,6 @@ function RemoveUnitModal(props: {
   const [targetUnitId, setTargetUnitId] = useState('');
   const [newSlug, setNewSlug] = useState('');
   const isRoot = !props.unit.parentId;
-
-  // Migration targets exclude this unit and its descendants.
-  const descendants = useMemo(() => {
-    const set = new Set<string>([props.unit.id]);
-    let grew = true;
-    while (grew) {
-      grew = false;
-      for (const u of props.units) {
-        if (u.parentId && set.has(u.parentId) && !set.has(u.id)) {
-          set.add(u.id);
-          grew = true;
-        }
-      }
-    }
-    return set;
-  }, [props.unit, props.units]);
-  const targetOptions = props.units.filter((u) => !descendants.has(u.id)).map((u) => ({ value: u.id, label: `${u.name} (${u.id})` }));
 
   async function remove() {
     const disposition: Record<string, unknown> = { kind };
@@ -241,7 +224,14 @@ function RemoveUnitModal(props: {
         </Field>
         {kind === 'migrate' && (
           <Field label="Destination unit">
-            <Select value={targetUnitId} onChange={setTargetUnitId} options={[{ value: '', label: '(choose…)' }, ...targetOptions]} />
+            <UnitSelect
+              units={props.units}
+              value={targetUnitId}
+              onChange={setTargetUnitId}
+              excludeSubtreeOf={props.unit.id}
+              allowEmpty
+              emptyLabel="(choose…)"
+            />
           </Field>
         )}
         {kind === 'alternative' && (
