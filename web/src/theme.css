@@ -482,6 +482,7 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
 /* ── Canvas view ─────────────────────────────────────────────────────────── */
 .canvas-view { display: flex; flex-direction: column; height: 100%; }
 .canvas-bar { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); flex: 0 0 auto; }
+.crumb-sep { color: var(--ink-subtle); }
 .canvas-frame { flex: 1; border: none; width: 100%; background: var(--bg); }
 /* Shadow-root host for the in-React classic canvas engine (web/src/canvas). */
 .canvas-host { flex: 1; min-height: 0; width: 100%; display: flex; }

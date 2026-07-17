@@ -1,54 +1,30 @@
-import { useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { get } from '../api';
-import { useAsync } from '../ui';
 import { CanvasView } from './CanvasView';
-import type { ProjectRecord } from '../types';
+import { Environment } from './Environment';
 
-/** Canvas landing view. The selected project lives in the URL (?project=…) so a
- *  view is a shareable link. The canvas is the SAME classic engine used for the
- *  standalone export, mounted directly in React (no iframe) via the shared
- *  engine module (web/src/canvas) inside a shadow root — full toolbar, details,
- *  and performance kept exactly, now theme-aware. We do not re-implement it. */
+/**
+ * The canvas navigator. With no ?project= it shows the ENVIRONMENT — the org
+ * hierarchy (units → projects) — and clicking a project drills into its
+ * architecture canvas (setting ?project=, a shareable link). A back control
+ * returns to the environment. There is no separate project selector: you
+ * navigate by clicking in the canvas itself.
+ */
 export function Home() {
   const [params, setParams] = useSearchParams();
   const selected = params.get('project') ?? '';
-  const projects = useAsync<{ projects: ProjectRecord[] }>(() => get('/web/projects'), []);
-  const list = projects.data?.projects ?? [];
 
-  // Default the URL to the first visible project once loaded and none is chosen.
-  useEffect(() => {
-    if (!selected && list.length > 0) {
-      setParams({ project: list[0].id }, { replace: true });
-    }
-  }, [selected, list, setParams]);
+  if (!selected) return <Environment />;
 
   return (
     <div className="canvas-view">
       <div className="canvas-bar">
-        {list.length > 0 ? (
-          <label className="inline-field">
-            <span>Project</span>
-            <select className="input" value={selected} onChange={(e) => setParams({ project: e.target.value })}>
-              {list.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.id}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : (
-          <span className="hint">No projects in your scope yet.</span>
-        )}
+        <button className="btn btn-ghost btn-sm" onClick={() => setParams({})} title="Back to the environment">
+          ← Environment
+        </button>
+        <span className="crumb-sep">/</span>
+        <strong>{selected}</strong>
       </div>
-      {selected ? (
-        <CanvasView key={selected} projectId={selected} />
-      ) : (
-        <div className="empty-state">
-          <h3>Nothing to show yet</h3>
-          <p className="hint">Once you can see a project, its architecture canvas appears here.</p>
-        </div>
-      )}
+      <CanvasView key={selected} projectId={selected} />
     </div>
   );
 }
