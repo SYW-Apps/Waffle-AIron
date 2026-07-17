@@ -231,6 +231,15 @@ export function upsertOrganizationUnit(
   // is a create (the registry computes the qualified dot-path id from
   // parent+slug and rejects collisions).
   const existing = record.id ? organization.getOrganizationUnit(cfg.dataDir, record.id) : null;
+  // A NEW unit must satisfy the org-unit kind hierarchy (business_entity at the
+  // root; otherwise a kind permitted under its parent's kind). Existing units take
+  // the metadata-update path and are not retroactively re-validated.
+  if (!existing) {
+    const parentKind = record.parentId
+      ? organization.getOrganizationUnit(cfg.dataDir, record.parentId)?.kind ?? null
+      : null;
+    organization.validateUnitHierarchy(record.kind, parentKind);
+  }
   const stored = existing
     ? organization.updateUnit(cfg.dataDir, record)
     : organization.createUnit(cfg.dataDir, record);

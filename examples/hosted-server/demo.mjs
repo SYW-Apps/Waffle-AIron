@@ -61,8 +61,9 @@ async function main() {
 
   step('Control plane (in-process): provision an isolated project + mint an owner-bound agent key');
   // Every project is placed in an organization unit at creation, so seed one first.
-  console.log('  ' + cli(['host', 'unit', 'create', '--slug', 'demo-team']).replace(/\s+/g, ' '));
-  console.log('  ' + cli(['host', 'project', 'create', '--id', 'demo', '--unit', 'demo-team']).replace(/\s+/g, ' '));
+  // A top-level unit must be a business_entity per the org-unit hierarchy.
+  console.log('  ' + cli(['host', 'unit', 'create', '--slug', 'demo-co', '--kind', 'business_entity']).replace(/\s+/g, ' '));
+  console.log('  ' + cli(['host', 'project', 'create', '--id', 'demo', '--unit', 'demo-co']).replace(/\s+/g, ' '));
   // A token carries NO permissions of its own — it acts as its OWNER's live
   // permission. Seed the owner's read+write assignment, then mint their token.
   console.log('  ' + cli(['host', 'permission', 'set', '--user', 'ci-agent', '--capability', 'project:read', '--project', 'demo']).replace(/\s+/g, ' '));

@@ -59,7 +59,10 @@ function unitRec(over: Partial<OrganizationUnitRecord> = {}): OrganizationUnitRe
   const name = over.name ?? 'Unit';
   // The slug (the qualified-id segment) derives from the name unless supplied.
   const slug = over.slug ?? name.toLowerCase().replace(/[^a-z0-9-]+/g, '-');
-  return { id: '', name, slug, kind: 'team', status: 'active', createdAt: '', createdBy: SUBJECT, ...over };
+  // Default to a business_entity so helper-created ROOT units satisfy the org-unit
+  // hierarchy (a root must be a business_entity; business_entity also nests under
+  // business_entity, so helper-created children stay valid too).
+  return { id: '', name, slug, kind: 'business_entity', status: 'active', createdAt: '', createdBy: SUBJECT, ...over };
 }
 
 function placementRec(over: Partial<ProjectPlacement> = {}): ProjectPlacement {
@@ -142,7 +145,7 @@ describe('landscape orchestrator (sdd_host)', () => {
   it('upsertUnit: a landscape:manage grant creates the unit and audits unit.upsert; a plain token is 403', () => {
     expect(() => upsertUnit(cfg, plainToken(), unitRec({ name: 'Team A' }))).toThrow(ForbiddenError);
 
-    const stored = upsertUnit(cfg, manageToken(), unitRec({ name: 'Team A', kind: 'team' }));
+    const stored = upsertUnit(cfg, manageToken(), unitRec({ name: 'Team A' }));
     expect(stored.id).toBeTruthy();
     expect(stored.name).toBe('Team A');
     expect(stored.status).toBe('active');
@@ -770,7 +773,7 @@ describe('landscape portal (sdd_host http)', () => {
 
   it('the seven landscape endpoints respond with the correct statuses through routeAdmin', async () => {
     // PUT /landscape/units/{id} → 200.
-    const unit = await api('PUT', '/landscape/units/team-1', { cred: MASTER, body: { name: 'Team 1', kind: 'team' } });
+    const unit = await api('PUT', '/landscape/units/team-1', { cred: MASTER, body: { name: 'Team 1', kind: 'business_entity' } });
     expect(unit.status).toBe(200);
     expect(unit.json.id).toBe('team-1');
 

@@ -1174,7 +1174,7 @@ describe('web admin orchestrator (sdd_host)', () => {
       id: '',
       name: 'Team One',
       slug: 'team-one',
-      kind: 'team',
+      kind: 'business_entity',
       status: 'active',
       createdAt: '',
       createdBy: SUBJECT,
@@ -1207,7 +1207,7 @@ describe('web admin orchestrator (sdd_host)', () => {
       id: '',
       name: 'Team',
       slug: 'unit-1',
-      kind: 'team',
+      kind: 'business_entity',
       status: 'active',
       createdAt: '',
       createdBy: SUBJECT,
@@ -1277,7 +1277,7 @@ describe('web admin orchestrator (sdd_host)', () => {
       id: '',
       name: 'U',
       slug: 'unit-u',
-      kind: 'team',
+      kind: 'business_entity',
       status: 'active',
       createdAt: '',
       createdBy: SUBJECT,
@@ -1490,7 +1490,7 @@ describe('web admin routes over HTTP (sdd_host)', () => {
 
   it('org-unit create forwards through the web admin orchestrator and is CSRF-gated', async () => {
     const cookie = adminCookie();
-    const unitBody = JSON.stringify({ name: 'Team', slug: 'team', kind: 'team', createdBy: { userId: 'u-1', kind: 'human', issuer: 'local' } });
+    const unitBody = JSON.stringify({ name: 'Team', slug: 'team', kind: 'business_entity', createdBy: { userId: 'u-1', kind: 'human', issuer: 'local' } });
 
     // A cookie-authenticated POST WITHOUT the CSRF header → 403 (never dispatched).
     const noCsrf = await raw({ method: 'POST', path: '/web/admin/org/units', headers: { cookie, 'content-type': 'application/json' }, body: unitBody });

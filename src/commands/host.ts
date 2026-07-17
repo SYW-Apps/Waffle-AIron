@@ -397,11 +397,12 @@ export async function runHostDemo(options: HostOptions = {}): Promise<void> {
   const unitId = options.unit || 'demo';
   try {
     // Ensure the owner unit exists (idempotent — updates it if already present).
+    // A root unit must be a business_entity per the org-unit hierarchy.
     landscapeUpsertUnit(cfg, cred, {
       id: unitId,
       name: unitId,
       slug: unitId,
-      kind: 'team',
+      kind: 'business_entity',
       status: 'active',
       createdAt: '',
       createdBy: { userId: 'master', kind: 'service', issuer: 'local' },

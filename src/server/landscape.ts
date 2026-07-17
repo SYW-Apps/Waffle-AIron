@@ -14,6 +14,7 @@ import {
   listOrganizationUnits,
   listProjectPlacements,
   getOrganizationUnit,
+  validateUnitHierarchy,
 } from './organization.js';
 import {
   upsertProjectRelation,
@@ -537,6 +538,15 @@ export function upsertUnit(
     }
   } else if (!permitsCap(cfg, principal, PROJECT_ADMIN_CAPABILITY, 'instance', '')) {
     throw new ForbiddenError('creating a ROOT organization unit requires instance-level project:admin');
+  }
+  // A NEW unit must satisfy the org-unit kind hierarchy (business_entity at the
+  // root; otherwise a kind permitted under its parent's kind). Existing units take
+  // the metadata-update path and are not retroactively re-validated.
+  if (!existing) {
+    const parentKind = unit.parentId
+      ? getOrganizationUnit(cfg.dataDir, unit.parentId)?.kind ?? null
+      : null;
+    validateUnitHierarchy(unit.kind, parentKind);
   }
   // An existing record takes the metadata-update path; anything else is a create
   // (the registry computes the qualified id and rejects collisions).

@@ -36,7 +36,29 @@ function buildTree(units: OrganizationUnitRecord[]): TreeNode[] {
   return roots;
 }
 
-const UNIT_KINDS = ['business_entity', 'department', 'team', 'portfolio', 'group'];
+// Canonical org-unit kinds + the hierarchy, mirroring src/server/organization.ts
+// (validateUnitHierarchy). A root unit must be a business_entity; otherwise a
+// kind may only sit under one of its allowed parent kinds. Portfolio was dropped
+// (a group is the same named container).
+const UNIT_KINDS = ['business_entity', 'department', 'team', 'group'] as const;
+const ALLOWED_PARENT_KINDS: Record<string, string[]> = {
+  business_entity: ['business_entity'],
+  department: ['business_entity', 'department'],
+  team: ['business_entity', 'department'],
+  group: ['team', 'group'],
+};
+const KIND_LABEL: Record<string, string> = {
+  business_entity: 'Business entity',
+  department: 'Department',
+  team: 'Team',
+  group: 'Group',
+};
+
+/** The kinds allowed directly under a parent of the given kind (null = a root). */
+function validKindsUnder(parentKind: string | null): string[] {
+  if (parentKind === null) return ['business_entity'];
+  return UNIT_KINDS.filter((k) => ALLOWED_PARENT_KINDS[k].includes(parentKind));
+}
 
 // ── Create / edit unit modal ─────────────────────────────────────────────────
 
@@ -49,18 +71,33 @@ function UnitModal(props: {
   onSaved: () => void;
 }) {
   const toast = useToast();
-  const [name, setName] = useState(props.existing?.name ?? '');
-  const [kind, setKind] = useState(props.existing?.kind ?? 'team');
-  const [slug, setSlug] = useState(props.existing?.slug ?? '');
-  const [parentId, setParentId] = useState(props.existing?.parentId ?? props.defaultParentId ?? '');
-  const [visibility, setVisibility] = useState(props.existing?.visibility ?? 'inherit');
   const isEdit = props.mode === 'edit';
+  const initialParent = props.existing?.parentId ?? props.defaultParentId ?? '';
+  const parentKindOf = (pid: string): string | null =>
+    pid ? props.units.find((u) => u.id === pid)?.kind ?? null : null;
+
+  const [name, setName] = useState(props.existing?.name ?? '');
+  const [slug, setSlug] = useState(props.existing?.slug ?? '');
+  const [parentId, setParentId] = useState(initialParent);
+  const [kind, setKind] = useState(props.existing?.kind ?? validKindsUnder(parentKindOf(initialParent))[0]);
+  const [visibility, setVisibility] = useState(props.existing?.visibility ?? 'inherit');
+
+  // Only offer kinds legal under the chosen parent (edit leaves the kind as-is —
+  // the backend re-validates the hierarchy on new/moved units only).
+  const validKinds = isEdit ? [...UNIT_KINDS] : validKindsUnder(parentKindOf(parentId));
+
+  // Switching parent narrows the legal kinds — snap to a valid one if needed.
+  function changeParent(pid: string): void {
+    setParentId(pid);
+    const legal = validKindsUnder(parentKindOf(pid));
+    if (!legal.includes(kind)) setKind(legal[0]);
+  }
 
   const parentOptions = [
-    { value: '', label: '(top-level / tenant root)' },
+    { value: '', label: '(top-level — a business entity)' },
     ...props.units
       .filter((u) => u.id !== props.existing?.id)
-      .map((u) => ({ value: u.id, label: `${u.name} (${u.id})` })),
+      .map((u) => ({ value: u.id, label: `${u.name} (${u.id}) · ${u.kind}` })),
   ];
 
   const previewId = isEdit ? props.existing!.id : parentId ? `${parentId}.${slug}` : slug;
@@ -94,16 +131,21 @@ function UnitModal(props: {
         <Field label="Display name">
           <TextInput value={name} onChange={setName} placeholder="Platform Team" />
         </Field>
-        <Field label="Kind">
-          <Select value={kind} onChange={setKind} options={UNIT_KINDS.map((k) => ({ value: k, label: k }))} />
+        {!isEdit && (
+          <Field label="Parent unit" hint="A top-level unit must be a business entity.">
+            <Select value={parentId} onChange={changeParent} options={parentOptions} />
+          </Field>
+        )}
+        <Field
+          label="Kind"
+          hint={isEdit ? undefined : `Allowed here: ${validKinds.map((k) => KIND_LABEL[k] ?? k).join(', ')}`}
+        >
+          <Select value={kind} onChange={setKind} options={validKinds.map((k) => ({ value: k, label: KIND_LABEL[k] ?? k }))} />
         </Field>
         {!isEdit && (
           <>
             <Field label="Slug" hint="Lowercase [a-z0-9-], no dots. Unique among siblings.">
               <TextInput value={slug} onChange={(v) => setSlug(v.toLowerCase())} placeholder="platform" />
-            </Field>
-            <Field label="Parent unit">
-              <Select value={parentId} onChange={setParentId} options={parentOptions} />
             </Field>
             <Field label="Qualified id (computed)">
               <code className="preview-id">{previewId || '—'}</code>

@@ -95,6 +95,46 @@ function persistState(dataDir: string, state: OrganizationState): void {
  *  qualified path), unique among siblings. */
 const SLUG_PATTERN = /^[a-z0-9-]+$/;
 
+/** The canonical organization-unit kinds, top → down. Portfolio was intentionally
+ *  dropped — a `group` is the same "named container", so portfolio-style grouping
+ *  is a future unit tag, not a distinct kind. */
+export const UNIT_KINDS = ['business_entity', 'department', 'team', 'group'] as const;
+export type UnitKind = (typeof UNIT_KINDS)[number];
+
+/** The kinds each kind may be nested DIRECTLY under. A root unit (no parent) must
+ *  be a business_entity. Cross-unit projects are not modeled as multi-parent units
+ *  — a project keeps a single owner unit and is shared via exposeTo. */
+export const ALLOWED_PARENT_KINDS: Record<UnitKind, UnitKind[]> = {
+  business_entity: ['business_entity'], // a subsidiary/division under another entity
+  department: ['business_entity', 'department'], // a division, or a sub-department (stackable)
+  team: ['business_entity', 'department'], // under a department, or an entity (small orgs)
+  group: ['team', 'group'], // a subdomain within a team (nestable)
+};
+
+/**
+ * Enforce the org-unit kind hierarchy for a NEW or moved unit: a root unit
+ * (`parentKind` null) must be a business_entity; otherwise `kind` must be allowed
+ * directly under the parent's kind, and both must be canonical kinds. Enforced at
+ * the ORCHESTRATION layer (like authorization — see createUnit's "not here" note),
+ * on new/moved units only, so legacy or test-seeded units are never retroactively
+ * invalidated. Throws a plain Error (mapped to a 400-class message upstream).
+ */
+export function validateUnitHierarchy(kind: string, parentKind: string | null): void {
+  if (!(UNIT_KINDS as readonly string[]).includes(kind)) {
+    throw new Error(`Organization unit kind "${kind}" is not one of: ${UNIT_KINDS.join(', ')}.`);
+  }
+  if (parentKind === null) {
+    if (kind !== 'business_entity') {
+      throw new Error(`A top-level organization unit must be a business_entity (a "${kind}" needs a parent unit).`);
+    }
+    return;
+  }
+  const allowed = ALLOWED_PARENT_KINDS[kind as UnitKind];
+  if (!allowed.includes(parentKind as UnitKind)) {
+    throw new Error(`A "${kind}" cannot be nested under a "${parentKind}" (allowed parents: ${allowed.join(', ')}).`);
+  }
+}
+
 /** The qualified dot-path id: the parent's qualified id + '.' + slug; a root
  *  unit's id IS its slug. */
 function qualifiedId(parentId: string | undefined, slug: string): string {
