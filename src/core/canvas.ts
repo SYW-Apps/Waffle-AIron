@@ -489,7 +489,11 @@ header input[type="search"]::placeholder { color:var(--dim); }
 .seg button.active { background:var(--accent); color:#fff; font-weight:700; }
 
 .dropdown { position:relative; }
-.dropdown .menu { display:none; position:absolute; right:0; top:calc(100% + 6px); background:var(--chrome); border:1px solid var(--chrome-border); border-radius:10px; box-shadow:var(--syw-deep-shadow); min-width:200px; padding:6px; z-index:120; }
+/* Fixed (viewport-anchored) + JS-positioned on open, so the menu overlays the
+   whole page and is NEVER clipped by the header's overflow-x:auto (or, in the
+   embedded canvas, the app's scroll container) — which would otherwise trap it
+   inside the canvas and force a scrollbar. Position is set in wireDropdown. */
+.dropdown .menu { display:none; position:fixed; max-height:calc(100vh - 80px); overflow-y:auto; background:var(--chrome); border:1px solid var(--chrome-border); border-radius:10px; box-shadow:var(--syw-deep-shadow); min-width:200px; padding:6px; z-index:120; }
 .dropdown.open .menu { display:block; }
 .dropdown .menu button { display:block; width:100%; text-align:left; border:none; background:transparent; color:var(--ink); padding:8px 10px; border-radius:7px; cursor:pointer; font:inherit; font-size:12.5px; }
 .dropdown .menu button:hover { background:var(--hover-bg); }
@@ -2571,11 +2575,26 @@ var MODEL = __MODEL_JSON__;
     setTimeout(function () { cy.resize(); cy.fit(undefined, 40); }, 60);
   });
 
+  // Anchor a fixed dropdown menu just under its button, right-aligned, clamped to
+  // the viewport. Fixed positioning means it floats over the whole page and is
+  // never clipped by the header's overflow (or the embedded canvas's scroll box).
+  function positionDropdownMenu(dd, btn) {
+    var menu = dd.querySelector ? dd.querySelector('.menu') : null;
+    if (!menu || !btn.getBoundingClientRect || typeof window === 'undefined') return;
+    var r = btn.getBoundingClientRect();
+    menu.style.top = (r.bottom + 6) + 'px';
+    menu.style.left = 'auto';
+    menu.style.right = Math.max(6, window.innerWidth - r.right) + 'px';
+  }
   function wireDropdown(ddId, btnId) {
     var dd = document.getElementById(ddId);
-    document.getElementById(btnId).addEventListener('click', function (ev) {
+    var btn = document.getElementById(btnId);
+    btn.addEventListener('click', function (ev) {
       if (ev && ev.stopPropagation) ev.stopPropagation();
-      if (dd.classList) dd.classList.toggle('open');
+      if (!dd.classList) return;
+      var opening = !dd.classList.contains('open');
+      dd.classList.toggle('open');
+      if (opening) positionDropdownMenu(dd, btn);
     });
     return dd;
   }

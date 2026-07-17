@@ -1875,11 +1875,26 @@ export function mountCanvas(host, model, opts = {}) {
     setTimeout(function () { cy.resize(); cy.fit(undefined, 40); }, 60);
   });
 
+  // Anchor a fixed dropdown menu just under its button, right-aligned, clamped to
+  // the viewport. Fixed positioning means it floats over the whole page and is
+  // never clipped by the header's overflow (or the embedded canvas's scroll box).
+  function positionDropdownMenu(dd, btn) {
+    var menu = dd.querySelector ? dd.querySelector('.menu') : null;
+    if (!menu || !btn.getBoundingClientRect || typeof window === 'undefined') return;
+    var r = btn.getBoundingClientRect();
+    menu.style.top = (r.bottom + 6) + 'px';
+    menu.style.left = 'auto';
+    menu.style.right = Math.max(6, window.innerWidth - r.right) + 'px';
+  }
   function wireDropdown(ddId, btnId) {
     var dd = ROOT.getElementById(ddId);
-    ROOT.getElementById(btnId).addEventListener('click', function (ev) {
+    var btn = ROOT.getElementById(btnId);
+    btn.addEventListener('click', function (ev) {
       if (ev && ev.stopPropagation) ev.stopPropagation();
-      if (dd.classList) dd.classList.toggle('open');
+      if (!dd.classList) return;
+      var opening = !dd.classList.contains('open');
+      dd.classList.toggle('open');
+      if (opening) positionDropdownMenu(dd, btn);
     });
     return dd;
   }
