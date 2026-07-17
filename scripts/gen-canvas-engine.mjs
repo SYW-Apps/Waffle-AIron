@@ -30,7 +30,10 @@ const iifeClose = at(/^\}\)\(\);$/, iifeOpen);
 
 let css = canvas.slice(styleOpen + 1, styleClose).join('\n');
 const skel = canvas.slice(bodyOpen + 1, cyLib - 3).join('\n'); // header..flow modal (before the __MODEL__ script)
-let eng = canvas.slice(iifeOpen + 3, iifeClose).join('\n'); // IIFE body, minus `'use strict';` + the two __FN__ decls
+// IIFE body only: skip the `(function () {` line, `'use strict';`, and the two
+// server-only `var buildDrawioXml/Scene = __DRAWIO_FN__/__EXCALIDRAW_FN__;` decls
+// (those placeholders are replaced by imports here).
+let eng = canvas.slice(iifeOpen + 4, iifeClose).join('\n');
 
 // ── CSS: scope body→.cbody, :root→:host/.cbody, viewport heights → flex ──
 css = css.replace(/:root \{/, ':host, .cbody {');

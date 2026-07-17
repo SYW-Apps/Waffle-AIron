@@ -31,7 +31,6 @@ export function mountCanvas(host, model, opts = {}) {
   var CBODY = cbody;
   var MODEL = model;
 
-  var buildExcalidrawScene = __EXCALIDRAW_FN__;
 
   var store = (typeof localStorage !== 'undefined') ? localStorage : null;
   var inBrowser = (typeof window !== 'undefined');
