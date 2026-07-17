@@ -132,6 +132,33 @@ export interface GitBackingStatus {
   credentialRef?: string;
 }
 
+// ── Instance health / diagnostics ─────────────────────────────────────────────
+
+export interface DiagnosticCheckResult {
+  id: string;
+  status: string; // 'pass' | 'warn' | 'fail'
+  message: string;
+  observedAt: string;
+  details?: string;
+}
+
+export interface ResourceUsageSnapshot {
+  scope: string;
+  capturedAt: string;
+  projectCount?: number;
+  projectBytes?: number;
+  mcpRequestsLastMinute?: number;
+  auditEventsToday?: number;
+  quotaMessages: string[];
+}
+
+export interface InstanceHealthReport {
+  status: string; // 'ok' | 'degraded' | 'unhealthy'
+  generatedAt: string;
+  checks: DiagnosticCheckResult[];
+  usage?: ResourceUsageSnapshot[];
+}
+
 // ── Identity providers / tokens / approvals / audit / instance policy ────────
 
 export interface IdentityProviderConfig {

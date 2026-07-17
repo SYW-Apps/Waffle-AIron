@@ -14,6 +14,7 @@ import { Tokens } from './views/Tokens';
 import { Providers } from './views/Providers';
 import { Approvals } from './views/Approvals';
 import { Audit } from './views/Audit';
+import { Health } from './views/Health';
 import { Instance } from './views/Instance';
 import { post } from './api';
 
@@ -37,6 +38,7 @@ const ADMIN_NAV: NavItem[] = [
   { to: '/admin/providers', label: 'Sign-in (SSO)', icon: '⚿' },
   { to: '/admin/approvals', label: 'Approvals', icon: '✓' },
   { to: '/admin/audit', label: 'Audit', icon: '☰' },
+  { to: '/admin/health', label: 'Health', icon: '♥' },
   { to: '/admin/instance', label: 'Instance', icon: '⚙' },
 ];
 
@@ -121,6 +123,7 @@ function Shell() {
             <Route path="/admin/providers" element={<Providers />} />
             <Route path="/admin/approvals" element={<Approvals />} />
             <Route path="/admin/audit" element={<Audit />} />
+            <Route path="/admin/health" element={<Health />} />
             <Route path="/admin/instance" element={<Instance />} />
             <Route path="/admin" element={<Navigate to="/admin/users" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
