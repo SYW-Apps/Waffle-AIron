@@ -85,6 +85,7 @@ export function Projects() {
     [],
   );
   const [creating, setCreating] = useState(false);
+  const [placing, setPlacing] = useState<ProjectRecord | null>(null);
 
   async function lock(id: string) {
     await post('/web/projects/lock', { projectId: id });
@@ -123,7 +124,15 @@ export function Projects() {
             columns={[
               { key: 'id', header: 'Project', cell: (p) => <strong>{p.id}</strong> },
               { key: 'status', header: 'Status', cell: (p) => <Badge tone={statusTone(p.status)}>{p.status}</Badge> },
-              { key: 'unit', header: 'Unit', cell: (p) => <code className="subtle">{p.unitId ?? '—'}</code> },
+              {
+                key: 'unit',
+                header: 'Unit',
+                cell: (p) => (
+                  <button className="btn btn-ghost btn-sm" onClick={() => setPlacing(p)} title="Place this project in an organization unit">
+                    {p.unitId ? <code className="subtle">{p.unitId}</code> : <span className="hint">— set unit</span>}
+                  </button>
+                ),
+              },
               {
                 key: 'act',
                 header: '',
@@ -160,6 +169,65 @@ export function Projects() {
       {creating && (
         <CreateProjectModal units={units.data?.units ?? []} onClose={() => setCreating(false)} onCreated={projects.reload} />
       )}
+      {placing && (
+        <PlaceModal
+          project={placing}
+          units={units.data?.units ?? []}
+          onClose={() => setPlacing(null)}
+          onPlaced={() => {
+            setPlacing(null);
+            projects.reload();
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/** Place (or move) a project into an organization unit. */
+function PlaceModal(props: {
+  project: ProjectRecord;
+  units: OrganizationUnitRecord[];
+  onClose: () => void;
+  onPlaced: () => void;
+}) {
+  const toast = useToast();
+  const [unitId, setUnitId] = useState(props.project.unitId ?? props.units[0]?.id ?? '');
+
+  async function place() {
+    await post('/web/admin/org/placements', { projectId: props.project.id, unitId });
+    toast.ok(`Placed “${props.project.id}” in ${unitId}`);
+    props.onPlaced();
+  }
+
+  return (
+    <Modal
+      title={`Place · ${props.project.id}`}
+      onClose={props.onClose}
+      footer={
+        <>
+          <Button variant="ghost" onClick={props.onClose}>
+            Cancel
+          </Button>
+          <AsyncButton variant="primary" action={place} onError={toast.bad} disabled={!unitId}>
+            Place
+          </AsyncButton>
+        </>
+      }
+    >
+      <div className="stack-lg">
+        <Field label="Organization unit" hint="Requires admin. Placing a project in a unit makes it visible in that unit's scope.">
+          {props.units.length === 0 ? (
+            <span className="hint">No units exist (or you can't list them). Create one under Organization first.</span>
+          ) : (
+            <Select
+              value={unitId}
+              onChange={setUnitId}
+              options={props.units.map((u) => ({ value: u.id, label: `${u.name} (${u.id})` }))}
+            />
+          )}
+        </Field>
+      </div>
+    </Modal>
   );
 }
