@@ -101,7 +101,7 @@ export function mountCanvas(host, model, opts = {}) {
   styleEl.textContent = CANVAS_CSS;
   rootEl.appendChild(styleEl);
   const cbody = document.createElement('div');
-  cbody.className = 'cbody';
+  cbody.className = 'cbody' + (opts.embed ? ' embed' : '');
   cbody.setAttribute('data-theme', opts.theme || 'syw');
   cbody.innerHTML = CANVAS_SKELETON;
   rootEl.appendChild(cbody);

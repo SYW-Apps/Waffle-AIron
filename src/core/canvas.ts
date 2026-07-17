@@ -565,6 +565,9 @@ body.presentation header, body.presentation .legend { display:none; }
    own chrome, so its redundant brand mark is hidden — the interactive toolbar
    (views, search, settings) stays. Keeps the iframe from showing a second logo. */
 body.embed header .brand { display:none; }
+/* Embedded in the web UI: the app owns the brand + theme, so hide the canvas's
+   own brand mark and Theme toggle (the host drives the canvas theme). */
+body.embed #themeBtn { display:none; }
 /* The details panel hides by default in presentation, but the floating details
    toggle brings it back without leaving presentation mode. */
 body.presentation #panel, body.presentation #panelResizer { display:none; }

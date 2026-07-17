@@ -29,7 +29,9 @@ export function CanvasView({ projectId }: { projectId: string }) {
   useEffect(() => {
     const host = hostRef.current;
     if (!host || model === undefined) return;
-    const handle = mountCanvas(host, model, { shadow: true, theme: canvasTheme });
+    // embed: trims the classic chrome that's redundant inside the app (its own
+    // brand mark + Theme toggle — the app owns both).
+    const handle = mountCanvas(host, model, { shadow: true, theme: canvasTheme, embed: true });
     handleRef.current = handle;
     return () => {
       handle.destroy();
