@@ -155,6 +155,29 @@ export function TextInput(props: {
   );
 }
 
+export function Checkbox(props: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: ReactNode;
+  hint?: ReactNode;
+  disabled?: boolean;
+}) {
+  return (
+    <label className="checkbox">
+      <input
+        type="checkbox"
+        checked={props.checked}
+        disabled={props.disabled}
+        onChange={(e) => props.onChange(e.target.checked)}
+      />
+      <span className="checkbox-body">
+        <span className="checkbox-label">{props.label}</span>
+        {props.hint && <span className="hint">{props.hint}</span>}
+      </span>
+    </label>
+  );
+}
+
 export function Select<T extends string>(props: {
   value: T;
   onChange: (v: T) => void;

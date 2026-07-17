@@ -149,8 +149,8 @@ describe('container-level git backing (sdd_host)', () => {
     expect(fs.existsSync(path.join(checkout, 'projects', 'proj-a', '.wai', 'specs', '.index.yaml'))).toBe(true);
   }, 30_000);
 
-  it('the instance binding mirrors the structure JSON — NEVER the secret store or live sessions; hashed credentials yes', () => {
-    seedWorld();
+  it('the instance binding mirrors the structure JSON + every project .wai tree, opt-in hashed credentials — NEVER the secret store or sessions', () => {
+    seedWorld(); // places proj-a with a .wai/specs/.index.yaml
     // Structure collections + the files that must never leave the box.
     fs.mkdirSync(path.join(dataDir, 'auth'), { recursive: true });
     fs.writeFileSync(path.join(dataDir, 'auth', 'credentials.json'), '[]');
@@ -158,20 +158,46 @@ describe('container-level git backing (sdd_host)', () => {
     fs.writeFileSync(path.join(dataDir, 'web-sessions.json'), '[]');
     const remote = seedBareRemote(base, 'instance-backup');
 
-    const stored = bindScope(cfg, MASTER, bindingFor({ remote }));
+    const stored = bindScope(cfg, MASTER, bindingFor({ remote, includeCredentials: true }));
     expect(syncBackingScope(cfg, MASTER, stored.id)).toBe(true);
 
     const checkout = inspect(base, remote);
     // The structure is there…
     expect(fs.existsSync(path.join(checkout, 'instance', 'organization.json'))).toBe(true);
     expect(fs.existsSync(path.join(checkout, 'instance', 'projects.json'))).toBe(true);
+    // …the hashed credentials (opt-in) are there…
     expect(fs.existsSync(path.join(checkout, 'instance', 'auth', 'credentials.json'))).toBe(true);
+    // …the PROJECT SPEC TREES are there (a full backup, not just the registry)…
+    expect(fs.existsSync(path.join(checkout, 'projects', 'proj-a', '.wai', 'specs', '.index.yaml'))).toBe(true);
     // …and the secrets and live sessions are NOT.
     expect(fs.existsSync(path.join(checkout, 'instance', 'auth', 'secrets.json'))).toBe(false);
     expect(fs.existsSync(path.join(checkout, 'instance', 'web-sessions.json'))).toBe(false);
     // Belt and braces: the pushed tree contains the secret value nowhere —
     // `git grep` exits non-zero exactly when there is NO match.
     expect(() => git(['grep', '-l', 'SUPER-SECRET', 'HEAD', '--'], checkout)).toThrow();
+  }, 30_000);
+
+  it('the instance binding EXCLUDES credential hashes by default (opt-in only), and drops them on re-sync', () => {
+    seedWorld();
+    fs.mkdirSync(path.join(dataDir, 'auth'), { recursive: true });
+    fs.writeFileSync(path.join(dataDir, 'auth', 'credentials.json'), '[{"hash":"x"}]');
+    const remote = seedBareRemote(base, 'instance-backup');
+
+    // Default (no includeCredentials): the credentials file is NOT mirrored.
+    const stored = bindScope(cfg, MASTER, bindingFor({ remote }));
+    expect(syncBackingScope(cfg, MASTER, stored.id)).toBe(true);
+    let checkout = inspect(base, remote);
+    expect(fs.existsSync(path.join(checkout, 'instance', 'organization.json'))).toBe(true);
+    expect(fs.existsSync(path.join(checkout, 'instance', 'auth', 'credentials.json'))).toBe(false);
+
+    // Turning it ON then OFF again removes the file from the repo on re-sync.
+    const withCreds = bindScope(cfg, MASTER, bindingFor({ remote, includeCredentials: true }));
+    syncBackingScope(cfg, MASTER, withCreds.id);
+    expect(fs.existsSync(path.join(inspect(base, remote), 'instance', 'auth', 'credentials.json'))).toBe(true);
+    const backOff = bindScope(cfg, MASTER, bindingFor({ remote, includeCredentials: false }));
+    syncBackingScope(cfg, MASTER, backOff.id);
+    checkout = inspect(base, remote);
+    expect(fs.existsSync(path.join(checkout, 'instance', 'auth', 'credentials.json'))).toBe(false);
   }, 30_000);
 
   it('one binding per scope: a re-bind replaces; unbind removes by id (repo untouched)', () => {

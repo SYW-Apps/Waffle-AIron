@@ -220,6 +220,8 @@ export interface GitBackingBinding {
   lastSyncAt?: string;
   /** Secret-store key of this connection's own PAT, when it has one. */
   credentialRef?: string;
+  /** Instance scope: also mirror hashed credential records. */
+  includeCredentials?: boolean;
 }
 
 /** The best human label for a user or subject: name, then email, then a short id. */

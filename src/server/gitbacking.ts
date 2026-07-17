@@ -448,9 +448,24 @@ function runMirrorSync(cfg: HostConfig, binding: GitBackingBinding): boolean {
       mirrorTree(path.join(rec.rootPath, '.wai'), path.join(projectsDir, rec.id, '.wai'));
     }
   } else {
-    // The instance structure: the flat JSON collections, never the secret store.
-    for (const rel of INSTANCE_STRUCTURE_FILES) {
-      mirrorTree(path.join(cfg.dataDir, rel), path.join(workdir, 'instance', rel));
+    // Whole-instance backup = the structure JSON collections (never the secret
+    // store) UNDER instance/, PLUS every project's .wai spec tree under
+    // projects/<id>/.wai/ — so a full restore has both the org state and the
+    // specs. Hashed credentials are opt-in (includeCredentials); rebuild the
+    // instance/ dir each sync so a de-selected file actually leaves the repo.
+    const instanceDir = path.join(workdir, 'instance');
+    fs.rmSync(instanceDir, { recursive: true, force: true });
+    const files = binding.includeCredentials
+      ? INSTANCE_STRUCTURE_FILES
+      : INSTANCE_STRUCTURE_FILES.filter((rel) => rel !== 'auth/credentials.json');
+    for (const rel of files) {
+      mirrorTree(path.join(cfg.dataDir, rel), path.join(instanceDir, rel));
+    }
+    // All project spec trees (a whole-instance backup is a FULL backup).
+    const projectsDir = path.join(workdir, 'projects');
+    fs.rmSync(projectsDir, { recursive: true, force: true });
+    for (const rec of listProjectRecords(cfg.dataDir)) {
+      mirrorTree(path.join(rec.rootPath, '.wai'), path.join(projectsDir, rec.id, '.wai'));
     }
   }
 

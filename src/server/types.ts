@@ -521,6 +521,10 @@ export interface GitBackingBinding {
   /** Secret-store key of this connection's own PAT (a distinct org/account per
    *  binding); the binding resolves it first, then the shared `git-token`. */
   credentialRef?: string;
+  /** Instance scope only: also mirror hashed credential records
+   *  (auth/credentials.json). Default false — a full restore of local logins /
+   *  agent tokens needs them, but hashes then live in the remote repo. */
+  includeCredentials?: boolean;
   /** ISO-8601 timestamp of the last successful sync. */
   lastSyncAt?: string;
   createdAt: string;

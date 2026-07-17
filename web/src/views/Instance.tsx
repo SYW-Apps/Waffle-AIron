@@ -5,6 +5,7 @@ import {
   AsyncView,
   Badge,
   Button,
+  Checkbox,
   ConfirmButton,
   DataTable,
   Field,
@@ -16,6 +17,7 @@ import {
   useToast,
 } from '../ui';
 import { GitCredentialCard, GitPatSummary } from '../components/GitCredentialCard';
+import { InfoTip } from '../components/InfoTip';
 import { UnitSelect } from '../components/UnitSelect';
 import type {
   GitBackingBinding,
@@ -232,6 +234,7 @@ function BackupsTab() {
   const [remote, setRemote] = useState('');
   const [branch, setBranch] = useState('main');
   const [pat, setPat] = useState('');
+  const [includeCredentials, setIncludeCredentials] = useState(false);
 
   async function bind() {
     await post('/web/admin/git-backing', {
@@ -240,12 +243,14 @@ function BackupsTab() {
       remote,
       branch,
       pat: pat.trim() || undefined,
+      includeCredentials: scopeKind === 'instance' ? includeCredentials : undefined,
     });
     toast.ok('Backup repo bound');
     setAdding(false);
     setRemote('');
     setScopeId('');
     setPat('');
+    setIncludeCredentials(false);
     bindings.reload();
   }
   async function sync(id: string) {
@@ -275,7 +280,16 @@ function BackupsTab() {
             empty="No backup repos bound."
             rows={d.bindings}
             columns={[
-              { key: 'scope', header: 'Scope', cell: (b) => <code>{b.scopeKind}{b.scopeId ? `:${b.scopeId}` : ''}</code> },
+              {
+                key: 'scope',
+                header: 'Scope',
+                cell: (b) => (
+                  <span className="cell-inline">
+                    <code>{b.scopeKind}{b.scopeId ? `:${b.scopeId}` : ''}</code>
+                    {b.includeCredentials && <Badge tone="warn">+cred hashes</Badge>}
+                  </span>
+                ),
+              },
               { key: 'remote', header: 'Remote', cell: (b) => <code className="subtle">{b.remote}</code> },
               {
                 key: 'auth',
@@ -323,6 +337,31 @@ function BackupsTab() {
                   placeholder="Choose a unit…"
                 />
               </Field>
+            )}
+            {scopeKind === 'instance' && (
+              <Checkbox
+                checked={includeCredentials}
+                onChange={setIncludeCredentials}
+                label={
+                  <>
+                    Include credential hashes
+                    <InfoTip label="About backing up credential hashes">
+                      <p>
+                        <strong>Off (default):</strong> the backup carries the org structure, project registry, and all
+                        project specs — but <strong>not</strong> <code>auth/credentials.json</code>. Safer: no password
+                        or agent-token hashes leave the box.
+                      </p>
+                      <p>
+                        <strong>On:</strong> also mirrors the <em>hashed</em> credential records, so a full restore
+                        keeps local logins and agent tokens. The hashes then live in the remote repo (still never
+                        plaintext, and the secret store is never mirrored either way).
+                      </p>
+                      <p>SSO users re-authenticate via your IdP regardless, so most instances can leave this off.</p>
+                    </InfoTip>
+                  </>
+                }
+                hint="Turn on only if you need to restore local passwords / agent tokens from this backup."
+              />
             )}
             <Field label="Remote URL"><TextInput value={remote} onChange={setRemote} placeholder="https://github.com/org/backup.git" /></Field>
             <Field label="Branch"><TextInput value={branch} onChange={setBranch} /></Field>
