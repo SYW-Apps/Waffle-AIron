@@ -117,7 +117,19 @@ ${eng}
       try { if (typeof cy !== 'undefined' && cy) cy.destroy(); } catch (e) { /* ignore */ }
       host.innerHTML = '';
     },
-    setTheme(theme) { cbody.setAttribute('data-theme', theme); },
+    // Drive the engine's OWN theme state (not just the CSS attribute) so the
+    // cytoscape node fills recolor too, and a later view switch keeps the theme
+    // (view rebuilds read state.theme). Mirrors the in-engine themeBtn handler.
+    setTheme(theme) {
+      var next = theme === 'light' ? 'light' : 'syw';
+      if (typeof state !== 'undefined' && state) state.theme = next;
+      cbody.setAttribute('data-theme', next);
+      try {
+        if (typeof cy !== 'undefined' && cy) cy.style(buildStyle(THEMES[next]));
+        if (typeof renderLegend === 'function') renderLegend();
+        if (typeof persist === 'function') persist();
+      } catch (e) { /* ignore */ }
+    },
   };
 }
 `,

@@ -851,7 +851,7 @@ var MODEL = __MODEL_JSON__;
     query: '',
     selected: null,
     selectedKind: null,
-    theme: saved.theme === 'light' ? 'light' : 'syw',
+    theme: (typeof opts !== 'undefined' && opts && opts.theme) ? (opts.theme === 'light' ? 'light' : 'syw') : (saved.theme === 'light' ? 'light' : 'syw'),
     typesDetail: ['full', 'fields', 'keys', 'names'].indexOf(saved.typesDetail) >= 0 ? saved.typesDetail : 'full',
     typesRenderAll: false,
     layout: ['layered', 'force', 'concentric', 'grid'].indexOf(saved.layout) >= 0 ? saved.layout : 'layered',

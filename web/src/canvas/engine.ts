@@ -157,7 +157,7 @@ export function mountCanvas(host, model, opts = {}) {
     query: '',
     selected: null,
     selectedKind: null,
-    theme: saved.theme === 'light' ? 'light' : 'syw',
+    theme: (typeof opts !== 'undefined' && opts && opts.theme) ? (opts.theme === 'light' ? 'light' : 'syw') : (saved.theme === 'light' ? 'light' : 'syw'),
     typesDetail: ['full', 'fields', 'keys', 'names'].indexOf(saved.typesDetail) >= 0 ? saved.typesDetail : 'full',
     typesRenderAll: false,
     layout: ['layered', 'force', 'concentric', 'grid'].indexOf(saved.layout) >= 0 ? saved.layout : 'layered',
@@ -2727,6 +2727,18 @@ export function mountCanvas(host, model, opts = {}) {
       try { if (typeof cy !== 'undefined' && cy) cy.destroy(); } catch (e) { /* ignore */ }
       host.innerHTML = '';
     },
-    setTheme(theme) { cbody.setAttribute('data-theme', theme); },
+    // Drive the engine's OWN theme state (not just the CSS attribute) so the
+    // cytoscape node fills recolor too, and a later view switch keeps the theme
+    // (view rebuilds read state.theme). Mirrors the in-engine themeBtn handler.
+    setTheme(theme) {
+      var next = theme === 'light' ? 'light' : 'syw';
+      if (typeof state !== 'undefined' && state) state.theme = next;
+      cbody.setAttribute('data-theme', next);
+      try {
+        if (typeof cy !== 'undefined' && cy) cy.style(buildStyle(THEMES[next]));
+        if (typeof renderLegend === 'function') renderLegend();
+        if (typeof persist === 'function') persist();
+      } catch (e) { /* ignore */ }
+    },
   };
 }

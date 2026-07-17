@@ -108,8 +108,10 @@ code { font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace; 
   font-weight: 700;
 }
 .btn-primary:hover:not(:disabled) { box-shadow: var(--syw-glow); transform: translateY(-1px); background: var(--brand-gradient); }
-.btn-ghost { background: transparent; border-color: transparent; color: var(--ink-dim); }
-.btn-ghost:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
+/* Ghost buttons keep a visible border so they read as buttons, not plain text
+   (Edit / secondary actions were near-invisible until hovered). */
+.btn-ghost { background: transparent; border-color: var(--border); color: var(--ink-dim); }
+.btn-ghost:hover:not(:disabled) { background: var(--hover); color: var(--ink); border-color: var(--border-strong); }
 .btn-danger { background: transparent; border-color: rgba(244, 63, 94, 0.5); color: var(--bad); }
 .btn-danger:hover:not(:disabled) { background: rgba(244, 63, 94, 0.12); }
 .icon-btn {
