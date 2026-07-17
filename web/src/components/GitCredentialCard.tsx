@@ -59,14 +59,43 @@ export function GitCredentialCard() {
   );
 }
 
+/** Concise PAT recipe for an inline info tip next to a per-connection PAT field.
+ *  Exported so both the field tips and (via the card) the full walkthrough stay
+ *  in agreement on the least-privilege scopes. */
+export function GitPatSummary() {
+  return (
+    <>
+      <p>
+        <strong>Grant the least privilege — repository “Contents: Read and write”, on this repo only.</strong>
+      </p>
+      <ul>
+        <li>
+          <strong>GitHub fine-grained:</strong> Repository access → only this repo → Permissions →{' '}
+          <code>Contents: Read and write</code> (Metadata is added automatically).
+        </li>
+        <li>
+          <strong>GitHub classic:</strong> <code>repo</code> (or <code>public_repo</code> if the repo is public).
+        </li>
+        <li>
+          <strong>GitLab:</strong> <code>write_repository</code>. <strong>Bitbucket:</strong> Repositories Read + Write.
+        </li>
+      </ul>
+      <p>
+        A brand-new empty repo is fine — wairon creates the branch on the first sync. Leave the field blank to use the
+        shared fallback token instead.
+      </p>
+    </>
+  );
+}
+
 /** The exact, least-privilege PAT recipe per provider — Contents/repo write only. */
 function TokenHelp() {
   return (
     <div className="token-help">
       <p className="token-help-note">
         The token only needs to <strong>read and write repository contents</strong> (clone, commit, push). Grant
-        nothing else — no admin, workflows, packages, or org scopes. wairon clones an <em>existing</em> repo, so create
-        the backup repo first with an initial commit on the target branch (e.g. a README), then bind it here.
+        nothing else — no admin, workflows, packages, or org scopes. A brand-new <em>empty</em> repo is fine — wairon
+        creates the branch on the first sync.
       </p>
 
       <h5>GitHub — fine-grained token (recommended)</h5>

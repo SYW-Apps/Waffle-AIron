@@ -204,19 +204,45 @@ export function backingCredentialKey(binding: Pick<GitBackingBinding, 'scopeKind
   return binding.scopeKind === 'unit' ? `git-backing:unit:${binding.scopeId}` : 'git-backing:instance';
 }
 
+/** Run git, returning null instead of throwing — for existence probes. */
+function tryGit(args: string[], cwd: string): string | null {
+  try {
+    return git(args, cwd);
+  } catch {
+    return null;
+  }
+}
+
+/** Put HEAD on `branch`: check out an existing local or remote-tracking branch,
+ *  else create it. A brand-new EMPTY backup repo has no branches, so the branch
+ *  is created (unborn) here and seeded by the first commit + push. */
+function checkoutBranch(workdir: string, branch: string): void {
+  if (tryGit(['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], workdir) !== null) {
+    git(['checkout', branch], workdir);
+  } else if (tryGit(['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${branch}`], workdir) !== null) {
+    git(['checkout', branch], workdir); // auto-creates a local tracking branch
+  } else {
+    git(['checkout', '-B', branch], workdir);
+  }
+}
+
 /** Ensure a working copy of the backing repo exists under the workdir (clone on
  *  first use, fetch+checkout the branch afterwards) and return its path. The
  *  optional credentialRef names this connection's own PAT (else the shared
- *  git-token authenticates the clone). */
+ *  git-token authenticates the clone). A brand-new EMPTY remote is supported —
+ *  the branch is created on the first sync rather than the clone failing. */
 export function cloneOrOpen(remote: string, branch: string, workdir: string, credentialRef?: string): string {
   if (!fs.existsSync(path.join(workdir, '.git'))) {
     fs.mkdirSync(workdir, { recursive: true });
-    git(['clone', '--branch', branch, authRemote(remote, credentialRef), '.'], workdir);
+    // Clone WITHOUT --branch so a brand-new EMPTY remote clones cleanly (git only
+    // warns) instead of failing "Remote branch <b> not found in upstream origin".
+    git(['clone', authRemote(remote, credentialRef), '.'], workdir);
     git(['config', 'user.name', process.env['WAIRON_GIT_NAME'] || 'wairon-bot'], workdir);
     git(['config', 'user.email', process.env['WAIRON_GIT_EMAIL'] || 'wairon-bot@localhost'], workdir);
+    checkoutBranch(workdir, branch);
   } else {
     git(['fetch', 'origin'], workdir);
-    git(['checkout', branch], workdir);
+    checkoutBranch(workdir, branch);
   }
   return workdir;
 }

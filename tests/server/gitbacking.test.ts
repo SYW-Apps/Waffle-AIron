@@ -132,6 +132,23 @@ describe('container-level git backing (sdd_host)', () => {
     expect(queryAuditEvents(dataDir, { action: 'git.backing.sync' }).length).toBeGreaterThanOrEqual(1);
   }, 30_000);
 
+  it('a brand-new EMPTY remote is seeded on the first sync (branch created) — not a clone failure', () => {
+    const { unitId } = seedWorld();
+    // A bare remote with NO initial commit and NO branches (the reported case).
+    const remote = path.join(base, 'fresh-empty.git');
+    fs.mkdirSync(remote, { recursive: true });
+    git(['init', '--bare', '-q', '.'], remote);
+
+    const stored = bindScope(cfg, MASTER, bindingFor({ scopeKind: 'unit', scopeId: unitId, remote, branch: 'main' }));
+    expect(syncBackingScope(cfg, MASTER, stored.id)).toBe(true);
+
+    // The branch now exists on the remote (clone --branch main would fail if not)
+    // and carries the mirrored content.
+    const checkout = fs.mkdtempSync(path.join(base, 'inspect-'));
+    git(['clone', '-q', '--branch', 'main', remote, '.'], checkout);
+    expect(fs.existsSync(path.join(checkout, 'projects', 'proj-a', '.wai', 'specs', '.index.yaml'))).toBe(true);
+  }, 30_000);
+
   it('the instance binding mirrors the structure JSON — NEVER the secret store or live sessions; hashed credentials yes', () => {
     seedWorld();
     // Structure collections + the files that must never leave the box.

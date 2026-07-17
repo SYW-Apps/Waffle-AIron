@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { InfoTip } from './components/InfoTip';
 
 /**
  * Shared UI primitives for the wairon web app. Everything here is intentionally
@@ -120,10 +121,15 @@ export function Field(props: {
   label: string;
   children: ReactNode;
   hint?: string;
+  /** Optional "ⓘ" hover explanation rendered next to the label. */
+  info?: ReactNode;
 }) {
   return (
     <label className="field">
-      <span className="field-label">{props.label}</span>
+      <span className="field-label">
+        {props.label}
+        {props.info != null && <InfoTip>{props.info}</InfoTip>}
+      </span>
       {props.children}
       {props.hint && <span className="hint">{props.hint}</span>}
     </label>

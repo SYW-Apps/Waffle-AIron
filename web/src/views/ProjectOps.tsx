@@ -16,7 +16,7 @@ import {
   useAsync,
   useToast,
 } from '../ui';
-import { GitCredentialCard } from '../components/GitCredentialCard';
+import { GitCredentialCard, GitPatSummary } from '../components/GitCredentialCard';
 import type { GitBackingStatus, PackDescriptor, PolicyEvaluationResult, ProducerConfig } from '../types';
 
 // ── Packs ────────────────────────────────────────────────────────────────────
@@ -333,6 +333,7 @@ function GitTab({ projectId }: { projectId: string }) {
                 </Field>
                 <Field
                   label="Access token (optional)"
+                  info={<GitPatSummary />}
                   hint="A PAT for this repo's org/account. Leave blank to use the shared fallback token. Stored write-only."
                 >
                   <TextInput type="password" value={pat} onChange={setPat} placeholder="github_pat_… / glpat-…" />

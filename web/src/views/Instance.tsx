@@ -15,7 +15,7 @@ import {
   useAsync,
   useToast,
 } from '../ui';
-import { GitCredentialCard } from '../components/GitCredentialCard';
+import { GitCredentialCard, GitPatSummary } from '../components/GitCredentialCard';
 import { UnitSelect } from '../components/UnitSelect';
 import type {
   GitBackingBinding,
@@ -328,6 +328,7 @@ function BackupsTab() {
             <Field label="Branch"><TextInput value={branch} onChange={setBranch} /></Field>
             <Field
               label="Access token for this connection (optional)"
+              info={<GitPatSummary />}
               hint="A PAT for this repo's org/account. Leave blank to use the shared fallback token above. Stored write-only; never mirrored."
             >
               <TextInput type="password" value={pat} onChange={setPat} placeholder="github_pat_… / ghp_… / glpat-…" />
