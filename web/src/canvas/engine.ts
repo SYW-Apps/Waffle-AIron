@@ -405,10 +405,10 @@ export function mountCanvas(host, model, opts = {}) {
       sw(t.stereo.data) + 'Data&nbsp; ' + sw(t.stereo.adapter) + 'Adapter&nbsp; ' +
       sw(t.stereo.patternLeaf) + 'Pattern&nbsp; ' +
       sw({ fill: t.ghostFill, stroke: t.ghostStroke }) + 'External&nbsp; ' +
-      sw(t.proxyIn) + '\\u21E0 in-port&nbsp; ' + sw(t.proxyOut) + '\\u21E2 out-port&nbsp; — bold border = published · ' +
+      sw(t.proxyIn) + '\u21E0 in-port&nbsp; ' + sw(t.proxyOut) + '\u21E2 out-port&nbsp; — bold border = published · ' +
       '<span style="color:' + t.cross + '">red</span> = boundary hop · double-click = open<br>' +
-      'on select: <span style="color:' + t.selGlow + '">\\u2192 depends on</span>&nbsp; <span style="color:' + t.warn + '">\\u2190 used by</span>' +
-      (state.dataCoupling ? '&nbsp; · &nbsp;<span style="color:' + t.typeV.stroke + '">- - \\u25B8 uses models</span>' : '');
+      'on select: <span style="color:' + t.selGlow + '">\u2192 depends on</span>&nbsp; <span style="color:' + t.warn + '">\u2190 used by</span>' +
+      (state.dataCoupling ? '&nbsp; · &nbsp;<span style="color:' + t.typeV.stroke + '">- - \u25B8 uses models</span>' : '');
   }
 
   // ---- view layout ---------------------------------------------------------------
@@ -626,7 +626,7 @@ export function mountCanvas(host, model, opts = {}) {
   // actually reference — NOT the entire shared library. (Including all shared
   // types flooded a small subsystem's scope so it re-clustered and its single
   // own type was unreachable.) Unscoped = all.
-  var SHARED_KEY = '\\u2014 shared \\u2014';
+  var SHARED_KEY = '\u2014 shared \u2014';
   function databaseAllowsType(t) {
     if (!t.database) return false;
     if (!MODEL.system.databases || !MODEL.system.databases.length) return true;
@@ -739,7 +739,7 @@ export function mountCanvas(host, model, opts = {}) {
     var scopeId = state.view.id;
     function keyOf(t) {
       var sub = t.subsystem || '';
-      if (!sub) return '\\u2014 shared \\u2014';
+      if (!sub) return '\u2014 shared \u2014';
       if (!scopeId) return sub.split('::')[0];
       if (sub === scopeId) return scopeId;
       if (sub.indexOf(scopeId + '::') === 0) return scopeId + '::' + sub.slice(scopeId.length + 2).split('::')[0];
@@ -763,7 +763,7 @@ export function mountCanvas(host, model, opts = {}) {
     keys.forEach(function (k, i) {
       var nm = subById[k] ? subById[k].name : k;
       out.push({
-        data: { id: 'TC~' + k, label: nm + '\\n' + groups[k] + ' types', w: 210, h: 66, tw: 192, clusterKey: k },
+        data: { id: 'TC~' + k, label: nm + '\n' + groups[k] + ' types', w: 210, h: 66, tw: 192, clusterKey: k },
         position: { x: (i % per) * 300, y: Math.floor(i / per) * 150 }, classes: 'typeCluster',
       });
     });
@@ -818,7 +818,7 @@ export function mountCanvas(host, model, opts = {}) {
 
     var groups = {}, groupIds = [];
     list.forEach(function (t) {
-      var g = t.subsystem || '\\u2014 shared \\u2014';
+      var g = t.subsystem || '\u2014 shared \u2014';
       if (!groups[g]) { groups[g] = []; groupIds.push(g); }
       groups[g].push(t);
     });
@@ -850,9 +850,9 @@ export function mountCanvas(host, model, opts = {}) {
     function tableShape(t) {
       var fields = visibleFields(t);
       var meths = det === 'full' ? t.methods : [];
-      var head = t.name + '  \\u00AB' + t.kind + '\\u00BB';
+      var head = t.name + '  \u00AB' + t.kind + '\u00BB';
       var rows = fields.map(function (f) { return rowText(t, f); })
-        .concat(meths.map(function (m) { return '\\u0192 ' + m.name + '(): ' + m.returns; }));
+        .concat(meths.map(function (m) { return '\u0192 ' + m.name + '(): ' + m.returns; }));
       var longest = head.length + 4;
       rows.forEach(function (r) { if (r.length > longest) longest = r.length; });
       var plain = rows.length === 0;
@@ -893,7 +893,7 @@ export function mountCanvas(host, model, opts = {}) {
       });
       sh.meths.forEach(function (m, mi) {
         eles.push({
-          data: { id: 'TM~' + t.id + '~' + mi, parent: 'T~' + t.id, label: '\\u0192 ' + m.name + '(): ' + m.returns, w: sh.w, h: ROW_H, tw: sh.w - 14 },
+          data: { id: 'TM~' + t.id + '~' + mi, parent: 'T~' + t.id, label: '\u0192 ' + m.name + '(): ' + m.returns, w: sh.w, h: ROW_H, tw: sh.w - 14 },
           position: { x: ax + sh.w / 2, y: ry + ROW_H / 2 }, classes: 'typeRow methRow' + (dim ? ' dimmed' : ''), grabbable: false,
         });
         ry += ROW_H;
@@ -1119,11 +1119,11 @@ export function mountCanvas(host, model, opts = {}) {
       var isPub = e.kind === 'component' && compById[e.id] && compById[e.id].public;
       if (e.kind === 'subsystem') {
         classes = 'subsysBox';
-        label = nameOf(e) + (e.hasKids && !inner ? '\\n\\u25B8 open' : '');
+        label = nameOf(e) + (e.hasKids && !inner ? '\n\u25B8 open' : '');
       } else {
         var c = compById[e.id];
         classes = stereoClass(c.componentType);
-        label = c.name + '\\n\\u00AB' + c.componentType + (c.portalType ? '/' + c.portalType : '') + '\\u00BB' + (e.hasKids && !inner ? ' \\u25B8' : '');
+        label = c.name + '\n\u00AB' + c.componentType + (c.portalType ? '/' + c.portalType : '') + '\u00BB' + (e.hasKids && !inner ? ' \u25B8' : '');
       }
       classes += (e.hasKids ? ' drillable' : '') + (isPub ? ' public' : '')
         + (dim ? ' dimmed' : '')
@@ -1144,7 +1144,7 @@ export function mountCanvas(host, model, opts = {}) {
         (inner.proxies || []).forEach(function (px) {
           eles.push({
             data: {
-              id: px.id, parent: aid, label: px.dir === 'in' ? '\\u21E0' : '\\u21E2',
+              id: px.id, parent: aid, label: px.dir === 'in' ? '\u21E0' : '\u21E2',
               w: px.w, h: px.h, tw: px.w,
               extId: px.extId, dir: px.dir,
               rvTargets: resolvePortTargets(px), rvDir: px.dir,
@@ -1223,7 +1223,7 @@ export function mountCanvas(host, model, opts = {}) {
     placedGhosts.forEach(function (pp) {
       posByAnchor[pp.gid] = { x: pp.x, y: pp.y, w: GHW, h: GHH };
       eles.push({
-        data: { id: pp.gid, label: pp.g.label + '\\n(external)', w: GHW, h: GHH, tw: GHW - 14, extKind: pp.g.kind, extId: pp.g.id },
+        data: { id: pp.gid, label: pp.g.label + '\n(external)', w: GHW, h: GHH, tw: GHW - 14, extKind: pp.g.kind, extId: pp.g.id },
         position: { x: pp.x, y: pp.y },
         classes: 'ghost',
       });
@@ -1315,7 +1315,7 @@ export function mountCanvas(host, model, opts = {}) {
         var dim = state.query && (dimmedAnchors[e.src] || dimmedAnchors[e.tgt]);
         var route = routeData(e.src, e.tgt, key);
         eles.push({
-          data: { id: 'de' + (di++), source: e.src, target: e.tgt, lbl: e.n > 1 ? e.n + ' \\u00d7 models' : 'models', cpDist: route.cpDist, cpWeight: route.cpWeight, taxiTurn: route.taxiTurn },
+          data: { id: 'de' + (di++), source: e.src, target: e.tgt, lbl: e.n > 1 ? e.n + ' \u00d7 models' : 'models', cpDist: route.cpDist, cpWeight: route.cpWeight, taxiTurn: route.taxiTurn },
           classes: 'routed datacoupling' + (e.ghost ? ' toghost' : '') + (dim ? ' dimmed' : ''),
         });
       });
@@ -1515,7 +1515,7 @@ export function mountCanvas(host, model, opts = {}) {
           dpath.push({ kind: 'databases', id: dsid, label: nameOf({ kind: 'subsystem', id: dsid }) });
         }
       }
-      dpath[dpath.length - 1].label += ' \\u00B7 Databases';
+      dpath[dpath.length - 1].label += ' \u00B7 Databases';
       return dpath;
     }
     if (v.kind === 'types') {
@@ -1531,7 +1531,7 @@ export function mountCanvas(host, model, opts = {}) {
         }
       }
       // Keep the ERD legible in the trail by tagging the current scope.
-      tpath[tpath.length - 1].label += ' \\u00B7 Types (ERD)';
+      tpath[tpath.length - 1].label += ' \u00B7 Types (ERD)';
       return tpath;
     }
     if (v.kind === 'subsystem') {
@@ -1560,7 +1560,7 @@ export function mountCanvas(host, model, opts = {}) {
     el.innerHTML = path.map(function (p, i) {
       var cur = i === path.length - 1;
       return '<button class="crumb' + (cur ? ' cur' : '') + '" data-ck="' + p.kind + '" data-ci="' + (p.id || '') + '">' + p.label + '</button>'
-        + (cur ? '' : '<span class="sep">\\u203A</span>');
+        + (cur ? '' : '<span class="sep">\u203A</span>');
     }).join('');
     var btns = el.querySelectorAll('button');
     for (var i = 0; i < btns.length; i++) {
@@ -1576,14 +1576,14 @@ export function mountCanvas(host, model, opts = {}) {
       var scoped = typesInScope().length;
       var label = state.view.kind === 'databases' ? 'database tables' : 'types (ERD';
       ROOT.getElementById('viewHint').textContent = 'View: ' + scoped + ' ' + label
-        + (state.view.id ? ', ' + state.view.id + ' + shared' : '') + (state.view.kind === 'databases' ? '' : ')') + ' \\u00B7 '
-        + (state.typesDetail === 'names' ? 'dependency lines' : 'relation lines anchor at their field \\u00B7 double-click an FK row to jump to its type');
+        + (state.view.id ? ', ' + state.view.id + ' + shared' : '') + (state.view.kind === 'databases' ? '' : ')') + ' \u00B7 '
+        + (state.typesDetail === 'names' ? 'dependency lines' : 'relation lines anchor at their field \u00B7 double-click an FK row to jump to its type');
       return;
     }
     var n = childrenOf(state.view).length;
     var what = state.view.kind === 'system' ? 'top-level subsystems'
       : state.view.kind === 'subsystem' ? 'children of this subsystem' : 'members of this pattern';
-    ROOT.getElementById('viewHint').textContent = 'View: ' + n + ' ' + what + ' \\u00B7 double-click a box to open it';
+    ROOT.getElementById('viewHint').textContent = 'View: ' + n + ' ' + what + ' \u00B7 double-click a box to open it';
   }
   function navigateTo(kind, id) {
     if (state.view.kind === kind && state.view.id === id) return;
@@ -1602,8 +1602,8 @@ export function mountCanvas(host, model, opts = {}) {
     var cut = typesNotice.indexOf(':');
     var mode = typesNotice.slice(0, cut), count = typesNotice.slice(cut + 1);
     var msg = mode === 'cluster'
-      ? '\\u26A0 ' + count + ' types \\u2014 showing a subsystem overview so it stays fast. Double-click a group to open its types.'
-      : '\\u26A0 ' + count + ' types \\u2014 showing names only so it stays fast. Drill into a subsystem for fields, or';
+      ? '\u26A0 ' + count + ' types \u2014 showing a subsystem overview so it stays fast. Double-click a group to open its types.'
+      : '\u26A0 ' + count + ' types \u2014 showing names only so it stays fast. Drill into a subsystem for fields, or';
     el.innerHTML = msg + '<button class="tbtn" id="typesAllBtn">Render full detail anyway</button>';
     el.style.display = 'block';
     var b = ROOT.getElementById('typesAllBtn');
@@ -1891,7 +1891,7 @@ export function mountCanvas(host, model, opts = {}) {
   var LAYOUT_LABEL = { layered: 'Layered', force: 'Force', concentric: 'Concentric', grid: 'Grid' };
   function updateLayoutBtn() {
     var b = ROOT.getElementById('layoutBtn');
-    if (b) b.textContent = 'Layout: ' + (LAYOUT_LABEL[state.layout] || 'Layered') + ' \\u25BE';
+    if (b) b.textContent = 'Layout: ' + (LAYOUT_LABEL[state.layout] || 'Layered') + ' \u25BE';
   }
   function setLayout(name) {
     if (!LAYOUT_LABEL[name] || state.layout === name) { if (ldd.classList) ldd.classList.remove('open'); return; }
@@ -1926,7 +1926,7 @@ export function mountCanvas(host, model, opts = {}) {
   function fileBase() {
     var scope = state.view.kind === 'types' ? 'types'
       : state.view.id ? state.view.id.replace(/::/g, '-') : 'system';
-    return (String(MODEL.system.name) + '-' + scope).replace(/\\s+/g, '-').toLowerCase();
+    return (String(MODEL.system.name) + '-' + scope).replace(/\s+/g, '-').toLowerCase();
   }
   function downloadText(name, text, mime) {
     if (!inBrowser) return;
@@ -2103,7 +2103,7 @@ export function mountCanvas(host, model, opts = {}) {
         case 'loop':
           E(n, nextOf(n), 'enter', s.loopKind === 'doWhile' ? 'do' : '');
           if (s.end !== undefined) {
-            E(s.end, n, 'back', s.loopKind === 'doWhile' ? 'while ' + (s.cond || '') : '\\u27F3');
+            E(s.end, n, 'back', s.loopKind === 'doWhile' ? 'while ' + (s.cond || '') : '\u27F3');
             E(n, nextOf(s.end), 'exit', 'done');
           }
           break;
@@ -2152,13 +2152,13 @@ export function mountCanvas(host, model, opts = {}) {
 
   function flowStepLabel(s) {
     switch (s.kind) {
-      case 'branch': return s.n + '. \\u25C7 ' + (s.cond || s.text);
-      case 'switch': return s.n + '. \\u25C7 switch ' + (s.on || s.text);
-      case 'loop': return s.n + '. \\u27F3 ' + (s.loopKind === 'doWhile' ? 'do' : (s.loopKind || 'forEach')) + (s.over ? ' ' + s.over : s.cond ? ' while ' + s.cond : '');
-      case 'try': return s.n + '. \\u26E8 try \\u2014 ' + s.text;
-      case 'jump': return s.n + '. \\u21B7 ' + s.text;
-      case 'return': return s.n + '. \\u23CE return' + (s.outcome ? ' \\u2014 ' + s.outcome : '');
-      case 'throw': return s.n + '. \\u26A1 throw' + (s.err ? ' ' + s.err : '');
+      case 'branch': return s.n + '. \u25C7 ' + (s.cond || s.text);
+      case 'switch': return s.n + '. \u25C7 switch ' + (s.on || s.text);
+      case 'loop': return s.n + '. \u27F3 ' + (s.loopKind === 'doWhile' ? 'do' : (s.loopKind || 'forEach')) + (s.over ? ' ' + s.over : s.cond ? ' while ' + s.cond : '');
+      case 'try': return s.n + '. \u26E8 try \u2014 ' + s.text;
+      case 'jump': return s.n + '. \u21B7 ' + s.text;
+      case 'return': return s.n + '. \u23CE return' + (s.outcome ? ' \u2014 ' + s.outcome : '');
+      case 'throw': return s.n + '. \u26A1 throw' + (s.err ? ' ' + s.err : '');
       default: return s.n + '. ' + s.text;
     }
   }
@@ -2179,7 +2179,7 @@ export function mountCanvas(host, model, opts = {}) {
       var isCall = (s.kind === 'call' || s.kind === 'dispatch') && !!s.call;
       var callable = isCall && !!narrativeFor(s.call.component, s.call.method);
       var isCond = s.kind === 'branch' || s.kind === 'switch' || s.kind === 'loop';
-      var label = flowStepLabel(s) + (isCall ? '\\n\\u2192 ' + s.call.component + '.' + s.call.method + '()' + (callable ? '  \\u21B4' : '') : '');
+      var label = flowStepLabel(s) + (isCall ? '\n\u2192 ' + s.call.component + '.' + s.call.method + '()' + (callable ? '  \u21B4' : '') : '');
       var cls = s.kind === 'branch' || s.kind === 'switch' ? 'flowcond'
         : s.kind === 'loop' ? 'flowloop'
         : s.kind === 'try' ? 'flowtry'
@@ -2252,13 +2252,13 @@ export function mountCanvas(host, model, opts = {}) {
   }
   function flowStepText(s) {
     switch (s.kind) {
-      case 'branch': return '\\u25C7 if ' + (s.cond || s.text) + (s.onFalse !== undefined ? ' \\u2014 else \\u2192 ' + s.onFalse : '');
-      case 'switch': return '\\u25C7 switch on ' + (s.on || s.text) + ' \\u2014 ' + (s.cases || []).map(function (c) { return c.value + ' \\u2192 ' + c.step; }).join(', ') + (s.defaultStep !== undefined ? ', default \\u2192 ' + s.defaultStep : '');
-      case 'loop': return '\\u27F3 ' + (s.loopKind || 'forEach') + (s.over ? ' ' + s.over : '') + (s.cond ? ' while ' + s.cond : '') + (s.end !== undefined ? ' (body \\u2192 ' + s.end + ')' : '');
-      case 'try': return '\\u26E8 try (body \\u2192 ' + s.end + ')' + (s.catches || []).map(function (c) { return ' \\u2014 on ' + c.error + ' \\u2192 ' + c.step; }).join('') + (s.fin !== undefined ? ' \\u2014 finally \\u2192 ' + s.fin : '');
-      case 'jump': return '\\u21B7 \\u2192 step ' + s.to + (s.text ? ' \\u2014 ' + s.text : '');
-      case 'return': return '\\u23CE return' + (s.outcome ? ' \\u2014 ' + s.outcome : '') + (s.text ? ' (' + s.text + ')' : '');
-      case 'throw': return '\\u26A1 throw' + (s.err ? ' ' + s.err : '') + (s.text ? ' \\u2014 ' + s.text : '');
+      case 'branch': return '\u25C7 if ' + (s.cond || s.text) + (s.onFalse !== undefined ? ' \u2014 else \u2192 ' + s.onFalse : '');
+      case 'switch': return '\u25C7 switch on ' + (s.on || s.text) + ' \u2014 ' + (s.cases || []).map(function (c) { return c.value + ' \u2192 ' + c.step; }).join(', ') + (s.defaultStep !== undefined ? ', default \u2192 ' + s.defaultStep : '');
+      case 'loop': return '\u27F3 ' + (s.loopKind || 'forEach') + (s.over ? ' ' + s.over : '') + (s.cond ? ' while ' + s.cond : '') + (s.end !== undefined ? ' (body \u2192 ' + s.end + ')' : '');
+      case 'try': return '\u26E8 try (body \u2192 ' + s.end + ')' + (s.catches || []).map(function (c) { return ' \u2014 on ' + c.error + ' \u2192 ' + c.step; }).join('') + (s.fin !== undefined ? ' \u2014 finally \u2192 ' + s.fin : '');
+      case 'jump': return '\u21B7 \u2192 step ' + s.to + (s.text ? ' \u2014 ' + s.text : '');
+      case 'return': return '\u23CE return' + (s.outcome ? ' \u2014 ' + s.outcome : '') + (s.text ? ' (' + s.text + ')' : '');
+      case 'throw': return '\u26A1 throw' + (s.err ? ' ' + s.err : '') + (s.text ? ' \u2014 ' + s.text : '');
       default: return s.text;
     }
   }
@@ -2270,8 +2270,8 @@ export function mountCanvas(host, model, opts = {}) {
       var callHtml = '';
       if (s.call) {
         var callable = !!narrativeFor(s.call.component, s.call.method);
-        callHtml = ' \\u2192 <span class="call' + (callable ? ' drillstep' : '') + '" data-dc="' + s.call.component + '" data-dm="' + s.call.method + '">'
-          + s.call.component + '.' + s.call.method + '()' + (callable ? ' \\u21B4' : '') + '</span>';
+        callHtml = ' \u2192 <span class="call' + (callable ? ' drillstep' : '') + '" data-dc="' + s.call.component + '" data-dm="' + s.call.method + '">'
+          + s.call.component + '.' + s.call.method + '()' + (callable ? ' \u21B4' : '') + '</span>';
       }
       return '<div class="fstep"><span class="num">' + s.n + '.</span> ' + escText(flowStepText(s)) + callHtml + '</div>';
     }).join('') || '<div class="fstep">No narrative steps.</div>';
@@ -2345,7 +2345,7 @@ export function mountCanvas(host, model, opts = {}) {
     var comps = [], edges = [];
     comps.push({ id: 'start', name: flowTitle() + '()', subsystem: 'flow', componentType: 'Start', public: false, owns: [] });
     graph.steps.forEach(function (s) {
-      var name = flowStepLabel(s) + (s.call ? ' \\u2192 ' + s.call.component + '.' + s.call.method + '()' : '');
+      var name = flowStepLabel(s) + (s.call ? ' \u2192 ' + s.call.component + '.' + s.call.method + '()' : '');
       comps.push({ id: 'n' + s.n, name: name, subsystem: 'flow', componentType: (s.kind === 'call' || s.kind === 'dispatch') ? 'Call' : 'Step', public: false, owns: [] });
     });
     if (graph.first !== null) edges.push({ from: 'start', to: 'n' + graph.first, cross: false });
@@ -2473,7 +2473,7 @@ export function mountCanvas(host, model, opts = {}) {
 
   function openViewButton(kind, id, hasKids) {
     if (!hasKids) return '';
-    return '<div class="openbtn"><button class="tbtn" data-open-kind="' + kind + '" data-open-id="' + esc(id) + '">\\u25B8 Open as view</button></div>';
+    return '<div class="openbtn"><button class="tbtn" data-open-kind="' + kind + '" data-open-id="' + esc(id) + '">\u25B8 Open as view</button></div>';
   }
 
   function renderPanel() {
@@ -2491,7 +2491,7 @@ export function mountCanvas(host, model, opts = {}) {
     if (focusKind === 'component' && compById[focusId]) {
       var c = compById[focusId];
       head = '<h2>' + esc(c.name) + '</h2>'
-        + staticChip('\\u00AB' + c.componentType + (c.portalType ? '/' + c.portalType : '') + '\\u00BB')
+        + staticChip('\u00AB' + c.componentType + (c.portalType ? '/' + c.portalType : '') + '\u00BB')
         + (c.public ? staticChip('published') : '')
         + (c.status ? staticChip(c.status) : '')
         + (scopeFocus ? staticChip('current view') : '')
@@ -2522,14 +2522,14 @@ export function mountCanvas(host, model, opts = {}) {
             (c.intents || []).forEach(function (x) { if (x.method === m.name) mIntent = x.text; });
             return '<div class="method"><div class="mname">' + esc(m.name) + '<span class="grow"></span>'
               + (hasNarr
-                ? '<button class="flowbtn" data-flow-comp="' + esc(c.id) + '" data-flow-method="' + esc(m.name) + '" data-flow-mode="flow">flow \\u25F7</button>'
+                ? '<button class="flowbtn" data-flow-comp="' + esc(c.id) + '" data-flow-method="' + esc(m.name) + '" data-flow-mode="flow">flow \u25F7</button>'
                   + '<button class="flowbtn" data-flow-comp="' + esc(c.id) + '" data-flow-method="' + esc(m.name) + '" data-flow-mode="steps">steps</button>'
                 : mIntent
                   ? '<span class="chip">intent</span>'
                   : '<span class="chip" style="opacity:.6">no narrative</span>')
               + '</div>'
               + '<code>' + esc(m.signature) + '</code>'
-              + '<div class="mdesc">' + esc(m.description) + ' \\u2014 returns ' + typeRefHtml(m.returns) + '</div>'
+              + '<div class="mdesc">' + esc(m.description) + ' \u2014 returns ' + typeRefHtml(m.returns) + '</div>'
               + (mIntent && !hasNarr ? '<div class="mdesc" style="font-style:italic">' + esc(mIntent) + '</div>' : '')
               + (m.params ? '<div class="mdesc">params: ' + m.params.map(function (p) { return esc(p.name) + ': ' + typeRefHtml(p.type); }).join(', ') + '</div>' : '')
               + (m.endpoint ? '<code>' + esc(JSON.stringify(m.endpoint)) + '</code>' : '')
@@ -2544,7 +2544,7 @@ export function mountCanvas(host, model, opts = {}) {
       if (orphanNarrs.length) {
         intfInner += orphanNarrs.map(function (n) {
           return '<div class="method"><div class="mname">' + esc(n.method) + '() <span class="grow"></span>'
-            + '<button class="flowbtn" data-flow-comp="' + esc(c.id) + '" data-flow-method="' + esc(n.method) + '" data-flow-mode="flow">flow \\u25F7</button>'
+            + '<button class="flowbtn" data-flow-comp="' + esc(c.id) + '" data-flow-method="' + esc(n.method) + '" data-flow-mode="flow">flow \u25F7</button>'
             + '<button class="flowbtn" data-flow-comp="' + esc(c.id) + '" data-flow-method="' + esc(n.method) + '" data-flow-mode="steps">steps</button>'
             + '</div><div class="mdesc">narrative without a contract method</div></div>';
         }).join('');
@@ -2559,12 +2559,12 @@ export function mountCanvas(host, model, opts = {}) {
       if (pd) {
         var xt = compById[pd.extId];
         head = '<h2>' + esc(xt ? xt.name : pd.extId) + '</h2>'
-          + staticChip(pd.dir === 'in' ? '\\u21E0 external caller' : 'external dependency \\u21E2')
-          + (xt ? staticChip('\\u00AB' + xt.componentType + (xt.portalType ? '/' + xt.portalType : '') + '\\u00BB') : '')
+          + staticChip(pd.dir === 'in' ? '\u21E0 external caller' : 'external dependency \u21E2')
+          + (xt ? staticChip('\u00AB' + xt.componentType + (xt.portalType ? '/' + xt.portalType : '') + '\u00BB') : '')
           + (xt ? chip(xt.subsystem, 'subsystem', xt.subsystem) : '');
         body += '<p class="desc">' + (pd.dir === 'in'
           ? 'Lives outside this box and depends on something inside it. The dashed line shows the actual cross-boundary link while this port is selected.'
-          : 'A dependency of this box\\u2019s internals that lives outside it. The dashed line shows the actual cross-boundary link while this port is selected.') + '</p>';
+          : 'A dependency of this box\u2019s internals that lives outside it. The dashed line shows the actual cross-boundary link while this port is selected.') + '</p>';
         if (xt) {
           body += section('External component', null,
             chip(xt.id, 'component', xt.id) + '<div class="mdesc">' + esc(xt.description) + '</div>', true);
@@ -2579,7 +2579,7 @@ export function mountCanvas(host, model, opts = {}) {
       var ty = null;
       MODEL.types.forEach(function (t2) { if (t2.id === focusId) ty = t2; });
       if (ty) {
-        head = '<h2>' + esc(ty.name) + '</h2>' + staticChip('\\u00AB' + ty.kind + '\\u00BB')
+        head = '<h2>' + esc(ty.name) + '</h2>' + staticChip('\u00AB' + ty.kind + '\u00BB')
           + (ty.subsystem ? chip(ty.subsystem, 'subsystem', ty.subsystem) : staticChip('system-level shared'));
         
         if (ty.componentClass) {
@@ -2616,7 +2616,7 @@ export function mountCanvas(host, model, opts = {}) {
                 var targetExists = MODEL.types.some(function(t) { return t.id === targetTypeId; });
                 refHtml = '<div class="mdesc">References: ' + (targetExists ? chip(f.references, 'type', targetTypeId) : esc(f.references)) + '</div>';
               } else if (fk) {
-                refHtml = '<div class="mdesc">FK \\u2192 ' + chip(fk.to + ' [' + (fk.card || '1') + ']', 'type', fk.to) + '</div>';
+                refHtml = '<div class="mdesc">FK \u2192 ' + chip(fk.to + ' [' + (fk.card || '1') + ']', 'type', fk.to) + '</div>';
               }
 
               return '<div class="method"><div class="mname">' + esc(f.name)
@@ -2635,14 +2635,14 @@ export function mountCanvas(host, model, opts = {}) {
         }
         if (ty.methods.length) {
           body += section('Methods (pure intrinsic)', ty.methods.length, ty.methods.map(function (m2) {
-            return '<div class="method"><div class="mname">' + esc(m2.name) + '</div><code>' + esc(m2.signature) + '</code><div class="mdesc">' + esc(m2.description || '') + ' \\u2014 returns <code style="display:inline">' + esc(m2.returns) + '</code></div></div>';
+            return '<div class="method"><div class="mname">' + esc(m2.name) + '</div><code>' + esc(m2.signature) + '</code><div class="mdesc">' + esc(m2.description || '') + ' \u2014 returns <code style="display:inline">' + esc(m2.returns) + '</code></div></div>';
           }).join(''), true);
         }
         var refsOut = MODEL.typeEdges.filter(function (e2) { return e2.from === ty.id; });
         var refsIn = MODEL.typeEdges.filter(function (e2) { return e2.to === ty.id; });
         if (refsOut.length || refsIn.length) {
-          var refInner = (refsOut.length ? '<div class="mdesc"><b>References:</b></div>' + refsOut.map(function (e2) { return chip(e2.to + ' \\u00B7 ' + e2.field + ' [' + (e2.card || '1') + ']', 'type', e2.to); }).join('') : '')
-            + (refsIn.length ? '<div class="mdesc" style="margin-top:6px"><b>Referenced by:</b></div>' + refsIn.map(function (e2) { return chip(e2.from + ' \\u00B7 ' + e2.field + ' [' + (e2.card || '1') + ']', 'type', e2.from); }).join('') : '');
+          var refInner = (refsOut.length ? '<div class="mdesc"><b>References:</b></div>' + refsOut.map(function (e2) { return chip(e2.to + ' \u00B7 ' + e2.field + ' [' + (e2.card || '1') + ']', 'type', e2.to); }).join('') : '')
+            + (refsIn.length ? '<div class="mdesc" style="margin-top:6px"><b>Referenced by:</b></div>' + refsIn.map(function (e2) { return chip(e2.from + ' \u00B7 ' + e2.field + ' [' + (e2.card || '1') + ']', 'type', e2.from); }).join('') : '');
           body += section('Relations', refsOut.length + refsIn.length, refInner, true);
         }
         var issT = issuesBySpec[ty.id];
@@ -2673,9 +2673,9 @@ export function mountCanvas(host, model, opts = {}) {
         + (MODEL.system.targetLanguage ? staticChip(MODEL.system.targetLanguage) : '')
         + staticChip(MODEL.subsystems.length + ' subsystems')
         + staticChip(MODEL.components.length + ' components')
-        + (MODEL.types.length ? '<div class="openbtn"><button class="tbtn" id="openTypesBtn">\\u25B8 Types (ERD) \\u2014 ' + MODEL.types.length + '</button></div>' : '');
+        + (MODEL.types.length ? '<div class="openbtn"><button class="tbtn" id="openTypesBtn">\u25B8 Types (ERD) \u2014 ' + MODEL.types.length + '</button></div>' : '');
       if (MODEL.system.vision) body += '<p class="desc">' + esc(MODEL.system.vision) + '</p>';
-      body += '<p class="desc">Each view shows one scope\\u2019s direct children \\u2014 double-click a box (or use \\u201COpen as view\\u201D) to drill in, and the breadcrumb to come back. Derived from <code style="display:inline">.wai/specs/</code>.</p>';
+      body += '<p class="desc">Each view shows one scope\u2019s direct children \u2014 double-click a box (or use \u201COpen as view\u201D) to drill in, and the breadcrumb to come back. Derived from <code style="display:inline">.wai/specs/</code>.</p>';
       if (state.showIssues && MODEL.issues.length) body += section('All validation issues', MODEL.issues.length, issueHtml(MODEL.issues), true);
     }
     panel.innerHTML = '<div class="head">' + head + '</div><div class="body">' + body + '</div>';

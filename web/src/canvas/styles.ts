@@ -88,7 +88,7 @@ header input[type="search"]::placeholder { color:var(--dim); }
 .swrow .lbl { font-size:12.5px; color:var(--ink); line-height:1.3; }
 .swrow .lbl .sub { display:block; color:var(--dim); font-size:10.5px; font-weight:400; }
 .selectWrap { position:relative; width:100%; }
-.selectWrap::after { content:'\\\\25BE'; position:absolute; right:10px; top:50%; transform:translateY(-50%); color:var(--dim); pointer-events:none; font-size:10px; }
+.selectWrap::after { content:'\\25BE'; position:absolute; right:10px; top:50%; transform:translateY(-50%); color:var(--dim); pointer-events:none; font-size:10px; }
 .selectControl { width:100%; appearance:none; -webkit-appearance:none; background:var(--input-bg); color:var(--ink); border:1px solid var(--chrome-border); border-radius:7px; padding:6px 30px 6px 9px; font-size:11.5px; font-family:inherit; outline:none; color-scheme:dark; }
 .selectControl:hover { border-color:var(--accent); background:var(--hover-bg); }
 .selectControl:focus { border-color:var(--accent); box-shadow:0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent); }

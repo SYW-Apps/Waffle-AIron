@@ -28,12 +28,20 @@ const cyLib = at(/^<script>__CYTOSCAPE_LIB__<\/script>$/, bodyOpen);
 const iifeOpen = at(/^\(function \(\) \{$/, cyLib);
 const iifeClose = at(/^\}\)\(\);$/, iifeOpen);
 
-let css = canvas.slice(styleOpen + 1, styleClose).join('\n');
-const skel = canvas.slice(bodyOpen + 1, cyLib - 3).join('\n'); // header..flow modal (before the __MODEL__ script)
+// canvas.ts holds the CSS/skeleton/engine INSIDE a template literal, so runtime
+// escapes are double-escaped in the source (a runtime `\n` is written `\\n`).
+// Evaluate each section as the template literal it is — exactly what canvas.ts
+// does at render time — to recover the real strings before writing them out.
+// (These sections contain no backticks or `${`, verified, so this is safe.)
+const evalTL = (s) => new Function('return `' + s + '`')();
+
+let css = evalTL(canvas.slice(styleOpen + 1, styleClose).join('\n'));
+const skel = evalTL(canvas.slice(bodyOpen + 1, cyLib - 3).join('\n')); // header..flow modal
 // IIFE body only: skip the `(function () {` line, `'use strict';`, and the two
 // server-only `var buildDrawioXml/Scene = __DRAWIO_FN__/__EXCALIDRAW_FN__;` decls
-// (those placeholders are replaced by imports here).
-let eng = canvas.slice(iifeOpen + 4, iifeClose).join('\n');
+// (those placeholders are replaced by imports here). Template-eval to recover
+// real escapes (`\\n` → `\n`, etc.).
+let eng = evalTL(canvas.slice(iifeOpen + 4, iifeClose).join('\n'));
 
 // ── CSS: scope body→.cbody, :root→:host/.cbody, viewport heights → flex ──
 css = css.replace(/:root \{/, ':host, .cbody {');
