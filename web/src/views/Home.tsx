@@ -2,14 +2,14 @@ import { useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { get } from '../api';
 import { useAsync } from '../ui';
+import { CanvasView } from './CanvasView';
 import type { ProjectRecord } from '../types';
 
 /** Canvas landing view. The selected project lives in the URL (?project=…) so a
- *  view is a shareable link. The canvas itself is the SAME self-contained classic
- *  renderer used for the standalone export (src/core/canvas.ts) — embedded via a
- *  same-origin iframe with ?_embed=true so its redundant brand mark is hidden but
- *  its full toolbar (views, search, settings, present, export) and details panel
- *  are kept exactly. We do not re-implement the renderer. */
+ *  view is a shareable link. The canvas is the SAME classic engine used for the
+ *  standalone export, mounted directly in React (no iframe) via the shared
+ *  engine module (web/src/canvas) inside a shadow root — full toolbar, details,
+ *  and performance kept exactly, now theme-aware. We do not re-implement it. */
 export function Home() {
   const [params, setParams] = useSearchParams();
   const selected = params.get('project') ?? '';
@@ -42,11 +42,7 @@ export function Home() {
         )}
       </div>
       {selected ? (
-        <iframe
-          className="canvas-frame"
-          title="Architecture canvas"
-          src={`/web/canvas?projectId=${encodeURIComponent(selected)}&_embed=true`}
-        />
+        <CanvasView key={selected} projectId={selected} />
       ) : (
         <div className="empty-state">
           <h3>Nothing to show yet</h3>
