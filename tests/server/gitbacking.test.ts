@@ -200,7 +200,7 @@ describe('container-level git backing (sdd_host)', () => {
     expect(fs.existsSync(path.join(checkout, 'instance', 'auth', 'credentials.json'))).toBe(false);
   }, 30_000);
 
-  it('one binding per scope: a re-bind replaces; unbind removes by id (repo untouched)', () => {
+  it('one binding per scope: a re-bind updates in place (stable id); unbind removes by id (repo untouched)', () => {
     const { unitId } = seedWorld();
     const remote = seedBareRemote(base, 'acme-container');
 
@@ -209,7 +209,9 @@ describe('container-level git backing (sdd_host)', () => {
     const bindings = listBackingBindings(cfg, MASTER);
     expect(bindings).toHaveLength(1);
     expect(bindings[0].id).toBe(second.id);
-    expect(bindings[0].id).not.toBe(first.id);
+    // A re-bind of the same scope (an edit) updates in PLACE — stable id + createdAt.
+    expect(second.id).toBe(first.id);
+    expect(second.createdAt).toBe(first.createdAt);
 
     unbindScope(cfg, MASTER, second.id);
     expect(listBackingBindings(cfg, MASTER)).toEqual([]);

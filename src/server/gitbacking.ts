@@ -403,8 +403,16 @@ export function bindScope(
     credentialRef = backingCredentialKey(binding);
     setSecret(credentialRef, pat.trim());
   }
+  // Editing = re-binding the same scope. Carry the existing binding's id +
+  // createdAt so it updates in place (stable id, one working copy) instead of
+  // orphaning the old one — the client never supplies an id, so scopes can't be
+  // crossed. one-per-scope replacement still holds.
+  const existing = listBindings(cfg.dataDir).find(
+    (b) => b.scopeKind === binding.scopeKind && (b.scopeId ?? '') === (binding.scopeId ?? ''),
+  );
   const stored = upsertBinding(cfg.dataDir, {
     ...binding,
+    ...(existing ? { id: existing.id, createdAt: existing.createdAt } : {}),
     ...(credentialRef ? { credentialRef } : {}),
     createdBy: principalSubject(principal),
   });

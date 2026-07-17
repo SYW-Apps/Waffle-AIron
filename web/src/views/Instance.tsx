@@ -228,31 +228,9 @@ function BackupsTab() {
     () => get<{ units: OrganizationUnitRecord[] }>('/web/admin/org/units').catch(() => ({ units: [] as OrganizationUnitRecord[] })),
     [],
   );
-  const [adding, setAdding] = useState(false);
-  const [scopeKind, setScopeKind] = useState('unit');
-  const [scopeId, setScopeId] = useState('');
-  const [remote, setRemote] = useState('');
-  const [branch, setBranch] = useState('main');
-  const [pat, setPat] = useState('');
-  const [includeCredentials, setIncludeCredentials] = useState(false);
+  // undefined = modal closed; null = create; a binding = edit.
+  const [editing, setEditing] = useState<GitBackingBinding | null | undefined>(undefined);
 
-  async function bind() {
-    await post('/web/admin/git-backing', {
-      scopeKind,
-      scopeId: scopeKind === 'instance' ? undefined : scopeId,
-      remote,
-      branch,
-      pat: pat.trim() || undefined,
-      includeCredentials: scopeKind === 'instance' ? includeCredentials : undefined,
-    });
-    toast.ok('Backup repo bound');
-    setAdding(false);
-    setRemote('');
-    setScopeId('');
-    setPat('');
-    setIncludeCredentials(false);
-    bindings.reload();
-  }
   async function sync(id: string) {
     await post('/web/admin/git-backing/sync', { id });
     toast.ok('Sync run');
@@ -268,7 +246,7 @@ function BackupsTab() {
     <div className="stack-lg">
       <div className="view-head">
         <p className="hint">Container-level backup repos: mirror a unit's subtree or the whole instance structure to git. Never mirrors secrets or live sessions.</p>
-        <Button variant="primary" onClick={() => setAdding(true)}>
+        <Button variant="primary" onClick={() => setEditing(null)}>
           + Bind backup repo
         </Button>
       </div>
@@ -304,6 +282,7 @@ function BackupsTab() {
                 cell: (b) => (
                   <div className="row-actions">
                     <AsyncButton size="sm" action={() => sync(b.id)} onError={toast.bad}>Sync now</AsyncButton>
+                    <Button size="sm" variant="ghost" onClick={() => setEditing(b)}>Edit</Button>
                     <ConfirmButton label="Unbind" title="Unbind backup" message="Stop backing up this scope? The remote repo is left untouched." confirmLabel="Unbind" action={() => remove(b.id)} onError={toast.bad} />
                   </div>
                 ),
@@ -312,70 +291,139 @@ function BackupsTab() {
           />
         )}
       </AsyncView>
-      {adding && (
-        <Modal
-          title="Bind a backup repository"
-          onClose={() => setAdding(false)}
-          footer={
-            <>
-              <Button variant="ghost" onClick={() => setAdding(false)}>Cancel</Button>
-              <AsyncButton variant="primary" action={bind} onError={toast.bad} disabled={!remote || (scopeKind !== 'instance' && !scopeId)}>Bind</AsyncButton>
-            </>
-          }
-        >
-          <div className="stack-lg">
-            <Field label="Scope">
-              <Select value={scopeKind} onChange={setScopeKind} options={[{ value: 'unit', label: 'Organization unit subtree' }, { value: 'instance', label: 'Whole instance structure' }]} />
-            </Field>
-            {scopeKind !== 'instance' && (
-              <Field label="Unit subtree" hint="The unit whose subtree is mirrored. Backs up structure only — never secrets or sessions.">
-                <UnitSelect
-                  units={units.data?.units ?? []}
-                  value={scopeId}
-                  onChange={setScopeId}
-                  allowEmpty={false}
-                  placeholder="Choose a unit…"
-                />
-              </Field>
-            )}
-            {scopeKind === 'instance' && (
-              <Checkbox
-                checked={includeCredentials}
-                onChange={setIncludeCredentials}
-                label={
-                  <>
-                    Include credential hashes
-                    <InfoTip label="About backing up credential hashes">
-                      <p>
-                        <strong>Off (default):</strong> the backup carries the org structure, project registry, and all
-                        project specs — but <strong>not</strong> <code>auth/credentials.json</code>. Safer: no password
-                        or agent-token hashes leave the box.
-                      </p>
-                      <p>
-                        <strong>On:</strong> also mirrors the <em>hashed</em> credential records, so a full restore
-                        keeps local logins and agent tokens. The hashes then live in the remote repo (still never
-                        plaintext, and the secret store is never mirrored either way).
-                      </p>
-                      <p>SSO users re-authenticate via your IdP regardless, so most instances can leave this off.</p>
-                    </InfoTip>
-                  </>
-                }
-                hint="Turn on only if you need to restore local passwords / agent tokens from this backup."
-              />
-            )}
-            <Field label="Remote URL"><TextInput value={remote} onChange={setRemote} placeholder="https://github.com/org/backup.git" /></Field>
-            <Field label="Branch"><TextInput value={branch} onChange={setBranch} /></Field>
-            <Field
-              label="Access token for this connection (optional)"
-              info={<GitPatSummary />}
-              hint="A PAT for this repo's org/account. Leave blank to use the shared fallback token above. Stored write-only; never mirrored."
-            >
-              <TextInput type="password" value={pat} onChange={setPat} placeholder="github_pat_… / ghp_… / glpat-…" />
-            </Field>
-          </div>
-        </Modal>
+      {editing !== undefined && (
+        <BackupBindModal
+          existing={editing}
+          units={units.data?.units ?? []}
+          onClose={() => setEditing(undefined)}
+          onDone={() => {
+            setEditing(undefined);
+            bindings.reload();
+          }}
+        />
       )}
     </div>
+  );
+}
+
+/** Create OR edit a backup binding (one per scope, so an edit re-binds the same
+ *  scope in place). Editing keeps the scope fixed and can toggle credentials,
+ *  change the remote/branch, or rotate the PAT (blank keeps the current one). */
+function BackupBindModal(props: {
+  existing: GitBackingBinding | null;
+  units: OrganizationUnitRecord[];
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const toast = useToast();
+  const isEdit = !!props.existing;
+  const [scopeKind, setScopeKind] = useState(props.existing?.scopeKind ?? 'unit');
+  const [scopeId, setScopeId] = useState(props.existing?.scopeId ?? '');
+  const [remote, setRemote] = useState(props.existing?.remote ?? '');
+  const [branch, setBranch] = useState(props.existing?.branch ?? 'main');
+  const [pat, setPat] = useState('');
+  const [includeCredentials, setIncludeCredentials] = useState(props.existing?.includeCredentials ?? false);
+
+  async function save() {
+    await post('/web/admin/git-backing', {
+      scopeKind,
+      scopeId: scopeKind === 'instance' ? undefined : scopeId,
+      remote,
+      branch,
+      pat: pat.trim() || undefined,
+      includeCredentials: scopeKind === 'instance' ? includeCredentials : undefined,
+      // Keep this connection's existing per-connection PAT unless a new one is
+      // typed (bindScope re-derives + stores it when `pat` is present).
+      credentialRef: props.existing?.credentialRef,
+    });
+    toast.ok(isEdit ? 'Backup updated' : 'Backup repo bound');
+    props.onDone();
+  }
+
+  const scopeLabel = `${scopeKind}${scopeId ? `:${scopeId}` : ''}`;
+
+  return (
+    <Modal
+      title={isEdit ? `Edit backup · ${scopeLabel}` : 'Bind a backup repository'}
+      onClose={props.onClose}
+      footer={
+        <>
+          <Button variant="ghost" onClick={props.onClose}>Cancel</Button>
+          <AsyncButton
+            variant="primary"
+            action={save}
+            onError={toast.bad}
+            disabled={!remote || (scopeKind !== 'instance' && !scopeId)}
+          >
+            {isEdit ? 'Save' : 'Bind'}
+          </AsyncButton>
+        </>
+      }
+    >
+      <div className="stack-lg">
+        {isEdit ? (
+          // Scope is a binding's identity — fixed on edit.
+          <Field label="Scope">
+            <code className="preview-id">{scopeLabel}</code>
+          </Field>
+        ) : (
+          <Field label="Scope">
+            <Select value={scopeKind} onChange={setScopeKind} options={[{ value: 'unit', label: 'Organization unit subtree' }, { value: 'instance', label: 'Whole instance structure' }]} />
+          </Field>
+        )}
+        {!isEdit && scopeKind !== 'instance' && (
+          <Field label="Unit subtree" hint="The unit whose subtree is mirrored. Backs up structure only — never secrets or sessions.">
+            <UnitSelect
+              units={props.units}
+              value={scopeId}
+              onChange={setScopeId}
+              allowEmpty={false}
+              placeholder="Choose a unit…"
+            />
+          </Field>
+        )}
+        {scopeKind === 'instance' && (
+          <Checkbox
+            checked={includeCredentials}
+            onChange={setIncludeCredentials}
+            label={
+              <>
+                Include credential hashes
+                <InfoTip label="About backing up credential hashes">
+                  <p>
+                    <strong>Off (default):</strong> the backup carries the org structure, project registry, and all
+                    project specs — but <strong>not</strong> <code>auth/credentials.json</code>. Safer: no password or
+                    agent-token hashes leave the box.
+                  </p>
+                  <p>
+                    <strong>On:</strong> also mirrors the <em>hashed</em> credential records, so a full restore keeps
+                    local logins and agent tokens. The hashes then live in the remote repo (still never plaintext, and
+                    the secret store is never mirrored either way).
+                  </p>
+                  <p>SSO users re-authenticate via your IdP regardless, so most instances can leave this off.</p>
+                </InfoTip>
+              </>
+            }
+            hint="Turn on only if you need to restore local passwords / agent tokens from this backup. Turning it off removes the hashes from the repo on the next sync."
+          />
+        )}
+        <Field label="Remote URL"><TextInput value={remote} onChange={setRemote} placeholder="https://github.com/org/backup.git" /></Field>
+        <Field label="Branch"><TextInput value={branch} onChange={setBranch} /></Field>
+        <Field
+          label={isEdit ? 'Access token' : 'Access token for this connection (optional)'}
+          info={<GitPatSummary />}
+          hint={
+            isEdit
+              ? props.existing?.credentialRef
+                ? 'A per-connection PAT is set. Leave blank to keep it, or type a new one to rotate.'
+                : 'Uses the shared fallback token. Type a PAT here to give this connection its own.'
+              : "A PAT for this repo's org/account. Leave blank to use the shared fallback token above. Stored write-only; never mirrored."
+          }
+        >
+          <TextInput type="password" value={pat} onChange={setPat} placeholder="github_pat_… / ghp_… / glpat-…" />
+        </Field>
+      </div>
+    </Modal>
   );
 }
 
