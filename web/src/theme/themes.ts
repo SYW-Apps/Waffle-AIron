@@ -81,11 +81,13 @@ export function deriveThemeVariables(primary: string, mode: ResolvedMode): Recor
   const text = light ? '#111827' : '#f9fafb';
   const textMuted = light ? mixHex('#475569', primary, 0.88) : mixHex('#cbd5e1', primary, 0.95);
   const textSubtle = light ? mixHex('#64748b', primary, 0.82) : mixHex('#94a3b8', primary, 0.92);
-  const border = light ? rgbaFromHex(primary, 0.18) : hc ? '#ffffff' : rgbaFromHex(primary, 0.24);
-  const borderStrong = light ? rgbaFromHex(primary, 0.45) : hc ? '#ffffff' : rgbaFromHex(primary, 0.58);
-  const borderMuted = light ? 'rgba(15,23,42,0.09)' : hc ? 'rgba(255,255,255,0.46)' : 'rgba(148,163,184,0.16)';
-  const shadow = hc ? 'none' : light ? `0 12px 28px ${rgbaFromHex(primary, 0.12)}` : `0 14px 32px rgba(0,0,0,0.34)`;
-  const shellShadow = hc ? '1px 0 0 #ffffff' : light ? `1px 0 0 ${rgbaFromHex(primary, 0.12)}` : `1px 0 0 ${rgbaFromHex(primary, 0.16)}`;
+  // Light-mode borders use a neutral slate (a faint translucent primary is
+  // invisible on a near-white surface, merging sidebar/header/content together).
+  const border = light ? 'rgba(15, 23, 42, 0.16)' : hc ? '#ffffff' : rgbaFromHex(primary, 0.24);
+  const borderStrong = light ? 'rgba(15, 23, 42, 0.34)' : hc ? '#ffffff' : rgbaFromHex(primary, 0.58);
+  const borderMuted = light ? 'rgba(15, 23, 42, 0.10)' : hc ? 'rgba(255,255,255,0.46)' : 'rgba(148,163,184,0.16)';
+  const shadow = hc ? 'none' : light ? `0 12px 28px rgba(15, 23, 42, 0.12)` : `0 14px 32px rgba(0,0,0,0.34)`;
+  const shellShadow = hc ? '1px 0 0 #ffffff' : light ? `1px 0 0 rgba(15, 23, 42, 0.10)` : `1px 0 0 ${rgbaFromHex(primary, 0.16)}`;
   const focusRing = hc ? '0 0 0 3px #ffffff' : `0 0 0 3px ${rgbaFromHex(primary, light ? 0.24 : 0.34)}`;
 
   return {

@@ -1722,6 +1722,14 @@ export function mountCanvas(host, model, opts = {}) {
   cy.on('dbltap', 'node', function (ev) {
     var t = idOf(ev.target);
     if (t.proxy || t.group) return;
+    // Optional host hook (web UI): double-clicking a leaf component node hands the
+    // id back to the embedder (e.g. the environment view opens that project's
+    // canvas). The opts object only exists when the engine is mounted as a module;
+    // in the standalone export it is undefined, so this is inert there.
+    if (typeof opts !== 'undefined' && opts && opts.onNodeOpen && t.kind === 'component') {
+      opts.onNodeOpen('component', t.id);
+      return;
+    }
     if (t.cluster) { navigateTo('types', t.id); return; }
     if (t.kind === 'type') {
       // Double-clicking an FK field row jumps to the referenced type.

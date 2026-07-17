@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { get } from '../api';
 import { AsyncView, useAsync } from '../ui';
 import { useSettings } from '../settings';
@@ -116,6 +117,7 @@ function landscapeToCanvasModel(g: Graph): unknown {
 export function Environment() {
   const state = useAsync<Graph>(() => get('/web/graph?tier=landscape&level=1'), []);
   const { appearance } = useSettings();
+  const nav = useNavigate();
   const canvasTheme = resolveMode(appearance) === 'light' ? 'light' : 'syw';
 
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -125,7 +127,14 @@ export function Environment() {
   useEffect(() => {
     const host = hostRef.current;
     if (!host || !g || g.nodes.length === 0) return;
-    const handle = mountCanvas(host, landscapeToCanvasModel(g), { shadow: true, theme: canvasTheme, embed: true });
+    // Double-clicking a project node (a "component" in the adapted model) opens
+    // that project's canvas.
+    const handle = mountCanvas(host, landscapeToCanvasModel(g), {
+      shadow: true,
+      theme: canvasTheme,
+      embed: true,
+      onNodeOpen: (_kind: string, id: string) => nav('/?project=' + encodeURIComponent(id)),
+    });
     handleRef.current = handle;
     return () => {
       handle.destroy();
