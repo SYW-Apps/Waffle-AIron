@@ -4,24 +4,36 @@ import { Badge, Button, EmptyState, ErrorNote, Spinner, TextInput, useAsync } fr
 import type { CanvasComponent, CanvasModel, CanvasType } from '../canvas/model';
 import { mountCanvas, type CanvasHandle } from '../canvas/renderer';
 import { mountErd, type ErdHandle } from '../canvas/erd';
+import { mountDatabases, databaseTables, type DbHandle, type DbSelection, type CanvasDatabase } from '../canvas/databases';
 import { FlowModal } from './FlowModal';
 
 /**
  * In-React canvas (the "Beta" renderer). Fetches a project's {@link CanvasModel}
  * from `/web/canvas-model` and mounts the shared, framework-agnostic cytoscape
- * renderers directly — no iframe. Two view modes share one stage, one search box
+ * renderers directly — no iframe. Three view modes share one stage, one search box
  * and one Fit button:
  *   • Components — the architecture graph ({@link mountCanvas}).
  *   • Types — the ERD / entity-relationship view ({@link mountErd}).
+ *   • Databases — the per-database schema view ({@link mountDatabases}).
  * Selecting a node opens a details side panel; the search box highlights matches
  * and dims the rest. Exactly one cytoscape instance is mounted at a time — it is
  * destroyed on unmount, project change, or view-mode change.
  */
-type ViewMode = 'components' | 'types';
+type ViewMode = 'components' | 'types' | 'databases';
 
-/** Both renderer handles expose the same control surface; the view only ever
+/** All three renderer handles expose the same control surface; the view only ever
  *  touches this shared slice. */
-type AnyHandle = Pick<CanvasHandle & ErdHandle, 'fit' | 'setQuery' | 'select' | 'destroy' | 'cy'>;
+type AnyHandle = Pick<CanvasHandle & ErdHandle & DbHandle, 'fit' | 'setQuery' | 'select' | 'destroy' | 'cy'>;
+
+/** Whether the active view has nothing to render for `mode` (drives the empty
+ *  overlay + skips mounting). Databases mode is empty only when the system
+ *  declares no databases AND no type points at one (so a synthesized frame for a
+ *  referenced-but-undeclared db still counts as content). */
+function modeIsEmpty(m: CanvasModel, mode: ViewMode): boolean {
+  if (mode === 'components') return m.components.length === 0;
+  if (mode === 'types') return m.types.length === 0;
+  return (m.system.databases?.length ?? 0) === 0 && !m.types.some((t) => !!t.database);
+}
 
 export function CanvasView({ projectId }: { projectId: string }) {
   const state = useAsync<CanvasModel>(
@@ -34,13 +46,14 @@ export function CanvasView({ projectId }: { projectId: string }) {
   const [mode, setMode] = useState<ViewMode>('components');
   const [selectedComponent, setSelectedComponent] = useState<CanvasComponent | null>(null);
   const [selectedType, setSelectedType] = useState<CanvasType | null>(null);
+  // The databases view selects either a database frame or one of its tables.
+  const [selectedDb, setSelectedDb] = useState<DbSelection | null>(null);
   const [query, setQuery] = useState('');
   // The method whose L5 narrative flow the FlowModal is showing (null = closed).
   const [flowTarget, setFlowTarget] = useState<{ component: string; method: string } | null>(null);
 
   const model = state.data;
-  const emptyForMode =
-    !!model && (mode === 'components' ? model.components.length === 0 : model.types.length === 0);
+  const emptyForMode = !!model && modeIsEmpty(model, mode);
   const mounted = !!model && !emptyForMode;
 
   // Mount / remount the active renderer whenever a fresh model arrives (new
@@ -48,28 +61,29 @@ export function CanvasView({ projectId }: { projectId: string }) {
   // ever live; cleanup destroys it and clears the matching selection.
   useEffect(() => {
     const el = stageRef.current;
-    if (!el || !model) return;
+    if (!el || !model || modeIsEmpty(model, mode)) return;
 
-    let handle: AnyHandle | null = null;
+    let handle: AnyHandle;
     if (mode === 'components') {
-      if (model.components.length === 0) return;
       handle = mountCanvas(el, model, { onSelect: setSelectedComponent });
-    } else {
-      if (model.types.length === 0) return;
+    } else if (mode === 'types') {
       handle = mountErd(el, model, { onSelect: setSelectedType });
+    } else {
+      handle = mountDatabases(el, model, { onSelect: setSelectedDb });
     }
     handleRef.current = handle;
 
     // Keep the graph fitted when the stage resizes (e.g. the details panel opens).
-    const ro = new ResizeObserver(() => handle?.cy.resize());
+    const ro = new ResizeObserver(() => handle.cy.resize());
     ro.observe(el);
 
     return () => {
       ro.disconnect();
-      handle?.destroy();
+      handle.destroy();
       handleRef.current = null;
       setSelectedComponent(null);
       setSelectedType(null);
+      setSelectedDb(null);
     };
   }, [model, mode]);
 
@@ -89,6 +103,7 @@ export function CanvasView({ projectId }: { projectId: string }) {
     handleRef.current?.select(null);
     setSelectedComponent(null);
     setSelectedType(null);
+    setSelectedDb(null);
   }
 
   return (
@@ -117,13 +132,28 @@ export function CanvasView({ projectId }: { projectId: string }) {
               >
                 Types
               </button>
+              <button
+                role="tab"
+                aria-selected={mode === 'databases'}
+                className={`seg-btn ${mode === 'databases' ? 'is-active' : ''}`}
+                onClick={() => setMode('databases')}
+                title="Database schema view"
+              >
+                Databases
+              </button>
             </div>
             {mounted && (
               <div className="beta-canvas-search">
                 <TextInput
                   value={query}
                   onChange={setQuery}
-                  placeholder={mode === 'components' ? 'Search components…' : 'Search types…'}
+                  placeholder={
+                    mode === 'components'
+                      ? 'Search components…'
+                      : mode === 'types'
+                        ? 'Search types…'
+                        : 'Search databases…'
+                  }
                 />
               </div>
             )}
@@ -151,7 +181,9 @@ export function CanvasView({ projectId }: { projectId: string }) {
             <EmptyState>
               {mode === 'components'
                 ? 'This project has no components yet — design its spec tree to see the canvas.'
-                : 'This project has no types yet — add types to see the ERD.'}
+                : mode === 'types'
+                  ? 'This project has no types yet — add types to see the ERD.'
+                  : 'This project defines no databases yet — map types to a database to see the schema.'}
             </EmptyState>
           </div>
         )}
@@ -166,6 +198,13 @@ export function CanvasView({ projectId }: { projectId: string }) {
       )}
       {mode === 'types' && selectedType && model && (
         <TypeDetailsPanel type={selectedType} model={model} onClose={clearSelection} />
+      )}
+      {mode === 'databases' && selectedDb && model && (
+        selectedDb.kind === 'table' ? (
+          <TypeDetailsPanel type={selectedDb.type} model={model} onClose={clearSelection} />
+        ) : (
+          <DbDetailsPanel database={selectedDb.database} model={model} onClose={clearSelection} />
+        )
       )}
 
       {flowTarget && model && (
@@ -407,6 +446,65 @@ function TypeDetailsPanel({
                 <span className="beta-method-returns"> · {u.method}</span>
               </li>
             ))}
+          </ul>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+/** Right-hand side panel describing the selected database: its engine, optional
+ *  description, and the tables persisted in it (each with a compact field count
+ *  and PK/FK column count). Mirrors the language of the type/component panels. */
+function DbDetailsPanel({
+  database,
+  model,
+  onClose,
+}: {
+  database: CanvasDatabase;
+  model: CanvasModel;
+  onClose: () => void;
+}) {
+  const db = database;
+  const tables = databaseTables(model, db.id);
+  return (
+    <aside className="beta-details">
+      <div className="beta-details-head">
+        <div className="cell-stack">
+          <h3>{db.name}</h3>
+          <span className="beta-stereo">«{db.engine}»</span>
+        </div>
+        <button className="icon-btn" aria-label="Close details" onClick={onClose}>
+          ×
+        </button>
+      </div>
+
+      <div className="chip-row beta-details-badges">
+        <Badge tone="warn">database</Badge>
+        <Badge tone="neutral">{tables.length} {tables.length === 1 ? 'table' : 'tables'}</Badge>
+      </div>
+
+      {db.description && <p className="beta-details-desc">{db.description}</p>}
+
+      <div className="beta-details-section">
+        <div className="beta-details-label">Tables</div>
+        {tables.length === 0 ? (
+          <p className="hint">No types are mapped to this database yet.</p>
+        ) : (
+          <ul className="beta-db-table-list">
+            {tables.map((t) => {
+              const keyCount = t.fields.filter((f) => fieldMarker(t, f, model) !== '').length;
+              return (
+                <li key={t.id} className="beta-db-table">
+                  <code className="beta-db-table-name">{t.table || t.name}</code>
+                  <span className="beta-stereo beta-db-table-kind">«{t.kind}»</span>
+                  <span className="beta-db-table-meta">
+                    {t.fields.length} {t.fields.length === 1 ? 'field' : 'fields'}
+                    {keyCount > 0 && <> · {keyCount} keyed</>}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

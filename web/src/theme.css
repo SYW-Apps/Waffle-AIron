@@ -576,6 +576,28 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
 .beta-card { color: var(--ink-subtle); font-size: 11px; }
 .beta-method-list-flush { padding-left: 0; border-left: none; }
 
+/* ── Beta canvas — Databases / schema view ────────────────────────────────────
+   The third canvas mode (Components|Types|Databases) reuses the same floating
+   `.beta-canvas-modeseg` toggle chrome and the shared `.beta-details` panel. The
+   only view-specific styling is the selected-database panel's table list: one row
+   per persisted table (its db-table name, «kind», and a field/keyed count). Warn
+   (amber) accents echo the persistence-tinted database frames in databases.ts. */
+.beta-db-table-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.beta-db-table {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--warn);
+  border-radius: var(--radius-sm);
+  background: var(--panel-soft);
+}
+.beta-db-table-name { color: var(--ink); font-size: 12.5px; }
+.beta-db-table-kind { color: var(--warn); font-size: 11px; }
+.beta-db-table-meta { flex: 1 0 100%; color: var(--ink-subtle); font-size: 11px; }
+
 /* ── Beta canvas — narrative flow modal ───────────────────────────────────────
    The L5 flow graph for a component method, shown over the canvas. The details
    panel grows a per-method "View flow" affordance (+ intent prose for methods
