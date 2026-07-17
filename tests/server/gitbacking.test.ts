@@ -10,7 +10,9 @@ import {
   syncBackingScope,
   runPeriodicBackingSync,
   getBinding,
+  backingCredentialKey,
 } from '../../src/server/gitbacking.js';
+import { resolveSecret, resolveGitToken, setSecret } from '../../src/utils/secrets.js';
 import { ForbiddenError } from '../../src/server/errors.js';
 import { createProjectRecord } from '../../src/server/projects.js';
 import { placeProject } from '../../src/server/organization.js';
@@ -202,6 +204,40 @@ describe('container-level git backing (sdd_host)', () => {
     expect(() => unbindScope(cfg, admToken, instanceBinding.id)).toThrow(ForbiddenError);
     expect(() => syncBackingScope(cfg, admToken, instanceBinding.id)).toThrow(ForbiddenError);
   });
+
+  it('an inline PAT becomes the connection credential: stored write-only, recorded as credentialRef, never in the binding record', () => {
+    const { unitId } = seedWorld();
+    const remote = seedBareRemote(base, 'acme-container');
+
+    const stored = bindScope(cfg, MASTER, bindingFor({ scopeKind: 'unit', scopeId: unitId, remote }), 'ghp_UNIT_TOKEN');
+
+    const key = backingCredentialKey({ scopeKind: 'unit', scopeId: unitId });
+    expect(stored.credentialRef).toBe(key);
+    // Resolvable via the connection key AND via the fallback resolver.
+    expect(resolveSecret(key)).toBe('ghp_UNIT_TOKEN');
+    expect(resolveGitToken(stored.credentialRef)).toBe('ghp_UNIT_TOKEN');
+
+    // The raw PAT is NEVER persisted into the binding record — only the key name.
+    const raw = fs.readFileSync(path.join(dataDir, 'git-backing.json'), 'utf8');
+    expect(raw).not.toContain('ghp_UNIT_TOKEN');
+    expect(raw).toContain(key);
+  }, 30_000);
+
+  it('distinct connections carry distinct PATs; a binding without one falls back to the shared git-token', () => {
+    const a = seedUnit(dataDir, 'acme');
+    const b = seedUnit(dataDir, 'globex');
+    const ra = seedBareRemote(base, 'acme-container');
+    const rb = seedBareRemote(base, 'globex-container');
+    setSecret('git-token', 'shared-fallback');
+
+    const bound = bindScope(cfg, MASTER, bindingFor({ scopeKind: 'unit', scopeId: a.id, remote: ra }), 'ghp_ACME');
+    const shared = bindScope(cfg, MASTER, bindingFor({ scopeKind: 'unit', scopeId: b.id, remote: rb }));
+
+    // acme uses its own PAT; globex (no PAT) resolves to the shared fallback.
+    expect(resolveGitToken(bound.credentialRef)).toBe('ghp_ACME');
+    expect(shared.credentialRef).toBeUndefined();
+    expect(resolveGitToken(shared.credentialRef)).toBe('shared-fallback');
+  }, 30_000);
 
   it('runPeriodicBackingSync syncs due bindings and skips not-due ones', () => {
     const { unitId } = seedWorld();

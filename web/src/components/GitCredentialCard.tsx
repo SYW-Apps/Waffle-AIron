@@ -33,13 +33,13 @@ export function GitCredentialCard() {
   return (
     <div className="panel">
       <h4>
-        Git access token {isSet ? <Badge tone="ok">set</Badge> : <Badge tone="warn">not set</Badge>}
+        Shared git access token {isSet ? <Badge tone="ok">set</Badge> : <Badge tone="warn">not set</Badge>}
       </h4>
       <p className="hint">
-        wairon authenticates HTTPS git remotes — both container backup repos and per-project backing — with one
-        instance-wide bot token, injected as <code>x-access-token</code>. Set it once (requires instance admin);
-        without it, private clones fail with “could not read Username”. The value is write-only and is never mirrored
-        into any backing repo. Re-set to rotate.
+        The <strong>fallback</strong> token for HTTPS git remotes: any connection (backup binding or per-project
+        backing) that has no PAT of its own uses this one, injected as <code>x-access-token</code>. Give a connection
+        its own PAT when it lives in a different org or account; otherwise this shared token covers it. Set once
+        (requires instance admin); the value is write-only and never mirrored into any repo. Re-set to rotate.
       </p>
       <div className="row-form">
         <Field label="Personal access token">

@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import * as admin from '../../src/server/admin.js';
 import { AdminAuthError } from '../../src/server/admin.js';
+import { resolveSecret } from '../../src/utils/secrets.js';
 import type { HostConfig } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
@@ -147,6 +148,21 @@ describe('git-backed projects (sdd_git)', () => {
 
     admin.syncGit(cfg, ADMIN, 'demo');
     expect(fs.existsSync(path.join(projectRoot(), 'COLLAB.md'))).toBe(true);
+  });
+
+  it('a per-project PAT is stored write-only under git-project:<id>, recorded as credentialRef, never in git.json', () => {
+    process.env.WAIRON_DATA_DIR = dataDir; // the secret store lives under the data dir
+    admin.enableGit(cfg, ADMIN, 'demo', remote, 'main', 'ghp_PROJECT_TOKEN');
+    const key = admin.projectGitCredentialKey('demo');
+
+    // Status + config record only the key NAME, never the raw PAT.
+    expect(admin.getGitBinding(cfg, ADMIN, 'demo').credentialRef).toBe(key);
+    const gitJson = fs.readFileSync(path.join(projectRoot(), '.wai', 'git.json'), 'utf8');
+    expect(gitJson).toContain(key);
+    expect(gitJson).not.toContain('ghp_PROJECT_TOKEN');
+
+    // The PAT resolves via the connection key (write-only secret store).
+    expect(resolveSecret(key)).toBe('ghp_PROJECT_TOKEN');
   });
 
   it('disable removes the git-backing config', () => {

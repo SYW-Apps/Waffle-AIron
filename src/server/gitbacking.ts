@@ -12,7 +12,7 @@ import {
   listProjectPlacements,
 } from './organization.js';
 import { listProjectRecords } from './projects.js';
-import { resolveSecret } from '../utils/secrets.js';
+import { resolveGitToken, setSecret } from '../utils/secrets.js';
 import type {
   AuditEvent,
   GitBackingBinding,
@@ -192,18 +192,26 @@ function git(args: string[], cwd: string): string {
   }).trim();
 }
 
-function authRemote(remote: string): string {
-  const token = resolveSecret('git-token');
+function authRemote(remote: string, credentialRef?: string): string {
+  const token = resolveGitToken(credentialRef);
   if (!token || !/^https:\/\//.test(remote)) return remote;
   return remote.replace(/^https:\/\//, `https://x-access-token:${token}@`);
 }
 
+/** The per-connection secret key for a backing binding: a stable, scope-derived
+ *  name so re-binding the same scope reuses (overwrites) the same secret. */
+export function backingCredentialKey(binding: Pick<GitBackingBinding, 'scopeKind' | 'scopeId'>): string {
+  return binding.scopeKind === 'unit' ? `git-backing:unit:${binding.scopeId}` : 'git-backing:instance';
+}
+
 /** Ensure a working copy of the backing repo exists under the workdir (clone on
- *  first use, fetch+checkout the branch afterwards) and return its path. */
-export function cloneOrOpen(remote: string, branch: string, workdir: string): string {
+ *  first use, fetch+checkout the branch afterwards) and return its path. The
+ *  optional credentialRef names this connection's own PAT (else the shared
+ *  git-token authenticates the clone). */
+export function cloneOrOpen(remote: string, branch: string, workdir: string, credentialRef?: string): string {
   if (!fs.existsSync(path.join(workdir, '.git'))) {
     fs.mkdirSync(workdir, { recursive: true });
-    git(['clone', '--branch', branch, authRemote(remote), '.'], workdir);
+    git(['clone', '--branch', branch, authRemote(remote, credentialRef), '.'], workdir);
     git(['config', 'user.name', process.env['WAIRON_GIT_NAME'] || 'wairon-bot'], workdir);
     git(['config', 'user.email', process.env['WAIRON_GIT_EMAIL'] || 'wairon-bot@localhost'], workdir);
   } else {
@@ -344,7 +352,12 @@ export function listBackingBindings(cfg: HostConfig, credential: string | null):
  * 'unit' scope resolves to an existing organization unit, upsert the binding
  * (one per scope), and audit at security level.
  */
-export function bindScope(cfg: HostConfig, credential: string | null, binding: GitBackingBinding): GitBackingBinding {
+export function bindScope(
+  cfg: HostConfig,
+  credential: string | null,
+  binding: GitBackingBinding,
+  pat?: string,
+): GitBackingBinding {
   const principal = requirePrincipal(cfg, credential);
   // The shape check precedes the unit lookup so a scope-less 'unit' binding
   // reports its actual defect (the registry re-validates on write).
@@ -355,7 +368,20 @@ export function bindScope(cfg: HostConfig, credential: string | null, binding: G
   if (binding.scopeKind === 'unit' && !getOrganizationUnit(cfg.dataDir, binding.scopeId ?? '')) {
     throw new Error(`Unknown organization unit "${binding.scopeId}".`);
   }
-  const stored = upsertBinding(cfg.dataDir, { ...binding, createdBy: principalSubject(principal) });
+  // A PAT supplied inline becomes THIS connection's own credential, stored under
+  // the stable scope-derived key (project:admin over the scope authorizes it).
+  // Stored before the first sync so authentication is available; a binding with
+  // no PAT falls back to the shared git-token.
+  let credentialRef = binding.credentialRef;
+  if (pat && pat.trim()) {
+    credentialRef = backingCredentialKey(binding);
+    setSecret(credentialRef, pat.trim());
+  }
+  const stored = upsertBinding(cfg.dataDir, {
+    ...binding,
+    ...(credentialRef ? { credentialRef } : {}),
+    createdBy: principalSubject(principal),
+  });
   tryAppendAudit(cfg, buildAuditEvent(principal, 'git.backing.bind', 'security', stored.id));
   return stored;
 }
@@ -378,7 +404,7 @@ export function unbindScope(cfg: HostConfig, credential: string | null, bindingI
  *  whether anything was published. */
 function runMirrorSync(cfg: HostConfig, binding: GitBackingBinding): boolean {
   const workdir = path.join(cfg.dataDir, 'git-backing', binding.id);
-  cloneOrOpen(binding.remote, binding.branch, workdir);
+  cloneOrOpen(binding.remote, binding.branch, workdir, binding.credentialRef);
 
   if (binding.scopeKind === 'unit') {
     // Every project placed in the unit's subtree mirrors as projects/<id>/.wai/.

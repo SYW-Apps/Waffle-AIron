@@ -231,13 +231,21 @@ function BackupsTab() {
   const [scopeId, setScopeId] = useState('');
   const [remote, setRemote] = useState('');
   const [branch, setBranch] = useState('main');
+  const [pat, setPat] = useState('');
 
   async function bind() {
-    await post('/web/admin/git-backing', { scopeKind, scopeId: scopeKind === 'instance' ? undefined : scopeId, remote, branch });
+    await post('/web/admin/git-backing', {
+      scopeKind,
+      scopeId: scopeKind === 'instance' ? undefined : scopeId,
+      remote,
+      branch,
+      pat: pat.trim() || undefined,
+    });
     toast.ok('Backup repo bound');
     setAdding(false);
     setRemote('');
     setScopeId('');
+    setPat('');
     bindings.reload();
   }
   async function sync(id: string) {
@@ -269,6 +277,12 @@ function BackupsTab() {
             columns={[
               { key: 'scope', header: 'Scope', cell: (b) => <code>{b.scopeKind}{b.scopeId ? `:${b.scopeId}` : ''}</code> },
               { key: 'remote', header: 'Remote', cell: (b) => <code className="subtle">{b.remote}</code> },
+              {
+                key: 'auth',
+                header: 'Auth',
+                cell: (b) =>
+                  b.credentialRef ? <Badge tone="ok">own PAT</Badge> : <Badge tone="neutral">shared token</Badge>,
+              },
               { key: 'sync', header: 'Last sync', cell: (b) => <span className="hint">{b.lastSyncAt ? new Date(b.lastSyncAt).toLocaleString() : 'never'}</span> },
               {
                 key: 'act',
@@ -312,6 +326,12 @@ function BackupsTab() {
             )}
             <Field label="Remote URL"><TextInput value={remote} onChange={setRemote} placeholder="https://github.com/org/backup.git" /></Field>
             <Field label="Branch"><TextInput value={branch} onChange={setBranch} /></Field>
+            <Field
+              label="Access token for this connection (optional)"
+              hint="A PAT for this repo's org/account. Leave blank to use the shared fallback token above. Stored write-only; never mirrored."
+            >
+              <TextInput type="password" value={pat} onChange={setPat} placeholder="github_pat_… / ghp_… / glpat-…" />
+            </Field>
           </div>
         </Modal>
       )}

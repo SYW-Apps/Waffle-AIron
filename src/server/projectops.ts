@@ -102,8 +102,15 @@ export function getGitBinding(cfg: HostConfig, credential: string | null, projec
   return admin.getGitBinding(cfg, credential, project);
 }
 
-export function enableGit(cfg: HostConfig, credential: string | null, project: string, remote: string, branch: string): HostedProjectRecord {
-  return admin.enableGit(cfg, credential, project, remote, branch);
+export function enableGit(
+  cfg: HostConfig,
+  credential: string | null,
+  project: string,
+  remote: string,
+  branch: string,
+  pat?: string,
+): HostedProjectRecord {
+  return admin.enableGit(cfg, credential, project, remote, branch, pat);
 }
 
 export function disableGit(cfg: HostConfig, credential: string | null, project: string): void {
@@ -128,8 +135,13 @@ export function listBackingBindings(cfg: HostConfig, credential: string | null):
   return gitbacking.listBackingBindings(cfg, credential);
 }
 
-export function bindBackingScope(cfg: HostConfig, credential: string | null, binding: GitBackingBinding): GitBackingBinding {
-  return gitbacking.bindScope(cfg, credential, binding);
+export function bindBackingScope(
+  cfg: HostConfig,
+  credential: string | null,
+  binding: GitBackingBinding,
+  pat?: string,
+): GitBackingBinding {
+  return gitbacking.bindScope(cfg, credential, binding, pat);
 }
 
 export function unbindBackingScope(cfg: HostConfig, credential: string | null, bindingId: string): void {

@@ -2980,7 +2980,8 @@ function opsGitStatus(cfg: HostConfig, sessionId: string, url: URL, res: ServerR
   sendJson(res, 200, projectops.getGitBinding(cfg, sessionId, q(url, 'projectId') ?? ''));
 }
 function opsGitBind(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(res, 200, projectops.enableGit(cfg, sessionId, String(body?.projectId ?? ''), String(body?.remote ?? ''), String(body?.branch ?? '')));
+  const pat = body?.pat ? String(body.pat) : undefined;
+  sendJson(res, 200, projectops.enableGit(cfg, sessionId, String(body?.projectId ?? ''), String(body?.remote ?? ''), String(body?.branch ?? ''), pat));
 }
 function opsGitUnbind(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
   projectops.disableGit(cfg, sessionId, String(body?.projectId ?? ''));
@@ -3017,7 +3018,12 @@ function opsListGitBacking(cfg: HostConfig, sessionId: string, res: ServerRespon
   sendJson(res, 200, { bindings: projectops.listBackingBindings(cfg, sessionId) });
 }
 function opsBindGitBacking(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(res, 200, projectops.bindBackingScope(cfg, sessionId, body as GitBackingBinding));
+  // Strip the inline PAT out of the binding shape — it is stored write-only in
+  // the secret store, NEVER persisted into the binding record.
+  const pat = body?.pat ? String(body.pat) : undefined;
+  const binding = { ...(body ?? {}) } as Record<string, unknown>;
+  delete binding.pat;
+  sendJson(res, 200, projectops.bindBackingScope(cfg, sessionId, binding as unknown as GitBackingBinding, pat));
 }
 function opsUnbindGitBacking(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
   projectops.unbindBackingScope(cfg, sessionId, String(body?.id ?? ''));

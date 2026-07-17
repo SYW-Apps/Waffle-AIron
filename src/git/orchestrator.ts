@@ -1,6 +1,6 @@
 import { readGitConfig, writeGitConfig, clearGitConfig } from './config.js';
 import * as adapter from './adapter.js';
-import type { GitBackingStatus, GitPublish } from './types.js';
+import type { GitBackingStatus, GitConfig, GitPublish } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Git Orchestrator (sdd_git)
@@ -18,13 +18,17 @@ const WORKING_BRANCH = 'wairon/work';
  *  repository, so the repo can be shared with the project's own codebase. */
 const DEFAULT_SCOPE = '.wai/';
 
-/** Clone the remote onto the isolated working branch and persist the config. */
-export function enable(remote: string, branch: string): void {
+/** Clone the remote onto the isolated working branch and persist the config. An
+ *  optional credentialRef names this connection's own PAT (else the shared
+ *  git-token authenticates the clone). */
+export function enable(remote: string, branch: string, credentialRef?: string): void {
   const defaultBranch = branch || 'main';
-  adapter.clone(remote, defaultBranch);
+  adapter.clone(remote, defaultBranch, credentialRef);
   adapter.ensureWorkingBranch(WORKING_BRANCH);
   adapter.excludeLocalFiles();
-  writeGitConfig({ enabled: true, remote, defaultBranch, workingBranch: WORKING_BRANCH });
+  const config: GitConfig = { enabled: true, remote, defaultBranch, workingBranch: WORKING_BRANCH };
+  if (credentialRef) config.credentialRef = credentialRef;
+  writeGitConfig(config);
 }
 
 export function disable(): void {
@@ -71,6 +75,7 @@ export function status(): GitBackingStatus {
   if (config.periodicSyncMinutes !== undefined) backing.periodicSyncMinutes = config.periodicSyncMinutes;
   if (config.skipIfClean !== undefined) backing.skipIfClean = config.skipIfClean;
   if (config.lastSyncAt !== undefined) backing.lastSyncAt = config.lastSyncAt;
+  if (config.credentialRef !== undefined) backing.credentialRef = config.credentialRef;
   return backing;
 }
 

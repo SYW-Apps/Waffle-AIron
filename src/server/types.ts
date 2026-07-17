@@ -518,6 +518,9 @@ export interface GitBackingBinding {
   periodicSyncMinutes?: number;
   /** The sweep skips the commit when the mirrored content is unchanged (default true). */
   skipIfClean?: boolean;
+  /** Secret-store key of this connection's own PAT (a distinct org/account per
+   *  binding); the binding resolves it first, then the shared `git-token`. */
+  credentialRef?: string;
   /** ISO-8601 timestamp of the last successful sync. */
   lastSyncAt?: string;
   createdAt: string;

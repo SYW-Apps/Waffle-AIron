@@ -11,6 +11,9 @@ export interface GitConfig {
   remote: string;
   defaultBranch: string;
   workingBranch: string;
+  /** Secret-store key of this connection's own PAT (falls back to the shared
+   *  `git-token` when absent). Set when the binding was given its own token. */
+  credentialRef?: string;
   /** Interval for the periodic .wai/-scoped backup sweep; absent disables
    *  periodic sync for this project. */
   periodicSyncMinutes?: number;
@@ -39,4 +42,6 @@ export interface GitBackingStatus {
   periodicSyncMinutes?: number;
   skipIfClean?: boolean;
   lastSyncAt?: string;
+  /** Secret-store key of this connection's own PAT, when it has one. */
+  credentialRef?: string;
 }

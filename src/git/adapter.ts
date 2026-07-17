@@ -2,7 +2,7 @@ import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getProjectRoot } from '../utils/fs.js';
-import { resolveSecret } from '../utils/secrets.js';
+import { resolveGitToken } from '../utils/secrets.js';
 
 // ---------------------------------------------------------------------------
 // Git Client Adapter (sdd_git)
@@ -29,16 +29,19 @@ function gitEmail(): string {
   return process.env['WAIRON_GIT_EMAIL'] || 'wairon-bot@localhost';
 }
 
-/** Inject the bot token into an https remote so fetch/push authenticate. */
-function authRemote(remote: string): string {
-  const token = resolveSecret('git-token');
+/** Inject the connection's token into an https remote so fetch/push authenticate.
+ *  Resolves the connection's own credentialRef first, then the shared git-token. */
+function authRemote(remote: string, credentialRef?: string): string {
+  const token = resolveGitToken(credentialRef);
   if (!token || !/^https:\/\//.test(remote)) return remote;
   return remote.replace(/^https:\/\//, `https://x-access-token:${token}@`);
 }
 
-/** Clone the remote (at branch) into the bound (empty) project directory. */
-export function clone(remote: string, branch: string): void {
-  git(['clone', '--branch', branch, authRemote(remote), '.']);
+/** Clone the remote (at branch) into the bound (empty) project directory. The
+ *  token is injected into the clone URL, so `origin` carries it for later
+ *  fetch/push (container-local .git/config only, never the repo). */
+export function clone(remote: string, branch: string, credentialRef?: string): void {
+  git(['clone', '--branch', branch, authRemote(remote, credentialRef), '.']);
   git(['config', 'user.name', gitName()]);
   git(['config', 'user.email', gitEmail()]);
 }

@@ -255,11 +255,13 @@ function GitTab({ projectId }: { projectId: string }) {
   const status = useAsync<GitBackingStatus>(() => get(`/web/projects/git?projectId=${encodeURIComponent(projectId)}`), [projectId]);
   const [remote, setRemote] = useState('');
   const [branch, setBranch] = useState('main');
+  const [pat, setPat] = useState('');
   const [message, setMessage] = useState('');
 
   async function bind() {
-    await post('/web/projects/git', { projectId, remote, branch });
+    await post('/web/projects/git', { projectId, remote, branch, pat: pat.trim() || undefined });
     toast.ok('Git backing enabled');
+    setPat('');
     status.reload();
   }
   async function disconnect() {
@@ -283,7 +285,8 @@ function GitTab({ projectId }: { projectId: string }) {
           {s.enabled ? (
             <div className="panel">
               <h4>
-                Backing repository <Badge tone="ok">enabled</Badge> {s.dirty && <Badge tone="warn">.wai/ dirty</Badge>}
+                Backing repository <Badge tone="ok">enabled</Badge> {s.dirty && <Badge tone="warn">.wai/ dirty</Badge>}{' '}
+                {s.credentialRef ? <Badge tone="ok">own PAT</Badge> : <Badge tone="neutral">shared token</Badge>}
               </h4>
               <dl className="kv">
                 <dt>Remote</dt>
@@ -327,6 +330,12 @@ function GitTab({ projectId }: { projectId: string }) {
                 </Field>
                 <Field label="Branch">
                   <TextInput value={branch} onChange={setBranch} placeholder="main" />
+                </Field>
+                <Field
+                  label="Access token (optional)"
+                  hint="A PAT for this repo's org/account. Leave blank to use the shared fallback token. Stored write-only."
+                >
+                  <TextInput type="password" value={pat} onChange={setPat} placeholder="github_pat_… / glpat-…" />
                 </Field>
                 <div className="row-form-action">
                   <AsyncButton variant="primary" action={bind} onError={toast.bad} disabled={!remote}>

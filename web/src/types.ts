@@ -128,6 +128,8 @@ export interface GitBackingStatus {
   periodicSyncMinutes?: number;
   skipIfClean?: boolean;
   lastSyncAt?: string;
+  /** Secret-store key of this connection's own PAT, when it has one. */
+  credentialRef?: string;
 }
 
 // ── Identity providers / tokens / approvals / audit / instance policy ────────
@@ -216,6 +218,8 @@ export interface GitBackingBinding {
   remote: string;
   branch?: string;
   lastSyncAt?: string;
+  /** Secret-store key of this connection's own PAT, when it has one. */
+  credentialRef?: string;
 }
 
 /** The best human label for a user or subject: name, then email, then a short id. */

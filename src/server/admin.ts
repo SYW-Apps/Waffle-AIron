@@ -267,7 +267,20 @@ export function executeApprovedLock(cfg: HostConfig, projectId: string): LockRec
 
 /** Bind a fresh project to its REAL repository (clones the remote onto an
  *  isolated working branch). Binding is project administration. */
-export function enableGit(cfg: HostConfig, credential: string | null, project: string, remote: string, branch: string): HostedProjectRecord {
+/** The per-project git connection's own PAT lives under this secret key; the
+ *  binding resolves it first, then the shared instance-wide `git-token`. */
+export function projectGitCredentialKey(project: string): string {
+  return `git-project:${project}`;
+}
+
+export function enableGit(
+  cfg: HostConfig,
+  credential: string | null,
+  project: string,
+  remote: string,
+  branch: string,
+  pat?: string,
+): HostedProjectRecord {
   const principal = requirePrincipal(cfg, credential);
   if (authorize(cfg.dataDir, principal, 'project:admin', 'project', project).value !== 'yes') {
     throw new AdminAuthError('Forbidden — binding a repository requires project:admin over the project');
@@ -275,8 +288,17 @@ export function enableGit(cfg: HostConfig, credential: string | null, project: s
   if (existingProjectRoot(cfg.dataDir, project)) {
     throw new Error(`Project "${project}" already exists; destroy it first to git-enable a fresh clone.`);
   }
+  // A PAT supplied inline becomes this connection's own credential (project:admin
+  // over the project authorizes storing its scoped git secret). Stored BEFORE the
+  // clone so authentication is available; a connection without a PAT falls back
+  // to the shared git-token.
+  let credentialRef: string | undefined;
+  if (pat && pat.trim()) {
+    credentialRef = projectGitCredentialKey(project);
+    storeSecret(credentialRef, pat.trim());
+  }
   const rec = createProjectRecord(cfg.dataDir, project); // empty dir + record (no native provisioning)
-  runWithProjectRoot(rec.rootPath, () => hostGit.enable(remote, branch || 'main'));
+  runWithProjectRoot(rec.rootPath, () => hostGit.enable(remote, branch || 'main', credentialRef));
   return rec;
 }
 
