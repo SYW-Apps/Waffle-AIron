@@ -16,6 +16,7 @@ import {
   useAsync,
   useToast,
 } from '../ui';
+import { GitCredentialCard } from '../components/GitCredentialCard';
 import type { GitBackingStatus, PackDescriptor, PolicyEvaluationResult, ProducerConfig } from '../types';
 
 // ── Packs ────────────────────────────────────────────────────────────────────
@@ -254,7 +255,6 @@ function GitTab({ projectId }: { projectId: string }) {
   const status = useAsync<GitBackingStatus>(() => get(`/web/projects/git?projectId=${encodeURIComponent(projectId)}`), [projectId]);
   const [remote, setRemote] = useState('');
   const [branch, setBranch] = useState('main');
-  const [pat, setPat] = useState('');
   const [message, setMessage] = useState('');
 
   async function bind() {
@@ -273,34 +273,12 @@ function GitTab({ projectId }: { projectId: string }) {
     setMessage('');
     status.reload();
   }
-  async function setToken() {
-    await post('/web/admin/secrets', { key: 'git-token', value: pat });
-    toast.ok('Access token saved');
-    setPat('');
-  }
 
   return (
     <AsyncView state={status}>
       {(s) => (
         <div className="stack-lg">
-          <div className="panel">
-            <h4>Access token</h4>
-            <p className="hint">
-              For HTTPS remotes, wairon injects an instance-wide bot token (<code>git-token</code>) as
-              <code> x-access-token</code>. Set it once here (requires instance admin) — without it, clones fail with
-              “could not read Username”. The token is write-only and never mirrored into any backing repo.
-            </p>
-            <div className="row-form">
-              <Field label="Personal access token">
-                <TextInput type="password" value={pat} onChange={setPat} placeholder="ghp_… / glpat-…" />
-              </Field>
-              <div className="row-form-action">
-                <AsyncButton variant="primary" action={setToken} onError={toast.bad} disabled={!pat}>
-                  Save token
-                </AsyncButton>
-              </div>
-            </div>
-          </div>
+          <GitCredentialCard />
 
           {s.enabled ? (
             <div className="panel">

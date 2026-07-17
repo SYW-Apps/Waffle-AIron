@@ -15,6 +15,7 @@ import {
   useAsync,
   useToast,
 } from '../ui';
+import { GitCredentialCard } from '../components/GitCredentialCard';
 import { UnitSelect } from '../components/UnitSelect';
 import type {
   GitBackingBinding,
@@ -258,6 +259,7 @@ function BackupsTab() {
           + Bind backup repo
         </Button>
       </div>
+      <GitCredentialCard />
       <AsyncView state={bindings}>
         {(d) => (
           <DataTable<GitBackingBinding>
