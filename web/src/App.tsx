@@ -5,6 +5,7 @@ import { ToastProvider } from './ui';
 import { HeaderMenu } from './HeaderMenu';
 import { Login } from './views/Login';
 import { Home } from './views/Home';
+import { Environment } from './views/Environment';
 import { Users } from './views/Users';
 import { Roles } from './views/Roles';
 import { Units } from './views/Units';
@@ -26,6 +27,7 @@ interface NavItem {
 
 const MAIN_NAV: NavItem[] = [
   { to: '/', label: 'Canvas', icon: '◈', end: true },
+  { to: '/environment', label: 'Environment', icon: '⬡' },
   { to: '/projects', label: 'Projects', icon: '▦' },
   { to: '/agents', label: 'Agents', icon: '⌁' },
 ];
@@ -112,6 +114,7 @@ function Shell() {
         <main className="view">
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/environment" element={<Environment />} />
             <Route path="/projects" element={<Projects />} />
             <Route path="/projects/:projectId" element={<ProjectOps />} />
             <Route path="/agents" element={<Tokens />} />

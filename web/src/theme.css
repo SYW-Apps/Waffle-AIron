@@ -486,6 +486,10 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
 /* Shadow-root host for the in-React classic canvas engine (web/src/canvas). */
 .canvas-host { flex: 1; min-height: 0; width: 100%; display: flex; }
 
+/* Environment (org hierarchy) graph view. */
+.env-view { display: flex; flex-direction: column; height: 100%; }
+.env-canvas { flex: 1; min-height: 0; width: 100%; background: var(--bg); }
+
 /* ── Boot / login ────────────────────────────────────────────────────────── */
 .boot, .login-wrap {
   height: 100%;
