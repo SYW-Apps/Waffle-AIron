@@ -29,6 +29,7 @@ import {
   runServe,
   runDev,
   runHostProject,
+  runHostDemo,
   runHostUnit,
   runHostPermission,
   runHostDoctor,
@@ -468,6 +469,17 @@ hostCmd
   .option('--data-dir <path>', 'data root (default WAIRON_DATA_DIR or ~/.wairon/data)')
   .action(async (action: string, opts) => {
     await runHostProject(action, { id: opts.id, unit: opts.unit, dataDir: opts.dataDir });
+  });
+
+hostCmd
+  .command('demo')
+  .description('provision a project seeded with a rich example spec tree, so the canvas has content to render')
+  .option('--id <id>', 'project id', 'demo')
+  .option('--unit <unitId>', 'owner unit id (created if absent)', 'demo')
+  .option('--force', 'destroy and reseed the project if it already exists')
+  .option('--data-dir <path>', 'data root (default WAIRON_DATA_DIR or ~/.wairon/data)')
+  .action(async (opts) => {
+    await runHostDemo({ id: opts.id, unit: opts.unit, force: opts.force, dataDir: opts.dataDir });
   });
 
 hostCmd

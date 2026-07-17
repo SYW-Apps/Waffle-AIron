@@ -14,7 +14,10 @@ import { upsertUnit as landscapeUpsertUnit } from '../server/landscape.js';
 import { migratePermissionModel } from '../server/migration.js';
 import { AdminAuthError, LockValidationError } from '../server/admin.js';
 import { startHostServer } from '../server/http.js';
-import { registerLocalDevProject } from '../server/projects.js';
+import { registerLocalDevProject, existingProjectRoot } from '../server/projects.js';
+import { runWithProjectRoot } from '../utils/fs.js';
+import { buildCanvasModel } from '../core/canvas.js';
+import { seedDemoTree } from '../core/demo-seed.js';
 import { upsertIdentityProviderRecord } from '../server/policy.js';
 import { setSecret } from '../utils/secrets.js';
 import type {
@@ -69,6 +72,7 @@ export interface HostOptions {
   name?: string;
   file?: string;
   open?: boolean;
+  force?: boolean;
 }
 
 function resolveHostConfig(options: HostOptions): HostConfig {
@@ -371,6 +375,71 @@ export async function runHostProject(action: string, options: HostOptions = {}):
       default:
         throw new WaironError(`Unknown project action "${action}" (create | list | destroy).`);
     }
+  } catch (e) {
+    throw mapAdminError(e);
+  }
+}
+
+// ── wairon host demo ──────────────────────────────────────────────────────────
+
+/**
+ * Provision a project and seed it with the rich "ShopFlow" example spec tree, so
+ * the architecture canvas renders substantial content across all views. Every
+ * project is placed in an organization unit at creation (permission model), so
+ * this first ensures an owner unit exists (idempotent upsert; defaults to a root
+ * unit named after `--unit`, default "demo"). `--force` destroys and reseeds an
+ * existing project instead of erroring.
+ */
+export async function runHostDemo(options: HostOptions = {}): Promise<void> {
+  const cfg = resolveHostConfig(options);
+  const cred = masterCredential();
+  const id = options.id || 'demo';
+  const unitId = options.unit || 'demo';
+  try {
+    // Ensure the owner unit exists (idempotent — updates it if already present).
+    landscapeUpsertUnit(cfg, cred, {
+      id: unitId,
+      name: unitId,
+      slug: unitId,
+      kind: 'team',
+      status: 'active',
+      createdAt: '',
+      createdBy: { userId: 'master', kind: 'service', issuer: 'local' },
+    });
+
+    const existing = existingProjectRoot(cfg.dataDir, id);
+    if (existing && !options.force) {
+      throw new WaironError(
+        `Project "${id}" already exists at ${existing}. Re-run with --force to destroy and reseed it.`,
+      );
+    }
+    if (existing) admin.destroyProject(cfg, cred, id);
+    const rec = admin.createProject(cfg, cred, id, unitId);
+
+    const summary = runWithProjectRoot(rec.rootPath, () => {
+      seedDemoTree();
+      const model = buildCanvasModel();
+      return {
+        subsystems: model.subsystems.length,
+        components: model.components.length,
+        edges: model.edges.length,
+        crossEdges: model.edges.filter((e) => e.cross).length,
+        types: model.types.length,
+        typeEdges: model.typeEdges.length,
+        databases: model.system.databases?.length ?? 0,
+        narratives: model.components.reduce((n, c) => n + c.narratives.length, 0),
+      };
+    });
+
+    logger.success(`Seeded demo project "${rec.id}" at ${chalk.gray(rec.rootPath)}`);
+    logger.info(
+      `  ${summary.subsystems} subsystems · ${summary.components} components · ${summary.edges} dependency edges (${summary.crossEdges} cross-subsystem)`,
+    );
+    logger.info(
+      `  ${summary.types} types · ${summary.typeEdges} ERD edges · ${summary.databases} databases · ${summary.narratives} narratives`,
+    );
+    logger.blank();
+    logger.info(`Explore it in the web UI canvas (Components / Types / Databases / Flow).`);
   } catch (e) {
     throw mapAdminError(e);
   }
