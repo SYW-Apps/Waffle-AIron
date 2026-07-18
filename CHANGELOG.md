@@ -11,11 +11,27 @@ v4.1.0).
 - **Symbolic step labels**: a narrative step may declare a `label` anchor, and
   every jump-by-number flow field has a `*Label` twin (`toLabel`,
   `onTrueLabel`, `onFalseLabel`, `defaultLabel`, `endLabel`, `finallyLabel`,
-  plus `label` in `cases`/`catches` entries) resolved to step numbers at
-  write time — the stored spec keeps plain numbers. Guards LLM step-counting
-  off-by-ones: an unknown/duplicate label REJECTS the write, and an
-  `sdd_update_spec` delta can reference labels anchored on pre-existing steps
-  (resolution runs post-merge, against the final numbering).
+  plus `label` in `cases`/`catches`/`branches` entries) resolved to step
+  numbers at write time — the stored spec keeps plain numbers. Guards LLM
+  step-counting off-by-ones: an unknown/duplicate label REJECTS the write,
+  and an `sdd_update_spec` delta can reference labels anchored on
+  pre-existing steps (resolution runs post-merge, against the final
+  numbering).
+- **`parallel` fan-out/join step + `detach` call flag** (flow algebra
+  extension sanctioned by the technology-boundaries design record §4; the
+  model review's GPU/robotics/backend convergence). A `parallel` header owns
+  body `next..endStep`, covered by ≥2 contiguous ordered arms
+  (`branches: [{step}]`); the join is implicit after `endStep` once ALL arms
+  complete — `stepGraph()` routes an arm's last step to the join, never into
+  its neighbor (nesting handled). `detach: true` on a call/dispatch step is
+  fire-and-forget. Soundness lives in the narrative-flow rule (arm coverage,
+  ordering, region overlap, dangling entries); `updateSpec` relocates
+  `branches[].step` on insert/delete and refuses to delete an arm entry
+  target; language/platform packs gate both via `unsupportedFlow`
+  (`parallel:`, `detach:`). Renderers currently degrade to sequential
+  display — native arm rendering is the canvas engine's follow-up.
+  `UNCONDITIONAL_CALL_CYCLE` treats arms as alternatives for now
+  (under-reports across parallel regions — conservative direction).
 
 ### Extension packs: pack-provided AI skills + versioned pattern references (new)
 

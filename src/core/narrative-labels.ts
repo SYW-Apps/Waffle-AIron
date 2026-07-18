@@ -61,7 +61,7 @@ export function resolveNarrativeLabels(methodName: string, steps: Record<string,
       }
       delete s[labelField];
     }
-    for (const key of ['cases', 'catches']) {
+    for (const key of ['cases', 'catches', 'branches']) {
       const arr = s[key];
       if (!Array.isArray(arr)) continue;
       for (const entry of arr) {

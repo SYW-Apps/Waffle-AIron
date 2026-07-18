@@ -111,7 +111,10 @@ its core.
 - Skill/template re-skinning per profile (generated agents speaking
   "scenarios and modules" instead of "source files") — profiles v2
   territory, lands with Appenser's actual pack.
-- Async/event step kinds (`dispatchAsync`, `waitForResponse`, `parallel`) —
-  enter core when a real narrative needs them.
+- Async/event step kinds (`dispatchAsync`, `waitForResponse`) — enter core
+  when a real narrative needs them. (`parallel` fan-out/join and the `detach`
+  call flag entered core 2026-07-19 per §4 — the model review's GPU/robotics/
+  backend convergence was the trigger; renderers degrade gracefully until the
+  canvas engine renders arms natively.)
 - Field-level FK targets, dataflow modeling, declarative custom rules beyond
   profile/language data.

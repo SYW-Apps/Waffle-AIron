@@ -1805,7 +1805,7 @@ export class SpecWorkspace {
     // assembler relocating addresses: inserts/deletes shift every jump field
     // in the SAME narrative that points at or beyond the mutation point.
     const JUMP_FIELDS = ['onTrueStep', 'onFalseStep', 'defaultStep', 'endStep', 'finallyStep', 'toStep'] as const;
-    const JUMP_LIST_FIELDS = ['cases', 'catches'] as const;
+    const JUMP_LIST_FIELDS = ['cases', 'catches', 'branches'] as const;
 
     // captureInsertTarget: ENTRY jumps pointing exactly at the insertion point
     // stay put, so they land on the inserted step instead of following the
