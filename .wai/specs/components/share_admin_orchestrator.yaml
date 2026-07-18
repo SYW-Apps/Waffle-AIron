@@ -19,6 +19,7 @@ dependsOn:
   - share_access_repository
   - share_snapshot_specialist
   - audit_repository
+  - credential_registry
 status: complete
 createdAt: '2026-07-17T22:09:46.658Z'
-updatedAt: '2026-07-18T09:36:29.295Z'
+updatedAt: '2026-07-18T13:17:00.449Z'

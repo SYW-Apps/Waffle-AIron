@@ -625,6 +625,9 @@ export interface SharedViewResult {
   link?: ShareLink;
   /** Serialized snapshot canvas model, on success. */
   model?: string;
+  /** Captured self-contained view HTML, on success — served by the portal so it
+   *  never reaches into the snapshot repository itself. */
+  html?: string;
   allowDownloadHtml?: boolean;
   allowDownloadOpenapi?: boolean;
 }
@@ -925,6 +928,9 @@ export interface HostedProjectRecord {
   rootPath: string;
   status: 'active' | 'disabled';
   createdAt: string;
+  /** Derived (not persisted on the record): the project's home unit — its
+   *  'owner' placement — populated when the record is listed for display. */
+  unitId?: string;
 }
 
 /** Runtime exposure posture for a hosted instance: which control-plane surfaces

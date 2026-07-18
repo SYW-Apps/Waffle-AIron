@@ -1,6 +1,7 @@
 import { authenticateSession } from './auth.js';
 import { visibleScopes, actionableProjectIds, isInstanceAdmin } from './authorization.js';
 import { listProjectRecords } from './projects.js';
+import { listProjectPlacements } from './organization.js';
 import {
   lockProject as adminLockProject,
   promoteProject as adminPromoteProject,
@@ -57,18 +58,27 @@ export function listProjects(cfg: HostConfig, sessionId: string): HostedProjectR
   // step 2: list all hosted project records.
   const records = listProjectRecords(cfg.dataDir);
 
-  // step 3: an instance-admin sees the whole instance, including projects not yet
-  // placed in any organization unit (which no unit-scoped permission can reach).
-  if (isInstanceAdmin(principal)) return records;
+  // step 3: annotate each record with its home unit — its 'owner' placement — so
+  // the UI shows where a project lives without a second round-trip.
+  const ownerUnit = new Map<string, string>();
+  for (const p of listProjectPlacements(cfg.dataDir)) {
+    if (p.role === 'owner' && !ownerUnit.has(p.projectId)) ownerUnit.set(p.projectId, p.unitId);
+  }
+  const enrich = (rs: HostedProjectRecord[]): HostedProjectRecord[] =>
+    rs.map((r) => ({ ...r, unitId: ownerUnit.get(r.id) }));
 
-  // step 4: otherwise keep the projects the caller can act on in ANY way —
+  // step 4: an instance-admin sees the whole instance, including projects not yet
+  // placed in any organization unit (which no unit-scoped permission can reach).
+  if (isInstanceAdmin(principal)) return enrich(records);
+
+  // step 5: otherwise keep the projects the caller can act on in ANY way —
   // read, write, or admin (the consumer-side capability union).
   const inScope = new Set<string>([
     ...actionableProjectIds(visibleScopes(cfg.dataDir, principal, 'project:read')),
     ...actionableProjectIds(visibleScopes(cfg.dataDir, principal, 'project:write')),
     ...actionableProjectIds(visibleScopes(cfg.dataDir, principal, 'project:admin')),
   ]);
-  return records.filter((r) => inScope.has(r.id));
+  return enrich(records.filter((r) => inScope.has(r.id)));
 }
 
 /**

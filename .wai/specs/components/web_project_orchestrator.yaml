@@ -19,6 +19,7 @@ dependsOn:
   - auth_specialist
   - authorization_specialist
   - project_registry
+  - organization_repository
 status: complete
 createdAt: '2026-07-13T20:36:24.912Z'
-updatedAt: '2026-07-16T15:31:26.755Z'
+updatedAt: '2026-07-18T13:17:04.451Z'

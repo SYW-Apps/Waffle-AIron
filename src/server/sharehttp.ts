@@ -1,6 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { resolveSharedView, downloadArtifact } from './shareaccess.js';
-import { getSnapshotArtifact } from './sharesnapshots.js';
 import { swaggerUiPage } from './swagger.js';
 import type { HostConfig, ShareLink, ShareRequestMeta } from './types.js';
 
@@ -53,12 +52,10 @@ function notFoundPage(res: ServerResponse): void {
  *  canvas HTML). */
 export function serveSharedView(cfg: HostConfig, token: string, req: IncomingMessage, res: ServerResponse): void {
   const result = resolveSharedView(cfg, token, shareRequestMeta(req));
-  if (!result.found || !result.link) return notFoundPage(res);
-  const html = getSnapshotArtifact(cfg.dataDir, result.link.snapshotId, 'html');
-  if (html === null) return notFoundPage(res);
+  if (!result.found || !result.link || result.html === undefined) return notFoundPage(res);
   harden(res, result.link, 'text/html; charset=utf-8');
   res.statusCode = 200;
-  res.end(html);
+  res.end(result.html);
 }
 
 /** GET /share/:token/model — the snapshot canvas model JSON + download flags. */

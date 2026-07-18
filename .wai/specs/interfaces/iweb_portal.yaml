@@ -844,6 +844,76 @@ methods:
       transport: HTTP
       method: POST
       path: /web/admin/git-backing/sync
+  - name: adminCreateShareLink
+    description: >-
+      Create a share link (mint the token once); forwards the session to
+      share_admin_orchestrator.createShareLink, which enforces share:create on the target scope.
+    signature: 'adminCreateShareLink(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/share
+  - name: adminListShareLinks
+    description: List a project's share links; forwards to share_admin_orchestrator.listShareLinks.
+    signature: 'adminListShareLinks(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/admin/share
+  - name: adminRefreshShareSnapshot
+    description: Re-capture a link's immutable snapshot; forwards to share_admin_orchestrator.refreshSnapshot.
+    signature: 'adminRefreshShareSnapshot(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/share/refresh
+  - name: adminUpdateShareLink
+    description: >-
+      Update a link's mutable settings (enabled / expiry / download permissions / embedding
+      allowlist); forwards to share_admin_orchestrator.updateShareLink.
+    signature: 'adminUpdateShareLink(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/share/update
+  - name: adminRemoveShareLink
+    description: Revoke a share link; forwards to share_admin_orchestrator.removeShareLink.
+    signature: 'adminRemoveShareLink(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/share/remove
+  - name: adminGetShareAccessLog
+    description: Read a link's access log; forwards to share_admin_orchestrator.getShareAccessLog.
+    signature: 'adminGetShareAccessLog(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/admin/share/access
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-07-16T15:41:26.600Z'
+updatedAt: '2026-07-18T13:22:16.983Z'

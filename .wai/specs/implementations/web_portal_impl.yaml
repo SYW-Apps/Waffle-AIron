@@ -612,7 +612,67 @@ methods:
         targetMethod: syncBackingScope
     detail: calls-only
     symbol: opsSyncGitBacking
+  - name: adminCreateShareLink
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse the ShareLinkInput from the body, resolve the session cookie, and forward to the
+          share admin orchestrator (which enforces share:create).
+        type: call
+        targetComponent: share_admin_orchestrator
+        targetMethod: createShareLink
+    detail: calls-only
+  - name: adminListShareLinks
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read projectId from the query, resolve the session cookie, and forward to the share admin
+          orchestrator.
+        type: call
+        targetComponent: share_admin_orchestrator
+        targetMethod: listShareLinks
+    detail: calls-only
+  - name: adminRefreshShareSnapshot
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse { linkId } from the body, resolve the session cookie, and forward to the share admin
+          orchestrator.
+        type: call
+        targetComponent: share_admin_orchestrator
+        targetMethod: refreshSnapshot
+    detail: calls-only
+  - name: adminUpdateShareLink
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse { linkId, changes } from the body, resolve the session cookie, and forward to the
+          share admin orchestrator.
+        type: call
+        targetComponent: share_admin_orchestrator
+        targetMethod: updateShareLink
+    detail: calls-only
+  - name: adminRemoveShareLink
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse { linkId } from the body, resolve the session cookie, and forward to the share admin
+          orchestrator.
+        type: call
+        targetComponent: share_admin_orchestrator
+        targetMethod: removeShareLink
+    detail: calls-only
+  - name: adminGetShareAccessLog
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read { linkId, limit } from the query, resolve the session cookie, and forward to the
+          share admin orchestrator.
+        type: call
+        targetComponent: share_admin_orchestrator
+        targetMethod: getShareAccessLog
+    detail: calls-only
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-07-16T17:43:00.336Z'
+updatedAt: '2026-07-18T13:22:24.305Z'

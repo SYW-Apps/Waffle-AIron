@@ -30,8 +30,7 @@ import {
   listWebSessionsBySubject,
 } from './websessions.js';
 import { resolveProjectRoot } from './projects.js';
-import * as shareadmin from './shareadminhttp.js';
-import { listProjectPlacements } from './organization.js';
+import * as shareadmin from './shareadmin.js';
 import { runWithProjectRoot } from '../utils/fs.js';
 import { hostCore, hostSurfaces, validateProjectAsComplete } from './adapters.js';
 import { swaggerUiPage } from './swagger.js';
@@ -54,6 +53,8 @@ import type {
   ProjectProfileSelection,
   Role,
   ScopeKind,
+  ShareLinkInput,
+  ShareLinkUpdate,
   UnitDisposition,
   WebContext,
   WebGraphModel,
@@ -2743,6 +2744,41 @@ function adminSetUserStatus(cfg: HostConfig, sessionId: string, body: Body, res:
   sendJson(res, 200, webadmin.setUserStatus(cfg, sessionId, String(body?.userId ?? ''), String(body?.status ?? '')));
 }
 
+// Share links (owner-side; gated on share:create). Each forwards straight to the
+// share admin orchestrator — the same portal→orchestrator shape as every other
+// /web/admin route — passing the ws_ session as the credential.
+/** Create a share link (mint the token once); forwards to share_admin_orchestrator.createShareLink. */
+function adminCreateShareLink(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 201, shareadmin.createShareLink(cfg, sessionId, (body ?? {}) as unknown as ShareLinkInput));
+}
+
+/** List a project's share links; forwards to share_admin_orchestrator.listShareLinks. */
+function adminListShareLinks(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  sendJson(res, 200, { links: shareadmin.listShareLinks(cfg, sessionId, url.searchParams.get('projectId') ?? '') });
+}
+
+/** Re-capture a link's immutable snapshot; forwards to share_admin_orchestrator.refreshSnapshot. */
+function adminRefreshShareSnapshot(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, shareadmin.refreshSnapshot(cfg, sessionId, String(body?.linkId ?? '')));
+}
+
+/** Update a link's mutable settings; forwards to share_admin_orchestrator.updateShareLink. */
+function adminUpdateShareLink(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, shareadmin.updateShareLink(cfg, sessionId, String(body?.linkId ?? ''), (body?.changes ?? {}) as ShareLinkUpdate));
+}
+
+/** Revoke a share link; forwards to share_admin_orchestrator.removeShareLink. */
+function adminRemoveShareLink(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  shareadmin.removeShareLink(cfg, sessionId, String(body?.linkId ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+
+/** Read a link's access log; forwards to share_admin_orchestrator.getShareAccessLog. */
+function adminGetShareAccessLog(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  const limit = Number(url.searchParams.get('limit') ?? '100') || 100;
+  sendJson(res, 200, { entries: shareadmin.getShareAccessLog(cfg, sessionId, url.searchParams.get('linkId') ?? '', limit) });
+}
+
 /** List identity-provider (SSO) configurations; forwards to web_admin_orchestrator.listIdentityProviders. */
 function adminListProviders(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
   sendJson(res, 200, { providers: webadmin.listIdentityProviders(cfg, sessionId) });
@@ -2893,18 +2929,10 @@ function adminRemoveAssignment(cfg: HostConfig, sessionId: string, body: Body, r
 // UNCHANGED (a caller lacking the grant is refused with AdminAuthError → 403).
 // Cookie-authenticated POSTs are CSRF-gated in http.ts (routeData) like /web/logout.
 
-/** List the projects the caller can manage; forwards to web_project_orchestrator.listProjects. */
+/** List the projects the caller can manage, each annotated with its home unit;
+ *  forwards to web_project_orchestrator.listProjects. */
 function projectList(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
-  const records = webproject.listProjects(cfg, sessionId);
-  // The project record itself carries no unit — a project's home unit is its
-  // 'owner' placement. Enrich each record with it so the UI can show where a
-  // project lives (only for projects the caller already sees).
-  const ownerUnit = new Map<string, string>();
-  for (const p of listProjectPlacements(cfg.dataDir)) {
-    if (p.role === 'owner' && !ownerUnit.has(p.projectId)) ownerUnit.set(p.projectId, p.unitId);
-  }
-  const enriched = records.map((r) => ({ ...r, unitId: ownerUnit.get(r.id) }));
-  sendJson(res, 200, { projects: enriched });
+  sendJson(res, 200, { projects: webproject.listProjects(cfg, sessionId) });
 }
 
 /** Create a project placed in the REQUIRED owner unit, optionally with a
@@ -3512,29 +3540,27 @@ export async function handleWebRequest(
       // ── Share links (owner-side; gated on share:create) ───────────────────
       // POST /web/admin/share { ...ShareLinkInput } — create a link (token once).
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'share') {
-        return sendJson(res, 201, shareadmin.postCreate(cfg, sessionId, body));
+        return adminCreateShareLink(cfg, sessionId, body, res);
       }
       // GET /web/admin/share?projectId= — a project's share links.
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'share') {
-        return sendJson(res, 200, { links: shareadmin.getList(cfg, sessionId, q(url, 'projectId') ?? '') });
+        return adminListShareLinks(cfg, sessionId, url, res);
       }
       // POST /web/admin/share/refresh { linkId } — re-capture the snapshot.
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'share' && parts[3] === 'refresh') {
-        return sendJson(res, 200, shareadmin.postRefresh(cfg, sessionId, body));
+        return adminRefreshShareSnapshot(cfg, sessionId, body, res);
       }
       // POST /web/admin/share/update { linkId, changes } — mutable settings.
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'share' && parts[3] === 'update') {
-        return sendJson(res, 200, shareadmin.postUpdate(cfg, sessionId, body));
+        return adminUpdateShareLink(cfg, sessionId, body, res);
       }
       // POST /web/admin/share/remove { linkId } — revoke.
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'share' && parts[3] === 'remove') {
-        shareadmin.postRemove(cfg, sessionId, body);
-        return sendJson(res, 200, { ok: true });
+        return adminRemoveShareLink(cfg, sessionId, body, res);
       }
       // GET /web/admin/share/access?linkId=&limit= — the link's access log.
       if (req.method === 'GET' && parts.length === 4 && parts[2] === 'share' && parts[3] === 'access') {
-        const limit = Number(q(url, 'limit') ?? '100') || 100;
-        return sendJson(res, 200, { entries: shareadmin.getAccessLog(cfg, sessionId, q(url, 'linkId') ?? '', limit) });
+        return adminGetShareAccessLog(cfg, sessionId, url, res);
       }
 
       // ── Existing scoped control-plane reads (unchanged) ───────────────────

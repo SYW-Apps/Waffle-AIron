@@ -63,6 +63,7 @@ export function resolveSharedView(cfg: HostConfig, token: string, meta: ShareReq
     outcome: 'served',
     link: check.link,
     ...(snapshot?.canvasModel ? { model: snapshot.canvasModel } : {}),
+    ...(snapshot?.html ? { html: snapshot.html } : {}),
     allowDownloadHtml: check.link.allowDownloadHtml,
     allowDownloadOpenapi: check.link.allowDownloadOpenapi,
   };

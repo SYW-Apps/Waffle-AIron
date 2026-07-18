@@ -13,6 +13,7 @@ owns: []
 dependsOn:
   - host_core_adapter
   - host_surfaces_adapter
+  - project_registry
 status: complete
 createdAt: '2026-07-17T22:09:44.091Z'
-updatedAt: '2026-07-18T09:36:20.000Z'
+updatedAt: '2026-07-18T13:17:01.452Z'

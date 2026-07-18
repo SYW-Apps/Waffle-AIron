@@ -13,8 +13,9 @@ componentType: Portal
 owns: []
 dependsOn:
   - share_access_orchestrator
+  - host_server
 portalType: HTTP_API
 basePath: /share
 status: complete
 createdAt: '2026-07-17T22:09:53.934Z'
-updatedAt: '2026-07-18T09:36:30.026Z'
+updatedAt: '2026-07-18T13:16:50.767Z'
