@@ -21,6 +21,7 @@ import { narrativeDetailRule } from './narrative-detail.js';
 import { portalsRule } from './portals.js';
 import { stereotypeDepsRule } from './stereotype-deps.js';
 import { patternsRule } from './patterns.js';
+import { facadeForwardingRule } from './facade-forwarding.js';
 import { patternReferencesRule } from './pattern-references.js';
 import { variantReferencesRule } from './variant-references.js';
 import { profilesRule } from './profiles.js';
@@ -72,6 +73,8 @@ export const SDD_RULES: SddRule[] = [
   portalsRule,
   stereotypeDepsRule,
   patternsRule,
+  // Facade shape rides with pattern ownership: same §7 doctrine, narrative side.
+  facadeForwardingRule,
   profilesRule,
   patternReferencesRule,
   variantReferencesRule,

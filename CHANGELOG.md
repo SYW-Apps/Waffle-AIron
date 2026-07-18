@@ -48,6 +48,11 @@ suppressible) unless noted; existing clean trees stay clean unless listed under
   (`idempotent | atomic | transactional | exactly-once`) nor declared by a
   loaded pack. The token consistency checks match literally, so an undeclared
   token silently escapes them.
+- Facade rule now enforced: `FACADE_FORWARDING` — a Repository/Gateway facade
+  method with an authored narrative that is not exactly one `call` step to an
+  owned member (the standard §7 claim, previously "mechanically enforceable"
+  but unimplemented; dogfooded at zero cost — wairon's own 63 narrated facade
+  methods all conform).
 
 **New config & schema surface:**
 

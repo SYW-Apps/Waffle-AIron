@@ -284,10 +284,14 @@ looks like.
 > sequence and the early-return policy; **Specialists** are the interceptors (auth,
 > validation, rate-limit). A bare Portal (no ingress logic) is a block, not a Gateway.
 
-### The facade rule (mechanically enforceable)
+### The facade rule (mechanically enforced: `FACADE_FORWARDING`)
 A pattern's facade does **pure 1:1 forwarding with no logic**: **every facade
-method's narrative is exactly one `call` step.** More than one step, or a `local`
-step, means the facade contains logic — a violation.
+method's authored narrative is exactly one `call` step targeting an owned
+member.** More than one step, a `local` step, or a call that leaves the pattern
+means the facade contains logic — a violation. The validator enforces this on
+Repository/Gateway facades as the `FACADE_FORWARDING` warning
+(lint.allow-suppressible for deliberate exceptions); methods without an
+authored narrative are governed by the detail dial, not this rule.
 
 ### Specialist as the wildcard pattern
 Named patterns have *specific* containment rules; the **Specialist** is the
@@ -491,7 +495,8 @@ Designs should stay faithful to the typed model so this stays free to add later.
 3. A pattern owns **only blocks**, **one hop**, **never a pattern**; compose
    patterns at L1.
 4. `owns` ≠ `dependsOn`; cross-group access is via facades only.
-5. A facade forwards 1:1 with no logic (single-`call` narratives).
+5. A facade forwards 1:1 with no logic (single-`call`-to-owned-member
+   narratives; enforced as `FACADE_FORWARDING`).
 6. State-owners (Store/Supervisor/Actor/Index) ≠ stateless coordinators
    (Orchestrator/Registry/Specialist/Portal/Observer).
 7. Workflow control flow → Orchestrator; local control flow → anywhere.
