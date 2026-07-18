@@ -2586,9 +2586,12 @@ export function mountCanvas(host, model, opts = {}) {
   function projectExposesApi() {
     return MODEL.components.some(componentExposesApi);
   }
-  function openApiButton(exposes) {
+  // tag = the component's L0 gateway entry id (its section in the combined spec),
+  // so a portal deep-links straight to its own operations; a subsystem/project
+  // passes '' and opens the whole combined document.
+  function openApiButton(exposes, tag) {
     if (!exposes || !openApiAllowed()) return '';
-    return '<div class="openbtn"><button class="tbtn" data-openapi-comp="">\u25A4 View OpenAPI \u2197</button></div>';
+    return '<div class="openbtn"><button class="tbtn" data-openapi-tag="' + esc(tag || '') + '">\u25A4 View OpenAPI \u2197</button></div>';
   }
 
   function renderPanel() {
@@ -2612,7 +2615,7 @@ export function mountCanvas(host, model, opts = {}) {
         + (scopeFocus ? staticChip('current view') : '')
         + chip(c.subsystem, 'subsystem', c.subsystem)
         + (scopeFocus ? '' : openViewButton('component', c.id, c.owns.length > 0))
-        + openApiButton(componentExposesApi(c));
+        + openApiButton(componentExposesApi(c), c.apiTag);
       
       var linkedTypes = MODEL.types.filter(function (t) { return t.componentClass === c.id; });
       if (linkedTypes.length) {
@@ -2772,7 +2775,7 @@ export function mountCanvas(host, model, opts = {}) {
         + (s.status ? staticChip(s.status) : '')
         + (scopeFocus ? staticChip('current view') : '')
         + (scopeFocus ? '' : openViewButton('subsystem', s.id, subKids > 0))
-        + openApiButton(subsystemExposesApi(s.id));
+        + openApiButton(subsystemExposesApi(s.id), '');
       body += '<p class="desc">' + esc(s.description) + '</p>';
       if (s.trustedLinks.length) {
         body += section('Trusted links (fast lanes)', s.trustedLinks.length, s.trustedLinks.map(function (t2) {
@@ -2791,7 +2794,7 @@ export function mountCanvas(host, model, opts = {}) {
         + staticChip(MODEL.subsystems.length + ' subsystems')
         + staticChip(MODEL.components.length + ' components')
         + (MODEL.types.length ? '<div class="openbtn"><button class="tbtn" id="openTypesBtn">\u25B8 Types (ERD) \u2014 ' + MODEL.types.length + '</button></div>' : '')
-        + openApiButton(projectExposesApi());
+        + openApiButton(projectExposesApi(), '');
       if (MODEL.system.vision) body += '<p class="desc">' + esc(MODEL.system.vision) + '</p>';
       body += '<p class="desc">Each view shows one scope\u2019s direct children \u2014 double-click a box (or use \u201COpen as view\u201D) to drill in, and the breadcrumb to come back. Derived from <code style="display:inline">.wai/specs/</code>.</p>';
       if (state.showIssues && MODEL.issues.length) body += section('All validation issues', MODEL.issues.length, issueHtml(MODEL.issues), true);
@@ -2819,13 +2822,14 @@ export function mountCanvas(host, model, opts = {}) {
     if (typesOpen && typesOpen.addEventListener && panel.innerHTML.indexOf('openTypesBtn') >= 0) {
       typesOpen.addEventListener('click', function () { navigateTo('types', null); });
     }
-    var oapis = panel.querySelectorAll('[data-openapi-comp]');
+    var oapis = panel.querySelectorAll('[data-openapi-tag]');
     for (var oi = 0; oi < oapis.length; oi++) {
       (function (b) {
         b.addEventListener('click', function () {
-          if (typeof opts !== 'undefined' && opts && opts.onOpenApi) { opts.onOpenApi(b.getAttribute('data-openapi-comp')); return; }
+          var tag = b.getAttribute('data-openapi-tag') || '';
+          if (typeof opts !== 'undefined' && opts && opts.onOpenApi) { opts.onOpenApi(tag); return; }
           var href = openApiSiblingHref();
-          if (href) window.open(href, '_blank', 'noopener');
+          if (href) window.open(href + (tag ? '#/' + tag : ''), '_blank', 'noopener');
         });
       })(oapis[oi]);
     }

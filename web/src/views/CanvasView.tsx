@@ -37,8 +37,15 @@ export function CanvasView({ projectId }: { projectId: string }) {
       theme: canvasTheme,
       embed: true,
       // "View OpenAPI" on an API-exposing component opens the project's full
-      // surface as an interactive Swagger UI page.
-      onOpenApi: () => window.open(`/web/openapi?projectId=${encodeURIComponent(projectId)}`, '_blank', 'noopener'),
+      // (combined) surface as an interactive Swagger UI page. When the affordance
+      // carries a tag (a specific portal's L0 gateway entry id) we deep-link to
+      // that section; a subsystem/project passes '' and opens the whole document.
+      onOpenApi: (tag?: string) =>
+        window.open(
+          `/web/openapi?projectId=${encodeURIComponent(projectId)}` + (tag ? `#/${tag}` : ''),
+          '_blank',
+          'noopener',
+        ),
     });
     handleRef.current = handle;
     return () => {

@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { seedDemoTree } from '../../src/core/demo-seed.js';
 import { exportSurface } from '../../src/core/surfaces.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
+import { buildCanvasDataModel } from '../../src/core/diagram.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 
 // ---------------------------------------------------------------------------
@@ -32,21 +33,44 @@ describe('demo OpenAPI surface (external projection)', () => {
     }
   });
 
-  it('projects Catalog + Ordering operations, excludes instance-only Payments', () => {
-    const doc = runWithProjectRoot(base, () => {
+  function surfacePaths(maxAudience: string): Record<string, unknown> {
+    return runWithProjectRoot(base, () => {
       seedDemoTree();
       invalidateSpecCache();
-      const result = exportSurface('external', 'openapi');
-      return JSON.parse(result.rendered ?? '{}') as { paths?: Record<string, unknown> };
+      const doc = JSON.parse(exportSurface(maxAudience, 'openapi').rendered ?? '{}') as { paths?: Record<string, unknown> };
+      return doc.paths ?? {};
     });
+  }
 
-    const paths = doc.paths ?? {};
-    // Non-empty — the external gateway surface renders operations.
+  it('EXTERNAL projection: Catalog + Ordering only, excludes instance-only Payments', () => {
+    const paths = surfacePaths('external');
     expect(Object.keys(paths).length).toBeGreaterThan(0);
-    // Catalog (external) + Ordering (external) are present…
     expect(paths).toHaveProperty('/catalog/products/{id}');
     expect(paths).toHaveProperty('/orders');
-    // …Payments (audience instance) is NOT exposed in the EXTERNAL projection.
     expect(paths).not.toHaveProperty('/payments/charges');
+  });
+
+  it('FULL (project) projection: all three APIs, INCLUDING instance-only Payments', () => {
+    const paths = surfacePaths('project');
+    expect(paths).toHaveProperty('/catalog/products/{id}');
+    expect(paths).toHaveProperty('/orders');
+    expect(paths).toHaveProperty('/payments/charges'); // instance, included at the project ceiling
+  });
+
+  it('canvas model tags each published portal with its L0 gateway id (the OpenAPI deep-link tag)', () => {
+    const tagOf = runWithProjectRoot(base, () => {
+      seedDemoTree();
+      invalidateSpecCache();
+      const model = buildCanvasDataModel();
+      return new Map(model.components.map(c => [c.id, c.apiTag]));
+    });
+    // The OpenAPI tags operations with the L0 entry id; the canvas carries the same
+    // id on the backing portal so "View OpenAPI" can jump straight to its section.
+    expect(tagOf.get('catalog-portal')).toBe('catalog-api');
+    expect(tagOf.get('ordering-portal')).toBe('ordering-api');
+    expect(tagOf.get('payments-portal')).toBe('payments-api');
+    // An internal (non-published) component backs no gateway entry → no tag.
+    expect(tagOf.has('catalog-orchestrator')).toBe(true); // it exists…
+    expect(tagOf.get('catalog-orchestrator')).toBeUndefined(); // …but carries no API tag
   });
 });
