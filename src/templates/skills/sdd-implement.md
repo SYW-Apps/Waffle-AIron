@@ -103,7 +103,7 @@ All implementation work must strictly adhere to these rules:
      - `Specialist` (narrow, functional domain rules e.g., Scanner, Router, Evaluator, Compiler).
    - **Strict Layer Isolation & No Persistence Shortcuts**:
      - A `Portal` must **never** depend directly on a `Repository`, `Store`, `Registry`, `Index`, or `Adapter`. It must **always** route calls through an `Orchestrator`.
-     - Every stored domain entity (even simple configs, permissions, or rules) **must** use a dedicated `Repository` pattern composed of `Store`, `Registry`, and `Index` blocks. Do **not** store state inside `Orchestrator` or `Specialist` blocks directly, and do **not** combine Store/Registry/Index functionality into a single helper/specialist.
+     - Held domain state always lives in a dedicated data component, never as fields inside an `Orchestrator` or `Specialist`. Two sanctioned shapes: the RECOMMENDED `Repository` pattern (owns `Store` + `Registry` + `Index`; consumers depend on the facade), or — for genuinely simple state — a deliberately standalone `Store` (workflow-layer consumers only, acknowledged via `lint.allow` on `UNOWNED_STORE`). Do **not** combine Store/Registry/Index functionality into a single helper/specialist, and never fold state into a consuming component because a link was refused.
 2. **Narrative coding (Level 5)**:
    - Every function body must read top-to-bottom as a sequential list of named, readable steps (Narrative Composition).
    - Maintain one level of abstraction per function. Functions must remain short (~25 lines max).
