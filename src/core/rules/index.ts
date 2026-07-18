@@ -38,6 +38,7 @@ import { technologyRule } from './technology.js';
 import { namingRule } from './naming.js';
 import { complexityRule } from './complexity.js';
 import { structuralConformanceRule } from './conformance.js';
+import { hiddenStateRule } from './hidden-state.js';
 import { dependencyConformanceRule } from './dependency-conformance.js';
 import { lintAllowsRule } from './lint-allows.js';
 import { emptyCodeModel, CodeModel } from '../source-analysis.js';
@@ -93,6 +94,8 @@ export const SDD_RULES: SddRule[] = [
   // Level 3 opener: narrative call steps must be realized as callees of the
   // realized function (set membership, exact grade).
   callConformanceRule,
+  // The fields-vs-Store criterion: mutable module state in logic-only files.
+  hiddenStateRule,
   dependencyConformanceRule,
   couplingRule,
   languageRule,

@@ -64,6 +64,13 @@ export interface SourceFileFacts {
    * call-step realization check (Level 3).
    */
   functionCalls?: Record<string, string[]>;
+  /**
+   * Module-scope mutable bindings (`let`/`var` at the top level of the file).
+   * EXACT grade only. The static approximation of held state a logic
+   * component may be hiding — fuel for the HIDDEN_STATE lint. (Mutation of
+   * const-bound containers is invisible to this collection; the lint says so.)
+   */
+  topLevelMutableBindings?: string[];
 }
 
 export interface CodeModel {
@@ -356,6 +363,8 @@ interface ExactFacts {
   complexity: Map<string, number>;
   /** Direct callee names per named function-like (union across same-named). */
   calls: Map<string, Set<string>>;
+  /** Module-scope mutable (`let`/`var`) binding names. */
+  mutableBindings: Set<string>;
 }
 
 function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFacts {
@@ -368,6 +377,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const starExports: string[] = [];
   const complexity = new Map<string, number>();
   const calls = new Map<string, Set<string>>();
+  const mutableBindings = new Set<string>();
 
   const addBindingNames = (name: import('typescript').BindingName): void => {
     if (ts.isIdentifier(name)) declared.add(name.text);
@@ -462,9 +472,12 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
       }
     } else if (ts.isVariableStatement(node)) {
       const isExported = hasExportModifier(node);
+      const isMutable = (node.declarationList.flags & ts.NodeFlags.Const) === 0;
+      const atModuleScope = node.parent === sf;
       for (const decl of node.declarationList.declarations) {
         addBindingNames(decl.name);
         if (isExported && ts.isIdentifier(decl.name)) exported.add(decl.name.text);
+        if (isMutable && atModuleScope && ts.isIdentifier(decl.name)) mutableBindings.add(decl.name.text);
       }
     } else if (ts.isVariableDeclaration(node)) {
       // nested declarations (inside functions) — parameters are deliberately excluded
@@ -519,7 +532,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   };
   visit(sf);
 
-  return { declared, anchors, exported, imports, reexports, starExports, complexity, calls };
+  return { declared, anchors, exported, imports, reexports, starExports, complexity, calls, mutableBindings };
 }
 
 /** Resolve a relative export-* specifier to a real file (.js → .ts mapping, index files). */
@@ -669,6 +682,7 @@ export function buildCodeModel(implementations: ImplementationSpec[], projectRoo
             reexports: [...facts.reexports],
             functionComplexity: Object.fromEntries(facts.complexity),
             functionCalls: Object.fromEntries([...facts.calls].map(([k, v]) => [k, [...v]])),
+            topLevelMutableBindings: [...facts.mutableBindings],
           };
         } catch {
           analyzed = analyzeGeneric(text);
