@@ -17,6 +17,7 @@ import {
   useToast,
 } from '../ui';
 import { GitCredentialCard, GitPatSummary } from '../components/GitCredentialCard';
+import { SharingTab } from './Sharing';
 import type { GitBackingStatus, PackDescriptor, PolicyEvaluationResult, ProducerConfig } from '../types';
 
 // ── Packs ────────────────────────────────────────────────────────────────────
@@ -359,6 +360,7 @@ const OPS_TABS = [
   { id: 'policy', label: 'Policy' },
   { id: 'producers', label: 'Producers' },
   { id: 'git', label: 'Git' },
+  { id: 'sharing', label: 'Sharing' },
 ];
 
 export function ProjectOps() {
@@ -385,6 +387,7 @@ export function ProjectOps() {
         {tab === 'policy' && <PolicyTab projectId={projectId} />}
         {tab === 'producers' && <ProducersTab projectId={projectId} />}
         {tab === 'git' && <GitTab projectId={projectId} />}
+        {tab === 'sharing' && <SharingTab projectId={projectId} />}
       </div>
     </div>
   );

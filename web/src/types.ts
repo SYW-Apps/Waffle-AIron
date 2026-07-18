@@ -139,6 +139,38 @@ export interface GitBackingStatus {
   credentialRef?: string;
 }
 
+// ── Public share links ────────────────────────────────────────────────────────
+
+export interface ShareLink {
+  id: string;
+  projectId: string;
+  view: string;
+  snapshotId: string;
+  mode: string;
+  enabled: boolean;
+  expiresAt?: string;
+  allowDownloadHtml: boolean;
+  allowDownloadOpenapi: boolean;
+  frameAncestors: string[];
+  createdAt: string;
+}
+
+export interface ShareLinkCreated {
+  link: ShareLink;
+  /** The raw token — shown to the creator exactly once. */
+  token: string;
+}
+
+export interface ShareAccessEntry {
+  id: string;
+  linkId: string;
+  at: string;
+  ip: string;
+  userAgent: string;
+  referer?: string;
+  outcome: string;
+}
+
 // ── Instance health / diagnostics ─────────────────────────────────────────────
 
 export interface DiagnosticCheckResult {
