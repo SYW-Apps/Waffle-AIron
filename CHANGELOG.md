@@ -77,6 +77,12 @@ suppressible) unless noted; existing clean trees stay clean unless listed under
   Views (was exactly one of each) — a feature slice with list/detail/form
   faces no longer needs artificial per-view slices. Foreign member types
   inside the slice are still rejected.
+- Honest profile labeling: `lowlevel-os` / `game-ecs` / `realtime-embedded`
+  are now labeled as *blueprints* everywhere they're described (init menu,
+  roadmap) — today they enforce only backend-family fencing; the described
+  platform validations are explicitly marked unimplemented, and doctrine is
+  expected from extension packs. `plc-cyclic`'s unimplemented narrative
+  checks are likewise marked.
 - Placement notices: `sdd_add_type` (and siblings) explain flat-layout
   placement and never-relocate semantics instead of silently "ignoring" the
   subsystem parameter. `doctor --fix` still performs no flat→nested migration
