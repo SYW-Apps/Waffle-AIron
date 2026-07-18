@@ -6,6 +6,78 @@ Post-v4.0.0 fixes and additive capabilities around extension packs, the hosted
 server, chained subprojects, and agent-topology scale (merge with `[minor]` →
 v4.1.0).
 
+### Level-3 semantic conformance + model-review program (new, `feat/level3-conformance`)
+
+The validator moves from structural/topological checking toward semantic and
+behavioral checking, plus the configurability and doctrine fixes from an
+independent model review. All new checks default to **warnings** (lint.allow-
+suppressible) unless noted; existing clean trees stay clean unless listed under
+*migration* below.
+
+**New rule codes** (see `wairon rules list` for the full descriptions):
+
+- Detail sufficiency: `UNNARRATED_COMPLEXITY` (realized cyclomatic complexity —
+  exact AST grade only — over `rules.complexity.maxUnnarratedComplexity`,
+  default 8, while the method sits below `detail: full` with no narrative),
+  `DETAIL_BELOW_STEREOTYPE` (explicit dial below a logic stereotype's full floor).
+- Invariant registry: entities declare `invariants:` (anchored via
+  `componentClass`); narrative steps assert them via `assertsInvariants` —
+  `UNASSERTED_INVARIANT`, `INVARIANT_UNANCHORED` (warnings),
+  `UNKNOWN_INVARIANT_REF`, `DUPLICATE_INVARIANT_ID` (errors). Declarations
+  checked; enforcement never proven.
+- L5 antipatterns (provable-only): `INESCAPABLE_CYCLE` (step cycle with no exit
+  and no terminator), `MEANINGLESS_BRANCH`, `UNCONDITIONAL_CALL_CYCLE`
+  (cross-component call cycle unavoidable on every path).
+- Code↔spec Level 3 opener: `CALL_STEP_UNREALIZED` — every narrative `call`
+  step must appear among the realized function's callees (set membership,
+  same-file helper closure, symbol overrides + N:1 identity forwarding
+  honored; exact grade only; aggregated one finding per method).
+- Store/Registry doctrine: `UNOWNED_STORE` (two sanctioned shapes: Repository
+  recommended, deliberate standalone Store via lint.allow),
+  `REGISTRY_WITHOUT_STORE` (a storeless standalone Registry is mistyped or
+  orphaned), `ARCHITECTURE_VIOLATION_REGISTRY_DEP` (Registry outbound: its
+  Store or a backend Adapter only), `HIDDEN_STATE` (module-scope mutable
+  bindings in files realizing only logic stereotypes), `MISSING_DURABILITY`
+  (every Store declares its durability), `PORTAL_WRITE_SHORTCUT` (error — a
+  Portal narrative calling a write-effect facade method).
+- Event topology: components declare `emits:` / `subscribesTo:`; paired with
+  MessageBus endpoint directions — `UNCONSUMED_TOPIC`, `UNSOURCED_SUBSCRIPTION`
+  (silent on trees with no event edges).
+
+**New config & schema surface:**
+
+- `rules.designDepth: components | interfaces | implementations | narratives`
+  (default `narratives`) + per-subsystem `designDepth` override + pack-profile
+  default — expectation checks below the declared depth are gated; soundness
+  of authored content always applies.
+- Pack profiles (`ProfileDef.rules`) can now carry `sddRuleSeverity` (applies
+  to their subsystems; explicit project config wins) alongside the existing
+  documentation/complexity/naming and the new designDepth.
+- `durability` grows to `durable | read-through | ram-projection | cache`
+  (only `durable` requires the hydration round-trip).
+- Lifecycle entrypoint `phase` grows to `init | shutdown | cyclic | interrupt |
+  scheduled` — all root the reachability walker; only `init` feeds hydration.
+- `ext:` — an opaque, verbatim-preserved extension-data map on every spec kind
+  and on L3/L4 methods, for pack rules to read.
+- Cross-subsystem: a `trustedLink` on the SOURCE subsystem licenses a direct
+  in-process edge to the peer's published Portal (no Adapter shim); Portals may
+  depend on Repository/Index for reads.
+- Placement notices: `sdd_add_type` (and siblings) explain flat-layout
+  placement and never-relocate semantics instead of silently "ignoring" the
+  subsystem parameter. `doctor --fix` still performs no flat→nested migration
+  (known gap).
+- sdd-implement's Definition of Done now includes an integration sim against
+  real dependencies (docs/design/integration-conformance.md holds the designed
+  static gate); the standard gains a transactions & unit-of-work + outbox
+  doctrine and the two-path store doctrine.
+
+**Migration for existing trees:** `MISSING_DURABILITY` fires once per
+undeclared Store (declare one of the four modes); storeless standalone
+Registries get `REGISTRY_WITHOUT_STORE` (retype to a `read-through` Store, or
+lint.allow); narrative-bearing trees may see `CALL_STEP_UNREALIZED` where
+per-method `symbol` maps are missing. `Store → Registry` edges are now errors
+(the standard always said so; none existed in wairon's own tree).
+
 ### Extension packs: pack-provided AI skills + versioned pattern references (new)
 
 Two generic extension-pack capabilities so profiles and wrapper products can
