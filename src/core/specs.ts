@@ -22,6 +22,7 @@ import {
   SpecStatus,
 } from '../models/index.js';
 import type { ValidationIssue } from './validation.js';
+import { resolveNarrativeLabels } from './narrative-labels.js';
 import { buildGraphModel } from './diagram.js';
 import type { WebGraphModel } from '../server/types.js';
 
@@ -2103,6 +2104,20 @@ export class SpecWorkspace {
 
     const mergedResult = mergeDelta(result, qualifyDeltaRefs(delta));
     mergedResult.updatedAt = new Date().toISOString();
+
+    // Symbolic step-label references resolve AFTER the merge, so a delta can
+    // reference labels anchored on pre-existing steps. Unresolved references
+    // abort the whole update — a dropped reference would silently become a
+    // dangling numeric jump.
+    if (kind === 'implementation' && Array.isArray(mergedResult.methods)) {
+      const labelErrors: string[] = [];
+      for (const m of mergedResult.methods) {
+        if (m && Array.isArray(m.narrative)) labelErrors.push(...resolveNarrativeLabels(String(m.name), m.narrative));
+      }
+      if (labelErrors.length) {
+        throw new Error(`Unresolved narrative label references — nothing was saved:\n- ${labelErrors.join('\n- ')}`);
+      }
+    }
 
     // An explicit status in the delta is a deliberate change — allow demotion
     // (e.g. reopening a completed spec to 'draft' for revision).

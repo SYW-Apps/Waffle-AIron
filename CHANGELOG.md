@@ -6,6 +6,17 @@ Post-v4.0.0 fixes and additive capabilities around extension packs, the hosted
 server, chained subprojects, and agent-topology scale (merge with `[minor]` →
 v4.1.0).
 
+### Narrative authoring (cherry-picked from `feat/level3-conformance`)
+
+- **Symbolic step labels**: a narrative step may declare a `label` anchor, and
+  every jump-by-number flow field has a `*Label` twin (`toLabel`,
+  `onTrueLabel`, `onFalseLabel`, `defaultLabel`, `endLabel`, `finallyLabel`,
+  plus `label` in `cases`/`catches` entries) resolved to step numbers at
+  write time — the stored spec keeps plain numbers. Guards LLM step-counting
+  off-by-ones: an unknown/duplicate label REJECTS the write, and an
+  `sdd_update_spec` delta can reference labels anchored on pre-existing steps
+  (resolution runs post-merge, against the final numbering).
+
 ### Extension packs: pack-provided AI skills + versioned pattern references (new)
 
 Two generic extension-pack capabilities so profiles and wrapper products can

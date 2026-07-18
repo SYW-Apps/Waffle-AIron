@@ -446,6 +446,14 @@ export type CatchClause = z.infer<typeof CatchClauseSchema>;
 
 export const NarrativeStepSchema = z.object({
   stepNumber: z.number().int().positive(),
+  /**
+   * Optional symbolic anchor for this step. Authoring surfaces accept *Label
+   * twins of every jump-by-number field (toLabel, onTrueLabel, …) resolved
+   * against these anchors at WRITE time (updateSpec / sdd_write_narrative) —
+   * the stored numeric fields stay the single flow representation. Labels
+   * persist so later deltas can reference existing steps symbolically.
+   */
+  label: z.string().min(1).optional(),
   description: z.string(),
   type: NarrativeStepTypeSchema,
   targetComponent: z.string().optional(), // Required if type is 'call' or 'dispatch', references L2 Component id

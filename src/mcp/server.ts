@@ -15,6 +15,7 @@ import { fileURLToPath } from 'url';
 import { setProjectRoot } from '../utils/fs.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import type { ValidationIssue } from '../core/validation.js';
+import { resolveNarrativeLabels } from '../core/narrative-labels.js';
 import { EndpointSchema, type Endpoint, type SubsystemSpec } from '../models/specs.js';
 import {
   listResources as coreListSkillResources,
@@ -728,8 +729,10 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   );
 
   const stepNo = () => z.number().int().positive();
+  const labelRef = () => z.string().min(1);
   const narrativeStepInput = z.object({
     stepNumber: stepNo().optional().describe('Defaults to the 1-based array position — jump fields reference these numbers'),
+    label: labelRef().optional().describe('Optional symbolic anchor for this step (unique per narrative). Every jump-by-number field has a *Label twin resolved against these anchors at write time — prefer labels over hand-counted step numbers'),
     description: z.string(),
     type: z.enum(['local', 'call', 'dispatch', 'branch', 'switch', 'loop', 'try', 'jump', 'return', 'throw']),
     targetComponent: z.string().optional().describe('call/dispatch: L2 component id (for dispatch, the Portal routed through)'),
@@ -738,16 +741,22 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     assertsGuarantees: z.array(z.enum(['idempotent', 'atomic', 'transactional', 'exactly-once'])).optional().describe('Semantic guarantees this step relies on — each must be declared in the called method\'s L3 guarantees (NARRATIVE_SEMANTIC_UNBACKED otherwise)'),
     condition: z.string().optional().describe('branch / while / doWhile'),
     onTrueStep: stepNo().optional().describe('branch: default = next step'),
-    onFalseStep: stepNo().optional().describe('branch: required'),
+    onTrueLabel: labelRef().optional().describe('branch: symbolic alternative to onTrueStep'),
+    onFalseStep: stepNo().optional().describe('branch: required (or onFalseLabel)'),
+    onFalseLabel: labelRef().optional().describe('branch: symbolic alternative to onFalseStep'),
     on: z.string().optional().describe('switch: the dispatched value'),
-    cases: z.array(z.object({ value: z.string(), step: stepNo() })).optional().describe('switch: required'),
+    cases: z.array(z.object({ value: z.string(), step: stepNo().optional(), label: labelRef().optional() })).optional().describe('switch: required; each case targets its region by step number or label'),
     defaultStep: stepNo().optional().describe('switch: default = next step'),
+    defaultLabel: labelRef().optional().describe('switch: symbolic alternative to defaultStep'),
     loopKind: z.enum(['forEach', 'for', 'while', 'doWhile']).optional().describe('loop: default forEach when "over" is set, else while'),
     over: z.string().optional().describe('loop forEach/for: iteration source'),
-    endStep: stepNo().optional().describe('loop/try: last step of the body region (required)'),
-    catches: z.array(z.object({ error: z.string(), step: stepNo() })).optional().describe('try: handler regions'),
+    endStep: stepNo().optional().describe('loop/try: last step of the body region (required, or endLabel)'),
+    endLabel: labelRef().optional().describe('loop/try: symbolic alternative to endStep'),
+    catches: z.array(z.object({ error: z.string(), step: stepNo().optional(), label: labelRef().optional() })).optional().describe('try: handler regions, each targeted by step number or label'),
     finallyStep: stepNo().optional().describe('try: first step of the always-runs region'),
-    toStep: stepNo().optional().describe('jump: required (break/continue/rejoin)'),
+    finallyLabel: labelRef().optional().describe('try: symbolic alternative to finallyStep'),
+    toStep: stepNo().optional().describe('jump: required (break/continue/rejoin), or toLabel'),
+    toLabel: labelRef().optional().describe('jump: symbolic alternative to toStep — resolves to the labeled step at write time'),
     outcome: z.string().optional().describe('return: e.g. "success", "not found"'),
     error: z.string().optional().describe('throw: the raised error'),
   });
@@ -758,7 +767,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ id: string; name: string; description: string; contract: string; sourcePath?: string; technologies?: string[]; detail?: 'full' | 'calls-only' | 'intent'; conformance?: 'declared' | 'anchored' | 'off'; methods?: { name: string; detail?: 'full' | 'calls-only' | 'intent'; intent?: string; conformance?: 'declared' | 'anchored' | 'off'; symbol?: string; narrative?: NarrativeStepIn[] }[] }>(server,
     'sdd_write_narrative',
     {
-      description: 'Write L4 Concrete Implementation spec containing L5 method narratives. Narratives are a FLAT ordered step list; flow steps (branch/switch/loop/try/jump/return/throw) jump by step number — blocks are just skipped regions. Detail dial per method: full (narrative required) | calls-only (call choreography suffices) | intent (prose instead of steps); omitted = stereotype default (Portal/Observer/Adapter: calls-only, Store/Index/Registry: intent, else full). Conformance dial per method or spec: declared | anchored | off — how strictly structural conformance requires contract methods to be realized in the sourcePath file (omitted = Portal: anchored, else declared).',
+      description: 'Write L4 Concrete Implementation spec containing L5 method narratives. Narratives are a FLAT ordered step list; flow steps (branch/switch/loop/try/jump/return/throw) jump by step number — blocks are just skipped regions. Steps may declare a `label` anchor, and every jump field has a *Label twin (toLabel, onTrueLabel, endLabel, …) resolved to step numbers at write time — prefer labels over hand-counted numbers; an unresolvable label rejects the write. Detail dial per method: full (narrative required) | calls-only (call choreography suffices) | intent (prose instead of steps); omitted = stereotype default (Portal/Observer/Adapter: calls-only, Store/Index/Registry: intent, else full). Conformance dial per method or spec: declared | anchored | off — how strictly structural conformance requires contract methods to be realized in the sourcePath file (omitted = Portal: anchored, else declared).',
       inputSchema: {
         id: z.string().describe('Lowercase identifier, e.g. "vfs_storage"'),
         name: z.string().describe('Human-readable implementation name'),
@@ -783,6 +792,14 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         const { loadInterfaceSpec, saveImplementationSpec } = requireSpecs();
         const intf = loadInterfaceSpec(contract);
         if (!intf) return errText(`Interface contract "${contract}" does not exist.`);
+        const resolvedMethods = (methods ?? []).map(m => ({
+          ...m,
+          narrative: (m.narrative ?? []).map((s, i) => ({ ...s, stepNumber: s.stepNumber ?? i + 1 })),
+        }));
+        // Symbolic *Label references resolve to step numbers before the spec
+        // is saved; an unresolvable reference rejects the whole write.
+        const labelErrors = resolvedMethods.flatMap(m => resolveNarrativeLabels(m.name, m.narrative));
+        if (labelErrors.length) return errText(`Unresolved narrative label references — nothing was saved:\n- ${labelErrors.join('\n- ')}`);
         const now = new Date().toISOString();
         saveImplementationSpec({
           id,
@@ -793,10 +810,9 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           technologies,
           detail,
           conformance,
-          methods: (methods ?? []).map(m => ({
-            ...m,
-            narrative: (m.narrative ?? []).map((s, i) => ({ ...s, stepNumber: s.stepNumber ?? i + 1 })),
-          })),
+          // Post-resolution every cases/catches entry has its numeric step —
+          // the *Label twins exist only in the input type, not the spec's.
+          methods: resolvedMethods as Parameters<typeof saveImplementationSpec>[0]['methods'],
           status: 'draft',
           createdAt: now,
           updatedAt: now,
