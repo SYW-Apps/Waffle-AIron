@@ -134,11 +134,17 @@ export function captureSnapshot(
       snapshot.html = hostCore.renderDiagram('canvas');
     }
     if (artifacts.includes('openapi')) {
-      // Capture at the EXTERNAL ceiling: a public share exposes only the surface
-      // entries explicitly marked externally-shareable (rank(entry) >= external),
-      // never instance-internal APIs. A project with no external entries yields an
-      // (intentionally) empty document.
-      const result = hostSurfaces.exportBoundSurface('external', 'openapi') as { rendered?: string };
+      // The OpenAPI must MATCH THE DIAGRAM it is linked from. This share captures
+      // the full architecture canvas above (buildCanvasDataModel — every
+      // component), so the paired OpenAPI is the full surface too ('project'
+      // ceiling = all published portals, incl. instance-internal ones). Anything
+      // less produces the confusing mismatch where a portal is visible on the
+      // shared canvas yet absent from its OpenAPI. This is safe because the link
+      // is token-secured and already reveals the whole internal architecture — the
+      // API reveals nothing the diagram doesn't. (A future "API-only" link for
+      // external 3rd parties, who never see the diagram, is the place to filter to
+      // the external-only surface instead.)
+      const result = hostSurfaces.exportBoundSurface('project', 'openapi') as { rendered?: string };
       snapshot.openapi = result.rendered ?? '{}';
     }
     return snapshot;

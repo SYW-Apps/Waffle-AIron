@@ -9,13 +9,16 @@ import { buildCanvasDataModel } from '../../src/core/diagram.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 
 // ---------------------------------------------------------------------------
-// The demo (ShopFlow) publishes an L0 gateway surface, so a public share's
-// OpenAPI is non-empty and testable: Catalog + Ordering (audience external)
-// render as real paths; Payments (audience instance) is excluded from the
-// external projection.
+// The demo (ShopFlow) publishes an L0 gateway surface, so its OpenAPI is
+// non-empty and testable at each audience ceiling. The EXTERNAL projection
+// renders only externally-shareable entries (Catalog + Ordering); the FULL
+// ('project') projection additionally includes the instance-internal Payments
+// API. A shared diagram link captures the FULL surface so it matches the full
+// canvas it is paired with; the external projection is reserved for a future
+// API-only link aimed at outside 3rd parties who never see the diagram.
 // ---------------------------------------------------------------------------
 
-describe('demo OpenAPI surface (external projection)', () => {
+describe('demo OpenAPI surface projections', () => {
   let base: string;
   const savedEnv = { ...process.env };
 
@@ -51,6 +54,9 @@ describe('demo OpenAPI surface (external projection)', () => {
   });
 
   it('FULL (project) projection: all three APIs, INCLUDING instance-only Payments', () => {
+    // This is the ceiling a shared DIAGRAM link captures (sharesnapshots.ts):
+    // it must match the full canvas it is paired with, so every portal visible on
+    // the shared diagram — Payments included — is present in its OpenAPI.
     const paths = surfacePaths('project');
     expect(paths).toHaveProperty('/catalog/products/{id}');
     expect(paths).toHaveProperty('/orders');
