@@ -21,7 +21,8 @@ export const patternsRule: SddRule = {
     { code: 'FEATURE_COMPONENT_CONTAINMENT', defaultSeverity: 'error', summary: 'FeatureComponent not owning exactly one Orchestrator + one View' },
     { code: 'ROUTER_COMPONENT_CONTAINMENT', defaultSeverity: 'error', summary: 'RouterComponent missing its Portal facade or children' },
     { code: 'VISIBILITY_VIOLATION', defaultSeverity: 'error', summary: 'Dependency on a block privately owned by another pattern' },
-    { code: 'UNOWNED_STORE', defaultSeverity: 'warning', summary: 'Store not owned by any pattern — held state belongs inside a Repository' },
+    { code: 'UNOWNED_STORE', defaultSeverity: 'warning', summary: 'Store not owned by any pattern — recommended shape is a Repository; a deliberate standalone Store needs a lint.allow' },
+    { code: 'REGISTRY_WITHOUT_STORE', defaultSeverity: 'warning', summary: 'Standalone Registry with no Store to write to — either mistyped (a fused file-backed store belongs typed Store) or orphaned' },
   ],
   check(ctx) {
     const ownedBy = new Map<string, string>(); // member block id -> owning pattern id
@@ -119,6 +120,25 @@ export const patternsRule: SddRule = {
         'warning',
         'UNOWNED_STORE',
         `Store "${comp.id}" is not owned by any pattern. The recommended shape for held state is a Repository (owns: ["${comp.id}", its Registry, its Index]) with consumers on the facade. For genuinely simple state a deliberately standalone Store is the sanctioned lightweight form — keep it visible as this Store, reachable from the workflow layer (Orchestrator/Supervisor/Actor), and acknowledge it with a lint.allow reason. Never take the third path of merging the state into a consuming component: state hidden inside a logic block disappears from the architecture permanently.`,
+        comp.id,
+        ctx.isComponentDraft(comp.id),
+      );
+    }
+
+    // The symmetric tripwire: a Registry is by definition the WRITE PATH to a
+    // Store. Standalone with no Store dependency it is either mistyped (the
+    // "file-backed Registry" idiom — a fused persistent store that belongs
+    // typed Store, where the durability machinery can see it) or orphaned.
+    // Repository-owned Registries reach their Store as a sibling member and
+    // are exempt from the dependency requirement.
+    for (const comp of ctx.components) {
+      if (comp.componentType !== 'Registry' || ownedBy.has(comp.id)) continue;
+      const hasStoreDep = comp.dependsOn.some(depId => ctx.componentMap.get(depId)?.componentType === 'Store');
+      if (hasStoreDep) continue;
+      ctx.addIssue(
+        'warning',
+        'REGISTRY_WITHOUT_STORE',
+        `Registry "${comp.id}" stands alone with no Store to write to. A Registry is the write path to a Store — if this component itself holds the persisted state (a file-backed record/config store), retype it as a Store with the honest durability (read-through for no-RAM-copy file I/O) so the durability machinery can see it; otherwise wire its Store, or lint.allow with a reason.`,
         comp.id,
         ctx.isComponentDraft(comp.id),
       );

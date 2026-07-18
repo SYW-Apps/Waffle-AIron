@@ -166,6 +166,16 @@ export const LintConfigSchema = z.object({
 export type LintConfig = z.infer<typeof LintConfigSchema>;
 
 /**
+ * Open, namespaced extension-data channel: an opaque map packs and tools may
+ * attach structured domain data to (ISR priorities, topic names, memory
+ * budgets, …). Never validated, relativized, or interpreted by the core —
+ * preserved verbatim through load/save so pack rules have something to read.
+ * Key discipline (e.g. "mypack:priority") is the pack's concern.
+ */
+export const ExtDataSchema = z.record(z.unknown());
+export type ExtData = z.infer<typeof ExtDataSchema>;
+
+/**
  * A declared lifecycle flow root: a component.method the runtime invokes at a
  * lifecycle phase (init/shutdown). Reachability analysis (unused-detection,
  * durability round-trip) treats these as entrypoints alongside Portals,
@@ -207,6 +217,8 @@ export const SubsystemSpecSchema = z.object({
   trustedLinks: z.array(TrustedLinkSchema).default([]),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
+  /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
+  ext: ExtDataSchema.optional(),
   status: SpecStatusSchema.optional().default('complete'),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -266,13 +278,23 @@ export const DispatchBindingSchema = z.object({
 export type DispatchBinding = z.infer<typeof DispatchBindingSchema>;
 
 /**
- * Store durability declaration. `durable` promises the state survives restart:
- * the durability round-trip rule then requires a hydration read-back (a read-
- * effect contract method) reachable from a declared lifecycle init entrypoint
- * (MISSING_HYDRATION otherwise). `ram-projection` declares the state is
- * rebuilt, not restored — exempt from the round-trip requirement.
+ * Store durability declaration — the orthogonal axis to the access shape
+ * (bare Store vs Repository). Every Store should declare one
+ * (MISSING_DURABILITY otherwise):
+ * - `durable`        — persisted RAM projection: survives restart AND holds a
+ *                      RAM copy, so the round-trip rule requires a hydration
+ *                      read-back reachable from a lifecycle init entrypoint
+ *                      (MISSING_HYDRATION otherwise).
+ * - `read-through`   — persisted with NO RAM copy: every read hits the
+ *                      backing medium, so every read IS the read-back —
+ *                      hydration exempt by definition (the file-backed
+ *                      config/record store).
+ * - `ram-projection` — rebuilt, not restored; exempt from the round-trip.
+ * - `cache`          — evictable memo state whose loss is behavior-preserving;
+ *                      hydration exempt (the honest home for TTL caches that
+ *                      would otherwise hide inside a Specialist).
  */
-export const DurabilitySchema = z.enum(['ram-projection', 'durable']);
+export const DurabilitySchema = z.enum(['ram-projection', 'durable', 'read-through', 'cache']);
 export type Durability = z.infer<typeof DurabilitySchema>;
 
 /** A reference from a component to a pack-declared reusable pattern (resolved against loaded packs' PatternDefs; UNKNOWN_PATTERN_REF when unresolved). */
@@ -304,6 +326,8 @@ export const ComponentSpecSchema = z.object({
   variant: z.string().optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
+  /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
+  ext: ExtDataSchema.optional(),
   status: SpecStatusSchema.optional().default('complete'),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -385,6 +409,8 @@ export const MethodSignatureSchema = z.object({
    * writes with hydration read-backs (MISSING_HYDRATION); optional elsewhere.
    */
   effect: z.enum(['read', 'write']).optional(),
+  /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
+  ext: ExtDataSchema.optional(),
 });
 
 export type MethodSignature = z.infer<typeof MethodSignatureSchema>;
@@ -397,6 +423,8 @@ export const InterfaceSpecSchema = z.object({
   methods: z.array(MethodSignatureSchema).default([]),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
+  /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
+  ext: ExtDataSchema.optional(),
   status: SpecStatusSchema.optional().default('complete'),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -524,6 +552,8 @@ export const MethodImplementationSchema = z.object({
    * name — e.g. a store's `put` realized by `saveSnapshot`.
    */
   symbol: z.string().optional(),
+  /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
+  ext: ExtDataSchema.optional(),
 });
 
 export type MethodImplementation = z.infer<typeof MethodImplementationSchema>;
@@ -550,6 +580,8 @@ export const ImplementationSpecSchema = z.object({
   conformance: ConformanceTierSchema.optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
+  /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
+  ext: ExtDataSchema.optional(),
   status: SpecStatusSchema.optional().default('complete'),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -647,6 +679,8 @@ export const TypeSpecSchema = z.object({
   linkedEntity: z.string().optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
+  /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
+  ext: ExtDataSchema.optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });

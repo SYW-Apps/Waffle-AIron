@@ -1,8 +1,18 @@
-id: "spec_loader"
-name: "Spec Loader"
-description: "I/O manager for specification YAML files under .wai/specs/"
-subsystem: "sdd_core"
-componentType: "Registry"
+id: spec_loader
+name: Spec Loader
+description: I/O manager for specification YAML files under .wai/specs/
+subsystem: sdd_core
+componentType: Registry
+owns: []
 dependsOn: []
-createdAt: "2026-06-10T19:28:00.000Z"
-updatedAt: "2026-06-10T19:28:00.000Z"
+lint:
+  allow:
+    - code: REGISTRY_WITHOUT_STORE
+      reason: >-
+        spec_loader is the authoritative state boundary of the whole product (16 methods over six
+        spec kinds) — per the registry-taxonomy ruling it graduates to a REAL Repository (Store +
+        Registry + Index faces split out), not a retype-in-place. That remodel is scheduled as its
+        own pass; this allow marks the debt.
+status: complete
+createdAt: '2026-06-10T19:28:00.000Z'
+updatedAt: '2026-07-18T19:18:00.874Z'

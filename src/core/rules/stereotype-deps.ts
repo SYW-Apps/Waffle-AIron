@@ -34,7 +34,8 @@ export const stereotypeDepsRule: SddRule = {
     { code: 'ARCHITECTURE_VIOLATION_PORTAL_DEP', defaultSeverity: 'error', summary: 'Component depending on a Portal/Observer' },
     { code: 'ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP', defaultSeverity: 'error', summary: 'Portal/Observer reaching the data layer directly' },
     { code: 'ARCHITECTURE_VIOLATION_SPECIALIST_DEP', defaultSeverity: 'error', summary: 'Specialist depending on workflow/runtime/state blocks' },
-    { code: 'ARCHITECTURE_VIOLATION_STORE_DEP', defaultSeverity: 'error', summary: 'Store depending on anything but Store/Registry/Adapter' },
+    { code: 'ARCHITECTURE_VIOLATION_STORE_DEP', defaultSeverity: 'error', summary: 'Store depending on anything but another Store or a backend Adapter' },
+    { code: 'ARCHITECTURE_VIOLATION_REGISTRY_DEP', defaultSeverity: 'warning', summary: 'Registry depending on anything but its Store or a backend Adapter (warning while new; the standard has always claimed this)' },
     { code: 'ARCHITECTURE_VIOLATION_ADAPTER_DEP', defaultSeverity: 'error', summary: 'Adapter depending on Orchestrators or Stores' },
     { code: 'ARCHITECTURE_VIOLATION_INDEX_DEP', defaultSeverity: 'error', summary: 'Index depending on anything but its Store or an Adapter' },
     { code: 'ARCHITECTURE_VIOLATION_VIEW_DEP', defaultSeverity: 'error', summary: 'View depending on logic/persistence layers' },
@@ -177,14 +178,33 @@ export const stereotypeDepsRule: SddRule = {
           }
         }
 
-        // Store rule: a Store may depend only on another Store or its backend Adapter.
-        // It is depended upon by Registries/Indexes — never the reverse.
+        // Store rule: a Store may depend only on another Store or its backend
+        // Adapter. It is depended upon by Registries/Indexes — never the
+        // reverse (the Registry allowance the code used to carry contradicted
+        // both this comment and the standard, and existed only to serve the
+        // since-retyped file-backed "Registries").
         if (comp.componentType === 'Store') {
-          if (depComp.componentType !== 'Store' && depComp.componentType !== 'Registry' && depComp.componentType !== 'Adapter') {
+          if (depComp.componentType !== 'Store' && depComp.componentType !== 'Adapter') {
             ctx.addIssue(
               'error',
               'ARCHITECTURE_VIOLATION_STORE_DEP',
-              `Architectural violation: Store component "${comp.id}" cannot depend on "${depComp.componentType}" component "${depComp.id}". Stores may only depend on other Stores, Registries, or a backend Adapter.`,
+              `Architectural violation: Store component "${comp.id}" cannot depend on "${depComp.componentType}" component "${depComp.id}". Stores may only depend on other Stores or a backend Adapter — Registries and Indexes depend on the Store, never the reverse.`,
+              comp.id,
+              isDraftCtx || ctx.isComponentDraft(depComp.id),
+            );
+          }
+        }
+
+        // Registry rule: the write path to its Store — it may depend only on
+        // that Store (or a backend Adapter); reaching workflow, read
+        // projections, or boundaries inverts the layering. Warning while the
+        // check is new; the written standard has always claimed it.
+        if (comp.componentType === 'Registry') {
+          if (depComp.componentType !== 'Store' && depComp.componentType !== 'Adapter') {
+            ctx.addIssue(
+              'warning',
+              'ARCHITECTURE_VIOLATION_REGISTRY_DEP',
+              `Architectural violation: Registry component "${comp.id}" should not depend on "${depComp.componentType}" component "${depComp.id}". A Registry is the write path to its Store and may depend only on that Store or a backend Adapter — the Registry never updates Indexes and never drives workflow.`,
               comp.id,
               isDraftCtx || ctx.isComponentDraft(depComp.id),
             );

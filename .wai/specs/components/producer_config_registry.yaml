@@ -1,13 +1,21 @@
 id: producer_config_registry
 name: Producer Config Registry
 description: >-
-  I/O manager for a project's producer configs (.wai/producers.json): per-target settings such as
-  Notion's parent page id. Modeled as a single file-backed Registry, mirroring the spec_loader
-  convention.
+  The project's producer-config boundary (.wai/producers.json): per-target settings such as Notion's
+  parent page id. A standalone read-through Store — the file is the persistence medium, this
+  component is the state boundary; every read hits the file, so hydration is definitionally covered.
+  (Previously mistyped as a file-backed Registry; retyped per the registry-taxonomy review.)
 subsystem: sdd_producers
-componentType: Registry
+componentType: Store
 owns: []
 dependsOn: []
+durability: read-through
+lint:
+  allow:
+    - code: UNOWNED_STORE
+      reason: >-
+        Sanctioned lightweight form: a small per-project config file with read/write/clear — a full
+        Repository around it would be ceremony. Consumer is workflow-layer (producer_orchestrator).
 status: complete
 createdAt: '2026-07-04T17:29:08.079Z'
-updatedAt: '2026-07-04T17:42:03.931Z'
+updatedAt: '2026-07-18T19:16:00.520Z'

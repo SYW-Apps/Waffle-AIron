@@ -255,9 +255,10 @@ export const lifecycleRule: SddRule = {
 export const durabilityRule: SddRule = {
   name: 'durability-round-trip',
   description:
-    'A Store declared durable must tag its contract methods with effect: read | write, and — when it has write-effect methods — at least one read-effect method must be reachable from a declared lifecycle init entrypoint (the hydration read-back). ram-projection Stores declare they are rebuilt, not restored, and are exempt.',
+    'Every Store must declare its durability (MISSING_DURABILITY): durable = persisted RAM projection (effect-tagged methods; writes require a hydration read-back reachable from a lifecycle init entrypoint), read-through = persisted with no RAM copy (every read IS the read-back — hydration exempt), ram-projection = rebuilt not restored, cache = evictable loss-safe memo state. The round-trip requirement applies to durable Stores only — the flagship semantic check is opt-out by declaration, never silently absent.',
   codes: [
     { code: 'DURABILITY_ON_NON_STORE', defaultSeverity: 'error', summary: 'durability declared on a component that is not a Store' },
+    { code: 'MISSING_DURABILITY', defaultSeverity: 'warning', summary: 'Store with no durability declaration — the round-trip machinery cannot know whether restart-survival is promised' },
     { code: 'MISSING_EFFECT_TAG', defaultSeverity: 'warning', summary: 'Durable Store contract method lacks an effect: read | write tag' },
     { code: 'MISSING_HYDRATION', defaultSeverity: 'error', summary: 'Durable Store is written but no read-back is reachable from any lifecycle init entrypoint' },
   ],
@@ -278,8 +279,23 @@ export const durabilityRule: SddRule = {
     const initReach = initSeeds.length ? walkNarrativeGraph(ctx, initSeeds, { followDispatchTables: false }) : null;
 
     for (const comp of ctx.components) {
-      if (!comp.durability) continue;
       const isDraftCtx = ctx.isComponentDraft(comp.id);
+
+      if (!comp.durability) {
+        // Undeclared durability hollows out the round-trip machinery: on a
+        // 12-store tree with 2 declarations the flagship check protects
+        // almost nothing. Exemption is by declaration, never by omission.
+        if (comp.componentType === 'Store') {
+          ctx.addIssue(
+            'warning',
+            'MISSING_DURABILITY',
+            `Store "${comp.id}" declares no durability. Declare one: durable (persisted RAM projection — hydration round-trip enforced), read-through (persisted, no RAM copy — every read is the read-back), ram-projection (rebuilt, not restored), or cache (evictable, loss-safe).`,
+            comp.id,
+            isDraftCtx,
+          );
+        }
+        continue;
+      }
 
       if (comp.componentType !== 'Store') {
         ctx.addIssue(
@@ -291,6 +307,9 @@ export const durabilityRule: SddRule = {
         );
         continue;
       }
+      // Only `durable` (persisted RAM projection) needs the boot read-back:
+      // read-through reads the medium on every call, ram-projection rebuilds,
+      // cache loss is behavior-preserving.
       if (comp.durability !== 'durable') continue;
 
       const methods = interfaceMethodsOf(ctx, comp.id);
