@@ -1,6 +1,21 @@
 import { SddRule } from './types.js';
 import { resolveSurfaceRef, isExternalNamespaceRef } from './namespace.js';
 
+// The one shortcut agents reach for when a Store link is refused is the one
+// that must never happen: folding the store's state into the consumer. Say so
+// on every Store-target violation, next to the CORRECT resolution.
+const NEVER_INLINE_STATE =
+  ' Never resolve this by merging the store\'s state into the consuming component — state hidden inside a logic block is invisible to the spec and unrecoverable.';
+
+const storeResolutionHint = (consumerType: string, storeId: string): string => {
+  if (consumerType === 'Specialist') {
+    return ` Resolution: wrap "${storeId}" in a Repository pattern (owns: Store + Registry + Index) and depend on that Repository facade instead.${NEVER_INLINE_STATE}`;
+  }
+  // Portal / Observer / View: even the Repository facade is out of reach —
+  // the hop goes through the logic side.
+  return ` Resolution: wrap "${storeId}" in a Repository pattern and reach it through an Orchestrator that uses the Repository facade.${NEVER_INLINE_STATE}`;
+};
+
 /**
  * The stereotype dependency matrix (intra-subsystem) and the bounded-context
  * boundary rules (cross-subsystem): only a local client Adapter may cross a
@@ -138,7 +153,8 @@ export const stereotypeDepsRule: SddRule = {
             ctx.addIssue(
               'error',
               'ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP',
-              `Architectural violation: ${comp.componentType} component "${comp.id}" cannot depend directly on "${depComp.componentType}" component "${depComp.id}". ${comp.componentType}s coordinate through Orchestrators (and Supervisors); they do not reach the data layer directly.`,
+              `Architectural violation: ${comp.componentType} component "${comp.id}" cannot depend directly on "${depComp.componentType}" component "${depComp.id}". ${comp.componentType}s coordinate through Orchestrators (and Supervisors); they do not reach the data layer directly.`
+              + (depComp.componentType === 'Store' ? storeResolutionHint(comp.componentType, depComp.id) : ''),
               comp.id,
               isDraftCtx || ctx.isComponentDraft(depComp.id),
             );
@@ -153,7 +169,8 @@ export const stereotypeDepsRule: SddRule = {
             ctx.addIssue(
               'error',
               'ARCHITECTURE_VIOLATION_SPECIALIST_DEP',
-              `Architectural violation: Specialist component "${comp.id}" cannot depend on "${depComp.componentType}" component "${depComp.id}". Specialists are narrow capabilities — they may use Repositories, Indexes, and Adapters, but not Orchestrators, Supervisors, Stores, Portals, or Observers.`,
+              `Architectural violation: Specialist component "${comp.id}" cannot depend on "${depComp.componentType}" component "${depComp.id}". Specialists are narrow capabilities — they may use Repositories, Indexes, and Adapters, but not Orchestrators, Supervisors, Stores, Portals, or Observers.`
+              + (depComp.componentType === 'Store' ? storeResolutionHint(comp.componentType, depComp.id) : ''),
               comp.id,
               isDraftCtx || ctx.isComponentDraft(depComp.id),
             );
@@ -207,7 +224,8 @@ export const stereotypeDepsRule: SddRule = {
             ctx.addIssue(
               'error',
               'ARCHITECTURE_VIOLATION_VIEW_DEP',
-              `Architectural violation: View component "${comp.id}" cannot depend on "${depComp.componentType}" component "${depComp.id}". Views must remain passive UI blocks and be decoupled from logical layers.`,
+              `Architectural violation: View component "${comp.id}" cannot depend on "${depComp.componentType}" component "${depComp.id}". Views must remain passive UI blocks and be decoupled from logical layers.`
+              + (depComp.componentType === 'Store' ? storeResolutionHint(comp.componentType, depComp.id) : ''),
               comp.id,
               isDraftCtx || ctx.isComponentDraft(depComp.id),
             );

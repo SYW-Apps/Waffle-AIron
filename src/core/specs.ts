@@ -1391,6 +1391,20 @@ export class SpecWorkspace {
         specToWrite.status = existing.status;
       }
     }
+    // Doctrine guidance at the moment it helps: fire once, at creation,
+    // BEFORE the usual member-first authoring order creates the owner — it
+    // tells the agent the two sanctioned paths and pre-empts the forbidden
+    // third one (folding the state into a consumer).
+    if (!existing && spec.componentType === 'Store'
+      && !findOwner(spec.id, this.scanAll().components)) {
+      notices.push(
+        `Store "${spec.id}" has no owning pattern yet. Recommended: create the Repository that owns it `
+        + `(plus its Registry and Index) and point consumers at the facade. For genuinely simple held state, `
+        + `a standalone Store is the sanctioned lightweight form — keep the state visible here (workflow-layer `
+        + `consumers only) and acknowledge the UNOWNED_STORE warning with a lint.allow reason. `
+        + `Never fold the state into a consuming component instead.`,
+      );
+    }
     // The nested layout normalizes folders after the write; the flat legacy
     // layout keeps the file where it is — say so when the subsystem changed,
     // or a re-add reads as "the parameter was ignored".

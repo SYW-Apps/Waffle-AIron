@@ -172,6 +172,39 @@ describe('component / interface / implementation parent-change notices', () => {
     expect(notices.some(n => n.includes('never moves') && n.includes('"igadget"'))).toBe(true);
   });
 
+  it('creating a Store without an owner returns the Repository-containment guidance notice', () => {
+    flatProject();
+    const notices = saveComponentSpec({
+      id: 'loose-store', name: 'LS', description: 'd', subsystem: 'billing', componentType: 'Store',
+      owns: [], dependsOn: [], status: 'draft', createdAt: now, updatedAt: now,
+    });
+    expect(notices.some(n => n.includes('create the Repository that owns it'))).toBe(true);
+    expect(notices.some(n => n.includes('standalone Store is the sanctioned lightweight form'))).toBe(true);
+    expect(notices.some(n => n.includes('Never fold the state into a consuming component'))).toBe(true);
+
+    // re-saving the same store does not repeat the guidance
+    const again = saveComponentSpec({
+      id: 'loose-store', name: 'LS', description: 'renamed', subsystem: 'billing', componentType: 'Store',
+      owns: [], dependsOn: [], status: 'draft', createdAt: now, updatedAt: now,
+    });
+    expect(again).toEqual([]);
+  });
+
+  it('creating a Store whose Repository owner already exists stays silent', () => {
+    flatProject();
+    const specs = path.join(proj, '.wai', 'specs');
+    fs.writeFileSync(
+      path.join(specs, 'components', 'unit-repository.yaml'),
+      `schemaVersion: 1.0.0\nid: unit-repository\nname: UR\ndescription: d\nsubsystem: billing\ncomponentType: Repository\nowns: [unit-store, unit-registry, unit-index]\ndependsOn: []\n${stamp}\n`,
+    );
+    invalidateSpecCache();
+    const notices = saveComponentSpec({
+      id: 'unit-store', name: 'US', description: 'd', subsystem: 'billing', componentType: 'Store',
+      owns: [], dependsOn: [], status: 'draft', createdAt: now, updatedAt: now,
+    });
+    expect(notices).toEqual([]);
+  });
+
   it('unchanged parents stay silent everywhere', () => {
     flatProject();
     const specs = path.join(proj, '.wai', 'specs');
