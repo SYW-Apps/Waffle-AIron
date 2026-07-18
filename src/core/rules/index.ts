@@ -111,6 +111,53 @@ export function composeRuleSequence(extraRules: SddRule[] = []): SddRule[] {
   return [...base, ...extraRules, lintAllowsRule];
 }
 
+// ---------------------------------------------------------------------------
+// Design depth — which layers a project/subsystem COMMITS to designing.
+// EXPECTATION codes (something deeper must exist / be complete) are gated by
+// the effective depth; SOUNDNESS codes (what is authored must be coherent)
+// are deliberately absent from this map and always apply. The gate runs
+// BEFORE severity overrides: a gated code is skipped, period — raising the
+// depth is the way to get it back.
+// ---------------------------------------------------------------------------
+
+type DesignDepth = import('../../models/index.js').DesignDepth;
+
+const DEPTH_RANK: Record<DesignDepth, number> = {
+  components: 2,
+  interfaces: 3,
+  implementations: 4,
+  narratives: 5,
+};
+
+/** Expectation code → the minimum design depth at which it applies. */
+const DEPTH_GATED_CODES: Record<string, DesignDepth> = {
+  // L3 expectations: contract content the design promises at interface depth.
+  MISSING_ENDPOINT: 'interfaces',
+  MISSING_EFFECT_TAG: 'interfaces',
+  UNUSED_TYPE: 'interfaces',
+  // L4 expectations: implementations and their code linkage.
+  MISSING_IMPLEMENTATION_METHOD: 'implementations',
+  MISSING_SOURCE_PATH: 'implementations',
+  MISSING_SOURCE_FILE: 'implementations',
+  SOURCE_PATH_ESCAPES_ROOT: 'implementations',
+  UNREALIZED_METHOD: 'implementations',
+  CONFORMANCE_ANALYSIS_SKIPPED: 'implementations',
+  CONFORMANCE_DEGRADED: 'implementations',
+  UNDECLARED_DEPENDENCY: 'implementations',
+  UNREALIZED_DEPENDENCY: 'implementations',
+  // L5 expectations: narratives and everything whose fuel is narrative edges
+  // (the reachability walk and the hydration round-trip would drown a
+  // narrative-less tree in findings about flows nobody designed).
+  MISSING_NARRATIVE: 'narratives',
+  INTENT_FLOOR: 'narratives',
+  UNNARRATED_COMPLEXITY: 'narratives',
+  DETAIL_BELOW_STEREOTYPE: 'narratives',
+  UNASSERTED_INVARIANT: 'narratives',
+  MISSING_HYDRATION: 'narratives',
+  UNUSED_COMPONENT: 'narratives',
+  UNUSED_METHOD: 'narratives',
+};
+
 // Completeness rules downgrade to warnings while the surrounding specs are
 // still draft/design — the tree is allowed to be unfinished, not inconsistent.
 const COMPLETENESS_RULES = new Set([
@@ -247,6 +294,37 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
 
   const isSpecInScope = makeScopeFilter({ components, interfaces, implementations, types, scopeSubsystem });
 
+  // ---- design depth resolution --------------------------------------------
+  // specId → owning subsystem, so a finding can be judged under the depth of
+  // the subsystem it belongs to (project default otherwise).
+  const subsystemOfSpec = new Map<string, string>();
+  for (const s of subsystems) subsystemOfSpec.set(s.id, s.id);
+  for (const c of components) subsystemOfSpec.set(c.id, c.subsystem);
+  for (const i of interfaces) {
+    const comp = componentMap.get(i.component);
+    if (comp) subsystemOfSpec.set(i.id, comp.subsystem);
+  }
+  for (const im of implementations) {
+    const contract = interfaceMap.get(im.contract);
+    const comp = contract ? componentMap.get(contract.component) : undefined;
+    if (comp) subsystemOfSpec.set(im.id, comp.subsystem);
+  }
+  for (const t of types) {
+    if (t.subsystem) subsystemOfSpec.set(t.id, t.subsystem);
+  }
+
+  const profileDepth = (profileName: string | undefined): import('../../models/index.js').DesignDepth | undefined =>
+    profileName ? extensions.profiles[profileName]?.rules?.designDepth : undefined;
+
+  const effectiveDesignDepth = (subsystemId: string | undefined): import('../../models/index.js').DesignDepth => {
+    const sub = subsystemId ? subsystems.find(s => s.id === subsystemId) : undefined;
+    return sub?.designDepth
+      ?? rules?.designDepth
+      ?? profileDepth(sub?.profile)
+      ?? profileDepth(projectType)
+      ?? 'narratives';
+  };
+
   const isComponentDraft = (compId: string): boolean => {
     const comp = componentMap.get(compId);
     if (!compId || !comp) return false;
@@ -345,6 +423,14 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
   ): void => {
     if (scopeSubsystem && specId && !isSpecInScope(specId)) {
       return;
+    }
+    // Design-depth gate (before severity resolution): expectation codes below
+    // the effective depth are skipped entirely — the team declared it does
+    // not design that layer, so nothing at that layer can be "missing".
+    const requiredDepth = DEPTH_GATED_CODES[code];
+    if (requiredDepth) {
+      const owner = specId ? subsystemOfSpec.get(specId) : undefined;
+      if (DEPTH_RANK[effectiveDesignDepth(owner)] < DEPTH_RANK[requiredDepth]) return;
     }
     const severity = getRuleSeverity(code, defaultSeverity, isDraftContext);
     if (severity === 'off') return;

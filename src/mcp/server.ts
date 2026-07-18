@@ -375,7 +375,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
-  reg<{ id: string; name: string; description: string; publicInterfaces?: { type: 'REST' | 'GraphQL' | 'MessageBus' | 'RPC' | 'Custom'; details: string; component?: string; interface?: string }[]; projectPath?: string; targetLanguage?: string; profile?: string; trustedLinks?: { subsystem: string; reason: string }[]; lifecycle?: { phase: 'init' | 'shutdown'; component: string; method: string; description?: string }[] }>(server,
+  reg<{ id: string; name: string; description: string; publicInterfaces?: { type: 'REST' | 'GraphQL' | 'MessageBus' | 'RPC' | 'Custom'; details: string; component?: string; interface?: string }[]; projectPath?: string; targetLanguage?: string; profile?: string; designDepth?: 'components' | 'interfaces' | 'implementations' | 'narratives'; trustedLinks?: { subsystem: string; reason: string }[]; lifecycle?: { phase: 'init' | 'shutdown'; component: string; method: string; description?: string }[] }>(server,
     'sdd_add_subsystem',
     {
       description: 'Add an L1 Subsystem / Service under the system boundary. publicInterfaces should bind each entry to the component that realizes it (the subsystem\'s published surface); if components do not exist yet, add them later with sdd_set_public_interfaces.',
@@ -392,6 +392,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         projectPath: z.string().optional().describe('Relative path to external project root for subsystem chaining'),
         targetLanguage: z.string().optional().describe('Override of the system-level targetLanguage for this subsystem'),
         profile: z.string().optional().describe('Architectural profile override for this subsystem (built-ins: backend, frontend-reactive, frontend-controller, lowlevel-os, game-ecs, realtime-embedded, plc-cyclic; extension packs may add more — unknown names get UNKNOWN_PROFILE)'),
+        designDepth: z.enum(['components', 'interfaces', 'implementations', 'narratives']).optional().describe('How deep THIS subsystem commits to designing (overrides project rules.designDepth; default narratives = full depth). Expectation checks below the depth are gated — soundness of authored content always applies.'),
         trustedLinks: z.array(z.object({
           subsystem: z.string().describe('Peer subsystem id'),
           reason: z.string().describe('Why the coupling is sanctioned (e.g. "dispatch latency fast lane")'),
@@ -404,7 +405,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         })).optional().describe('Declared init/shutdown flow roots — reachability entrypoints alongside Portals/Observers; required for durable-Store hydration checks (MISSING_HYDRATION).'),
       },
     },
-    ({ id, name, description, publicInterfaces, projectPath, targetLanguage, profile, trustedLinks, lifecycle }) => {
+    ({ id, name, description, publicInterfaces, projectPath, targetLanguage, profile, designDepth, trustedLinks, lifecycle }) => {
       try {
         const { loadSystemSpec, saveSubsystemSpec } = requireSpecs();
         const system = loadSystemSpec();
@@ -419,6 +420,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           projectPath,
           ...(targetLanguage ? { targetLanguage } : {}),
           ...(profile ? { profile } : {}),
+          ...(designDepth ? { designDepth } : {}),
           ...(lifecycle ? { lifecycle } : {}),
           trustedLinks: trustedLinks ?? [],
           status: 'draft',

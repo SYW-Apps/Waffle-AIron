@@ -215,6 +215,16 @@ export const SubsystemSpecSchema = z.object({
   targetLanguage: z.string().optional(),
   /** Explicitly sanctioned tight couplings with peer subsystems (see TrustedLinkSchema). */
   trustedLinks: z.array(TrustedLinkSchema).default([]),
+  /**
+   * Per-subsystem design-depth override (components | interfaces |
+   * implementations | narratives): how deep THIS subsystem commits to
+   * designing. Overrides the project rules.designDepth — a black-box or
+   * externally-owned subsystem can stop at interfaces while siblings go to
+   * L5, or one flagship subsystem can go deeper than the project default.
+   * Expectation checks below the depth are gated; soundness of authored
+   * content never is.
+   */
+  designDepth: z.enum(['components', 'interfaces', 'implementations', 'narratives']).optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
   /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */

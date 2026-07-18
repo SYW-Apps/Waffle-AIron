@@ -89,6 +89,20 @@ export const ComplexityRuleConfigSchema = z.object({
 });
 export type ComplexityRuleConfig = z.infer<typeof ComplexityRuleConfigSchema>;
 
+/**
+ * How deep this project (or subsystem, or pack profile) commits to DESIGNING.
+ * The validator gates EXPECTATION checks by depth — nothing below the declared
+ * depth is demanded to exist (no missing-narrative/-implementation/-endpoint
+ * findings, no reachability walk that would need narrative edges) — while
+ * SOUNDNESS checks always apply to whatever IS authored (a malformed narrative
+ * errors even at designDepth: interfaces). Default is `narratives` (full
+ * depth): shallower depth is a per-team choice, never the tool's default.
+ * Resolution: subsystem.designDepth → project rules.designDepth → the
+ * subsystem's pack-profile designDepth → narratives.
+ */
+export const DesignDepthSchema = z.enum(['components', 'interfaces', 'implementations', 'narratives']);
+export type DesignDepth = z.infer<typeof DesignDepthSchema>;
+
 export const RulesConfigSchema = z.object({
   /**
    * Prevent two agents from declaring overlapping ownedPaths.
@@ -138,6 +152,9 @@ export const RulesConfigSchema = z.object({
 
   /** Dynamic structural complexity caps (method limit, step limit, dependency limit) */
   complexity: ComplexityRuleConfigSchema.optional(),
+
+  /** Project-default design depth (see DesignDepthSchema); subsystems may override. */
+  designDepth: DesignDepthSchema.optional(),
 });
 
 export type RulesConfig = z.infer<typeof RulesConfigSchema>;
