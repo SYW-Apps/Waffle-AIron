@@ -508,7 +508,7 @@ export async function runHostDoctor(options: HostOptions & { fix?: boolean } = {
 
 // ── wairon host permission <action> ──────────────────────────────────────────
 
-const CAPABILITIES: Capability[] = ['project:read', 'project:create', 'project:write', 'project:admin', 'approval:decide'];
+const CAPABILITIES: Capability[] = ['project:read', 'project:create', 'project:write', 'project:admin', 'approval:decide', 'share:create'];
 const PERMISSION_VALUES: PermissionValue[] = ['yes', 'approval', 'no', 'inherit'];
 
 /** The assignment scope from the mutually exclusive --project/--unit/--instance flags. */

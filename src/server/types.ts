@@ -23,7 +23,8 @@ export type Capability =
   | 'project:create'
   | 'project:write'
   | 'project:admin'
-  | 'approval:decide';
+  | 'approval:decide'
+  | 'share:create';
 
 /** A three-valued permission plus `inherit`. The values ARE the approval flow:
  *  `yes` = act directly, `approval` = create an approval request, `no` = deny
@@ -529,6 +530,112 @@ export interface GitBackingBinding {
   lastSyncAt?: string;
   createdAt: string;
   createdBy: PrincipalSubject;
+}
+
+// ── Public share links + artifact hosting (sdd_host) ─────────────────────────
+
+/** A public share link: an unguessable token (stored ONLY as a salted hash)
+ *  granting read-only access to a single captured view of one project. */
+export interface ShareLink {
+  id: string;
+  /** Salted hash of the share token; the raw token is never stored. */
+  tokenHash: string;
+  projectId: string;
+  /** The captured view kind (architecture | types | databases). */
+  view: string;
+  /** The immutable snapshot this link serves. */
+  snapshotId: string;
+  mode: 'snapshot' | 'live';
+  enabled: boolean;
+  /** ISO-8601 expiry; absent = no expiry. */
+  expiresAt?: string;
+  allowDownloadHtml: boolean;
+  allowDownloadOpenapi: boolean;
+  /** CSP frame-ancestors embedding allowlist (empty = not embeddable). */
+  frameAncestors: string[];
+  createdBy: PrincipalSubject;
+  createdAt: string;
+}
+
+/** An immutable, point-in-time capture a share link serves — written once. */
+export interface ShareSnapshot {
+  id: string;
+  projectId: string;
+  view: string;
+  capturedAt: string;
+  /** Serialized CanvasModel JSON for the view. */
+  canvasModel?: string;
+  /** Serialized OpenAPI document, when captured. */
+  openapi?: string;
+  /** Standalone HTML export, when captured. */
+  html?: string;
+}
+
+/** One recorded access to a share link on the public surface. */
+export interface ShareAccessEntry {
+  id: string;
+  linkId: string;
+  at: string;
+  ip: string;
+  userAgent: string;
+  referer?: string;
+  /** served | denied-disabled | denied-expired | not-found | denied-download. */
+  outcome: string;
+}
+
+/** The owner's request to create a share link. */
+export interface ShareLinkInput {
+  projectId: string;
+  view: string;
+  mode: 'snapshot' | 'live';
+  /** Artifact kinds to capture (canvas | html | openapi). */
+  artifacts: string[];
+  expiresAt?: string;
+  allowDownloadHtml?: boolean;
+  allowDownloadOpenapi?: boolean;
+  frameAncestors?: string[];
+}
+
+/** The mutable settings an owner may change on an existing share link. */
+export interface ShareLinkUpdate {
+  enabled?: boolean;
+  expiresAt?: string;
+  allowDownloadHtml?: boolean;
+  allowDownloadOpenapi?: boolean;
+  frameAncestors?: string[];
+}
+
+/** Result of creating a link: the record + the raw token, shown once. */
+export interface ShareLinkCreated {
+  link: ShareLink;
+  token: string;
+}
+
+/** Request context recorded on every unauthenticated share access. */
+export interface ShareRequestMeta {
+  ip: string;
+  userAgent: string;
+  referer?: string;
+}
+
+/** Outcome of resolving a share token — the snapshot model + download perms. */
+export interface SharedViewResult {
+  found: boolean;
+  outcome: string;
+  link?: ShareLink;
+  /** Serialized snapshot canvas model, on success. */
+  model?: string;
+  allowDownloadHtml?: boolean;
+  allowDownloadOpenapi?: boolean;
+}
+
+/** Outcome of a share artifact download. */
+export interface ShareArtifactResult {
+  found: boolean;
+  outcome: string;
+  kind?: string;
+  content?: string;
+  contentType?: string;
 }
 
 /** Maps an organization unit's previous qualified id to its new one after a

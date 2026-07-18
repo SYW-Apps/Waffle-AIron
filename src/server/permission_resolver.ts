@@ -305,4 +305,5 @@ export const CAPABILITIES: Capability[] = [
   'project:write',
   'project:admin',
   'approval:decide',
+  'share:create',
 ];

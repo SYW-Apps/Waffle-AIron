@@ -30,6 +30,7 @@ import {
   listWebSessionsBySubject,
 } from './websessions.js';
 import { resolveProjectRoot } from './projects.js';
+import * as shareadmin from './shareadminhttp.js';
 import { listProjectPlacements } from './organization.js';
 import { runWithProjectRoot } from '../utils/fs.js';
 import { hostCore, validateProjectAsComplete } from './adapters.js';
@@ -3475,6 +3476,34 @@ export async function handleWebRequest(
       // POST /web/admin/git-backing/sync { id } — run the mirror sync now.
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'git-backing' && parts[3] === 'sync') {
         return opsSyncGitBacking(cfg, sessionId, body, res);
+      }
+
+      // ── Share links (owner-side; gated on share:create) ───────────────────
+      // POST /web/admin/share { ...ShareLinkInput } — create a link (token once).
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'share') {
+        return sendJson(res, 201, shareadmin.postCreate(cfg, sessionId, body));
+      }
+      // GET /web/admin/share?projectId= — a project's share links.
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'share') {
+        return sendJson(res, 200, { links: shareadmin.getList(cfg, sessionId, q(url, 'projectId') ?? '') });
+      }
+      // POST /web/admin/share/refresh { linkId } — re-capture the snapshot.
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'share' && parts[3] === 'refresh') {
+        return sendJson(res, 200, shareadmin.postRefresh(cfg, sessionId, body));
+      }
+      // POST /web/admin/share/update { linkId, changes } — mutable settings.
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'share' && parts[3] === 'update') {
+        return sendJson(res, 200, shareadmin.postUpdate(cfg, sessionId, body));
+      }
+      // POST /web/admin/share/remove { linkId } — revoke.
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'share' && parts[3] === 'remove') {
+        shareadmin.postRemove(cfg, sessionId, body);
+        return sendJson(res, 200, { ok: true });
+      }
+      // GET /web/admin/share/access?linkId=&limit= — the link's access log.
+      if (req.method === 'GET' && parts.length === 4 && parts[2] === 'share' && parts[3] === 'access') {
+        const limit = Number(q(url, 'limit') ?? '100') || 100;
+        return sendJson(res, 200, { entries: shareadmin.getAccessLog(cfg, sessionId, q(url, 'linkId') ?? '', limit) });
       }
 
       // ── Existing scoped control-plane reads (unchanged) ───────────────────

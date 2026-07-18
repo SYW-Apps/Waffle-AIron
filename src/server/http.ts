@@ -6,6 +6,7 @@ import { handleMcpRequest, handleViewDiagram } from './request.js';
 import { sendJson, bearerToken } from './httpio.js';
 import { handleWebRequest, sessionCookieValue, startDevSession, setSessionCookie } from './web.js';
 import { getRealtimeHub, channelsForWebMutation, publishChange } from './realtime.js';
+import { serveSharedView, serveSharedModel, serveSharedOpenApi, serveSharedDownload } from './sharehttp.js';
 import * as admin from './admin.js';
 import * as packs from './packs.js';
 import { ensureInstanceIdentity } from './instance.js';
@@ -142,6 +143,10 @@ const WEB_MUTATION_PATHS = new Set<string>([
   '/web/admin/git-backing',
   '/web/admin/git-backing/remove',
   '/web/admin/git-backing/sync',
+  '/web/admin/share',
+  '/web/admin/share/refresh',
+  '/web/admin/share/update',
+  '/web/admin/share/remove',
   '/web/projects/packs',
   '/web/projects/packs/remove',
   '/web/projects/policy/reconcile',
@@ -180,6 +185,34 @@ export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResp
   }
   if (req.method === 'GET' && url.pathname === '/view/diagram') {
     handleViewDiagram(cfg, req, res);
+    return;
+  }
+
+  // Public share surface: GET /share/:token[/model|/openapi|/download/:kind].
+  // Unauthenticated + token-gated (the share access orchestrator resolves the
+  // token, logs the access, and sets the hardening headers). Gated by the same
+  // web-UI exposure switch as the app, so disabling the web UI disables sharing.
+  if (req.method === 'GET' && url.pathname.startsWith('/share/')) {
+    if (!resolveExposurePolicy(cfg).webUiEnabled && cfg.devMode !== true) {
+      sendJson(res, 404, { error: 'not found' });
+      return;
+    }
+    const parts = url.pathname.split('/').filter(Boolean); // ['share', token, sub?, kind?]
+    const token = decodeURIComponent(parts[1] ?? '');
+    const sub = parts[2];
+    if (!token) {
+      sendJson(res, 404, { error: 'not found' });
+    } else if (!sub) {
+      serveSharedView(cfg, token, req, res);
+    } else if (sub === 'model') {
+      serveSharedModel(cfg, token, req, res);
+    } else if (sub === 'openapi') {
+      serveSharedOpenApi(cfg, token, req, res);
+    } else if (sub === 'download' && parts[3]) {
+      serveSharedDownload(cfg, token, decodeURIComponent(parts[3]), req, res);
+    } else {
+      sendJson(res, 404, { error: 'not found' });
+    }
     return;
   }
 

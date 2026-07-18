@@ -175,6 +175,8 @@ export function channelsForWebMutation(pathname: string, body: unknown): string[
     add('providers');
   } else if (pathname.startsWith('/web/admin/git-backing')) {
     add('git-backing');
+  } else if (pathname.startsWith('/web/admin/share')) {
+    add('share');
   } else if (
     pathname.startsWith('/web/admin/packs') ||
     pathname === '/web/admin/policy' ||

@@ -3,7 +3,13 @@
  * Only the fields the UI consumes are modeled; the server remains authoritative.
  */
 
-export type Capability = 'project:read' | 'project:create' | 'project:write' | 'project:admin' | 'approval:decide';
+export type Capability =
+  | 'project:read'
+  | 'project:create'
+  | 'project:write'
+  | 'project:admin'
+  | 'approval:decide'
+  | 'share:create';
 export type PermissionValue = 'yes' | 'approval' | 'no' | 'inherit';
 export type ScopeKind = 'instance' | 'unit' | 'project';
 
@@ -13,6 +19,7 @@ export const CAPABILITIES: Capability[] = [
   'project:write',
   'project:admin',
   'approval:decide',
+  'share:create',
 ];
 
 export const PERMISSION_VALUES: PermissionValue[] = ['inherit', 'yes', 'approval', 'no'];
