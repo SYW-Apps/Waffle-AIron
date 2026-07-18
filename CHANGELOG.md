@@ -152,6 +152,15 @@ lint.allow); narrative-bearing trees may see `CALL_STEP_UNREALIZED` where
 per-method `symbol` maps are missing. `Store → Registry` edges are now errors
 (the standard always said so; none existed in wairon's own tree).
 
+**Dogfood: spec_loader promoted to a real Repository.** The
+REGISTRY_WITHOUT_STORE debt marker on wairon's own spec loader is retired the
+honest way: `spec_loader` is now a Repository owning `spec_file_store`
+(read-through Store over the YAML tree, `readYamlFile`/`writeYamlFile`/
+`listFilesRecursive` symbols), `spec_registry` (validated write face + the
+round-trip dry run), and `spec_index` (read/lookup face). The facade's 16
+methods are pure 1:1 forwards — verified by the new `FACADE_FORWARDING` rule
+on a real remodel. Spec-tree-only change; the code already had this shape.
+
 ### Extension packs: pack-provided AI skills + versioned pattern references (new)
 
 Two generic extension-pack capabilities so profiles and wrapper products can

@@ -1,0 +1,170 @@
+id: spec_index_impl
+name: Spec Index Implementation
+description: >-
+  Read/lookup pipeline of the spec workspace: path resolution across flat and per-subsystem layouts,
+  document reads through the file store, and level-schema parsing that collects loader issues
+  instead of throwing.
+contract: ispec_index
+sourcePath: src/core/specs.ts
+methods:
+  - name: loadSystemSpec
+    narrative:
+      - stepNumber: 1
+        description: Resolve the system spec path (.index.yaml at the specs root)
+        type: local
+      - stepNumber: 2
+        description: Read the YAML document through the file store
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: read
+      - stepNumber: 3
+        description: Parse against SystemSpecSchema; an absent document yields null
+        type: local
+  - name: loadSubsystemSpecs
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Walk the specs tree for subsystem documents (the workspace scan is recursive across flat
+          and per-subsystem layouts)
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: listTree
+      - stepNumber: 2
+        description: Read each listed file's document through the file store
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: read
+      - stepNumber: 3
+        description: >-
+          Parse each against SubsystemSpecSchema, qualifying namespaces and collecting refusals as
+          loader issues — a bad file never aborts the sweep
+        type: local
+  - name: loadSubsystemSpec
+    narrative:
+      - stepNumber: 1
+        description: Resolve the subsystem id to its spec file path
+        type: local
+      - stepNumber: 2
+        description: Read the YAML document through the file store
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: read
+      - stepNumber: 3
+        description: Parse against SubsystemSpecSchema, qualifying namespaces; an absent document yields null
+        type: local
+  - name: loadComponentSpecs
+    narrative:
+      - stepNumber: 1
+        description: Walk the specs tree for component documents (flat and per-subsystem layouts)
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: listTree
+      - stepNumber: 2
+        description: Read each listed file's document through the file store
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: read
+      - stepNumber: 3
+        description: >-
+          Parse each against ComponentSpecSchema, qualifying namespaces and collecting refusals as
+          loader issues
+        type: local
+  - name: loadComponentSpec
+    narrative:
+      - stepNumber: 1
+        description: Resolve the component id to its spec file path (flat or per-subsystem layout)
+        type: local
+      - stepNumber: 2
+        description: Read the YAML document through the file store
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: read
+      - stepNumber: 3
+        description: Parse against ComponentSpecSchema, qualifying namespaces; an absent document yields null
+        type: local
+  - name: loadInterfaceSpecs
+    narrative:
+      - stepNumber: 1
+        description: Walk the specs tree for interface documents (flat and per-subsystem layouts)
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: listTree
+      - stepNumber: 2
+        description: Read each listed file's document through the file store
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: read
+      - stepNumber: 3
+        description: >-
+          Parse each against InterfaceSpecSchema, qualifying namespaces and collecting refusals as
+          loader issues
+        type: local
+  - name: loadInterfaceSpec
+    narrative:
+      - stepNumber: 1
+        description: Resolve the interface id to its spec file path
+        type: local
+      - stepNumber: 2
+        description: Read the YAML document through the file store
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: read
+      - stepNumber: 3
+        description: Parse against InterfaceSpecSchema, qualifying namespaces; an absent document yields null
+        type: local
+  - name: loadImplementationSpecs
+    narrative:
+      - stepNumber: 1
+        description: Walk the specs tree for implementation documents (flat and per-subsystem layouts)
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: listTree
+      - stepNumber: 2
+        description: Read each listed file's document through the file store
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: read
+      - stepNumber: 3
+        description: >-
+          Parse each against ImplementationSpecSchema, qualifying namespaces and collecting refusals
+          as loader issues
+        type: local
+  - name: loadImplementationSpec
+    narrative:
+      - stepNumber: 1
+        description: Resolve the implementation id to its spec file path
+        type: local
+      - stepNumber: 2
+        description: Read the YAML document through the file store
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: read
+      - stepNumber: 3
+        description: >-
+          Parse against ImplementationSpecSchema, qualifying namespaces; an absent document yields
+          null
+        type: local
+  - name: loadTypeSpecs
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Walk the full specs tree for type documents — types live flat, per-subsystem, and in
+          groups
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: listTree
+      - stepNumber: 2
+        description: Read each type document through the file store
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: read
+      - stepNumber: 3
+        description: Parse each against TypeSpecSchema, collecting refusals as loader issues
+        type: local
+      - stepNumber: 4
+        description: Return the parsed type specs
+        type: return
+        outcome: TypeSpec[]
+status: complete
+createdAt: '2026-07-18T22:57:53.605Z'
+updatedAt: '2026-07-18T22:59:16.935Z'

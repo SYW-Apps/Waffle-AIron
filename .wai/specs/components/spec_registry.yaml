@@ -1,0 +1,15 @@
+id: spec_registry
+name: Spec Registry
+description: >-
+  Validated write face of the spec repository: every save qualifies ids, relativizes namespaces for
+  the target mount, stamps updatedAt, and re-parses through the writer schema before routing the
+  serialized document to the file store; also exercises that same writer pipeline in memory for the
+  round-trip dry run.
+subsystem: sdd_core
+componentType: Registry
+owns: []
+dependsOn:
+  - spec_file_store
+status: complete
+createdAt: '2026-07-18T22:57:53.067Z'
+updatedAt: '2026-07-18T22:57:53.836Z'

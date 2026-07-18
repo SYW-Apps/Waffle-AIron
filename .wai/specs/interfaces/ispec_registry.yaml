@@ -1,0 +1,39 @@
+id: ispec_registry
+name: Spec Registry Interface
+description: >-
+  Validated write face of the spec repository: per-level saves through the writer schema, plus the
+  in-memory round-trip dry run over the same pipeline.
+component: spec_registry
+methods:
+  - name: saveSystemSpec
+    description: Validates and persists the L0 system specification.
+    signature: 'saveSystemSpec(spec: SystemSpec): void'
+    returns: void
+  - name: saveSubsystemSpec
+    description: Validates and persists a subsystem specification.
+    signature: 'saveSubsystemSpec(spec: SubsystemSpec): void'
+    returns: void
+  - name: saveComponentSpec
+    description: Validates and persists a component specification, returning placement notices.
+    signature: 'saveComponentSpec(spec: ComponentSpec): void'
+    returns: void
+  - name: saveInterfaceSpec
+    description: Validates and persists an interface specification, returning placement notices.
+    signature: 'saveInterfaceSpec(spec: InterfaceSpec): void'
+    returns: void
+  - name: saveImplementationSpec
+    description: Validates and persists an implementation specification, returning placement notices.
+    signature: 'saveImplementationSpec(spec: ImplementationSpec): void'
+    returns: void
+  - name: dryRunSerializeSpecs
+    description: >-
+      Re-serializes every currently loaded spec in memory through the exact writer pipeline the save
+      paths use — same relativization, same schema parse — without touching the filesystem; returns
+      one ROUNDTRIP_SERIALIZATION issue per refused spec and never throws for an unserializable one.
+    signature: 'dryRunSerializeSpecs(include?: (specId: string) => boolean): ValidationIssue[]'
+    returns: ValidationIssue[]
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-07-18T22:57:53.350Z'
+updatedAt: '2026-07-18T22:57:54.007Z'

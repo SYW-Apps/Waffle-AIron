@@ -1,0 +1,96 @@
+id: spec_registry_impl
+name: Spec Registry Implementation
+description: >-
+  Validated write pipeline of the spec workspace: namespace relativization, updatedAt stamping,
+  writer-schema re-parse, and persistence through the file store; the dry run exercises the
+  identical pipeline in memory.
+contract: ispec_registry
+sourcePath: src/core/specs.ts
+methods:
+  - name: saveSystemSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Stamp updatedAt and re-parse the system spec through the writer schema — a refusal aborts
+          the save
+        type: local
+      - stepNumber: 2
+        description: Persist the serialized document to the system spec path through the file store
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: write
+  - name: saveSubsystemSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Qualify ids, relativize namespaces for the target mount, stamp updatedAt, and re-parse
+          through the writer schema — a refusal aborts the save
+        type: local
+      - stepNumber: 2
+        description: Persist the serialized document to its subsystem spec path through the file store
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: write
+  - name: saveComponentSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Qualify ids, relativize namespaces, stamp updatedAt, re-parse through the writer schema,
+          and collect placement notices for layout decisions the caller should see
+        type: local
+      - stepNumber: 2
+        description: Persist the serialized document to its component spec path through the file store
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: write
+  - name: saveInterfaceSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Qualify ids, relativize namespaces, stamp updatedAt, re-parse through the writer schema,
+          and collect placement notices
+        type: local
+      - stepNumber: 2
+        description: Persist the serialized document to its interface spec path through the file store
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: write
+  - name: saveImplementationSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Qualify ids, relativize namespaces, stamp updatedAt, re-parse through the writer schema,
+          and collect placement notices
+        type: local
+      - stepNumber: 2
+        description: Persist the serialized document to its implementation spec path through the file store
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: write
+  - name: dryRunSerializeSpecs
+    narrative: []
+    detail: intent
+    intent: >-
+      Re-serializes every currently loaded spec — subsystems, components, interfaces,
+      implementations, types, AND groups — in memory through the exact writer pipeline the save
+      paths use: the same deepest-mount prefix derivation, the same namespace relativization, and
+      the same schema parse, shared code with the real save path so the check can never drift from
+      what a write would actually do, without touching the filesystem. An optional include predicate
+      skips out-of-scope specs before the expensive clone and parse, so scoped validation pays
+      scoped cost. For each spec whose serialized form the writer schema refuses, collects a
+      ROUNDTRIP_SERIALIZATION issue naming the spec id and the offending field path (rendered by the
+      same formatter as the save-time refusal, so the two outputs correlate); an unserializable spec
+      never throws, it only surfaces issues. Returns the collected issues so validate reports at
+      validate time every refusal that lock's status promotion or any later save would otherwise
+      raise mid-write.
+lint:
+  allow:
+    - code: UNNARRATED_COMPLEXITY
+      reason: >-
+        dryRunSerializeSpecs is a uniform per-spec loop over the writer relativization + schema
+        pipeline; its branching is per-kind dispatch and per-spec error collection — the semantics
+        live in the writer pipeline it exercises, and ROUNDTRIP_SERIALIZATION findings carry the
+        behavior contract.
+status: complete
+createdAt: '2026-07-18T22:57:53.545Z'
+updatedAt: '2026-07-18T22:57:54.177Z'

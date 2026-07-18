@@ -1,130 +1,125 @@
 id: spec_loader_impl
 name: Spec Loader Implementation
-description: Concrete implementation of the Spec Loader Interface using js-yaml and Zod schemas.
+description: >-
+  Pure repository facade: every method forwards 1:1 to the owned face that does the work — loads to
+  the Spec Index, saves and the round-trip dry run to the Spec Registry.
 contract: ispec_loader
 sourcePath: src/core/specs.ts
 methods:
   - name: loadSystemSpec
     narrative:
       - stepNumber: 1
-        description: Determine the system spec path using AI_PATHS.specsSystem()
-        type: local
-      - stepNumber: 2
-        description: Read system.yaml if it exists and parse it using SystemSpecSchema
-        type: local
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: loadSystemSpec
   - name: saveSystemSpec
     narrative:
       - stepNumber: 1
-        description: Serialize the SystemSpec object and write to system.yaml
-        type: local
+        description: Forward 1:1 to the registry write face
+        type: call
+        targetComponent: spec_registry
+        targetMethod: saveSystemSpec
   - name: loadSubsystemSpecs
     narrative:
       - stepNumber: 1
-        description: List all YAML files in the subsystems specification directory
-        type: local
-      - stepNumber: 2
-        description: Read and parse each file against SubsystemSpecSchema, collecting Zod errors
-        type: local
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: loadSubsystemSpecs
   - name: loadSubsystemSpec
     narrative:
       - stepNumber: 1
-        description: Read the specified subsystem spec file and validate against SubsystemSpecSchema
-        type: local
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: loadSubsystemSpec
   - name: saveSubsystemSpec
     narrative:
       - stepNumber: 1
-        description: Update the updatedAt timestamp and write the subsystem spec to subsystems/*.yaml
-        type: local
+        description: Forward 1:1 to the registry write face
+        type: call
+        targetComponent: spec_registry
+        targetMethod: saveSubsystemSpec
   - name: loadComponentSpecs
     narrative:
       - stepNumber: 1
-        description: List all YAML files in the components specification directory
-        type: local
-      - stepNumber: 2
-        description: Read and parse each file against ComponentSpecSchema, collecting Zod errors
-        type: local
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: loadComponentSpecs
   - name: loadComponentSpec
     narrative:
       - stepNumber: 1
-        description: Read the specified component spec file and validate against ComponentSpecSchema
-        type: local
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: loadComponentSpec
   - name: saveComponentSpec
     narrative:
       - stepNumber: 1
-        description: Update the updatedAt timestamp and write the component spec to components/*.yaml
-        type: local
+        description: Forward 1:1 to the registry write face
+        type: call
+        targetComponent: spec_registry
+        targetMethod: saveComponentSpec
   - name: loadInterfaceSpecs
     narrative:
       - stepNumber: 1
-        description: List all YAML files in the interfaces specification directory
-        type: local
-      - stepNumber: 2
-        description: Read and parse each file against InterfaceSpecSchema, collecting Zod errors
-        type: local
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: loadInterfaceSpecs
   - name: loadInterfaceSpec
     narrative:
       - stepNumber: 1
-        description: Read the specified interface spec file and validate against InterfaceSpecSchema
-        type: local
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: loadInterfaceSpec
   - name: saveInterfaceSpec
     narrative:
       - stepNumber: 1
-        description: Update the updatedAt timestamp and write the interface spec to interfaces/*.yaml
-        type: local
+        description: Forward 1:1 to the registry write face
+        type: call
+        targetComponent: spec_registry
+        targetMethod: saveInterfaceSpec
   - name: loadImplementationSpecs
     narrative:
       - stepNumber: 1
-        description: List all YAML files in the implementations specification directory
-        type: local
-      - stepNumber: 2
-        description: Read and parse each file against ImplementationSpecSchema, collecting Zod errors
-        type: local
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: loadImplementationSpecs
   - name: loadImplementationSpec
     narrative:
       - stepNumber: 1
-        description: Read the specified implementation spec file and validate against ImplementationSpecSchema
-        type: local
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: loadImplementationSpec
   - name: saveImplementationSpec
     narrative:
       - stepNumber: 1
-        description: Update the updatedAt timestamp and write the implementation spec to implementations/*.yaml
-        type: local
+        description: Forward 1:1 to the registry write face
+        type: call
+        targetComponent: spec_registry
+        targetMethod: saveImplementationSpec
   - name: loadTypeSpecs
     narrative:
       - stepNumber: 1
-        description: List all YAML files in the types specification directory
-        type: local
-      - stepNumber: 2
-        description: Read and parse each file against TypeSpecSchema, collecting Zod errors
-        type: local
-      - stepNumber: 3
-        description: Return the array of parsed type specs
-        type: return
-        outcome: TypeSpec[]
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: loadTypeSpecs
   - name: dryRunSerializeSpecs
-    narrative: []
-    detail: intent
-    intent: >-
-      Re-serializes every currently loaded spec — subsystems, components, interfaces,
-      implementations, types, AND groups — in memory through the exact writer pipeline the save
-      paths use: the same deepest-mount prefix derivation, the same namespace relativization, and
-      the same schema parse, shared code with the real save path so the check can never drift from
-      what a write would actually do, without touching the filesystem. An optional include predicate
-      skips out-of-scope specs before the expensive clone and parse, so scoped validation pays
-      scoped cost. For each spec whose serialized form the writer schema refuses, collects a
-      ROUNDTRIP_SERIALIZATION issue naming the spec id and the offending field path (rendered by the
-      same formatter as the save-time refusal, so the two outputs correlate); an unserializable spec
-      never throws, it only surfaces issues. Returns the collected issues so validate reports at
-      validate time every refusal that lock's status promotion or any later save would otherwise
-      raise mid-write.
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the registry write face, which runs the writer pipeline in memory
+        type: call
+        targetComponent: spec_registry
+        targetMethod: dryRunSerializeSpecs
 lint:
-  allow:
-    - code: UNNARRATED_COMPLEXITY
-      reason: >-
-        dryRunSerializeSpecs is a uniform per-spec loop over the writer relativization + schema
-        pipeline; its branching is per-kind dispatch and per-spec error collection — the semantics
-        live in the writer pipeline it exercises, and ROUNDTRIP_SERIALIZATION findings carry the
-        behavior contract.
+  allow: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-18T14:19:01.606Z'
+updatedAt: '2026-07-18T22:57:53.720Z'

@@ -1,0 +1,50 @@
+id: ispec_index
+name: Spec Index Interface
+description: >-
+  Read/lookup face of the spec repository: per-level bulk and by-id loads, resolving file locations
+  and parsing against the level schemas.
+component: spec_index
+methods:
+  - name: loadSystemSpec
+    description: Loads the L0 system specification, or null when the project has none.
+    signature: 'loadSystemSpec(): SystemSpec | null'
+    returns: SystemSpec | null
+  - name: loadSubsystemSpecs
+    description: Loads all L1 subsystem specifications.
+    signature: 'loadSubsystemSpecs(): SubsystemSpec[]'
+    returns: SubsystemSpec[]
+  - name: loadSubsystemSpec
+    description: Loads a single subsystem specification by id.
+    signature: 'loadSubsystemSpec(id: string): SubsystemSpec | null'
+    returns: SubsystemSpec | null
+  - name: loadComponentSpecs
+    description: Loads all L2 component specifications.
+    signature: 'loadComponentSpecs(): ComponentSpec[]'
+    returns: ComponentSpec[]
+  - name: loadComponentSpec
+    description: Loads a single component specification by id.
+    signature: 'loadComponentSpec(id: string): ComponentSpec | null'
+    returns: ComponentSpec | null
+  - name: loadInterfaceSpecs
+    description: Loads all L3 interface specifications.
+    signature: 'loadInterfaceSpecs(): InterfaceSpec[]'
+    returns: InterfaceSpec[]
+  - name: loadInterfaceSpec
+    description: Loads a single interface specification by id.
+    signature: 'loadInterfaceSpec(id: string): InterfaceSpec | null'
+    returns: InterfaceSpec | null
+  - name: loadImplementationSpecs
+    description: Loads all L4 implementation specifications.
+    signature: 'loadImplementationSpecs(): ImplementationSpec[]'
+    returns: ImplementationSpec[]
+  - name: loadImplementationSpec
+    description: Loads a single implementation specification by id.
+    signature: 'loadImplementationSpec(id: string): ImplementationSpec | null'
+    returns: ImplementationSpec | null
+  - name: loadTypeSpecs
+    description: Loads all type specifications across flat, per-subsystem, and grouped layouts.
+    signature: 'loadTypeSpecs(): TypeSpec[]'
+    returns: TypeSpec[]
+status: complete
+createdAt: '2026-07-18T22:57:53.410Z'
+updatedAt: '2026-07-18T22:57:54.065Z'
