@@ -121,6 +121,9 @@ const COMPLETENESS_RULES = new Set([
   'CONFORMANCE_ANALYSIS_SKIPPED',
   'UNDECLARED_DEPENDENCY',
   'UNREALIZED_DEPENDENCY',
+  // Detail sufficiency reads the realized code like the conformance family
+  // does — a draft tree is allowed to disagree with its code.
+  'UNNARRATED_COMPLEXITY',
 ]);
 
 export interface ScopeFilterOptions {

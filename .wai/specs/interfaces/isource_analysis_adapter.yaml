@@ -16,9 +16,10 @@ methods:
       AST when the TypeScript compiler module resolves dynamically for ts/js, else the language's
       declarative pattern table (built-in or extension-pack registered), else the generic
       word-boundary scan — and return per-file facts (declaration-tier names, string-literal and
-      property-access anchors, exported names, import specifiers) graded exact | pattern | generic.
-      Deterministic over file contents; a single file's analysis failure degrades that file, never
-      the run.
+      property-access anchors, exported names, import specifiers, and — at exact grade only —
+      per-named-function cyclomatic complexity, fuel for the detail-sufficiency lint; lower grades
+      omit complexity rather than guess) graded exact | pattern | generic. Deterministic over file
+      contents; a single file's analysis failure degrades that file, never the run.
     signature: 'buildCodeModel(implementations: ImplementationSpec[], projectRoot: string): CodeModel'
     returns: CodeModel
     params:
@@ -32,4 +33,4 @@ methods:
         description: The root all sourcePaths are resolved and containment-checked within
 status: complete
 createdAt: '2026-07-11T17:52:00.756Z'
-updatedAt: '2026-07-11T19:14:23.324Z'
+updatedAt: '2026-07-18T13:57:29.426Z'

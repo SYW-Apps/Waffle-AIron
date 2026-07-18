@@ -49,6 +49,13 @@ export interface SourceFileFacts {
   imports: string[];
   /** Module specifiers of export-from declarations (surface republication). */
   reexports: string[];
+  /**
+   * Cyclomatic complexity per named function-like (function/method/accessor
+   * declarations, and function/arrow initializers of named slots). EXACT grade
+   * only — lower grades omit the map rather than guess. Same-named functions
+   * in one file record their maximum. Fuel for the detail-sufficiency lint.
+   */
+  functionComplexity?: Record<string, number>;
 }
 
 export interface CodeModel {
@@ -337,6 +344,8 @@ interface ExactFacts {
   reexports: Set<string>;
   /** Relative export-* specifiers to chase for barrel re-exports. */
   starExports: string[];
+  /** Cyclomatic complexity per named function-like (max across same-named). */
+  complexity: Map<string, number>;
 }
 
 function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFacts {
@@ -347,6 +356,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const imports = new Set<string>();
   const reexports = new Set<string>();
   const starExports: string[] = [];
+  const complexity = new Map<string, number>();
 
   const addBindingNames = (name: import('typescript').BindingName): void => {
     if (ts.isIdentifier(name)) declared.add(name.text);
@@ -368,7 +378,61 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     return !!mods?.some(m => m.kind === ts.SyntaxKind.ExportKeyword);
   };
 
+  // The name under which a function-like gets its own complexity entry: a
+  // declaration's own name, or the named slot (variable / property) a
+  // function/arrow initializer is bound to. Anonymous inline callbacks return
+  // undefined — their branching belongs to the enclosing named function.
+  const namedFunctionName = (node: import('typescript').Node): string | undefined => {
+    if (ts.isFunctionDeclaration(node)) {
+      return node.name && ts.isIdentifier(node.name) ? node.name.text : undefined;
+    }
+    if (ts.isMethodDeclaration(node) || ts.isGetAccessorDeclaration(node) || ts.isSetAccessorDeclaration(node)) {
+      return propertyNameText(node.name);
+    }
+    if (ts.isFunctionExpression(node) || ts.isArrowFunction(node)) {
+      const p = node.parent;
+      if (p && ts.isVariableDeclaration(p) && p.initializer === node && ts.isIdentifier(p.name)) return p.name.text;
+      if (p && (ts.isPropertyAssignment(p) || ts.isPropertyDeclaration(p)) && p.initializer === node) {
+        return propertyNameText(p.name);
+      }
+    }
+    return undefined;
+  };
+
+  // Classic cyclomatic complexity (decision points + 1) over one named
+  // function's body. Nested NAMED function-likes are excluded — they get their
+  // own entries — while anonymous callbacks count into the enclosing function.
+  const measureComplexity = (fn: import('typescript').Node & { body?: import('typescript').Node }): number => {
+    let score = 1;
+    const count = (node: import('typescript').Node): void => {
+      if (namedFunctionName(node) !== undefined) return;
+      if (ts.isIfStatement(node) || ts.isConditionalExpression(node)
+        || ts.isForStatement(node) || ts.isForInStatement(node) || ts.isForOfStatement(node)
+        || ts.isWhileStatement(node) || ts.isDoStatement(node)
+        || ts.isCaseClause(node) || ts.isCatchClause(node)) {
+        score++;
+      } else if (ts.isBinaryExpression(node)) {
+        const k = node.operatorToken.kind;
+        if (k === ts.SyntaxKind.AmpersandAmpersandToken || k === ts.SyntaxKind.BarBarToken
+          || k === ts.SyntaxKind.QuestionQuestionToken) {
+          score++;
+        }
+      }
+      ts.forEachChild(node, count);
+    };
+    // count() on the body node itself (not just children): an arrow's
+    // expression body may BE the decision point (`x => x ? a : b`). A body is
+    // never itself a named function, so the skip guard cannot short-circuit it.
+    if (fn.body) count(fn.body);
+    return score;
+  };
+
   const visit = (node: import('typescript').Node): void => {
+    const fnName = namedFunctionName(node);
+    if (fnName && (node as { body?: import('typescript').Node }).body) {
+      const measured = measureComplexity(node as { body?: import('typescript').Node } & import('typescript').Node);
+      complexity.set(fnName, Math.max(complexity.get(fnName) ?? 0, measured));
+    }
     if (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node) || ts.isInterfaceDeclaration(node)
       || ts.isTypeAliasDeclaration(node) || ts.isEnumDeclaration(node) || ts.isModuleDeclaration(node)) {
       const name = node.name && ts.isIdentifier(node.name) ? node.name.text : undefined;
@@ -435,7 +499,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   };
   visit(sf);
 
-  return { declared, anchors, exported, imports, reexports, starExports };
+  return { declared, anchors, exported, imports, reexports, starExports, complexity };
 }
 
 /** Resolve a relative export-* specifier to a real file (.js → .ts mapping, index files). */
@@ -490,6 +554,11 @@ function chaseStarExports(
     for (const name of targetFacts.exported) {
       facts.exported.add(name);
       facts.declared.add(name);
+      // A pure re-export barrel realizes the function it publishes — carry the
+      // real function's complexity onto the barrel so the detail-sufficiency
+      // lint sees through the forwarding hop.
+      const c = targetFacts.complexity.get(name);
+      if (c !== undefined) facts.complexity.set(name, Math.max(facts.complexity.get(name) ?? 0, c));
     }
   }
 }
@@ -572,6 +641,7 @@ export function buildCodeModel(implementations: ImplementationSpec[], projectRoo
             exportedNames: [...facts.exported],
             imports: [...facts.imports],
             reexports: [...facts.reexports],
+            functionComplexity: Object.fromEntries(facts.complexity),
           };
         } catch {
           analyzed = analyzeGeneric(text);

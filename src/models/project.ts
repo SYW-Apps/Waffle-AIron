@@ -79,6 +79,13 @@ export const ComplexityRuleConfigSchema = z.object({
   maxNarrativeSteps: z.number().int().nonnegative().optional(),
   /** Maximum number of direct components allowed in a single subsystem */
   maxSubsystemComponents: z.number().int().nonnegative().optional(),
+  /**
+   * Maximum cyclomatic complexity a realized function may measure (exact AST
+   * grade) while its method's narrative detail sits below `full` with no
+   * narrative — above it the detail-sufficiency lint fires
+   * (UNNARRATED_COMPLEXITY). Default 8 when unset.
+   */
+  maxUnnarratedComplexity: z.number().int().nonnegative().optional(),
 });
 export type ComplexityRuleConfig = z.infer<typeof ComplexityRuleConfigSchema>;
 

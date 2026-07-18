@@ -36,6 +36,13 @@ methods:
       rules). Any read/require/parse failure propagates to the caller, which records it as an
       EXTENSION_LOAD_ERROR.
 detail: intent
+lint:
+  allow:
+    - code: UNNARRATED_COMPLEXITY
+      reason: >-
+        readManifest's branching is format dispatch plus defensive parse fallbacks (YAML pack file
+        vs required JS module); behavior is fully stated in the L3 contract and every failure
+        propagates to EXTENSION_LOAD_ERROR — a narrative would restate a parser, not add spec.
 status: complete
 createdAt: '2026-07-14T19:00:52.644Z'
-updatedAt: '2026-07-14T20:23:49.677Z'
+updatedAt: '2026-07-18T14:19:01.542Z'

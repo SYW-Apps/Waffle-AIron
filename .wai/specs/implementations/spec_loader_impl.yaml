@@ -117,6 +117,14 @@ methods:
       never throws, it only surfaces issues. Returns the collected issues so validate reports at
       validate time every refusal that lock's status promotion or any later save would otherwise
       raise mid-write.
+lint:
+  allow:
+    - code: UNNARRATED_COMPLEXITY
+      reason: >-
+        dryRunSerializeSpecs is a uniform per-spec loop over the writer relativization + schema
+        pipeline; its branching is per-kind dispatch and per-spec error collection — the semantics
+        live in the writer pipeline it exercises, and ROUNDTRIP_SERIALIZATION findings carry the
+        behavior contract.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-10T22:14:42.040Z'
+updatedAt: '2026-07-18T14:19:01.606Z'

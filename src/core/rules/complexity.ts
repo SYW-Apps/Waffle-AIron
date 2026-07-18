@@ -17,7 +17,7 @@ function getEffectiveDocConfig(ctx: RuleContext, subsystemId?: string): Document
   return projectDoc;
 }
 
-function getEffectiveComplexityConfig(ctx: RuleContext, subsystemId?: string): ComplexityRuleConfig | undefined {
+export function getEffectiveComplexityConfig(ctx: RuleContext, subsystemId?: string): ComplexityRuleConfig | undefined {
   const projectComp = ctx.rules?.complexity;
   const packDef = extensionProfileFor(ctx, subsystemId);
   
