@@ -381,9 +381,19 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     ruleCode: string,
     defaultSeverity: Severity,
     isDraftContext?: boolean,
+    subsystemId?: string,
   ): Severity | 'off' => {
+    // Explicit project config wins over everything.
     if (rules?.sddRuleSeverity?.[ruleCode]) {
       return rules.sddRuleSeverity[ruleCode];
+    }
+    // Then the governing pack profile's severity overrides — the mechanism a
+    // platform pack (e.g. a low-code profile) uses to auto-apply its doctrine
+    // to every subsystem running under it, scoped to those subsystems only.
+    const sub = subsystemId ? subsystems.find(s => s.id === subsystemId) : undefined;
+    const profileSeverity = extensions.profiles[sub?.profile ?? projectType]?.rules?.sddRuleSeverity?.[ruleCode];
+    if (profileSeverity) {
+      return profileSeverity;
     }
     if (isDraftContext && COMPLETENESS_RULES.has(ruleCode)) {
       return 'warning';
@@ -424,15 +434,15 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     if (scopeSubsystem && specId && !isSpecInScope(specId)) {
       return;
     }
+    const owner = specId ? subsystemOfSpec.get(specId) : undefined;
     // Design-depth gate (before severity resolution): expectation codes below
     // the effective depth are skipped entirely — the team declared it does
     // not design that layer, so nothing at that layer can be "missing".
     const requiredDepth = DEPTH_GATED_CODES[code];
     if (requiredDepth) {
-      const owner = specId ? subsystemOfSpec.get(specId) : undefined;
       if (DEPTH_RANK[effectiveDesignDepth(owner)] < DEPTH_RANK[requiredDepth]) return;
     }
-    const severity = getRuleSeverity(code, defaultSeverity, isDraftContext);
+    const severity = getRuleSeverity(code, defaultSeverity, isDraftContext, owner);
     if (severity === 'off') return;
     if (specId) {
       const allow = allowLookup.get(specId)?.get(code);

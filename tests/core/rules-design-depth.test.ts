@@ -203,4 +203,44 @@ describe('designDepth gates expectation checks', () => {
     ctx2.addIssue('warning', 'MISSING_NARRATIVE', 'not gated at explicit narratives depth', 'orch-a');
     expect(issues2).toHaveLength(1);
   });
+
+  it('a pack profile can set sddRuleSeverity for its subsystems — explicit project config still wins', () => {
+    const stamp = { createdAt: '2026-07-18T10:00:00Z', updatedAt: '2026-07-18T10:00:00Z' };
+    const ext = emptyExtensions();
+    ext.profiles['platform-profile'] = {
+      family: 'neutral', forbiddenStereotypes: [], discouragedStereotypes: [],
+      rules: { sddRuleSeverity: { UNOWNED_STORE: 'off', MEANINGLESS_BRANCH: 'error' } },
+    };
+    const base = {
+      system: { schemaVersion: '1.0.0', name: 'S', vision: 'v', ...stamp } as never,
+      subsystems: [{ id: 'sub-a', name: 'A', description: 'd', parentSystem: 'S', publicInterfaces: [], trustedLinks: [], profile: 'platform-profile', status: 'complete', ...stamp } as never],
+      components: [{ id: 'store-a', name: 's', description: 'd', subsystem: 'sub-a', componentType: 'Store', owns: [], dependsOn: [], status: 'complete', ...stamp } as never],
+      interfaces: [],
+      implementations: [],
+      types: [],
+      projectType: 'backend',
+      extensions: ext,
+    };
+
+    // Profile turns UNOWNED_STORE off for its subsystem…
+    const issues: ValidationIssue[] = [];
+    const ctx = buildRuleContext({ ...base, issues });
+    ctx.addIssue('warning', 'UNOWNED_STORE', 'suppressed by profile', 'store-a');
+    expect(issues).toHaveLength(0);
+    // …and can raise another code to error.
+    ctx.addIssue('warning', 'MEANINGLESS_BRANCH', 'raised by profile', 'store-a');
+    expect(issues).toHaveLength(1);
+    expect(issues[0].severity).toBe('error');
+
+    // Explicit project sddRuleSeverity beats the profile.
+    const issues2: ValidationIssue[] = [];
+    const ctx2 = buildRuleContext({
+      ...base,
+      rules: RulesConfigSchema.parse({ sddRuleSeverity: { UNOWNED_STORE: 'warning' } }),
+      issues: issues2,
+    });
+    ctx2.addIssue('warning', 'UNOWNED_STORE', 'project override wins', 'store-a');
+    expect(issues2).toHaveLength(1);
+    expect(issues2[0].severity).toBe('warning');
+  });
 });
