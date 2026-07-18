@@ -10,18 +10,11 @@ import {
   DataTable,
   Field,
   Modal,
-  Select,
   TextInput,
   useAsync,
   useToast,
 } from '../ui';
 import type { ShareAccessEntry, ShareLink, ShareLinkCreated } from '../types';
-
-const VIEW_OPTIONS = [
-  { value: 'architecture', label: 'Architecture (components)' },
-  { value: 'types', label: 'Types (ERD)' },
-  { value: 'databases', label: 'Databases' },
-];
 
 const shareUrl = (token: string) => `${window.location.origin}/share/${token}`;
 const isExpired = (l: ShareLink) => !!l.expiresAt && Date.parse(l.expiresAt) <= Date.now();
@@ -78,7 +71,11 @@ export function SharingTab({ projectId }: { projectId: string }) {
             empty="No share links for this project yet."
             rows={d.links}
             columns={[
-              { key: 'view', header: 'View', cell: (l) => <code>{l.view}</code> },
+              {
+                key: 'created',
+                header: 'Created',
+                cell: (l) => <span className="hint">{new Date(l.createdAt).toLocaleDateString()}</span>,
+              },
               {
                 key: 'status',
                 header: 'Status',
@@ -167,7 +164,6 @@ export function SharingTab({ projectId }: { projectId: string }) {
 
 function CreateShareModal(props: { projectId: string; onClose: () => void; onCreated: (c: ShareLinkCreated) => void }) {
   const toast = useToast();
-  const [view, setView] = useState('architecture');
   const [expiresAt, setExpiresAt] = useState('');
   const [allowDownloadHtml, setAllowDownloadHtml] = useState(false);
   const [allowDownloadOpenapi, setAllowDownloadOpenapi] = useState(false);
@@ -176,7 +172,9 @@ function CreateShareModal(props: { projectId: string; onClose: () => void; onCre
   async function create() {
     const result = await post<ShareLinkCreated>('/web/admin/share', {
       projectId: props.projectId,
-      view,
+      // The shared page is the whole interactive canvas (all views + drill-down),
+      // so a link is the project canvas, not a single view.
+      view: 'canvas',
       mode: 'snapshot',
       artifacts: ['canvas', 'html', ...(allowDownloadOpenapi ? ['openapi'] : [])],
       expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
@@ -203,14 +201,19 @@ function CreateShareModal(props: { projectId: string; onClose: () => void; onCre
       }
     >
       <div className="stack-lg">
-        <Field label="Canvas view" hint="The view captured into the shared snapshot.">
-          <Select value={view} onChange={setView} options={VIEW_OPTIONS} />
-        </Field>
+        <p className="hint">
+          Shares the whole interactive project canvas (all views + drill-down) as a point-in-time snapshot.
+        </p>
         <Field label="Expires (optional)" hint="Leave blank for no expiry. The link stops working after this date.">
           <TextInput type="date" value={expiresAt} onChange={setExpiresAt} />
         </Field>
         <Checkbox checked={allowDownloadHtml} onChange={setAllowDownloadHtml} label="Allow downloading the standalone HTML canvas" />
-        <Checkbox checked={allowDownloadOpenapi} onChange={setAllowDownloadOpenapi} label="Capture + allow downloading the OpenAPI document" />
+        <Checkbox
+          checked={allowDownloadOpenapi}
+          onChange={setAllowDownloadOpenapi}
+          label="Include the OpenAPI document (viewer + download)"
+          hint="Generated from the project's EXTERNAL public surface (L0 interfaces marked audience 'external'). Empty if the project publishes none."
+        />
         <Field
           label="Embedding allowlist (optional)"
           info={
@@ -294,7 +297,7 @@ function AccessLogModal(props: { link: ShareLink; onClose: () => void }) {
     [props.link.id],
   );
   return (
-    <Modal title={`Access log · ${props.link.view}`} onClose={props.onClose} wide footer={<Button variant="primary" onClick={props.onClose}>Close</Button>}>
+    <Modal title="Share link access log" onClose={props.onClose} wide footer={<Button variant="primary" onClick={props.onClose}>Close</Button>}>
       <p className="hint">Every access to this link — watch for unfamiliar IPs or a burst of activity.</p>
       <AsyncView state={log}>
         {(d) => (

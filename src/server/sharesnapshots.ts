@@ -134,7 +134,11 @@ export function captureSnapshot(
       snapshot.html = hostCore.renderDiagram('canvas');
     }
     if (artifacts.includes('openapi')) {
-      const result = hostSurfaces.exportBoundSurface('instance', 'openapi') as { rendered?: string };
+      // Capture at the EXTERNAL ceiling: a public share exposes only the surface
+      // entries explicitly marked externally-shareable (rank(entry) >= external),
+      // never instance-internal APIs. A project with no external entries yields an
+      // (intentionally) empty document.
+      const result = hostSurfaces.exportBoundSurface('external', 'openapi') as { rendered?: string };
       snapshot.openapi = result.rendered ?? '{}';
     }
     return snapshot;

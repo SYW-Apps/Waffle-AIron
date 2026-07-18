@@ -105,6 +105,15 @@ export function seedDemoTree(): void {
       { id: 'catalogdb', name: 'Catalog DB', engine: 'postgres', description: 'Products and categories.' },
       { id: 'ordersdb', name: 'Orders DB', engine: 'postgres', description: 'Orders, order lines, and payments.' },
     ],
+    // L0 gateway surface — the entries exported beyond the project (each backed by
+    // a subsystem-published Portal), with an audience ceiling. Catalog + Ordering
+    // are externally shareable (they appear in a public share's OpenAPI); Payments
+    // is instance-internal (excluded from an external projection).
+    publicInterfaces: [
+      { id: 'catalog-api', name: 'Catalog API', subsystem: 'catalog', component: 'catalog-portal', interface: 'icatalog-portal', type: 'REST', details: 'Public product catalog — browse products, categories, and display pricing.', audience: 'external' },
+      { id: 'ordering-api', name: 'Ordering API', subsystem: 'ordering', component: 'ordering-portal', interface: 'iordering-portal', type: 'REST', details: 'Order management — place and fetch orders.', audience: 'external' },
+      { id: 'payments-api', name: 'Payments API', subsystem: 'payments', component: 'payments-portal', interface: 'ipayments-portal', type: 'REST', details: 'Payment settlement (internal).', audience: 'instance' },
+    ],
     ...base,
   });
 
