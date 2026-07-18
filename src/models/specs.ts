@@ -396,13 +396,17 @@ export const EndpointSchema = z.discriminatedUnion('transport', [
 export type Endpoint = z.infer<typeof EndpointSchema>;
 
 /**
- * Recognized method-level semantic guarantees. Kept as a closed set so the validator's
- * cross-level consistency check (narrative claim ↔ contract guarantee) is data-driven over
- * one source of truth — add a guarantee here (+ its narrative keyword in validation.ts) to
- * extend it. NOT a place for free-form prose.
+ * Method-level semantic guarantee tokens. SEMANTIC_GUARANTEES is wairon's BUILTIN
+ * vocabulary — the cross-level consistency check (narrative claim ↔ contract guarantee)
+ * and the prose-claim linter are data-driven over it (add a builtin here + its narrative
+ * keyword in validation.ts). The schema itself is OPEN so extension packs can declare
+ * platform vocabularies (`guarantees:` in a pack manifest); a token that is neither
+ * builtin nor pack-declared is flagged by the guarantee-token rule (UNKNOWN_GUARANTEE),
+ * not rejected at parse time. Still NOT a place for free-form prose — every token must
+ * be declared somewhere.
  */
 export const SEMANTIC_GUARANTEES = ['idempotent', 'atomic', 'transactional', 'exactly-once'] as const;
-export const GuaranteeSchema = z.enum(SEMANTIC_GUARANTEES);
+export const GuaranteeSchema = z.string().min(1);
 export type Guarantee = z.infer<typeof GuaranteeSchema>;
 
 /**

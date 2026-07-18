@@ -43,6 +43,11 @@ suppressible) unless noted; existing clean trees stay clean unless listed under
 - Event topology: components declare `emits:` / `subscribesTo:`; paired with
   MessageBus endpoint directions — `UNCONSUMED_TOPIC`, `UNSOURCED_SUBSCRIPTION`
   (silent on trees with no event edges).
+- Guarantee vocabulary: `UNKNOWN_GUARANTEE` — a guarantee token on an L3 method
+  or a narrative `assertsGuarantees` that is neither builtin
+  (`idempotent | atomic | transactional | exactly-once`) nor declared by a
+  loaded pack. The token consistency checks match literally, so an undeclared
+  token silently escapes them.
 
 **New config & schema surface:**
 
@@ -59,6 +64,12 @@ suppressible) unless noted; existing clean trees stay clean unless listed under
   scheduled` — all root the reachability walker; only `init` feeds hydration.
 - `ext:` — an opaque, verbatim-preserved extension-data map on every spec kind
   and on L3/L4 methods, for pack rules to read.
+- **Pack-declarable guarantee tokens**: the guarantee schema is now open
+  (`z.string()`); a pack manifest may declare `guarantees: [compensating, …]`
+  to extend the vocabulary. The narrative↔contract consistency check
+  (`NARRATIVE_SEMANTIC_UNBACKED`) applies to pack tokens exactly as to
+  builtins; the MCP `guarantees`/`assertsGuarantees` inputs accept any
+  declared token.
 - Cross-subsystem: a `trustedLink` on the SOURCE subsystem licenses a direct
   in-process edge to the peer's published Portal (no Adapter shim); Portals may
   depend on Repository/Index for reads.

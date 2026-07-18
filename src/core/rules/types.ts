@@ -106,6 +106,8 @@ export interface RuleContext {
     profiles: Record<string, ProfileDef>;
     languages: Record<string, LanguagePackDef>;
     patterns: LoadedPattern[];
+    /** Pack-declared semantic guarantee tokens — unioned with SEMANTIC_GUARANTEES by the guarantee-token rule. */
+    guarantees: string[];
   };
 
   /**

@@ -623,7 +623,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
-  reg<{ id: string; name: string; description: string; component: string; methods?: { name: string; description: string; signature: string; returns: string; params?: { name: string; type: string; description?: string; optional?: boolean }[]; guarantees?: ('idempotent' | 'atomic' | 'transactional' | 'exactly-once')[]; effect?: 'read' | 'write' }[] }>(server,
+  reg<{ id: string; name: string; description: string; component: string; methods?: { name: string; description: string; signature: string; returns: string; params?: { name: string; type: string; description?: string; optional?: boolean }[]; guarantees?: string[]; effect?: 'read' | 'write' }[] }>(server,
     'sdd_define_interface',
     {
       description: 'Define an L3 Contract / Interface with method signatures for a component. Prefer supplying structured `params` per method — they are the authoritative source for type checking (the free-form signature string then becomes display-only and is never heuristically parsed).',
@@ -643,7 +643,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
             description: z.string().optional(),
             optional: z.boolean().optional(),
           })).optional().describe('Structured parameters — authoritative for type checking (the prose signature becomes display-only). Strongly preferred.'),
-          guarantees: z.array(z.enum(['idempotent', 'atomic', 'transactional', 'exactly-once'])).optional().describe('Semantic guarantees the method promises (combinable); any guarantee a narrative step asserts must be declared here'),
+          guarantees: z.array(z.string().min(1)).optional().describe('Semantic guarantees the method promises (combinable); any guarantee a narrative step asserts must be declared here. Builtin tokens: idempotent | atomic | transactional | exactly-once; extension packs may declare more (any other token is UNKNOWN_GUARANTEE)'),
           effect: z.enum(['read', 'write']).optional().describe('State-effect direction on the component\'s held state — required on a durable Store\'s contract methods so the durability round-trip rule can pair writes with hydration read-backs'),
         })).optional().describe('List of method signature contracts'),
       },
@@ -751,7 +751,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     targetComponent: z.string().optional().describe('call/dispatch: L2 component id (for dispatch, the Portal routed through)'),
     targetMethod: z.string().optional().describe('call: method name on the target'),
     capability: z.string().optional().describe('dispatch: the capability routed through the target Portal\'s dispatch table (validated against it — UNSERVED_CAPABILITY)'),
-    assertsGuarantees: z.array(z.enum(['idempotent', 'atomic', 'transactional', 'exactly-once'])).optional().describe('Semantic guarantees this step relies on — each must be declared in the called method\'s L3 guarantees (NARRATIVE_SEMANTIC_UNBACKED otherwise)'),
+    assertsGuarantees: z.array(z.string().min(1)).optional().describe('Semantic guarantees this step relies on — each must be declared in the called method\'s L3 guarantees (NARRATIVE_SEMANTIC_UNBACKED otherwise). Builtin tokens: idempotent | atomic | transactional | exactly-once; extension packs may declare more (any other token is UNKNOWN_GUARANTEE)'),
     assertsInvariants: z.array(z.string()).optional().describe('Declared entity invariants this step upholds, as "<type-id>.<invariant-id>" refs (UNKNOWN_INVARIANT_REF when unresolved); write-effect methods of the entity\'s componentClass must carry one per declared invariant (UNASSERTED_INVARIANT)'),
     condition: z.string().optional().describe('branch / while / doWhile'),
     onTrueStep: stepNo().optional().describe('branch: default = next step'),

@@ -28,6 +28,7 @@ import { publicSurfaceRule } from './public-surface.js';
 import { cyclesRule, reachabilityRule } from './graph.js';
 import { dispatchRule, lifecycleRule, durabilityRule, untypedSeamRule, proseClaimRule } from './semantic-edges.js';
 import { invariantBackingRule } from './invariants.js';
+import { guaranteeTokensRule } from './guarantee-tokens.js';
 import { eventTopologyRule } from './event-topology.js';
 import { narrativeAntipatternsRule } from './narrative-antipatterns.js';
 import { callConformanceRule } from './call-conformance.js';
@@ -60,6 +61,9 @@ export const SDD_RULES: SddRule[] = [
   surfaceFreshnessRule,
   typeReferencesRule,
   contractsRule,
+  // Vocabulary check right after contracts: an unknown token explains why the
+  // consistency findings around it are absent, so surface them together.
+  guaranteeTokensRule,
   narrativeFlowRule,
   // Antipatterns right after flow soundness: they analyze the same step
   // graphs and only make sense once the graphs are structurally valid.
@@ -487,7 +491,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     isTypeResolved,
     targetLanguageFor,
     isSpecInScope,
-    ext: { profiles: extensions.profiles, languages: extensions.languages, patterns: extensions.patterns },
+    ext: { profiles: extensions.profiles, languages: extensions.languages, patterns: extensions.patterns, guarantees: extensions.guarantees },
     variants: opts.variants ?? [],
     surfaceSnapshots: opts.surfaceSnapshots ?? [],
     codeModel: opts.codeModel ?? emptyCodeModel(),

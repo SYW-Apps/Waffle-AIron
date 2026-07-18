@@ -3,8 +3,8 @@ id: extension_pack
 name: ExtensionPack
 description: >-
   A parsed extension-pack manifest — wairon's plugin unit. A declarative (YAML) pack carries data
-  only (profiles, languages, skills, patterns); a programmatic (JS) pack adds rules. Listed in
-  project.yaml under extensions.packs, vendored into .wai/packs for reproducibility.
+  only (profiles, languages, skills, patterns, guarantees); a programmatic (JS) pack adds rules.
+  Listed in project.yaml under extensions.packs, vendored into .wai/packs for reproducibility.
 fields:
   - name: name
     type: string
@@ -30,6 +30,13 @@ fields:
     type: PatternDef[]
     description: Named, versioned reusable pattern definitions referenceable by specs.
     optional: false
+  - name: guarantees
+    type: string[]
+    description: >-
+      Pack-declared semantic guarantee tokens extending the builtin vocabulary
+      (idempotent/atomic/transactional/exactly-once); a referenced token that is neither builtin nor
+      declared by any loaded pack is flagged UNKNOWN_GUARANTEE.
+    optional: false
 methods: []
 createdAt: '2026-07-14T18:57:01.915Z'
-updatedAt: '2026-07-14T18:57:01.958Z'
+updatedAt: '2026-07-18T21:35:43.984Z'

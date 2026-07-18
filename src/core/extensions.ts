@@ -92,6 +92,13 @@ export const DeclarativePackSchema = z.object({
   languages: z.record(LanguagePackDefSchema).default({}),
   skills: z.array(PackSkillSchema).default([]),
   patterns: z.array(PatternDefSchema).default([]),
+  /**
+   * Semantic guarantee tokens this pack adds to the builtin vocabulary
+   * (SEMANTIC_GUARANTEES). Declaring a token makes it legal on L3 method
+   * `guarantees` and narrative `assertsGuarantees`; referenced tokens outside
+   * builtin + declared are flagged UNKNOWN_GUARANTEE by the validator.
+   */
+  guarantees: z.array(z.string().min(1)).default([]),
 });
 export type DeclarativePack = z.infer<typeof DeclarativePackSchema>;
 
@@ -122,12 +129,14 @@ export interface LoadedExtensions {
   skills: LoadedPackSkill[];
   /** Pack-registered reusable pattern definitions (with provenance). */
   patterns: LoadedPattern[];
+  /** Pack-declared semantic guarantee tokens (merged, deduped) — the extension half of the guarantee vocabulary. */
+  guarantees: string[];
   /** Pack loading failures — surfaced as EXTENSION_LOAD_ERROR (error). */
   errors: string[];
 }
 
 export function emptyExtensions(): LoadedExtensions {
-  return { packNames: [], packs: [], rules: [], profiles: {}, languages: {}, skills: [], patterns: [], errors: [] };
+  return { packNames: [], packs: [], rules: [], profiles: {}, languages: {}, skills: [], patterns: [], guarantees: [], errors: [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -208,6 +217,8 @@ function mergePack(out: LoadedExtensions, pack: DeclarativePack, ref: string, sc
   // ids by convention), so they accumulate across packs with their provenance.
   for (const s of pack.skills) out.skills.push({ ...s, pack: pack.name, packVersion: pack.version, sourcePath: path.resolve(packDir, s.source) });
   for (const p of pack.patterns) out.patterns.push({ ...p, pack: pack.name });
+  // Guarantee tokens are a flat vocabulary — same token from two packs is one token.
+  out.guarantees = [...new Set([...out.guarantees, ...pack.guarantees])];
 }
 
 /**
@@ -259,6 +270,7 @@ export function readManifest(target: string, projectRoot: string): DeclarativePa
     languages: mod.languages ?? {},
     skills: mod.skills ?? [],
     patterns: mod.patterns ?? [],
+    guarantees: mod.guarantees ?? [],
   });
   const rules: SddRule[] = [];
   for (const r of (mod.rules as unknown[] | undefined) ?? []) {
