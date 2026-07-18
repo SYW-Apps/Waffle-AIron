@@ -24,6 +24,7 @@ import { patternsRule } from './patterns.js';
 import { facadeForwardingRule } from './facade-forwarding.js';
 import { patternReferencesRule } from './pattern-references.js';
 import { variantReferencesRule } from './variant-references.js';
+import { declarativeAssertionsRule } from './declarative-assertions.js';
 import { profilesRule } from './profiles.js';
 import { publicSurfaceRule } from './public-surface.js';
 import { cyclesRule, reachabilityRule } from './graph.js';
@@ -79,6 +80,9 @@ export const SDD_RULES: SddRule[] = [
   profilesRule,
   patternReferencesRule,
   variantReferencesRule,
+  // Pack-instantiated declarative doctrine rides with the pack-reference
+  // family: same data source, same provenance-bearing findings.
+  declarativeAssertionsRule,
   publicSurfaceRule,
   cyclesRule,
   // Semantic-edge family: dispatch/lifecycle validity BEFORE reachability so a
@@ -444,7 +448,12 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
   for (const im of implementations) collectAllows(im.id, im.lint);
   for (const t of types) collectAllows(t.id, t.lint);
 
-  const knownIssueCodes = new Set([...SDD_RULES, ...extensions.rules].flatMap(r => r.codes.map(c => c.code)));
+  const knownIssueCodes = new Set([
+    ...[...SDD_RULES, ...extensions.rules].flatMap(r => r.codes.map(c => c.code)),
+    // Declarative assertions bring their own namespaced codes — lint.allow
+    // and severity overrides treat them exactly like builtins.
+    ...extensions.assertions.map(a => a.fullCode),
+  ]);
 
   const addIssue = (
     defaultSeverity: Severity,
@@ -503,7 +512,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     isTypeResolved,
     targetLanguageFor,
     isSpecInScope,
-    ext: { profiles: extensions.profiles, languages: extensions.languages, patterns: extensions.patterns, guarantees: extensions.guarantees },
+    ext: { profiles: extensions.profiles, languages: extensions.languages, patterns: extensions.patterns, guarantees: extensions.guarantees, assertions: extensions.assertions },
     variants: opts.variants ?? [],
     surfaceSnapshots: opts.surfaceSnapshots ?? [],
     codeModel: opts.codeModel ?? emptyCodeModel(),

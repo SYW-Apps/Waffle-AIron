@@ -24,6 +24,13 @@ fields:
       Pack-declared guarantee tokens; the guarantee-token rule unions these with the builtin
       SEMANTIC_GUARANTEES set to form the accepted vocabulary.
     optional: false
+  - name: assertions
+    type: PackAssertion[]
+    description: >-
+      Loaded declarative assertions the declarative-assertions rule evaluates; their namespaced
+      codes join the known-issue-code set so lint.allow and severity overrides treat them like
+      builtins.
+    optional: false
 methods: []
 createdAt: '2026-07-14T18:56:56.419Z'
-updatedAt: '2026-07-18T21:35:44.268Z'
+updatedAt: '2026-07-18T22:42:18.583Z'

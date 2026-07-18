@@ -85,6 +85,72 @@ export const PatternDefSchema = z.object({
 });
 export type PatternDef = z.infer<typeof PatternDefSchema>;
 
+/**
+ * Selector for declarative assertions (closed, v1): absent keys match all,
+ * present keys AND together. `profile` matches the component's governing
+ * profile — how a platform pack scopes doctrine to its own subsystems.
+ * `id` is a simple glob (`*` wildcard only).
+ */
+export const AssertionSelectorSchema = z.object({
+  componentType: z.array(z.string().min(1)).optional(),
+  profile: z.array(z.string().min(1)).optional(),
+  id: z.string().min(1).optional(),
+});
+export type AssertionSelector = z.infer<typeof AssertionSelectorSchema>;
+
+const assertionBase = {
+  /** Pack-local code; surfaced namespaced as <PACK_NAME>_<CODE>. */
+  code: z.string().min(1),
+  severity: z.enum(['warning', 'error']).default('warning'),
+  /** The doctrine, stated for the finding message. */
+  reason: z.string().min(1),
+};
+
+/**
+ * Declarative rule assertions (docs/design/declarative-rule-dsl.md): packs
+ * add INSTANCES of closed assertion kinds, never rule logic — the hosted-safe
+ * doctrine channel. An unknown `kind` fails the pack load loudly (an old
+ * wairon must never silently not-enforce a newer pack's doctrine).
+ */
+export const PackAssertionSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('forbid-edge'),
+    ...assertionBase,
+    from: AssertionSelectorSchema,
+    to: AssertionSelectorSchema,
+    relation: z.array(z.enum(['dependsOn', 'owns'])).default(['dependsOn', 'owns']),
+  }),
+  z.object({
+    kind: z.literal('require-field'),
+    ...assertionBase,
+    on: AssertionSelectorSchema,
+    level: z.enum(['component', 'interface', 'implementation']).default('component'),
+    /** A top-level spec field name, or one `ext.*` path — nothing else is addressable. */
+    field: z.string().min(1),
+    /** Optional closed value set (string equality). */
+    values: z.array(z.string()).optional(),
+  }),
+  z.object({
+    kind: z.literal('endpoint-shape'),
+    ...assertionBase,
+    on: AssertionSelectorSchema,
+    /** Optional transport allowlist. */
+    transport: z.array(z.string().min(1)).optional(),
+    /** Optional anchored regex over the transport's address field (path/topic/command/…). */
+    pathPattern: z.string().min(1).optional(),
+  }),
+]);
+export type PackAssertion = z.infer<typeof PackAssertionSchema>;
+
+/** A pack assertion tagged with provenance and its namespaced finding code. */
+export type LoadedAssertion = PackAssertion & { pack: string; fullCode: string };
+
+/** <PACK_NAME>_<CODE>, upper-snake, non-alphanumerics collapsed — collision-free across packs, provenance legible in every finding. */
+export function assertionFullCode(packName: string, code: string): string {
+  const norm = (s: string): string => s.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  return `${norm(packName)}_${norm(code)}`;
+}
+
 export const DeclarativePackSchema = z.object({
   name: z.string().min(1),
   version: z.string().optional(),
@@ -92,6 +158,8 @@ export const DeclarativePackSchema = z.object({
   languages: z.record(LanguagePackDefSchema).default({}),
   skills: z.array(PackSkillSchema).default([]),
   patterns: z.array(PatternDefSchema).default([]),
+  /** Declarative rule assertions — instances of closed kinds, hosted-safe. */
+  assertions: z.array(PackAssertionSchema).default([]),
   /**
    * Semantic guarantee tokens this pack adds to the builtin vocabulary
    * (SEMANTIC_GUARANTEES). Declaring a token makes it legal on L3 method
@@ -131,12 +199,14 @@ export interface LoadedExtensions {
   patterns: LoadedPattern[];
   /** Pack-declared semantic guarantee tokens (merged, deduped) — the extension half of the guarantee vocabulary. */
   guarantees: string[];
+  /** Declarative rule assertions across all loaded packs (with provenance + namespaced codes). */
+  assertions: LoadedAssertion[];
   /** Pack loading failures — surfaced as EXTENSION_LOAD_ERROR (error). */
   errors: string[];
 }
 
 export function emptyExtensions(): LoadedExtensions {
-  return { packNames: [], packs: [], rules: [], profiles: {}, languages: {}, skills: [], patterns: [], guarantees: [], errors: [] };
+  return { packNames: [], packs: [], rules: [], profiles: {}, languages: {}, skills: [], patterns: [], guarantees: [], assertions: [], errors: [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -219,6 +289,8 @@ function mergePack(out: LoadedExtensions, pack: DeclarativePack, ref: string, sc
   for (const p of pack.patterns) out.patterns.push({ ...p, pack: pack.name });
   // Guarantee tokens are a flat vocabulary — same token from two packs is one token.
   out.guarantees = [...new Set([...out.guarantees, ...pack.guarantees])];
+  // Assertions accumulate with provenance; the namespaced code keeps packs collision-free.
+  for (const a of pack.assertions) out.assertions.push({ ...a, pack: pack.name, fullCode: assertionFullCode(pack.name, a.code) });
 }
 
 /**
@@ -271,6 +343,7 @@ export function readManifest(target: string, projectRoot: string): DeclarativePa
     skills: mod.skills ?? [],
     patterns: mod.patterns ?? [],
     guarantees: mod.guarantees ?? [],
+    assertions: mod.assertions ?? [],
   });
   const rules: SddRule[] = [];
   for (const r of (mod.rules as unknown[] | undefined) ?? []) {

@@ -45,6 +45,12 @@ fields:
       Merged pack-declared guarantee tokens (deduped across packs) — the extension half of the
       guarantee vocabulary the guarantee-token rule accepts.
     optional: false
+  - name: assertions
+    type: PackAssertion[]
+    description: >-
+      Merged declarative assertions across all loaded packs, each tagged with pack provenance and
+      its namespaced finding code (<PACK>_<CODE>).
+    optional: false
 methods: []
 createdAt: '2026-07-14T18:57:07.906Z'
-updatedAt: '2026-07-18T21:35:44.144Z'
+updatedAt: '2026-07-18T22:42:18.487Z'

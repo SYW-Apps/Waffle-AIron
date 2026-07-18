@@ -82,6 +82,17 @@ suppressible) unless noted; existing clean trees stay clean unless listed under
   scheduled` — all root the reachability walker; only `init` feeds hydration.
 - `ext:` — an opaque, verbatim-preserved extension-data map on every spec kind
   and on L3/L4 methods, for pack rules to read.
+- **Declarative rule assertions** (docs/design/declarative-rule-dsl.md): a
+  declarative pack may carry `assertions:` — instances of three closed kinds
+  (`forbid-edge` selector-matched dependency/ownership bans, `require-field`
+  over top-level and `ext.*` fields with optional closed value sets,
+  `endpoint-shape` transport allowlists + address patterns) with pack-local
+  codes surfaced namespaced (`<PACK>_<CODE>`), declared severities, and the
+  doctrine reason quoted in every finding. Packs add rule INSTANCES, never
+  rule logic — the hosted (declarative-only) pack path finally carries real
+  doctrine; an unknown kind fails the pack load loudly. Assertion codes join
+  `knownIssueCodes`, so lint.allow and `sddRuleSeverity` treat them exactly
+  like builtins.
 - **Pack-declarable guarantee tokens**: the guarantee schema is now open
   (`z.string()`); a pack manifest may declare `guarantees: [compensating, …]`
   to extend the vocabulary. The narrative↔contract consistency check

@@ -37,6 +37,12 @@ fields:
       (idempotent/atomic/transactional/exactly-once); a referenced token that is neither builtin nor
       declared by any loaded pack is flagged UNKNOWN_GUARANTEE.
     optional: false
+  - name: assertions
+    type: PackAssertion[]
+    description: >-
+      Declarative rule assertions — instances of the closed kinds (forbid-edge / require-field /
+      endpoint-shape), the hosted-safe doctrine channel; an unknown kind fails the pack load loudly.
+    optional: false
 methods: []
 createdAt: '2026-07-14T18:57:01.915Z'
-updatedAt: '2026-07-18T21:35:43.984Z'
+updatedAt: '2026-07-18T22:42:18.358Z'
