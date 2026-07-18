@@ -3274,9 +3274,21 @@ var MODEL = __MODEL_JSON__;
   function openApiAllowed() {
     return (typeof opts !== 'undefined' && opts && opts.onOpenApi) || openApiSiblingHref() !== null;
   }
-  function openApiButton(c) {
-    if (!componentExposesApi(c) || !openApiAllowed()) return '';
-    return '<div class="openbtn"><button class="tbtn" data-openapi-comp="' + esc(c.id) + '">\\u25A4 View OpenAPI \\u2197</button></div>';
+  // The OpenAPI document is a PROJECT-level artifact (the whole project's external
+  // gateway surface), so the affordance is offered up the whole hierarchy where
+  // it is contextually relevant: a portal that exposes HTTP, its subsystem, and
+  // the project root — each opens the same project surface.
+  function subsystemExposesApi(sid) {
+    return MODEL.components.some(function (x) {
+      return (x.subsystem === sid || (x.subsystem || '').indexOf(sid + '::') === 0) && componentExposesApi(x);
+    });
+  }
+  function projectExposesApi() {
+    return MODEL.components.some(componentExposesApi);
+  }
+  function openApiButton(exposes) {
+    if (!exposes || !openApiAllowed()) return '';
+    return '<div class="openbtn"><button class="tbtn" data-openapi-comp="">\\u25A4 View OpenAPI \\u2197</button></div>';
   }
 
   function renderPanel() {
@@ -3300,7 +3312,7 @@ var MODEL = __MODEL_JSON__;
         + (scopeFocus ? staticChip('current view') : '')
         + chip(c.subsystem, 'subsystem', c.subsystem)
         + (scopeFocus ? '' : openViewButton('component', c.id, c.owns.length > 0))
-        + openApiButton(c);
+        + openApiButton(componentExposesApi(c));
       
       var linkedTypes = MODEL.types.filter(function (t) { return t.componentClass === c.id; });
       if (linkedTypes.length) {
@@ -3459,7 +3471,8 @@ var MODEL = __MODEL_JSON__;
         + (s.targetLanguage ? staticChip(s.targetLanguage) : '')
         + (s.status ? staticChip(s.status) : '')
         + (scopeFocus ? staticChip('current view') : '')
-        + (scopeFocus ? '' : openViewButton('subsystem', s.id, subKids > 0));
+        + (scopeFocus ? '' : openViewButton('subsystem', s.id, subKids > 0))
+        + openApiButton(subsystemExposesApi(s.id));
       body += '<p class="desc">' + esc(s.description) + '</p>';
       if (s.trustedLinks.length) {
         body += section('Trusted links (fast lanes)', s.trustedLinks.length, s.trustedLinks.map(function (t2) {
@@ -3477,7 +3490,8 @@ var MODEL = __MODEL_JSON__;
         + (MODEL.system.targetLanguage ? staticChip(MODEL.system.targetLanguage) : '')
         + staticChip(MODEL.subsystems.length + ' subsystems')
         + staticChip(MODEL.components.length + ' components')
-        + (MODEL.types.length ? '<div class="openbtn"><button class="tbtn" id="openTypesBtn">\\u25B8 Types (ERD) \\u2014 ' + MODEL.types.length + '</button></div>' : '');
+        + (MODEL.types.length ? '<div class="openbtn"><button class="tbtn" id="openTypesBtn">\\u25B8 Types (ERD) \\u2014 ' + MODEL.types.length + '</button></div>' : '')
+        + openApiButton(projectExposesApi());
       if (MODEL.system.vision) body += '<p class="desc">' + esc(MODEL.system.vision) + '</p>';
       body += '<p class="desc">Each view shows one scope\\u2019s direct children \\u2014 double-click a box (or use \\u201COpen as view\\u201D) to drill in, and the breadcrumb to come back. Derived from <code style="display:inline">.wai/specs/</code>.</p>';
       if (state.showIssues && MODEL.issues.length) body += section('All validation issues', MODEL.issues.length, issueHtml(MODEL.issues), true);
