@@ -28,6 +28,7 @@ import { publicSurfaceRule } from './public-surface.js';
 import { cyclesRule, reachabilityRule } from './graph.js';
 import { dispatchRule, lifecycleRule, durabilityRule, untypedSeamRule, proseClaimRule } from './semantic-edges.js';
 import { invariantBackingRule } from './invariants.js';
+import { eventTopologyRule } from './event-topology.js';
 import { narrativeAntipatternsRule } from './narrative-antipatterns.js';
 import { callConformanceRule } from './call-conformance.js';
 import { roundtripRule, namespaceHygieneRule, surfaceFreshnessRule } from './namespace.js';
@@ -83,6 +84,8 @@ export const SDD_RULES: SddRule[] = [
   // Invariant registry rides with the semantic-edge family: declared entity
   // invariants must be asserted on every write path (declarations, not proofs).
   invariantBackingRule,
+  // Pub/sub completeness: emitted topics need subscribers and vice versa.
+  eventTopologyRule,
   // Code↔spec: structural conformance consumes the injected CodeModel (built
   // by the source analysis adapter next to the surface snapshots); dependency
   // conformance lifts its import edges onto the declared dependsOn/owns graph.

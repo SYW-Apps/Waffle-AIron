@@ -2100,7 +2100,9 @@ export class SpecWorkspace {
         } else if (key === 'dispatch' && Array.isArray(value) && Array.isArray(existing.dispatch)) {
           res.dispatch = mergeKeyedArray(existing.dispatch, value, b => String(b?.capability));
         } else if (key === 'lifecycle' && Array.isArray(value) && Array.isArray(existing.lifecycle)) {
-          res.lifecycle = mergeKeyedArray(existing.lifecycle, value, le => `${le?.phase} ${le?.component} ${le?.method}`);
+          res.lifecycle = mergeKeyedArray(existing.lifecycle, value, le => `${le?.phase} ${le?.component} ${le?.method}`);
+        } else if ((key === 'emits' || key === 'subscribesTo') && Array.isArray(value) && Array.isArray(existing[key])) {
+          res[key] = mergeKeyedArray(existing[key], value, (b: { topic?: string; event?: string }) => `${b?.topic} ${b?.event ?? ''}`);
         } else if (Array.isArray(value)) {
           res[key] = value;
         } else if (typeof value === 'object' && typeof existing[key] === 'object' && existing[key] !== null) {

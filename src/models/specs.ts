@@ -177,15 +177,19 @@ export type ExtData = z.infer<typeof ExtDataSchema>;
 
 /**
  * A declared lifecycle flow root: a component.method the runtime invokes at a
- * lifecycle phase (init/shutdown). Reachability analysis (unused-detection,
- * durability round-trip) treats these as entrypoints alongside Portals,
- * Observers, and published components — boot-time wiring like hydration and
- * environment provisioning becomes statically checkable instead of a blanket
- * lint-allow ("called at startup, invisible to the walker").
+ * lifecycle phase. Reachability analysis (unused-detection, durability
+ * round-trip) treats these as entrypoints alongside Portals, Observers, and
+ * published components — boot-time wiring like hydration and environment
+ * provisioning becomes statically checkable instead of a blanket lint-allow
+ * ("called at startup, invisible to the walker"). Beyond init/shutdown, the
+ * execution-model roots open the walker to non-request/response systems:
+ * `cyclic` (invoked every scan/tick — the PLC/game-loop model), `interrupt`
+ * (invoked by a hardware/OS interrupt), `scheduled` (invoked by a
+ * timer/cron). Only `init` flows feed the durable-Store hydration check.
  */
 export const LifecycleEntrypointSchema = z.object({
-  /** Which lifecycle flow this roots. */
-  phase: z.enum(['init', 'shutdown']),
+  /** Which lifecycle/execution flow this roots. */
+  phase: z.enum(['init', 'shutdown', 'cyclic', 'interrupt', 'scheduled']),
   /** Component id whose method the runtime invokes at this phase. */
   component: z.string(),
   /** Method name on that component's interface. */
@@ -314,6 +318,22 @@ export const PatternRefSchema = z.object({
 });
 export type PatternRef = z.infer<typeof PatternRefSchema>;
 
+/**
+ * One event edge of the pub/sub topology: a topic this component emits to or
+ * consumes from. First-class so the event graph is STATABLE, not prose — the
+ * event-topology rule pairs every emitted topic with a subscriber and vice
+ * versa (UNCONSUMED_TOPIC / UNSOURCED_SUBSCRIPTION). MessageBus endpoints on
+ * Portal methods (direction publish|subscribe) count into the same pairing.
+ */
+export const EventBindingSchema = z.object({
+  /** Topic/channel name exactly as used on the bus. */
+  topic: z.string().min(1),
+  /** Optional event name within the topic (informational in v1 — pairing is by topic). */
+  event: z.string().optional(),
+  description: z.string().optional(),
+});
+export type EventBinding = z.infer<typeof EventBindingSchema>;
+
 export const ComponentSpecSchema = z.object({
   id: SpecIdSchema,
   name: z.string(),
@@ -330,6 +350,10 @@ export const ComponentSpecSchema = z.object({
   dispatch: z.array(DispatchBindingSchema).optional(),
   /** Store-only: whether held state survives restart (see DurabilitySchema). */
   durability: DurabilitySchema.optional(),
+  /** Topics this component publishes to (see EventBindingSchema). */
+  emits: z.array(EventBindingSchema).optional(),
+  /** Topics this component consumes (see EventBindingSchema) — typical on Observers. */
+  subscribesTo: z.array(EventBindingSchema).optional(),
   /** Pack-declared reusable patterns this component realizes (resolved against loaded packs; UNKNOWN_PATTERN_REF). */
   patterns: z.array(PatternRefSchema).optional(),
   /** Optional component variant — a declared, base-anchored specialization of this component's stereotype (resolved against the variant registry; UNKNOWN_VARIANT / VARIANT_BASE_MISMATCH). */
