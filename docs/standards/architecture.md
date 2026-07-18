@@ -262,6 +262,22 @@ constraints (uniqueness, validation) are checked against the **Store** (the
 authoritative source) + validation Specialists — not via an Index. A "custom query"
 is an **Index** method (Adapter-backed if needed) — never a consumer→Adapter shortcut.
 
+**When the full pattern is overkill — the two sanctioned shapes for held state.**
+The Repository is the RECOMMENDED shape wherever read and write consumers diverge
+or write-time constraints exist. For genuinely simple held state, a **deliberately
+standalone Store** is the sanctioned lightweight form: the state stays visible as a
+component, reachable from the workflow layer (Orchestrator/Supervisor/Actor),
+acknowledged with a `lint.allow` reason on the `UNOWNED_STORE` warning — and it
+declares its `durability` like every Store (`durable` | `read-through` |
+`ram-projection` | `cache`). The durability axis is **orthogonal** to the shape:
+an in-memory Repository (`ram-projection` Store inside) and a persisted bare Store
+(`read-through` file backing) are both legal quadrants. What is NEVER sanctioned is
+the third path — folding held state into a logic component's fields; hidden state
+is invisible to every rule in this standard. And a standalone **Registry** is not a
+shape at all: a Registry is the write path to a Store (`REGISTRY_WITHOUT_STORE`) —
+a component that itself holds persisted state is a *Store*, whatever its file I/O
+looks like.
+
 ### Gateway
 > `Portal + ingress Orchestrator + interceptor Specialists`. The **Portal** is the
 > dumb inbound boundary; the **ingress Orchestrator** owns the middleware/interceptor
@@ -356,8 +372,42 @@ the *strategy*, so it remains language-agnostic.
 
 **Exceptions to the default:** write-heavy large collections → sharded locks or a
 persistent structure; cross-store atomic transactions → a transactional backend via
-the Adapter; single-writer (Actor) state → wait-free reads, no write lock;
-non-shared / write-once state → plain ownership.
+the Adapter (see the unit-of-work rule below); single-writer (Actor) state →
+wait-free reads, no write lock; non-shared / write-once state → plain ownership.
+
+### Transactions & the unit of work
+
+A transaction is a **value, not a place**. The doctrine, in four rules:
+
+1. **The backend Adapter issues the transaction context.** The Adapter over the
+   transactional technology (declared via `technologies` on its L4) exposes
+   begin/commit/rollback as ordinary contract methods; `begin` returns an opaque
+   transaction-context value. No other block ever creates one.
+2. **The workflow Orchestrator owns the scope.** Begin, commit, and rollback are
+   narrative steps of the Orchestrator that owns the workflow — begin, then a
+   `try` region whose calls carry the context, commit as the body's last step,
+   rollback in the `catch` handler. The transaction boundary is thereby VISIBLE
+   in the L5 narrative, reviewable like any other flow.
+3. **The context travels as an explicit method argument.** Repository facades
+   (and their inner Registry/Store) MAY accept an optional transaction-context
+   parameter on write-face methods and pass it through to the backend Adapter.
+   Never store the context in component state — a held transaction is hidden
+   state and a concurrency hazard in one.
+4. **Guarantee tags stay honest.** A method declaring `transactional`/`atomic`
+   should either bind a transactional backend through its technology Adapter or
+   accept the context parameter. The validator checks claim↔declaration
+   consistency (a narrative step asserting a guarantee must call a method
+   declaring it) — whether the transaction actually holds is implementation
+   correctness, proven by tests, not by the gate.
+
+**Publish-and-persist atomically = the outbox pattern.** When a workflow must
+persist domain state AND emit an event without a gap, do not call the bus in the
+same breath as the write: append an outbox entry in the SAME transaction as the
+domain write (an outbox Store inside the owning Repository, or a sibling outbox
+Repository), and let an Actor (or Observer on the backend's change feed) drain
+the outbox, publish through the bus Adapter, and mark entries delivered. The
+Saga arrangement (§9) composes with this: the outbox is its delivery half, and
+the saga's progress Repository its memory.
 
 ---
 
@@ -374,9 +424,12 @@ only the Store; it never updates Indexes. (Where a language can't share referenc
 safely, the binding appendix gives the equivalent.)
 
 A coherent Index defined this way is **never stale**. A deliberately **evicting /
-TTL cache** is a different thing — it is for *external or expensive-to-compute* data,
-not a projection of an in-process Store, and is modeled as a caching **Adapter**
-(e.g. Redis) or a memoizing **Specialist**, not as a Store-backed Index.
+TTL cache** is a different thing — it is for *external or expensive-to-compute*
+data, not a projection of an in-process Store. An external cache service (e.g.
+Redis) is a caching **Adapter**; an in-process memo/TTL cache is a **Store with
+`durability: cache`** — evictable, loss-safe, hydration-exempt, and VISIBLE as
+held state. It is never a "memoizing Specialist" (Specialists are stateless) and
+never a private field inside a logic component (hidden state).
 
 ---
 
