@@ -49,6 +49,12 @@ methods:
         targetComponent: mcp_core_adapter
         targetMethod: loadInterfaceSpec
       - stepNumber: 2
+        description: >-
+          Resolve symbolic step-label references (*Label twins of the jump-by-number flow fields)
+          against the authored steps' label anchors, rejecting the write on unknown or duplicate
+          labels so a typo never becomes a dangling numeric jump
+        type: local
+      - stepNumber: 3
         description: Persist the L4 implementation spec via the core client adapter
         type: call
         targetComponent: mcp_core_adapter
@@ -173,4 +179,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-07-11T19:14:21.957Z'
+updatedAt: '2026-07-18T22:08:09.820Z'

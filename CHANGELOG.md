@@ -75,6 +75,14 @@ suppressible) unless noted; existing clean trees stay clean unless listed under
   (`NARRATIVE_SEMANTIC_UNBACKED`) applies to pack tokens exactly as to
   builtins; the MCP `guarantees`/`assertsGuarantees` inputs accept any
   declared token.
+- **Symbolic step labels**: a narrative step may declare a `label` anchor, and
+  every jump-by-number flow field has a `*Label` twin (`toLabel`,
+  `onTrueLabel`, `onFalseLabel`, `defaultLabel`, `endLabel`, `finallyLabel`,
+  plus `label` in `cases`/`catches` entries) resolved to step numbers at
+  write time — the stored spec keeps plain numbers. Guards LLM step-counting
+  off-by-ones: an unknown/duplicate label REJECTS the write, and an
+  `sdd_update_spec` delta can reference labels anchored on pre-existing steps
+  (resolution runs post-merge, against the final numbering).
 - Cross-subsystem: a `trustedLink` on the SOURCE subsystem licenses a direct
   in-process edge to the peer's published Portal (no Adapter shim); Portals may
   depend on Repository/Index for reads.
