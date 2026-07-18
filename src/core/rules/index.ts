@@ -28,6 +28,8 @@ import { publicSurfaceRule } from './public-surface.js';
 import { cyclesRule, reachabilityRule } from './graph.js';
 import { dispatchRule, lifecycleRule, durabilityRule, untypedSeamRule, proseClaimRule } from './semantic-edges.js';
 import { invariantBackingRule } from './invariants.js';
+import { narrativeAntipatternsRule } from './narrative-antipatterns.js';
+import { callConformanceRule } from './call-conformance.js';
 import { roundtripRule, namespaceHygieneRule, surfaceFreshnessRule } from './namespace.js';
 import { couplingRule } from './coupling.js';
 import { languageRule } from './language.js';
@@ -57,6 +59,9 @@ export const SDD_RULES: SddRule[] = [
   typeReferencesRule,
   contractsRule,
   narrativeFlowRule,
+  // Antipatterns right after flow soundness: they analyze the same step
+  // graphs and only make sense once the graphs are structurally valid.
+  narrativeAntipatternsRule,
   narrativeDetailRule,
   portalsRule,
   stereotypeDepsRule,
@@ -82,6 +87,9 @@ export const SDD_RULES: SddRule[] = [
   // by the source analysis adapter next to the surface snapshots); dependency
   // conformance lifts its import edges onto the declared dependsOn/owns graph.
   structuralConformanceRule,
+  // Level 3 opener: narrative call steps must be realized as callees of the
+  // realized function (set membership, exact grade).
+  callConformanceRule,
   dependencyConformanceRule,
   couplingRule,
   languageRule,
@@ -131,6 +139,9 @@ const COMPLETENESS_RULES = new Set([
   // Invariant assertions are narrative completeness — a draft tree may not
   // have written its write-path narratives yet.
   'UNASSERTED_INVARIANT',
+  // Call-step realization reads the realized code — a draft tree is allowed
+  // to disagree with its code.
+  'CALL_STEP_UNREALIZED',
 ]);
 
 export interface ScopeFilterOptions {

@@ -134,8 +134,12 @@ export const narrativeDetailRule: SddRule = {
           && !(component && isInChainedSubproject(component.subsystem, ctx))) {
           const facts = factsByPath.get(normalizeSourcePath(impl.sourcePath));
           const symbol = implMethod.symbol ?? implMethod.name;
+          // Own-property lookup: a method named e.g. "constructor" must not
+          // resolve to Object.prototype members.
           const complexity = facts?.status === 'analyzed' && facts.analysisGrade === 'exact'
-            ? facts.functionComplexity?.[symbol]
+            && facts.functionComplexity
+            && Object.prototype.hasOwnProperty.call(facts.functionComplexity, symbol)
+            ? facts.functionComplexity[symbol]
             : undefined;
           const limit = getEffectiveComplexityConfig(ctx, component?.subsystem)?.maxUnnarratedComplexity
             ?? DEFAULT_MAX_UNNARRATED_COMPLEXITY;

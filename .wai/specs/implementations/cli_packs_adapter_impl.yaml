@@ -84,10 +84,11 @@ methods:
   - name: listPacks
     narrative:
       - stepNumber: 1
-        description: Load the merged extension set (global then project packs) via the core portal.
-        type: call
-        targetComponent: core_portal
-        targetMethod: loadProjectExtensions
+        description: >-
+          Probe each configured pack ref — the global tier (packs dir) then the project tier
+          (extensions.packs) — for its manifest summary (name, scope, what it provides) and any load
+          error, via the core extension loader's per-pack probe.
+        type: local
       - stepNumber: 2
         description: >-
           Print each pack with its name, scope, version, and what it provides (profiles, languages,
@@ -175,4 +176,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-14T20:10:02.916Z'
-updatedAt: '2026-07-18T14:19:01.480Z'
+updatedAt: '2026-07-18T18:48:25.511Z'

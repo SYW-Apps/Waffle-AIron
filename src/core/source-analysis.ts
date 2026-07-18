@@ -56,6 +56,14 @@ export interface SourceFileFacts {
    * in one file record their maximum. Fuel for the detail-sufficiency lint.
    */
   functionComplexity?: Record<string, number>;
+  /**
+   * Direct callee names per named function-like: identifiers and property
+   * names invoked as calls inside the function body (nested NAMED functions
+   * excluded — they carry their own entries; anonymous callbacks included).
+   * EXACT grade only. Same-named functions union their sets. Fuel for the
+   * call-step realization check (Level 3).
+   */
+  functionCalls?: Record<string, string[]>;
 }
 
 export interface CodeModel {
@@ -346,6 +354,8 @@ interface ExactFacts {
   starExports: string[];
   /** Cyclomatic complexity per named function-like (max across same-named). */
   complexity: Map<string, number>;
+  /** Direct callee names per named function-like (union across same-named). */
+  calls: Map<string, Set<string>>;
 }
 
 function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFacts {
@@ -357,6 +367,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const reexports = new Set<string>();
   const starExports: string[] = [];
   const complexity = new Map<string, number>();
+  const calls = new Map<string, Set<string>>();
 
   const addBindingNames = (name: import('typescript').BindingName): void => {
     if (ts.isIdentifier(name)) declared.add(name.text);
@@ -399,11 +410,13 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     return undefined;
   };
 
-  // Classic cyclomatic complexity (decision points + 1) over one named
-  // function's body. Nested NAMED function-likes are excluded — they get their
-  // own entries — while anonymous callbacks count into the enclosing function.
-  const measureComplexity = (fn: import('typescript').Node & { body?: import('typescript').Node }): number => {
+  // One pass per named function's body collecting classic cyclomatic
+  // complexity (decision points + 1) AND direct callee names. Nested NAMED
+  // function-likes are excluded — they get their own entries — while
+  // anonymous callbacks count into the enclosing function.
+  const collectFunctionFacts = (fn: import('typescript').Node & { body?: import('typescript').Node }): { score: number; callees: Set<string> } => {
     let score = 1;
+    const callees = new Set<string>();
     const count = (node: import('typescript').Node): void => {
       if (namedFunctionName(node) !== undefined) return;
       if (ts.isIfStatement(node) || ts.isConditionalExpression(node)
@@ -417,6 +430,10 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
           || k === ts.SyntaxKind.QuestionQuestionToken) {
           score++;
         }
+      } else if (ts.isCallExpression(node)) {
+        const callee = node.expression;
+        if (ts.isIdentifier(callee)) callees.add(callee.text);
+        else if (ts.isPropertyAccessExpression(callee)) callees.add(callee.name.text);
       }
       ts.forEachChild(node, count);
     };
@@ -424,14 +441,17 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     // expression body may BE the decision point (`x => x ? a : b`). A body is
     // never itself a named function, so the skip guard cannot short-circuit it.
     if (fn.body) count(fn.body);
-    return score;
+    return { score, callees };
   };
 
   const visit = (node: import('typescript').Node): void => {
     const fnName = namedFunctionName(node);
     if (fnName && (node as { body?: import('typescript').Node }).body) {
-      const measured = measureComplexity(node as { body?: import('typescript').Node } & import('typescript').Node);
-      complexity.set(fnName, Math.max(complexity.get(fnName) ?? 0, measured));
+      const facts = collectFunctionFacts(node as { body?: import('typescript').Node } & import('typescript').Node);
+      complexity.set(fnName, Math.max(complexity.get(fnName) ?? 0, facts.score));
+      const set = calls.get(fnName) ?? new Set<string>();
+      for (const c of facts.callees) set.add(c);
+      calls.set(fnName, set);
     }
     if (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node) || ts.isInterfaceDeclaration(node)
       || ts.isTypeAliasDeclaration(node) || ts.isEnumDeclaration(node) || ts.isModuleDeclaration(node)) {
@@ -499,7 +519,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   };
   visit(sf);
 
-  return { declared, anchors, exported, imports, reexports, starExports, complexity };
+  return { declared, anchors, exported, imports, reexports, starExports, complexity, calls };
 }
 
 /** Resolve a relative export-* specifier to a real file (.js → .ts mapping, index files). */
@@ -555,10 +575,16 @@ function chaseStarExports(
       facts.exported.add(name);
       facts.declared.add(name);
       // A pure re-export barrel realizes the function it publishes — carry the
-      // real function's complexity onto the barrel so the detail-sufficiency
-      // lint sees through the forwarding hop.
+      // real function's complexity and callees onto the barrel so the
+      // detail-sufficiency and call-realization checks see through the hop.
       const c = targetFacts.complexity.get(name);
       if (c !== undefined) facts.complexity.set(name, Math.max(facts.complexity.get(name) ?? 0, c));
+      const targetCalls = targetFacts.calls.get(name);
+      if (targetCalls) {
+        const set = facts.calls.get(name) ?? new Set<string>();
+        for (const callee of targetCalls) set.add(callee);
+        facts.calls.set(name, set);
+      }
     }
   }
 }
@@ -642,6 +668,7 @@ export function buildCodeModel(implementations: ImplementationSpec[], projectRoo
             imports: [...facts.imports],
             reexports: [...facts.reexports],
             functionComplexity: Object.fromEntries(facts.complexity),
+            functionCalls: Object.fromEntries([...facts.calls].map(([k, v]) => [k, [...v]])),
           };
         } catch {
           analyzed = analyzeGeneric(text);

@@ -23,6 +23,64 @@ function flowConfigOn(step: NarrativeStep): string[] {
   });
 }
 
+/**
+ * The step graph of one narrative: the SINGLE source of truth for successor
+ * semantics (fall-through + jumps; loop and try headers carry both their body
+ * edge and their after-region exit edge; return/throw terminate). Shared by
+ * the reachability walk here and the antipattern analysis — the two must
+ * never disagree about what "next" means.
+ */
+export function stepGraph(steps: NarrativeStep[]): {
+  byNum: Map<number, NarrativeStep>;
+  nums: number[];
+  nextOf: (n: number) => number | undefined;
+  successorsOf: (n: number) => number[];
+} {
+  const byNum = new Map<number, NarrativeStep>();
+  for (const s of steps) byNum.set(s.stepNumber, s);
+  const nums = [...byNum.keys()].sort((a, b) => a - b);
+  const indexOf = new Map(nums.map((n, i) => [n, i]));
+  const nextOf = (n: number): number | undefined => {
+    const i = indexOf.get(n);
+    return i !== undefined && i + 1 < nums.length ? nums[i + 1] : undefined;
+  };
+  const successorsOf = (n: number): number[] => {
+    const s = byNum.get(n);
+    if (!s) return [];
+    const succ: (number | undefined)[] = [];
+    switch (s.type) {
+      case 'local':
+      case 'call':
+      case 'dispatch':
+        succ.push(nextOf(n));
+        break;
+      case 'branch':
+        succ.push(s.onTrueStep ?? nextOf(n), s.onFalseStep);
+        break;
+      case 'switch':
+        succ.push(...(s.cases ?? []).map(c => c.step), s.defaultStep ?? nextOf(n));
+        break;
+      case 'loop':
+        succ.push(nextOf(n), s.endStep !== undefined ? nextOf(s.endStep) : undefined);
+        break;
+      case 'try':
+        succ.push(
+          nextOf(n),
+          ...(s.catches ?? []).map(c => c.step),
+          s.finallyStep,
+          s.endStep !== undefined ? nextOf(s.endStep) : undefined,
+        );
+        break;
+      case 'jump':
+        succ.push(s.toStep);
+        break;
+      // return / throw terminate the path
+    }
+    return [...new Set(succ.filter((t): t is number => t !== undefined && byNum.has(t)))];
+  };
+  return { byNum, nums, nextOf, successorsOf };
+}
+
 export const narrativeFlowRule: SddRule = {
   name: 'narrative-flow',
   description:
@@ -123,44 +181,15 @@ export const narrativeFlowRule: SddRule = {
 
         // Reachability only makes sense over a structurally sound narrative.
         if (!sound) continue;
+        const graph = stepGraph(steps);
         const visited = new Set<number>();
         const stack = [nums[0]];
         while (stack.length) {
           const n = stack.pop()!;
           if (visited.has(n)) continue;
           visited.add(n);
-          const s = byNum.get(n)!;
-          const succ: (number | undefined)[] = [];
-          switch (s.type) {
-            case 'local':
-            case 'call':
-            case 'dispatch':
-              succ.push(nextOf(n));
-              break;
-            case 'branch':
-              succ.push(s.onTrueStep ?? nextOf(n), s.onFalseStep);
-              break;
-            case 'switch':
-              succ.push(...(s.cases ?? []).map(c => c.step), s.defaultStep ?? nextOf(n));
-              break;
-            case 'loop':
-              succ.push(nextOf(n), s.endStep !== undefined ? nextOf(s.endStep) : undefined);
-              break;
-            case 'try':
-              succ.push(
-                nextOf(n),
-                ...(s.catches ?? []).map(c => c.step),
-                s.finallyStep,
-                s.endStep !== undefined ? nextOf(s.endStep) : undefined,
-              );
-              break;
-            case 'jump':
-              succ.push(s.toStep);
-              break;
-            // return / throw terminate the path
-          }
-          for (const t of succ) {
-            if (t !== undefined && byNum.has(t) && !visited.has(t)) stack.push(t);
+          for (const t of graph.successorsOf(n)) {
+            if (!visited.has(t)) stack.push(t);
           }
         }
         const dead = nums.filter(n => !visited.has(n));

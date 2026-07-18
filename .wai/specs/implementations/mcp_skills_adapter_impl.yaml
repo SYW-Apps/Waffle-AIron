@@ -22,6 +22,13 @@ methods:
         targetComponent: skills_portal
         targetMethod: readResource
     symbol: readSkillResource
+lint:
+  allow:
+    - code: CALL_STEP_UNREALIZED
+      reason: >-
+        Skill resources are served from the embedded exported skill set inside the MCP server, not
+        by calling the skills portal at runtime — the narrative names the semantic owner of the
+        resource content. Revisit with the skills-resource refactor.
 status: complete
 createdAt: '2026-07-10T12:21:52.237Z'
-updatedAt: '2026-07-11T19:14:22.033Z'
+updatedAt: '2026-07-18T18:47:54.647Z'
