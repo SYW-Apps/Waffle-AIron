@@ -489,6 +489,7 @@ export const NarrativeStepTypeSchema = z.enum([
   'switch',   // multiway dispatch: on + cases[{value, step}] + defaultStep
   'loop',     // header step; body = next..endStep; loopKind picks the form
   'try',      // guarded region: body = next..endStep; catches[{error, step}] + finallyStep
+  'parallel', // concurrent fan-out/join: body = next..endStep; branches[{step}] name the arm entries; flow continues after endStep once ALL arms complete
   'jump',     // unconditional goto (break / continue / rejoin-after-catch)
   'return',   // terminator (happy or handled-failure exit)
   'throw',    // error terminator: this path raises/propagates
@@ -509,6 +510,19 @@ export const CatchClauseSchema = z.object({
   step: z.number().int().positive(),        // first step of the handler region
 });
 export type CatchClause = z.infer<typeof CatchClauseSchema>;
+
+/**
+ * One arm of a parallel fan-out. Arms are contiguous, ordered sub-regions of
+ * the parallel body: arm i spans its entry step through the step before arm
+ * i+1's entry (the last arm ends at the parallel's endStep). The join is
+ * implicit — flow continues after endStep once ALL arms complete; an arm
+ * never falls through into its neighbor.
+ */
+export const ParallelBranchSchema = z.object({
+  step: z.number().int().positive(),        // first step of this arm's region
+  name: z.string().optional(),              // optional arm label for renderers/readers
+});
+export type ParallelBranch = z.infer<typeof ParallelBranchSchema>;
 
 export const NarrativeStepSchema = z.object({
   stepNumber: z.number().int().positive(),
@@ -544,10 +558,17 @@ export const NarrativeStepSchema = z.object({
   defaultStep: z.number().int().positive().optional(),  // switch (default: next step)
   loopKind: LoopKindSchema.optional(),     // loop (default: forEach when `over`, else while)
   over: z.string().optional(),             // loop (forEach/for): iteration source
-  endStep: z.number().int().positive().optional(),      // loop/try: last step of the body region
+  endStep: z.number().int().positive().optional(),      // loop/try/parallel: last step of the body region
   catches: z.array(CatchClauseSchema).optional(),        // try
   finallyStep: z.number().int().positive().optional(),   // try: first step of the always-runs region
+  branches: z.array(ParallelBranchSchema).optional(),    // parallel (required, >= 2 arms)
   toStep: z.number().int().positive().optional(),        // jump (required)
+  /**
+   * call/dispatch only: fire-and-forget — the call is issued and this
+   * narrative CONTINUES without awaiting the result (no result is consumed
+   * by later steps). Language/platform packs may gate it via unsupportedFlow.
+   */
+  detach: z.boolean().optional(),
   outcome: z.string().optional(),          // return: 'success' / 'not found' / …
   error: z.string().optional(),            // throw: the raised error
 });

@@ -11,7 +11,7 @@ import { SddRule } from './types.js';
 
 const FLOW_FIELDS = [
   'condition', 'onTrueStep', 'onFalseStep', 'on', 'cases', 'defaultStep',
-  'loopKind', 'over', 'endStep', 'catches', 'finallyStep', 'toStep',
+  'loopKind', 'over', 'endStep', 'catches', 'finallyStep', 'branches', 'toStep',
 ] as const;
 
 function flowConfigOn(step: NarrativeStep): string[] {
@@ -44,6 +44,29 @@ export function stepGraph(steps: NarrativeStep[]): {
     const i = indexOf.get(n);
     return i !== undefined && i + 1 < nums.length ? nums[i + 1] : undefined;
   };
+  const prevOf = (n: number): number | undefined => {
+    const i = indexOf.get(n);
+    return i !== undefined && i > 0 ? nums[i - 1] : undefined;
+  };
+
+  // Parallel arm boundaries: the last step of an arm continues at the JOIN
+  // (after the parallel's endStep), never into its neighbor arm. Built
+  // outermost-first (ascending header) so a nested parallel whose endStep is
+  // an outer arm end resolves its join through the outer mapping.
+  const armEndJoin = new Map<number, number | undefined>();
+  const fallNext = (n: number): number | undefined =>
+    (armEndJoin.has(n) ? armEndJoin.get(n) : nextOf(n));
+  for (const n of nums) {
+    const s = byNum.get(n)!;
+    if (s.type !== 'parallel' || s.endStep === undefined || !s.branches?.length) continue;
+    const entries = s.branches.map(b => b.step).sort((a, b) => a - b);
+    const join = fallNext(s.endStep);
+    for (let i = 0; i < entries.length; i++) {
+      const armEnd = i + 1 < entries.length ? prevOf(entries[i + 1]) : s.endStep;
+      if (armEnd !== undefined && armEnd >= entries[i]) armEndJoin.set(armEnd, join);
+    }
+  }
+
   const successorsOf = (n: number): number[] => {
     const s = byNum.get(n);
     if (!s) return [];
@@ -52,23 +75,31 @@ export function stepGraph(steps: NarrativeStep[]): {
       case 'local':
       case 'call':
       case 'dispatch':
-        succ.push(nextOf(n));
+        succ.push(fallNext(n));
         break;
       case 'branch':
-        succ.push(s.onTrueStep ?? nextOf(n), s.onFalseStep);
+        succ.push(s.onTrueStep ?? fallNext(n), s.onFalseStep);
         break;
       case 'switch':
-        succ.push(...(s.cases ?? []).map(c => c.step), s.defaultStep ?? nextOf(n));
+        succ.push(...(s.cases ?? []).map(c => c.step), s.defaultStep ?? fallNext(n));
         break;
       case 'loop':
-        succ.push(nextOf(n), s.endStep !== undefined ? nextOf(s.endStep) : undefined);
+        succ.push(nextOf(n), s.endStep !== undefined ? fallNext(s.endStep) : undefined);
         break;
       case 'try':
         succ.push(
           nextOf(n),
           ...(s.catches ?? []).map(c => c.step),
           s.finallyStep,
-          s.endStep !== undefined ? nextOf(s.endStep) : undefined,
+          s.endStep !== undefined ? fallNext(s.endStep) : undefined,
+        );
+        break;
+      case 'parallel':
+        // Fan-out to every arm entry; the join continuation is the step after
+        // the region (all arms complete before flow proceeds).
+        succ.push(
+          ...(s.branches ?? []).map(b => b.step),
+          s.endStep !== undefined ? fallNext(s.endStep) : undefined,
         );
         break;
       case 'jump':
@@ -84,7 +115,7 @@ export function stepGraph(steps: NarrativeStep[]): {
 export const narrativeFlowRule: SddRule = {
   name: 'narrative-flow',
   description:
-    'Control-flow soundness of L5 narratives: flow steps (branch, switch, loop, try, jump) must carry their required config, every jump field must target an existing step number in the same narrative, and every step must be reachable from the first step following fall-through and jumps.',
+    'Control-flow soundness of L5 narratives: flow steps (branch, switch, loop, try, parallel, jump) must carry their required config, every jump field must target an existing step number in the same narrative, and every step must be reachable from the first step following fall-through and jumps. A parallel body is covered by contiguous, ordered arms (>= 2) whose last steps continue at the join after endStep; "detach" (fire-and-forget) is legal on call/dispatch steps only.',
   codes: [
     { code: 'MALFORMED_FLOW_STEP', defaultSeverity: 'error', summary: 'Flow step missing required config (or flow config on a local/call step)' },
     { code: 'INVALID_STEP_JUMP', defaultSeverity: 'error', summary: 'Jump field targets a step number that does not exist in the narrative' },
@@ -122,6 +153,9 @@ export const narrativeFlowRule: SddRule = {
         };
 
         for (const s of steps) {
+          if (s.detach && s.type !== 'call' && s.type !== 'dispatch') {
+            malformed(`step ${s.stepNumber} (${s.type}) carries "detach" — fire-and-forget applies to call/dispatch steps only.`);
+          }
           switch (s.type) {
             case 'local':
             case 'call':
@@ -150,6 +184,22 @@ export const narrativeFlowRule: SddRule = {
               else if (s.endStep <= s.stepNumber) malformed(`try step ${s.stepNumber} "endStep" (${s.endStep}) must lie beyond the header.`);
               if ((!s.catches || !s.catches.length) && s.finallyStep === undefined) malformed(`try step ${s.stepNumber} requires "catches" and/or "finallyStep" — a guard that handles nothing guards nothing.`);
               break;
+            case 'parallel': {
+              if (s.endStep === undefined) malformed(`parallel step ${s.stepNumber} requires "endStep" (last step of the fan-out body).`);
+              else if (s.endStep <= s.stepNumber) malformed(`parallel step ${s.stepNumber} "endStep" (${s.endStep}) must lie beyond the header.`);
+              const entries = (s.branches ?? []).map(b => b.step);
+              if (entries.length < 2) {
+                malformed(`parallel step ${s.stepNumber} requires "branches" with at least two arms — a single arm is sequential flow.`);
+              } else {
+                const sorted = [...entries].sort((a, b) => a - b);
+                if (entries.some((e, i) => e !== sorted[i])) malformed(`parallel step ${s.stepNumber} "branches" must list arm entries in ascending order — arms are contiguous sub-regions of the body.`);
+                if (new Set(entries).size !== entries.length) malformed(`parallel step ${s.stepNumber} "branches" lists the same entry step twice.`);
+                const bodyStart = nextOf(s.stepNumber);
+                if (bodyStart !== undefined && sorted[0] !== bodyStart) malformed(`parallel step ${s.stepNumber}: the first arm must start at the body's first step (${bodyStart}), got ${sorted[0]} — steps before the first arm would belong to no arm.`);
+                if (s.endStep !== undefined && sorted.some(e => e > s.endStep!)) malformed(`parallel step ${s.stepNumber}: every arm entry must lie within the body (..${s.endStep}).`);
+              }
+              break;
+            }
             case 'jump':
               if (s.toStep === undefined) malformed(`jump step ${s.stepNumber} requires "toStep".`);
               break;
@@ -165,6 +215,7 @@ export const narrativeFlowRule: SddRule = {
           if (s.toStep !== undefined) jumpFields.push(['toStep', s.toStep]);
           (s.cases ?? []).forEach((c, i) => jumpFields.push([`cases[${i}].step`, c.step]));
           (s.catches ?? []).forEach((c, i) => jumpFields.push([`catches[${i}].step`, c.step]));
+          (s.branches ?? []).forEach((b, i) => jumpFields.push([`branches[${i}].step`, b.step]));
           for (const [field, target] of jumpFields) {
             if (!byNum.has(target)) {
               sound = false;
@@ -208,7 +259,7 @@ export const narrativeFlowRule: SddRule = {
         // express them nested or disjoint, entered through their header.
         const regions: { h: number; end: number; kind: string }[] = [];
         for (const s of steps) {
-          if ((s.type === 'loop' || s.type === 'try') && s.endStep !== undefined) {
+          if ((s.type === 'loop' || s.type === 'try' || s.type === 'parallel') && s.endStep !== undefined) {
             regions.push({ h: s.stepNumber, end: s.endStep, kind: s.type });
           }
         }
