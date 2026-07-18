@@ -1376,7 +1376,9 @@ export class SpecWorkspace {
     }
   }
 
-  saveComponentSpec(spec: ComponentSpec, opts?: SaveSpecOptions): void {
+  /** Returns non-fatal placement notices (see saveTypeSpec) — empty when there is nothing to clarify. */
+  saveComponentSpec(spec: ComponentSpec, opts?: SaveSpecOptions): string[] {
+    const notices: string[] = [];
     const p = this.getComponentPath(spec.id, spec.subsystem);
     ensureDir(path.dirname(p));
 
@@ -1389,12 +1391,25 @@ export class SpecWorkspace {
         specToWrite.status = existing.status;
       }
     }
+    // The nested layout normalizes folders after the write; the flat legacy
+    // layout keeps the file where it is — say so when the subsystem changed,
+    // or a re-add reads as "the parameter was ignored".
+    const subsystemChanged = existing
+      && existing.subsystem !== spec.subsystem
+      && splitNamespace(existing.subsystem).localId !== splitNamespace(spec.subsystem).localId;
+    if (subsystemChanged && !p.endsWith('.index.yaml')) {
+      notices.push(
+        `component "${spec.id}" already exists at ${path.relative(this.rootDir, p)} — the flat layout re-saves in place and never relocates the file. `
+        + `The subsystem field is now "${spec.subsystem}" (was "${existing.subsystem}").`,
+      );
+    }
     specToWrite.updatedAt = new Date().toISOString();
     writeYamlFile(p, parseOrThrow(ComponentSpecSchema, specToWrite, 'component', spec.id));
     invalidateSpecCache();
     // Keep the physical layout in sync with ownership: nest owned members under
     // their pattern, and move anything an `owns` change has displaced.
     this.normalizeComponentLayout();
+    return notices;
   }
 
   deleteComponentSpec(id: string): boolean {
@@ -1476,13 +1491,22 @@ export class SpecWorkspace {
     }
   }
 
-  saveInterfaceSpec(spec: InterfaceSpec, opts?: SaveSpecOptions): void {
+  /** Returns non-fatal placement notices (see saveTypeSpec) — empty when there is nothing to clarify. */
+  saveInterfaceSpec(spec: InterfaceSpec, opts?: SaveSpecOptions): string[] {
+    const notices: string[] = [];
     const p = this.getInterfacePath(spec.id, spec.component);
     ensureDir(path.dirname(p));
 
     const specToWrite = this.prepareInterfaceForWrite(spec);
 
     const existing = this.loadInterfaceSpec(spec.id);
+    if (existing && existing.component !== spec.component
+      && splitNamespace(existing.component).localId !== splitNamespace(spec.component).localId) {
+      notices.push(
+        `interface "${spec.id}" already exists at ${path.relative(this.rootDir, p)} — re-saving updates the component binding field in place `
+        + `(now "${spec.component}", was "${existing.component}") and never moves the file.`,
+      );
+    }
     if (existing) {
       specToWrite.createdAt = existing.createdAt;
       if (!opts?.allowStatusDemotion && existing.status && (!spec.status || spec.status === 'draft')) {
@@ -1500,6 +1524,7 @@ export class SpecWorkspace {
     specToWrite.updatedAt = new Date().toISOString();
     writeYamlFile(p, parseOrThrow(InterfaceSpecSchema, specToWrite, 'interface', spec.id));
     invalidateSpecCache();
+    return notices;
   }
 
   deleteInterfaceSpec(id: string): boolean {
@@ -1540,13 +1565,22 @@ export class SpecWorkspace {
     }
   }
 
-  saveImplementationSpec(spec: ImplementationSpec, opts?: SaveSpecOptions): void {
+  /** Returns non-fatal placement notices (see saveTypeSpec) — empty when there is nothing to clarify. */
+  saveImplementationSpec(spec: ImplementationSpec, opts?: SaveSpecOptions): string[] {
+    const notices: string[] = [];
     const p = this.getImplementationPath(spec.id, spec.contract);
     ensureDir(path.dirname(p));
 
     const specToWrite = this.prepareImplementationForWrite(spec);
 
     const existing = this.loadImplementationSpec(spec.id);
+    if (existing && existing.contract !== spec.contract
+      && splitNamespace(existing.contract).localId !== splitNamespace(spec.contract).localId) {
+      notices.push(
+        `implementation "${spec.id}" already exists at ${path.relative(this.rootDir, p)} — re-saving updates the contract binding field in place `
+        + `(now "${spec.contract}", was "${existing.contract}") and never moves the file.`,
+      );
+    }
     if (existing) {
       specToWrite.createdAt = existing.createdAt;
       if (!opts?.allowStatusDemotion && existing.status && (!spec.status || spec.status === 'draft')) {
@@ -1556,6 +1590,7 @@ export class SpecWorkspace {
     specToWrite.updatedAt = new Date().toISOString();
     writeYamlFile(p, parseOrThrow(ImplementationSpecSchema, specToWrite, 'implementation', spec.id));
     invalidateSpecCache();
+    return notices;
   }
 
   deleteImplementationSpec(id: string): boolean {
@@ -1579,11 +1614,37 @@ export class SpecWorkspace {
     return this.scanAll().types.find((t) => t.id === id) ?? null;
   }
 
-  saveTypeSpec(spec: TypeSpec): void {
+  /**
+   * Returns non-fatal placement notices (empty when there is nothing to
+   * clarify): the flat legacy layout records subsystem ownership as a FIELD
+   * while the file stays in the shared types/ directory, and a re-save never
+   * relocates an existing file — both are by design, but silent they read as
+   * "the subsystem parameter was ignored".
+   */
+  saveTypeSpec(spec: TypeSpec): string[] {
+    const notices: string[] = [];
     const existing = this.loadTypeSpec(spec.id);
     const group = spec.group || (existing ? existing.group : undefined);
     const p = this.getTypePath(spec.id, spec.subsystem, group);
     ensureDir(path.dirname(p));
+
+    const subsystemChanged = existing
+      && (existing.subsystem ?? '') !== (spec.subsystem ?? '')
+      && splitNamespace(existing.subsystem ?? '').localId !== splitNamespace(spec.subsystem ?? '').localId;
+    if (subsystemChanged) {
+      notices.push(
+        `type "${spec.id}" already exists at ${path.relative(this.rootDir, p)} — re-saving updates fields in place and never relocates the file. `
+        + `The subsystem field is now "${spec.subsystem ?? '(none)'}" (was "${existing.subsystem ?? '(none)'}").`,
+      );
+    }
+    if (spec.subsystem && (!existing || subsystemChanged)
+      && !this.getSubsystemPath(spec.subsystem).endsWith('.index.yaml')) {
+      notices.push(
+        `flat layout: type "${spec.id}" is recorded under subsystem "${spec.subsystem}" via its subsystem field, `
+        + `and the file lives in the shared types/ directory — per-subsystem type folders exist only in the nested layout `
+        + `(subsystem indexes as .index.yaml). The subsystem parameter took effect: ownership is the field, not the folder.`,
+      );
+    }
 
     const specToWrite = this.prepareTypeForWrite(spec);
 
@@ -1596,6 +1657,7 @@ export class SpecWorkspace {
     specToWrite.updatedAt = new Date().toISOString();
     writeYamlFile(p, parseOrThrow(TypeSpecSchema, specToWrite, 'type', spec.id));
     invalidateSpecCache();
+    return notices;
   }
 
   deleteTypeSpec(id: string): boolean {
@@ -2113,10 +2175,10 @@ export class SpecWorkspace {
     switch (kind) {
       case 'system':         this.saveSystemSpec(mergedResult); break;
       case 'subsystem':      this.saveSubsystemSpec(mergedResult); break;
-      case 'component':      this.saveComponentSpec(mergedResult, opts); break;
-      case 'interface':      this.saveInterfaceSpec(mergedResult, opts); break;
-      case 'implementation': this.saveImplementationSpec(mergedResult, opts); break;
-      case 'type':           this.saveTypeSpec(mergedResult); break;
+      case 'component':      notices.push(...this.saveComponentSpec(mergedResult, opts)); break;
+      case 'interface':      notices.push(...this.saveInterfaceSpec(mergedResult, opts)); break;
+      case 'implementation': notices.push(...this.saveImplementationSpec(mergedResult, opts)); break;
+      case 'type':           notices.push(...this.saveTypeSpec(mergedResult)); break;
     }
 
     return notices;
@@ -2238,8 +2300,8 @@ export function loadComponentSpec(id: string): ComponentSpec | null {
   return current().loadComponentSpec(id);
 }
 
-export function saveComponentSpec(spec: ComponentSpec, opts?: SaveSpecOptions): void {
-  current().saveComponentSpec(spec, opts);
+export function saveComponentSpec(spec: ComponentSpec, opts?: SaveSpecOptions): string[] {
+  return current().saveComponentSpec(spec, opts);
 }
 
 export function deleteComponentSpec(id: string): boolean {
@@ -2258,8 +2320,8 @@ export function loadInterfaceSpec(id: string): InterfaceSpec | null {
   return current().loadInterfaceSpec(id);
 }
 
-export function saveInterfaceSpec(spec: InterfaceSpec, opts?: SaveSpecOptions): void {
-  current().saveInterfaceSpec(spec, opts);
+export function saveInterfaceSpec(spec: InterfaceSpec, opts?: SaveSpecOptions): string[] {
+  return current().saveInterfaceSpec(spec, opts);
 }
 
 export function deleteInterfaceSpec(id: string): boolean {
@@ -2274,8 +2336,8 @@ export function loadImplementationSpec(id: string): ImplementationSpec | null {
   return current().loadImplementationSpec(id);
 }
 
-export function saveImplementationSpec(spec: ImplementationSpec, opts?: SaveSpecOptions): void {
-  current().saveImplementationSpec(spec, opts);
+export function saveImplementationSpec(spec: ImplementationSpec, opts?: SaveSpecOptions): string[] {
+  return current().saveImplementationSpec(spec, opts);
 }
 
 export function deleteImplementationSpec(id: string): boolean {
@@ -2290,8 +2352,8 @@ export function loadTypeSpec(id: string): TypeSpec | null {
   return current().loadTypeSpec(id);
 }
 
-export function saveTypeSpec(spec: TypeSpec): void {
-  current().saveTypeSpec(spec);
+export function saveTypeSpec(spec: TypeSpec): string[] {
+  return current().saveTypeSpec(spec);
 }
 
 export function dryRunSerializeSpecs(include?: (specId: string) => boolean): ValidationIssue[] {

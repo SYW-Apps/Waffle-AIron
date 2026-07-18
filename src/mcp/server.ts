@@ -585,7 +585,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         const sub = loadSubsystemSpec(subsystem);
         if (!sub) return errText(`Parent subsystem "${subsystem}" does not exist.`);
         const now = new Date().toISOString();
-        saveComponentSpec({
+        const notices = saveComponentSpec({
           id,
           name,
           description,
@@ -601,7 +601,8 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           createdAt: now,
           updatedAt: now,
         });
-        return text(`Successfully added L2 Component Spec "${name}" (${id}, ${componentType}).`);
+        const noticeBlock = notices.length ? `\n\nNOTICE:\n- ${notices.join('\n- ')}` : '';
+        return text(`Successfully added L2 Component Spec "${name}" (${id}, ${componentType}).${noticeBlock}`);
       } catch (e) {
         return errText(String(e));
       }
@@ -639,7 +640,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         const comp = loadComponentSpec(component);
         if (!comp) return errText(`Component "${component}" does not exist.`);
         const now = new Date().toISOString();
-        saveInterfaceSpec({
+        const notices = saveInterfaceSpec({
           id,
           name,
           description,
@@ -649,7 +650,8 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           createdAt: now,
           updatedAt: now,
         });
-        return text(`Successfully defined L3 Interface Contract "${name}" (${id}).`);
+        const noticeBlock = notices.length ? `\n\nNOTICE:\n- ${notices.join('\n- ')}` : '';
+        return text(`Successfully defined L3 Interface Contract "${name}" (${id}).${noticeBlock}`);
       } catch (e) {
         return errText(String(e));
       }
@@ -785,7 +787,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         const intf = loadInterfaceSpec(contract);
         if (!intf) return errText(`Interface contract "${contract}" does not exist.`);
         const now = new Date().toISOString();
-        saveImplementationSpec({
+        const notices = saveImplementationSpec({
           id,
           name,
           description,
@@ -802,7 +804,8 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           createdAt: now,
           updatedAt: now,
         });
-        return text(`Successfully saved L4 Implementation Spec "${name}" (${id}) with method narratives.`);
+        const noticeBlock = notices.length ? `\n\nNOTICE:\n- ${notices.join('\n- ')}` : '';
+        return text(`Successfully saved L4 Implementation Spec "${name}" (${id}) with method narratives.${noticeBlock}`);
       } catch (e) {
         return errText(String(e));
       }
@@ -843,7 +846,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
       try {
         const { saveTypeSpec } = requireSpecs();
         const now = new Date().toISOString();
-        saveTypeSpec({
+        const notices = saveTypeSpec({
           kind,
           id,
           name,
@@ -867,7 +870,8 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           createdAt: now,
           updatedAt: now,
         });
-        return text(`Successfully defined ${kind} type "${name}" (${id}).`);
+        const noticeBlock = notices.length ? `\n\nNOTICE:\n- ${notices.join('\n- ')}` : '';
+        return text(`Successfully defined ${kind} type "${name}" (${id}).${noticeBlock}`);
       } catch (e) {
         return errText(String(e));
       }
