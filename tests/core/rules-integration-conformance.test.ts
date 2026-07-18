@@ -42,6 +42,7 @@ function createTempProject() {
 
   return {
     tempDir,
+    writeSpec,
     component: (id: string, type: string, extra = '') =>
       writeSpec('component', id, `schemaVersion: 1.0.0\nid: ${id}\nname: ${id}\ndescription: d\nsubsystem: sub-a\ncomponentType: ${type}\n${extra}`),
     wire: (compId: string, file: string, extraImpl = '') => {
@@ -75,7 +76,7 @@ function createTempProject() {
 }
 
 const simIssues = (res: { issues: { code: string; specId?: string; message: string; severity: string }[] }) =>
-  res.issues.filter(i => ['MISSING_INTEGRATION_SIM', 'SIM_FILE_MISSING', 'UNWIRED_INTEGRATION_SIM'].includes(i.code));
+  res.issues.filter(i => ['MISSING_INTEGRATION_SIM', 'SIM_FILE_MISSING', 'UNWIRED_INTEGRATION_SIM', 'SIM_PATH_UNCOVERED'].includes(i.code));
 
 const body = (name: string, extra = '') => `export function run${name}(): void {}\n${extra}`;
 
@@ -172,6 +173,93 @@ describe('integration conformance — subsystem adoption + wiring proof', () => 
     proj.activate();
     try {
       expect(simIssues(validateSddTree())).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  // A narrated orchestrator with a labeled error path, wired to a real dep —
+  // the §4.5 path-coverage fixture (orch-a validates via spec-b, then throws
+  // on rejection through the labeled path).
+  function narratedScenario(proj: ReturnType<typeof createTempProject>, simBody: string) {
+    proj.component('orch-a', 'Orchestrator', 'dependsOn: [spec-b]');
+    proj.component('spec-b', 'Specialist');
+    proj.writeSpec('interface', 'iorch-a', [
+      'schemaVersion: 1.0.0', 'id: iorch-a', 'name: IOrchA', 'description: contract', 'component: orch-a',
+      'methods:',
+      '  - name: ingest',
+      '    description: Ingests one record end to end, rejecting invalid payloads loudly.',
+      '    signature: "ingest(): void"',
+      '    returns: "void"',
+    ].join('\n'));
+    proj.writeSpec('implementation', 'impl-orch-a', [
+      'schemaVersion: 1.0.0', 'id: impl-orch-a', 'name: ImplOrchA', 'description: impl', 'contract: iorch-a',
+      'sourcePath: src/a.ts',
+      'simPath: tests/integration/a.sim.ts',
+      'conformance: off',
+      'methods:',
+      '  - name: ingest',
+      '    narrative:',
+      '      - stepNumber: 1',
+      '        description: Validate the payload through the specialist',
+      '        type: call',
+      '        targetComponent: spec-b',
+      '        targetMethod: runspecb',
+      '      - stepNumber: 2',
+      '        description: Accept the record',
+      '        type: branch',
+      '        condition: payload valid',
+      '        onFalseStep: 4',
+      '      - stepNumber: 3',
+      '        description: Done',
+      '        type: return',
+      '        outcome: accepted',
+      '      - stepNumber: 4',
+      '        label: invalid-payload',
+      '        description: Reject the invalid payload',
+      '        type: throw',
+      '        error: InvalidPayload',
+    ].join('\n'));
+    proj.wire('spec-b', 'src/b.ts');
+    proj.source('src/a.ts', "import { runspecb } from './b.js';\nexport function ingest(): void { runspecb(); }\n");
+    proj.source('src/b.ts', body('specb'));
+    proj.source('tests/integration/a.sim.ts', simBody);
+  }
+
+  it('§4.5: a fully anchored harness is clean; a missing error-path anchor is SIM_PATH_UNCOVERED', () => {
+    const proj = createTempProject();
+    narratedScenario(proj, [
+      "import { ingest } from '../../src/a.js';",
+      "console.log('sim:orch-a.ingest'); ingest();",
+      "console.log('sim:orch-a.ingest:invalid-payload');",
+    ].join('\n'));
+    proj.activate();
+    try {
+      expect(simIssues(validateSddTree()).filter(i => i.code === 'SIM_PATH_UNCOVERED')).toHaveLength(0);
+    } finally { proj.cleanup(); }
+
+    const proj2 = createTempProject();
+    narratedScenario(proj2, [
+      "import { ingest } from '../../src/a.js';",
+      "console.log('sim:orch-a.ingest'); ingest();",
+    ].join('\n'));
+    proj2.activate();
+    try {
+      const found = simIssues(validateSddTree()).filter(i => i.code === 'SIM_PATH_UNCOVERED');
+      expect(found).toHaveLength(1);
+      expect(found[0].message).toContain('invalid-payload');
+      expect(found[0].message).toContain('sim:orch-a.ingest:invalid-payload');
+    } finally { proj2.cleanup(); }
+  });
+
+  it('§4.5: a harness without sim: anchors claims nothing (opt-in), and anchors for a file-mate do not drag this component in', () => {
+    const proj = createTempProject();
+    narratedScenario(proj, [
+      "import { ingest } from '../../src/a.js';",
+      "ingest();",
+      "console.log('sim:some-other-component.run');",
+    ].join('\n'));
+    proj.activate();
+    try {
+      expect(simIssues(validateSddTree()).filter(i => i.code === 'SIM_PATH_UNCOVERED')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 

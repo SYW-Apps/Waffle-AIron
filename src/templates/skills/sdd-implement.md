@@ -90,6 +90,13 @@ You are the **Spec-to-Code Compiler**. Your job is to generate concrete source c
      (`SIM_FILE_MISSING` / `UNWIRED_INTEGRATION_SIM`), and holds the rest of the
      subsystem to the same bar (`MISSING_INTEGRATION_SIM` activates on first
      adoption). CI proves it passes; the validator proves it is wired.
+   - **Optionally claim path coverage** with string anchors in the harness:
+     `"sim:<component-id>.<method>"` for the happy path and
+     `"sim:<component-id>.<method>:<label>"` for the error path whose `throw` step
+     carries that narrative `label`. The first `sim:<component-id>.` anchor opts the
+     component in; the validator then expects every narrated method's happy anchor
+     and every labeled throw path's anchor (`SIM_PATH_UNCOVERED`). Anchors prove the
+     path is NAMED and driven on purpose — assertion quality stays your craft.
    - Be honest about what each layer proves: spec-validate proves the DESIGN is
      coherent, unit tests prove the component honors its CONTRACT shape, and only the
      integration sim proves the wired components RUN together.

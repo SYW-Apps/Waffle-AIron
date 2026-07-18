@@ -47,6 +47,7 @@ export const integrationConformanceRule: SddRule = {
     { code: 'MISSING_INTEGRATION_SIM', defaultSeverity: 'warning', summary: 'Complete non-leaf implementation in a sim-adopting subsystem declares no simPath' },
     { code: 'SIM_FILE_MISSING', defaultSeverity: 'warning', summary: 'Declared simPath resolves to no file inside the project root' },
     { code: 'UNWIRED_INTEGRATION_SIM', defaultSeverity: 'warning', summary: 'Sim file does not import the real modules it claims to wire' },
+    { code: 'SIM_PATH_UNCOVERED', defaultSeverity: 'warning', summary: 'A narrative path has no sim:<component>.<method>[:<label>] anchor in the component\'s coverage-opted harness' },
   ],
   check(ctx: RuleContext): void {
     const factsByPath = new Map(ctx.codeModel.files.map(f => [normalizePath(f.path), f]));
@@ -179,6 +180,42 @@ export const integrationConformanceRule: SddRule = {
           'warning',
           'UNWIRED_INTEGRATION_SIM',
           `Sim "${impl.simPath}" of implementation "${impl.id}" does not reach ${missing.join(', nor ')} through its import graph (closed over the analyzed modules, exact grade) — the harness is not wiring the real implementations it claims to exercise. Import the real modules (technology-boundary adapters may stay contract-faithfully faked), or fix the simPath.`,
+          impl.id,
+          isDraftCtx,
+        );
+      }
+
+      // Path coverage (§4.5) — opt-in PER COMPONENT: only once the harness
+      // carries at least one "sim:<component-id>." anchor does this component
+      // claim path coverage, and only then are its narrated methods held to
+      // it. An anchor proves the harness NAMES the path; whether the driven
+      // scenario asserts anything useful stays the test author's craft.
+      const simAnchors = new Set(facts.anchoredNames.filter(a => a.startsWith('sim:')));
+      if (simAnchors.size === 0) continue;
+      const compPrefix = `sim:${comp.id}.`;
+      if (![...simAnchors].some(a => a.startsWith(compPrefix))) continue;
+
+      const uncovered: string[] = [];
+      for (const method of impl.methods) {
+        const steps = method.narrative ?? [];
+        if (!steps.length) continue;
+        const happy = `sim:${comp.id}.${method.name}`;
+        if (!simAnchors.has(happy)) {
+          uncovered.push(`the happy path of "${method.name}" (anchor "${happy}")`);
+        }
+        for (const step of steps) {
+          if (step.type !== 'throw' || !step.label) continue;
+          const pathAnchor = `sim:${comp.id}.${method.name}:${step.label}`;
+          if (!simAnchors.has(pathAnchor)) {
+            uncovered.push(`error path "${step.label}" of "${method.name}" (anchor "${pathAnchor}")`);
+          }
+        }
+      }
+      if (uncovered.length) {
+        ctx.addIssue(
+          'warning',
+          'SIM_PATH_UNCOVERED',
+          `Sim "${impl.simPath}" declares path coverage for component "${comp.id}" (it carries sim: anchors) but does not name ${uncovered.join(', nor ')}. Drive the path and anchor it with the exact string literal, or drop the component's sim: anchors to withdraw the coverage claim. Unlabeled throw steps are not expected — a step's label is the path's identity. Anchors prove the path is NAMED; assertion quality and execution stay CI's job.`,
           impl.id,
           isDraftCtx,
         );

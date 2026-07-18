@@ -98,10 +98,9 @@ may cover several components).
   direct `dependsOn`/`owns` component — i.e. the harness does not actually
   wire the real implementations. Technology-boundary adapters (L4
   `technologies` declared) are exempt from the reach requirement.
-- `SIM_PATH_UNCOVERED` (stretch, later) — narrative `branch`/`throw` paths
-  with no corresponding sim anchor. Needs a convention for path markers in
-  the harness (e.g. string anchors naming narrative step outcomes) before it
-  can be honest; do not ship a guess.
+- `SIM_PATH_UNCOVERED` — narrative paths with no corresponding sim anchor
+  (see §4.5 for the marker convention; shipped once step labels gave paths a
+  stable identity).
 
 What this proves — and all it proves: a committed harness exists, imports
 the real modules on both sides, and is therefore RUNNABLE against the real
@@ -128,3 +127,32 @@ holds the subsystem to it. wairon's own tree adopts sims
 subsystem-by-subsystem, starting with sdd_validator (whose real-registry
 validation suite already IS an integration sim — it becomes the first
 declared `simPath`).
+
+### 4.5 Path coverage markers (`SIM_PATH_UNCOVERED`)
+
+The harness names the narrative paths it drives with **string anchors** —
+exact string literals the source-analysis adapter already collects at exact
+grade (the same `anchoredNames` machinery the `anchored` conformance tier
+uses):
+
+```
+"sim:<component-id>.<method>"           the method's happy path
+"sim:<component-id>.<method>:<label>"   the error path whose throw step
+                                        carries that narrative `label`
+```
+
+Rules that keep it honest:
+
+- **Opt-in per component**: coverage is only checked for a component once at
+  least one `sim:<component-id>.` anchor appears in its declared harness.
+  A harness with no anchors (or anchors only for its file-mates in an N:1
+  sim) claims nothing and is never accused — same adoption philosophy as
+  the per-subsystem `MISSING_INTEGRATION_SIM` activation.
+- Once a component opts in: every narrated method of its implementation
+  needs its happy anchor, and every **labeled** `throw` step needs its path
+  anchor. Unlabeled throw steps are skipped — the step `label` is the
+  path's stable, renumber-proof identity, so labeling is how an error path
+  becomes coverable.
+- What an anchor proves — and all it proves: the committed harness NAMES
+  the path. Whether the driven scenario asserts anything useful is the test
+  author's craft and CI's execution; the finding messages say so.

@@ -154,21 +154,24 @@ methods:
           direct dependency's module, any module of the target subsystem for cross-subsystem edges,
           technology-boundary fakes sanctioned — UNWIRED_INTEGRATION_SIM; declaring the first
           simPath in a subsystem activates MISSING_INTEGRATION_SIM for its other complete non-leaf
-          implementations; wiring proven, execution stays CI's job), the declarative-assertion rule
-          (pack-instantiated instances of the closed assertion kinds — forbid-edge, require-field
-          over top-level and ext.* fields, endpoint-shape transport and address patterns — evaluated
-          with the pack's namespaced <PACK>_<CODE> finding codes, declared severities, and stated
-          reasons: the hosted-safe doctrine channel), the pattern-reference rule (a component's
-          patterns[] must each resolve to a loaded pack PatternDef — UNKNOWN_PATTERN_REF — with a
-          version-mismatch warning), and the guarantee-token rule (the guarantee vocabulary is open:
-          every token an L3 method declares or a narrative step asserts must be a builtin guarantee
-          or one a loaded pack declares in its guarantees list — UNKNOWN_GUARANTEE warning, because
-          a token nobody declares can never be backed by the consistency checks), every finding
-          first passing the designDepth gate (expectation codes below the subsystem's or project's
-          declared design depth are skipped; soundness of authored content always applies) and
-          severity resolution (explicit project sddRuleSeverity, else the governing pack profile's,
-          else draft-context downgrade, else the rule default), each rule's check running against
-          the shared rule context
+          implementations; wiring proven, execution stays CI's job; a harness may additionally claim
+          per-component path coverage via sim:<component>.<method>[:<label>] string anchors — once
+          opted in, every narrated method's happy anchor and every labeled throw path's anchor are
+          expected: SIM_PATH_UNCOVERED), the declarative-assertion rule (pack-instantiated instances
+          of the closed assertion kinds — forbid-edge, require-field over top-level and ext.*
+          fields, endpoint-shape transport and address patterns — evaluated with the pack's
+          namespaced <PACK>_<CODE> finding codes, declared severities, and stated reasons: the
+          hosted-safe doctrine channel), the pattern-reference rule (a component's patterns[] must
+          each resolve to a loaded pack PatternDef — UNKNOWN_PATTERN_REF — with a version-mismatch
+          warning), and the guarantee-token rule (the guarantee vocabulary is open: every token an
+          L3 method declares or a narrative step asserts must be a builtin guarantee or one a loaded
+          pack declares in its guarantees list — UNKNOWN_GUARANTEE warning, because a token nobody
+          declares can never be backed by the consistency checks), every finding first passing the
+          designDepth gate (expectation codes below the subsystem's or project's declared design
+          depth are skipped; soundness of authored content always applies) and severity resolution
+          (explicit project sddRuleSeverity, else the governing pack profile's, else draft-context
+          downgrade, else the rule default), each rule's check running against the shared rule
+          context
         type: local
       - stepNumber: 19
         description: >-
@@ -308,4 +311,4 @@ lint:
         when Level 3 models call indirection.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-18T22:43:54.436Z'
+updatedAt: '2026-07-18T23:14:48.139Z'

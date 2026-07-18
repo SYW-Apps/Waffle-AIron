@@ -66,6 +66,13 @@ suppressible) unless noted; existing clean trees stay clean unless listed under
   wairon's own sdd_validator subsystem adopts first: all 7 non-leaf
   implementations declare `tests/core/validation.test.ts`, which wires the
   real registry/store/adapters.
+- **Sim path coverage** (`SIM_PATH_UNCOVERED`, §4.5): a harness may claim
+  coverage with string anchors — `"sim:<component>.<method>"` (happy path)
+  and `"sim:<component>.<method>:<label>"` (the error path of the `throw`
+  step carrying that narrative label). Opt-in per component (its first
+  `sim:` anchor activates the expectation); unlabeled throw steps are never
+  expected — the step label IS the path's renumber-proof identity. Anchors
+  prove paths are NAMED; execution and assertion quality stay CI's job.
 
 **New config & schema surface:**
 
