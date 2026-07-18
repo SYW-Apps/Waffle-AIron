@@ -73,6 +73,10 @@ suppressible) unless noted; existing clean trees stay clean unless listed under
 - Cross-subsystem: a `trustedLink` on the SOURCE subsystem licenses a direct
   in-process edge to the peer's published Portal (no Adapter shim); Portals may
   depend on Repository/Index for reads.
+- FeatureComponent arity relaxed: exactly one Orchestrator + **one or more**
+  Views (was exactly one of each) — a feature slice with list/detail/form
+  faces no longer needs artificial per-view slices. Foreign member types
+  inside the slice are still rejected.
 - Placement notices: `sdd_add_type` (and siblings) explain flat-layout
   placement and never-relocate semantics instead of silently "ignoring" the
   subsystem parameter. `doctor --fix` still performs no flat→nested migration

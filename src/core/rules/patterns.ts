@@ -18,7 +18,7 @@ export const patternsRule: SddRule = {
     { code: 'SHARED_OWNED_MEMBER', defaultSeverity: 'error', summary: 'Block owned by two patterns' },
     { code: 'REPOSITORY_CONTAINMENT', defaultSeverity: 'error', summary: 'Repository owning a non Store/Registry/Index/Adapter member' },
     { code: 'GATEWAY_CONTAINMENT', defaultSeverity: 'error', summary: 'Gateway owning a non Portal/Orchestrator/Specialist member' },
-    { code: 'FEATURE_COMPONENT_CONTAINMENT', defaultSeverity: 'error', summary: 'FeatureComponent not owning exactly one Orchestrator + one View' },
+    { code: 'FEATURE_COMPONENT_CONTAINMENT', defaultSeverity: 'error', summary: 'FeatureComponent not owning exactly one Orchestrator + one or more Views' },
     { code: 'ROUTER_COMPONENT_CONTAINMENT', defaultSeverity: 'error', summary: 'RouterComponent missing its Portal facade or children' },
     { code: 'VISIBILITY_VIOLATION', defaultSeverity: 'error', summary: 'Dependency on a block privately owned by another pattern' },
     { code: 'UNOWNED_STORE', defaultSeverity: 'warning', summary: 'Store not owned by any pattern — recommended shape is a Repository; a deliberate standalone Store needs a lint.allow' },
@@ -75,17 +75,22 @@ export const patternsRule: SddRule = {
         }
       }
 
-      // FeatureComponent containment: exactly one Orchestrator and one View
+      // FeatureComponent containment: exactly one Orchestrator and one or
+      // more Views — a feature slice often has several faces (list, detail,
+      // form) sharing the one logic component. A second Orchestrator is a
+      // second feature; anything else does not belong inside the slice.
       if (comp.componentType === 'FeatureComponent') {
-        let hasOrchestrator = false;
-        let hasView = false;
+        let orchestrators = 0;
+        let views = 0;
+        let others = 0;
         for (const memberId of comp.owns) {
           const t = ctx.componentMap.get(memberId)?.componentType;
-          if (t === 'Orchestrator') hasOrchestrator = true;
-          if (t === 'View') hasView = true;
+          if (t === 'Orchestrator') orchestrators++;
+          else if (t === 'View') views++;
+          else if (t) others++;
         }
-        if (comp.owns.length !== 2 || !hasOrchestrator || !hasView) {
-          ctx.addIssue('error', 'FEATURE_COMPONENT_CONTAINMENT', `FeatureComponent "${comp.id}" must own exactly one Orchestrator (logic side) and one View (UI side) component.`, comp.id, isDraftCtx);
+        if (orchestrators !== 1 || views < 1 || others > 0) {
+          ctx.addIssue('error', 'FEATURE_COMPONENT_CONTAINMENT', `FeatureComponent "${comp.id}" must own exactly one Orchestrator (logic side) and one or more Views (UI faces) — no other member types.`, comp.id, isDraftCtx);
         }
       }
 
