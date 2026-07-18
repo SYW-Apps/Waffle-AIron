@@ -48,6 +48,7 @@ You must read, respect, and update the living quest log file: `.wai/phased_desig
    - Do NOT design components or interfaces for the entire system all at once. Proceed **one subsystem at a time** to ensure focused, manageable design reviews.
    - For the active subsystem:
      1. Design and add all L2 Components (Portals, Orchestrators, Stores, etc.) using `sdd_add_component` (defaulting to `status: draft`).
+        The moment any need involves **storing, persisting, caching, or tracking state** — a config, a permission set, a session map, anything — apply the **held-state recipe** below BEFORE adding a bare Store.
      2. Verify component boundaries: ensure Portals never depend directly on Stores, Repositories, or Adapters.
      3. Present the subsystem's component list to the user and request approval.
      4. Once approved, define the L3 Interfaces (`.interface.yaml`, via `sdd_define_interface`) for each component in this subsystem.
@@ -72,6 +73,12 @@ The full standard is the source of truth; this is the summary you design against
    - **Strict Layer Isolation**: A `Portal` must **never** depend directly on a `Repository`, `Store`, `Registry`, `Index`, or `Adapter`. It must **always** route requests through an inbound `Orchestrator` to maintain clean separation between presentation/transport layers and domain/data layers.
 2. **Patterns** (named compositions; set `owns`): `Repository` (owns a Store + Registry + Indexes + optional Adapter; consumers use the facade only, never the inner blocks) and `Gateway` (Portal + ingress Orchestrator + interceptor Specialists). A pattern owns only building blocks, never another pattern — compose patterns at the subsystem (L1) level.
    - **No Persistence Shortcuts**: Every domain entity requiring state preservation (even simple settings, configurations, permissions, or in-memory rules) **must** utilize a proper `Repository` composed of `Store`, `Registry`, and `Index` blocks. Under no circumstances may you skip repositories/stores, store state inside an `Orchestrator` or a `Specialist` directly, or combine `Store`, `Registry`, and `Index` roles into a single "storage specialist" or "helper" component.
+   - **Held-state recipe (apply the moment state appears — do not wait for a refused link):**
+     1. `sdd_add_component` the members: `<x>_store` (Store), `<x>_registry` (Registry — write path), `<x>_index` (Index — read path).
+     2. `sdd_add_component` the facade: `<x>_repository` (Repository, `owns: [<x>_store, <x>_registry, <x>_index]`).
+     3. Point every consumer at the `<x>_repository` facade — never at the inner blocks.
+     - *Lightweight exception*: for genuinely simple held state, a deliberately **standalone Store** is sanctioned — consumers from the workflow layer only (Orchestrator/Supervisor/Actor), acknowledged with a `lint.allow` reason on the `UNOWNED_STORE` warning. The state stays VISIBLE as a component either way.
+     - *Never*: hold state as fields inside an Orchestrator/Specialist because a Store link was refused. A refused link means "apply this recipe", not "inline the state" — state hidden inside a logic component is invisible to the spec and unrecoverable.
 3. **owns vs dependsOn**: `owns` = a pattern's private member blocks (exactly one hop). `dependsOn` = collaborators (other facades / standalone blocks). Never depend on a block privately owned by another pattern.
 4. **Decoupling**: Registry (write) and Index (read) are independent — both work on the Store; the Registry never updates Indexes (Indexes share the Store's references and project structural changes). A Store is depended *upon*; it never depends on a Registry/Index.
 5. **Behaviour placement**: behaviour lives where it can be performed autonomously over its own state (`order.total()`, `dog.bark()`); behaviour needing an external actor lives on the *acting* component, taking the entity as an argument (a `Carrier` ships an order — not `order.ship()`). Prefer composition + interfaces over inheritance.
