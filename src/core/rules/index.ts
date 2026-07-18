@@ -27,6 +27,7 @@ import { profilesRule } from './profiles.js';
 import { publicSurfaceRule } from './public-surface.js';
 import { cyclesRule, reachabilityRule } from './graph.js';
 import { dispatchRule, lifecycleRule, durabilityRule, untypedSeamRule, proseClaimRule } from './semantic-edges.js';
+import { invariantBackingRule } from './invariants.js';
 import { roundtripRule, namespaceHygieneRule, surfaceFreshnessRule } from './namespace.js';
 import { couplingRule } from './coupling.js';
 import { languageRule } from './language.js';
@@ -74,6 +75,9 @@ export const SDD_RULES: SddRule[] = [
   durabilityRule,
   untypedSeamRule,
   proseClaimRule,
+  // Invariant registry rides with the semantic-edge family: declared entity
+  // invariants must be asserted on every write path (declarations, not proofs).
+  invariantBackingRule,
   // Code↔spec: structural conformance consumes the injected CodeModel (built
   // by the source analysis adapter next to the surface snapshots); dependency
   // conformance lifts its import edges onto the declared dependsOn/owns graph.
@@ -124,6 +128,9 @@ const COMPLETENESS_RULES = new Set([
   // Detail sufficiency reads the realized code like the conformance family
   // does — a draft tree is allowed to disagree with its code.
   'UNNARRATED_COMPLEXITY',
+  // Invariant assertions are narrative completeness — a draft tree may not
+  // have written its write-path narratives yet.
+  'UNASSERTED_INVARIANT',
 ]);
 
 export interface ScopeFilterOptions {

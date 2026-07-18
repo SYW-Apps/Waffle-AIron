@@ -48,5 +48,12 @@ fields:
     description: Credential id used to create the lock, if the action came through MCP or HTTP auth.
     optional: true
 methods: []
+componentClass: lock_registry
+invariants:
+  - id: single-record-per-project
+    description: >-
+      At most one lock record exists per project: .wai/lock.json is the only lock location and every
+      write replaces the prior record wholesale — there is no append path, so a stale lock can never
+      coexist with a fresh one.
 createdAt: '2026-07-04T12:44:18.588Z'
-updatedAt: '2026-07-08T19:35:20.487Z'
+updatedAt: '2026-07-18T14:33:34.055Z'

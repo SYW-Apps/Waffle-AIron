@@ -452,6 +452,14 @@ export const NarrativeStepSchema = z.object({
   targetMethod: z.string().optional(),    // Required if type is 'call', references Method name on target interface
   capability: z.string().optional(),      // Required if type is 'dispatch': the capability routed through the target Portal's dispatch table
   assertsGuarantees: z.array(GuaranteeSchema).optional(),
+  /**
+   * Declared entity invariants this step upholds, as "<type-id>.<invariant-id>"
+   * references (type id optionally subsystem-qualified). The invariant-backing
+   * rule resolves each against the entity's declared invariants
+   * (UNKNOWN_INVARIANT_REF) and counts the step as the write-path assertion the
+   * entity's write methods must carry (UNASSERTED_INVARIANT otherwise).
+   */
+  assertsInvariants: z.array(z.string()).optional(),
 
   // --- flow config (per type; validated by the narrative-flow rule) ---------
   condition: z.string().optional(),        // branch; loop (while/doWhile)
@@ -585,6 +593,22 @@ export const TypeMethodSchema = z.object({
 });
 export type TypeMethod = z.infer<typeof TypeMethodSchema>;
 
+/**
+ * A declared domain invariant on an entity — a property every write path must
+ * uphold (e.g. "slug unique among siblings"). A DECLARATION, not a proof: the
+ * invariant-backing rule checks that each write-effect method of the entity's
+ * componentClass carries a narrative step asserting it (assertsInvariants) —
+ * it never verifies the narrative actually enforces the property. It catches
+ * "nobody considered this here", not incorrectness.
+ */
+export const InvariantSchema = z.object({
+  /** Stable invariant id, unique within the entity (referenced as "<type-id>.<invariant-id>"). */
+  id: SpecIdSchema,
+  /** The property that must hold, stated precisely enough to test against. */
+  description: z.string().min(1),
+});
+export type Invariant = z.infer<typeof InvariantSchema>;
+
 export const TypeSpecSchema = z.object({
   kind: TypeKindSchema, // discriminator — entity | value-object
   id: SpecIdSchema,
@@ -602,6 +626,12 @@ export const TypeSpecSchema = z.object({
    * (e.g., a Store or Registry that owns this entity's lifecycle and methods).
    */
   componentClass: z.string().optional(),
+  /**
+   * Declared domain invariants on this entity (see InvariantSchema). Anchored
+   * through componentClass: its write-effect contract methods must each carry
+   * a narrative step asserting every declared invariant.
+   */
+  invariants: z.array(InvariantSchema).optional(),
   /**
    * The database ID this schema belongs to (marks it as a database table schema).
    */

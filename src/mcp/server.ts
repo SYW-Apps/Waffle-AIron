@@ -736,6 +736,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     targetMethod: z.string().optional().describe('call: method name on the target'),
     capability: z.string().optional().describe('dispatch: the capability routed through the target Portal\'s dispatch table (validated against it — UNSERVED_CAPABILITY)'),
     assertsGuarantees: z.array(z.enum(['idempotent', 'atomic', 'transactional', 'exactly-once'])).optional().describe('Semantic guarantees this step relies on — each must be declared in the called method\'s L3 guarantees (NARRATIVE_SEMANTIC_UNBACKED otherwise)'),
+    assertsInvariants: z.array(z.string()).optional().describe('Declared entity invariants this step upholds, as "<type-id>.<invariant-id>" refs (UNKNOWN_INVARIANT_REF when unresolved); write-effect methods of the entity\'s componentClass must carry one per declared invariant (UNASSERTED_INVARIANT)'),
     condition: z.string().optional().describe('branch / while / doWhile'),
     onTrueStep: stepNo().optional().describe('branch: default = next step'),
     onFalseStep: stepNo().optional().describe('branch: required'),
@@ -808,7 +809,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
-  reg<{ kind: 'entity' | 'value-object'; id: string; name: string; description?: string; subsystem?: string; group?: string; fields?: { name: string; type: string; description?: string; optional?: boolean; key?: 'primary' | 'unique' | 'foreign'; references?: string }[]; methods?: { name: string; signature: string; returns: string; description?: string }[]; componentClass?: string; database?: string; table?: string; linkedEntity?: string }>(server,
+  reg<{ kind: 'entity' | 'value-object'; id: string; name: string; description?: string; subsystem?: string; group?: string; fields?: { name: string; type: string; description?: string; optional?: boolean; key?: 'primary' | 'unique' | 'foreign'; references?: string }[]; methods?: { name: string; signature: string; returns: string; description?: string }[]; componentClass?: string; invariants?: { id: string; description: string }[]; database?: string; table?: string; linkedEntity?: string }>(server,
     'sdd_add_type',
     {
       description: 'Define an entity or value-object type (the data components operate on). Entities are owned by a subsystem; shared value objects omit subsystem (system-level). Fields are data; methods are PURE intrinsic behaviour only — anything needing a collaborator belongs on a component, taking the entity as an argument.',
@@ -829,12 +830,16 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         })).optional().describe('Data fields (type is a primitive or a qualified type id, e.g. "billing.Invoice")'),
         methods: z.array(z.object({ name: z.string(), signature: z.string(), returns: z.string(), description: z.string().optional() })).optional().describe('Pure intrinsic methods only'),
         componentClass: z.string().optional().describe('Optional component id that implements or owns this logical entity'),
+        invariants: z.array(z.object({
+          id: z.string().describe('Stable invariant id, unique within the entity'),
+          description: z.string().describe('The property that must hold, stated precisely'),
+        })).optional().describe('Declared domain invariants (entities): every write-effect method of the componentClass must carry a narrative step asserting each (assertsInvariants) — declarations checked, enforcement never proven'),
         database: z.string().optional().describe('Optional database id for table-schema types'),
         table: z.string().optional().describe('Optional database table name for table-schema types'),
         linkedEntity: z.string().optional().describe('Optional logical entity id represented by this table-schema type'),
       },
     },
-    ({ kind, id, name, description, subsystem, group, fields, methods, componentClass, database, table, linkedEntity }) => {
+    ({ kind, id, name, description, subsystem, group, fields, methods, componentClass, invariants, database, table, linkedEntity }) => {
       try {
         const { saveTypeSpec } = requireSpecs();
         const now = new Date().toISOString();
@@ -855,6 +860,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           })),
           methods: methods ?? [],
           ...(componentClass ? { componentClass } : {}),
+          ...(invariants?.length ? { invariants } : {}),
           ...(database ? { database } : {}),
           ...(table ? { table } : {}),
           ...(linkedEntity ? { linkedEntity } : {}),

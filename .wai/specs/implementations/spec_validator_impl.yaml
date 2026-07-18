@@ -111,22 +111,27 @@ methods:
           semantic-edge rules (dispatch-table capability contracts and guarantee backing, dispatch-
           and lifecycle-rooted reachability, durability round-trip hydration with a non-flooded boot
           graph, untyped cross-subsystem seams with dispatch-table exemption, prose-claim
-          realization), narrative detail-sufficiency (a method whose realized function's measured
-          cyclomatic complexity exceeds the configured threshold while its spec sits below detail:
-          full with no narrative — UNNARRATED_COMPLEXITY, emitted from exact-grade analysis only so
-          weaker grades never guess; an explicit detail declaration below a full-floor logic
-          stereotype with no narrative — DETAIL_BELOW_STEREOTYPE; both honest lints about UNDECLARED
-          behavior, not proofs, and both lint.allow-suppressible), structural-conformance rules
-          (sourcePaths resolve within the project root to real files; every contract method is
-          realized in its file at the implementation's conformance tier — declared | anchored | off
-          — honoring per-method symbol overrides, with analysis grade carried on findings),
-          dependency-conformance rules (runtime imports between component-mapped files must be
-          justified by declared dependsOn/owns edges — or, across subsystems, by a declared edge to
-          the target subsystem's published surface — UNDECLARED_DEPENDENCY; declared collaborator
-          edges with no realizing import between exactly-analyzed files surface as
-          UNREALIZED_DEPENDENCY), and the pattern-reference rule (a component's patterns[] must each
-          resolve to a loaded pack PatternDef — UNKNOWN_PATTERN_REF — with a version-mismatch
-          warning), each rule's check running against the shared rule context
+          realization), invariant backing (a declared entity invariant — type.invariants, anchored
+          via componentClass — must be asserted by a narrative step on every write-effect method of
+          the owning component: UNASSERTED_INVARIANT / INVARIANT_UNANCHORED warnings, declarations
+          checked while enforcement is never proven; dangling assertsInvariants references are
+          UNKNOWN_INVARIANT_REF errors), narrative detail-sufficiency (a method whose realized
+          function's measured cyclomatic complexity exceeds the configured threshold while its spec
+          sits below detail: full with no narrative — UNNARRATED_COMPLEXITY, emitted from
+          exact-grade analysis only so weaker grades never guess; an explicit detail declaration
+          below a full-floor logic stereotype with no narrative — DETAIL_BELOW_STEREOTYPE; both
+          honest lints about UNDECLARED behavior, not proofs, and both lint.allow-suppressible),
+          structural-conformance rules (sourcePaths resolve within the project root to real files;
+          every contract method is realized in its file at the implementation's conformance tier —
+          declared | anchored | off — honoring per-method symbol overrides, with analysis grade
+          carried on findings), dependency-conformance rules (runtime imports between
+          component-mapped files must be justified by declared dependsOn/owns edges — or, across
+          subsystems, by a declared edge to the target subsystem's published surface —
+          UNDECLARED_DEPENDENCY; declared collaborator edges with no realizing import between
+          exactly-analyzed files surface as UNREALIZED_DEPENDENCY), and the pattern-reference rule
+          (a component's patterns[] must each resolve to a loaded pack PatternDef —
+          UNKNOWN_PATTERN_REF — with a version-mismatch warning), each rule's check running against
+          the shared rule context
         type: local
       - stepNumber: 19
         description: >-
@@ -258,4 +263,4 @@ methods:
     detail: calls-only
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-18T13:57:29.490Z'
+updatedAt: '2026-07-18T14:33:34.231Z'
