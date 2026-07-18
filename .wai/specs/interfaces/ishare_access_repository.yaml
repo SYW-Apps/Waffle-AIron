@@ -1,0 +1,28 @@
+id: ishare_access_repository
+name: Share Access Repository Interface
+description: >-
+  Facade contract for the per-link access log. Pure 1:1 forwarding: the append write to the
+  registry, the per-link read to the index.
+component: share_access_repository
+methods:
+  - name: append
+    description: 'Facade: append an access entry through the registry.'
+    signature: 'append(entry: ShareAccessEntry): ShareAccessEntry'
+    returns: ShareAccessEntry
+    params:
+      - name: entry
+        type: ShareAccessEntry
+    guarantees:
+      - atomic
+  - name: listByLink
+    description: 'Facade: list a link''s access entries through the index.'
+    signature: 'listByLink(linkId: string, limit: number): ShareAccessEntry[]'
+    returns: ShareAccessEntry[]
+    params:
+      - name: linkId
+        type: string
+      - name: limit
+        type: number
+status: complete
+createdAt: '2026-07-17T22:29:57.370Z'
+updatedAt: '2026-07-18T10:10:39.378Z'

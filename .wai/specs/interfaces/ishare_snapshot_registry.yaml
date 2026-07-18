@@ -1,0 +1,19 @@
+id: ishare_snapshot_registry
+name: Share Snapshot Registry Interface
+description: 'Write path for captured snapshots: persist a fresh payload set under a new id. Write-once.'
+component: share_snapshot_registry
+methods:
+  - name: put
+    description: >-
+      Stamp a new snapshot id + capturedAt on the payload set, persist it write-once through the
+      store, and return the stored snapshot.
+    signature: 'put(snapshot: ShareSnapshot): ShareSnapshot'
+    returns: ShareSnapshot
+    params:
+      - name: snapshot
+        type: ShareSnapshot
+    guarantees:
+      - atomic
+status: complete
+createdAt: '2026-07-17T22:29:24.826Z'
+updatedAt: '2026-07-18T10:10:39.957Z'

@@ -1,0 +1,15 @@
+id: share_access_index_impl
+name: Share Access Index Implementation
+description: Read path over the access log.
+contract: ishare_access_index
+sourcePath: src/server/shareaccesslog.ts
+methods:
+  - name: listByLink
+    narrative: []
+    intent: >-
+      Loads the log, filters entries by linkId, sorts most-recent-first, and returns at most `limit`
+      of them for the owner's access-log view.
+detail: intent
+status: complete
+createdAt: '2026-07-18T09:26:32.419Z'
+updatedAt: '2026-07-18T10:10:40.182Z'

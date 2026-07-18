@@ -1,0 +1,15 @@
+id: share_access_registry_impl
+name: Share Access Registry Implementation
+description: Write path for the access log through the store.
+contract: ishare_access_registry
+sourcePath: src/server/shareaccesslog.ts
+methods:
+  - name: append
+    narrative: []
+    intent: >-
+      Stamps a fresh id + timestamp on the entry and appends it through the store; returns the
+      stored entry. Append-only.
+detail: intent
+status: complete
+createdAt: '2026-07-18T09:26:23.945Z'
+updatedAt: '2026-07-18T10:10:40.295Z'

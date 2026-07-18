@@ -1,0 +1,21 @@
+id: share_access_store_impl
+name: Share Access Store Implementation
+description: Disk-backed append-only access log at &lt;dataDir&gt;/share-access.json, loaded fresh per call.
+contract: ishare_access_store
+sourcePath: src/server/shareaccesslog.ts
+methods:
+  - name: load
+    narrative: []
+    intent: >-
+      Reads share-access.json under the data dir and returns the parsed ShareAccessEntry array; a
+      missing file yields an empty set.
+  - name: append
+    narrative: []
+    intent: >-
+      Loads the current entries, appends the new one, and swaps the file via write-temp-then-rename
+      (atomic). Append-only — existing entries are never rewritten, so the log is a faithful audit
+      trail.
+detail: intent
+status: complete
+createdAt: '2026-07-18T09:26:06.104Z'
+updatedAt: '2026-07-18T10:10:40.404Z'

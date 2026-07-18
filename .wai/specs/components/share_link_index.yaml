@@ -1,0 +1,14 @@
+id: share_link_index
+name: Share Link Index
+description: >-
+  Read path over the share-link store: resolve a presented token to its record by salted-hash lookup
+  (the public access path), fetch a record by id, and list records by target scope or creator (the
+  owner management path). Never mutates.
+subsystem: sdd_host
+componentType: Index
+owns: []
+dependsOn:
+  - share_link_store
+status: complete
+createdAt: '2026-07-17T22:09:16.880Z'
+updatedAt: '2026-07-18T09:37:24.085Z'

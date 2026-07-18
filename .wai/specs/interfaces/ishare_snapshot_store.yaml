@@ -1,0 +1,26 @@
+id: ishare_snapshot_store
+name: Share Snapshot Store Interface
+description: Private storage contract for the immutable captured payloads, keyed by snapshot id. Write-once.
+component: share_snapshot_store
+methods:
+  - name: write
+    description: >-
+      Persist a captured snapshot's payloads under its id via write-temp-then-rename. Write-once —
+      an existing id is never overwritten.
+    signature: 'write(snapshot: ShareSnapshot): void'
+    returns: void
+    params:
+      - name: snapshot
+        type: ShareSnapshot
+    guarantees:
+      - atomic
+  - name: read
+    description: Load a captured snapshot by id, or null when absent.
+    signature: 'read(snapshotId: string): ShareSnapshot | null'
+    returns: ShareSnapshot | null
+    params:
+      - name: snapshotId
+        type: string
+status: complete
+createdAt: '2026-07-17T22:29:21.825Z'
+updatedAt: '2026-07-18T10:10:40.126Z'

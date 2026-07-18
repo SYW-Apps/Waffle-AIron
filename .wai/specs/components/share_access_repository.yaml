@@ -1,0 +1,16 @@
+id: share_access_repository
+name: Share Access Repository
+description: >-
+  Facade over the owned share-access store, registry, and index for the per-link access log. Pure
+  1:1 forwarding — the append write to the registry, the per-link listing read to the index;
+  consumers use this facade only, never the inner blocks.
+subsystem: sdd_host
+componentType: Repository
+owns:
+  - share_access_store
+  - share_access_registry
+  - share_access_index
+dependsOn: []
+status: complete
+createdAt: '2026-07-17T22:09:35.252Z'
+updatedAt: '2026-07-18T09:36:28.946Z'

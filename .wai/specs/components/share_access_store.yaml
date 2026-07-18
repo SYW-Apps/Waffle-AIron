@@ -1,0 +1,16 @@
+id: share_access_store
+name: Share Access Store
+description: >-
+  Authoritative disk-backed holder of per-share-link access-log entries, persisted at
+  &lt;dataDir&gt;/share-access.json. Each entry records one access to a share link: the link id,
+  timestamp, source IP, user-agent, referer, and outcome (served | denied-disabled | denied-expired
+  | not-found) — the raw material for spotting irregular access patterns on an otherwise
+  unauthenticated surface. Loaded per call; append via write-temp-then-rename. Owned by the share
+  access repository; never depended on directly.
+subsystem: sdd_host
+componentType: Store
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-07-17T22:09:07.884Z'
+updatedAt: '2026-07-18T09:36:28.141Z'

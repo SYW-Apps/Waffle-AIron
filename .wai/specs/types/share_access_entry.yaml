@@ -1,0 +1,39 @@
+kind: entity
+id: share_access_entry
+name: Share Access Entry
+description: >-
+  One recorded access to a share link on the public surface — the raw material for spotting
+  irregular access patterns (many IPs, geo spread) on an otherwise unauthenticated endpoint.
+subsystem: sdd_host
+fields:
+  - name: id
+    type: string
+    optional: false
+    key: primary
+  - name: linkId
+    type: string
+    description: The accessed link.
+    optional: false
+    key: foreign
+    references: share_link.id
+  - name: at
+    type: string
+    description: ISO-8601 access time.
+    optional: false
+  - name: ip
+    type: string
+    description: Source IP.
+    optional: false
+  - name: userAgent
+    type: string
+    optional: false
+  - name: referer
+    type: string
+    optional: true
+  - name: outcome
+    type: string
+    description: served | denied-disabled | denied-expired | not-found | denied-download.
+    optional: false
+methods: []
+createdAt: '2026-07-17T22:32:36.503Z'
+updatedAt: '2026-07-17T22:32:36.561Z'

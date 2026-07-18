@@ -1,0 +1,24 @@
+id: share_access_repository_impl
+name: Share Access Repository Implementation
+description: 'Facade forwarding: the append write to the registry, the per-link read to the index.'
+contract: ishare_access_repository
+sourcePath: src/server/shareaccesslog.ts
+methods:
+  - name: append
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry to append the access entry.
+        type: call
+        targetComponent: share_access_registry
+        targetMethod: append
+  - name: listByLink
+    narrative:
+      - stepNumber: 1
+        description: Forward to the index to list a link's access entries.
+        type: call
+        targetComponent: share_access_index
+        targetMethod: listByLink
+detail: calls-only
+status: complete
+createdAt: '2026-07-18T09:26:56.326Z'
+updatedAt: '2026-07-18T10:10:40.349Z'

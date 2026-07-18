@@ -1,0 +1,56 @@
+id: ishare_link_repository
+name: Share Link Repository Interface
+description: >-
+  Facade contract for share-link records. Pure 1:1 forwarding: writes to the registry, reads to the
+  index.
+component: share_link_repository
+methods:
+  - name: create
+    description: 'Facade: create a record through the registry.'
+    signature: 'create(link: ShareLink): ShareLink'
+    returns: ShareLink
+    params:
+      - name: link
+        type: ShareLink
+    guarantees:
+      - atomic
+  - name: update
+    description: 'Facade: update a record through the registry.'
+    signature: 'update(link: ShareLink): ShareLink'
+    returns: ShareLink
+    params:
+      - name: link
+        type: ShareLink
+    guarantees:
+      - atomic
+  - name: remove
+    description: 'Facade: remove a record by id through the registry.'
+    signature: 'remove(id: string): void'
+    returns: void
+    params:
+      - name: id
+        type: string
+  - name: byTokenHash
+    description: 'Facade: resolve a token hash to its record through the index.'
+    signature: 'byTokenHash(tokenHash: string): ShareLink | null'
+    returns: ShareLink | null
+    params:
+      - name: tokenHash
+        type: string
+  - name: getById
+    description: 'Facade: one record by id through the index.'
+    signature: 'getById(id: string): ShareLink | null'
+    returns: ShareLink | null
+    params:
+      - name: id
+        type: string
+  - name: listByProject
+    description: 'Facade: list a project''s records through the index.'
+    signature: 'listByProject(projectId: string): ShareLink[]'
+    returns: ShareLink[]
+    params:
+      - name: projectId
+        type: string
+status: complete
+createdAt: '2026-07-17T22:29:49.805Z'
+updatedAt: '2026-07-18T10:10:39.725Z'

@@ -1,0 +1,17 @@
+id: ishare_access_registry
+name: Share Access Registry Interface
+description: 'Write path for the access log: append one entry. Append-only.'
+component: share_access_registry
+methods:
+  - name: append
+    description: Stamp id/timestamp on the entry, append it through the store, and return the stored entry.
+    signature: 'append(entry: ShareAccessEntry): ShareAccessEntry'
+    returns: ShareAccessEntry
+    params:
+      - name: entry
+        type: ShareAccessEntry
+    guarantees:
+      - atomic
+status: complete
+createdAt: '2026-07-17T22:29:34.387Z'
+updatedAt: '2026-07-18T10:10:39.318Z'

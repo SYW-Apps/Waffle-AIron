@@ -1,0 +1,26 @@
+id: ishare_link_store
+name: Share Link Store Interface
+description: >-
+  Private storage contract for the share-link records collection. Loaded fresh per call; the whole
+  set is swapped atomically.
+component: share_link_store
+methods:
+  - name: load
+    description: >-
+      Load the persisted share-link collection; a missing file yields an empty set, a malformed file
+      fails with a storage error naming the path.
+    signature: 'load(): ShareLink[]'
+    returns: ShareLink[]
+    params: []
+  - name: replaceAll
+    description: Swap the persisted collection wholesale via write-temp-then-rename.
+    signature: 'replaceAll(links: ShareLink[]): void'
+    returns: void
+    params:
+      - name: links
+        type: ShareLink[]
+    guarantees:
+      - atomic
+status: complete
+createdAt: '2026-07-17T22:29:08.769Z'
+updatedAt: '2026-07-18T10:10:39.782Z'

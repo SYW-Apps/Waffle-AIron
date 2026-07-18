@@ -1,0 +1,52 @@
+id: share_link_repository_impl
+name: Share Link Repository Implementation
+description: 'Facade forwarding: writes to the registry, reads to the index.'
+contract: ishare_link_repository
+sourcePath: src/server/sharelinks.ts
+methods:
+  - name: create
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry to create the record.
+        type: call
+        targetComponent: share_link_registry
+        targetMethod: create
+  - name: update
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry to update the record.
+        type: call
+        targetComponent: share_link_registry
+        targetMethod: update
+  - name: remove
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry to remove the record.
+        type: call
+        targetComponent: share_link_registry
+        targetMethod: remove
+  - name: byTokenHash
+    narrative:
+      - stepNumber: 1
+        description: Forward to the index to resolve the token hash.
+        type: call
+        targetComponent: share_link_index
+        targetMethod: byTokenHash
+  - name: getById
+    narrative:
+      - stepNumber: 1
+        description: Forward to the index for a record by id.
+        type: call
+        targetComponent: share_link_index
+        targetMethod: getById
+  - name: listByProject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the index to list a project's records.
+        type: call
+        targetComponent: share_link_index
+        targetMethod: listByProject
+detail: calls-only
+status: complete
+createdAt: '2026-07-18T09:26:48.951Z'
+updatedAt: '2026-07-18T10:10:40.688Z'

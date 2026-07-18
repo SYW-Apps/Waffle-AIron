@@ -1,0 +1,31 @@
+id: share_snapshot_repository_impl
+name: Share Snapshot Repository Implementation
+description: 'Facade forwarding: write to the registry, reads to the index.'
+contract: ishare_snapshot_repository
+sourcePath: src/server/sharesnapshots.ts
+methods:
+  - name: put
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry to persist the snapshot.
+        type: call
+        targetComponent: share_snapshot_registry
+        targetMethod: put
+  - name: get
+    narrative:
+      - stepNumber: 1
+        description: Forward to the index for a snapshot by id.
+        type: call
+        targetComponent: share_snapshot_index
+        targetMethod: get
+  - name: getArtifact
+    narrative:
+      - stepNumber: 1
+        description: Forward to the index for one captured artifact.
+        type: call
+        targetComponent: share_snapshot_index
+        targetMethod: getArtifact
+detail: calls-only
+status: complete
+createdAt: '2026-07-18T09:26:52.960Z'
+updatedAt: '2026-07-18T10:10:40.976Z'

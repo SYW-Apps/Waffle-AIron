@@ -1,0 +1,26 @@
+kind: value-object
+id: share_link_update
+name: Share Link Update
+description: >-
+  The mutable settings an owner may change on an existing share link (the scope, project, and
+  snapshot are fixed).
+subsystem: sdd_host
+fields:
+  - name: enabled
+    type: boolean
+    optional: true
+  - name: expiresAt
+    type: string
+    optional: true
+  - name: allowDownloadHtml
+    type: boolean
+    optional: true
+  - name: allowDownloadOpenapi
+    type: boolean
+    optional: true
+  - name: frameAncestors
+    type: string[]
+    optional: true
+methods: []
+createdAt: '2026-07-17T22:32:43.004Z'
+updatedAt: '2026-07-17T22:32:43.067Z'

@@ -1,0 +1,24 @@
+id: share_link_store_impl
+name: Share Link Store Implementation
+description: >-
+  Disk-backed share-link collection at &lt;dataDir&gt;/share-links.json, loaded fresh per call,
+  swapped atomically.
+contract: ishare_link_store
+sourcePath: src/server/sharelinks.ts
+methods:
+  - name: load
+    narrative: []
+    intent: >-
+      Reads share-links.json under the data dir and returns the parsed ShareLink array. A missing
+      file yields an empty set; a malformed file fails with a storage error naming the path so the
+      fault is diagnosable rather than silently swallowed.
+  - name: replaceAll
+    narrative: []
+    intent: >-
+      Serializes the given ShareLink set and swaps it into share-links.json via
+      write-temp-then-rename, so a crashed or partial write leaves the prior file intact (atomic
+      replacement).
+detail: intent
+status: complete
+createdAt: '2026-07-18T09:25:58.805Z'
+updatedAt: '2026-07-18T10:10:40.748Z'

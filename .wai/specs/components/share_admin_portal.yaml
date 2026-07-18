@@ -1,0 +1,18 @@
+id: share_admin_portal
+name: Share Admin Portal
+description: >-
+  The authenticated owner-side HTTP surface for managing share links, mounted under /web/admin/share
+  on the data plane (session-cookie authenticated like the rest of /web). Routes create / refresh /
+  update / remove / list / access-log to the share admin orchestrator, which enforces the
+  share:create capability. Self-contained (its own routing seam), consistent with the subsystem's
+  other inbound portals.
+subsystem: sdd_host
+componentType: Portal
+owns: []
+dependsOn:
+  - share_admin_orchestrator
+portalType: HTTP_API
+basePath: /web/admin/share
+status: complete
+createdAt: '2026-07-18T09:34:00.699Z'
+updatedAt: '2026-07-18T09:36:30.451Z'

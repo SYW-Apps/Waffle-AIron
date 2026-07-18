@@ -1,0 +1,14 @@
+id: share_snapshot_registry
+name: Share Snapshot Registry
+description: >-
+  Write path for captured share snapshots: persist a freshly captured payload set (canvas model /
+  openapi / html) under a new snapshot id. Write-once — a stored snapshot is never mutated. No
+  authorization; the share admin orchestrator drives capture.
+subsystem: sdd_host
+componentType: Registry
+owns: []
+dependsOn:
+  - share_snapshot_store
+status: complete
+createdAt: '2026-07-17T22:09:13.120Z'
+updatedAt: '2026-07-18T09:37:25.134Z'

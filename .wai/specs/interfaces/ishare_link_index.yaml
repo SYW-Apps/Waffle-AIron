@@ -1,0 +1,31 @@
+id: ishare_link_index
+name: Share Link Index Interface
+description: >-
+  Read path over the share-link store: token-hash resolution (the public path) and id / scope
+  listing (the owner path). Never mutates.
+component: share_link_index
+methods:
+  - name: byTokenHash
+    description: Resolve a presented token's salted hash to its record, or null when no enabled record matches.
+    signature: 'byTokenHash(tokenHash: string): ShareLink | null'
+    returns: ShareLink | null
+    params:
+      - name: tokenHash
+        type: string
+  - name: getById
+    description: One record by id, or null.
+    signature: 'getById(id: string): ShareLink | null'
+    returns: ShareLink | null
+    params:
+      - name: id
+        type: string
+  - name: listByProject
+    description: Every share link targeting a given project.
+    signature: 'listByProject(projectId: string): ShareLink[]'
+    returns: ShareLink[]
+    params:
+      - name: projectId
+        type: string
+status: complete
+createdAt: '2026-07-17T22:29:17.825Z'
+updatedAt: '2026-07-18T10:10:39.613Z'

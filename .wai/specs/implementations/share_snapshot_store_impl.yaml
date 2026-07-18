@@ -1,0 +1,23 @@
+id: share_snapshot_store_impl
+name: Share Snapshot Store Implementation
+description: >-
+  Disk-backed immutable snapshot payloads keyed by id under &lt;dataDir&gt;/share-snapshots/.
+  Write-once.
+contract: ishare_snapshot_store
+sourcePath: src/server/sharesnapshots.ts
+methods:
+  - name: write
+    narrative: []
+    intent: >-
+      Serializes the snapshot's payloads to a file named by its id under share-snapshots/ via
+      write-temp-then-rename. Write-once: an existing snapshot file is never overwritten (a captured
+      share is immutable), so a repeated id is a no-op rather than a mutation.
+  - name: read
+    narrative: []
+    intent: >-
+      Loads and parses the snapshot file named by id, returning the ShareSnapshot or null when the
+      file is absent; a malformed file fails with a storage error naming the path.
+detail: intent
+status: complete
+createdAt: '2026-07-18T09:26:02.936Z'
+updatedAt: '2026-07-18T10:10:41.086Z'

@@ -1,0 +1,18 @@
+id: share_snapshot_specialist
+name: Share Snapshot Specialist
+description: >-
+  Captures a share target into an immutable snapshot payload set at share-creation (and on explicit
+  refresh): the project's canvas-model JSON via the host core adapter's canvas-data-model build,
+  plus its OpenAPI document and standalone HTML export where the link requests them, via the host
+  surfaces adapter / diagram renderer. The single place a live view is frozen into what a link will
+  serve; produces exactly the payloads the link's mode and download permissions require, and nothing
+  more.
+subsystem: sdd_host
+componentType: Specialist
+owns: []
+dependsOn:
+  - host_core_adapter
+  - host_surfaces_adapter
+status: complete
+createdAt: '2026-07-17T22:09:44.091Z'
+updatedAt: '2026-07-18T09:36:20.000Z'

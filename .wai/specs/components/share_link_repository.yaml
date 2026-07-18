@@ -1,0 +1,16 @@
+id: share_link_repository
+name: Share Link Repository
+description: >-
+  Facade over the owned share-link store, registry, and index for public share-link records. Pure
+  1:1 forwarding — writes to the registry, reads to the index; consumers use this facade only, never
+  the inner blocks.
+subsystem: sdd_host
+componentType: Repository
+owns:
+  - share_link_store
+  - share_link_registry
+  - share_link_index
+dependsOn: []
+status: complete
+createdAt: '2026-07-17T22:09:31.109Z'
+updatedAt: '2026-07-18T09:36:16.057Z'

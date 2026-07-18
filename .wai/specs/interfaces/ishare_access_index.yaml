@@ -1,0 +1,17 @@
+id: ishare_access_index
+name: Share Access Index Interface
+description: 'Read path over the access log: per-link listing for the owner''s access-log view. Never mutates.'
+component: share_access_index
+methods:
+  - name: listByLink
+    description: Access entries for a given link, most-recent-first, capped at limit.
+    signature: 'listByLink(linkId: string, limit: number): ShareAccessEntry[]'
+    returns: ShareAccessEntry[]
+    params:
+      - name: linkId
+        type: string
+      - name: limit
+        type: number
+status: complete
+createdAt: '2026-07-17T22:29:36.361Z'
+updatedAt: '2026-07-18T10:10:39.191Z'

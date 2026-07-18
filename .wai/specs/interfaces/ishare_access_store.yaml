@@ -1,0 +1,22 @@
+id: ishare_access_store
+name: Share Access Store Interface
+description: Private storage contract for the per-link access-log entries. Append-only; loaded fresh per call.
+component: share_access_store
+methods:
+  - name: load
+    description: Load the persisted access-log collection; a missing file yields an empty set.
+    signature: 'load(): ShareAccessEntry[]'
+    returns: ShareAccessEntry[]
+    params: []
+  - name: append
+    description: Append one entry and persist the collection via write-temp-then-rename.
+    signature: 'append(entry: ShareAccessEntry): void'
+    returns: void
+    params:
+      - name: entry
+        type: ShareAccessEntry
+    guarantees:
+      - atomic
+status: complete
+createdAt: '2026-07-17T22:29:31.826Z'
+updatedAt: '2026-07-18T10:10:39.436Z'

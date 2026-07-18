@@ -1,0 +1,93 @@
+id: ishare_admin_portal
+name: Share Admin Portal Interface
+description: >-
+  Authenticated owner-side share-link management routes under /web/admin/share. Each carries the
+  caller's ws_ session id (from the cookie) and routes to the share admin orchestrator, which gates
+  on share:create.
+component: share_admin_portal
+methods:
+  - name: createShareLink
+    description: Create a share link for a project view; returns the record + the raw token exactly once.
+    signature: 'createShareLink(sessionId: string, input: ShareLinkInput): ShareLinkCreated'
+    returns: ShareLinkCreated
+    params:
+      - name: sessionId
+        type: string
+      - name: input
+        type: ShareLinkInput
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/share
+  - name: refreshShareSnapshot
+    description: Re-capture a link's view into a fresh immutable snapshot.
+    signature: 'refreshShareSnapshot(sessionId: string, linkId: string): ShareLink'
+    returns: ShareLink
+    params:
+      - name: sessionId
+        type: string
+      - name: linkId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/share/refresh
+  - name: updateShareLink
+    description: Change a link's mutable settings (enabled / expiry / downloads / embedding allowlist).
+    signature: 'updateShareLink(sessionId: string, linkId: string, changes: ShareLinkUpdate): ShareLink'
+    returns: ShareLink
+    params:
+      - name: sessionId
+        type: string
+      - name: linkId
+        type: string
+      - name: changes
+        type: ShareLinkUpdate
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/share/update
+  - name: removeShareLink
+    description: Revoke (delete) a share link.
+    signature: 'removeShareLink(sessionId: string, linkId: string): void'
+    returns: void
+    params:
+      - name: sessionId
+        type: string
+      - name: linkId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/share/remove
+  - name: listShareLinks
+    description: List a project's share links (records only, never a raw token).
+    signature: 'listShareLinks(sessionId: string, projectId: string): ShareLink[]'
+    returns: ShareLink[]
+    params:
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/admin/share
+  - name: getShareAccessLog
+    description: Read a link's recent access entries for anomaly review.
+    signature: 'getShareAccessLog(sessionId: string, linkId: string, limit: number): ShareAccessEntry[]'
+    returns: ShareAccessEntry[]
+    params:
+      - name: sessionId
+        type: string
+      - name: linkId
+        type: string
+      - name: limit
+        type: number
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/admin/share/access
+status: complete
+createdAt: '2026-07-18T09:34:12.822Z'
+updatedAt: '2026-07-18T10:10:39.552Z'
