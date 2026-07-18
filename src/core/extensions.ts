@@ -41,6 +41,20 @@ export const ProfileDefSchema = z.object({
   family: z.enum(['backend-like', 'frontend-like', 'neutral']).default('neutral'),
   forbiddenStereotypes: z.array(z.object({ types: z.array(z.string()).min(1), reason: z.string().min(1) })).default([]),
   discouragedStereotypes: z.array(z.object({ types: z.array(z.string()).min(1), reason: z.string().min(1) })).default([]),
+  /**
+   * Edge deltas — the ALLOW half of the profile-scoped dependency matrix. An
+   * entry LICENSES intra-subsystem dependsOn edges the builtin stereotype
+   * matrix refuses, for components governed by this profile (the platform's
+   * own idiom, e.g. an ECS system reading component Stores directly), with
+   * the stated reason. Scoped to the stereotype matrix only: cross-subsystem
+   * boundary rules and pattern containment are never relaxable. The DENY
+   * half is a `forbid-edge` declarative assertion.
+   */
+  allowedEdges: z.array(z.object({
+    from: z.array(z.string().min(1)).min(1),
+    to: z.array(z.string().min(1)).min(1),
+    reason: z.string().min(1),
+  })).default([]),
   rules: RulesConfigSchema.partial().optional(),
 });
 export type ProfileDef = z.infer<typeof ProfileDefSchema>;

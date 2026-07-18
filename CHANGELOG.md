@@ -76,6 +76,14 @@ suppressible) unless noted; existing clean trees stay clean unless listed under
 - Pack profiles (`ProfileDef.rules`) can now carry `sddRuleSeverity` (applies
   to their subsystems; explicit project config wins) alongside the existing
   documentation/complexity/naming and the new designDepth.
+- **Profile edge-deltas**: `ProfileDef.allowedEdges` — `{from[], to[],
+  reason}` entries LICENSE intra-subsystem `dependsOn` edges the builtin
+  stereotype matrix refuses, for components governed by the profile (the
+  review's "game-ecs would error on its own idiom" fixed: an ECS pack
+  licenses `Specialist → Store`). Cross-subsystem boundary rules and pattern
+  containment are never relaxable; the DENY half is a `forbid-edge`
+  declarative assertion. Together these complete the profile-scoped matrix
+  mechanism (severity deltas + allow deltas + deny assertions).
 - `durability` grows to `durable | read-through | ram-projection | cache`
   (only `durable` requires the hydration round-trip).
 - Lifecycle entrypoint `phase` grows to `init | shutdown | cyclic | interrupt |

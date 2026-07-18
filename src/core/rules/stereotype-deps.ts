@@ -24,7 +24,7 @@ const storeResolutionHint = (consumerType: string, storeId: string): string => {
 export const stereotypeDepsRule: SddRule = {
   name: 'stereotype-dependencies',
   description:
-    'Enforces the component-stereotype interaction matrix (Portal reaches the data layer only through Repository/Index READ faces — writes route through Orchestrators (PORTAL_WRITE_SHORTCUT); Stores are depended upon; Registries write their Store; Adapters are sinks; Views stay passive; …) and the cross-subsystem shape: client Adapter → published remote Portal, OR a direct in-process edge licensed by a trustedLink declared on the SOURCE subsystem (the published-Portal target requirement applies either way).',
+    'Enforces the component-stereotype interaction matrix (Portal reaches the data layer only through Repository/Index READ faces — writes route through Orchestrators (PORTAL_WRITE_SHORTCUT); Stores are depended upon; Registries write their Store; Adapters are sinks; Views stay passive; …) and the cross-subsystem shape: client Adapter → published remote Portal, OR a direct in-process edge licensed by a trustedLink declared on the SOURCE subsystem (the published-Portal target requirement applies either way). A governing pack profile may license intra-subsystem edges the matrix refuses via allowedEdges (its platform idiom, with the stated reason); boundary rules stay unrelaxable.',
   codes: [
     { code: 'INVALID_DEPENDENCY_REFERENCE', defaultSeverity: 'error', summary: 'dependsOn names a non-existent component' },
     { code: 'CROSS_TREE_REF_UNRESOLVED', defaultSeverity: 'warning', summary: 'Cross-tree dependsOn (super::/:: form) with no surface snapshot covering it' },
@@ -137,6 +137,17 @@ export const stereotypeDepsRule: SddRule = {
             );
           }
 
+          continue;
+        }
+
+        // Profile edge-deltas: the governing pack profile may LICENSE an
+        // intra-subsystem edge the builtin matrix refuses — the platform's
+        // own idiom (e.g. an ECS system reading component Stores directly),
+        // declared with a reason on the profile. Scoped to the stereotype
+        // matrix only: the cross-subsystem boundary rules above and pattern
+        // containment/visibility are never relaxable this way.
+        const governingProfile = ctx.ext.profiles[ctx.getComponentProfile(comp.id)];
+        if (governingProfile?.allowedEdges?.some(e => e.from.includes(comp.componentType) && e.to.includes(depComp.componentType))) {
           continue;
         }
 
