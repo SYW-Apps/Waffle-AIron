@@ -2556,6 +2556,29 @@ export function mountCanvas(host, model, opts = {}) {
     return '<div class="openbtn"><button class="tbtn" data-open-kind="' + kind + '" data-open-id="' + esc(id) + '">\u25B8 Open as view</button></div>';
   }
 
+  // ---- OpenAPI affordance ---------------------------------------------------
+  // A component "exposes an API" when any of its contract methods carries an HTTP
+  // endpoint. The details panel offers a "View OpenAPI" button that opens the
+  // project's rendered surface: in the web app via the host hook (opts.onOpenApi),
+  // on a served shared page as a sibling path (/share/<token>/openapi). In a
+  // downloaded standalone file (file://) there is no server, so it is hidden.
+  function componentExposesApi(c) {
+    return (c.interfaces || []).some(function (i) {
+      return (i.methods || []).some(function (m) { return m.endpoint && m.endpoint.transport === 'HTTP'; });
+    });
+  }
+  function openApiSiblingHref() {
+    if (typeof window === 'undefined' || !/^https?:$/.test(window.location.protocol)) return null;
+    return window.location.pathname.replace(/\/$/, '') + '/openapi';
+  }
+  function openApiAllowed() {
+    return (typeof opts !== 'undefined' && opts && opts.onOpenApi) || openApiSiblingHref() !== null;
+  }
+  function openApiButton(c) {
+    if (!componentExposesApi(c) || !openApiAllowed()) return '';
+    return '<div class="openbtn"><button class="tbtn" data-openapi-comp="' + esc(c.id) + '">\u25A4 View OpenAPI \u2197</button></div>';
+  }
+
   function renderPanel() {
     var head = '', body = '';
     // With nothing selected, describe the CURRENT VIEW SCOPE rather than the
@@ -2576,7 +2599,8 @@ export function mountCanvas(host, model, opts = {}) {
         + (c.status ? staticChip(c.status) : '')
         + (scopeFocus ? staticChip('current view') : '')
         + chip(c.subsystem, 'subsystem', c.subsystem)
-        + (scopeFocus ? '' : openViewButton('component', c.id, c.owns.length > 0));
+        + (scopeFocus ? '' : openViewButton('component', c.id, c.owns.length > 0))
+        + openApiButton(c);
       
       var linkedTypes = MODEL.types.filter(function (t) { return t.componentClass === c.id; });
       if (linkedTypes.length) {
@@ -2780,6 +2804,16 @@ export function mountCanvas(host, model, opts = {}) {
     var typesOpen = ROOT.getElementById('openTypesBtn');
     if (typesOpen && typesOpen.addEventListener && panel.innerHTML.indexOf('openTypesBtn') >= 0) {
       typesOpen.addEventListener('click', function () { navigateTo('types', null); });
+    }
+    var oapis = panel.querySelectorAll('[data-openapi-comp]');
+    for (var oi = 0; oi < oapis.length; oi++) {
+      (function (b) {
+        b.addEventListener('click', function () {
+          if (typeof opts !== 'undefined' && opts && opts.onOpenApi) { opts.onOpenApi(b.getAttribute('data-openapi-comp')); return; }
+          var href = openApiSiblingHref();
+          if (href) window.open(href, '_blank', 'noopener');
+        });
+      })(oapis[oi]);
     }
     var flows = panel.querySelectorAll('[data-flow-comp]');
     for (var j = 0; j < flows.length; j++) {

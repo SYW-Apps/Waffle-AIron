@@ -60,7 +60,8 @@
     "inquirer": "^8.2.6",
     "js-yaml": "^4.1.0",
     "ora": "^5.4.1",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "swagger-ui-dist": "^5.32.9"
   },
   "devDependencies": {
     "@types/inquirer": "^8.2.10",

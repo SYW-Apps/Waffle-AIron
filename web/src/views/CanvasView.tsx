@@ -32,7 +32,14 @@ export function CanvasView({ projectId }: { projectId: string }) {
     if (!host || model === undefined) return;
     // embed: trims the classic chrome that's redundant inside the app (its own
     // brand mark + Theme toggle — the app owns both).
-    const handle = mountCanvas(host, model, { shadow: true, theme: canvasTheme, embed: true });
+    const handle = mountCanvas(host, model, {
+      shadow: true,
+      theme: canvasTheme,
+      embed: true,
+      // "View OpenAPI" on an API-exposing component opens the project's full
+      // surface as an interactive Swagger UI page.
+      onOpenApi: () => window.open(`/web/openapi?projectId=${encodeURIComponent(projectId)}`, '_blank', 'noopener'),
+    });
     handleRef.current = handle;
     return () => {
       handle.destroy();

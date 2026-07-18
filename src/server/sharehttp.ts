@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { resolveSharedView, downloadArtifact } from './shareaccess.js';
 import { getSnapshotArtifact } from './sharesnapshots.js';
+import { swaggerUiPage } from './swagger.js';
 import type { HostConfig, ShareLink, ShareRequestMeta } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -10,10 +11,6 @@ import type { HostConfig, ShareLink, ShareRequestMeta } from './types.js';
 // establishes NO session cookie. Routing is done in http.ts; these are the
 // handlers.
 // ---------------------------------------------------------------------------
-
-function esc(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
 
 /** Extract the request context recorded on every access. */
 export function shareRequestMeta(req: IncomingMessage): ShareRequestMeta {
@@ -89,22 +86,11 @@ export function serveSharedModel(cfg: HostConfig, token: string, req: IncomingMe
 export function serveSharedOpenApi(cfg: HostConfig, token: string, req: IncomingMessage, res: ServerResponse): void {
   const result = downloadArtifact(cfg, token, 'openapi', shareRequestMeta(req));
   if (!result.found || result.content === undefined) return notFoundPage(res);
-  const pretty = (() => {
-    try {
-      return JSON.stringify(JSON.parse(result.content), null, 2);
-    } catch {
-      return result.content;
-    }
-  })();
+  // Swagger UI inlines its own scripts + styles, so the frame-ancestors-only CSP
+  // (no script-src) leaves them free to run.
   harden(res, undefined, 'text/html; charset=utf-8');
   res.statusCode = 200;
-  res.end(
-    '<!doctype html><meta charset="utf-8"><title>OpenAPI</title>' +
-      '<body style="font:13px/1.5 ui-monospace,monospace;margin:0;background:#0b1120;color:#e8e8f0">' +
-      '<pre style="padding:20px;white-space:pre-wrap;word-break:break-word">' +
-      esc(pretty) +
-      '</pre></body>',
-  );
+  res.end(swaggerUiPage(result.content, 'Shared API'));
 }
 
 /** GET /share/:token/download/:kind — a permitted artifact download. */

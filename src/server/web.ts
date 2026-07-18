@@ -33,7 +33,8 @@ import { resolveProjectRoot } from './projects.js';
 import * as shareadmin from './shareadminhttp.js';
 import { listProjectPlacements } from './organization.js';
 import { runWithProjectRoot } from '../utils/fs.js';
-import { hostCore, validateProjectAsComplete } from './adapters.js';
+import { hostCore, hostSurfaces, validateProjectAsComplete } from './adapters.js';
+import { swaggerUiPage } from './swagger.js';
 import { generateLandscape } from './landscape.js';
 import { sendJson } from './httpio.js';
 import type { ValidationIssue } from '../core/validation.js';
@@ -615,6 +616,26 @@ export function getWebProjectCanvasModel(cfg: HostConfig, sessionId: string, pro
     throw new ForbiddenError('project not authorized or unknown');
   }
   return runWithProjectRoot(root, () => hostCore.buildCanvasDataModel());
+}
+
+/**
+ * An interactive Swagger UI page for one authorized project's public surface.
+ * Same scoped authorization as the canvas. The OWNER sees the FULL surface
+ * (audience 'project' ceiling — every gateway entry), unlike a public share link,
+ * which projects only the external surface.
+ */
+export function getWebProjectOpenApi(cfg: HostConfig, sessionId: string, projectId: string): string {
+  const principal = authenticateSession(cfg.dataDir, sessionId);
+  if (!principal.authenticated) throw new UnauthenticatedError();
+  if (!webproject.listProjects(cfg, sessionId).some((r) => r.id === projectId)) {
+    throw new ForbiddenError('project not authorized or unknown');
+  }
+  const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
+  if (!root) throw new ForbiddenError('project not authorized or unknown');
+  const result = runWithProjectRoot(root, () => hostSurfaces.exportBoundSurface('project', 'openapi')) as {
+    rendered?: string;
+  };
+  return swaggerUiPage(result.rendered ?? '{}', projectId);
 }
 
 /**
@@ -3206,6 +3227,16 @@ export async function handleWebRequest(
     if (req.method === 'GET' && parts.length === 2 && parts[1] === 'canvas-model') {
       const projectId = url.searchParams.get('projectId') ?? '';
       return sendJson(res, 200, getWebProjectCanvasModel(cfg, sessionId, projectId));
+    }
+
+    // GET /web/openapi?projectId= → the project's full public surface as an
+    // interactive Swagger UI page (owner view — all audiences). Cross-project → 403.
+    if (req.method === 'GET' && parts.length === 2 && parts[1] === 'openapi') {
+      const projectId = url.searchParams.get('projectId') ?? '';
+      const html = getWebProjectOpenApi(cfg, sessionId, projectId);
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(html);
+      return;
     }
 
     // ── Agent-token self-service (any signed-in user) ────────────────────────
