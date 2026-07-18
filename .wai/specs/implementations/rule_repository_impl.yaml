@@ -5,6 +5,7 @@ description: >-
   forwarding — no logic here.
 contract: irule_repository
 sourcePath: src/core/rules/repository.ts
+simPath: tests/core/validation.test.ts
 methods:
   - name: registerBuiltinRules
     narrative:
@@ -37,4 +38,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-14T19:17:53.253Z'
-updatedAt: '2026-07-15T06:23:44.491Z'
+updatedAt: '2026-07-18T22:34:34.966Z'

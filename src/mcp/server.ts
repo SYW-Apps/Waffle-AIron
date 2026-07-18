@@ -783,7 +783,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   const detailEnum = z.enum(['full', 'calls-only', 'intent']);
 
   const conformanceEnum = z.enum(['declared', 'anchored', 'off']);
-  reg<{ id: string; name: string; description: string; contract: string; sourcePath?: string; technologies?: string[]; detail?: 'full' | 'calls-only' | 'intent'; conformance?: 'declared' | 'anchored' | 'off'; methods?: { name: string; detail?: 'full' | 'calls-only' | 'intent'; intent?: string; conformance?: 'declared' | 'anchored' | 'off'; symbol?: string; narrative?: NarrativeStepIn[] }[] }>(server,
+  reg<{ id: string; name: string; description: string; contract: string; sourcePath?: string; simPath?: string; technologies?: string[]; detail?: 'full' | 'calls-only' | 'intent'; conformance?: 'declared' | 'anchored' | 'off'; methods?: { name: string; detail?: 'full' | 'calls-only' | 'intent'; intent?: string; conformance?: 'declared' | 'anchored' | 'off'; symbol?: string; narrative?: NarrativeStepIn[] }[] }>(server,
     'sdd_write_narrative',
     {
       description: 'Write L4 Concrete Implementation spec containing L5 method narratives. Narratives are a FLAT ordered step list; flow steps (branch/switch/loop/try/parallel/jump/return/throw) jump by step number — blocks are just skipped regions. Steps may declare a `label` anchor, and every jump field has a *Label twin (toLabel, onTrueLabel, endLabel, …) resolved to step numbers at write time — prefer labels over hand-counted numbers; an unresolvable label rejects the write. Detail dial per method: full (narrative required) | calls-only (call choreography suffices) | intent (prose instead of steps); omitted = stereotype default (Portal/Observer/Adapter: calls-only, Store/Index/Registry: intent, else full). Conformance dial per method or spec: declared | anchored | off — how strictly structural conformance requires contract methods to be realized in the sourcePath file (omitted = Portal: anchored, else declared).',
@@ -793,6 +793,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         description: z.string().describe('Implementation details'),
         contract: z.string().describe('The L3 Interface contract ID this implements'),
         sourcePath: z.string().optional().describe('Optional: target source code file path relative to project root'),
+        simPath: z.string().optional().describe('Optional: the committed integration-sim harness file (project-relative; N:1 sharing allowed). The validator proves it exists and its import graph wires the REAL modules (this component + each direct dependency; technology adapters may stay faked) — running it is CI\'s job. Declaring the first simPath in a subsystem activates MISSING_INTEGRATION_SIM for its other complete non-leaf implementations'),
         technologies: z.array(z.string()).optional().describe('External technologies this implementation binds to (e.g. ["mysql"]) — declares this component\'s ownership tree as the technology\'s home; references outside it are flagged (TECH_LEAKAGE) and contract identifiers must stay intent-language. Only for Adapter/Store/Registry/Index components.'),
         detail: detailEnum.optional().describe('Spec-level narrative detail default for all methods'),
         conformance: conformanceEnum.optional().describe('Spec-level structural-conformance tier default: declared | anchored | off (omitted = stereotype default: Portal → anchored, else declared)'),
@@ -806,7 +807,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         })).optional().describe('Method implementations containing L5 narratives'),
       },
     },
-    ({ id, name, description, contract, sourcePath, technologies, detail, conformance, methods }) => {
+    ({ id, name, description, contract, sourcePath, simPath, technologies, detail, conformance, methods }) => {
       try {
         const { loadInterfaceSpec, saveImplementationSpec } = requireSpecs();
         const intf = loadInterfaceSpec(contract);
@@ -826,6 +827,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           description,
           contract,
           sourcePath,
+          simPath,
           technologies,
           detail,
           conformance,

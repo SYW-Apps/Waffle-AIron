@@ -623,9 +623,16 @@ export function buildCodeModel(implementations: ImplementationSpec[], projectRoo
   const seen = new Set<string>();
   const exactCache = new Map<string, ExactFacts | null>();
 
+  // simPath files are analyzed alongside sourcePaths: the integration-
+  // conformance rule needs their import graphs to prove the harness wires
+  // the real modules. Same containment, same tiers, same dedup (N:1).
+  const declaredPaths: string[] = [];
   for (const impl of implementations) {
-    if (!impl.sourcePath) continue;
-    const sourcePath = normalizeSourcePath(impl.sourcePath);
+    if (impl.sourcePath) declaredPaths.push(impl.sourcePath);
+    if (impl.simPath) declaredPaths.push(impl.simPath);
+  }
+  for (const declared of declaredPaths) {
+    const sourcePath = normalizeSourcePath(declared);
     if (seen.has(sourcePath)) continue;
     seen.add(sourcePath);
 

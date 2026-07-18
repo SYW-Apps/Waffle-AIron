@@ -53,6 +53,19 @@ suppressible) unless noted; existing clean trees stay clean unless listed under
   owned member (the standard §7 claim, previously "mechanically enforceable"
   but unimplemented; dogfooded at zero cost — wairon's own 63 narrated facade
   methods all conform).
+- **Static integration gate** (docs/design/integration-conformance.md §4,
+  implemented): L4 `simPath` names the committed integration harness (N:1
+  sharing like `sourcePath`). `SIM_FILE_MISSING` (no such file / escapes
+  root), `UNWIRED_INTEGRATION_SIM` (the harness's exact-grade import graph,
+  closed over the analyzed modules, does not reach the component's own
+  module + each direct dependency's — any module of the target subsystem for
+  cross-subsystem edges; technology-boundary fakes sanctioned), and
+  `MISSING_INTEGRATION_SIM` — which activates **per subsystem** once its
+  first `simPath` is declared (adoption made mechanical; un-adopted trees
+  see nothing). Wiring is proven statically; execution stays CI's job.
+  wairon's own sdd_validator subsystem adopts first: all 7 non-leaf
+  implementations declare `tests/core/validation.test.ts`, which wires the
+  real registry/store/adapters.
 
 **New config & schema surface:**
 

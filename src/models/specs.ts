@@ -632,6 +632,16 @@ export const ImplementationSpecSchema = z.object({
   contract: z.string(), // References L3 Interface id
   sourcePath: z.string().optional(), // Path to the concrete source code file (e.g. "src/storage/vfs.ts")
   /**
+   * The committed integration-sim harness for this implementation (N:1
+   * sharing allowed, like sourcePath — one subsystem sim may cover several
+   * components). The integration-conformance rule proves the harness EXISTS
+   * and its import graph WIRES the real modules (this component's and each
+   * direct dependency's); whether it passes is CI's job. Declaring the first
+   * simPath in a subsystem activates MISSING_INTEGRATION_SIM for that
+   * subsystem's other complete non-leaf implementations.
+   */
+  simPath: z.string().optional(),
+  /**
    * External technologies (vendor, engine, SDK, service) this implementation
    * binds to — e.g. ["mysql"], ["sendgrid"]. Declaring one makes this
    * component's ownership tree the technology's home: references anywhere

@@ -1,9 +1,12 @@
 # Design: integration sim as Definition of Done → the integration-conformance gate
 
-Status: **process shipped, gate designed** (July 2026). The sdd-implement
-skill's Definition of Done now requires an integration sim (§3, shipped); the
-static integration-conformance gate (§4) is the designed next step and is NOT
-yet implemented.
+Status: **process shipped, gate shipped** (July 2026). The sdd-implement
+skill's Definition of Done requires an integration sim (§3); the static
+integration-conformance gate (§4) is implemented as the
+`integration-conformance` rule family, with one refinement over the original
+design: MISSING_INTEGRATION_SIM activates **per subsystem** once its first
+`simPath` is declared (§4.4) — the adoption story made mechanical, so a tree
+that has not adopted sims is not flooded with expectations it never made.
 
 ## 1. Motivation (the retro that started this)
 
@@ -83,8 +86,10 @@ may cover several components).
 ### 4.2 Rule family (conformance.ts sibling, warning-severity, completeness-classed)
 
 - `MISSING_INTEGRATION_SIM` — a `complete` implementation of a component
-  with ≥1 real L2 dependency declares no `simPath`. (Leaf components with no
-  dependencies are exempt — their unit suite IS their sim.)
+  with ≥1 real L2 dependency declares no `simPath`, IN A SUBSYSTEM THAT HAS
+  ADOPTED SIMS (≥1 implementation there declares one — see §4.4). (Leaf
+  components with no dependencies are exempt — their unit suite IS their
+  sim.)
 - `SIM_FILE_MISSING` — the declared `simPath` resolves to no file
   (containment-checked inside the project root, like `sourcePath`).
 - `UNWIRED_INTEGRATION_SIM` — the sim file exists but its import graph
@@ -115,6 +120,11 @@ proves execution" keeps every promise honest.
 
 New codes arrive as warnings (the standard new-check policy) and are
 `lint.allow`-suppressible per spec. Projects opt into strictness via
-`rules.sddRuleSeverity` once their sims exist. wairon's own tree adopts sims
-subsystem-by-subsystem, starting with sdd_validator (whose MCP e2e test
-already IS an integration sim — it becomes the first declared `simPath`).
+`rules.sddRuleSeverity` once their sims exist. Adoption is mechanical and
+subsystem-scoped: declaring the FIRST `simPath` in a subsystem activates
+MISSING_INTEGRATION_SIM for that subsystem's other complete non-leaf
+implementations — declaring a sim is the declaration of intent, and the rule
+holds the subsystem to it. wairon's own tree adopts sims
+subsystem-by-subsystem, starting with sdd_validator (whose real-registry
+validation suite already IS an integration sim — it becomes the first
+declared `simPath`).

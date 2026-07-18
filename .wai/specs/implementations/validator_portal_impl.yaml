@@ -3,6 +3,7 @@ name: Validator Portal Implementation
 description: Concrete implementation forwarding portal requests to spec validator.
 contract: ivalidator_portal
 sourcePath: src/core/validation.ts
+simPath: tests/core/validation.test.ts
 methods:
   - name: validateSddTree
     narrative:
@@ -42,4 +43,4 @@ methods:
     detail: calls-only
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-14T20:09:34.346Z'
+updatedAt: '2026-07-18T22:34:35.289Z'

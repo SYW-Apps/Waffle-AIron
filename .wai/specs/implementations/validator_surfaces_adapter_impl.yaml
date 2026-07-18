@@ -3,6 +3,7 @@ name: Validator Surfaces Adapter Implementation
 description: Surface loading for validation-time resolution.
 contract: ivalidator_surfaces_adapter
 sourcePath: src/core/validation.ts
+simPath: tests/core/validation.test.ts
 methods:
   - name: loadSurfaceSnapshots
     narrative:
@@ -13,4 +14,4 @@ methods:
         targetMethod: listSnapshots
 status: complete
 createdAt: '2026-07-10T23:16:00.415Z'
-updatedAt: '2026-07-11T18:45:14.588Z'
+updatedAt: '2026-07-18T22:34:35.230Z'

@@ -84,6 +84,12 @@ You are the **Spec-to-Code Compiler**. Your job is to generate concrete source c
      not a footnote. Keep the sim as a committed, re-runnable harness (e.g. the
      project's integration/sim test directory) so CI re-proves it — a one-off manual
      run that leaves no artifact does not satisfy the gate.
+   - **Declare the harness as L4 `simPath`** (via `sdd_update_spec`; N:1 sharing is
+     fine — one subsystem sim may cover several components). The validator then
+     statically proves the harness exists and its import graph wires the REAL modules
+     (`SIM_FILE_MISSING` / `UNWIRED_INTEGRATION_SIM`), and holds the rest of the
+     subsystem to the same bar (`MISSING_INTEGRATION_SIM` activates on first
+     adoption). CI proves it passes; the validator proves it is wired.
    - Be honest about what each layer proves: spec-validate proves the DESIGN is
      coherent, unit tests prove the component honors its CONTRACT shape, and only the
      integration sim proves the wired components RUN together.

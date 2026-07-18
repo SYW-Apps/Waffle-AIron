@@ -40,6 +40,7 @@ import { technologyRule } from './technology.js';
 import { namingRule } from './naming.js';
 import { complexityRule } from './complexity.js';
 import { structuralConformanceRule } from './conformance.js';
+import { integrationConformanceRule } from './integration-conformance.js';
 import { hiddenStateRule } from './hidden-state.js';
 import { dependencyConformanceRule } from './dependency-conformance.js';
 import { lintAllowsRule } from './lint-allows.js';
@@ -104,6 +105,9 @@ export const SDD_RULES: SddRule[] = [
   // The fields-vs-Store criterion: mutable module state in logic-only files.
   hiddenStateRule,
   dependencyConformanceRule,
+  // Integration wiring proof rides after the code↔spec family: it consumes
+  // the same code model and speaks about the same sourcePath modules.
+  integrationConformanceRule,
   couplingRule,
   languageRule,
   technologyRule,
@@ -158,6 +162,7 @@ const DEPTH_GATED_CODES: Record<string, DesignDepth> = {
   CONFORMANCE_DEGRADED: 'implementations',
   UNDECLARED_DEPENDENCY: 'implementations',
   UNREALIZED_DEPENDENCY: 'implementations',
+  MISSING_INTEGRATION_SIM: 'implementations',
   // L5 expectations: narratives and everything whose fuel is narrative edges
   // (the reachability walk and the hydration round-trip would drown a
   // narrative-less tree in findings about flows nobody designed).
@@ -202,6 +207,10 @@ const COMPLETENESS_RULES = new Set([
   // Call-step realization reads the realized code — a draft tree is allowed
   // to disagree with its code.
   'CALL_STEP_UNREALIZED',
+  // Integration-sim gate: a draft tree may not have written its harness yet.
+  'MISSING_INTEGRATION_SIM',
+  'SIM_FILE_MISSING',
+  'UNWIRED_INTEGRATION_SIM',
 ]);
 
 export interface ScopeFilterOptions {
