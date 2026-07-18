@@ -124,7 +124,7 @@ header input[type="search"]::placeholder { color:var(--dim); }
 .cbody:not(.panel-closed) #panelToggle { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:700; }
 #panel .head { padding:16px 18px 10px; border-bottom:1px solid var(--line); }
 #panel .head h2 { font-size:16px; margin:0 0 6px; }
-#panel ..cbody { padding:12px 18px 30px; }
+#panel .body { padding:12px 18px 30px; }
 #panel .chip { display:inline-block; padding:2px 9px; border-radius:11px; font-size:11px; border:1px solid var(--chrome-border); margin:0 4px 5px 0; background:var(--input-bg); color:var(--ink); }
 #panel .chip[data-kind] { cursor:pointer; }
 #panel .chip[data-kind]:hover { border-color:var(--accent); background:var(--hover-bg); }

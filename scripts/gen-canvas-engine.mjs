@@ -45,7 +45,11 @@ let eng = evalTL(canvas.slice(iifeOpen + 4, iifeClose).join('\n'));
 
 // ── CSS: scope body→.cbody, :root→:host/.cbody, viewport heights → flex ──
 css = css.replace(/:root \{/, ':host, .cbody {');
-css = css.replace(/\bbody\b/g, '.cbody');
+// Only rewrite `body` when it is the ELEMENT selector — the negative lookbehind
+// excludes a `.`/`#`/`-`/word char before it, so the `.body` class (e.g.
+// `#panel .body`) is NOT corrupted into `..cbody` (which matched nothing and
+// dropped the details-panel padding).
+css = css.replace(/(?<![.#\w-])body\b/g, '.cbody');
 css = css.replace(/height:calc\(100vh - 52px\)/g, 'flex:1 1 auto; min-height:0');
 css = css.replace(/height:100vh/g, 'height:100%');
 css = css.replace('header { display:flex; align-items:center;', 'header { flex:0 0 auto; display:flex; align-items:center;');
