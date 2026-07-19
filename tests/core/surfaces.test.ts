@@ -193,6 +193,130 @@ describe('OpenAPI import (authored 3rd-party surfaces)', () => {
 
     expect(listSnapshots().map(s => s.projectName)).toContain('partner-billing');
   });
+
+  it('tolerates documents without x-wairon-* keys and ignores malformed ones', () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
+    buildParent(rootDir);
+
+    const openapi = JSON.stringify({
+      openapi: '3.0.3',
+      info: { title: 'Plain Partner', version: '1.0.0' },
+      paths: {
+        '/things': {
+          get: {
+            operationId: 'listThings',
+            responses: { '200': { description: 'ok', content: { 'application/json': { schema: { type: 'array', items: { type: 'string' } } } } } },
+          },
+          post: {
+            operationId: 'makeThing',
+            'x-wairon-guarantees': 'not-an-array',
+            'x-wairon-effect': 'purge',
+            'x-wairon-ext': ['not', 'a', 'map'],
+            responses: { '200': { description: 'ok' } },
+          },
+        },
+      },
+    });
+    const src = path.join(rootDir, 'plain-partner.json');
+    fs.writeFileSync(src, openapi);
+    const snapshot = importSurface(src, 'authored');
+
+    // A producer that never heard of wairon: the keys are simply absent.
+    const listThings = snapshot.interfaces[0].methods.find(m => m.name === 'listThings')!;
+    expect(listThings.guarantees).toBeUndefined();
+    expect(listThings.effect).toBeUndefined();
+    expect(listThings.ext).toBeUndefined();
+
+    // Malformed x-wairon-* values are ignored, never a failed import.
+    const makeThing = snapshot.interfaces[0].methods.find(m => m.name === 'makeThing')!;
+    expect(makeThing.guarantees).toBeUndefined();
+    expect(makeThing.effect).toBeUndefined();
+    expect(makeThing.ext).toBeUndefined();
+  });
+});
+
+describe('OpenAPI round-trip of x-wairon-* contract keys', () => {
+  let rootDir: string;
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    if (rootDir) fs.rmSync(rootDir, { recursive: true, force: true });
+  });
+
+  it('guarantees, effect, and method ext survive toOpenApi → fromOpenApi identically to the native snapshot path', () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
+    buildParent(rootDir);
+
+    const settleExt = {
+      'mypack:priority': 3,
+      'mypack:route': { queue: 'billing', retries: 2 },
+      'mypack:tags': ['fast', 'ledger'],
+    };
+    saveInterfaceSpec(iface('igateway-portal', 'gateway-portal', [
+      {
+        name: 'fetchRecord',
+        description: 'Fetches a record by id.',
+        signature: 'fetchRecord(id: string): invoice-record',
+        returns: 'invoice-record',
+        params: [{ name: 'id', type: 'string' }],
+        guarantees: ['idempotent'],
+        effect: 'read',
+        ext: { 'mypack:cache': 'hot' },
+        endpoint: { transport: 'HTTP', method: 'GET', path: '/records/{id}' },
+      },
+      {
+        name: 'settleInvoice',
+        description: 'Settles an invoice against the ledger.',
+        signature: 'settleInvoice(id: string, amount: number): void',
+        returns: 'void',
+        params: [{ name: 'id', type: 'string' }, { name: 'amount', type: 'number' }],
+        // Pack-style non-builtin token alongside a builtin — both must survive.
+        guarantees: ['atomic', 'billing:settles-ledger'],
+        effect: 'write',
+        ext: settleExt,
+        endpoint: { transport: 'HTTP', method: 'POST', path: '/invoices/{id}/settle' },
+      },
+    ]));
+    invalidateSpecCache();
+    setProjectRoot(rootDir);
+
+    // Native snapshot path: YAML export → consumer import.
+    const yamlPath = path.join(rootDir, 'exchange', 'native.yaml');
+    exportSurface('external', 'yaml', yamlPath);
+    const native = importSurface(yamlPath, 'exchanged');
+
+    // OpenAPI path: toOpenApi render → consumer import via fromOpenApi.
+    const apiPath = path.join(rootDir, 'exchange', 'via-openapi.json');
+    const { rendered } = exportSurface('external', 'openapi', apiPath);
+    const doc = JSON.parse(rendered!);
+    expect(doc.paths['/records/{id}'].get['x-wairon-guarantees']).toEqual(['idempotent']);
+    expect(doc.paths['/records/{id}'].get['x-wairon-effect']).toBe('read');
+    expect(doc.paths['/records/{id}'].get['x-wairon-ext']).toEqual({ 'mypack:cache': 'hot' });
+    expect(doc.paths['/invoices/{id}/settle'].post['x-wairon-guarantees']).toEqual(['atomic', 'billing:settles-ledger']);
+    expect(doc.paths['/invoices/{id}/settle'].post['x-wairon-effect']).toBe('write');
+    expect(doc.paths['/invoices/{id}/settle'].post['x-wairon-ext']).toEqual(settleExt);
+
+    const viaOpenApi = importSurface(apiPath, 'exchanged');
+
+    // The OpenAPI exchange must preserve exactly what the native path preserves.
+    const pick = (m: { guarantees?: string[]; effect?: string; ext?: Record<string, unknown> }) =>
+      ({ guarantees: m.guarantees, effect: m.effect, ext: m.ext });
+    for (const name of ['fetchRecord', 'settleInvoice']) {
+      const nativeMethod = native.interfaces.flatMap(e => e.methods).find(m => m.name === name)!;
+      const openApiMethod = viaOpenApi.interfaces.flatMap(e => e.methods).find(m => m.name === name)!;
+      expect(pick(openApiMethod)).toEqual(pick(nativeMethod));
+    }
+
+    // Pin the concrete contract so the parity check cannot pass vacuously.
+    const settled = viaOpenApi.interfaces[0].methods.find(m => m.name === 'settleInvoice')!;
+    expect(settled.guarantees).toEqual(['atomic', 'billing:settles-ledger']);
+    expect(settled.effect).toBe('write');
+    expect(settled.ext).toEqual(settleExt);
+    const fetched = viaOpenApi.interfaces[0].methods.find(m => m.name === 'fetchRecord')!;
+    expect(fetched.guarantees).toEqual(['idempotent']);
+    expect(fetched.effect).toBe('read');
+    expect(fetched.ext).toEqual({ 'mypack:cache': 'hot' });
+  });
 });
 
 describe('standalone-child validation against generated parent snapshots', () => {
