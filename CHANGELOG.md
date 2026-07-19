@@ -387,6 +387,34 @@ session surface, and a container CVE scan — all fixed:
   ships no perl/npm and scans **0 critical / 0 high**, down from 1 critical /
   20 high on the previous debian base; size 488 MB → 318 MB.
 
+### Post-RBAC web UI: permission grid, canvas engine, hierarchical environment
+
+The three deliberately-deferred UI epics, landed after the RBAC merge:
+
+- **Permissions admin view** (`/admin/permissions`) — the whole assignment
+  grid (subject × scope × capability → value) with scope/subject filters, a
+  scope-defaults (everyone) section, and a set-assignment form over the
+  existing hardened endpoints. Canonical-subject semantics throughout: the UI
+  displays record ids and submits them (the API canonicalizes); grid rows
+  resolve back to users by BOTH subject userId and record id, with a
+  "legacy key" badge on diverged-key rows.
+- **Canvas engine epic** — floating header (the classic renderer's solid top
+  bar becomes a floating toolbar over a full-bleed canvas, yielding to the
+  details panel), and **data-plane realtime**: successful MCP `sdd_*` writes
+  now nudge the project's realtime channel, so open canvases live-update on
+  agent spec edits (previously only `/web` mutations pushed). The event
+  carries no data — authorization stays at the scoped REST refetch.
+- **Hierarchical environment canvas** — the landscape is filtered by the
+  permission RESOLVER (`resolveVisibleScopes`), never a display projection:
+  ancestor units of a deeper actionable scope now appear as read-only
+  BREADCRUMBS (`actionable: false`, other children omitted) so the hierarchy
+  stays navigable in the no@org + yes@one-project case; every node carries
+  `actionable`, carried through `/web/graph` to the environment canvas.
+  Cross-tenant invisibility is pinned by a dedicated two-tenant test suite.
+- **Header overflow → dropdown** — canvas header controls that no longer fit
+  collapse into a trailing "⋯" menu (horizontal scroll remains the
+  last-resort fallback).
+
 ### Unified web UI (opt-in)
 
 One role-based browser app for the hosted server — developers author specs
