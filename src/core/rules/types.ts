@@ -8,7 +8,7 @@ import {
   RulesConfig,
   SurfaceSnapshot,
 } from '../../models/index.js';
-import type { ProfileDef, LanguagePackDef, LoadedPattern } from '../extensions.js';
+import type { ProfileDef, LanguagePackDef, LoadedPattern, LoadedAssertion } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
 import type { CodeModel } from '../source-analysis.js';
 
@@ -106,6 +106,10 @@ export interface RuleContext {
     profiles: Record<string, ProfileDef>;
     languages: Record<string, LanguagePackDef>;
     patterns: LoadedPattern[];
+    /** Pack-declared semantic guarantee tokens — unioned with SEMANTIC_GUARANTEES by the guarantee-token rule. */
+    guarantees: string[];
+    /** Declarative rule assertions (closed kinds, pack-instantiated) evaluated by the declarative-assertions rule. */
+    assertions: LoadedAssertion[];
   };
 
   /**

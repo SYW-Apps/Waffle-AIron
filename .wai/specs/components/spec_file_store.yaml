@@ -1,0 +1,14 @@
+id: spec_file_store
+name: Spec File Store
+description: >-
+  Durable YAML file state of the spec tree under .wai/specs/ — the single file-I/O face of the spec
+  repository. Reads and writes go straight through to disk (read-through: the workspace's index
+  cache is an evictable convenience, never the source of truth).
+subsystem: sdd_core
+componentType: Store
+owns: []
+dependsOn: []
+durability: read-through
+status: complete
+createdAt: '2026-07-18T22:57:52.990Z'
+updatedAt: '2026-07-18T22:57:53.778Z'

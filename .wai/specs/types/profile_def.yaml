@@ -23,6 +23,14 @@ fields:
     type: Json
     description: Optional partial RulesConfig overrides (rule severities etc.) the profile applies.
     optional: true
+  - name: allowedEdges
+    type: string[]
+    description: >-
+      Edge deltas (ALLOW half of the profile-scoped dependency matrix): {from[], to[], reason}
+      entries licensing intra-subsystem dependsOn edges the builtin stereotype matrix refuses, for
+      components governed by this profile. Cross-subsystem boundary rules and pattern containment
+      are never relaxable; the DENY half is a forbid-edge declarative assertion.
+    optional: false
 methods: []
 createdAt: '2026-07-14T18:56:48.916Z'
-updatedAt: '2026-07-14T18:56:48.960Z'
+updatedAt: '2026-07-18T23:05:10.746Z'

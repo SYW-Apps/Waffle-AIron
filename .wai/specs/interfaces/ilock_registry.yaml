@@ -7,10 +7,12 @@ methods:
     description: Read the current lock record for the bound project, or null when absent.
     signature: 'read(): LockRecord | null'
     returns: LockRecord | null
+    effect: read
   - name: write
     description: Persist the lock record for the bound project (overwrites any prior record).
     signature: 'write(record: LockRecord): void'
     returns: void
+    effect: write
 status: complete
 createdAt: '2026-07-04T12:48:43.336Z'
-updatedAt: '2026-07-04T13:06:22.858Z'
+updatedAt: '2026-07-18T14:33:34.121Z'

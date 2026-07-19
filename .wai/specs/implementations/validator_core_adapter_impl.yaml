@@ -3,6 +3,7 @@ name: Validator Core Adapter Implementation
 description: Concrete implementation forwarding validator load calls to core portal.
 contract: ivalidator_core_adapter
 sourcePath: src/core/validation.ts
+simPath: tests/core/validation.test.ts
 methods:
   - name: loadSystemSpec
     narrative:
@@ -64,4 +65,4 @@ methods:
     detail: calls-only
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-14T19:21:20.529Z'
+updatedAt: '2026-07-18T22:34:35.143Z'

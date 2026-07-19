@@ -1,0 +1,45 @@
+kind: value-object
+id: pack_assertion
+name: PackAssertion
+description: >-
+  One declarative rule assertion a pack instantiates from the closed kinds
+  (docs/design/declarative-rule-dsl.md): forbid-edge (selector-matched forbidden dependsOn/owns
+  edges), require-field (a top-level or ext.* field required, optionally from a closed value set, on
+  component/interface/implementation specs), endpoint-shape (transport allowlist + anchored address
+  pattern on Portal endpoints). Carries a pack-local code (surfaced namespaced <PACK>_<CODE>), a
+  warning|error severity (project overrides win; drafts soften errors), and the doctrine reason
+  quoted in every finding. Data only — packs add instances, never rule logic.
+fields:
+  - name: kind
+    type: string
+    description: >-
+      The closed assertion kind: forbid-edge | require-field | endpoint-shape. Unknown kinds fail
+      the pack load.
+    optional: false
+  - name: code
+    type: string
+    description: Pack-local finding code; surfaced namespaced as <PACK_NAME>_<CODE> (upper-snake).
+    optional: false
+  - name: severity
+    type: string
+    description: warning (default) or error; sddRuleSeverity overrides win and draft context softens errors.
+    optional: false
+  - name: reason
+    type: string
+    description: The doctrine, quoted verbatim in every finding message.
+    optional: false
+  - name: selectors
+    type: string
+    description: >-
+      Kind-specific closed selectors ({componentType[], profile[], id glob} AND-ed): from/to for
+      forbid-edge, on for require-field and endpoint-shape.
+    optional: true
+  - name: parameters
+    type: string
+    description: >-
+      Kind-specific parameters: relation[] (forbid-edge); level, field, values[] (require-field);
+      transport[], pathPattern (endpoint-shape).
+    optional: true
+methods: []
+createdAt: '2026-07-18T22:42:18.586Z'
+updatedAt: '2026-07-18T22:42:18.673Z'

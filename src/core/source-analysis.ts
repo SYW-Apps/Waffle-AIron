@@ -49,6 +49,28 @@ export interface SourceFileFacts {
   imports: string[];
   /** Module specifiers of export-from declarations (surface republication). */
   reexports: string[];
+  /**
+   * Cyclomatic complexity per named function-like (function/method/accessor
+   * declarations, and function/arrow initializers of named slots). EXACT grade
+   * only — lower grades omit the map rather than guess. Same-named functions
+   * in one file record their maximum. Fuel for the detail-sufficiency lint.
+   */
+  functionComplexity?: Record<string, number>;
+  /**
+   * Direct callee names per named function-like: identifiers and property
+   * names invoked as calls inside the function body (nested NAMED functions
+   * excluded — they carry their own entries; anonymous callbacks included).
+   * EXACT grade only. Same-named functions union their sets. Fuel for the
+   * call-step realization check (Level 3).
+   */
+  functionCalls?: Record<string, string[]>;
+  /**
+   * Module-scope mutable bindings (`let`/`var` at the top level of the file).
+   * EXACT grade only. The static approximation of held state a logic
+   * component may be hiding — fuel for the HIDDEN_STATE lint. (Mutation of
+   * const-bound containers is invisible to this collection; the lint says so.)
+   */
+  topLevelMutableBindings?: string[];
 }
 
 export interface CodeModel {
@@ -337,6 +359,12 @@ interface ExactFacts {
   reexports: Set<string>;
   /** Relative export-* specifiers to chase for barrel re-exports. */
   starExports: string[];
+  /** Cyclomatic complexity per named function-like (max across same-named). */
+  complexity: Map<string, number>;
+  /** Direct callee names per named function-like (union across same-named). */
+  calls: Map<string, Set<string>>;
+  /** Module-scope mutable (`let`/`var`) binding names. */
+  mutableBindings: Set<string>;
 }
 
 function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFacts {
@@ -347,6 +375,9 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const imports = new Set<string>();
   const reexports = new Set<string>();
   const starExports: string[] = [];
+  const complexity = new Map<string, number>();
+  const calls = new Map<string, Set<string>>();
+  const mutableBindings = new Set<string>();
 
   const addBindingNames = (name: import('typescript').BindingName): void => {
     if (ts.isIdentifier(name)) declared.add(name.text);
@@ -368,7 +399,70 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     return !!mods?.some(m => m.kind === ts.SyntaxKind.ExportKeyword);
   };
 
+  // The name under which a function-like gets its own complexity entry: a
+  // declaration's own name, or the named slot (variable / property) a
+  // function/arrow initializer is bound to. Anonymous inline callbacks return
+  // undefined — their branching belongs to the enclosing named function.
+  const namedFunctionName = (node: import('typescript').Node): string | undefined => {
+    if (ts.isFunctionDeclaration(node)) {
+      return node.name && ts.isIdentifier(node.name) ? node.name.text : undefined;
+    }
+    if (ts.isMethodDeclaration(node) || ts.isGetAccessorDeclaration(node) || ts.isSetAccessorDeclaration(node)) {
+      return propertyNameText(node.name);
+    }
+    if (ts.isFunctionExpression(node) || ts.isArrowFunction(node)) {
+      const p = node.parent;
+      if (p && ts.isVariableDeclaration(p) && p.initializer === node && ts.isIdentifier(p.name)) return p.name.text;
+      if (p && (ts.isPropertyAssignment(p) || ts.isPropertyDeclaration(p)) && p.initializer === node) {
+        return propertyNameText(p.name);
+      }
+    }
+    return undefined;
+  };
+
+  // One pass per named function's body collecting classic cyclomatic
+  // complexity (decision points + 1) AND direct callee names. Nested NAMED
+  // function-likes are excluded — they get their own entries — while
+  // anonymous callbacks count into the enclosing function.
+  const collectFunctionFacts = (fn: import('typescript').Node & { body?: import('typescript').Node }): { score: number; callees: Set<string> } => {
+    let score = 1;
+    const callees = new Set<string>();
+    const count = (node: import('typescript').Node): void => {
+      if (namedFunctionName(node) !== undefined) return;
+      if (ts.isIfStatement(node) || ts.isConditionalExpression(node)
+        || ts.isForStatement(node) || ts.isForInStatement(node) || ts.isForOfStatement(node)
+        || ts.isWhileStatement(node) || ts.isDoStatement(node)
+        || ts.isCaseClause(node) || ts.isCatchClause(node)) {
+        score++;
+      } else if (ts.isBinaryExpression(node)) {
+        const k = node.operatorToken.kind;
+        if (k === ts.SyntaxKind.AmpersandAmpersandToken || k === ts.SyntaxKind.BarBarToken
+          || k === ts.SyntaxKind.QuestionQuestionToken) {
+          score++;
+        }
+      } else if (ts.isCallExpression(node)) {
+        const callee = node.expression;
+        if (ts.isIdentifier(callee)) callees.add(callee.text);
+        else if (ts.isPropertyAccessExpression(callee)) callees.add(callee.name.text);
+      }
+      ts.forEachChild(node, count);
+    };
+    // count() on the body node itself (not just children): an arrow's
+    // expression body may BE the decision point (`x => x ? a : b`). A body is
+    // never itself a named function, so the skip guard cannot short-circuit it.
+    if (fn.body) count(fn.body);
+    return { score, callees };
+  };
+
   const visit = (node: import('typescript').Node): void => {
+    const fnName = namedFunctionName(node);
+    if (fnName && (node as { body?: import('typescript').Node }).body) {
+      const facts = collectFunctionFacts(node as { body?: import('typescript').Node } & import('typescript').Node);
+      complexity.set(fnName, Math.max(complexity.get(fnName) ?? 0, facts.score));
+      const set = calls.get(fnName) ?? new Set<string>();
+      for (const c of facts.callees) set.add(c);
+      calls.set(fnName, set);
+    }
     if (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node) || ts.isInterfaceDeclaration(node)
       || ts.isTypeAliasDeclaration(node) || ts.isEnumDeclaration(node) || ts.isModuleDeclaration(node)) {
       const name = node.name && ts.isIdentifier(node.name) ? node.name.text : undefined;
@@ -378,9 +472,12 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
       }
     } else if (ts.isVariableStatement(node)) {
       const isExported = hasExportModifier(node);
+      const isMutable = (node.declarationList.flags & ts.NodeFlags.Const) === 0;
+      const atModuleScope = node.parent === sf;
       for (const decl of node.declarationList.declarations) {
         addBindingNames(decl.name);
         if (isExported && ts.isIdentifier(decl.name)) exported.add(decl.name.text);
+        if (isMutable && atModuleScope && ts.isIdentifier(decl.name)) mutableBindings.add(decl.name.text);
       }
     } else if (ts.isVariableDeclaration(node)) {
       // nested declarations (inside functions) — parameters are deliberately excluded
@@ -435,7 +532,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   };
   visit(sf);
 
-  return { declared, anchors, exported, imports, reexports, starExports };
+  return { declared, anchors, exported, imports, reexports, starExports, complexity, calls, mutableBindings };
 }
 
 /** Resolve a relative export-* specifier to a real file (.js → .ts mapping, index files). */
@@ -490,6 +587,17 @@ function chaseStarExports(
     for (const name of targetFacts.exported) {
       facts.exported.add(name);
       facts.declared.add(name);
+      // A pure re-export barrel realizes the function it publishes — carry the
+      // real function's complexity and callees onto the barrel so the
+      // detail-sufficiency and call-realization checks see through the hop.
+      const c = targetFacts.complexity.get(name);
+      if (c !== undefined) facts.complexity.set(name, Math.max(facts.complexity.get(name) ?? 0, c));
+      const targetCalls = targetFacts.calls.get(name);
+      if (targetCalls) {
+        const set = facts.calls.get(name) ?? new Set<string>();
+        for (const callee of targetCalls) set.add(callee);
+        facts.calls.set(name, set);
+      }
     }
   }
 }
@@ -515,9 +623,16 @@ export function buildCodeModel(implementations: ImplementationSpec[], projectRoo
   const seen = new Set<string>();
   const exactCache = new Map<string, ExactFacts | null>();
 
+  // simPath files are analyzed alongside sourcePaths: the integration-
+  // conformance rule needs their import graphs to prove the harness wires
+  // the real modules. Same containment, same tiers, same dedup (N:1).
+  const declaredPaths: string[] = [];
   for (const impl of implementations) {
-    if (!impl.sourcePath) continue;
-    const sourcePath = normalizeSourcePath(impl.sourcePath);
+    if (impl.sourcePath) declaredPaths.push(impl.sourcePath);
+    if (impl.simPath) declaredPaths.push(impl.simPath);
+  }
+  for (const declared of declaredPaths) {
+    const sourcePath = normalizeSourcePath(declared);
     if (seen.has(sourcePath)) continue;
     seen.add(sourcePath);
 
@@ -572,6 +687,9 @@ export function buildCodeModel(implementations: ImplementationSpec[], projectRoo
             exportedNames: [...facts.exported],
             imports: [...facts.imports],
             reexports: [...facts.reexports],
+            functionComplexity: Object.fromEntries(facts.complexity),
+            functionCalls: Object.fromEntries([...facts.calls].map(([k, v]) => [k, [...v]])),
+            topLevelMutableBindings: [...facts.mutableBindings],
           };
         } catch {
           analyzed = analyzeGeneric(text);

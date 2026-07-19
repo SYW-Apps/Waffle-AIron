@@ -5,6 +5,7 @@ description: >-
   rule store.
 contract: irule_index
 sourcePath: src/core/rules/repository.ts
+simPath: tests/core/validation.test.ts
 methods:
   - name: ruleSequence
     narrative: []
@@ -22,4 +23,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-14T19:17:48.847Z'
-updatedAt: '2026-07-15T06:23:45.003Z'
+updatedAt: '2026-07-18T22:34:35.024Z'

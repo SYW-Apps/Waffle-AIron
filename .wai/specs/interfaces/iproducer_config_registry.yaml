@@ -7,18 +7,21 @@ methods:
     description: Read a target's config, or null.
     signature: 'read(target: string): ProducerConfig | null'
     returns: ProducerConfig | null
+    effect: read
   - name: write
     description: Persist a producer config.
     signature: 'write(config: ProducerConfig): void'
     returns: void
+    effect: write
   - name: clear
     description: Remove a target's config.
     signature: 'clear(target: string): void'
     returns: void
+    effect: write
   - name: list
     description: List all producer configs.
     signature: 'list(): ProducerConfig[]'
     returns: ProducerConfig[]
 status: complete
 createdAt: '2026-07-04T17:37:47.379Z'
-updatedAt: '2026-07-04T17:42:04.133Z'
+updatedAt: '2026-07-18T19:16:00.630Z'

@@ -166,16 +166,30 @@ export const LintConfigSchema = z.object({
 export type LintConfig = z.infer<typeof LintConfigSchema>;
 
 /**
+ * Open, namespaced extension-data channel: an opaque map packs and tools may
+ * attach structured domain data to (ISR priorities, topic names, memory
+ * budgets, …). Never validated, relativized, or interpreted by the core —
+ * preserved verbatim through load/save so pack rules have something to read.
+ * Key discipline (e.g. "mypack:priority") is the pack's concern.
+ */
+export const ExtDataSchema = z.record(z.unknown());
+export type ExtData = z.infer<typeof ExtDataSchema>;
+
+/**
  * A declared lifecycle flow root: a component.method the runtime invokes at a
- * lifecycle phase (init/shutdown). Reachability analysis (unused-detection,
- * durability round-trip) treats these as entrypoints alongside Portals,
- * Observers, and published components — boot-time wiring like hydration and
- * environment provisioning becomes statically checkable instead of a blanket
- * lint-allow ("called at startup, invisible to the walker").
+ * lifecycle phase. Reachability analysis (unused-detection, durability
+ * round-trip) treats these as entrypoints alongside Portals, Observers, and
+ * published components — boot-time wiring like hydration and environment
+ * provisioning becomes statically checkable instead of a blanket lint-allow
+ * ("called at startup, invisible to the walker"). Beyond init/shutdown, the
+ * execution-model roots open the walker to non-request/response systems:
+ * `cyclic` (invoked every scan/tick — the PLC/game-loop model), `interrupt`
+ * (invoked by a hardware/OS interrupt), `scheduled` (invoked by a
+ * timer/cron). Only `init` flows feed the durable-Store hydration check.
  */
 export const LifecycleEntrypointSchema = z.object({
-  /** Which lifecycle flow this roots. */
-  phase: z.enum(['init', 'shutdown']),
+  /** Which lifecycle/execution flow this roots. */
+  phase: z.enum(['init', 'shutdown', 'cyclic', 'interrupt', 'scheduled']),
   /** Component id whose method the runtime invokes at this phase. */
   component: z.string(),
   /** Method name on that component's interface. */
@@ -205,8 +219,20 @@ export const SubsystemSpecSchema = z.object({
   targetLanguage: z.string().optional(),
   /** Explicitly sanctioned tight couplings with peer subsystems (see TrustedLinkSchema). */
   trustedLinks: z.array(TrustedLinkSchema).default([]),
+  /**
+   * Per-subsystem design-depth override (components | interfaces |
+   * implementations | narratives): how deep THIS subsystem commits to
+   * designing. Overrides the project rules.designDepth — a black-box or
+   * externally-owned subsystem can stop at interfaces while siblings go to
+   * L5, or one flagship subsystem can go deeper than the project default.
+   * Expectation checks below the depth are gated; soundness of authored
+   * content never is.
+   */
+  designDepth: z.enum(['components', 'interfaces', 'implementations', 'narratives']).optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
+  /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
+  ext: ExtDataSchema.optional(),
   status: SpecStatusSchema.optional().default('complete'),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -266,13 +292,23 @@ export const DispatchBindingSchema = z.object({
 export type DispatchBinding = z.infer<typeof DispatchBindingSchema>;
 
 /**
- * Store durability declaration. `durable` promises the state survives restart:
- * the durability round-trip rule then requires a hydration read-back (a read-
- * effect contract method) reachable from a declared lifecycle init entrypoint
- * (MISSING_HYDRATION otherwise). `ram-projection` declares the state is
- * rebuilt, not restored — exempt from the round-trip requirement.
+ * Store durability declaration — the orthogonal axis to the access shape
+ * (bare Store vs Repository). Every Store should declare one
+ * (MISSING_DURABILITY otherwise):
+ * - `durable`        — persisted RAM projection: survives restart AND holds a
+ *                      RAM copy, so the round-trip rule requires a hydration
+ *                      read-back reachable from a lifecycle init entrypoint
+ *                      (MISSING_HYDRATION otherwise).
+ * - `read-through`   — persisted with NO RAM copy: every read hits the
+ *                      backing medium, so every read IS the read-back —
+ *                      hydration exempt by definition (the file-backed
+ *                      config/record store).
+ * - `ram-projection` — rebuilt, not restored; exempt from the round-trip.
+ * - `cache`          — evictable memo state whose loss is behavior-preserving;
+ *                      hydration exempt (the honest home for TTL caches that
+ *                      would otherwise hide inside a Specialist).
  */
-export const DurabilitySchema = z.enum(['ram-projection', 'durable']);
+export const DurabilitySchema = z.enum(['ram-projection', 'durable', 'read-through', 'cache']);
 export type Durability = z.infer<typeof DurabilitySchema>;
 
 /** A reference from a component to a pack-declared reusable pattern (resolved against loaded packs' PatternDefs; UNKNOWN_PATTERN_REF when unresolved). */
@@ -281,6 +317,22 @@ export const PatternRefSchema = z.object({
   version: z.string().optional(),
 });
 export type PatternRef = z.infer<typeof PatternRefSchema>;
+
+/**
+ * One event edge of the pub/sub topology: a topic this component emits to or
+ * consumes from. First-class so the event graph is STATABLE, not prose — the
+ * event-topology rule pairs every emitted topic with a subscriber and vice
+ * versa (UNCONSUMED_TOPIC / UNSOURCED_SUBSCRIPTION). MessageBus endpoints on
+ * Portal methods (direction publish|subscribe) count into the same pairing.
+ */
+export const EventBindingSchema = z.object({
+  /** Topic/channel name exactly as used on the bus. */
+  topic: z.string().min(1),
+  /** Optional event name within the topic (informational in v1 — pairing is by topic). */
+  event: z.string().optional(),
+  description: z.string().optional(),
+});
+export type EventBinding = z.infer<typeof EventBindingSchema>;
 
 export const ComponentSpecSchema = z.object({
   id: SpecIdSchema,
@@ -298,12 +350,18 @@ export const ComponentSpecSchema = z.object({
   dispatch: z.array(DispatchBindingSchema).optional(),
   /** Store-only: whether held state survives restart (see DurabilitySchema). */
   durability: DurabilitySchema.optional(),
+  /** Topics this component publishes to (see EventBindingSchema). */
+  emits: z.array(EventBindingSchema).optional(),
+  /** Topics this component consumes (see EventBindingSchema) — typical on Observers. */
+  subscribesTo: z.array(EventBindingSchema).optional(),
   /** Pack-declared reusable patterns this component realizes (resolved against loaded packs; UNKNOWN_PATTERN_REF). */
   patterns: z.array(PatternRefSchema).optional(),
   /** Optional component variant — a declared, base-anchored specialization of this component's stereotype (resolved against the variant registry; UNKNOWN_VARIANT / VARIANT_BASE_MISMATCH). */
   variant: z.string().optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
+  /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
+  ext: ExtDataSchema.optional(),
   status: SpecStatusSchema.optional().default('complete'),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -338,13 +396,17 @@ export const EndpointSchema = z.discriminatedUnion('transport', [
 export type Endpoint = z.infer<typeof EndpointSchema>;
 
 /**
- * Recognized method-level semantic guarantees. Kept as a closed set so the validator's
- * cross-level consistency check (narrative claim ↔ contract guarantee) is data-driven over
- * one source of truth — add a guarantee here (+ its narrative keyword in validation.ts) to
- * extend it. NOT a place for free-form prose.
+ * Method-level semantic guarantee tokens. SEMANTIC_GUARANTEES is wairon's BUILTIN
+ * vocabulary — the cross-level consistency check (narrative claim ↔ contract guarantee)
+ * and the prose-claim linter are data-driven over it (add a builtin here + its narrative
+ * keyword in validation.ts). The schema itself is OPEN so extension packs can declare
+ * platform vocabularies (`guarantees:` in a pack manifest); a token that is neither
+ * builtin nor pack-declared is flagged by the guarantee-token rule (UNKNOWN_GUARANTEE),
+ * not rejected at parse time. Still NOT a place for free-form prose — every token must
+ * be declared somewhere.
  */
 export const SEMANTIC_GUARANTEES = ['idempotent', 'atomic', 'transactional', 'exactly-once'] as const;
-export const GuaranteeSchema = z.enum(SEMANTIC_GUARANTEES);
+export const GuaranteeSchema = z.string().min(1);
 export type Guarantee = z.infer<typeof GuaranteeSchema>;
 
 /**
@@ -385,6 +447,8 @@ export const MethodSignatureSchema = z.object({
    * writes with hydration read-backs (MISSING_HYDRATION); optional elsewhere.
    */
   effect: z.enum(['read', 'write']).optional(),
+  /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
+  ext: ExtDataSchema.optional(),
 });
 
 export type MethodSignature = z.infer<typeof MethodSignatureSchema>;
@@ -397,6 +461,8 @@ export const InterfaceSpecSchema = z.object({
   methods: z.array(MethodSignatureSchema).default([]),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
+  /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
+  ext: ExtDataSchema.optional(),
   status: SpecStatusSchema.optional().default('complete'),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -474,6 +540,14 @@ export const NarrativeStepSchema = z.object({
   targetMethod: z.string().optional(),    // Required if type is 'call', references Method name on target interface
   capability: z.string().optional(),      // Required if type is 'dispatch': the capability routed through the target Portal's dispatch table
   assertsGuarantees: z.array(GuaranteeSchema).optional(),
+  /**
+   * Declared entity invariants this step upholds, as "<type-id>.<invariant-id>"
+   * references (type id optionally subsystem-qualified). The invariant-backing
+   * rule resolves each against the entity's declared invariants
+   * (UNKNOWN_INVARIANT_REF) and counts the step as the write-path assertion the
+   * entity's write methods must carry (UNASSERTED_INVARIANT otherwise).
+   */
+  assertsInvariants: z.array(z.string()).optional(),
 
   // --- flow config (per type; validated by the narrative-flow rule) ---------
   condition: z.string().optional(),        // branch; loop (while/doWhile)
@@ -545,6 +619,8 @@ export const MethodImplementationSchema = z.object({
    * name — e.g. a store's `put` realized by `saveSnapshot`.
    */
   symbol: z.string().optional(),
+  /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
+  ext: ExtDataSchema.optional(),
 });
 
 export type MethodImplementation = z.infer<typeof MethodImplementationSchema>;
@@ -555,6 +631,16 @@ export const ImplementationSpecSchema = z.object({
   description: z.string(),
   contract: z.string(), // References L3 Interface id
   sourcePath: z.string().optional(), // Path to the concrete source code file (e.g. "src/storage/vfs.ts")
+  /**
+   * The committed integration-sim harness for this implementation (N:1
+   * sharing allowed, like sourcePath — one subsystem sim may cover several
+   * components). The integration-conformance rule proves the harness EXISTS
+   * and its import graph WIRES the real modules (this component's and each
+   * direct dependency's); whether it passes is CI's job. Declaring the first
+   * simPath in a subsystem activates MISSING_INTEGRATION_SIM for that
+   * subsystem's other complete non-leaf implementations.
+   */
+  simPath: z.string().optional(),
   /**
    * External technologies (vendor, engine, SDK, service) this implementation
    * binds to — e.g. ["mysql"], ["sendgrid"]. Declaring one makes this
@@ -571,6 +657,8 @@ export const ImplementationSpecSchema = z.object({
   conformance: ConformanceTierSchema.optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
+  /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
+  ext: ExtDataSchema.optional(),
   status: SpecStatusSchema.optional().default('complete'),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -614,6 +702,22 @@ export const TypeMethodSchema = z.object({
 });
 export type TypeMethod = z.infer<typeof TypeMethodSchema>;
 
+/**
+ * A declared domain invariant on an entity — a property every write path must
+ * uphold (e.g. "slug unique among siblings"). A DECLARATION, not a proof: the
+ * invariant-backing rule checks that each write-effect method of the entity's
+ * componentClass carries a narrative step asserting it (assertsInvariants) —
+ * it never verifies the narrative actually enforces the property. It catches
+ * "nobody considered this here", not incorrectness.
+ */
+export const InvariantSchema = z.object({
+  /** Stable invariant id, unique within the entity (referenced as "<type-id>.<invariant-id>"). */
+  id: SpecIdSchema,
+  /** The property that must hold, stated precisely enough to test against. */
+  description: z.string().min(1),
+});
+export type Invariant = z.infer<typeof InvariantSchema>;
+
 export const TypeSpecSchema = z.object({
   kind: TypeKindSchema, // discriminator — entity | value-object
   id: SpecIdSchema,
@@ -632,6 +736,12 @@ export const TypeSpecSchema = z.object({
    */
   componentClass: z.string().optional(),
   /**
+   * Declared domain invariants on this entity (see InvariantSchema). Anchored
+   * through componentClass: its write-effect contract methods must each carry
+   * a narrative step asserting every declared invariant.
+   */
+  invariants: z.array(InvariantSchema).optional(),
+  /**
    * The database ID this schema belongs to (marks it as a database table schema).
    */
   database: z.string().optional(),
@@ -646,6 +756,8 @@ export const TypeSpecSchema = z.object({
   linkedEntity: z.string().optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
+  /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
+  ext: ExtDataSchema.optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });

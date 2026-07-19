@@ -3,8 +3,8 @@ id: rule_ext
 name: RuleExt
 description: >-
   The extension-pack data merged into validation and exposed on the RuleContext: pack-registered
-  profiles, language/platform tables, and reusable pattern definitions. Rules merge these over their
-  built-in tables and resolve spec references against them.
+  profiles, language/platform tables, reusable pattern definitions, and declared guarantee tokens.
+  Rules merge these over their built-in tables and resolve spec references against them.
 fields:
   - name: profiles
     type: ProfileDef[]
@@ -18,6 +18,19 @@ fields:
     type: PatternDef[]
     description: Pack-registered reusable pattern definitions, resolvable by PatternRef.
     optional: false
+  - name: guarantees
+    type: string[]
+    description: >-
+      Pack-declared guarantee tokens; the guarantee-token rule unions these with the builtin
+      SEMANTIC_GUARANTEES set to form the accepted vocabulary.
+    optional: false
+  - name: assertions
+    type: PackAssertion[]
+    description: >-
+      Loaded declarative assertions the declarative-assertions rule evaluates; their namespaced
+      codes join the known-issue-code set so lint.allow and severity overrides treat them like
+      builtins.
+    optional: false
 methods: []
 createdAt: '2026-07-14T18:56:56.419Z'
-updatedAt: '2026-07-14T18:56:56.460Z'
+updatedAt: '2026-07-18T22:42:18.583Z'
