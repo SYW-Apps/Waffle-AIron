@@ -7,7 +7,7 @@ import { getInstanceIdentity } from '../../src/server/instance.js';
 import { authenticate, LEGACY_SUPERADMIN_USER_ID } from '../../src/server/auth.js';
 import { authorize } from '../../src/server/authorization.js';
 import { listAssignments } from '../../src/server/permissions.js';
-import { getOrganizationUnit, listProjectPlacements } from '../../src/server/organization.js';
+import { createUnit, getOrganizationUnit, listProjectPlacements, placeProject } from '../../src/server/organization.js';
 import { getUserById } from '../../src/server/users.js';
 import { getWebSessionById } from '../../src/server/websessions.js';
 import { createProjectRecord } from '../../src/server/projects.js';
@@ -196,6 +196,26 @@ describe('permission-model migration (sdd_host)', () => {
     // The unplaced project was placed into the synthesized root unit.
     expect(getOrganizationUnit(dataDir, 'unassigned')).not.toBeNull();
     expect(listProjectPlacements(dataDir, 'proj-orphan').map((p) => p.unitId)).toEqual(['unassigned']);
+  });
+
+  it('apply: duplicate owner placements collapse to the NEWEST one', () => {
+    const system = { userId: 'seed', kind: 'service', issuer: 'local' };
+    createUnit(dataDir, { id: '', name: 'Alpha', slug: 'alpha', kind: 'business_entity', status: 'active', createdAt: '', createdBy: system });
+    createUnit(dataDir, { id: '', name: 'Beta', slug: 'beta', kind: 'business_entity', status: 'active', createdAt: '', createdBy: system });
+    createProjectRecord(dataDir, 'proj-dup');
+    // Two owner rows, the shape the pre-move-semantics web re-place produced.
+    placeProject(dataDir, { id: '', projectId: 'proj-dup', unitId: 'alpha', role: 'owner', createdAt: '2026-01-01T00:00:00.000Z', createdBy: system });
+    placeProject(dataDir, { id: 'dup-newer', projectId: 'proj-dup', unitId: 'beta', role: 'owner', createdAt: '', createdBy: system });
+
+    const dry = migratePermissionModel(dataDir, false);
+    expect(dry.findings.some((f) => f.area === 'placements' && f.detail.includes('proj-dup'))).toBe(true);
+    // Dry run touches nothing.
+    expect(listProjectPlacements(dataDir, 'proj-dup')).toHaveLength(2);
+
+    migratePermissionModel(dataDir, true);
+    const rows = listProjectPlacements(dataDir, 'proj-dup');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].unitId).toBe('beta'); // the newest placement intent wins
   });
 
   it('idempotent: a second apply finds nothing left to do', () => {

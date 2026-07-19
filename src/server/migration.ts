@@ -5,6 +5,7 @@ import { setAssignment, remapScope } from './permissions.js';
 import { remapUnitReferences } from './users.js';
 import {
   createUnit,
+  deletePlacement,
   getOrganizationUnit,
   listProjectPlacements,
   placeProject,
@@ -420,6 +421,40 @@ export function migratePermissionModel(dataDir: string, apply: boolean): Migrati
           createdBy: system,
         });
       }
+    }
+  }
+
+  // 7. Duplicate OWNER placements: a project has exactly one owner unit
+  //    (cross-unit sharing rides exposeTo), but the pre-move-semantics web
+  //    re-place path accumulated a new owner row per move. Keep the NEWEST
+  //    owner placement per project (the latest placement intent) and drop the
+  //    stale rows — each one draws a phantom empty owner frame on the
+  //    environment canvas.
+  const ownersByProject = new Map<string, ReturnType<typeof listProjectPlacements>>();
+  for (const p of listProjectPlacements(dataDir)) {
+    if (p.role !== 'owner') continue;
+    const rows = ownersByProject.get(p.projectId) ?? [];
+    rows.push(p);
+    ownersByProject.set(p.projectId, rows);
+  }
+  for (const [projectId, rows] of ownersByProject) {
+    if (rows.length <= 1) continue;
+    // Newest createdAt wins; on a timestamp tie (the registry stamps createdAt
+    // itself, so rapid re-places can collide) the LATER stored row wins — later
+    // insertion is the later placement intent.
+    const sorted = rows
+      .map((p, i) => ({ p, i }))
+      .sort((a, b) =>
+        a.p.createdAt === b.p.createdAt ? b.i - a.i : a.p.createdAt < b.p.createdAt ? 1 : -1,
+      )
+      .map((x) => x.p);
+    const stale = sorted.slice(1);
+    found(
+      'placements',
+      `project "${projectId}" carries ${rows.length} owner placements — keeping the newest (${sorted[0].unitId}), removing ${stale.map((p) => p.unitId).join(', ')}`,
+    );
+    if (apply) {
+      for (const p of stale) deletePlacement(dataDir, p.id);
     }
   }
 

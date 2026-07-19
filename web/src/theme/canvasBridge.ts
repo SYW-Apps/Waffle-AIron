@@ -4,7 +4,7 @@ import {
   resolveMode,
   type AppearanceMode,
 } from './themes';
-import { mixHex, rotateHex } from './colorUtils';
+import { mixHex } from './colorUtils';
 
 /**
  * Bridge the app's SYW theme engine onto the classic canvas engine: the app
@@ -29,18 +29,22 @@ export function engineTheme(appearance: AppearanceMode): 'light' | 'syw' {
  *  active palette + appearance. */
 export function engineVars(themeId: string, appearance: AppearanceMode): Record<string, string> {
   const mode = resolveMode(appearance);
-  const primary = getThemeOption(themeId).swatches[0];
+  const theme = getThemeOption(themeId);
+  const primary = theme.swatches[0];
   const v = deriveThemeVariables(primary, mode);
   // The classic canvas keeps its "deep space" GRADIENT background in dark
-  // modes — re-derived from the theme's primary (via the same +120° accent the
-  // brand gradient uses) instead of the fixed slate→indigo. Light mode is
-  // solid, matching the classic light theme.
-  const accent = rotateHex(primary, 120);
-  // High contrast stays pure black (max contrast beats atmosphere).
+  // mode, re-derived strictly from the theme's OWN swatches (a hue rotation
+  // drifted off-palette — reddish on non-Waffler themes): a whiff of the
+  // primary at the start ramping into the secondary swatch, both sunk into the
+  // dark base. Waffler reproduces the classic slate→indigo feel; Neutral's
+  // near-dark secondary yields a deliberately quiet, almost-flat space. Light
+  // mode is solid (matching the classic light theme); high contrast stays
+  // pure black (max contrast beats atmosphere).
+  const secondary = theme.swatches[1];
   const deepSpace =
     mode === 'light' || mode === 'high-contrast'
       ? 'none'
-      : `linear-gradient(135deg, ${mixHex('#0b1120', primary, 0.94)} 0%, ${mixHex('#0b1120', accent, 0.84)} 50%, ${mixHex('#0b1120', accent, 0.7)} 100%)`;
+      : `linear-gradient(135deg, ${mixHex('#0b1120', primary, 0.95)} 0%, ${mixHex('#0b1120', secondary, 0.85)} 50%, ${mixHex('#0b1120', secondary, 0.7)} 100%)`;
   return {
     '--bg': v['--wairon-page-bg'],
     '--chrome': v['--wairon-panel-bg'],
