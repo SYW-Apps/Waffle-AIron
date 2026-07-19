@@ -15,7 +15,7 @@ import {
   getAssignment,
   listAssignments as repoListAssignments,
 } from './permissions.js';
-import { getUserById, upsertUser } from './users.js';
+import { findUserByRecordOrSubjectId, getUserById, upsertUser } from './users.js';
 import type {
   AuditEvent,
   HostConfig,
@@ -52,6 +52,19 @@ import type {
 // ---------------------------------------------------------------------------
 
 const PROJECT_ADMIN_CAPABILITY = 'project:admin';
+
+/**
+ * The canonical assignment key for a user subject is the subject's userId —
+ * the id every live Principal carries into the resolver. Callers routinely
+ * pass the user RECORD id instead (the Users list shows it); when the two
+ * have diverged, storing the record id would key a row the resolver only
+ * honors via the alias path. Canonicalize at the write/read boundary; an id
+ * with no user record (a pre-provisioned subject) passes through unchanged.
+ */
+function canonicalSubjectId(cfg: HostConfig, subjectId: string): string {
+  const user = findUserByRecordOrSubjectId(cfg.dataDir, subjectId);
+  return user?.subject.userId || subjectId;
+}
 
 /** Authenticate the caller credential or throw (401-mapping). */
 function requirePrincipal(cfg: HostConfig, credential: string | null): Principal {
@@ -205,6 +218,11 @@ export function setAssignment(
   );
   const stored = repoSetAssignment(cfg.dataDir, {
     ...assignment,
+    // Canonical grid key: user-kind subjects store the subject's userId, so
+    // the resolver's primary match (not the legacy-alias path) serves them.
+    ...(assignment.subjectKind === 'user' && assignment.subjectId
+      ? { subjectId: canonicalSubjectId(cfg, assignment.subjectId) }
+      : {}),
     createdBy: principalSubject(principal),
   }); // step 7
   tryAppendAudit(cfg, buildAuditEvent(principal, 'permission.set', stored.id)); // steps 8–11
@@ -262,9 +280,19 @@ export function listAssignments(
   ); // steps 2–4
   // steps 5–6: the repository filters by subject; the scope filter narrows to
   // the exact {scopeKind, scopeId} anchor when given (kind-qualified — a unit
-  // and a project id never cross-match).
-  const assignments = repoListAssignments(cfg.dataDir, undefined, subjectKind, subjectId);
+  // and a project id never cross-match). A user-subject filter matches the
+  // raw id AND its canonical form, so legacy rows keyed by a diverged record
+  // id stay visible next to canonical ones.
+  const subjectIds = subjectKind === 'user' && subjectId
+    ? [...new Set([subjectId, canonicalSubjectId(cfg, subjectId)])]
+    : undefined;
+  const assignments = subjectIds
+    ? subjectIds.flatMap((id) => repoListAssignments(cfg.dataDir, undefined, subjectKind, id))
+    : repoListAssignments(cfg.dataDir, undefined, subjectKind, subjectId);
+  const seen = new Set<string>();
   return assignments.filter((a) => {
+    if (seen.has(a.id)) return false;
+    seen.add(a.id);
     if (scopeKind !== undefined && a.scopeKind !== scopeKind) return false;
     if (scopeId !== undefined && (a.scopeId ?? '') !== scopeId) return false;
     return true;

@@ -96,6 +96,15 @@ export interface RoleBinding {
 export interface PermissionSubject {
   /** The principal's stable user id (matches PermissionAssignment.subjectId). */
   subjectId: string;
+  /**
+   * Alternate ids this subject is also known by, when a user record's id and
+   * its subject's userId have DIVERGED (legacy records, renamed subjects).
+   * The resolver honors a per-user assignment keyed by ANY of these exactly
+   * as one keyed by subjectId — a "no" override must never silently miss a
+   * diverged user. Write paths canonicalize new assignments onto the
+   * subject's userId, so aliases only carry legacy rows.
+   */
+  aliasSubjectIds?: string[];
   /** Roles bound to this subject, optionally scoped. */
   roleBindings: RoleBinding[];
   /** True ONLY for the env-anchored built-in super-admin subject, the master

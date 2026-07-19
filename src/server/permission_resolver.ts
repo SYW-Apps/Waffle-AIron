@@ -139,10 +139,21 @@ function settingsAtScope(
 ): ScopeSettings {
   const here = world.assignments.filter((a) => assignmentAt(a, scope, capability));
   return {
-    user: here.find((a) => a.subjectKind === 'user' && a.subjectId === subject.subjectId)?.value,
+    user: here.find((a) => a.subjectKind === 'user' && subjectIdMatches(subject, a.subjectId))?.value,
     roleValues: roleValuesAt(subject, capability, scope, world.roles),
     everyone: here.find((a) => a.subjectKind === 'everyone')?.value,
   };
+}
+
+/**
+ * A user-kind assignment applies when keyed by the subject's canonical id OR
+ * any of its diverged aliases (a legacy record id ≠ subject userId) — a
+ * per-user override must never silently miss a diverged user.
+ */
+function subjectIdMatches(subject: PermissionSubject, assignmentSubjectId: string | undefined): boolean {
+  if (!assignmentSubjectId) return false;
+  if (assignmentSubjectId === subject.subjectId) return true;
+  return (subject.aliasSubjectIds ?? []).includes(assignmentSubjectId);
 }
 
 /** A scope's decision, or null when it defers upward. */

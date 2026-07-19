@@ -127,7 +127,20 @@ function resolvePermissionSubject(
   }
   const user = findUserByRecordOrSubjectId(dataDir, subjectId);
   if (user && user.status !== 'active') return null;
-  return { subjectId, roleBindings: user?.roleBindings ?? [], instanceAdmin: false };
+  // Diverged identities: when the record's id and its subject's userId are
+  // not the same string, legacy assignments may be keyed by either — carry
+  // the other ids as aliases so the resolver honors those rows too.
+  const aliasSubjectIds = user
+    ? [user.id, user.subject.userId].filter(
+      (id): id is string => !!id && id !== subjectId,
+    )
+    : [];
+  return {
+    subjectId,
+    ...(aliasSubjectIds.length ? { aliasSubjectIds: [...new Set(aliasSubjectIds)] } : {}),
+    roleBindings: user?.roleBindings ?? [],
+    instanceAdmin: false,
+  };
 }
 
 /** True once a credential record is past its expiresAt or has a revokedAt set. */

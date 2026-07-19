@@ -78,7 +78,11 @@ methods:
         type: throw
         error: Forbidden — setting an assignment requires project:admin over its scope
       - stepNumber: 7
-        description: Upsert the assignment through the permission repository
+        description: >-
+          Canonicalize a user-kind subjectId onto the subject's userId (the id every live principal
+          carries — a record id passed from the Users list resolves through the user record; an id
+          with no record passes through), then upsert the assignment through the permission
+          repository
         type: call
         targetComponent: permission_repository
         targetMethod: setAssignment
@@ -195,7 +199,10 @@ methods:
         type: throw
         error: Forbidden — listing assignments requires project:admin over the scope
       - stepNumber: 5
-        description: List assignments filtered by scope/subject through the permission repository
+        description: >-
+          List assignments through the permission repository; a user-subject filter matches the raw
+          id AND its canonical form, so legacy rows keyed by a diverged record id stay visible next
+          to canonical ones
         type: call
         targetComponent: permission_repository
         targetMethod: listAssignments
@@ -526,4 +533,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-15T22:01:26.906Z'
-updatedAt: '2026-07-16T07:27:54.864Z'
+updatedAt: '2026-07-19T14:59:59.557Z'

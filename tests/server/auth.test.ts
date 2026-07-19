@@ -381,9 +381,11 @@ describe('auth specialist (sdd_host)', () => {
     const p = authenticate(dataDir, token);
     expect(p.authenticated).toBe(true);
     // The bindings come from the DIVERGED record — resolved by subject id, never
-    // empty, never instanceAdmin.
+    // empty, never instanceAdmin — and the diverged RECORD id rides along as an
+    // assignment alias, so legacy grid rows keyed by it still apply.
     expect(p.permissionSubject).toEqual({
       subjectId: 'subj-div-2',
+      aliasSubjectIds: ['rec-div-2'],
       roleBindings: [{ roleId: 'sso-admin' }],
       instanceAdmin: false,
     });

@@ -153,6 +153,27 @@ describe('permission admin orchestrator (sdd_host)', () => {
       expect(listAssignments(cfg, MASTER, 'project', unit.id)).toEqual([]);
     });
 
+    it('canonicalizes a diverged record id onto the subject userId at write, and lists by either id', () => {
+      const unit = seedUnit(dataDir, 'team-c');
+      // A diverged identity: the record's id and its subject's userId differ.
+      upsertUser(dataDir, { id: 'rec-42', subject: subjectOf('subj-42'), status: 'active', createdAt: '' });
+      const stored = setAssignment(cfg, MASTER, {
+        id: '',
+        subjectKind: 'user',
+        subjectId: 'rec-42', // the id an admin copies from the Users list
+        scopeKind: 'unit',
+        scopeId: unit.id,
+        capability: 'project:read',
+        value: 'no',
+        createdAt: '',
+      });
+      // Stored under the canonical grid key — the id every live principal carries.
+      expect(stored.subjectId).toBe('subj-42');
+      // Listing by either id finds the same row.
+      expect(listAssignments(cfg, MASTER, undefined, undefined, 'user', 'rec-42').map((a) => a.id)).toEqual([stored.id]);
+      expect(listAssignments(cfg, MASTER, undefined, undefined, 'user', 'subj-42').map((a) => a.id)).toEqual([stored.id]);
+    });
+
     it("a unit admin manages assignments within their unit but never at instance scope (or a foreign unit)", () => {
       const mine = seedUnit(dataDir, 'mine');
       const theirs = seedUnit(dataDir, 'theirs');

@@ -132,6 +132,32 @@ describe('resolvePermission — instance default', () => {
   });
 });
 
+describe('resolvePermission — diverged-subject aliases', () => {
+  it('honors a per-user grant keyed by a diverged alias id (legacy record id)', () => {
+    const world = worldOf([userAt('u1-record', 'unit', 'acme.it.web', 'yes')]);
+    const aliased: PermissionSubject = { ...subjectOf(), aliasSubjectIds: ['u1-record'] };
+    expect(resolvePermission(aliased, 'project:read', 'unit', 'acme.it.web', world).value).toBe('yes');
+    // Without the alias the row is invisible and the walk falls to the deny default.
+    expect(resolvePermission(subjectOf(), 'project:read', 'unit', 'acme.it.web', world).value).toBe('no');
+  });
+
+  it('honors a per-user NO override keyed by an alias against a role grant — the filed bug', () => {
+    const world = worldOf(
+      [userAt('u1-record', 'unit', 'acme.it.web', 'no')],
+      [role('reader', 'yes')],
+    );
+    const bindings: RoleBinding[] = [{ roleId: 'reader', scopeKind: 'unit', scopeId: 'acme.it.web' }];
+    const aliased: PermissionSubject = { ...subjectOf(bindings), aliasSubjectIds: ['u1-record'] };
+    expect(resolvePermission(aliased, 'project:read', 'unit', 'acme.it.web', world).value).toBe('no');
+  });
+
+  it('never lets an alias of one subject match another subject', () => {
+    const world = worldOf([userAt('u2', 'unit', 'acme.it.web', 'yes')]);
+    const aliased: PermissionSubject = { ...subjectOf(), aliasSubjectIds: ['u1-record'] };
+    expect(resolvePermission(aliased, 'project:read', 'unit', 'acme.it.web', world).value).toBe('no');
+  });
+});
+
 describe('resolvePermission — nearest-ancestor walk', () => {
   it('lets a nearer scope override a broader one (no@org + yes@team)', () => {
     const world = worldOf([
