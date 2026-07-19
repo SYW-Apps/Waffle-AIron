@@ -1221,6 +1221,33 @@ describe('web admin orchestrator (sdd_host)', () => {
     expect(ev[0].level).toBe('security');
   });
 
+  it('placeProject MOVES the owner placement on re-place — one owner unit, never a duplicate', () => {
+    const admin = adminSession();
+    const mk = (slug: string) =>
+      webadmin.upsertOrganizationUnit(cfg, admin, {
+        id: '',
+        name: slug,
+        slug,
+        kind: 'business_entity',
+        status: 'active',
+        createdAt: '',
+        createdBy: SUBJECT,
+      });
+    const unitA = mk('move-a');
+    const unitB = mk('move-b');
+    createProjectRecord(dataDir, 'proj-move');
+
+    webadmin.placeProject(cfg, admin, 'proj-move', unitA.id);
+    webadmin.placeProject(cfg, admin, 'proj-move', unitB.id);
+
+    // The owner placement MOVED (registry update path) — no stale row remains
+    // to draw an empty "owner" frame on the environment canvas.
+    const all = listProjectPlacements(dataDir, 'proj-move');
+    expect(all).toHaveLength(1);
+    expect(all[0].unitId).toBe(unitB.id);
+    expect(all[0].role).toBe('owner');
+  });
+
   it('user / IdP methods forward with the session as the credential (upstream scope applies)', () => {
     const admin = adminSession();
     const viewer = viewerSession();

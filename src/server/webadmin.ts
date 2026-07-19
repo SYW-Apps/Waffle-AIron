@@ -256,9 +256,16 @@ export function upsertOrganizationUnit(
  */
 export function placeProject(cfg: HostConfig, sessionId: string, projectId: string, unitId: string): void {
   const principal = requireInstanceAdminSession(cfg, sessionId); // steps 1–3
-  // step 4: build the ProjectPlacement binding projectId to unitId.
+  // step 4: build the ProjectPlacement binding projectId to unitId. A project
+  // has exactly ONE owner unit (cross-unit sharing rides exposeTo), so a
+  // re-place MOVES the existing owner placement — reusing its id takes the
+  // registry's update path — instead of accumulating duplicates that leave a
+  // stale owner frame on the environment canvas.
+  const existingOwners = organization
+    .listProjectPlacements(cfg.dataDir, projectId)
+    .filter((p) => p.role === 'owner');
   const placement: ProjectPlacement = {
-    id: '',
+    id: existingOwners[0]?.id ?? '',
     projectId,
     unitId,
     role: 'owner',
@@ -266,6 +273,10 @@ export function placeProject(cfg: HostConfig, sessionId: string, projectId: stri
     createdBy: auditActor(principal),
   };
   organization.placeProject(cfg.dataDir, placement); // step 5 (atomic)
+  // Sweep duplicate owner rows left by earlier add-only re-placements.
+  for (const extra of existingOwners.slice(1)) {
+    organization.deletePlacement(cfg.dataDir, extra.id);
+  }
   // steps 6–9: best-effort append.
   tryAppendAudit(cfg, buildOrgAuditEvent(principal, 'org.placement.set', projectId));
   // step 10: return once placed.
