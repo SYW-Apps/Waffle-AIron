@@ -1,5 +1,5 @@
 /* GENERATED — do not edit. */
-export const CANVAS_SKELETON = `<header>
+export const CANVAS_SKELETON = `<header id="hdr">
   <span class="brand syw-gradient-text">wairon</span>
   <div class="seg" id="modeSeg" title="Switch between the component architecture, the type ERD, or the database schemas">
     <button data-vm="components" class="active">Components</button>
@@ -73,6 +73,10 @@ export const CANVAS_SKELETON = `<header>
   </div>
   <button class="tbtn" id="themeBtn" title="Toggle theme">◐ Theme</button>
   <button class="tbtn" id="presentBtn" title="Presentation mode (hides menus)">⛶ Present</button>
+  <div class="dropdown" id="moreDd" style="display:none">
+    <button class="tbtn" id="moreBtn" title="More options">⋯</button>
+    <div class="menu" id="moreMenu"></div>
+  </div>
 </header>
 <div id="wrap">
   <div id="stage">

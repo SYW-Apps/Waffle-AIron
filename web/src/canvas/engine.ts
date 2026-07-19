@@ -1902,6 +1902,7 @@ export function mountCanvas(host, model, opts = {}) {
   var fdd = wireDropdown('flowExportDd', 'flowExportBtn');
   var ldd = wireDropdown('layoutDd', 'layoutBtn');
   var sdd = wireDropdown('settingsDd', 'settingsBtn');
+  var mdd = wireDropdown('moreDd', 'moreBtn');
   // Keep the settings panel open while flipping switches (clicks inside it don't
   // bubble to the document-level close handler).
   (function () {
@@ -1936,6 +1937,7 @@ export function mountCanvas(host, model, opts = {}) {
       if (fdd.classList) fdd.classList.remove('open');
       if (ldd.classList) ldd.classList.remove('open');
       if (sdd.classList) sdd.classList.remove('open');
+      if (mdd && mdd.classList) mdd.classList.remove('open');
     });
     document.addEventListener('keydown', function (ev) {
       if (ev.key === 'Escape') {
@@ -1946,6 +1948,76 @@ export function mountCanvas(host, model, opts = {}) {
       }
     });
   }
+
+  // ── Responsive header overflow → "⋯" dropdown ─────────────────────────────
+  // When the floating header no longer fits its controls, trailing items
+  // COLLAPSE into the More menu instead of relying on horizontal scroll —
+  // every control stays one click away. Whole items move (listeners survive
+  // reparenting); a hidden placeholder pins each item's original position so
+  // restoring keeps the exact order. Collapse order = least-used first.
+  (function () {
+    if (typeof window === 'undefined') return;
+    var hdr = ROOT.getElementById('hdr');
+    var moreDd = ROOT.getElementById('moreDd');
+    var moreMenu = ROOT.getElementById('moreMenu');
+    if (!hdr || !moreDd || !moreMenu || !hdr.getBoundingClientRect) return;
+    // Collapse order = least-used first. A dropdown trigger moves with its
+    // WRAPPER (the .dropdown div) so its own menu keeps working from the More
+    // menu (menus are fixed-positioned at the trigger's rect).
+    var COLLAPSE = ['themeBtn', 'resetBtn', 'exportBtn', 'layoutBtn', 'presentBtn', 'fitBtn', 'panelToggle'];
+    var markers = {};
+    function movableFor(id) {
+      var el = ROOT.getElementById(id);
+      if (!el) return null;
+      var p = el.parentNode;
+      if (p && p.className && String(p.className).indexOf('dropdown') >= 0 && p !== moreMenu) return p;
+      return el;
+    }
+    function markerFor(id, el) {
+      if (!markers[id]) {
+        var m = document.createElement('span');
+        m.style.display = 'none';
+        el.parentNode.insertBefore(m, el);
+        markers[id] = m;
+      }
+      return markers[id];
+    }
+    var collapsed = [];
+    function reflow() {
+      // Restore everything, then collapse until the row fits (idempotent).
+      for (var i = collapsed.length - 1; i >= 0; i--) {
+        var it = collapsed[i];
+        if (it.el && it.marker && it.marker.parentNode) it.marker.parentNode.insertBefore(it.el, it.marker);
+      }
+      collapsed = [];
+      moreDd.style.display = 'none';
+      var guard = 0;
+      while (hdr.scrollWidth > hdr.clientWidth + 1 && guard < COLLAPSE.length) {
+        var id = COLLAPSE[guard++];
+        var el = movableFor(id);
+        if (!el || el === moreDd || el.parentNode === moreMenu) continue;
+        var m = markerFor(id, el);
+        moreDd.style.display = '';
+        moreMenu.appendChild(el);
+        collapsed.push({ el: el, marker: m });
+      }
+      if (collapsed.length === 0) moreDd.style.display = 'none';
+    }
+    var raf = null;
+    var defer = window.requestAnimationFrame
+      ? window.requestAnimationFrame.bind(window)
+      : window.setTimeout.bind(window);
+    function schedule() {
+      if (raf !== null) return;
+      raf = defer(function () { raf = null; reflow(); });
+    }
+    if (typeof ResizeObserver !== 'undefined') {
+      new ResizeObserver(schedule).observe(hdr);
+    } else if (window.addEventListener) {
+      window.addEventListener('resize', schedule);
+    }
+    schedule();
+  })();
   function fileBase() {
     var scope = state.view.kind === 'types' ? 'types'
       : state.view.id ? state.view.id.replace(/::/g, '-') : 'system';

@@ -88,6 +88,12 @@ header input[type="search"]::placeholder { color:var(--dim); }
 .dropdown .menu button { display:block; width:100%; text-align:left; border:none; background:transparent; color:var(--ink); padding:8px 10px; border-radius:7px; cursor:pointer; font:inherit; font-size:12.5px; }
 .dropdown .menu button:hover { background:var(--hover-bg); }
 .dropdown .menu .hint { display:block; color:var(--dim); font-size:10.5px; }
+/* Header controls collapsed into the "⋯" overflow menu: whole items (buttons
+   or nested dropdowns) stack vertically; a nested dropdown's own menu still
+   opens fixed-positioned over the page. */
+#moreMenu .dropdown { display:block; width:100%; }
+#moreMenu .dropdown > .tbtn, #moreMenu > .tbtn { display:block; width:100%; text-align:left; border:none; background:transparent; margin:2px 0; }
+#moreMenu .dropdown > .tbtn:hover, #moreMenu > .tbtn:hover { background:var(--hover-bg); }
 
 /* Settings panel — toggle switches */
 .settings-menu { min-width:266px; }

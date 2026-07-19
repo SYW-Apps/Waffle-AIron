@@ -675,6 +675,8 @@ function reshapeLandscapeGraph(model: LandscapeGraphModel, level: number): WebGr
     const node: WebGraphNode = { id: n.id, label: n.label, kind, level: nodeLevel };
     if (n.projectId !== undefined) node.projectId = n.projectId;
     if (n.status !== undefined) node.status = n.status;
+    // Carry actionability through: a breadcrumb ancestor renders read-only.
+    if (n.actionable !== undefined) node.actionable = n.actionable;
     const parentId = parentOf.get(n.id);
     if (parentId !== undefined) node.parentId = parentId;
     nodes.push(node);
