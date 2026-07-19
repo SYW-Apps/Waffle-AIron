@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useSettings } from './settings';
-import { APPEARANCE_OPTIONS, THEME_OPTIONS } from './theme/themes';
+import { ThemeSections } from './ThemeControls';
 import { subjectLabel } from './types';
 import type { WebContext } from './session';
 
@@ -11,7 +10,6 @@ import type { WebContext } from './session';
  * and sign out. Native (no FontAwesome / ui-sdk) — closes on outside click / Esc.
  */
 export function HeaderMenu(props: { ctx: WebContext; onSignOut: () => void }) {
-  const { themeId, appearance, setThemeId, setAppearance } = useSettings();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -52,44 +50,7 @@ export function HeaderMenu(props: { ctx: WebContext; onSignOut: () => void }) {
             </div>
           </div>
 
-          <div className="hmenu-section">
-            <div className="hmenu-label">Color palette</div>
-            <div className="theme-list">
-              {THEME_OPTIONS.map((t) => (
-                <button
-                  key={t.id}
-                  className={`theme-opt ${t.id === themeId ? 'is-active' : ''}`}
-                  onClick={() => setThemeId(t.id)}
-                >
-                  <span className="swatches">
-                    {t.swatches.map((c) => (
-                      <span key={c} style={{ background: c }} />
-                    ))}
-                  </span>
-                  <span className="cell-stack">
-                    <span className="theme-name">{t.label}</span>
-                    <span className="hint">{t.description}</span>
-                  </span>
-                  {t.id === themeId && <span className="check">✓</span>}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="hmenu-section">
-            <div className="hmenu-label">Appearance</div>
-            <div className="seg">
-              {APPEARANCE_OPTIONS.map((m) => (
-                <button
-                  key={m.id}
-                  className={`seg-btn ${m.id === appearance ? 'is-active' : ''}`}
-                  onClick={() => setAppearance(m.id)}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
-          </div>
+          <ThemeSections />
 
           <div className="hmenu-foot">
             <button className="btn btn-ghost btn-sm" onClick={props.onSignOut}>

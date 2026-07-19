@@ -4,6 +4,7 @@ import { SettingsProvider, useSettings } from './settings';
 import { RealtimeProvider } from './realtime';
 import { ToastProvider } from './ui';
 import { HeaderMenu } from './HeaderMenu';
+import { ThemeCog } from './ThemeControls';
 import { Login } from './views/Login';
 import { Home } from './views/Home';
 import { Users } from './views/Users';
@@ -97,10 +98,13 @@ function Shell() {
     }
   }
 
-  // Local dev mode (`wairon dev`): no chrome — the canvas fills the viewport.
+  // Local dev mode (`wairon dev`): no chrome — the canvas fills the viewport;
+  // theme settings stay reachable via a floating cog (they are app-level
+  // localStorage settings, not account state).
   if (local) {
     return (
       <main className="view-full">
+        <ThemeCog />
         <Home />
       </main>
     );

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { get, post } from '../api';
+import { ThemeCog } from '../ThemeControls';
 
 interface LoginOptions {
   passwordLogin: boolean;
@@ -53,6 +54,7 @@ export function Login({ onSignedIn }: { onSignedIn: () => void }) {
 
   return (
     <div className="login-wrap">
+      <ThemeCog />
       <div className="login-card">
         <div className="brand">wairon</div>
         {!opts && <p className="hint">Loading sign-in options…</p>}
