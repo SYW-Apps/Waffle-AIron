@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import {
   getUserById,
   findUserByExternalSubject,
+  findUserByRecordOrSubjectId,
   listUsers,
   upsertUser,
   setUserStatus,
@@ -117,6 +118,25 @@ describe('user repository (sdd_host)', () => {
     expect(getUserById(dataDir, 'u-1')).toBeNull();
     upsertUser(dataDir, mkUser({ id: 'u-1' }));
     expect(getUserById(dataDir, 'u-1')?.id).toBe('u-1');
+  });
+
+  // ── findByRecordOrSubjectId (the divergent-id-safe lookup) ─────────────────
+
+  it('findByRecordOrSubjectId resolves by record id OR subject userId, record id winning, null on a miss', () => {
+    // Admin-created divergent-id user: record id ≠ subject.userId.
+    upsertUser(dataDir, mkUser({ id: 'rec-1', subject: subject({ userId: 'subj-1' }) }));
+
+    // Both ids resolve the SAME record — neither can dodge an identity-critical
+    // gate (live auth status, mint deactivation guard) keyed on the other.
+    expect(findUserByRecordOrSubjectId(dataDir, 'rec-1')?.id).toBe('rec-1');
+    expect(findUserByRecordOrSubjectId(dataDir, 'subj-1')?.id).toBe('rec-1');
+    expect(findUserByRecordOrSubjectId(dataDir, 'ghost')).toBeNull();
+
+    // Precedence: when another record's SUBJECT claims an id that is also a
+    // record id, the exact record-id match wins (mirrors mintToken's original
+    // getUserById-first resolution).
+    upsertUser(dataDir, mkUser({ id: 'claimer', subject: subject({ userId: 'rec-1' }) }));
+    expect(findUserByRecordOrSubjectId(dataDir, 'rec-1')?.id).toBe('rec-1');
   });
 
   // ── findByExternalSubject ──────────────────────────────────────────────────

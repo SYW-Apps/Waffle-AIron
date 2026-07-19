@@ -10,7 +10,7 @@ import {
 } from './types.js';
 import { findByTokenHash, hashToken } from './credentials.js';
 import { getWebSessionById, WEB_SESSION_PREFIX } from './websessions.js';
-import { getUserById } from './users.js';
+import { findUserByRecordOrSubjectId } from './users.js';
 import { getInstanceIdentity } from './instance.js';
 import { resolveSecret } from '../utils/secrets.js';
 
@@ -103,6 +103,14 @@ export function isReservedSubject(dataDir: string, userId: string): boolean {
  * the owner user exists but is not active — defense in depth behind
  * revokeAllForOwner, so a deactivated user cannot act even if a credential
  * somehow survived the revocation sweep.
+ *
+ * The owning record is resolved by BOTH the subject's userId and the record id
+ * (findUserByRecordOrSubjectId): admin-created users can carry a record id that
+ * diverges from their subject's userId, and resolving by only one of them would
+ * silently miss the record — skipping the live status gate and reading no
+ * roleBindings. Mirrors mintToken's owner resolution and the deactivation
+ * sweep. A subject with genuinely NO user record under either id (a service
+ * principal) still resolves to an empty-bindings subject, never null.
  */
 function resolvePermissionSubject(
   dataDir: string,
@@ -117,7 +125,7 @@ function resolvePermissionSubject(
   if (!subjectId) {
     return { subjectId: '', roleBindings: [], instanceAdmin: false };
   }
-  const user = getUserById(dataDir, subjectId);
+  const user = findUserByRecordOrSubjectId(dataDir, subjectId);
   if (user && user.status !== 'active') return null;
   return { subjectId, roleBindings: user?.roleBindings ?? [], instanceAdmin: false };
 }
