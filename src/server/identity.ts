@@ -317,13 +317,11 @@ export function mintToken(cfg: HostConfig, credential: string | null, request: T
   // Refuse minting a token for a user record that has been deactivated — else
   // deactivation could be undone by minting fresh tokens for the inactive owner.
   // A token's owner id can be EITHER a record id or the record's subject.userId
-  // (they diverge for admin-created users), so resolve by both — matching the
-  // revocation sweep — or the guard is dodgeable with the other id. A
-  // request.ownerUserId with no user record (a service principal) is allowed.
-  const owner =
-    userRepo.getUserById(cfg.dataDir, request.ownerUserId) ??
-    userRepo.listUsers(cfg.dataDir).find((u) => u.subject?.userId === request.ownerUserId) ??
-    null;
+  // (they diverge for admin-created users), so resolve by both — the shared
+  // divergent-id-safe lookup, matching the revocation sweep and the live auth
+  // gate — or the guard is dodgeable with the other id. A request.ownerUserId
+  // with no user record (a service principal) is allowed.
+  const owner = userRepo.findUserByRecordOrSubjectId(cfg.dataDir, request.ownerUserId);
   if (owner && owner.status !== 'active') {
     throw new ForbiddenError('cannot mint a token for a deactivated user');
   }

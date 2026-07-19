@@ -8,11 +8,12 @@ import {
   authenticateMaster,
   authenticateSession,
 } from '../../src/server/auth.js';
-import { createCredential, hashToken } from '../../src/server/credentials.js';
+import { createCredential, findByTokenHash, hashToken } from '../../src/server/credentials.js';
 import { createWebSession, WEB_SESSION_PREFIX } from '../../src/server/websessions.js';
 import { upsertUser } from '../../src/server/users.js';
 import { ensureInstanceIdentity } from '../../src/server/instance.js';
-import type { ApiKeyRecord, PrincipalSubject, WebSession } from '../../src/server/types.js';
+import * as identity from '../../src/server/identity.js';
+import type { ApiKeyRecord, HostConfig, PrincipalSubject, WebSession } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
 // Auth Specialist (sdd_host) — subject resolution, the LIVE permissionSubject
@@ -297,6 +298,110 @@ describe('auth specialist (sdd_host)', () => {
     expect(authenticate(dataDir, token).authenticated).toBe(true);
     // … but must not resolve as a session
     expect(authenticateSession(dataDir, token).authenticated).toBe(false);
+  });
+
+  // ── divergent-id owners (record id ≠ subject.userId): the LIVE gate ────────
+  //
+  // Admin-created users can carry a record id that diverges from their subject's
+  // userId. A credential's ownerSubject.userId names the SUBJECT id, so resolving
+  // the owning record by record id alone silently misses it — the per-request
+  // status gate never fires (suspension is then enforced ONLY by the revocation
+  // sweep) and roleBindings resolve empty. resolvePermissionSubject must resolve
+  // by BOTH ids, exactly like mintToken and the deactivation sweep.
+
+  const hostCfg = (): HostConfig => ({
+    host: '127.0.0.1',
+    port: 0,
+    adminHost: '127.0.0.1',
+    adminPort: 0,
+    dataDir,
+    authEnabled: true,
+  });
+
+  it('rejects a still-unrevoked credential of a SUSPENDED divergent-id user at request time (the live gate, not the sweep)', () => {
+    const cfg = hostCfg();
+    const ownerSubject: PrincipalSubject = { userId: 'subj-div-1', kind: 'human', issuer: 'local' };
+    // Admin-created user whose RECORD id diverges from its subject's userId.
+    identity.upsertUser(cfg, MASTER, {
+      id: 'rec-div-1',
+      subject: ownerSubject,
+      status: 'active',
+      roleBindings: [],
+      createdAt: new Date().toISOString(),
+    });
+
+    // Sanity: while active, a credential owned under the SUBJECT id authenticates.
+    const before = 'tok-div-before';
+    createCredential(dataDir, mkRecord({ id: 'c-div-before', keyHash: hashToken(before), ownerSubject }));
+    expect(authenticate(dataDir, before).authenticated).toBe(true);
+
+    // Suspend through the real admin flow, addressed by the RECORD id.
+    identity.setUserStatus(cfg, MASTER, 'rec-div-1', 'suspended');
+    // The sweep revoked the pre-existing credential (it sweeps both ids) …
+    expect(findByTokenHash(dataDir, hashToken(before))?.revokedAt).toBeTruthy();
+    expect(authenticate(dataDir, before).authenticated).toBe(false);
+
+    // … but the LIVE gate must not depend on the sweep: craft a credential that
+    // survived it (written after the sweep ran), still owned under the subject id.
+    const survivor = 'tok-div-survivor';
+    createCredential(dataDir, mkRecord({ id: 'c-div-survivor', keyHash: hashToken(survivor), ownerSubject }));
+    // The record itself is NOT revoked — so the rejections below can only come
+    // from the per-request status gate resolving the suspended record.
+    expect(findByTokenHash(dataDir, hashToken(survivor))?.revokedAt).toBeUndefined();
+
+    expect(authenticate(dataDir, survivor).authenticated).toBe(false);
+    expect(authenticateCredential(dataDir, survivor).authenticated).toBe(false);
+
+    // The web-session bridge rides the same resolution: a session crafted for the
+    // suspended divergent-id subject is rejected too.
+    const s = createWebSession(dataDir, {
+      id: '',
+      subject: ownerSubject,
+      projects: ['*'],
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+    expect(authenticateSession(dataDir, s.id).authenticated).toBe(false);
+  });
+
+  it('resolves a divergent-id user\'s LIVE roleBindings and active status through the record (positive)', () => {
+    const cfg = hostCfg();
+    const ownerSubject: PrincipalSubject = { userId: 'subj-div-2', kind: 'human', issuer: 'local' };
+    identity.upsertUser(cfg, MASTER, {
+      id: 'rec-div-2',
+      subject: ownerSubject,
+      status: 'active',
+      roleBindings: [{ roleId: 'sso-admin' }],
+      createdAt: new Date().toISOString(),
+    });
+
+    const token = 'tok-div-live';
+    createCredential(dataDir, mkRecord({ id: 'c-div-live', keyHash: hashToken(token), ownerSubject }));
+
+    const p = authenticate(dataDir, token);
+    expect(p.authenticated).toBe(true);
+    // The bindings come from the DIVERGED record — resolved by subject id, never
+    // empty, never instanceAdmin.
+    expect(p.permissionSubject).toEqual({
+      subjectId: 'subj-div-2',
+      roleBindings: [{ roleId: 'sso-admin' }],
+      instanceAdmin: false,
+    });
+
+    // End-to-end: the binding CONFERS live authority — the built-in sso-admin
+    // role resolves instance-level project:admin, so the token reaches an
+    // instance-admin-gated read surface.
+    expect(Array.isArray(identity.listIdentityProviders(cfg, token))).toBe(true);
+
+    // The session bridge resolves the identical live permissionSubject.
+    const s = createWebSession(dataDir, {
+      id: '',
+      subject: ownerSubject,
+      projects: ['*'],
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+    expect(authenticateSession(dataDir, s.id).permissionSubject).toEqual(p.permissionSubject);
   });
 
   // ── regressions: the pre-existing credential kinds still authenticate ──────

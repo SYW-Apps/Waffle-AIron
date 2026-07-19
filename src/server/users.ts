@@ -175,6 +175,23 @@ function indexGetById(dataDir: string, id: string): HostedUserRecord | null {
 }
 
 /**
+ * Return the record whose RECORD id OR subject userId matches, or null. An
+ * exact record-id match wins over a subject-userId match.
+ *
+ * Admin-created users can carry a record id that DIVERGES from their subject's
+ * userId, and a credential's ownerSubject.userId (or an admin-supplied owner id)
+ * may name either one. Every identity-critical resolution — the live
+ * status/roleBindings gate (auth.resolvePermissionSubject), the mint
+ * deactivation guard (identity.mintToken), the revocation sweep — must resolve
+ * by BOTH ids through this one lookup, or a divergent-id user dodges it with
+ * the other id.
+ */
+function indexFindByRecordOrSubjectId(dataDir: string, id: string): HostedUserRecord | null {
+  const records = loadStore(dataDir);
+  return records.find((r) => r.id === id) ?? records.find((r) => r.subject?.userId === id) ?? null;
+}
+
+/**
  * Return the record bound to both the issuer and external subject exactly, or null.
  * Comparison is exact and case-sensitive because provider subjects are opaque ids.
  */
@@ -210,6 +227,13 @@ function indexList(dataDir: string, status?: string): HostedUserRecord[] {
 /** Return one hosted user by Wairon user id or null when absent. */
 export function getUserById(dataDir: string, id: string): HostedUserRecord | null {
   return indexGetById(dataDir, id);
+}
+
+/** Return one hosted user by record id OR subject userId (record id wins), or
+ *  null when absent — the divergent-id-safe lookup identity-critical callers
+ *  (live auth gate, mint deactivation guard) must use. */
+export function findUserByRecordOrSubjectId(dataDir: string, id: string): HostedUserRecord | null {
+  return indexFindByRecordOrSubjectId(dataDir, id);
 }
 
 /** Return one hosted user by external issuer subject or null when absent. */

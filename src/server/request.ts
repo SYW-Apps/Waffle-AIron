@@ -484,11 +484,14 @@ export async function handleMcpRequest(
     }
 
     // Steps 25–27: enforce the granular data-plane permission BEFORE dispatching
-    // an ordinary sdd_* tool. A read tool needs mcp:read, a write tool needs
-    // mcp:write (a '*' permission or the instance-wide '*'/'*' grant covers both),
-    // consulted from the principal's grant for the BOUND project. A refusal is an
-    // isError tool result (HTTP still 200) and the tool is never dispatched; it
-    // still flows through the SAME best-effort audit path.
+    // an ordinary sdd_* tool. A read tool needs project:read, every other tool
+    // project:write (fail closed), resolved LIVE through the hierarchical
+    // permission resolver over the BOUND project. Capabilities match EXACTLY —
+    // there is no wildcard capability, and the '*'@instance instance-admin
+    // marker is reserved (setAssignment rejects it); only the env-anchored
+    // instance-admin subjects bypass the walk. A refusal is an isError tool
+    // result (HTTP still 200) and the tool is never dispatched; it still flows
+    // through the SAME best-effort audit path.
     const permissionError = dataPlanePermissionError(cfg, principal, projectId, body);
     if (permissionError !== undefined) {
       sendJson(res, 200, permissionError);
