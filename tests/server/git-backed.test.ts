@@ -3,7 +3,20 @@ import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { invalidateSpecCache } from '../../src/core/specs.js';
+import {
+  invalidateSpecCache,
+  saveSubsystemSpec,
+  saveComponentSpec,
+  saveInterfaceSpec,
+  saveImplementationSpec,
+  loadComponentSpec,
+  getSubsystemPath,
+  getComponentPath,
+  getInterfacePath,
+  getImplementationPath,
+} from '../../src/core/specs.js';
+import { runWithProjectRoot } from '../../src/utils/fs.js';
+import { readYamlFile } from '../../src/utils/yaml.js';
 import * as admin from '../../src/server/admin.js';
 import { AdminAuthError } from '../../src/server/admin.js';
 import { resolveSecret } from '../../src/utils/secrets.js';
@@ -51,16 +64,66 @@ const INDEX_YAML = [
   '',
 ].join('\n');
 
+/** A collaborator-authored component spec carrying every NEW schema field
+ *  (durability, emits/subscribesTo, lint.allow, ext) as exact LF bytes — the
+ *  content-identity test asserts these very bytes survive the whole
+ *  enable → commit → sync → clone cycle untouched. */
+const RELAY_STORE_YAML = [
+  'id: relay_store',
+  'name: Relay Store',
+  'description: seeded read-through store carrying every new schema field',
+  'subsystem: demo-core',
+  'componentType: Store',
+  'owns: []',
+  'dependsOn: []',
+  'durability: read-through',
+  'emits:',
+  '  - topic: relay.forwarded',
+  '    event: sent',
+  'subscribesTo:',
+  '  - topic: relay.inbound',
+  '    description: raw inbound frames',
+  'lint:',
+  '  allow:',
+  '    - code: UNOWNED_STORE',
+  '      reason: seeded standalone store fixture',
+  'ext:',
+  '  com.example.seeded:',
+  '    origin: collaborator',
+  '    weights:',
+  '      - 1',
+  '      - 2',
+  'status: draft',
+  'createdAt: "2026-07-04T00:00:00.000Z"',
+  'updatedAt: "2026-07-04T00:00:00.000Z"',
+  '',
+].join('\n');
+
 function git(args: string[], cwd: string): string {
   return execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 }
 
+/** Recursively list every file under dir as sorted relpaths (forward slashes). */
+function listTree(dir: string, base = dir): string[] {
+  const out: string[] = [];
+  if (!fs.existsSync(dir)) return out;
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (e.name === '.git') continue;
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) out.push(...listTree(p, base));
+    else out.push(path.relative(base, p).replace(/\\/g, '/'));
+  }
+  return out.sort();
+}
+
 /** A bare "remote" seeded with a minimal wairon project on main, plus a working
- *  clone the test can use to simulate a collaborator. */
+ *  clone the test can use to simulate a collaborator. HEAD is pinned to main at
+ *  init (CI runners default to master, and the pushed main would otherwise
+ *  never become HEAD). */
 function seedRemote(base: string): { remote: string; seed: string } {
   const remote = path.join(base, 'remote.git');
   fs.mkdirSync(remote, { recursive: true });
-  git(['init', '--bare', '-q', '.'], remote);
+  git(['init', '--bare', '-q', '-b', 'main', '.'], remote);
   const seed = path.join(base, 'seed');
   git(['clone', '-q', remote, seed], base);
   fs.mkdirSync(path.join(seed, '.wai', 'specs'), { recursive: true });
@@ -283,4 +346,203 @@ describe('git-backed projects (sdd_git)', () => {
     expect(admin.getGitBinding(cfg, ADMIN, 'demo').lastSyncAt).toBeTruthy();
     expect(git(['log', '-1', '--pretty=%s', 'wairon/work'], root)).toContain('wairon periodic sync: demo');
   });
+
+  // ── content identity: the spec bytes wairon stores are the bytes git carries ──
+  //
+  // The mechanics above prove the flow runs; this proves FIDELITY. wairon's git
+  // layer applies NO line-ending or serialization policy of its own — no
+  // .gitattributes, no core.autocrlf configuration, and commitScoped is a plain
+  // pathspec-confined `git add` + `commit` (never a rewrite) — so a fresh clone
+  // of the pushed working branch must reproduce the spec files byte for byte.
+  // The inspecting clone pins -c core.autocrlf=false: without it the assertion
+  // would measure the INSPECTING host's checkout translation (autocrlf=true on
+  // Windows dev/CI turns the repo's LF into CRLF at checkout), not the stored
+  // content.
+
+  it('carries new-field spec content (durability/ext/labels/parallel/detach) byte-identically through commit → sync → fresh clone', () => {
+    // A collaborator seeds the remote with a new-field component spec (exact LF
+    // bytes) before the project binds to it.
+    fs.mkdirSync(path.join(seed, '.wai', 'specs', 'components'), { recursive: true });
+    fs.writeFileSync(path.join(seed, '.wai', 'specs', 'components', 'relay_store.yaml'), RELAY_STORE_YAML);
+    git(['-c', 'user.email=c@x', '-c', 'user.name=collab', 'add', '-A'], seed);
+    git(['-c', 'user.email=c@x', '-c', 'user.name=collab', 'commit', '-qm', 'seed relay_store'], seed);
+    git(['push', '-q', 'origin', 'main'], seed);
+
+    admin.enableGit(cfg, ADMIN, 'demo', remote, 'main');
+    const root = projectRoot();
+
+    // The seeded spec LOADS with every new field intact right after the
+    // enable-clone (remote → container direction).
+    const relay = runWithProjectRoot(root, () => loadComponentSpec('relay_store'));
+    expect(relay).not.toBeNull();
+    expect(relay!.durability).toBe('read-through');
+    expect(relay!.emits).toStrictEqual([{ topic: 'relay.forwarded', event: 'sent' }]);
+    expect(relay!.subscribesTo).toStrictEqual([{ topic: 'relay.inbound', description: 'raw inbound frames' }]);
+    expect(relay!.lint).toStrictEqual({ allow: [{ code: 'UNOWNED_STORE', reason: 'seeded standalone store fixture' }] });
+    expect(relay!.ext).toStrictEqual({ 'com.example.seeded': { origin: 'collaborator', weights: [1, 2] } });
+
+    // Author IN-CONTAINER through the real spec writers: a subsystem, a Store
+    // with durability + event topology + lint/ext, its contract, and an
+    // implementation whose narrative uses labels, a parallel fan-out/join, and
+    // a detached call. Returns each authored file's repo-relative path.
+    const now = '2026-07-05T00:00:00.000Z';
+    const authored = runWithProjectRoot(root, () => {
+      saveSubsystemSpec({
+        id: 'demo-core',
+        name: 'Demo Core',
+        description: 'session handling',
+        parentSystem: 'demo',
+        publicInterfaces: [],
+        trustedLinks: [],
+        status: 'draft',
+        createdAt: now,
+        updatedAt: now,
+      });
+      saveComponentSpec({
+        id: 'session_store',
+        name: 'Session Store',
+        description: 'holds authenticated sessions',
+        subsystem: 'demo-core',
+        componentType: 'Store',
+        owns: [],
+        dependsOn: [],
+        durability: 'durable',
+        emits: [{ topic: 'session.events', event: 'created' }],
+        subscribesTo: [{ topic: 'auth.revoked' }],
+        lint: { allow: [{ code: 'UNOWNED_STORE', reason: 'standalone by design' }] },
+        ext: { 'com.example.canvas': { color: 'red', weights: [1, 2, 3] } },
+        status: 'draft',
+        createdAt: now,
+        updatedAt: now,
+      });
+      saveInterfaceSpec({
+        id: 'isession-store',
+        name: 'Session Store Contract',
+        description: 'session persistence obligations',
+        component: 'session_store',
+        methods: [
+          {
+            name: 'put',
+            description: 'store a session record',
+            signature: 'put(record: string): void',
+            returns: 'void',
+            guarantees: ['idempotent'],
+            effect: 'write',
+          },
+          { name: 'get', description: 'read a session record', signature: 'get(id: string): string | null', returns: 'string | null', effect: 'read' },
+        ],
+        status: 'draft',
+        createdAt: now,
+        updatedAt: now,
+      });
+      saveImplementationSpec({
+        id: 'session_store_impl',
+        name: 'Session Store Implementation',
+        description: 'durable session persistence',
+        contract: 'isession-store',
+        methods: [
+          {
+            name: 'put',
+            narrative: [
+              { stepNumber: 1, label: 'entry', description: 'validate the session record shape', type: 'local' },
+              { stepNumber: 2, description: 'is the record valid?', type: 'branch', condition: 'record shape is valid', onFalseStep: 7 },
+              {
+                stepNumber: 3,
+                description: 'fan out the write to both sinks',
+                type: 'parallel',
+                branches: [
+                  { step: 4, name: 'mirror' },
+                  { step: 5, name: 'persist' },
+                ],
+                endStep: 5,
+              },
+              {
+                stepNumber: 4,
+                label: 'mirror-arm',
+                description: 'mirror the write into the audit log (fire-and-forget)',
+                type: 'call',
+                targetComponent: 'audit_log',
+                targetMethod: 'record',
+                detach: true,
+              },
+              { stepNumber: 5, description: 'persist the record durably', type: 'local' },
+              { stepNumber: 6, description: 'report the stored session', type: 'return', outcome: 'success' },
+              { stepNumber: 7, label: 'reject', description: 'reject the malformed record', type: 'throw', error: 'invalid session record' },
+            ],
+          },
+        ],
+        lint: { allow: [{ code: 'CALL_STEP_UNREALIZED', reason: 'audit mirror lands in a later wave' }] },
+        ext: { 'com.example.metrics': { collect: ['latency'] } },
+        status: 'draft',
+        createdAt: now,
+        updatedAt: now,
+      });
+      return {
+        subsystem: path.relative(root, getSubsystemPath('demo-core')).replace(/\\/g, '/'),
+        component: path.relative(root, getComponentPath('session_store')).replace(/\\/g, '/'),
+        contract: path.relative(root, getInterfacePath('isession-store')).replace(/\\/g, '/'),
+        implementation: path.relative(root, getImplementationPath('session_store_impl')).replace(/\\/g, '/'),
+      };
+    });
+    invalidateSpecCache();
+
+    // The commit/sync flow: publish the authored specs, integrate the default
+    // branch, and prove the sync neither dirtied nor rewrote the scope (a
+    // follow-up commit finds nothing to publish).
+    const publish = admin.commitProject(cfg, ADMIN, 'demo', undefined, 'author new-field specs');
+    expect(publish.published).toBe(true);
+    admin.syncGit(cfg, ADMIN, 'demo');
+    expect(admin.commitProject(cfg, ADMIN, 'demo').published).toBe(false);
+
+    // Clone the remote FRESH at the pushed working branch (explicit --branch —
+    // never whatever HEAD points at), with checkout translation pinned off.
+    const clone = fs.mkdtempSync(path.join(base, 'content-clone-'));
+    git(['-c', 'core.autocrlf=false', 'clone', '-q', '--branch', 'wairon/work', remote, '.'], clone);
+
+    // 1. Every wairon-AUTHORED spec file is byte-identical, working tree → clone.
+    for (const rel of Object.values(authored)) {
+      const original = fs.readFileSync(path.join(root, rel));
+      const carried = fs.readFileSync(path.join(clone, rel));
+      expect(carried.equals(original), `byte drift between project and clone in ${rel}`).toBe(true);
+    }
+
+    // 2. Files wairon did NOT author come back as the collaborator's exact
+    // bytes — the enable/commit/sync cycle never rewrites or renormalizes them.
+    expect(fs.readFileSync(path.join(clone, '.wai', 'specs', 'components', 'relay_store.yaml'), 'utf8')).toBe(RELAY_STORE_YAML);
+    expect(fs.readFileSync(path.join(clone, '.wai', 'project.yaml'), 'utf8')).toBe(PROJECT_YAML);
+    expect(fs.readFileSync(path.join(clone, '.wai', 'specs', '.index.yaml'), 'utf8')).toBe(INDEX_YAML);
+
+    // 3. The clone's .wai file SET matches the project's (nothing dropped),
+    // minus the container-local files that must never enter the repo.
+    const containerLocal = new Set(['git.json', 'lock.json']);
+    expect(listTree(path.join(clone, '.wai'))).toStrictEqual(
+      listTree(path.join(root, '.wai')).filter((f) => !containerLocal.has(f)),
+    );
+    expect(fs.existsSync(path.join(clone, '.wai', 'git.json'))).toBe(false);
+
+    // 4. Anti-vacuity: byte-identity alone cannot tell "faithfully carried"
+    // from "never written" — parse the CLONE's implementation file and prove
+    // the new narrative shape really is in the carried bytes.
+    const implInClone = readYamlFile(path.join(clone, authored.implementation)) as {
+      methods: { narrative: Record<string, unknown>[] }[];
+      lint: unknown;
+      ext: unknown;
+    };
+    const steps = implInClone.methods[0].narrative;
+    expect(steps[0]).toMatchObject({ label: 'entry', type: 'local' });
+    expect(steps[2]).toMatchObject({
+      type: 'parallel',
+      branches: [
+        { step: 4, name: 'mirror' },
+        { step: 5, name: 'persist' },
+      ],
+      endStep: 5,
+    });
+    expect(steps[3]).toMatchObject({ label: 'mirror-arm', type: 'call', detach: true });
+    expect(implInClone.lint).toStrictEqual({ allow: [{ code: 'CALL_STEP_UNREALIZED', reason: 'audit mirror lands in a later wave' }] });
+    expect(implInClone.ext).toStrictEqual({ 'com.example.metrics': { collect: ['latency'] } });
+    const compInClone = readYamlFile(path.join(clone, authored.component)) as Record<string, unknown>;
+    expect(compInClone.durability).toBe('durable');
+    expect(compInClone.emits).toStrictEqual([{ topic: 'session.events', event: 'created' }]);
+  }, 30_000);
 });
