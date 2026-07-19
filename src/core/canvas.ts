@@ -485,10 +485,14 @@ body[data-theme="light"] {
   --card: #f7fafc;
   --danger: #c22f3e; --warn: #9a6a00;
 }
-body { margin:0; background:var(--bg); color:var(--ink); font:13px/1.45 "Inter", system-ui, "Segoe UI", sans-serif; overflow:hidden; }
+body { margin:0; position:relative; background:var(--bg); color:var(--ink); font:13px/1.45 "Inter", system-ui, "Segoe UI", sans-serif; overflow:hidden; }
 body[data-theme="syw"] { background-image: var(--syw-deep-space); background-attachment: fixed; }
 
-header { display:flex; align-items:center; gap:10px; padding:0 14px; height:52px; background:var(--chrome); border-bottom:1px solid var(--chrome-border); position:relative; z-index:20; overflow-x:auto; scrollbar-width:thin; }
+/* Floating header: the toolbar hovers over a FULL-BLEED canvas (blueprint-
+   designer style) instead of reserving a solid top bar. It anchors to the body
+   (position:relative there) and yields to the details panel when that is open. */
+header { display:flex; align-items:center; gap:10px; padding:0 14px; height:52px; background:var(--chrome); border:1px solid var(--chrome-border); border-radius:12px; box-shadow:var(--syw-deep-shadow); position:absolute; top:10px; left:12px; right:12px; z-index:20; overflow-x:auto; scrollbar-width:thin; }
+body:not(.panel-closed) header { right:calc(var(--panel-width, 380px) + 19px); }
 /* Responsive overflow: on a narrow header the toolbar buttons must stay
    REACHABLE (scroll) rather than wrapping off the right edge. Groups keep their
    own shape; nothing shrinks below its content width. */
@@ -544,13 +548,16 @@ body[data-theme="light"] .selectControl { color-scheme:light; }
 .toggle input:checked + .track { background:var(--accent); border-color:var(--accent); }
 .toggle input:checked + .track::after { transform:translateX(16px); background:#fff; }
 
-#wrap { display:flex; height:calc(100vh - 52px); }
+#wrap { display:flex; height:100vh; }
 #stage { flex:1; min-width:0; position:relative; }
 #cy { position:absolute; inset:0; }
 .legend { position:absolute; left:12px; bottom:12px; background:var(--chrome); border:1px solid var(--chrome-border); border-radius:10px; padding:8px 12px; font-size:11px; color:var(--dim); z-index:5; pointer-events:none; }
 .legend .sw { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; vertical-align:-1px; border:1.5px solid; }
-.viewhint { position:absolute; top:10px; left:12px; color:var(--dim); font-size:11px; background:var(--chrome); border:1px solid var(--chrome-border); border-radius:9px; padding:5px 10px; z-index:5; pointer-events:none; }
-#typesWarn { position:absolute; top:10px; left:50%; transform:translateX(-50%); color:var(--ink); font-size:12px; background:var(--chrome); border:1px solid var(--warn); border-radius:9px; padding:6px 12px; z-index:6; max-width:72vw; box-shadow:var(--syw-deep-shadow); display:none; }
+/* Stage overlays clear the floating header (52px + 10px top + 10px gap). The
+   header hides in presentation mode, where they return to the top edge. */
+.viewhint { position:absolute; top:72px; left:12px; color:var(--dim); font-size:11px; background:var(--chrome); border:1px solid var(--chrome-border); border-radius:9px; padding:5px 10px; z-index:5; pointer-events:none; }
+body.presentation .viewhint { top:10px; }
+#typesWarn { position:absolute; top:72px; left:50%; transform:translateX(-50%); color:var(--ink); font-size:12px; background:var(--chrome); border:1px solid var(--warn); border-radius:9px; padding:6px 12px; z-index:6; max-width:72vw; box-shadow:var(--syw-deep-shadow); display:none; }
 #typesWarn button { margin-left:8px; }
 
 #panelResizer { flex:0 0 7px; cursor:col-resize; background:var(--chrome); border-left:1px solid var(--chrome-border); border-right:1px solid var(--line); z-index:11; position:relative; }
@@ -613,6 +620,8 @@ body.presentation #exitPresent, body.presentation #presentDetails { display:bloc
   #wrap { position:relative; }
   #panel { position:absolute; top:0; right:0; bottom:0; width:min(var(--panel-width, 360px), calc(100vw - 44px)); flex-basis:auto; box-shadow:var(--syw-deep-shadow); }
   #panelResizer { position:absolute; top:0; bottom:0; right:min(var(--panel-width, 360px), calc(100vw - 44px)); width:7px; flex-basis:auto; box-shadow:-3px 0 10px rgba(0,0,0,.18); }
+  /* The panel overlays the stage here, so the floating header keeps full width. */
+  body:not(.panel-closed) header { right:12px; }
 }
 
 #flowModal { display:none; position:fixed; inset:0; background:rgba(4,6,12,0.6); backdrop-filter:blur(3px); z-index:80; align-items:center; justify-content:center; }

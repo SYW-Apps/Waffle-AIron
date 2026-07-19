@@ -43,6 +43,7 @@ import type {
 import { bearerToken, sendJson } from './httpio.js';
 // Historical import site for these helpers — republish them.
 export { bearerToken, sendJson } from './httpio.js';
+import { publishChange } from './realtime.js';
 
 function projectSelector(req: IncomingMessage): string | null {
   const h = req.headers['x-wairon-project'];
@@ -244,6 +245,37 @@ function requiredDataPlaneCapability(toolName: string): 'project:read' | 'projec
   if (READ_TOOL_PREFIXES.some((p) => toolName.startsWith(p))) return 'project:read';
   if (WRITE_TOOL_PREFIXES.some((p) => toolName.startsWith(p))) return 'project:write';
   return 'project:write';
+}
+
+/** Lifecycle/ops tools whose SUCCESS changes state other live views are
+ *  showing (project status, placements, packs) — not the read-shaped ones
+ *  (get_approval_status, landscape discovery) and not the external-side-effect
+ *  ones (produce, commit — the spec tree itself is unchanged). */
+const MUTATING_HOST_TOOLS = new Set([
+  'sdd_host_initialize_project',
+  'sdd_host_lock_project',
+  'sdd_host_promote_project',
+  'sdd_host_await_approval', // a decided approval may have executed the action
+  'sdd_host_policy_reconcile',
+]);
+
+/**
+ * The realtime channels a SUCCESSFUL data-plane tool call invalidates: a spec-
+ * mutating sdd_* write wakes the bound project's channel (open canvases refetch
+ * through their own scoped REST reads — the event carries no data, so
+ * authorization stays at the read); a mutating lifecycle tool also wakes the
+ * projects list. Publishing is an OPTIMIZATION, so unlike the permission gate
+ * (which fails closed to write) an unknown tool publishes nothing.
+ */
+export function mcpChangeChannels(body: unknown, projectId: string, response: unknown): string[] {
+  if (deriveMcpOutcome(response) !== 'success') return [];
+  const msg = jsonRpcRequest(body);
+  if (!msg || msg.method !== 'tools/call') return [];
+  const name = msg.params?.name;
+  if (typeof name !== 'string') return [];
+  if (WRITE_TOOL_PREFIXES.some((p) => name.startsWith(p))) return [`project:${projectId}`];
+  if (MUTATING_HOST_TOOLS.has(name)) return [`project:${projectId}`, 'projects'];
+  return [];
 }
 
 /**
@@ -480,6 +512,8 @@ export async function handleMcpRequest(
     if (dispatchedResponse !== undefined) {
       sendJson(res, 200, dispatchedResponse);
       auditToolCall(cfg.dataDir, principal, projectId, body, deriveMcpOutcome(dispatchedResponse));
+      // Realtime: nudge the channels a successful lifecycle mutation touched.
+      for (const ch of mcpChangeChannels(body, projectId, dispatchedResponse)) publishChange(ch);
       return;
     }
 
@@ -525,6 +559,9 @@ export async function handleMcpRequest(
 
     // Steps 23–27: audit the handled data-plane tool call (best-effort).
     auditToolCall(cfg.dataDir, principal, projectId, body, deriveMcpOutcome(response));
+    // Realtime: a successful sdd_* WRITE changed the spec tree — nudge the
+    // project channel so open canvases/views refetch (spec-tree change → live).
+    for (const ch of mcpChangeChannels(body, projectId, response)) publishChange(ch);
   });
 }
 
