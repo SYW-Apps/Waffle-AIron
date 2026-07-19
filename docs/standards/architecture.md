@@ -180,9 +180,13 @@ Realizations, smallest-first:
   — a normal `dependsOn → Adapter` edge; an Observer subscribes via a bus Adapter.
 - *Simplest systems* may skip events entirely and call the next step directly.
 
-There is no "EventPublisher" block in any case. The optional `eventPublication`
-interface binding (mirror of `eventSubscription`) lets producer↔consumer event
-contracts be validated when events are used.
+There is no "EventPublisher" block in any case. Event topology is declared, not
+inferred: a component lists the topics it `emits` and `subscribesTo` (L2
+fields), and a MessageBus public interface's endpoints carry a
+`direction: publish | subscribe`. The validator pairs the two by topic —
+an emitted topic nobody consumes is `UNCONSUMED_TOPIC`, a subscription with no
+source is `UNSOURCED_SUBSCRIPTION` (topics with external ends are acknowledged
+via `lint.allow`). Trees that use no events see neither check.
 
 **Ports + implementations (the Carrier rule).** When a capability has multiple
 external providers, define an **interface (a port)** and one Adapter per provider:
@@ -473,17 +477,19 @@ dependencies, behavior on the right object); only the *amount* of structure scal
 
 ---
 
-## 14. Diagram generation (V2)
+## 14. Diagram generation
 
-The spec tree is a typed graph, so it renders to diagrams with no extra modeling
-(planned V2, not v1):
+The spec tree is a typed graph, so it renders to diagrams with no extra
+modeling. These surfaces are SHIPPED (interactive canvas, Mermaid, draw.io,
+Excalidraw exports, and the flow modal):
 - component + `dependsOn` → C4 / component diagrams
 - `owns` tree → containment / module diagrams
 - typed entities (§6) → data-model / ER diagrams
 - L3 interfaces → contract views; L1 public interfaces → API maps
-- **L5 narratives → sequence diagrams** (each `call` is a message)
+- **L5 narratives → sequence diagrams and flowcharts** (each `call` is a
+  message; `parallel` fans out, `detach` renders fire-and-forget)
 
-Designs should stay faithful to the typed model so this stays free to add later.
+Designs should stay faithful to the typed model so the diagrams stay free.
 
 ---
 

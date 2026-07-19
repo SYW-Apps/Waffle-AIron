@@ -35,11 +35,11 @@ export const stereotypeDepsRule: SddRule = {
     { code: 'ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP', defaultSeverity: 'error', summary: 'Portal/Observer reaching the data layer directly' },
     { code: 'ARCHITECTURE_VIOLATION_SPECIALIST_DEP', defaultSeverity: 'error', summary: 'Specialist depending on workflow/runtime/state blocks' },
     { code: 'ARCHITECTURE_VIOLATION_STORE_DEP', defaultSeverity: 'error', summary: 'Store depending on anything but another Store or a backend Adapter' },
-    { code: 'ARCHITECTURE_VIOLATION_REGISTRY_DEP', defaultSeverity: 'warning', summary: 'Registry depending on anything but its Store or a backend Adapter (warning while new; the standard has always claimed this)' },
+    { code: 'ARCHITECTURE_VIOLATION_REGISTRY_DEP', defaultSeverity: 'warning', summary: 'Registry depending on anything but its Store or a backend Adapter (warning while new; NOTE: the written standard also licenses validation Specialists — alignment pending)' },
     { code: 'ARCHITECTURE_VIOLATION_ADAPTER_DEP', defaultSeverity: 'error', summary: 'Adapter depending on Orchestrators or Stores' },
     { code: 'ARCHITECTURE_VIOLATION_INDEX_DEP', defaultSeverity: 'error', summary: 'Index depending on anything but its Store or an Adapter' },
     { code: 'ARCHITECTURE_VIOLATION_VIEW_DEP', defaultSeverity: 'error', summary: 'View depending on logic/persistence layers' },
-    { code: 'PORTAL_WRITE_SHORTCUT', defaultSeverity: 'error', summary: 'Portal narrative calls a write-effect method on a Repository/Index directly — reads may shortcut, writes route through an Orchestrator' },
+    { code: 'PORTAL_WRITE_SHORTCUT', defaultSeverity: 'error', summary: 'Portal narrative calls a write-effect method on a Repository/Index directly — reads may shortcut, writes route through an Orchestrator (judged on effect-tagged facade methods; untagged methods are not yet judged)' },
   ],
   check(ctx) {
     for (const comp of ctx.components) {

@@ -6,6 +6,7 @@
   "description": "Hosted wairon web UI — React SPA bundled self-contained and served by the node host server.",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node ../scripts/gen-canvas-engine.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"

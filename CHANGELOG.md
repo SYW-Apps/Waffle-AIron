@@ -96,7 +96,7 @@ suppressible) unless noted; existing clean trees stay clean unless listed under
 - Lifecycle entrypoint `phase` grows to `init | shutdown | cyclic | interrupt |
   scheduled` â€” all root the reachability walker; only `init` feeds hydration.
 - `ext:` â€” an opaque, verbatim-preserved extension-data map on every spec kind
-  and on L3/L4 methods, for pack rules to read.
+  below L0 (L1â€“L4 and types) and on L3/L4 methods, for pack rules to read.
 - **Declarative rule assertions** (docs/design/declarative-rule-dsl.md): a
   declarative pack may carry `assertions:` â€” instances of three closed kinds
   (`forbid-edge` selector-matched dependency/ownership bans, `require-field`

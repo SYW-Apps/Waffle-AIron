@@ -2087,14 +2087,49 @@ export function mountCanvas(host, model, opts = {}) {
     nums.forEach(function (n, i) { idx[n] = i; });
     function nextOf(n) { var i = idx[n]; return i !== undefined && i + 1 < nums.length ? nums[i + 1] : null; }
 
-    // Region depth (loop/try bodies) → indentation; loop body ends flow back
-    // to their header instead of falling through.
+    // Region depth (loop/try/parallel bodies) → indentation; loop body ends
+    // flow back to their header instead of falling through.
     var depth = {}, open = [], loopEnd = {};
     steps.forEach(function (s) {
       while (open.length && open[open.length - 1] < s.n) open.pop();
       depth[s.n] = open.length;
-      if ((s.kind === 'loop' || s.kind === 'try') && s.end !== undefined) open.push(s.end);
+      if ((s.kind === 'loop' || s.kind === 'try' || s.kind === 'parallel') && s.end !== undefined) open.push(s.end);
       if (s.kind === 'loop' && s.end !== undefined) loopEnd[s.end] = s.n;
+    });
+
+    // Parallel fan-out/join: arms are contiguous ordered sub-regions of the
+    // body; an arm's LAST step continues at the region's JOIN bar (a virtual
+    // node, id 'j'+header), never into its neighbor arm. Built outermost-first
+    // (ascending header) so a nested parallel whose endStep is an outer arm
+    // end resolves its continuation through the outer mapping — mirrors the
+    // validator's stepGraph() fallNext generalization.
+    var joins = [];         // [{id, header, end, arms}] — virtual join-bar nodes
+    var virtualNode = {};   // non-step node ids (join bars, detached ghosts)
+    var armEndJoin = {};    // arm-end step → the join id it flows into
+    var joinCont = {};      // join id → what runs after the region (step or outer join)
+    function fallNext(n) { return armEndJoin[n] !== undefined ? armEndJoin[n] : nextOf(n); }
+    steps.forEach(function (p) {
+      if (p.kind !== 'parallel' || p.end === undefined || !(p.branches && p.branches.length >= 2)) return;
+      var jid = 'j' + p.n;
+      var pEntries = p.branches.map(function (b) { return b.step; }).sort(function (a, b) { return a - b; });
+      joinCont[jid] = fallNext(p.end);
+      joins.push({ id: jid, header: p.n, end: p.end, arms: pEntries.length });
+      virtualNode[jid] = 1;
+      for (var ai = 0; ai < pEntries.length; ai++) {
+        var armEnd = ai + 1 < pEntries.length ? prevOf(pEntries[ai + 1]) : p.end;
+        if (armEnd !== null && armEnd >= pEntries[ai]) armEndJoin[armEnd] = jid;
+      }
+    });
+
+    // Detached (fire-and-forget) calls: the callee hangs OFF the flow as a
+    // ghost node reached by a dashed open arrow, while the caller's own lane
+    // continues immediately — failure does not propagate back.
+    var detached = [];
+    steps.forEach(function (s) {
+      if (!s.detach || !(s.kind === 'call' || s.kind === 'dispatch') || !s.call) return;
+      var did = 'd' + s.n;
+      detached.push({ id: did, from: s.n, comp: s.call.component, method: s.call.method });
+      virtualNode[did] = 1;
     });
 
     // Lanes: structured-flowchart X assignment. Loop/try bodies, branch
@@ -2134,34 +2169,51 @@ export function mountCanvas(host, model, opts = {}) {
           if (endN !== null && endN >= cs) shiftSpan(cs, endN, ci + 1);
         });
       }
+      if (s.kind === 'parallel' && s.end !== undefined && s.branches && s.branches.length >= 2) {
+        // One lane per arm: arm 0 stays under the fan-out bar; each further
+        // arm shifts into its own lane, side by side (like case blocks).
+        var armStarts = s.branches.map(function (b) { return b.step; })
+          .filter(function (n2) { return byN[n2]; })
+          .sort(function (a, b) { return a - b; });
+        armStarts.forEach(function (as2, ai) {
+          if (ai === 0) return;
+          var aEnd = ai + 1 < armStarts.length ? prevOf(armStarts[ai + 1]) : s.end;
+          if (aEnd !== null && aEnd >= as2) shiftSpan(as2, aEnd, ai);
+        });
+      }
     });
     var lane = {};
     nums.forEach(function (n, i) { lane[n] = laneAdd[i]; });
 
     var edges = [];
-    function E(a, b, kind, label) { if (b !== null && b !== undefined && byN[b]) edges.push({ from: a, to: b, kind: kind, label: label || '' }); }
+    function E(a, b, kind, label) { if (b !== null && b !== undefined && (byN[b] || virtualNode[b])) edges.push({ from: a, to: b, kind: kind, label: label || '' }); }
     steps.forEach(function (s) {
       var n = s.n;
       switch (s.kind) {
         case 'branch':
-          E(n, s.onTrue !== undefined ? s.onTrue : nextOf(n), 'true', 'true');
+          E(n, s.onTrue !== undefined ? s.onTrue : fallNext(n), 'true', 'true');
           E(n, s.onFalse, 'false', 'false');
           break;
         case 'switch':
           (s.cases || []).forEach(function (cse) { E(n, cse.step, 'case', cse.value); });
-          E(n, s.defaultStep !== undefined ? s.defaultStep : nextOf(n), 'default', 'default');
+          E(n, s.defaultStep !== undefined ? s.defaultStep : fallNext(n), 'default', 'default');
           break;
         case 'loop':
           E(n, nextOf(n), 'enter', s.loopKind === 'doWhile' ? 'do' : '');
           if (s.end !== undefined) {
             E(s.end, n, 'back', s.loopKind === 'doWhile' ? 'while ' + (s.cond || '') : '\u27F3');
-            E(n, nextOf(s.end), 'exit', 'done');
+            E(n, fallNext(s.end), 'exit', 'done');
           }
           break;
         case 'try':
           E(n, nextOf(n), 'seq');
           (s.catches || []).forEach(function (cc) { E(n, cc.step, 'error', cc.error); });
           if (s.fin !== undefined) E(n, s.fin, 'finally', 'finally');
+          break;
+        case 'parallel':
+          // Fan-out: the header bar forks to EVERY arm entry; the implicit
+          // join (all arms complete) is the virtual bar wired up below.
+          (s.branches || []).forEach(function (br) { E(n, br.step, 'fork', br.name || ''); });
           break;
         case 'jump':
           E(n, s.to, 'jump');
@@ -2170,10 +2222,16 @@ export function mountCanvas(host, model, opts = {}) {
         case 'throw':
           break;
         default:
-          if (loopEnd[n] === undefined) E(n, nextOf(n), 'seq');
+          // Fall-through — except a loop body end (flows back to its header)
+          // and an arm end (flows into the join bar, never the neighbor arm).
+          if (loopEnd[n] === undefined) E(n, fallNext(n), armEndJoin[n] !== undefined ? 'join' : 'seq');
       }
     });
-    return { steps: steps, edges: edges, depth: depth, lane: lane, first: nums.length ? nums[0] : null };
+    // Join bars continue at the step after the region (or the outer join);
+    // detached ghosts hang off their firing step with an annotated open arrow.
+    joins.forEach(function (j) { E(j.id, joinCont[j.id], 'seq'); });
+    detached.forEach(function (d) { E(d.from, d.id, 'detached', 'detached'); });
+    return { steps: steps, edges: edges, depth: depth, lane: lane, first: nums.length ? nums[0] : null, joins: joins, detached: detached };
   }
 
   // "Hide error paths": drop everything only reachable through error edges —
@@ -2198,6 +2256,10 @@ export function mountCanvas(host, model, opts = {}) {
       depth: graph.depth,
       lane: graph.lane,
       first: graph.first,
+      // Join bars and detached ghosts are NOT error paths — they survive the
+      // toggle whenever their region/firing step does.
+      joins: (graph.joins || []).filter(function (j) { return keep[j.id]; }),
+      detached: (graph.detached || []).filter(function (d) { return keep[d.id]; }),
     };
   }
 
@@ -2207,6 +2269,7 @@ export function mountCanvas(host, model, opts = {}) {
       case 'switch': return s.n + '. \u25C7 switch ' + (s.on || s.text);
       case 'loop': return s.n + '. \u27F3 ' + (s.loopKind === 'doWhile' ? 'do' : (s.loopKind || 'forEach')) + (s.over ? ' ' + s.over : s.cond ? ' while ' + s.cond : '');
       case 'try': return s.n + '. \u26E8 try \u2014 ' + s.text;
+      case 'parallel': return s.n + '. \u2225 ' + s.text;
       case 'jump': return s.n + '. \u21B7 ' + s.text;
       case 'return': return s.n + '. \u23CE return' + (s.outcome ? ' \u2014 ' + s.outcome : '');
       case 'throw': return s.n + '. \u26A1 throw' + (s.err ? ' ' + s.err : '');
@@ -2225,29 +2288,72 @@ export function mountCanvas(host, model, opts = {}) {
 
     var eles = [];
     eles.push({ data: { id: 'start', label: (c ? c.name : top.comp) + '.' + top.method + '()', w: 280, h: 44, tw: 260 }, position: { x: 0, y: 0 }, classes: 'flowstart' });
+    var rowOf = {};
+    graph.steps.forEach(function (s2, i2) { rowOf[s2.n] = i2 + 1; });
+    var joinByHeader = {};
+    (graph.joins || []).forEach(function (j2) { joinByHeader[j2.header] = j2; });
     graph.steps.forEach(function (s, i) {
       var id = 'n' + s.n;
       var isCall = (s.kind === 'call' || s.kind === 'dispatch') && !!s.call;
-      var callable = isCall && openable(s.call.component, s.call.method);
+      // A detached call's target renders as a separate ghost node (below), so
+      // the step node itself stays plain and undrillable.
+      var isDetached = isCall && !!s.detach;
+      var callable = isCall && !isDetached && openable(s.call.component, s.call.method);
       var isCond = s.kind === 'branch' || s.kind === 'switch' || s.kind === 'loop';
-      var label = flowStepLabel(s) + (isCall ? '\n\u2192 ' + s.call.component + '.' + s.call.method + '()' + (callable ? '  \u21B4' : '') : '');
+      var label = flowStepLabel(s) + (isCall && !isDetached ? '\n\u2192 ' + s.call.component + '.' + s.call.method + '()' + (callable ? '  \u21B4' : '') : '');
       var cls = s.kind === 'branch' || s.kind === 'switch' ? 'flowcond'
         : s.kind === 'loop' ? 'flowloop'
         : s.kind === 'try' ? 'flowtry'
+        : s.kind === 'parallel' ? 'flowfork'
         : s.kind === 'return' ? 'flowend'
         : s.kind === 'throw' ? 'flowthrow'
         : s.kind === 'jump' ? 'flowjumpn'
         : isCall ? 'flowcall' : 'flowlocal';
+      // A parallel header renders as a fan-out BAR spanning its arm lanes
+      // (label above); its implicit join bar is added after the loop.
+      var jinfo = s.kind === 'parallel' ? joinByHeader[s.n] : undefined;
+      var laneN = graph.lane[s.n] || 0;
       eles.push({
         data: {
           id: id, label: label,
-          w: isCond ? 320 : 300, h: isCall ? 58 : isCond ? 64 : 46, tw: isCond ? 210 : 280,
+          w: jinfo ? 344 * (jinfo.arms - 1) + 320 : isCond ? 320 : 300,
+          h: jinfo ? 16 : isCall ? 58 : isCond ? 64 : 46,
+          tw: jinfo ? 344 * (jinfo.arms - 1) + 280 : isCond ? 210 : 280,
           callComp: isCall ? s.call.component : '', callMethod: isCall ? s.call.method : '',
         },
-        // Rows keep code order (Y); lanes give branches/cases their own
+        // Rows keep code order (Y); lanes give branches/cases/arms their own
         // column (X), wide enough that side-by-side nodes never overlap.
-        position: { x: (graph.lane[s.n] || 0) * 344, y: (i + 1) * 92 },
+        position: { x: jinfo ? (laneN + (jinfo.arms - 1) / 2) * 344 : laneN * 344, y: (i + 1) * 92 },
         classes: cls + (callable ? ' drill' : ''),
+      });
+    });
+    // Implicit join bars: one per parallel region, spanning the arm lanes just
+    // below the body's last row — all arms complete before flow continues.
+    (graph.joins || []).forEach(function (j) {
+      // A pruned/dangling endStep must not orphan the bar's edges — park it
+      // after the last kept row instead of dropping it.
+      var rEnd = rowOf[j.end] !== undefined ? rowOf[j.end] : graph.steps.length;
+      var laneJ = graph.lane[j.header] || 0;
+      var barW = 344 * (j.arms - 1) + 320;
+      eles.push({
+        data: { id: 'n' + j.id, label: 'join \u2014 all ' + j.arms + ' arms', w: barW, h: 16, tw: barW - 40 },
+        position: { x: (laneJ + (j.arms - 1) / 2) * 344, y: rEnd * 92 + 46 },
+        classes: 'flowjoin',
+      });
+    });
+    // Detached-call ghosts: the callee sits OFF the flow lane, reached by a
+    // dashed open arrow labeled "detached" — failure does not propagate back.
+    (graph.detached || []).forEach(function (d) {
+      if (rowOf[d.from] === undefined) return;
+      var dCallable = openable(d.comp, d.method);
+      eles.push({
+        data: {
+          id: 'n' + d.id,
+          label: d.comp + '.' + d.method + '()' + (dCallable ? '  \u21B4' : '') + '\ndetached \u2014 fire & forget',
+          w: 260, h: 52, tw: 240, callComp: d.comp, callMethod: d.method,
+        },
+        position: { x: ((graph.lane[d.from] || 0)) * 344 + 330, y: rowOf[d.from] * 92 },
+        classes: 'flowdetach' + (dCallable ? ' drill' : ''),
       });
     });
     // No L5 narrative for the opened method: instead of an empty chart, show
@@ -2267,6 +2373,9 @@ export function mountCanvas(host, model, opts = {}) {
         : e.kind === 'false' ? 'fAlt'
         : e.kind === 'jump' || e.kind === 'finally' ? 'fJump'
         : e.kind === 'case' || e.kind === 'default' ? 'fAlt'
+        : e.kind === 'fork' ? 'fFork'
+        : e.kind === 'join' ? 'fJoin'
+        : e.kind === 'detached' ? 'fDetach'
         : e.kind === 'exit' ? 'fAlt' : '';
       eles.push({ data: { id: 'fe' + i, source: 'n' + e.from, target: 'n' + e.to, lbl: e.label }, classes: cls });
     });
@@ -2282,6 +2391,12 @@ export function mountCanvas(host, model, opts = {}) {
       { selector: '.flowend', style: { shape: 'round-rectangle', 'background-color': t.stereo.entry.fill, 'border-color': t.stereo.entry.stroke, color: t.stereo.entry.text, 'border-width': 2.5 } },
       { selector: '.flowthrow', style: { shape: 'round-rectangle', 'background-color': t.ghostFill, 'border-color': t.issue, color: t.issue, 'border-width': 2.5 } },
       { selector: '.flowjumpn', style: { 'background-color': t.ghostFill, 'border-color': t.ghostStroke, 'border-style': 'dotted', color: t.ghostText } },
+      // Parallel fan-out/join bars (UML activity style): solid slim bars; the
+      // fork carries the step label above it, the join a small caption below.
+      { selector: '.flowfork', style: { 'background-color': t.ink, 'border-color': t.ink, color: t.ink, 'text-valign': 'top', 'text-margin-y': -6, 'font-weight': 'bold' } },
+      { selector: '.flowjoin', style: { 'background-color': t.ink, 'border-color': t.ink, color: t.edgeText, 'text-valign': 'bottom', 'text-margin-y': 6, 'font-size': 9.5 } },
+      // Detached-call ghost: visibly off the flow, no failure propagation.
+      { selector: '.flowdetach', style: { 'background-color': t.ghostFill, 'border-color': t.ghostStroke, 'border-style': 'dashed', color: t.ghostText, 'font-style': 'italic' } },
       { selector: '.flowintent', style: { shape: 'round-rectangle', width: 'label', height: 'label', padding: '16px', 'background-color': t.ghostFill, 'border-color': t.ghostStroke, 'border-style': 'dashed', color: t.innerText, 'text-max-width': 340, 'text-wrap': 'wrap', 'font-size': 11.5, 'text-valign': 'center', 'text-halign': 'center', 'font-style': 'italic' } },
       { selector: '.drill', style: { 'border-width': 2.5 } },
       { selector: 'edge', style: { 'curve-style': 'bezier', width: 1.6, 'line-color': t.pageEdge, 'target-arrow-shape': 'triangle', 'target-arrow-color': t.pageEdge, label: 'data(lbl)', 'font-size': 9.5, color: t.edgeText, 'text-background-color': t.bgLabel, 'text-background-opacity': 0.85, 'text-rotation': 'autorotate' } },
@@ -2294,6 +2409,12 @@ export function mountCanvas(host, model, opts = {}) {
       { selector: 'edge.fBack', style: { 'line-style': 'dashed', 'curve-style': 'unbundled-bezier', 'control-point-distances': [-70], 'control-point-weights': [0.5] } },
       { selector: 'edge.fErr', style: { 'line-style': 'dashed', 'curve-style': 'taxi', 'taxi-direction': 'downward', 'taxi-turn': -34, 'taxi-turn-min-distance': 10, 'line-color': t.issue, 'target-arrow-color': t.issue, color: t.issue } },
       { selector: 'edge.fJump', style: { 'line-style': 'dotted', 'curve-style': 'taxi', 'taxi-direction': 'downward', 'taxi-turn': -34, 'taxi-turn-min-distance': 10 } },
+      // Fork fan-out is a first-class flow edge (slightly heavier); the join
+      // collectors route orthogonally down their own (empty) lane corridor.
+      { selector: 'edge.fFork', style: { width: 2.2 } },
+      { selector: 'edge.fJoin', style: { width: 2.2, 'curve-style': 'taxi', 'taxi-direction': 'downward', 'taxi-turn': -34, 'taxi-turn-min-distance': 10 } },
+      // Detached: dashed OPEN arrow — fire-and-forget, no failure propagation.
+      { selector: 'edge.fDetach', style: { 'line-style': 'dashed', 'target-arrow-shape': 'vee' } },
     ];
 
     if (!flowCy) {
@@ -2318,6 +2439,7 @@ export function mountCanvas(host, model, opts = {}) {
       case 'switch': return '\u25C7 switch on ' + (s.on || s.text) + ' \u2014 ' + (s.cases || []).map(function (c) { return c.value + ' \u2192 ' + c.step; }).join(', ') + (s.defaultStep !== undefined ? ', default \u2192 ' + s.defaultStep : '');
       case 'loop': return '\u27F3 ' + (s.loopKind || 'forEach') + (s.over ? ' ' + s.over : '') + (s.cond ? ' while ' + s.cond : '') + (s.end !== undefined ? ' (body \u2192 ' + s.end + ')' : '');
       case 'try': return '\u26E8 try (body \u2192 ' + s.end + ')' + (s.catches || []).map(function (c) { return ' \u2014 on ' + c.error + ' \u2192 ' + c.step; }).join('') + (s.fin !== undefined ? ' \u2014 finally \u2192 ' + s.fin : '');
+      case 'parallel': return '\u2225 parallel \u2014 arms ' + (s.branches || []).map(function (b) { return (b.name ? b.name + ' ' : '') + '\u2192 ' + b.step; }).join(', ') + (s.end !== undefined ? ' (join after ' + s.end + ')' : '');
       case 'jump': return '\u21B7 \u2192 step ' + s.to + (s.text ? ' \u2014 ' + s.text : '');
       case 'return': return '\u23CE return' + (s.outcome ? ' \u2014 ' + s.outcome : '') + (s.text ? ' (' + s.text + ')' : '');
       case 'throw': return '\u26A1 throw' + (s.err ? ' ' + s.err : '') + (s.text ? ' \u2014 ' + s.text : '');
@@ -2348,7 +2470,8 @@ export function mountCanvas(host, model, opts = {}) {
       if (s.call) {
         var callable = openable(s.call.component, s.call.method);
         callHtml = ' \u2192 <span class="call' + (callable ? ' drillstep' : '') + '" data-dc="' + s.call.component + '" data-dm="' + s.call.method + '">'
-          + s.call.component + '.' + s.call.method + '()' + (callable ? ' \u21B4' : '') + '</span>';
+          + s.call.component + '.' + s.call.method + '()' + (callable ? ' \u21B4' : '') + '</span>'
+          + (s.detach ? ' <span style="opacity:.72">\u21E2 detached \u2014 fire &amp; forget</span>' : '');
       }
       return '<div class="fstep"><span class="num">' + s.n + '.</span> ' + escText(flowStepText(s)) + callHtml + '</div>';
     }).join('');
@@ -2425,8 +2548,16 @@ export function mountCanvas(host, model, opts = {}) {
     var comps = [], edges = [];
     comps.push({ id: 'start', name: flowTitle() + '()', subsystem: 'flow', componentType: 'Start', public: false, owns: [] });
     graph.steps.forEach(function (s) {
-      var name = flowStepLabel(s) + (s.call ? ' \u2192 ' + s.call.component + '.' + s.call.method + '()' : '');
+      var name = flowStepLabel(s) + (s.call && !s.detach ? ' \u2192 ' + s.call.component + '.' + s.call.method + '()' : '');
       comps.push({ id: 'n' + s.n, name: name, subsystem: 'flow', componentType: (s.kind === 'call' || s.kind === 'dispatch') ? 'Call' : 'Step', public: false, owns: [] });
+    });
+    // Virtual flow nodes (join bars, detached-call ghosts) export as plain
+    // steps so the editable diagrams keep the fan-out/join and detachment.
+    (graph.joins || []).forEach(function (j) {
+      comps.push({ id: 'n' + j.id, name: '\u2225 join \u2014 all ' + j.arms + ' arms', subsystem: 'flow', componentType: 'Step', public: false, owns: [] });
+    });
+    (graph.detached || []).forEach(function (d) {
+      comps.push({ id: 'n' + d.id, name: d.comp + '.' + d.method + '() \u2014 detached', subsystem: 'flow', componentType: 'Call', public: false, owns: [] });
     });
     if (graph.first !== null) edges.push({ from: 'start', to: 'n' + graph.first, cross: false });
     graph.edges.forEach(function (e) {

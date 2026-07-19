@@ -62,7 +62,8 @@ export type ProfileDef = z.infer<typeof ProfileDefSchema>;
 /**
  * A pack-defined target language/platform. `unsupportedFlow` maps a narrative
  * flow construct (branch | switch | forEach | for | while | doWhile | try |
- * throw | jump) to remodeling guidance — merged over the built-in table, so a
+ * throw | jump | parallel | detach) to remodeling guidance — merged over the
+ * built-in table, so a
  * pack can gate constructs for its platform (warning severity: "possible but
  * not clean" is guidance, not prohibition). `foreignBuiltins` are builtin-type
  * markers unambiguous to THIS language, enabling the foreign-builtin check

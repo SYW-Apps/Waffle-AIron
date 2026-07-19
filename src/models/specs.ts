@@ -133,8 +133,11 @@ export type PublicInterface = z.infer<typeof PublicInterfaceSchema>;
  * latency "fast lane" where a trusted sibling calls directly instead of going
  * over the message bus. Mutual subsystem dependencies are flagged unless one
  * side declares the link, turning the exception into reviewable spec instead
- * of tribal knowledge. The cross-subsystem shape (client Adapter → published
- * Portal) still applies; a trusted link never licenses reaching internals.
+ * of tribal knowledge. Declared on the SOURCE subsystem, the link licenses
+ * direct in-process edges into the peer WITHOUT the client-Adapter shim; the
+ * target must still be published (the peer's Portal in publicInterfaces) — a
+ * trusted link never licenses reaching internals, and a target-side
+ * declaration waives nothing for callers.
  */
 export const TrustedLinkSchema = z.object({
   /** The peer subsystem id this link sanctions tight coupling with. */
