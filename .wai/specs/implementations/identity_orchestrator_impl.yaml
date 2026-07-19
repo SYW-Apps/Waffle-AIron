@@ -747,10 +747,12 @@ methods:
         targetComponent: auth_specialist
         targetMethod: authenticateCredential
       - stepNumber: 2
-        description: Look up the token's owner user by request.ownerUserId to confirm existence and read status
+        description: >-
+          Resolve the token's owner user by request.ownerUserId — matching the record id or the
+          record's subject userId (record id wins) — to confirm existence and read status
         type: call
         targetComponent: user_repository
-        targetMethod: getById
+        targetMethod: findByRecordOrSubjectId
       - stepNumber: 3
         description: If no user matches request.ownerUserId, reject as not found
         type: branch
@@ -1081,4 +1083,4 @@ methods:
     symbol: tryAppendAudit
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-07-19T00:01:05.170Z'
+updatedAt: '2026-07-19T13:29:42.967Z'

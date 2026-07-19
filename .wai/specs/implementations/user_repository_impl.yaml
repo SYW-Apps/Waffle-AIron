@@ -53,7 +53,15 @@ methods:
         type: call
         targetComponent: user_registry
         targetMethod: remapUnitReferences
+  - name: findByRecordOrSubjectId
+    narrative:
+      - stepNumber: 1
+        description: Forward to the user index
+        type: call
+        targetComponent: user_index
+        targetMethod: findByRecordOrSubjectId
+    symbol: findUserByRecordOrSubjectId
 detail: calls-only
 status: complete
 createdAt: '2026-07-09T17:30:25.703Z'
-updatedAt: '2026-07-15T22:49:41.299Z'
+updatedAt: '2026-07-19T13:29:42.806Z'

@@ -198,6 +198,48 @@ the one narrative/code mismatch surfaced by `CALL_STEP_UNREALIZED`
 the visibility resolution instead) is corrected spec-side. Wairon's own tree
 now validates at **0 errors / 0 warnings**.
 
+### Post-merge verification round (fixes from four independent reviews)
+
+A four-reviewer audit of the merged tree (docs drift, integration seams, test
+coverage, security re-check), then a fix pass. Security: the 2026-07-10 B1
+(suspend revokes auth) and S2 (cross-tenant scope) findings are **re-verified
+FIXED** against the merged RBAC code; additionally, users whose record id
+diverges from their subject id (admin-created) now hit the live status gate
+and resolve their role bindings — the lookup resolves by either id, shared
+with mintToken (`findUserByRecordOrSubjectId`).
+
+Real bugs found by the new tests, all fixed: the invariant-backing rule
+credited assertions to the wrong same-named type across namespaces
+(first-match suffix resolution) and never anchored invariants in chained
+subprojects (`componentClass` wasn't namespace-resolved); a method-level
+delta containing `ext` clobbered the whole map instead of key-merging
+(component-level already merged — now uniform at all three levels);
+`sdd_add_component`/`sdd_define_interface`/`sdd_write_narrative` silently
+stripped `ext` at the tool boundary, and the latter two dropped spec-level
+`lint`/`ext` + method `ext` on re-authoring (now carried forward with a
+NOTICE); the OpenAPI codec exported `x-wairon-guarantees`/`x-wairon-effect`
+but never imported them, and method `ext` now round-trips as `x-wairon-ext`;
+agent owned-path inference ran even for implemented components, letting a
+type-named file be claimed across subsystems (`OVERLAPPING_OWNERSHIP` on
+wairon's own tree — inference is now a fallback only); the generated web
+canvas engine had drifted (no parallel/detach rendering in the SPA) — it is
+regenerated, the web build now regenerates it as a prebuild step, a drift
+test guards it, and the generator tolerates CRLF checkouts.
+
+Alignment: Registry → validation-Specialist edges are now legal (the
+standard's §7 validate→write path always named them); Portal/trustedLink/
+durability/lifecycle doctrine text in the AI guide + skills caught up with
+enforcement. CI environment fixes: git-backing tests pin their bare remotes
+to branch `main` (runners default to `master`).
+
+New coverage: MCP e2e deep-equal round-trips for every newer tool input
+(labels, parallel/detach, durability, emits, simPath, ext, invariants);
+hosted data-plane content round-trips against a real spawned server with a
+second warm project (isolation pinned); git-backed byte-identity; flow
+draw.io/Excalidraw parallel/detach exports (verified working); nested-parallel
+mermaid; N:1 identity-forwarding suppression; `GATEWAY_CONTAINMENT`/
+`SHARED_OWNED_MEMBER`/`INVALID_OWNED_MEMBER` first tests.
+
 ### Extension packs: pack-provided AI skills + versioned pattern references (new)
 
 Two generic extension-pack capabilities so profiles and wrapper products can

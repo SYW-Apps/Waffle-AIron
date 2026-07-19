@@ -216,11 +216,12 @@ methods:
         outcome: unauthenticated
       - stepNumber: 8
         description: >-
-          Look up the record's owner user to read its roleBindings (null when the credential
-          resolves to no user record); a DEACTIVATED owner user rejects as unauthenticated
+          Resolve the record's owner user by record id or subject userId (record id wins) to read
+          its roleBindings (null when neither matches a record); a DEACTIVATED owner user rejects as
+          unauthenticated
         type: call
         targetComponent: user_repository
-        targetMethod: getById
+        targetMethod: findByRecordOrSubjectId
       - stepNumber: 9
         description: Read the persisted instance identity for the instance-admin comparison
         type: call
@@ -272,11 +273,11 @@ methods:
         outcome: unauthenticated
       - stepNumber: 6
         description: >-
-          Look up the session subject's user to read its roleBindings (null for the built-in
-          super-admin); a DEACTIVATED session user rejects as unauthenticated
+          Resolve the session subject's user by record id or subject userId to read its roleBindings
+          (null for the built-in super-admin); a DEACTIVATED session user rejects as unauthenticated
         type: call
         targetComponent: user_repository
-        targetMethod: getById
+        targetMethod: findByRecordOrSubjectId
       - stepNumber: 7
         description: Read the persisted instance identity for the instance-admin comparison
         type: call
@@ -333,11 +334,11 @@ methods:
         outcome: unauthenticated
       - stepNumber: 6
         description: >-
-          Look up the session subject's user to read its roleBindings (null for the built-in
-          super-admin); a DEACTIVATED session user rejects as unauthenticated
+          Resolve the session subject's user by record id or subject userId to read its roleBindings
+          (null for the built-in super-admin); a DEACTIVATED session user rejects as unauthenticated
         type: call
         targetComponent: user_repository
-        targetMethod: getById
+        targetMethod: findByRecordOrSubjectId
       - stepNumber: 7
         description: >-
           Assemble the Principal from the session's subject, its projects narrowing, and resolved
@@ -402,11 +403,12 @@ methods:
         outcome: unauthenticated
       - stepNumber: 20
         description: >-
-          Look up the record's owner user to read its roleBindings (null when the credential
-          resolves to no user record); a DEACTIVATED owner user rejects as unauthenticated
+          Resolve the record's owner user by record id or subject userId (record id wins) to read
+          its roleBindings (null when neither matches a record); a DEACTIVATED owner user rejects as
+          unauthenticated
         type: call
         targetComponent: user_repository
-        targetMethod: getById
+        targetMethod: findByRecordOrSubjectId
       - stepNumber: 21
         description: >-
           Assemble the Principal with the record's ownerSubject, its projects narrowing, and
@@ -441,4 +443,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-04T12:54:26.477Z'
-updatedAt: '2026-07-16T00:26:08.872Z'
+updatedAt: '2026-07-19T13:29:42.886Z'
