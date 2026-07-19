@@ -13,8 +13,12 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'web/src/canvas');
 fs.mkdirSync(OUT, { recursive: true });
 
-const canvas = fs.readFileSync(path.join(ROOT, 'src/core/canvas.ts'), 'utf8').split('\n');
-const dexp = fs.readFileSync(path.join(ROOT, 'src/core/diagram-export.ts'), 'utf8').split('\n');
+// Normalize CRLF: the ^…$ section markers below require LF lines, and a fresh
+// Windows checkout (core.autocrlf) would otherwise crash the generator — which
+// now runs as the web build's prebuild step.
+const readLines = (p) => fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n').split('\n');
+const canvas = readLines(path.join(ROOT, 'src/core/canvas.ts'));
+const dexp = readLines(path.join(ROOT, 'src/core/diagram-export.ts'));
 
 // Locate the section boundaries by their stable markers (robust to line drift).
 const at = (re, from = 0) => {
