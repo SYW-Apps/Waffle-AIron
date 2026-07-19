@@ -74,6 +74,9 @@ function operationFor(method: MethodSignature, closureIds: Set<string>): Record<
   };
   if (method.guarantees?.length) op['x-wairon-guarantees'] = method.guarantees;
   if (method.effect) op['x-wairon-effect'] = method.effect;
+  // Opaque pack/tool extension data — emitted verbatim so the OpenAPI form
+  // round-trips everything the native YAML snapshot preserves.
+  if (method.ext && Object.keys(method.ext).length) op['x-wairon-ext'] = method.ext;
 
   if (params.length) {
     if (bodyVerbs.has(httpVerb)) {
@@ -221,6 +224,22 @@ export function fromOpenApi(document: string, projectName: string): SurfaceSnaps
       const responseSchema = ((okResponse?.content as Record<string, Record<string, unknown>>)?.['application/json']?.schema) as Record<string, unknown> | undefined;
       const returns = responseSchema ? typeRefFromSchema(responseSchema) : 'void';
 
+      // Read back the x-wairon-* keys toOpenApi emits, so an OpenAPI-format
+      // exchange preserves the same contract the native YAML snapshot does.
+      // All three are optional: documents from other producers simply lack
+      // them, and a malformed value is ignored rather than failing the import.
+      const rawGuarantees = op['x-wairon-guarantees'];
+      const guarantees = Array.isArray(rawGuarantees)
+        ? rawGuarantees.filter((g): g is string => typeof g === 'string' && g.length > 0)
+        : [];
+      const rawEffect = op['x-wairon-effect'];
+      const effect = rawEffect === 'read' || rawEffect === 'write' ? rawEffect : undefined;
+      // Opaque by doctrine — preserved verbatim, never validated beyond "is a map".
+      const rawExt = op['x-wairon-ext'];
+      const ext = rawExt && typeof rawExt === 'object' && !Array.isArray(rawExt)
+        ? (rawExt as Record<string, unknown>)
+        : undefined;
+
       methods.push({
         name,
         description: typeof op.summary === 'string' ? op.summary : (typeof op.description === 'string' ? op.description : name),
@@ -228,6 +247,9 @@ export function fromOpenApi(document: string, projectName: string): SurfaceSnaps
         returns,
         params,
         endpoint: { transport: 'HTTP', method: verb.toUpperCase() as 'GET', path: rawPath },
+        ...(guarantees.length ? { guarantees } : {}),
+        ...(effect ? { effect } : {}),
+        ...(ext ? { ext } : {}),
       });
     }
   }
