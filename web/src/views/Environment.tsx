@@ -39,9 +39,13 @@ function landscapeToCanvasModel(g: Graph): unknown {
   // string, which the landscape sets from the placement role ('owns'/'shared_with'
   // /'contains') and relation kind — not literal 'placement'/'relation'.
   const kindOf = new Map(g.nodes.map((n) => [n.id, n.kind]));
-  // A unit node id is 'unit:<qualified.dot.id>'; strip the prefix and map the
-  // dot-path onto the engine's '::' subsystem nesting.
-  const toColons = (unitNodeId: string) => unitNodeId.replace(/^unit:/, '').replace(/\./g, '::');
+  // A unit node id is 'unit:<qualified.dot.id>'; map the dot-path onto the
+  // engine's '::' subsystem nesting but KEEP the 'unit:' prefix as an id
+  // namespace — subsystem frames and project components share one cytoscape id
+  // space, so a unit and a project with the same name (the demo seed's 'demo'
+  // unit + 'demo' project) would otherwise collide and silently drop the
+  // project node from the root view, leaving an "empty" unit frame.
+  const toColons = (unitNodeId: string) => unitNodeId.replace(/\./g, '::');
   const realProjectId = (n: GNode) => n.projectId ?? n.id.replace(/^project:/, '');
 
   const units = g.nodes.filter((n) => n.kind === 'unit');
