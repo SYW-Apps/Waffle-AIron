@@ -22,7 +22,10 @@ You own and decide on everything within:
 .wai/specs/components/audit_store.yaml
 .wai/specs/components/authorization_specialist.yaml
 .wai/specs/components/auth_specialist.yaml
+.wai/specs/components/credential_index.yaml
 .wai/specs/components/credential_registry.yaml
+.wai/specs/components/credential_store.yaml
+.wai/specs/components/credential_write_registry.yaml
 .wai/specs/components/diagnostics_specialist.yaml
 .wai/specs/components/git_backing_adapter.yaml
 .wai/specs/components/git_backing_index.yaml
@@ -68,6 +71,7 @@ You own and decide on everything within:
 .wai/specs/components/policy_registry.yaml
 .wai/specs/components/policy_repository.yaml
 .wai/specs/components/policy_store.yaml
+.wai/specs/components/project_index.yaml
 .wai/specs/components/project_lifecycle_orchestrator.yaml
 .wai/specs/components/project_ops_orchestrator.yaml
 .wai/specs/components/project_policy_orchestrator.yaml
@@ -77,6 +81,8 @@ You own and decide on everything within:
 .wai/specs/components/project_relation_registry.yaml
 .wai/specs/components/project_relation_repository.yaml
 .wai/specs/components/project_relation_store.yaml
+.wai/specs/components/project_store.yaml
+.wai/specs/components/project_write_registry.yaml
 .wai/specs/components/public_surface_index.yaml
 .wai/specs/components/public_surface_registry.yaml
 .wai/specs/components/public_surface_repository.yaml
@@ -86,7 +92,10 @@ You own and decide on everything within:
 .wai/specs/components/role_registry.yaml
 .wai/specs/components/role_repository.yaml
 .wai/specs/components/role_store.yaml
+.wai/specs/components/secret_index.yaml
 .wai/specs/components/secret_registry.yaml
+.wai/specs/components/secret_store.yaml
+.wai/specs/components/secret_write_registry.yaml
 .wai/specs/components/share_access_index.yaml
 .wai/specs/components/share_access_orchestrator.yaml
 .wai/specs/components/share_access_registry.yaml
@@ -139,9 +148,9 @@ src/server/permissionadmin.ts
 src/server/permissions.ts
 src/server/permission_resolver.ts
 src/server/policy.ts
+src/server/projects.ts
 src/server/projectlifecycle.ts
 src/server/projectops.ts
-src/server/projects.ts
 src/server/relations.ts
 src/server/surfaces.ts
 src/server/roles.ts

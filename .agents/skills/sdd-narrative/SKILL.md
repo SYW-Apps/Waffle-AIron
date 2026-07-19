@@ -35,9 +35,12 @@ You must read, respect, and update `.wai/phased_design.md` (specifically Stage 5
      - `switch`: `on` + `cases: [{value, step}]` + optional `defaultStep`.
      - `loop`: header step; body = next step through `endStep`. `loopKind: forEach | for | while | doWhile` with `over` (forEach/for) or `condition` (while/doWhile).
      - `try`: guarded region (body = next through `endStep`) with `catches: [{error, step}]` and optional `finallyStep`.
+     - `parallel`: concurrent fan-out/join — body = next through `endStep`, `branches: [{step}]` (≥2, ascending, first = the step right after the header) name the arm entries; arms are contiguous sub-regions and flow continues after `endStep` once ALL arms complete. Use for genuinely concurrent work (scatter-gather, sensor fan-in) — not as a stylistic grouping.
      - `jump`: unconditional goto (`toStep`) — how a loop breaks/continues and how a catch block rejoins the main flow (put one at the end of a try body to skip the handlers).
+     - A `call`/`dispatch` step may set `detach: true` — fire-and-forget: the call is issued and the narrative continues without awaiting the result. Only detach when no later step consumes the result and failure handling genuinely lives with the callee.
      - `return`: terminator (optional `outcome`); `throw`: error terminator (optional `error`).
    - `stepNumber` may be omitted in `sdd_write_narrative` — it defaults to the 1-based array position; jump fields reference those numbers. `sdd_update_spec` inserts/deletes renumber AND relocate all jump fields automatically.
+   - **Prefer symbolic labels over hand-counted step numbers.** Give a target step a `label` (e.g. `label: retry`) and reference it with the jump field's `*Label` twin — `toLabel`, `onTrueLabel`, `onFalseLabel`, `defaultLabel`, `endLabel`, `finallyLabel`, and `label` inside `cases`/`catches`/`branches` entries. Labels resolve to step numbers at write time (the stored spec keeps plain numbers); an unknown label REJECTS the write instead of silently mis-jumping, and an `sdd_update_spec` delta may reference labels anchored on pre-existing steps.
    - Error paths belong in the SAME narrative (the flowchart renderer visually separates them and can hide them) — never write separate happy/unhappy narratives.
 4. **Verify Contracts & Boundaries (MCP)**:
    - For every `call` step, query the MCP server to verify that the target component is declared in the calling component's dependencies and that the target method exists on its L3 interfaces.
