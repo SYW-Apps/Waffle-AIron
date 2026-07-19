@@ -155,7 +155,7 @@ export function seedDemoTree(): void {
     description: string,
     extra: Partial<ComponentSpec> = {},
   ): void =>
-    saveComponentSpec({
+    void saveComponentSpec({
       id,
       name,
       description,
@@ -226,7 +226,7 @@ export function seedDemoTree(): void {
 
   // ── L3: Interfaces ───────────────────────────────────────────────────────────
   const iface = (id: string, name: string, component: string, methods: MethodInput[]): void =>
-    saveInterfaceSpec({
+    void saveInterfaceSpec({
       id,
       name,
       description: `${name} contract`,
@@ -329,7 +329,7 @@ export function seedDemoTree(): void {
     methods: MethodImplementation[],
     detail?: ImplementationSpec['detail'],
   ): void =>
-    saveImplementationSpec({
+    void saveImplementationSpec({
       id,
       name: id,
       description: `Implementation of ${contract}`,
@@ -477,7 +477,7 @@ export function seedDemoTree(): void {
 
   // ── Types (entities + value objects) — ERD tables + FK reference edges ────────
   const type = (t: Omit<TypeSpec, 'createdAt' | 'updatedAt' | 'methods' | 'fields'> & Partial<Pick<TypeSpec, 'methods' | 'fields'>>): void =>
-    saveTypeSpec({ methods: [], fields: [], ...base, ...t } as TypeSpec);
+    void saveTypeSpec({ methods: [], fields: [], ...base, ...t } as TypeSpec);
 
   // Shared, system-level value object (no owning subsystem).
   type({
