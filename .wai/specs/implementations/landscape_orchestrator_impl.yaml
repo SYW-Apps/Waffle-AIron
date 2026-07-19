@@ -469,10 +469,10 @@ methods:
         targetComponent: auth_specialist
         targetMethod: authenticateCredential
       - stepNumber: 2
-        description: Gather all organization units (to distinguish an update from a create)
+        description: Look up the target unit by id (to distinguish an update from a create)
         type: call
         targetComponent: organization_repository
-        targetMethod: listUnits
+        targetMethod: getUnit
       - stepNumber: 3
         description: >-
           Resolve the caller's project:admin permission over the target unit (its own id when
@@ -546,4 +546,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-09T22:10:36.787Z'
-updatedAt: '2026-07-15T23:27:05.266Z'
+updatedAt: '2026-07-18T23:48:26.026Z'

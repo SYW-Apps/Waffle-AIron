@@ -21,6 +21,7 @@ methods:
         type: call
         targetComponent: organization_index
         targetMethod: listUnits
+    symbol: listOrganizationUnits
   - name: listPlacements
     narrative:
       - stepNumber: 1
@@ -28,6 +29,7 @@ methods:
         type: call
         targetComponent: organization_index
         targetMethod: listPlacements
+    symbol: listProjectPlacements
   - name: getUnit
     narrative:
       - stepNumber: 1
@@ -35,6 +37,7 @@ methods:
         type: call
         targetComponent: organization_index
         targetMethod: getUnit
+    symbol: getOrganizationUnit
   - name: createUnit
     narrative:
       - stepNumber: 1
@@ -73,4 +76,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-09T22:07:54.774Z'
-updatedAt: '2026-07-15T19:49:32.208Z'
+updatedAt: '2026-07-18T23:33:10.654Z'

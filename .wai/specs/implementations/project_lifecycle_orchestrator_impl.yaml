@@ -322,28 +322,29 @@ methods:
         targetComponent: auth_specialist
         targetMethod: authenticateCredential
       - stepNumber: 2
+        description: >-
+          Resolve the caller's approval:decide visibility view and derive the actionable (decidable)
+          project set — skipped for an instance-admin, who may decide every request
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: visibleScopes
+      - stepNumber: 3
+        description: Reject (Forbidden) a non-admin caller whose decidable project set is empty
+        type: local
+      - stepNumber: 4
         description: Lazily expire overdue pending requests before listing (pass the current timestamp)
         type: call
         targetComponent: approval_repository
         targetMethod: expirePending
-      - stepNumber: 3
+      - stepNumber: 5
         description: List the pending approval requests, optionally narrowed to one project
         type: call
         targetComponent: approval_repository
         targetMethod: list
-      - stepNumber: 4
-        description: Filter to the requests the caller may decide
-        type: loop
-        loopKind: forEach
-        over: the pending requests
-        endStep: 6
-      - stepNumber: 5
-        description: Resolve the caller's approval:decide permission over this request's project
-        type: call
-        targetComponent: authorization_specialist
-        targetMethod: authorize
       - stepNumber: 6
-        description: Include the request when the resolved value is yes (an instance-admin includes all)
+        description: >-
+          Filter to the requests whose project is in the caller's decidable set (an instance-admin
+          keeps all; a request with no project id is instance-admin-only — fail closed)
         type: local
       - stepNumber: 7
         description: Return the pending approval requests the caller may decide
@@ -657,4 +658,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-16T00:10:14.534Z'
-updatedAt: '2026-07-16T07:27:54.918Z'
+updatedAt: '2026-07-18T23:40:10.796Z'

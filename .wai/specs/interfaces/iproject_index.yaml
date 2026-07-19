@@ -1,0 +1,21 @@
+id: iproject_index
+name: Project Index Interface
+description: >-
+  Read-face contract of the project repository: listings and the authorization-narrowed root
+  resolution.
+component: project_index
+methods:
+  - name: resolveRoot
+    description: >-
+      Resolve the isolated root path of the authorized project, honoring the optional selector only
+      within the principal's authorized set; reject cross-project access (null — no existence leak).
+      Only an active project resolves.
+    signature: 'resolveRoot(principal: Principal, selector: string): string'
+    returns: string
+  - name: list
+    description: Return all hosted-project records registered under the data root.
+    signature: 'list(): HostedProjectRecord[]'
+    returns: HostedProjectRecord[]
+status: complete
+createdAt: '2026-07-19T09:00:02.404Z'
+updatedAt: '2026-07-19T09:00:50.330Z'

@@ -11,6 +11,7 @@ methods:
         type: call
         targetComponent: share_link_registry
         targetMethod: create
+    symbol: createLink
   - name: update
     narrative:
       - stepNumber: 1
@@ -18,6 +19,7 @@ methods:
         type: call
         targetComponent: share_link_registry
         targetMethod: update
+    symbol: updateLink
   - name: remove
     narrative:
       - stepNumber: 1
@@ -25,6 +27,7 @@ methods:
         type: call
         targetComponent: share_link_registry
         targetMethod: remove
+    symbol: removeLink
   - name: byTokenHash
     narrative:
       - stepNumber: 1
@@ -32,6 +35,7 @@ methods:
         type: call
         targetComponent: share_link_index
         targetMethod: byTokenHash
+    symbol: linkByTokenHash
   - name: getById
     narrative:
       - stepNumber: 1
@@ -39,6 +43,7 @@ methods:
         type: call
         targetComponent: share_link_index
         targetMethod: getById
+    symbol: getLink
   - name: listByProject
     narrative:
       - stepNumber: 1
@@ -46,7 +51,8 @@ methods:
         type: call
         targetComponent: share_link_index
         targetMethod: listByProject
+    symbol: listProjectLinks
 detail: calls-only
 status: complete
 createdAt: '2026-07-18T09:26:48.951Z'
-updatedAt: '2026-07-18T10:10:40.688Z'
+updatedAt: '2026-07-18T23:33:24.075Z'

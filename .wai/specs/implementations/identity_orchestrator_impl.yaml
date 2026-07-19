@@ -295,7 +295,59 @@ methods:
         type: return
         outcome: plaintext token returned once
   - name: mintSelfToken
-    narrative: []
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          Resolve the caller's project:read over the EXACT requested project through the resolver
+          (self-scoped: a unit assignment covers its own subtree, never another tenant's)
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: The caller must already hold read authority over the project
+        type: branch
+        condition: the resolved project:read value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: 'Refuse: caller lacks project:read on the requested project'
+        type: throw
+        error: Forbidden — no project:read
+      - stepNumber: 5
+        description: A write-narrowed token additionally requires project:write
+        type: branch
+        condition: write narrowing is requested and the resolved project:write value is not yes
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: 'Refuse: caller lacks project:write on the requested project'
+        type: throw
+        error: Forbidden — no project:write
+      - stepNumber: 7
+        description: >-
+          Mint a fresh random token and build the caller-owned record NARROWED to exactly the one
+          project — the record stores NO permissions: the data-plane gate resolves the owner's LIVE
+          permission per request, so revoking the owner cuts the token off
+        type: local
+      - stepNumber: 8
+        description: Persist the credential record (hashed token only — the plaintext is never stored)
+        type: call
+        targetComponent: credential_registry
+        targetMethod: create
+      - stepNumber: 9
+        description: Append the redacted token.mint.self (security) audit event best-effort
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: appendAuditBestEffort
+      - stepNumber: 10
+        description: Return the plaintext token — shown exactly once
+        type: return
+        outcome: the plaintext token
     detail: intent
     intent: >-
       Authenticate the caller (ws_ session or token) to the calling principal via the auth
@@ -309,7 +361,23 @@ methods:
       once. Because the token is owned by the caller, a later deactivation of that user revokes it
       via revokeAllForOwner.
   - name: listSelfTokens
-    narrative: []
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          Return the caller's OWN minted credential records through the credential registry,
+          redacted — hashed token only, with id/project/label/createdAt/revokedAt
+        type: call
+        targetComponent: credential_registry
+        targetMethod: listByOwner
+      - stepNumber: 3
+        description: Return the redacted records — a read, not audited
+        type: return
+        outcome: the caller's own redacted credential records
     detail: intent
     intent: >-
       Authenticate the caller credential to the calling principal, list the principal's own
@@ -318,7 +386,43 @@ methods:
       id, authorized project, label, createdAt and revokedAt, so the client can show a user their
       agent tokens and offer revoke. A read; not audited.
   - name: revokeSelfToken
-    narrative: []
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: List the caller's OWN tokens through the credential registry
+        type: call
+        targetComponent: credential_registry
+        targetMethod: listByOwner
+      - stepNumber: 3
+        description: Only a token the caller owns may be revoked
+        type: branch
+        condition: tokenId is not among the caller's own tokens
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Refuse as not found — no cross-user revocation, no key:manage escalation, no existence
+          leak
+        type: throw
+        error: token not found
+      - stepNumber: 5
+        description: Revoke the token through the credential registry
+        type: call
+        targetComponent: credential_registry
+        targetMethod: revoke
+      - stepNumber: 6
+        description: Append the redacted token.revoke.self (security) audit event best-effort
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: appendAuditBestEffort
+      - stepNumber: 7
+        description: Return — the token is revoked
+        type: return
+        outcome: void
     detail: intent
     intent: >-
       Authenticate the caller credential to the calling principal, fetch the principal's own tokens
@@ -925,6 +1029,56 @@ methods:
         type: return
         outcome: identity provider removed
     detail: full
+  - name: resolveEnabledProvider
+    narrative:
+      - stepNumber: 1
+        description: Resolve the configured identity providers through the policy repository
+        type: call
+        targetComponent: policy_repository
+        targetMethod: listIdentityProviders
+      - stepNumber: 2
+        description: Select the provider configuration whose id is providerId
+        type: local
+      - stepNumber: 3
+        description: If the provider is unknown or not enabled, reject
+        type: branch
+        condition: the provider is unknown or not enabled
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject with the identical unknown-or-disabled error (no existence leak)
+        type: throw
+        error: unknown or disabled identity provider
+      - stepNumber: 5
+        description: Return the enabled provider configuration
+        type: return
+        outcome: the enabled provider configuration
+  - name: appendAuditBestEffort
+    narrative:
+      - stepNumber: 1
+        description: Attempt the append — a failure must never escape into the caller's primary action
+        type: try
+        endStep: 2
+        catches:
+          - error: audit append failure
+            step: 4
+      - stepNumber: 2
+        description: Append the redacted audit event under the active retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 3
+        description: On a successful append, skip the failure handler
+        type: jump
+        toStep: 5
+      - stepNumber: 4
+        description: Record the append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 5
+        description: Return — the append was attempted best-effort
+        type: return
+        outcome: void
+    symbol: tryAppendAudit
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-07-16T15:06:43.067Z'
+updatedAt: '2026-07-19T00:01:05.170Z'

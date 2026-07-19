@@ -11,6 +11,7 @@ methods:
         type: call
         targetComponent: share_access_registry
         targetMethod: append
+    symbol: appendAccess
   - name: listByLink
     narrative:
       - stepNumber: 1
@@ -18,7 +19,8 @@ methods:
         type: call
         targetComponent: share_access_index
         targetMethod: listByLink
+    symbol: listLinkAccess
 detail: calls-only
 status: complete
 createdAt: '2026-07-18T09:26:56.326Z'
-updatedAt: '2026-07-18T10:10:40.349Z'
+updatedAt: '2026-07-18T23:33:29.582Z'

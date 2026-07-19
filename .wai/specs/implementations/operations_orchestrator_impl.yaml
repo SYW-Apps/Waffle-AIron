@@ -42,11 +42,11 @@ methods:
         type: local
       - stepNumber: 7
         description: >-
-          List the server-global packs across both tiers (image and instance), tier-tagged and
-          shadow-marked
+          Count the server-global packs via the pre-authorized store-layer read (the caller was
+          already authorized upstream)
         type: call
         targetComponent: pack_registry
-        targetMethod: listGlobalPacks
+        targetMethod: storeListGlobalPacks
       - stepNumber: 8
         description: >-
           Derive the image-tier and instance-tier pack name listings from the tier-tagged global
@@ -291,4 +291,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T11:27:00.178Z'
-updatedAt: '2026-07-16T15:29:27.790Z'
+updatedAt: '2026-07-19T08:57:51.787Z'

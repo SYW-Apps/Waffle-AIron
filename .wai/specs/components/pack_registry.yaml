@@ -17,10 +17,18 @@ description: >-
   `wairon packs add`). Listing probes each pack for its name, tier, and profile/language/rule
   counts, or its load error. Modeled as a single file-backed Registry.
 subsystem: sdd_host
-componentType: Registry
+componentType: Store
 owns: []
 dependsOn:
   - host_core_adapter
+lint:
+  allow:
+    - code: UNOWNED_STORE
+      reason: >-
+        Option F registry-taxonomy ruling (2026-07-19): deliberate standalone Store — pack storage
+        is genuinely simple held state (vendored declarative pack files under the data root),
+        consumers are workflow-layer Orchestrators. durability: read-through to be declared once the
+        level3 branch merges (the enum value does not exist in this branch's schema).
 status: complete
 createdAt: '2026-07-04T18:42:27.572Z'
-updatedAt: '2026-07-15T06:53:05.206Z'
+updatedAt: '2026-07-19T08:57:25.985Z'

@@ -18,6 +18,7 @@ methods:
       previous record intact and surfaces as a storage error. Authorization is enforced by the
       orchestrator, not here; the registry owns only server-side stamping and durable replacement of
       the one active record.
+    symbol: setPackPolicyRecord
   - name: upsertIdentityProvider
     narrative: []
     intent: >-
@@ -50,4 +51,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-07-09T20:47:44.803Z'
-updatedAt: '2026-07-16T17:42:39.432Z'
+updatedAt: '2026-07-18T23:45:29.205Z'

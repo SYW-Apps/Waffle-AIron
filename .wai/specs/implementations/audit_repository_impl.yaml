@@ -15,6 +15,7 @@ methods:
         type: call
         targetComponent: audit_registry
         targetMethod: append
+    symbol: appendAuditEvent
   - name: query
     narrative:
       - stepNumber: 1
@@ -22,6 +23,7 @@ methods:
         type: call
         targetComponent: audit_index
         targetMethod: query
+    symbol: queryAuditEvents
   - name: count
     narrative:
       - stepNumber: 1
@@ -29,6 +31,7 @@ methods:
         type: call
         targetComponent: audit_index
         targetMethod: count
+    symbol: countAuditEvents
   - name: prune
     narrative:
       - stepNumber: 1
@@ -36,7 +39,8 @@ methods:
         type: call
         targetComponent: audit_registry
         targetMethod: prune
+    symbol: pruneAuditEvents
 detail: calls-only
 status: complete
 createdAt: '2026-07-09T17:31:09.662Z'
-updatedAt: '2026-07-09T17:43:53.402Z'
+updatedAt: '2026-07-18T23:33:09.207Z'

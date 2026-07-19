@@ -89,11 +89,11 @@ methods:
         endStep: 14
       - stepNumber: 14
         description: >-
-          Vendor and register the declarative pack into the bound project (the registry rejects code
-          packs)
+          Vendor and register each required/default declarative pack into the new project via the
+          pre-authorized entry (skipping names the server-global set cannot resolve)
         type: call
         targetComponent: pack_registry
-        targetMethod: installProjectPack
+        targetMethod: executeApprovedInstallProjectPack
       - stepNumber: 15
         description: >-
           Record the resolved ProjectProfileSelection (the request's selected profile ids plus the
@@ -181,11 +181,11 @@ methods:
         endStep: 10
       - stepNumber: 10
         description: >-
-          Vendor and register the declarative pack into the bound project (the registry rejects code
-          packs)
+          Vendor and register each required/default declarative pack into the new project via the
+          pre-authorized entry (skipping names the server-global set cannot resolve)
         type: call
         targetComponent: pack_registry
-        targetMethod: installProjectPack
+        targetMethod: executeApprovedInstallProjectPack
       - stepNumber: 11
         description: >-
           Record the resolved ProjectProfileSelection (the request's selected profile ids plus the
@@ -283,10 +283,12 @@ methods:
           the effective policy
         type: local
       - stepNumber: 8
-        description: Probe the bound project's active declarative packs
+        description: >-
+          List the project's installed packs via the pre-authorized entry (the caller's mcp:write
+          was already resolved)
         type: call
         targetComponent: pack_registry
-        targetMethod: listProjectPacks
+        targetMethod: executeApprovedListProjectPacks
       - stepNumber: 9
         description: >-
           Evaluate the project's active packs and recorded profile selection against the effective
@@ -338,10 +340,12 @@ methods:
           the effective policy
         type: local
       - stepNumber: 8
-        description: Probe the bound project's active declarative packs
+        description: >-
+          List the project's installed packs via the pre-authorized entry (the caller's mcp:write
+          was already resolved)
         type: call
         targetComponent: pack_registry
-        targetMethod: listProjectPacks
+        targetMethod: executeApprovedListProjectPacks
       - stepNumber: 9
         description: >-
           Evaluate the project against the effective policy, computing the missing required/default
@@ -369,11 +373,11 @@ methods:
         endStep: 13
       - stepNumber: 13
         description: >-
-          Vendor and register the missing declarative pack into the bound project (the registry
-          rejects code packs)
+          Vendor and register each missing required/default declarative pack via the pre-authorized
+          entry
         type: call
         targetComponent: pack_registry
-        targetMethod: installProjectPack
+        targetMethod: executeApprovedInstallProjectPack
       - stepNumber: 14
         description: >-
           Build the PolicyEvaluationResult reflecting the post-reconciliation compliance state,
@@ -495,4 +499,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-09T20:50:11.443Z'
-updatedAt: '2026-07-16T15:20:37.532Z'
+updatedAt: '2026-07-19T08:57:56.420Z'

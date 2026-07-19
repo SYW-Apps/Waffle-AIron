@@ -1,0 +1,19 @@
+id: project_write_registry_impl
+name: Project Write Registry Implementation
+description: 'Write path over the project store''s backing file: root allocation and record create/remove.'
+contract: iproject_write_registry
+sourcePath: src/server/projects.ts
+methods:
+  - name: create
+    narrative: []
+    intent: >-
+      Validates the id shape (path-traversal safe), refuses an existing id, creates
+      <dataDir>/projects/<id>, and persists an active HostedProjectRecord.
+    symbol: createProjectRecord
+  - name: remove
+    narrative: []
+    intent: Deletes the record and recursively removes the isolated project tree; a missing id is a no-op.
+    symbol: removeProjectRecord
+status: complete
+createdAt: '2026-07-19T09:00:09.975Z'
+updatedAt: '2026-07-19T09:01:00.672Z'

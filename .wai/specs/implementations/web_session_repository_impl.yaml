@@ -13,6 +13,7 @@ methods:
         type: call
         targetComponent: web_session_registry
         targetMethod: create
+    symbol: createWebSession
   - name: touch
     narrative:
       - stepNumber: 1
@@ -20,6 +21,7 @@ methods:
         type: call
         targetComponent: web_session_registry
         targetMethod: touch
+    symbol: touchWebSession
   - name: remove
     narrative:
       - stepNumber: 1
@@ -27,6 +29,7 @@ methods:
         type: call
         targetComponent: web_session_registry
         targetMethod: remove
+    symbol: removeWebSession
   - name: pruneExpired
     narrative:
       - stepNumber: 1
@@ -34,6 +37,7 @@ methods:
         type: call
         targetComponent: web_session_registry
         targetMethod: pruneExpired
+    symbol: pruneExpiredWebSessions
   - name: getById
     narrative:
       - stepNumber: 1
@@ -41,6 +45,7 @@ methods:
         type: call
         targetComponent: web_session_index
         targetMethod: getById
+    symbol: getWebSessionById
   - name: listBySubject
     narrative:
       - stepNumber: 1
@@ -48,6 +53,7 @@ methods:
         type: call
         targetComponent: web_session_index
         targetMethod: listBySubject
+    symbol: listWebSessionsBySubject
   - name: removeAllForSubject
     narrative:
       - stepNumber: 1
@@ -55,7 +61,8 @@ methods:
         type: call
         targetComponent: web_session_registry
         targetMethod: removeAllForSubject
+    symbol: removeAllWebSessionsForSubject
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:35:06.198Z'
-updatedAt: '2026-07-11T13:17:37.884Z'
+updatedAt: '2026-07-18T23:33:32.698Z'

@@ -13,6 +13,7 @@ methods:
         type: call
         targetComponent: instance_identity_registry
         targetMethod: seed
+    symbol: ensureInstanceIdentity
   - name: get
     narrative:
       - stepNumber: 1
@@ -20,7 +21,8 @@ methods:
         type: call
         targetComponent: instance_identity_index
         targetMethod: get
+    symbol: getInstanceIdentity
 detail: calls-only
 status: complete
 createdAt: '2026-07-16T00:24:47.202Z'
-updatedAt: '2026-07-16T07:27:54.758Z'
+updatedAt: '2026-07-18T23:33:30.993Z'

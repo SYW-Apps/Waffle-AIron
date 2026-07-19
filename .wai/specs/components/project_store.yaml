@@ -1,0 +1,12 @@
+id: project_store
+name: Project Record Store
+description: >-
+  Persisted hosted-project records (id, status, isolated rootPath) in the data-dir project registry
+  file. Read-through: every access loads the backing file fresh.
+subsystem: sdd_host
+componentType: Store
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-07-19T08:59:49.280Z'
+updatedAt: '2026-07-19T09:00:39.345Z'

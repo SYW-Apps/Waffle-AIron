@@ -14,21 +14,12 @@ import {
   revokeAllForOwner,
   listByOwner,
 } from './credentials.js';
-import {
-  getUserById,
-  listUsers as repoListUsers,
-  upsertUser as repoUpsertUser,
-  setUserStatus as repoSetUserStatus,
-  findUserByExternalSubject as repoFindUserByExternalSubject,
-} from './users.js';
+// Namespace imports: identity's own orchestrator methods shadow the repository
+// function names (upsertUser, queryAuditEvents, …), and property access keeps
+// the repository call sites visible under their real exported names.
+import * as userRepo from './users.js';
 import { listAssignments } from './permissions.js';
-import {
-  appendAuditEvent,
-  queryAuditEvents as repoQueryAuditEvents,
-  pruneAuditEvents as repoPruneAuditEvents,
-  countAuditEvents as repoCountAuditEvents,
-  DEFAULT_AUDIT_POLICY,
-} from './audit.js';
+import * as auditRepo from './audit.js';
 import { listProjectRecords } from './projects.js';
 import { removeAllWebSessionsForSubject } from './websessions.js';
 import {
@@ -165,7 +156,7 @@ function auditReadView(cfg: HostConfig, principal: Principal): { all: boolean; p
 /** Resolve the active audit retention policy. Host-config plumbing
  *  (HostConfig.auditPolicy) is a later phase; until then the secure default. */
 function resolveAuditPolicy(_cfg: HostConfig): AuditRetentionPolicy {
-  return DEFAULT_AUDIT_POLICY;
+  return auditRepo.DEFAULT_AUDIT_POLICY;
 }
 
 /** The audit actor for an action: the caller's resolved subject, or — when a
@@ -234,7 +225,7 @@ export function buildSsoAuditEvent(
  *  Exported so the web plane (web.ts) reuses the same best-effort append path. */
 export function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
   try {
-    appendAuditEvent(cfg.dataDir, event, resolveAuditPolicy(cfg));
+    auditRepo.appendAuditEvent(cfg.dataDir, event, resolveAuditPolicy(cfg));
   } catch (err) {
     // Server diagnostic (audit appends are best-effort by invariant).
     console.error(
@@ -260,7 +251,7 @@ function scopedAuditEvents(
   view: { all: boolean; projectIds: string[] },
   query: AuditQuery,
 ): AuditEvent[] {
-  if (view.all) return repoQueryAuditEvents(cfg.dataDir, query);
+  if (view.all) return auditRepo.queryAuditEvents(cfg.dataDir, query);
 
   const inScope = new Set(view.projectIds);
   const targets =
@@ -275,7 +266,7 @@ function scopedAuditEvents(
   const { limit, ...rest } = query;
   const merged: AuditEvent[] = [];
   for (const projectId of targets) {
-    merged.push(...repoQueryAuditEvents(cfg.dataDir, { ...rest, projectId }));
+    merged.push(...auditRepo.queryAuditEvents(cfg.dataDir, { ...rest, projectId }));
   }
   merged.sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
   return limit !== undefined && limit >= 0 ? merged.slice(0, limit) : merged;
@@ -330,8 +321,8 @@ export function mintToken(cfg: HostConfig, credential: string | null, request: T
   // revocation sweep — or the guard is dodgeable with the other id. A
   // request.ownerUserId with no user record (a service principal) is allowed.
   const owner =
-    getUserById(cfg.dataDir, request.ownerUserId) ??
-    repoListUsers(cfg.dataDir).find((u) => u.subject?.userId === request.ownerUserId) ??
+    userRepo.getUserById(cfg.dataDir, request.ownerUserId) ??
+    userRepo.listUsers(cfg.dataDir).find((u) => u.subject?.userId === request.ownerUserId) ??
     null;
   if (owner && owner.status !== 'active') {
     throw new ForbiddenError('cannot mint a token for a deactivated user');
@@ -511,13 +502,13 @@ export function listUsers(
   // An instance-level admin (bypass OR delegated) sees every user, including
   // no-home-unit users a unit filter could never surface.
   if (hasInstanceProjectAdmin(cfg, principal)) {
-    return narrowToProject(repoListUsers(cfg.dataDir));
+    return narrowToProject(userRepo.listUsers(cfg.dataDir));
   }
   const units = new Set(actionableUnitIds(visibleScopes(cfg.dataDir, principal, PROJECT_ADMIN_CAPABILITY)));
   if (units.size === 0) {
     throw new ForbiddenError('user administration requires project:admin over at least one unit');
   }
-  const users = narrowToProject(repoListUsers(cfg.dataDir));
+  const users = narrowToProject(userRepo.listUsers(cfg.dataDir));
   return users.filter((u) => u.unitId !== undefined && units.has(u.unitId));
 }
 
@@ -551,7 +542,7 @@ export function pruneAuditEvents(cfg: HostConfig, credential: string | null): nu
   requireInstanceProjectAdmin(cfg, principal, 'audit administration');
 
   const policy = resolveAuditPolicy(cfg);
-  const removed = repoPruneAuditEvents(cfg.dataDir, policy, new Date().toISOString());
+  const removed = auditRepo.pruneAuditEvents(cfg.dataDir, policy, new Date().toISOString());
 
   tryAppendAudit(cfg, buildAuditEvent(principal, 'audit.prune', 'info', 'audit', { target: 'audit' }));
 
@@ -578,7 +569,7 @@ export function upsertUser(
 
   // Distinguish creation from update, and read the existing home unit, by probing
   // for an existing record first.
-  const existing = getUserById(cfg.dataDir, record.id);
+  const existing = userRepo.getUserById(cfg.dataDir, record.id);
   const existed = existing !== null;
 
   // The caller must cover the incoming record's home unit — and, on an update
@@ -595,7 +586,7 @@ export function upsertUser(
 
   const action = existed ? 'user.update' : 'user.create';
 
-  const stored = repoUpsertUser(cfg.dataDir, record);
+  const stored = userRepo.upsertUser(cfg.dataDir, record);
 
   tryAppendAudit(cfg, buildAuditEvent(principal, action, 'info', 'admin', { target: record.id }));
 
@@ -621,13 +612,13 @@ export function setUserStatus(
   // Look up the target to read its home unit (and separate not-found from a
   // permission denial). The caller must cover the target's home unit; a user
   // with no home unit resolves at the instance root (instance-level admins only).
-  const existing = getUserById(cfg.dataDir, userId);
+  const existing = userRepo.getUserById(cfg.dataDir, userId);
   if (existing === null) {
     throw new Error(`Hosted user "${userId}" not found.`);
   }
   requireAdminOverHomeUnit(cfg, principal, existing.unitId);
 
-  const updated = repoSetUserStatus(cfg.dataDir, userId, status);
+  const updated = userRepo.setUserStatus(cfg.dataDir, userId, status);
 
   // Deactivation (any non-'active' status) cuts off the user's existing access:
   // revoke every one of their non-revoked credentials at the credential layer so
@@ -743,7 +734,7 @@ export async function completeSsoLogin(cfg: HostConfig, state: string, code: str
   const inAdminGroup = isInAdminGroup(provider, groups);
 
   // Look up the hosted user by issuer + external subject; provision on first login.
-  let user = repoFindUserByExternalSubject(cfg.dataDir, subject.issuer, subject.externalSubject ?? '');
+  let user = userRepo.findUserByExternalSubject(cfg.dataDir, subject.issuer, subject.externalSubject ?? '');
   if (!user) {
     const provisioned: HostedUserRecord = {
       id: subject.userId,
@@ -761,7 +752,7 @@ export async function completeSsoLogin(cfg: HostConfig, state: string, code: str
       ...(subject.displayName ? { displayName: subject.displayName } : {}),
       ...(subject.email ? { email: subject.email } : {}),
     };
-    user = repoUpsertUser(cfg.dataDir, provisioned);
+    user = userRepo.upsertUser(cfg.dataDir, provisioned);
   }
 
   // Reject re-login for a deactivated user before minting. A freshly provisioned
@@ -781,7 +772,7 @@ export async function completeSsoLogin(cfg: HostConfig, state: string, code: str
     (subject.displayName !== undefined && subject.displayName !== user.displayName) ||
     (subject.email !== undefined && subject.email !== user.email);
   if (hasSsoAdmin !== inAdminGroup || identityDrifted) {
-    user = repoUpsertUser(cfg.dataDir, {
+    user = userRepo.upsertUser(cfg.dataDir, {
       ...user,
       roleBindings: inAdminGroup
         ? hasSsoAdmin
@@ -885,7 +876,7 @@ export function countAuditEvents(
   if (!view.all && view.projectIds.length === 0) {
     throw new ForbiddenError('audit read access requires project:admin over at least one project');
   }
-  if (view.all) return repoCountAuditEvents(cfg.dataDir, query);
+  if (view.all) return auditRepo.countAuditEvents(cfg.dataDir, query);
   // A count ignores the query limit; scope the query to the in-view projects.
   return scopedAuditEvents(cfg, view, { ...query, limit: undefined }).length;
 }

@@ -255,6 +255,22 @@ methods:
         type: string
       - name: tokenId
         type: string
+  - name: resolveEnabledProvider
+    description: >-
+      Resolve one ENABLED identity-provider configuration by id through the policy repository, or
+      throw a login-rejecting error — an unknown id and a disabled provider reject identically (no
+      existence leak). Unauthenticated by nature: a pre-auth resolution step shared by the headless
+      SSO login and the web sign-in planes.
+    signature: 'resolveEnabledProvider(providerId: string): IdentityProviderConfig'
+    returns: IdentityProviderConfig
+  - name: appendAuditBestEffort
+    description: >-
+      Append one redacted audit event under the active retention policy WITHOUT letting a failure
+      fail the caller's primary action — an append failure is recorded as a server diagnostic and
+      swallowed (audit appends are best-effort by invariant). The shared best-effort audit
+      choreography reused by the identity and web planes.
+    signature: 'appendAuditBestEffort(event: AuditEvent): void'
+    returns: void
 status: complete
 createdAt: '2026-07-08T20:17:23.976Z'
-updatedAt: '2026-07-16T00:26:28.277Z'
+updatedAt: '2026-07-18T23:46:03.739Z'

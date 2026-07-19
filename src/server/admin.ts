@@ -5,7 +5,7 @@ import { stateIdEquals } from '../core/statehash.js';
 import type { LockRecord } from '../core/lockfile.js';
 import { authenticateMaster, authenticateCredential, signViewToken } from './auth.js';
 import { authorize } from './authorization.js';
-import { placeProject as placeProjectInUnit, listOrganizationUnits } from './organization.js';
+import { placeProject, listOrganizationUnits } from './organization.js';
 import {
   hashToken,
   createCredential,
@@ -144,7 +144,7 @@ export function executeApprovedCreate(
   requireExistingUnit(cfg, unitId);
   const rec = createProjectRecord(cfg.dataDir, id);
   runWithProjectRoot(rec.rootPath, () => hostCore.provisionProject(id));
-  placeProjectInUnit(cfg.dataDir, {
+  placeProject(cfg.dataDir, {
     id: '',
     projectId: id,
     unitId,

@@ -81,7 +81,7 @@ methods:
         type: call
         targetComponent: web_orchestrator
         targetMethod: getProjectCanvas
-    symbol: getWebProjectCanvas
+    symbol: getProjectCanvas
   - name: adminListUsers
     narrative:
       - stepNumber: 1
@@ -675,4 +675,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-07-18T13:22:24.305Z'
+updatedAt: '2026-07-18T23:38:45.512Z'

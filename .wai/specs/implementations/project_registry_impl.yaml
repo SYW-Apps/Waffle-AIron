@@ -1,34 +1,46 @@
 id: project_registry_impl
-name: Project Registry Implementation
-description: File-backed I/O for hosted-project records and their isolated roots under the data root.
+name: Project Repository Facade Implementation
+description: >-
+  Pure 1:1 forwarding facade over the owned project record store, write registry, and index. The
+  facade adds no logic.
 contract: iproject_registry
 sourcePath: src/server/projects.ts
 methods:
   - name: resolveRoot
-    narrative: []
-    intent: >-
-      Given an authenticated principal and an optional selector, returns the isolated root path of
-      the target project: the sole authorized project when the token scopes exactly one, or the
-      selector only when it lies within the principal's authorized set. Returns empty for any
-      project outside that set — the selector can never widen scope.
-    symbol: projectRoot
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the project index (authorization-narrowed resolution — a selector never widens
+          scope)
+        type: call
+        targetComponent: project_index
+        targetMethod: resolveRoot
+    symbol: resolveProjectRoot
   - name: create
-    narrative: []
-    intent: >-
-      Validates the id against path traversal, allocates <dataDir>/projects/<id>, creates the
-      directory, and persists a HostedProjectRecord with status active. Fails if the id already
-      exists.
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project write registry (root allocation + record create)
+        type: call
+        targetComponent: project_write_registry
+        targetMethod: create
     symbol: createProjectRecord
   - name: list
-    narrative: []
-    intent: Returns all HostedProjectRecords registered under the data root.
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project index
+        type: call
+        targetComponent: project_index
+        targetMethod: list
     symbol: listProjectRecords
   - name: remove
-    narrative: []
-    intent: >-
-      Deletes the project record and recursively removes its isolated tree. Idempotent for a missing
-      id.
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project write registry
+        type: call
+        targetComponent: project_write_registry
+        targetMethod: remove
     symbol: removeProjectRecord
+detail: calls-only
 status: complete
 createdAt: '2026-07-04T12:53:36.287Z'
-updatedAt: '2026-07-11T19:14:22.809Z'
+updatedAt: '2026-07-19T09:01:03.550Z'

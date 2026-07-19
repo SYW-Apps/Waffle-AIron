@@ -13,6 +13,7 @@ methods:
         type: call
         targetComponent: policy_index
         targetMethod: getPackPolicy
+    symbol: getPackPolicyRecord
   - name: setPackPolicy
     narrative:
       - stepNumber: 1
@@ -20,6 +21,7 @@ methods:
         type: call
         targetComponent: policy_registry
         targetMethod: setPackPolicy
+    symbol: setPackPolicyRecord
   - name: listIdentityProviders
     narrative:
       - stepNumber: 1
@@ -63,4 +65,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-09T20:47:51.139Z'
-updatedAt: '2026-07-16T17:43:11.432Z'
+updatedAt: '2026-07-18T23:33:40.288Z'
