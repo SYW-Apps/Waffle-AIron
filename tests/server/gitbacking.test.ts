@@ -35,11 +35,14 @@ function git(args: string[], cwd: string): string {
   return execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 }
 
-/** A bare "remote" with an initial empty commit on main. */
+/** A bare "remote" with an initial empty commit on main. HEAD is pinned to
+ *  main at init — otherwise the host's init.defaultBranch decides it (CI
+ *  runners default to master), the pushed main never becomes HEAD, and a
+ *  plain clone silently checks out an empty tree. */
 function seedBareRemote(base: string, name: string): string {
   const remote = path.join(base, `${name}.git`);
   fs.mkdirSync(remote, { recursive: true });
-  git(['init', '--bare', '-q', '.'], remote);
+  git(['init', '--bare', '-q', '-b', 'main', '.'], remote);
   const seed = path.join(base, `${name}-seed`);
   git(['clone', '-q', remote, seed], base);
   fs.writeFileSync(path.join(seed, 'README.md'), `# ${name} backup\n`);
@@ -50,10 +53,12 @@ function seedBareRemote(base: string, name: string): string {
   return remote;
 }
 
-/** Clone the remote fresh and return the checkout path, to inspect what was pushed. */
-function inspect(base: string, remote: string): string {
+/** Clone the remote fresh and return the checkout path, to inspect what was
+ *  pushed. Clones the binding's declared branch explicitly — the assertion is
+ *  "the content landed on THAT branch", never "on whatever HEAD points at". */
+function inspect(base: string, remote: string, branch = 'main'): string {
   const dir = fs.mkdtempSync(path.join(base, 'inspect-'));
-  git(['clone', '-q', remote, '.'], dir);
+  git(['clone', '-q', '--branch', branch, remote, '.'], dir);
   return dir;
 }
 
