@@ -1,9 +1,10 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { validateSddTree } from '../../src/core/validation.js';
-import { invalidateSpecCache } from '../../src/core/specs.js';
+import { setProjectRoot } from '../../src/utils/fs.js';
+import { invalidateSpecCache, saveSubsystemSpec, saveSystemSpec, workspaceFor } from '../../src/core/specs.js';
 
 // ---------------------------------------------------------------------------
 // Invariant registry — the HONEST declaration+backing linter. An entity
@@ -255,6 +256,91 @@ describe('invariant-backing — declaration + assertion, never a proof', () => {
     } finally { proj.cleanup(); }
   });
 
+  it('attributes bare refs to the OWN type when two subsystems declare same-named entities', () => {
+    // Two entities with the SAME id in DIFFERENT subsystems, each declaring
+    // the SAME invariant id and anchored to its own registry. Each write
+    // asserts its own invariant via the natural bare ref — the rule must
+    // credit each assertion to the asserting component's OWN type, never
+    // cross-match into the other namespace by suffix.
+    const proj = createTempProject();
+    proj.writeSpec('subsystem', 'sub-b', 'schemaVersion: 1.0.0\nid: sub-b\nname: SubB\ndescription: d\nparentSystem: TestSystem');
+    proj.component('a-registry', 'Registry');
+    proj.writeSpec('component', 'b-registry', 'schemaVersion: 1.0.0\nid: b-registry\nname: b-registry\ndescription: d\nsubsystem: sub-b\ncomponentType: Registry');
+    proj.contract('a-registry', [{ name: 'createUnit', effect: 'write' }]);
+    proj.contract('b-registry', [{ name: 'createUnit', effect: 'write' }]);
+    const entityIn = (sub: string, componentClass: string) => [
+      'kind: entity', 'id: org-unit', 'name: org-unit', 'description: an entity',
+      `subsystem: ${sub}`, `componentClass: ${componentClass}`,
+      'invariants:',
+      '  - id: slug-unique-among-siblings',
+      '    description: A unit slug is unique among the children of its parent unit.',
+    ].join('\n');
+    proj.writeSpec('type', 'org-unit-a', entityIn('sub-a', 'a-registry'));
+    proj.writeSpec('type', 'org-unit-b', entityIn('sub-b', 'b-registry'));
+    proj.impl('a-registry', `methods:\n${ASSERTING_WRITE('org-unit.slug-unique-among-siblings')}`);
+    proj.impl('b-registry', `methods:\n${ASSERTING_WRITE('org-unit.slug-unique-among-siblings')}`);
+    proj.activate();
+    try {
+      expect(invariantIssues(validateSddTree())).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('attributes the UNASSERTION to the right implementation when one namespace is silent', () => {
+    const proj = createTempProject();
+    proj.writeSpec('subsystem', 'sub-b', 'schemaVersion: 1.0.0\nid: sub-b\nname: SubB\ndescription: d\nparentSystem: TestSystem');
+    proj.component('a-registry', 'Registry');
+    proj.writeSpec('component', 'b-registry', 'schemaVersion: 1.0.0\nid: b-registry\nname: b-registry\ndescription: d\nsubsystem: sub-b\ncomponentType: Registry');
+    proj.contract('a-registry', [{ name: 'createUnit', effect: 'write' }]);
+    proj.contract('b-registry', [{ name: 'createUnit', effect: 'write' }]);
+    const entityIn = (sub: string, componentClass: string) => [
+      'kind: entity', 'id: org-unit', 'name: org-unit', 'description: an entity',
+      `subsystem: ${sub}`, `componentClass: ${componentClass}`,
+      'invariants:',
+      '  - id: slug-unique-among-siblings',
+      '    description: A unit slug is unique among the children of its parent unit.',
+    ].join('\n');
+    proj.writeSpec('type', 'org-unit-a', entityIn('sub-a', 'a-registry'));
+    proj.writeSpec('type', 'org-unit-b', entityIn('sub-b', 'b-registry'));
+    proj.impl('a-registry', `methods:\n${ASSERTING_WRITE('org-unit.slug-unique-among-siblings')}`);
+    proj.impl('b-registry', `methods:\n${SILENT_WRITE}`);
+    proj.activate();
+    try {
+      const found = invariantIssues(validateSddTree());
+      expect(found).toHaveLength(1);
+      expect(found[0].code).toBe('UNASSERTED_INVARIANT');
+      expect(found[0].specId).toBe('impl-b-registry');
+    } finally { proj.cleanup(); }
+  });
+
+  it('a ref qualified into the OTHER subsystem never satisfies the local entity', () => {
+    const proj = createTempProject();
+    proj.writeSpec('subsystem', 'sub-b', 'schemaVersion: 1.0.0\nid: sub-b\nname: SubB\ndescription: d\nparentSystem: TestSystem');
+    proj.component('a-registry', 'Registry');
+    proj.writeSpec('component', 'b-registry', 'schemaVersion: 1.0.0\nid: b-registry\nname: b-registry\ndescription: d\nsubsystem: sub-b\ncomponentType: Registry');
+    proj.contract('a-registry', [{ name: 'createUnit', effect: 'write' }]);
+    proj.contract('b-registry', [{ name: 'createUnit', effect: 'write' }]);
+    const entityIn = (sub: string, componentClass: string) => [
+      'kind: entity', 'id: org-unit', 'name: org-unit', 'description: an entity',
+      `subsystem: ${sub}`, `componentClass: ${componentClass}`,
+      'invariants:',
+      '  - id: slug-unique-among-siblings',
+      '    description: A unit slug is unique among the children of its parent unit.',
+    ].join('\n');
+    proj.writeSpec('type', 'org-unit-a', entityIn('sub-a', 'a-registry'));
+    proj.writeSpec('type', 'org-unit-b', entityIn('sub-b', 'b-registry'));
+    proj.impl('a-registry', `methods:\n${ASSERTING_WRITE('sub-a.org-unit.slug-unique-among-siblings')}`);
+    // b's write asserts sub-a's invariant explicitly — a resolvable reference
+    // (no UNKNOWN_INVARIANT_REF), but it does NOT satisfy sub-b's own entity.
+    proj.impl('b-registry', `methods:\n${ASSERTING_WRITE('sub-a.org-unit.slug-unique-among-siblings')}`);
+    proj.activate();
+    try {
+      const found = invariantIssues(validateSddTree());
+      expect(found).toHaveLength(1);
+      expect(found[0].code).toBe('UNASSERTED_INVARIANT');
+      expect(found[0].specId).toBe('impl-b-registry');
+    } finally { proj.cleanup(); }
+  });
+
   it('multiple invariants each need their own assertion on every write method', () => {
     const proj = createTempProject();
     proj.component('unit-registry', 'Registry');
@@ -274,5 +360,90 @@ describe('invariant-backing — declaration + assertion, never a proof', () => {
       // createUnit misses the second invariant; renameUnit misses both
       expect(found).toHaveLength(3);
     } finally { proj.cleanup(); }
+  });
+});
+
+describe('invariants inside a chained subproject — ids resolve through the mount namespace', () => {
+  const now = new Date().toISOString();
+  let rootDir: string;
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    if (rootDir) fs.rmSync(rootDir, { recursive: true, force: true });
+  });
+
+  /** A child project mounted at packages/inventory declaring + asserting its own invariant. */
+  function buildChained(asserting: boolean): void {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-inv-chained-'));
+    fs.mkdirSync(path.join(rootDir, '.wai', 'specs'), { recursive: true });
+    setProjectRoot(rootDir);
+    saveSystemSpec({
+      schemaVersion: '1.0.0', name: 'root-system', vision: 'v',
+      boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
+    });
+    saveSubsystemSpec({
+      id: 'inventory', name: 'inventory', description: 'mount', parentSystem: 'root-system',
+      publicInterfaces: [], projectPath: 'packages/inventory', status: 'complete', createdAt: now, updatedAt: now,
+    });
+
+    const childDir = path.join(rootDir, 'packages', 'inventory');
+    fs.mkdirSync(path.join(childDir, '.wai', 'specs'), { recursive: true });
+    const child = workspaceFor(childDir);
+    child.saveSystemSpec({
+      schemaVersion: '1.0.0', name: 'inventory-system', vision: 'v',
+      boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
+    });
+    child.saveSubsystemSpec({
+      id: 'inv-core', name: 'inv-core', description: 'd', parentSystem: 'inventory-system',
+      publicInterfaces: [], status: 'complete', createdAt: now, updatedAt: now,
+    });
+    child.saveComponentSpec({
+      id: 'unit-registry', name: 'unit-registry', description: 'd', subsystem: 'inv-core',
+      componentType: 'Registry', owns: [], dependsOn: [], status: 'complete', createdAt: now, updatedAt: now,
+    });
+    child.saveInterfaceSpec({
+      id: 'iunit-registry', name: 'IUnitRegistry', description: 'contract', component: 'unit-registry',
+      methods: [{
+        name: 'createUnit', description: 'creates the unit, carefully and observably',
+        signature: 'createUnit(): void', returns: 'void', effect: 'write',
+      }],
+      status: 'complete', createdAt: now, updatedAt: now,
+    });
+    child.saveImplementationSpec({
+      id: 'unit-registry-impl', name: 'impl', description: 'd', contract: 'iunit-registry',
+      methods: [{
+        name: 'createUnit',
+        narrative: [
+          asserting
+            ? {
+              stepNumber: 1, description: 'Reject a slug that collides with any sibling under the target parent',
+              type: 'local', assertsInvariants: ['org-unit.slug-unique-among-siblings'],
+            }
+            : { stepNumber: 1, description: 'Persist the unit record', type: 'local' },
+          { stepNumber: 2, description: 'Done', type: 'return', outcome: 'created' },
+        ],
+      }],
+      status: 'complete', createdAt: now, updatedAt: now,
+    });
+    child.saveTypeSpec({
+      schemaVersion: '1.0.0', kind: 'entity', id: 'org-unit', name: 'OrgUnit', description: 'an entity',
+      subsystem: 'inv-core', componentClass: 'unit-registry',
+      invariants: [{ id: 'slug-unique-among-siblings', description: 'A unit slug is unique among the children of its parent unit.' }],
+      createdAt: now, updatedAt: now,
+    });
+    invalidateSpecCache();
+  }
+
+  it('an asserted invariant in the child anchors and resolves clean from the parent root', () => {
+    buildChained(true);
+    expect(invariantIssues(validateSddTree())).toHaveLength(0);
+  });
+
+  it('anchoring works through the mount: a silent child write yields exactly its own UNASSERTED_INVARIANT', () => {
+    buildChained(false);
+    const found = invariantIssues(validateSddTree());
+    expect(found).toHaveLength(1);
+    expect(found[0].code).toBe('UNASSERTED_INVARIANT');
+    expect(found[0].specId).toBe('inventory::unit-registry-impl');
   });
 });

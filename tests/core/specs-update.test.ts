@@ -354,6 +354,73 @@ describe('granular specification updates via updateSpec', () => {
     expect(intact!.methods[0].name).toBe('authorize');
   });
 
+  it('ext data key-merges at every level: spec-level, implementation methods, and interface methods', () => {
+    proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-ext-merge-test-'));
+    fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
+    setProjectRoot(proj);
+
+    const EXT = { 'pack-x': { budget: 5, note: 'n' }, 'pack-y': 'keep' };
+
+    saveSubsystemSpec({
+      schemaVersion: '1.0.0', id: 'billing', name: 'Billing', description: 'd',
+      parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now,
+    });
+    saveComponentSpec({
+      schemaVersion: '1.0.0', id: 'billing-engine', name: 'BillingEngine', description: 'Engine',
+      subsystem: 'billing', componentType: 'Orchestrator', owns: [], dependsOn: [],
+      ext: EXT, createdAt: now, updatedAt: now,
+    });
+    saveInterfaceSpec({
+      id: 'ibilling-engine', name: 'IBillingEngine', description: 'contract', component: 'billing-engine',
+      methods: [
+        { name: 'charge', signature: 'charge()', returns: 'void', description: 'charge method', ext: EXT },
+        { name: 'refund', signature: 'refund()', returns: 'void', description: 'refund method' },
+      ],
+      createdAt: now, updatedAt: now,
+    });
+    saveImplementationSpec({
+      id: 'billing-engine-impl', name: 'impl', description: 'd', contract: 'ibilling-engine',
+      methods: [{
+        name: 'charge',
+        narrative: [{ stepNumber: 1, description: 'charge it', type: 'local' }],
+        ext: EXT,
+      }],
+      createdAt: now, updatedAt: now,
+    });
+
+    // Component-level ext (the reference semantics): a delta mentioning ONE
+    // key merges into the map — absent keys survive, nested objects merge.
+    updateSpec('component', 'billing-engine', { ext: { 'pack-x': { budget: 9 } } });
+    expect(loadComponentSpec('billing-engine')!.ext).toEqual({ 'pack-x': { budget: 9, note: 'n' }, 'pack-y': 'keep' });
+
+    // An unrelated method edit (delta never mentions ext) preserves the
+    // method's ext verbatim.
+    updateSpec('implementation', 'billing-engine-impl', {
+      methods: [{ name: 'charge', narrative: [{ stepNumber: 1, description: 'charge it, updated', type: 'local' }] }],
+    });
+    let method = loadImplementationSpec('billing-engine-impl')!.methods[0];
+    expect(method.narrative[0].description).toBe('charge it, updated');
+    expect(method.ext).toEqual(EXT);
+
+    // A method-level ext delta must behave exactly like component-level ext:
+    // key-merge, never clobber the whole map.
+    updateSpec('implementation', 'billing-engine-impl', {
+      methods: [{ name: 'charge', ext: { 'pack-x': { budget: 9 } } }],
+    });
+    method = loadImplementationSpec('billing-engine-impl')!.methods[0];
+    expect(method.ext).toEqual({ 'pack-x': { budget: 9, note: 'n' }, 'pack-y': 'keep' });
+    expect(method.narrative[0].description).toBe('charge it, updated');
+
+    // Same parity on L3 contract methods; the untouched sibling keeps having
+    // no ext at all.
+    updateSpec('interface', 'ibilling-engine', {
+      methods: [{ name: 'charge', ext: { 'pack-x': { budget: 9 } } }],
+    });
+    const intf = loadInterfaceSpec('ibilling-engine')!;
+    expect(intf.methods.find(m => m.name === 'charge')!.ext).toEqual({ 'pack-x': { budget: 9, note: 'n' }, 'pack-y': 'keep' });
+    expect(intf.methods.find(m => m.name === 'refund')!.ext).toBeUndefined();
+  });
+
   it('allows explicit status demotion via updateSpec while re-adds still cannot demote', () => {
     proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-demote-test-'));
     fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
