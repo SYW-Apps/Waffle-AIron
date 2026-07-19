@@ -11,6 +11,7 @@ subsystem: sdd_host
 componentType: Store
 owns: []
 dependsOn: []
+durability: read-through
 status: complete
 createdAt: '2026-07-17T22:09:07.884Z'
-updatedAt: '2026-07-18T09:36:28.141Z'
+updatedAt: '2026-07-19T11:31:02.120Z'

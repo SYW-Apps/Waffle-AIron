@@ -8,6 +8,7 @@ subsystem: sdd_git
 componentType: Store
 owns: []
 dependsOn: []
+durability: read-through
 lint:
   allow:
     - code: UNOWNED_STORE
@@ -18,4 +19,4 @@ lint:
         level3 branch merges (the enum value does not exist in this branch's schema).
 status: complete
 createdAt: '2026-07-04T16:31:20.264Z'
-updatedAt: '2026-07-19T08:57:27.901Z'
+updatedAt: '2026-07-19T11:31:01.293Z'

@@ -189,6 +189,14 @@ round-trip dry run), and `spec_index` (read/lookup face). The facade's 16
 methods are pure 1:1 forwards â€” verified by the new `FACADE_FORWARDING` rule
 on a real remodel. Spec-tree-only change; the code already had this shape.
 
+**Dogfood: own tree at zero findings.** Post-merge coda: all 20 file-backed
+hosted-server Stores declare `durability: read-through` (each verified
+read-fresh-per-call â€” file authoritative, no RAM copy survives a call), and
+the one narrative/code mismatch surfaced by `CALL_STEP_UNREALIZED`
+(`listVisibleSurfaces` narrated an `audienceDistance` call the code reads off
+the visibility resolution instead) is corrected spec-side. Wairon's own tree
+now validates at **0 errors / 0 warnings**.
+
 ### Extension packs: pack-provided AI skills + versioned pattern references (new)
 
 Two generic extension-pack capabilities so profiles and wrapper products can
