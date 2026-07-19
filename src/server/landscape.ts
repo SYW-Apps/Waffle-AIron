@@ -127,20 +127,30 @@ function permitsCap(
  *  projects from the caller's project:read AND project:admin visibility views —
  *  an admin can always read what they administer (the documented
  *  manage-confers-read behavior), while breadcrumb ancestors stay excluded
- *  (navigation is not reach). */
+ *  (navigation is not reach). `contextUnitIds` carries those ancestor
+ *  breadcrumbs SEPARATELY: units shown read-only so the hierarchy stays
+ *  navigable to a deeper actionable scope (the no@org + yes@one-project case),
+ *  never counted as reach and never exposing their other children. */
 function readView(
   cfg: HostConfig,
   principal: Principal,
-): { all: boolean; projectIds: Set<string>; unitIds: Set<string> } {
+): { all: boolean; projectIds: Set<string>; unitIds: Set<string>; contextUnitIds: Set<string> } {
   if (isInstanceAdmin(principal)) {
-    return { all: true, projectIds: new Set(), unitIds: new Set() };
+    return { all: true, projectIds: new Set(), unitIds: new Set(), contextUnitIds: new Set() };
   }
   const read = visibleScopes(cfg.dataDir, principal, PROJECT_READ_CAPABILITY);
   const admin = visibleScopes(cfg.dataDir, principal, PROJECT_ADMIN_CAPABILITY);
+  const unitIds = new Set([...actionableUnitIds(read), ...actionableUnitIds(admin)]);
+  const contextUnitIds = new Set(
+    [...read, ...admin]
+      .filter((s) => s.context === true && s.scopeKind === 'unit' && !unitIds.has(s.scopeId))
+      .map((s) => s.scopeId),
+  );
   return {
     all: false,
     projectIds: new Set([...actionableProjectIds(read), ...actionableProjectIds(admin)]),
-    unitIds: new Set([...actionableUnitIds(read), ...actionableUnitIds(admin)]),
+    unitIds,
+    contextUnitIds,
   };
 }
 
@@ -750,6 +760,11 @@ export function generateLandscape(
   // are in view so the scoped graph never carries a dangling edge to — or leaks
   // the id of — an out-of-scope project. Equivalent to filtering the built graph's
   // nodes to the view and dropping edges that reference a dropped node.
+  //
+  // Ancestor BREADCRUMB units (context) are included alongside the actionable
+  // ones so the hierarchy stays navigable to the root — but only as read-only
+  // shells: their placements are still filtered to the caller's actionable
+  // projects, so a breadcrumb never exposes an ancestor's OTHER children.
   let scopedUnits = units;
   let scopedProjects = projects;
   let scopedPlacements = placements;
@@ -757,9 +772,10 @@ export function generateLandscape(
   if (!view.all) {
     const projSet = view.projectIds;
     const unitSet = view.unitIds;
-    scopedUnits = units.filter((u) => unitSet.has(u.id));
+    const shownUnits = new Set([...unitSet, ...view.contextUnitIds]);
+    scopedUnits = units.filter((u) => shownUnits.has(u.id));
     scopedProjects = projects.filter((p) => projSet.has(p.id));
-    scopedPlacements = placements.filter((pl) => unitSet.has(pl.unitId) && projSet.has(pl.projectId));
+    scopedPlacements = placements.filter((pl) => shownUnits.has(pl.unitId) && projSet.has(pl.projectId));
     scopedRelations = relations.filter(
       (r) => projSet.has(r.sourceProjectId) && projSet.has(r.targetProjectId),
     );
@@ -779,6 +795,17 @@ export function generateLandscape(
     // leaks an out-of-scope id.
     const nodeIds = new Set(graph.nodes.map((n) => n.id));
     graph.edges = graph.edges.filter((e) => nodeIds.has(e.from) && nodeIds.has(e.to));
+  }
+  // Stamp actionability: an instance-admin acts on everything; otherwise a unit
+  // is actionable when in the caller's actionable set (a context breadcrumb is
+  // not), and every included project is actionable by construction (only the
+  // caller's actionable projects survive the narrowing above).
+  for (const node of graph.nodes) {
+    if (node.nodeKind === 'orgUnit' && node.unitId !== undefined) {
+      node.actionable = view.all || view.unitIds.has(node.unitId);
+    } else if (node.nodeKind === 'project') {
+      node.actionable = true;
+    }
   }
   if (scope !== undefined && scope !== '') graph.scope = scope;
   return graph;

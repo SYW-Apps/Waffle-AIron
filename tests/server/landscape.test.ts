@@ -20,6 +20,8 @@ import {
   buildLandscapeGraph,
 } from '../../src/server/landscape.js';
 import { routeAdmin } from '../../src/server/http.js';
+import { getWebGraph } from '../../src/server/web.js';
+import { createWebSession } from '../../src/server/websessions.js';
 import { createProject } from '../../src/server/admin.js';
 import { mintUserToken, allow, seedUnit } from './helpers.js';
 import { createProjectRecord } from '../../src/server/projects.js';
@@ -582,10 +584,14 @@ describe('landscape orchestrator (sdd_host)', () => {
     expect(rels.map((r) => r.id)).toEqual([relIn.id]);
     expect(rels.map((r) => r.id)).not.toContain(relOut.id);
 
-    // generateLandscape: only unit A and its projects appear; unit B, its projects,
-    // and the root (out of A's subtree) are filtered out.
+    // generateLandscape: unit A (actionable) and its projects appear; the ROOT
+    // appears only as a read-only ancestor BREADCRUMB (actionable false) so the
+    // hierarchy stays navigable; unit B and its projects are filtered out.
     const graph = generateLandscape(cfg, tokenA);
-    expect(graph.nodes.filter((n) => n.nodeKind === 'orgUnit').map((n) => n.unitId)).toEqual([unitA.id]);
+    const unitNodes = graph.nodes.filter((n) => n.nodeKind === 'orgUnit');
+    expect(unitNodes.map((n) => n.unitId).sort()).toEqual(['root', unitA.id].sort());
+    expect(unitNodes.find((n) => n.unitId === unitA.id)?.actionable).toBe(true);
+    expect(unitNodes.find((n) => n.unitId === 'root')?.actionable).toBe(false);
     expect(
       graph.nodes
         .filter((n) => n.nodeKind === 'project')
@@ -593,6 +599,8 @@ describe('landscape orchestrator (sdd_host)', () => {
         .sort(),
     ).toEqual(['a-dst', 'a-src']);
     expect(graph.nodes.some((n) => n.projectId === 'b-src' || n.projectId === 'b-dst')).toBe(false);
+    // The breadcrumb root never exposes its OTHER child (unit B stays invisible).
+    expect(graph.nodes.some((n) => n.nodeKind === 'orgUnit' && n.unitId !== 'root' && n.unitId !== unitA.id)).toBe(false);
 
     // No edge dangles to a filtered-out node; the in-scope relation edge survives.
     const nodeIds = new Set(graph.nodes.map((n) => n.id));
@@ -835,5 +843,126 @@ describe('landscape portal (sdd_host http)', () => {
     const res = await api('GET', '/admin/projects', { cred: MASTER });
     expect(res.status).toBe(200);
     expect(Array.isArray(res.json)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Hierarchical environment canvas: permission-filtered landscape (the resolver,
+// never a display projection). The S2-family standard: cross-tenant
+// invisibility gets its own two-tenant tests, and the no@org + yes@one-project
+// breadcrumb case is pinned end-to-end (generateLandscape actionability + the
+// /web graph reshape carrying it to the environment canvas).
+// ---------------------------------------------------------------------------
+
+describe('landscape visibility: breadcrumbs + two-tenant invisibility', () => {
+  let dataDir: string;
+  let cfg: HostConfig;
+  const savedEnv = { ...process.env };
+
+  beforeEach(() => {
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-landvis-'));
+    process.env.WAIRON_ADMIN_TOKEN = MASTER;
+    cfg = { host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: true };
+  });
+
+  afterEach(() => {
+    process.env = { ...savedEnv };
+    try {
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    } catch {
+      /* windows file locks */
+    }
+  });
+
+  let seq = 0;
+  function userToken(userId: string): string {
+    return mintUserToken(dataDir, { id: `lv-tok-${seq++}`, userId });
+  }
+
+  /** Two tenants side by side: a business entity each, one placed project each. */
+  function seedTwoTenants() {
+    createProjectRecord(dataDir, 'ten-a-app');
+    createProjectRecord(dataDir, 'ten-b-app');
+    const ua = upsertUnit(cfg, MASTER, unitRec({ name: 'Tenant A', slug: 'tenant-a' }));
+    const ub = upsertUnit(cfg, MASTER, unitRec({ name: 'Tenant B', slug: 'tenant-b' }));
+    placeProject(cfg, MASTER, placementRec({ projectId: 'ten-a-app', unitId: ua.id }));
+    placeProject(cfg, MASTER, placementRec({ projectId: 'ten-b-app', unitId: ub.id }));
+    return { ua, ub };
+  }
+
+  it('two tenants are mutually invisible: a unit admin of A sees no node, edge, or id of B', () => {
+    const { ua, ub } = seedTwoTenants();
+    allow(dataDir, 'lv-admin-a', 'project:admin', 'unit', ua.id);
+    const g = generateLandscape(cfg, userToken('lv-admin-a'));
+
+    const unitA = g.nodes.find((n) => n.nodeKind === 'orgUnit' && n.unitId === ua.id);
+    expect(unitA).toBeDefined();
+    expect(unitA?.actionable).toBe(true);
+    const projA = g.nodes.find((n) => n.nodeKind === 'project' && n.projectId === 'ten-a-app');
+    expect(projA?.actionable).toBe(true);
+
+    // Tenant B never appears — not as a node, not as an edge endpoint.
+    expect(g.nodes.some((n) => n.unitId === ub.id || n.projectId === 'ten-b-app')).toBe(false);
+    const bIds = [`unit:${ub.id}`, 'project:ten-b-app'];
+    expect(g.edges.some((e) => bIds.includes(e.from) || bIds.includes(e.to))).toBe(false);
+  });
+
+  it('an instance admin sees both tenants, every node actionable', () => {
+    const { ua, ub } = seedTwoTenants();
+    const g = generateLandscape(cfg, MASTER, 'instance');
+    for (const unitId of [ua.id, ub.id]) {
+      const node = g.nodes.find((n) => n.nodeKind === 'orgUnit' && n.unitId === unitId);
+      expect(node?.actionable).toBe(true);
+    }
+    for (const pid of ['ten-a-app', 'ten-b-app']) {
+      expect(g.nodes.find((n) => n.projectId === pid)?.actionable).toBe(true);
+    }
+  });
+
+  it('no@org + yes@one-project: the ancestor chain shows as read-only breadcrumbs, siblings stay invisible', () => {
+    createProjectRecord(dataDir, 'bc-mine');
+    createProjectRecord(dataDir, 'bc-sibling');
+    const root = upsertUnit(cfg, MASTER, unitRec({ name: 'Org Root', slug: 'org-root' }));
+    const team = upsertUnit(cfg, MASTER, unitRec({ name: 'Team', slug: 'team', parentId: root.id }));
+    placeProject(cfg, MASTER, placementRec({ projectId: 'bc-mine', unitId: team.id }));
+    placeProject(cfg, MASTER, placementRec({ projectId: 'bc-sibling', unitId: team.id }));
+
+    allow(dataDir, 'lv-bc', 'project:read', 'unit', root.id, 'no');
+    allow(dataDir, 'lv-bc', 'project:read', 'project', 'bc-mine');
+    const g = generateLandscape(cfg, userToken('lv-bc'));
+
+    // The ancestor chain is present but read-only (actionable false).
+    expect(g.nodes.find((n) => n.unitId === team.id)?.actionable).toBe(false);
+    expect(g.nodes.find((n) => n.unitId === root.id)?.actionable).toBe(false);
+    // The actionable project sits under its breadcrumb unit (placement kept).
+    expect(g.nodes.find((n) => n.projectId === 'bc-mine')?.actionable).toBe(true);
+    expect(g.edges.some((e) => e.from === `unit:${team.id}` && e.to === 'project:bc-mine')).toBe(true);
+    // The breadcrumb NEVER exposes the ancestor unit''s other children.
+    expect(g.nodes.some((n) => n.projectId === 'bc-sibling')).toBe(false);
+    // The unit hierarchy edge root→team survives for navigation.
+    expect(g.edges.some((e) => e.from === `unit:${root.id}` && e.to === `unit:${team.id}`)).toBe(true);
+  });
+
+  it('the /web graph reshape carries actionability to the environment canvas', () => {
+    createProjectRecord(dataDir, 'bc2-mine');
+    const root = upsertUnit(cfg, MASTER, unitRec({ name: 'Root2', slug: 'root2' }));
+    const team = upsertUnit(cfg, MASTER, unitRec({ name: 'Team2', slug: 'team2', parentId: root.id }));
+    placeProject(cfg, MASTER, placementRec({ projectId: 'bc2-mine', unitId: team.id }));
+    allow(dataDir, 'lv-web', 'project:read', 'project', 'bc2-mine');
+
+    const session = createWebSession(dataDir, {
+      id: '',
+      subject: { userId: 'lv-web', kind: 'human', issuer: 'local' },
+      projects: ['*'],
+      createdAt: '',
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+    });
+    const web = getWebGraph(cfg, session.id, 'landscape', '', 1);
+    const unitNode = web.nodes.find((n) => n.kind === 'unit' && n.id === `unit:${team.id}`);
+    expect(unitNode?.actionable).toBe(false);
+    const projNode = web.nodes.find((n) => n.kind === 'project' && n.projectId === 'bc2-mine');
+    expect(projNode?.actionable).toBe(true);
+    // parentId spans the unit nesting so the client can rebuild the tree.
+    expect(unitNode?.parentId).toBe(`unit:${root.id}`);
   });
 });

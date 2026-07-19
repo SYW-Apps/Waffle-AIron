@@ -527,6 +527,12 @@ header input[type="search"]::placeholder { color:var(--dim); }
 .dropdown .menu button { display:block; width:100%; text-align:left; border:none; background:transparent; color:var(--ink); padding:8px 10px; border-radius:7px; cursor:pointer; font:inherit; font-size:12.5px; }
 .dropdown .menu button:hover { background:var(--hover-bg); }
 .dropdown .menu .hint { display:block; color:var(--dim); font-size:10.5px; }
+/* Header controls collapsed into the "⋯" overflow menu: whole items (buttons
+   or nested dropdowns) stack vertically; a nested dropdown's own menu still
+   opens fixed-positioned over the page. */
+#moreMenu .dropdown { display:block; width:100%; }
+#moreMenu .dropdown > .tbtn, #moreMenu > .tbtn { display:block; width:100%; text-align:left; border:none; background:transparent; margin:2px 0; }
+#moreMenu .dropdown > .tbtn:hover, #moreMenu > .tbtn:hover { background:var(--hover-bg); }
 
 /* Settings panel — toggle switches */
 .settings-menu { min-width:266px; }
@@ -643,7 +649,7 @@ body.presentation #exitPresent, body.presentation #presentDetails { display:bloc
 </style>
 </head>
 <body data-theme="syw">
-<header>
+<header id="hdr">
   <span class="brand syw-gradient-text">wairon</span>
   <div class="seg" id="modeSeg" title="Switch between the component architecture, the type ERD, or the database schemas">
     <button data-vm="components" class="active">Components</button>
@@ -717,6 +723,10 @@ body.presentation #exitPresent, body.presentation #presentDetails { display:bloc
   </div>
   <button class="tbtn" id="themeBtn" title="Toggle theme">◐ Theme</button>
   <button class="tbtn" id="presentBtn" title="Presentation mode (hides menus)">⛶ Present</button>
+  <div class="dropdown" id="moreDd" style="display:none">
+    <button class="tbtn" id="moreBtn" title="More options">⋯</button>
+    <div class="menu" id="moreMenu"></div>
+  </div>
 </header>
 <div id="wrap">
   <div id="stage">
@@ -2636,6 +2646,7 @@ var MODEL = __MODEL_JSON__;
   var fdd = wireDropdown('flowExportDd', 'flowExportBtn');
   var ldd = wireDropdown('layoutDd', 'layoutBtn');
   var sdd = wireDropdown('settingsDd', 'settingsBtn');
+  var mdd = wireDropdown('moreDd', 'moreBtn');
   // Keep the settings panel open while flipping switches (clicks inside it don't
   // bubble to the document-level close handler).
   (function () {
@@ -2670,6 +2681,7 @@ var MODEL = __MODEL_JSON__;
       if (fdd.classList) fdd.classList.remove('open');
       if (ldd.classList) ldd.classList.remove('open');
       if (sdd.classList) sdd.classList.remove('open');
+      if (mdd && mdd.classList) mdd.classList.remove('open');
     });
     document.addEventListener('keydown', function (ev) {
       if (ev.key === 'Escape') {
@@ -2680,6 +2692,76 @@ var MODEL = __MODEL_JSON__;
       }
     });
   }
+
+  // ── Responsive header overflow → "⋯" dropdown ─────────────────────────────
+  // When the floating header no longer fits its controls, trailing items
+  // COLLAPSE into the More menu instead of relying on horizontal scroll —
+  // every control stays one click away. Whole items move (listeners survive
+  // reparenting); a hidden placeholder pins each item's original position so
+  // restoring keeps the exact order. Collapse order = least-used first.
+  (function () {
+    if (typeof window === 'undefined') return;
+    var hdr = document.getElementById('hdr');
+    var moreDd = document.getElementById('moreDd');
+    var moreMenu = document.getElementById('moreMenu');
+    if (!hdr || !moreDd || !moreMenu || !hdr.getBoundingClientRect) return;
+    // Collapse order = least-used first. A dropdown trigger moves with its
+    // WRAPPER (the .dropdown div) so its own menu keeps working from the More
+    // menu (menus are fixed-positioned at the trigger's rect).
+    var COLLAPSE = ['themeBtn', 'resetBtn', 'exportBtn', 'layoutBtn', 'presentBtn', 'fitBtn', 'panelToggle'];
+    var markers = {};
+    function movableFor(id) {
+      var el = document.getElementById(id);
+      if (!el) return null;
+      var p = el.parentNode;
+      if (p && p.className && String(p.className).indexOf('dropdown') >= 0 && p !== moreMenu) return p;
+      return el;
+    }
+    function markerFor(id, el) {
+      if (!markers[id]) {
+        var m = document.createElement('span');
+        m.style.display = 'none';
+        el.parentNode.insertBefore(m, el);
+        markers[id] = m;
+      }
+      return markers[id];
+    }
+    var collapsed = [];
+    function reflow() {
+      // Restore everything, then collapse until the row fits (idempotent).
+      for (var i = collapsed.length - 1; i >= 0; i--) {
+        var it = collapsed[i];
+        if (it.el && it.marker && it.marker.parentNode) it.marker.parentNode.insertBefore(it.el, it.marker);
+      }
+      collapsed = [];
+      moreDd.style.display = 'none';
+      var guard = 0;
+      while (hdr.scrollWidth > hdr.clientWidth + 1 && guard < COLLAPSE.length) {
+        var id = COLLAPSE[guard++];
+        var el = movableFor(id);
+        if (!el || el === moreDd || el.parentNode === moreMenu) continue;
+        var m = markerFor(id, el);
+        moreDd.style.display = '';
+        moreMenu.appendChild(el);
+        collapsed.push({ el: el, marker: m });
+      }
+      if (collapsed.length === 0) moreDd.style.display = 'none';
+    }
+    var raf = null;
+    var defer = window.requestAnimationFrame
+      ? window.requestAnimationFrame.bind(window)
+      : window.setTimeout.bind(window);
+    function schedule() {
+      if (raf !== null) return;
+      raf = defer(function () { raf = null; reflow(); });
+    }
+    if (typeof ResizeObserver !== 'undefined') {
+      new ResizeObserver(schedule).observe(hdr);
+    } else if (window.addEventListener) {
+      window.addEventListener('resize', schedule);
+    }
+    schedule();
+  })();
   function fileBase() {
     var scope = state.view.kind === 'types' ? 'types'
       : state.view.id ? state.view.id.replace(/::/g, '-') : 'system';

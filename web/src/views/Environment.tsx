@@ -12,6 +12,8 @@ interface GNode {
   kind: string; // 'unit' | 'project' | 'interface'
   projectId?: string;
   status?: string;
+  /** False on an ancestor breadcrumb shown read-only for navigation only. */
+  actionable?: boolean;
 }
 interface GEdge {
   from: string;
@@ -55,10 +57,15 @@ function landscapeToCanvasModel(g: Graph): unknown {
     }
   }
 
+  // A breadcrumb ancestor (actionable === false) is included only so the
+  // hierarchy stays navigable — label and describe it as browse-only.
   const subsystems = units.map((u) => ({
     id: toColons(u.id),
-    name: u.label,
-    description: 'Organization unit',
+    name: u.actionable === false ? u.label + ' ◇' : u.label,
+    description:
+      u.actionable === false
+        ? 'Organization unit (browse-only — shown as the path to a scope you can act on)'
+        : 'Organization unit',
     trustedLinks: [] as { subsystem: string; reason: string }[],
   }));
   const unplaced = projects.some((p) => !unitOfProject.has(p.id));
@@ -129,11 +136,18 @@ export function Environment() {
     if (!host || !g || g.nodes.length === 0) return;
     // Double-clicking a project node (a "component" in the adapted model) opens
     // that project's canvas.
+    // Only actionable projects navigate into their spec canvas (the server only
+    // ships actionable projects today — belt and braces should that change).
+    const openable = new Set(
+      g.nodes.filter((n) => n.kind === 'project' && n.actionable !== false).map((n) => n.projectId ?? n.id.replace(/^project:/, '')),
+    );
     const handle = mountCanvas(host, landscapeToCanvasModel(g), {
       shadow: true,
       theme: canvasTheme,
       embed: true,
-      onNodeOpen: (_kind: string, id: string) => nav('/?project=' + encodeURIComponent(id)),
+      onNodeOpen: (_kind: string, id: string) => {
+        if (openable.has(id)) nav('/?project=' + encodeURIComponent(id));
+      },
     });
     handleRef.current = handle;
     return () => {
