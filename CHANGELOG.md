@@ -36,7 +36,8 @@ suppressible) unless noted; existing clean trees stay clean unless listed under
   recommended, deliberate standalone Store via lint.allow),
   `REGISTRY_WITHOUT_STORE` (a storeless standalone Registry is mistyped or
   orphaned), `ARCHITECTURE_VIOLATION_REGISTRY_DEP` (Registry outbound: its
-  Store or a backend Adapter only), `HIDDEN_STATE` (module-scope mutable
+  Store, a backend Adapter, or a validation Specialist â€” the standard's
+  validate â†’ write path), `HIDDEN_STATE` (module-scope mutable
   bindings in files realizing only logic stereotypes), `MISSING_DURABILITY`
   (every Store declares its durability), `PORTAL_WRITE_SHORTCUT` (error â€” a
   Portal narrative calling a write-effect facade method).

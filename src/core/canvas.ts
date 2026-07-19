@@ -29,6 +29,12 @@ import { buildDrawioXml, buildExcalidrawScene } from './diagram-export.js';
 // (micro-layered). "Externals" shows ghost references to out-of-scope
 // dependencies. Per-view layout rearrangements persist in localStorage.
 //
+// SCOPE NOTE (deliberate, revisit in the canvas-engine epic): the model
+// projects structure + contracts + flow. Newer component-level semantics —
+// durability, emits/subscribesTo event topology, ext maps, method effect
+// tags, type invariants, narrative step labels — are NOT projected yet;
+// omitting a field here means "not visualized", never "not persisted".
+//
 // ---------------------------------------------------------------------------
 
 export interface CanvasModel {

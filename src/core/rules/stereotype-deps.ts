@@ -35,7 +35,7 @@ export const stereotypeDepsRule: SddRule = {
     { code: 'ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP', defaultSeverity: 'error', summary: 'Portal/Observer reaching the data layer directly' },
     { code: 'ARCHITECTURE_VIOLATION_SPECIALIST_DEP', defaultSeverity: 'error', summary: 'Specialist depending on workflow/runtime/state blocks' },
     { code: 'ARCHITECTURE_VIOLATION_STORE_DEP', defaultSeverity: 'error', summary: 'Store depending on anything but another Store or a backend Adapter' },
-    { code: 'ARCHITECTURE_VIOLATION_REGISTRY_DEP', defaultSeverity: 'warning', summary: 'Registry depending on anything but its Store or a backend Adapter (warning while new; NOTE: the written standard also licenses validation Specialists — alignment pending)' },
+    { code: 'ARCHITECTURE_VIOLATION_REGISTRY_DEP', defaultSeverity: 'warning', summary: 'Registry depending on anything but its Store, a backend Adapter, or a validation Specialist (warning while new; aligned to the standard §7 validate→write path)' },
     { code: 'ARCHITECTURE_VIOLATION_ADAPTER_DEP', defaultSeverity: 'error', summary: 'Adapter depending on Orchestrators or Stores' },
     { code: 'ARCHITECTURE_VIOLATION_INDEX_DEP', defaultSeverity: 'error', summary: 'Index depending on anything but its Store or an Adapter' },
     { code: 'ARCHITECTURE_VIOLATION_VIEW_DEP', defaultSeverity: 'error', summary: 'View depending on logic/persistence layers' },
@@ -218,16 +218,21 @@ export const stereotypeDepsRule: SddRule = {
           }
         }
 
-        // Registry rule: the write path to its Store — it may depend only on
-        // that Store (or a backend Adapter); reaching workflow, read
-        // projections, or boundaries inverts the layering. Warning while the
-        // check is new; the written standard has always claimed it.
+        // Registry rule: the write path to its Store — validate → store.write.
+        // It may depend on that Store, a backend Adapter, or a validation
+        // Specialist (the standard's §7 write path names Specialists
+        // explicitly); reaching workflow, read projections, or boundaries
+        // inverts the layering. Warning while the check is new.
         if (comp.componentType === 'Registry') {
-          if (depComp.componentType !== 'Store' && depComp.componentType !== 'Adapter') {
+          if (
+            depComp.componentType !== 'Store' &&
+            depComp.componentType !== 'Adapter' &&
+            depComp.componentType !== 'Specialist'
+          ) {
             ctx.addIssue(
               'warning',
               'ARCHITECTURE_VIOLATION_REGISTRY_DEP',
-              `Architectural violation: Registry component "${comp.id}" should not depend on "${depComp.componentType}" component "${depComp.id}". A Registry is the write path to its Store and may depend only on that Store or a backend Adapter — the Registry never updates Indexes and never drives workflow.`,
+              `Architectural violation: Registry component "${comp.id}" should not depend on "${depComp.componentType}" component "${depComp.id}". A Registry is the write path to its Store and may depend only on that Store, a backend Adapter, or a validation Specialist — the Registry never updates Indexes and never drives workflow.`,
               comp.id,
               isDraftCtx || ctx.isComponentDraft(depComp.id),
             );

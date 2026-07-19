@@ -171,6 +171,17 @@ describe('Registry matrix — write path to its Store, nothing else', () => {
     } finally { proj.cleanup(); }
   });
 
+  it('accepts Registry → validation Specialist (the standard §7 validate→write path)', () => {
+    const proj = createTempProject();
+    proj.component('rec-store2', 'Store', 'durability: ram-projection');
+    proj.component('shape-validator', 'Specialist');
+    proj.component('rec-registry2', 'Registry', 'dependsOn: [rec-store2, shape-validator]');
+    proj.activate();
+    try {
+      expect(byCode(validateSddTree(), 'ARCHITECTURE_VIOLATION_REGISTRY_DEP')).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
   it('Store → Registry is now the error the docs always claimed', () => {
     const proj = createTempProject();
     proj.component('rec-registry2', 'Registry');
