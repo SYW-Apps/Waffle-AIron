@@ -5,6 +5,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { getRealtimeHub, publishChange, channelsForWebMutation } from '../../src/server/realtime.js';
+import { mcpChangeChannels } from '../../src/server/request.js';
 import { encodeFrame, decodeFrameForTest } from '../../src/server/websocket.js';
 import { createWebSession } from '../../src/server/websessions.js';
 import { allow, subjectOf } from './helpers.js';
@@ -200,5 +201,39 @@ describe('realtime channel hub (sdd_host)', () => {
     expect(channelsForWebMutation('/web/admin/approvals/decide', {})).toContain('approvals');
     expect(channelsForWebMutation('/web/tokens', {})).toEqual(['tokens']);
     expect(channelsForWebMutation('/web/something-else', {})).toEqual([]);
+  });
+
+  // ── data-plane (MCP) spec-tree change → channel mapping ────────────────────
+
+  const toolCall = (name: string) => ({
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'tools/call',
+    params: { name, arguments: {} },
+  });
+  const ok = { jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: '{}' }] } };
+  const toolError = { jsonrpc: '2.0', id: 1, result: { isError: true, content: [] } };
+
+  it('a successful sdd_* write wakes the bound project channel', () => {
+    expect(mcpChangeChannels(toolCall('sdd_add_component'), 'demo', ok)).toEqual(['project:demo']);
+    expect(mcpChangeChannels(toolCall('sdd_write_narrative'), 'demo', ok)).toEqual(['project:demo']);
+  });
+
+  it('a mutating lifecycle tool also wakes the projects list', () => {
+    expect(mcpChangeChannels(toolCall('sdd_host_lock_project'), 'demo', ok)).toEqual([
+      'project:demo',
+      'projects',
+    ]);
+  });
+
+  it('reads, unknown tools, failures, and non-tool messages publish nothing', () => {
+    expect(mcpChangeChannels(toolCall('sdd_get_status'), 'demo', ok)).toEqual([]);
+    expect(mcpChangeChannels(toolCall('sdd_validate_tree'), 'demo', ok)).toEqual([]);
+    expect(mcpChangeChannels(toolCall('sdd_host_get_approval_status'), 'demo', ok)).toEqual([]);
+    expect(mcpChangeChannels(toolCall('some_novel_tool'), 'demo', ok)).toEqual([]);
+    expect(mcpChangeChannels(toolCall('sdd_add_component'), 'demo', toolError)).toEqual([]);
+    expect(
+      mcpChangeChannels({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, 'demo', ok),
+    ).toEqual([]);
   });
 });
