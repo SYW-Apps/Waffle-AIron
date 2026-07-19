@@ -559,7 +559,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
-  reg<{ id: string; name: string; description: string; subsystem: string; componentType: 'Portal' | 'Orchestrator' | 'Supervisor' | 'Actor' | 'Store' | 'Index' | 'Registry' | 'Adapter' | 'Observer' | 'Specialist' | 'Repository' | 'Gateway'; owns?: string[]; dependsOn?: string[]; portalType?: 'HTTP_API' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'CLI' | 'NamedPipe' | 'IPC' | 'Custom'; basePath?: string; dispatch?: { capability: string; component: string; method: string; description?: string }[]; durability?: 'ram-projection' | 'durable' | 'read-through' | 'cache'; emits?: { topic: string; event?: string; description?: string }[]; subscribesTo?: { topic: string; event?: string; description?: string }[] }>(server,
+  reg<{ id: string; name: string; description: string; subsystem: string; componentType: 'Portal' | 'Orchestrator' | 'Supervisor' | 'Actor' | 'Store' | 'Index' | 'Registry' | 'Adapter' | 'Observer' | 'Specialist' | 'Repository' | 'Gateway'; owns?: string[]; dependsOn?: string[]; portalType?: 'HTTP_API' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'CLI' | 'NamedPipe' | 'IPC' | 'Custom'; basePath?: string; dispatch?: { capability: string; component: string; method: string; description?: string }[]; durability?: 'ram-projection' | 'durable' | 'read-through' | 'cache'; emits?: { topic: string; event?: string; description?: string }[]; subscribesTo?: { topic: string; event?: string; description?: string }[]; ext?: Record<string, unknown> }>(server,
     'sdd_add_component',
     {
       description: 'Add an L2 Component under a subsystem. componentType is a building block (Portal, Orchestrator, Supervisor, Actor, Store, Index, Registry, Adapter, Observer, Specialist) or a pattern (Repository, Gateway). Patterns set "owns" (their private member blocks); all components set "dependsOn" (collaborators — facades or standalone blocks). Held/persisted state (configs, permissions, sessions, caches): model the Repository recipe — a Store + Registry (write) + Index (read) owned by a Repository facade consumers depend on; a deliberately standalone Store is the sanctioned lightweight form (workflow-layer consumers + lint.allow on UNOWNED_STORE). Never hold state as fields inside an Orchestrator/Specialist because a Store link was refused.',
@@ -590,9 +590,10 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           event: z.string().optional(),
           description: z.string().optional(),
         })).optional().describe('Topics this component consumes (typical on Observers) — every subscription needs an emitter somewhere in the tree (UNSOURCED_SUBSCRIPTION).'),
+        ext: z.record(z.unknown()).optional().describe('Opaque pack/tool extension data (namespaced keys, e.g. "mypack:priority") — preserved verbatim, never validated or interpreted by the core'),
       },
     },
-    ({ id, name, description, subsystem, componentType, owns, dependsOn, portalType, basePath, dispatch, durability, emits, subscribesTo }) => {
+    ({ id, name, description, subsystem, componentType, owns, dependsOn, portalType, basePath, dispatch, durability, emits, subscribesTo, ext }) => {
       try {
         const { loadSubsystemSpec, saveComponentSpec } = requireSpecs();
         const sub = loadSubsystemSpec(subsystem);
@@ -612,6 +613,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           ...(durability ? { durability } : {}),
           ...(emits ? { emits } : {}),
           ...(subscribesTo ? { subscribesTo } : {}),
+          ...(ext ? { ext } : {}),
           status: 'draft',
           createdAt: now,
           updatedAt: now,
@@ -624,7 +626,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
-  reg<{ id: string; name: string; description: string; component: string; methods?: { name: string; description: string; signature: string; returns: string; params?: { name: string; type: string; description?: string; optional?: boolean }[]; guarantees?: string[]; effect?: 'read' | 'write' }[] }>(server,
+  reg<{ id: string; name: string; description: string; component: string; methods?: { name: string; description: string; signature: string; returns: string; params?: { name: string; type: string; description?: string; optional?: boolean }[]; guarantees?: string[]; effect?: 'read' | 'write'; ext?: Record<string, unknown> }[] }>(server,
     'sdd_define_interface',
     {
       description: 'Define an L3 Contract / Interface with method signatures for a component. Prefer supplying structured `params` per method — they are the authoritative source for type checking (the free-form signature string then becomes display-only and is never heuristically parsed).',
@@ -646,25 +648,53 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           })).optional().describe('Structured parameters — authoritative for type checking (the prose signature becomes display-only). Strongly preferred.'),
           guarantees: z.array(z.string().min(1)).optional().describe('Semantic guarantees the method promises (combinable); any guarantee a narrative step asserts must be declared here. Builtin tokens: idempotent | atomic | transactional | exactly-once; extension packs may declare more (any other token is UNKNOWN_GUARANTEE)'),
           effect: z.enum(['read', 'write']).optional().describe('State-effect direction on the component\'s held state — required on a durable Store\'s contract methods so the durability round-trip rule can pair writes with hydration read-backs'),
+          ext: z.record(z.unknown()).optional().describe('Opaque pack/tool extension data for this method (namespaced keys) — preserved verbatim'),
         })).optional().describe('List of method signature contracts'),
       },
     },
     ({ id, name, description, component, methods }) => {
       try {
-        const { loadComponentSpec, saveInterfaceSpec } = requireSpecs();
+        const { loadComponentSpec, loadInterfaceSpec, saveInterfaceSpec } = requireSpecs();
         const comp = loadComponentSpec(component);
         if (!comp) return errText(`Component "${component}" does not exist.`);
         const now = new Date().toISOString();
+        // Redefining an EXISTING interface replaces what the input expresses —
+        // but the input cannot express spec-level lint/ext or per-method
+        // endpoint bindings (sdd_set_endpoints), and may omit per-method ext.
+        // Carry those forward from the previous definition (createdAt likewise)
+        // instead of silently dropping them.
+        const existing = loadInterfaceSpec(id);
+        const carried: string[] = [];
+        if (existing) carried.push('createdAt');
+        if (existing?.lint !== undefined) carried.push('lint');
+        if (existing?.ext !== undefined) carried.push('ext');
+        const specMethods = (methods ?? []).map((m) => {
+          const prev = existing?.methods.find((p) => p.name === m.name);
+          const endpoint = prev?.endpoint;
+          const ext = m.ext ?? prev?.ext;
+          if (prev?.endpoint !== undefined) carried.push(`endpoint (${m.name})`);
+          if (m.ext === undefined && prev?.ext !== undefined) carried.push(`method ext (${m.name})`);
+          return {
+            ...m,
+            ...(endpoint !== undefined ? { endpoint } : {}),
+            ...(ext !== undefined ? { ext } : {}),
+          };
+        });
         const notices = saveInterfaceSpec({
           id,
           name,
           description,
           component,
-          methods: methods ?? [],
+          methods: specMethods,
+          ...(existing?.lint !== undefined ? { lint: existing.lint } : {}),
+          ...(existing?.ext !== undefined ? { ext: existing.ext } : {}),
           status: 'draft',
-          createdAt: now,
+          createdAt: existing?.createdAt ?? now,
           updatedAt: now,
         });
+        if (existing) {
+          notices.push(`Interface "${id}" already existed — redefined; carried forward from the previous definition: ${carried.join(', ')}.`);
+        }
         const noticeBlock = notices.length ? `\n\nNOTICE:\n- ${notices.join('\n- ')}` : '';
         return text(`Successfully defined L3 Interface Contract "${name}" (${id}).${noticeBlock}`);
       } catch (e) {
@@ -783,7 +813,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   const detailEnum = z.enum(['full', 'calls-only', 'intent']);
 
   const conformanceEnum = z.enum(['declared', 'anchored', 'off']);
-  reg<{ id: string; name: string; description: string; contract: string; sourcePath?: string; simPath?: string; technologies?: string[]; detail?: 'full' | 'calls-only' | 'intent'; conformance?: 'declared' | 'anchored' | 'off'; methods?: { name: string; detail?: 'full' | 'calls-only' | 'intent'; intent?: string; conformance?: 'declared' | 'anchored' | 'off'; symbol?: string; narrative?: NarrativeStepIn[] }[] }>(server,
+  reg<{ id: string; name: string; description: string; contract: string; sourcePath?: string; simPath?: string; technologies?: string[]; detail?: 'full' | 'calls-only' | 'intent'; conformance?: 'declared' | 'anchored' | 'off'; methods?: { name: string; detail?: 'full' | 'calls-only' | 'intent'; intent?: string; conformance?: 'declared' | 'anchored' | 'off'; symbol?: string; ext?: Record<string, unknown>; narrative?: NarrativeStepIn[] }[] }>(server,
     'sdd_write_narrative',
     {
       description: 'Write L4 Concrete Implementation spec containing L5 method narratives. Narratives are a FLAT ordered step list; flow steps (branch/switch/loop/try/parallel/jump/return/throw) jump by step number — blocks are just skipped regions. Steps may declare a `label` anchor, and every jump field has a *Label twin (toLabel, onTrueLabel, endLabel, …) resolved to step numbers at write time — prefer labels over hand-counted numbers; an unresolvable label rejects the write. Detail dial per method: full (narrative required) | calls-only (call choreography suffices) | intent (prose instead of steps); omitted = stereotype default (Portal/Observer/Adapter: calls-only, Store/Index/Registry: intent, else full). Conformance dial per method or spec: declared | anchored | off — how strictly structural conformance requires contract methods to be realized in the sourcePath file (omitted = Portal: anchored, else declared).',
@@ -803,19 +833,35 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           intent: z.string().optional().describe('detail: intent — behavioral prose (what it does and how it fails); substitute for a narrative'),
           conformance: conformanceEnum.optional().describe('Conformance tier for this method (overrides the spec default)'),
           symbol: z.string().optional().describe('Code-level name realizing this contract method in the sourcePath file, when it legitimately differs from the intent-language contract name (e.g. put realized by saveSnapshot)'),
+          ext: z.record(z.unknown()).optional().describe('Opaque pack/tool extension data for this method (namespaced keys) — preserved verbatim'),
           narrative: z.array(narrativeStepInput).optional(),
         })).optional().describe('Method implementations containing L5 narratives'),
       },
     },
     ({ id, name, description, contract, sourcePath, simPath, technologies, detail, conformance, methods }) => {
       try {
-        const { loadInterfaceSpec, saveImplementationSpec } = requireSpecs();
+        const { loadInterfaceSpec, loadImplementationSpec, saveImplementationSpec } = requireSpecs();
         const intf = loadInterfaceSpec(contract);
         if (!intf) return errText(`Interface contract "${contract}" does not exist.`);
-        const resolvedMethods = (methods ?? []).map(m => ({
-          ...m,
-          narrative: (m.narrative ?? []).map((s, i) => ({ ...s, stepNumber: s.stepNumber ?? i + 1 })),
-        }));
+        // Re-authoring an EXISTING implementation replaces what the input
+        // expresses — but the input cannot express spec-level lint/ext and may
+        // omit per-method ext. Carry those forward from the previous version
+        // (createdAt likewise) instead of silently dropping them.
+        const existing = loadImplementationSpec(id);
+        const carried: string[] = [];
+        if (existing) carried.push('createdAt');
+        if (existing?.lint !== undefined) carried.push('lint');
+        if (existing?.ext !== undefined) carried.push('ext');
+        const resolvedMethods = (methods ?? []).map(m => {
+          const prev = existing?.methods.find(p => p.name === m.name);
+          const ext = m.ext ?? prev?.ext;
+          if (m.ext === undefined && prev?.ext !== undefined) carried.push(`method ext (${m.name})`);
+          return {
+            ...m,
+            ...(ext !== undefined ? { ext } : {}),
+            narrative: (m.narrative ?? []).map((s, i) => ({ ...s, stepNumber: s.stepNumber ?? i + 1 })),
+          };
+        });
         // Symbolic *Label references resolve to step numbers before the spec
         // is saved; an unresolvable reference rejects the whole write.
         const labelErrors = resolvedMethods.flatMap(m => resolveNarrativeLabels(m.name, m.narrative));
@@ -831,13 +877,18 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           technologies,
           detail,
           conformance,
+          ...(existing?.lint !== undefined ? { lint: existing.lint } : {}),
+          ...(existing?.ext !== undefined ? { ext: existing.ext } : {}),
           // Post-resolution every cases/catches entry has its numeric step —
           // the *Label twins exist only in the input type, not the spec's.
           methods: resolvedMethods as Parameters<typeof saveImplementationSpec>[0]['methods'],
           status: 'draft',
-          createdAt: now,
+          createdAt: existing?.createdAt ?? now,
           updatedAt: now,
         });
+        if (existing) {
+          notices.push(`Implementation "${id}" already existed — re-authored; carried forward from the previous version: ${carried.join(', ')}.`);
+        }
         const noticeBlock = notices.length ? `\n\nNOTICE:\n- ${notices.join('\n- ')}` : '';
         return text(`Successfully saved L4 Implementation Spec "${name}" (${id}) with method narratives.${noticeBlock}`);
       } catch (e) {
