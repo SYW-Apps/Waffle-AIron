@@ -10,11 +10,14 @@ import { CANVAS_SKELETON } from './skeleton';
 
 export interface CanvasHandle {
   destroy(): void;
-  setTheme(theme: string): void;
+  setTheme(theme: string, vars?: Record<string, string>): void;
 }
 
 /** Mount the classic canvas into `host`. shadow (default true) isolates its CSS
- *  in a shadow root; theme sets the initial data-theme (`syw` dark | `light`). */
+ *  in a shadow root; theme sets the initial data-theme (`syw` dark | `light`);
+ *  `vars` overlays CSS custom properties (e.g. the app's derived palette) on
+ *  the canvas body — inline custom props win over the stylesheet's theme vars,
+ *  so the whole chrome follows the host app's selected theme. */
 export function mountCanvas(host, model, opts = {}) {
   const useShadow = opts.shadow !== false;
   const rootEl = useShadow ? host.attachShadow({ mode: 'open' }) : host;
@@ -26,6 +29,18 @@ export function mountCanvas(host, model, opts = {}) {
   cbody.setAttribute('data-theme', opts.theme || 'syw');
   cbody.innerHTML = CANVAS_SKELETON;
   rootEl.appendChild(cbody);
+  let appliedVars = [];
+  function applyVars(vars) {
+    for (const k of appliedVars) cbody.style.removeProperty(k);
+    appliedVars = [];
+    if (vars) {
+      for (const k of Object.keys(vars)) {
+        cbody.style.setProperty(k, vars[k]);
+        appliedVars.push(k);
+      }
+    }
+  }
+  applyVars(opts.vars);
 
   var ROOT = useShadow ? rootEl : document;
   var CBODY = cbody;
@@ -1983,7 +1998,23 @@ export function mountCanvas(host, model, opts = {}) {
       return markers[id];
     }
     var collapsed = [];
+    // True content overflow in px, measured with FRACTIONAL rect precision:
+    // scrollWidth/clientWidth are rounded integers and scrollWidth never reads
+    // below clientWidth, so a sub-pixel overflow that still paints a scrollbar
+    // is invisible to them. Positive = overflowing; negative = headroom.
+    function overflowPx() {
+      var box = hdr.getBoundingClientRect();
+      var edge = box.left;
+      for (var c = hdr.firstElementChild; c; c = c.nextElementSibling) {
+        var cr = c.getBoundingClientRect();
+        if (cr.width > 0 && cr.right > edge) edge = cr.right;
+      }
+      return edge - (box.right - 14); // 14 = the header's right padding
+    }
     function reflow() {
+      // Not laid out (hidden tab, non-browser DOM) — measuring would misfire.
+      var box = hdr.getBoundingClientRect();
+      if (!box || box.width <= 0) return;
       // Restore everything, then collapse until the row fits (idempotent).
       for (var i = collapsed.length - 1; i >= 0; i--) {
         var it = collapsed[i];
@@ -1991,12 +2022,17 @@ export function mountCanvas(host, model, opts = {}) {
       }
       collapsed = [];
       moreDd.style.display = 'none';
+      hdr.scrollLeft = 0;
       var guard = 0;
-      while (hdr.scrollWidth > hdr.clientWidth + 1 && guard < COLLAPSE.length) {
+      // Demand a few px of headroom, not a bare fit — the marginal-fit widths
+      // are exactly where the phantom scrollbar appeared.
+      while (overflowPx() > -8 && guard < COLLAPSE.length) {
         var id = COLLAPSE[guard++];
         var el = movableFor(id);
         if (!el || el === moreDd || el.parentNode === moreMenu) continue;
         var m = markerFor(id, el);
+        // A dropdown moved while open would strand its fixed-positioned menu.
+        if (el.classList) el.classList.remove('open');
         moreDd.style.display = '';
         moreMenu.appendChild(el);
         collapsed.push({ el: el, marker: m });
@@ -3057,10 +3093,14 @@ export function mountCanvas(host, model, opts = {}) {
     // Drive the engine's OWN theme state (not just the CSS attribute) so the
     // cytoscape node fills recolor too, and a later view switch keeps the theme
     // (view rebuilds read state.theme). Mirrors the in-engine themeBtn handler.
-    setTheme(theme) {
+    // `vars` (optional) replaces the mounted custom-property overlay — the
+    // cytoscape content keeps its semantic light/dark palettes; vars theme the
+    // CHROME (background, header, panel, accent) to the host app's palette.
+    setTheme(theme, vars) {
       var next = theme === 'light' ? 'light' : 'syw';
       if (typeof state !== 'undefined' && state) state.theme = next;
       cbody.setAttribute('data-theme', next);
+      if (vars !== undefined) applyVars(vars);
       try {
         if (typeof cy !== 'undefined' && cy) cy.style(buildStyle(THEMES[next]));
         if (typeof renderLegend === 'function') renderLegend();

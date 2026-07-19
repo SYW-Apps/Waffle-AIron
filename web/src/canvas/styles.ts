@@ -84,7 +84,10 @@ header input[type="search"]::placeholder { color:var(--dim); }
    embedded canvas, the app's scroll container) — which would otherwise trap it
    inside the canvas and force a scrollbar. Position is set in wireDropdown. */
 .dropdown .menu { display:none; position:fixed; max-height:calc(100vh - 80px); overflow-y:auto; background:var(--chrome); border:1px solid var(--chrome-border); border-radius:10px; box-shadow:var(--syw-deep-shadow); min-width:200px; padding:6px; z-index:120; }
-.dropdown.open .menu { display:block; }
+/* Child combinator, deliberately: a dropdown moved INTO the "⋯" overflow menu
+   must not auto-open when the More dropdown opens (a descendant selector would
+   match every nested menu under .dropdown.open). */
+.dropdown.open > .menu { display:block; }
 .dropdown .menu button { display:block; width:100%; text-align:left; border:none; background:transparent; color:var(--ink); padding:8px 10px; border-radius:7px; cursor:pointer; font:inherit; font-size:12.5px; }
 .dropdown .menu button:hover { background:var(--hover-bg); }
 .dropdown .menu .hint { display:block; color:var(--dim); font-size:10.5px; }

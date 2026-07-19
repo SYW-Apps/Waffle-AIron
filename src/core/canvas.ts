@@ -523,7 +523,10 @@ header input[type="search"]::placeholder { color:var(--dim); }
    embedded canvas, the app's scroll container) — which would otherwise trap it
    inside the canvas and force a scrollbar. Position is set in wireDropdown. */
 .dropdown .menu { display:none; position:fixed; max-height:calc(100vh - 80px); overflow-y:auto; background:var(--chrome); border:1px solid var(--chrome-border); border-radius:10px; box-shadow:var(--syw-deep-shadow); min-width:200px; padding:6px; z-index:120; }
-.dropdown.open .menu { display:block; }
+/* Child combinator, deliberately: a dropdown moved INTO the "⋯" overflow menu
+   must not auto-open when the More dropdown opens (a descendant selector would
+   match every nested menu under .dropdown.open). */
+.dropdown.open > .menu { display:block; }
 .dropdown .menu button { display:block; width:100%; text-align:left; border:none; background:transparent; color:var(--ink); padding:8px 10px; border-radius:7px; cursor:pointer; font:inherit; font-size:12.5px; }
 .dropdown .menu button:hover { background:var(--hover-bg); }
 .dropdown .menu .hint { display:block; color:var(--dim); font-size:10.5px; }
@@ -2727,7 +2730,23 @@ var MODEL = __MODEL_JSON__;
       return markers[id];
     }
     var collapsed = [];
+    // True content overflow in px, measured with FRACTIONAL rect precision:
+    // scrollWidth/clientWidth are rounded integers and scrollWidth never reads
+    // below clientWidth, so a sub-pixel overflow that still paints a scrollbar
+    // is invisible to them. Positive = overflowing; negative = headroom.
+    function overflowPx() {
+      var box = hdr.getBoundingClientRect();
+      var edge = box.left;
+      for (var c = hdr.firstElementChild; c; c = c.nextElementSibling) {
+        var cr = c.getBoundingClientRect();
+        if (cr.width > 0 && cr.right > edge) edge = cr.right;
+      }
+      return edge - (box.right - 14); // 14 = the header's right padding
+    }
     function reflow() {
+      // Not laid out (hidden tab, non-browser DOM) — measuring would misfire.
+      var box = hdr.getBoundingClientRect();
+      if (!box || box.width <= 0) return;
       // Restore everything, then collapse until the row fits (idempotent).
       for (var i = collapsed.length - 1; i >= 0; i--) {
         var it = collapsed[i];
@@ -2735,12 +2754,17 @@ var MODEL = __MODEL_JSON__;
       }
       collapsed = [];
       moreDd.style.display = 'none';
+      hdr.scrollLeft = 0;
       var guard = 0;
-      while (hdr.scrollWidth > hdr.clientWidth + 1 && guard < COLLAPSE.length) {
+      // Demand a few px of headroom, not a bare fit — the marginal-fit widths
+      // are exactly where the phantom scrollbar appeared.
+      while (overflowPx() > -8 && guard < COLLAPSE.length) {
         var id = COLLAPSE[guard++];
         var el = movableFor(id);
         if (!el || el === moreDd || el.parentNode === moreMenu) continue;
         var m = markerFor(id, el);
+        // A dropdown moved while open would strand its fixed-positioned menu.
+        if (el.classList) el.classList.remove('open');
         moreDd.style.display = '';
         moreMenu.appendChild(el);
         collapsed.push({ el: el, marker: m });

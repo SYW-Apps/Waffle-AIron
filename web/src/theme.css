@@ -383,6 +383,13 @@ select.input option, select.input optgroup {
 .hmenu-section { padding: 12px 14px; border-bottom: 1px solid var(--border); }
 .hmenu-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-subtle); font-weight: 700; margin-bottom: 8px; }
 .hmenu-foot { padding: 12px 14px; display: flex; justify-content: flex-end; }
+/* Floating theme cog for chromeless surfaces (sign-in screen, local dev):
+   theme settings are app-level, not account state, so they stay reachable
+   without a session. Viewport-anchored top-right. */
+.theme-cog { position: fixed; top: 14px; right: 16px; z-index: 80; }
+.theme-cog .hmenu-trigger { padding: 8px 10px; }
+.theme-cog .cog { font-size: 16px; line-height: 1; color: var(--ink-dim); }
+.theme-cog .hmenu-trigger:hover .cog, .theme-cog .hmenu-trigger.is-open .cog { color: var(--ink); }
 .theme-list { display: flex; flex-direction: column; gap: 4px; }
 .theme-opt {
   display: flex;

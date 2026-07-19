@@ -1,8 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { get } from '../api';
 import { AsyncView, useAsync } from '../ui';
 import { useSettings } from '../settings';
-import { resolveMode } from '../theme/themes';
+import { engineTheme, engineVars } from '../theme/canvasBridge';
 import { mountCanvas, type CanvasHandle } from '../canvas/engine';
 
 /**
@@ -17,10 +17,12 @@ export function CanvasView({ projectId }: { projectId: string }) {
     [projectId],
     [`project:${projectId}`, 'projects'],
   );
-  const { appearance } = useSettings();
-  // The classic engine ships a dark ('syw') and a 'light' theme; map the app's
-  // resolved appearance onto them.
-  const canvasTheme = resolveMode(appearance) === 'light' ? 'light' : 'syw';
+  const { themeId, appearance } = useSettings();
+  // The classic engine ships a dark ('syw') and a 'light' theme for its
+  // semantic content colors; the SELECTED app palette is overlaid on the
+  // chrome via CSS-variable overrides.
+  const canvasTheme = engineTheme(appearance);
+  const canvasVars = useMemo(() => engineVars(themeId, appearance), [themeId, appearance]);
 
   const hostRef = useRef<HTMLDivElement | null>(null);
   const handleRef = useRef<CanvasHandle | null>(null);
@@ -35,6 +37,7 @@ export function CanvasView({ projectId }: { projectId: string }) {
     const handle = mountCanvas(host, model, {
       shadow: true,
       theme: canvasTheme,
+      vars: canvasVars,
       embed: true,
       // "View OpenAPI" on an API-exposing component opens the project's full
       // (combined) surface as an interactive Swagger UI page. When the affordance
@@ -55,10 +58,10 @@ export function CanvasView({ projectId }: { projectId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model]);
 
-  // Follow the app theme without remounting the whole graph.
+  // Follow the app theme (palette + appearance) without remounting the graph.
   useEffect(() => {
-    handleRef.current?.setTheme(canvasTheme);
-  }, [canvasTheme]);
+    handleRef.current?.setTheme(canvasTheme, canvasVars);
+  }, [canvasTheme, canvasVars]);
 
   return (
     <AsyncView state={state}>

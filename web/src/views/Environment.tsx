@@ -1,9 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { get } from '../api';
 import { AsyncView, useAsync } from '../ui';
 import { useSettings } from '../settings';
-import { resolveMode } from '../theme/themes';
+import { engineTheme, engineVars } from '../theme/canvasBridge';
 import { mountCanvas, type CanvasHandle } from '../canvas/engine';
 
 interface GNode {
@@ -123,9 +123,10 @@ function landscapeToCanvasModel(g: Graph): unknown {
  */
 export function Environment() {
   const state = useAsync<Graph>(() => get('/web/graph?tier=landscape&level=1'), [], ['landscape']);
-  const { appearance } = useSettings();
+  const { themeId, appearance } = useSettings();
   const nav = useNavigate();
-  const canvasTheme = resolveMode(appearance) === 'light' ? 'light' : 'syw';
+  const canvasTheme = engineTheme(appearance);
+  const canvasVars = useMemo(() => engineVars(themeId, appearance), [themeId, appearance]);
 
   const hostRef = useRef<HTMLDivElement | null>(null);
   const handleRef = useRef<CanvasHandle | null>(null);
@@ -144,6 +145,7 @@ export function Environment() {
     const handle = mountCanvas(host, landscapeToCanvasModel(g), {
       shadow: true,
       theme: canvasTheme,
+      vars: canvasVars,
       embed: true,
       onNodeOpen: (_kind: string, id: string) => {
         if (openable.has(id)) nav('/?project=' + encodeURIComponent(id));
@@ -158,8 +160,8 @@ export function Environment() {
   }, [g]);
 
   useEffect(() => {
-    handleRef.current?.setTheme(canvasTheme);
-  }, [canvasTheme]);
+    handleRef.current?.setTheme(canvasTheme, canvasVars);
+  }, [canvasTheme, canvasVars]);
 
   return (
     <AsyncView state={state}>

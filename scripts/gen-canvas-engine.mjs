@@ -97,11 +97,14 @@ import { CANVAS_SKELETON } from './skeleton';
 
 export interface CanvasHandle {
   destroy(): void;
-  setTheme(theme: string): void;
+  setTheme(theme: string, vars?: Record<string, string>): void;
 }
 
 /** Mount the classic canvas into \`host\`. shadow (default true) isolates its CSS
- *  in a shadow root; theme sets the initial data-theme (\`syw\` dark | \`light\`). */
+ *  in a shadow root; theme sets the initial data-theme (\`syw\` dark | \`light\`);
+ *  \`vars\` overlays CSS custom properties (e.g. the app's derived palette) on
+ *  the canvas body — inline custom props win over the stylesheet's theme vars,
+ *  so the whole chrome follows the host app's selected theme. */
 export function mountCanvas(host, model, opts = {}) {
   const useShadow = opts.shadow !== false;
   const rootEl = useShadow ? host.attachShadow({ mode: 'open' }) : host;
@@ -113,6 +116,18 @@ export function mountCanvas(host, model, opts = {}) {
   cbody.setAttribute('data-theme', opts.theme || 'syw');
   cbody.innerHTML = CANVAS_SKELETON;
   rootEl.appendChild(cbody);
+  let appliedVars = [];
+  function applyVars(vars) {
+    for (const k of appliedVars) cbody.style.removeProperty(k);
+    appliedVars = [];
+    if (vars) {
+      for (const k of Object.keys(vars)) {
+        cbody.style.setProperty(k, vars[k]);
+        appliedVars.push(k);
+      }
+    }
+  }
+  applyVars(opts.vars);
 
   var ROOT = useShadow ? rootEl : document;
   var CBODY = cbody;
@@ -128,10 +143,14 @@ ${eng}
     // Drive the engine's OWN theme state (not just the CSS attribute) so the
     // cytoscape node fills recolor too, and a later view switch keeps the theme
     // (view rebuilds read state.theme). Mirrors the in-engine themeBtn handler.
-    setTheme(theme) {
+    // \`vars\` (optional) replaces the mounted custom-property overlay — the
+    // cytoscape content keeps its semantic light/dark palettes; vars theme the
+    // CHROME (background, header, panel, accent) to the host app's palette.
+    setTheme(theme, vars) {
       var next = theme === 'light' ? 'light' : 'syw';
       if (typeof state !== 'undefined' && state) state.theme = next;
       cbody.setAttribute('data-theme', next);
+      if (vars !== undefined) applyVars(vars);
       try {
         if (typeof cy !== 'undefined' && cy) cy.style(buildStyle(THEMES[next]));
         if (typeof renderLegend === 'function') renderLegend();
