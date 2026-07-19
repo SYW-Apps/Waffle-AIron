@@ -176,12 +176,25 @@ function PermissionsTab(props: { user: HostedUserRecord; scopes: Scope[] }) {
     assignments.reload();
   }
 
+  // Divergent ids (admin-created users): the grid keys assignments by the
+  // SUBJECT userId, not the record id shown in the list. The server
+  // canonicalizes on save and matches both on read — surface the divergence so
+  // an admin reading raw grid rows elsewhere isn't misled.
+  const gridKey = props.user.subject?.userId;
+  const diverged = !!gridKey && gridKey !== props.user.id;
+
   return (
     <div className="stack-lg">
       <p className="hint">
         Direct overrides win over roles for this user. Use them to grant or explicitly deny a single capability at one
         scope — <code>no</code> denies even when a role would allow.
       </p>
+      {diverged && (
+        <p className="hint">
+          Grid key: <code>{gridKey}</code> (this user's record id <code>{props.user.id}</code> differs; assignments are
+          keyed canonically by the subject id).
+        </p>
+      )}
       <AsyncView state={assignments}>
         {(d) => (
           <DataTable<PermissionAssignment>

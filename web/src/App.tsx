@@ -8,6 +8,7 @@ import { Login } from './views/Login';
 import { Home } from './views/Home';
 import { Users } from './views/Users';
 import { Roles } from './views/Roles';
+import { Permissions } from './views/Permissions';
 import { Units } from './views/Units';
 import { Projects } from './views/Projects';
 import { ProjectOps } from './views/ProjectOps';
@@ -35,6 +36,7 @@ const MAIN_NAV: NavItem[] = [
 const ADMIN_NAV: NavItem[] = [
   { to: '/admin/users', label: 'Users', icon: '⦿' },
   { to: '/admin/roles', label: 'Roles', icon: '⛨' },
+  { to: '/admin/permissions', label: 'Permissions', icon: '⚖' },
   { to: '/admin/units', label: 'Organization', icon: '⌂' },
   { to: '/admin/providers', label: 'Sign-in (SSO)', icon: '⚿' },
   { to: '/admin/approvals', label: 'Approvals', icon: '✓' },
@@ -120,6 +122,7 @@ function Shell() {
             <Route path="/agents" element={<Tokens />} />
             <Route path="/admin/users" element={<Users />} />
             <Route path="/admin/roles" element={<Roles />} />
+            <Route path="/admin/permissions" element={<Permissions />} />
             <Route path="/admin/units" element={<Units />} />
             <Route path="/admin/providers" element={<Providers />} />
             <Route path="/admin/approvals" element={<Approvals />} />
