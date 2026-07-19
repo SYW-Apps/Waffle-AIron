@@ -1,0 +1,31 @@
+kind: value-object
+id: pack_skill
+name: PackSkill
+description: >-
+  A declarative AI-agent skill shipped by an extension pack. Discovered alongside the pack and
+  installed (namespaced by pack id) into supported client targets' skills directories, and published
+  through the wairon-skill MCP resource mirror.
+fields:
+  - name: id
+    type: string
+    description: Skill id within the pack (e.g. domain-implementer). Installed as <pack-id>-<id>.
+    optional: false
+  - name: source
+    type: string
+    description: Path to the SKILL.md file, relative to the pack directory.
+    optional: false
+  - name: targets
+    type: string[]
+    description: AI client targets this skill installs into (claude, gemini, codex, ...).
+    optional: false
+  - name: pack
+    type: string
+    description: 'Provenance: the id/name of the pack that ships this skill.'
+    optional: true
+  - name: version
+    type: string
+    description: 'Provenance: the pack version that ships this skill.'
+    optional: true
+methods: []
+createdAt: '2026-07-14T18:56:18.960Z'
+updatedAt: '2026-07-14T18:56:19.007Z'

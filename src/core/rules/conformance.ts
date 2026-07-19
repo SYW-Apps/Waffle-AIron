@@ -32,7 +32,7 @@ import { RuleContext, SddRule } from './types.js';
 
 export type ConformanceTier = 'declared' | 'anchored' | 'off';
 
-function stereotypeDefaultTier(componentType: string): ConformanceTier {
+export function stereotypeDefaultTier(componentType: string): ConformanceTier {
   return componentType === 'Portal' ? 'anchored' : 'declared';
 }
 

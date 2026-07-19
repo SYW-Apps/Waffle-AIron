@@ -1,0 +1,26 @@
+id: ishare_snapshot_index
+name: Share Snapshot Index Interface
+description: 'Read path over the snapshot store: whole-snapshot and single-artifact fetch. Never mutates.'
+component: share_snapshot_index
+methods:
+  - name: get
+    description: A captured snapshot by id, or null.
+    signature: 'get(snapshotId: string): ShareSnapshot | null'
+    returns: ShareSnapshot | null
+    params:
+      - name: snapshotId
+        type: string
+  - name: getArtifact
+    description: >-
+      One captured artifact (canvas | html | openapi) of a snapshot as a serialized payload, or null
+      when the snapshot or artifact is absent.
+    signature: 'getArtifact(snapshotId: string, kind: string): string | null'
+    returns: string | null
+    params:
+      - name: snapshotId
+        type: string
+      - name: kind
+        type: string
+status: complete
+createdAt: '2026-07-17T22:29:28.352Z'
+updatedAt: '2026-07-18T10:10:39.899Z'

@@ -1,0 +1,24 @@
+id: irule_index
+name: Rule Index Interface
+description: >-
+  Read-path projections over the rule store: the ordered run sequence and the aggregate
+  known-issue-code set.
+component: rule_index
+methods:
+  - name: ruleSequence
+    description: >-
+      Return the ordered rule run sequence (built-ins first, then pack rules) the validator
+      executes.
+    signature: 'ruleSequence(): SddRule[]'
+    returns: SddRule[]
+    params: []
+  - name: knownIssueCodes
+    description: >-
+      Return every issue code any registered rule can emit — the set used to validate lint.allow
+      references (UNKNOWN_LINT_ALLOW_CODE).
+    signature: 'knownIssueCodes(): RuleCode[]'
+    returns: RuleCode[]
+    params: []
+status: complete
+createdAt: '2026-07-14T19:17:17.309Z'
+updatedAt: '2026-07-14T20:23:49.283Z'

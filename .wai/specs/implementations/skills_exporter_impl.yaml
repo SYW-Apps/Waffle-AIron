@@ -1,20 +1,39 @@
-schemaVersion: "1.0.0"
-id: "skills_exporter_impl"
-name: "Skills Exporter Implementation"
-description: "Concrete implementation of the Skills Exporter Interface copying Markdown templates."
-contract: "iskills_exporter"
-sourcePath: "src/core/skills.ts"
+id: skills_exporter_impl
+name: Skills Exporter Implementation
+description: >-
+  Copies the built-in SDD skill templates and the pack-provided skills into each active target's
+  skills directory, in src/core/skills.ts.
+contract: iskills_exporter
+sourcePath: src/core/skills.ts
 methods:
-  - name: "exportSddSkills"
+  - name: exportSddSkills
     narrative:
       - stepNumber: 1
-        description: "Determine build template directory for skills"
-        type: "local"
+        description: >-
+          Determine the built-in skill template directory and each active target's skills directory
+          (from project config).
+        type: local
       - stepNumber: 2
-        description: "Ensure destination .gemini/skills/ and .claude/ folders are created"
-        type: "local"
+        description: >-
+          Copy each built-in SDD skill template into every active target's skills directory as
+          <name>/SKILL.md, skipping targets that have no skills directory.
+        type: local
       - stepNumber: 3
-        description: "Iterate over static skill template files and copy them to destination directories"
-        type: "local"
-createdAt: "2026-06-11T14:50:00Z"
-updatedAt: "2026-06-11T14:50:00Z"
+        description: Load the governing extension packs to obtain their provided skills.
+        type: call
+        targetComponent: skills_core_adapter
+        targetMethod: loadProjectExtensions
+      - stepNumber: 4
+        description: >-
+          For each pack skill whose targets include an active target, copy its SKILL.md (resolved
+          relative to the pack directory) into that target's skills directory namespaced as
+          <pack-id>-<skill-id>; the built-in sdd-* names are reserved so a pack cannot shadow them.
+        type: local
+      - stepNumber: 5
+        description: Return the export result (destinations, file count, skipped targets).
+        type: return
+        outcome: skills installed
+detail: calls-only
+status: complete
+createdAt: '2026-06-11T14:50:00Z'
+updatedAt: '2026-07-14T20:14:24.630Z'

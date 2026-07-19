@@ -95,6 +95,7 @@ function buildVars(agent: AgentRecord): Record<string, string> {
     contextNote: '',
     domainPath: '.',
     domainName: '',
+    variantGuidance: agent.variantGuidance ?? '',
   };
 }
 

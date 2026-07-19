@@ -1,0 +1,15 @@
+id: iinstance_identity_index
+name: Instance Identity Index Interface
+description: Private read-path contract over the instance identity store.
+component: instance_identity_index
+methods:
+  - name: get
+    description: >-
+      Return the persisted instance identity (the boot-reserved built-in subject UUIDs), or null
+      when the instance has never been seeded.
+    signature: 'get(): InstanceIdentity | null'
+    returns: InstanceIdentity | null
+    params: []
+status: complete
+createdAt: '2026-07-16T00:24:13.420Z'
+updatedAt: '2026-07-16T07:27:54.399Z'

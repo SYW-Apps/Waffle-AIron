@@ -14,6 +14,7 @@ methods:
         type: call
         targetComponent: approval_registry
         targetMethod: create
+    symbol: createApprovalRequest
   - name: decide
     narrative:
       - stepNumber: 1
@@ -21,6 +22,7 @@ methods:
         type: call
         targetComponent: approval_registry
         targetMethod: decide
+    symbol: decideApprovalRequest
   - name: markCompleted
     narrative:
       - stepNumber: 1
@@ -28,6 +30,7 @@ methods:
         type: call
         targetComponent: approval_registry
         targetMethod: markCompleted
+    symbol: markApprovalCompleted
   - name: expirePending
     narrative:
       - stepNumber: 1
@@ -35,6 +38,7 @@ methods:
         type: call
         targetComponent: approval_registry
         targetMethod: expirePending
+    symbol: expirePendingApprovals
   - name: getById
     narrative:
       - stepNumber: 1
@@ -42,6 +46,7 @@ methods:
         type: call
         targetComponent: approval_index
         targetMethod: getById
+    symbol: getApprovalRequestById
   - name: list
     narrative:
       - stepNumber: 1
@@ -49,7 +54,8 @@ methods:
         type: call
         targetComponent: approval_index
         targetMethod: list
+    symbol: listApprovalRequests
 detail: calls-only
 status: complete
 createdAt: '2026-07-09T19:31:12.411Z'
-updatedAt: '2026-07-09T19:33:06.778Z'
+updatedAt: '2026-07-18T23:33:19.702Z'

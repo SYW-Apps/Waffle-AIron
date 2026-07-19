@@ -1,0 +1,20 @@
+id: share_access_orchestrator
+name: Share Access Orchestrator
+description: >-
+  Owns the PUBLIC, unauthenticated, token-gated access workflow. Resolves a presented token to its
+  link by salted-hash lookup; refuses a disabled, expired, or unknown token; records EVERY access
+  (source IP, user-agent, referer, outcome) to the access log; and returns the link's immutable
+  snapshot, or a permitted downloadable artifact (html / openapi) only when the link enables it.
+  Establishes NO session and grants nothing beyond the single shared view — the one choke point
+  where an unauthenticated request touches shared content.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - share_link_repository
+  - share_snapshot_repository
+  - share_access_repository
+  - credential_registry
+status: complete
+createdAt: '2026-07-17T22:09:50.123Z'
+updatedAt: '2026-07-18T13:16:59.019Z'

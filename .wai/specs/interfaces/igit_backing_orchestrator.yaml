@@ -1,0 +1,72 @@
+id: igit_backing_orchestrator
+name: Git Backing Orchestrator Interface
+description: >-
+  Contract for container-level backup administration. Binding/unbinding and syncing authorize
+  through the permission resolver — project:admin over the unit for a 'unit' binding, instance-level
+  project:admin for an 'instance' binding; the listing filters to the caller's project:admin reach.
+  The secret store is never mirrored.
+component: git_backing_orchestrator
+methods:
+  - name: listBackingBindings
+    description: >-
+      Authenticate and return the bindings whose scope the caller holds project:admin over (an
+      instance admin sees all). A read; not audited.
+    signature: 'listBackingBindings(credential: string): GitBackingBinding[]'
+    returns: GitBackingBinding[]
+    params:
+      - name: credential
+        type: string
+  - name: bindScope
+    description: >-
+      Authenticate, require project:admin over the binding's scope (the named unit, or instance
+      scope for an 'instance' binding), validate a 'unit' scope resolves to an existing organization
+      unit, upsert the binding (one per scope), and audit at security level.
+    signature: 'bindScope(credential: string, binding: GitBackingBinding): GitBackingBinding'
+    returns: GitBackingBinding
+    params:
+      - name: credential
+        type: string
+      - name: binding
+        type: GitBackingBinding
+    guarantees:
+      - atomic
+  - name: unbindScope
+    description: >-
+      Authenticate, look up the binding (not-found when absent), require project:admin over ITS
+      scope, remove it, and audit at security level. The backing repository itself is untouched.
+    signature: 'unbindScope(credential: string, bindingId: string): void'
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: bindingId
+        type: string
+  - name: syncBackingScope
+    description: >-
+      Authenticate, require project:admin over the binding's scope, and run the mirror sync:
+      clone-or-open the backing repo's working copy; for a 'unit' binding mirror every project
+      placed in the unit's subtree as <workdir>/projects/<projectId>/.wai/; for an 'instance'
+      binding mirror the instance-structure JSON collections (organization, users, permissions,
+      roles, instance identity, project registry, relations, policies, approvals) as
+      <workdir>/instance/ — NEVER the secret store, credentials only as hashed records; then
+      commit+push skip-if-clean, record lastSyncAt on a published sync, and audit at info level.
+      Returns whether anything was published.
+    signature: 'syncBackingScope(credential: string, bindingId: string): boolean'
+    returns: boolean
+    params:
+      - name: credential
+        type: string
+      - name: bindingId
+        type: string
+  - name: runPeriodicBackingSync
+    description: >-
+      Pre-authorized internal entry for the host supervisor's periodic backup timer — no
+      authentication, never exposed on any portal. Sweeps the bindings whose periodicSyncMinutes has
+      elapsed since lastSyncAt and runs each mirror sync (skip-if-clean); per-binding failures are
+      recorded and never abort the sweep.
+    signature: 'runPeriodicBackingSync(): void'
+    returns: void
+    params: []
+status: complete
+createdAt: '2026-07-16T15:39:32.918Z'
+updatedAt: '2026-07-16T15:48:49.029Z'

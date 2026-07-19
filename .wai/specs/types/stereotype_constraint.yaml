@@ -1,0 +1,18 @@
+kind: value-object
+id: stereotype_constraint
+name: StereotypeConstraint
+description: >-
+  A profile's constraint on component stereotypes: the stereotype names it forbids or discourages,
+  with a stated reason. Used by both the forbidden and discouraged lists of a ProfileDef.
+fields:
+  - name: types
+    type: string[]
+    description: Stereotype names this constraint applies to (e.g. Actor, Supervisor).
+    optional: false
+  - name: reason
+    type: string
+    description: Why the governing profile forbids or discourages these stereotypes.
+    optional: false
+methods: []
+createdAt: '2026-07-14T18:56:11.004Z'
+updatedAt: '2026-07-14T18:56:11.075Z'

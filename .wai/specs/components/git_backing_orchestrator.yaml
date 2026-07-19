@@ -1,0 +1,32 @@
+id: git_backing_orchestrator
+name: Git Backing Orchestrator
+description: >-
+  Owns the container-level backup workflows, distinct from the per-project real-repo binding:
+  bind/unbind a unit's container repo or the instance-structure backup repo (project:admin over the
+  unit, or instance-level project:admin for the instance binding and listings), and run a sync —
+  mirror-export every subtree project's .wai/ tree (unit binding) or the instance-structure JSON
+  collections excluding the secret store (instance binding) into the backing repo's working copy,
+  then commit+push skip-if-clean through the git backing adapter. Also exposes the pre-authorized
+  periodic sweep the host supervisor's timer drives. Writes are audited at security level
+  (bind/unbind) or info level (sync).
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - auth_specialist
+  - authorization_specialist
+  - git_backing_repository
+  - git_backing_adapter
+  - organization_repository
+  - project_registry
+  - audit_repository
+lint:
+  allow:
+    - code: UNUSED_METHOD
+      reason: >-
+        runPeriodicBackingSync is invoked by the host supervisor's periodic timer, scheduled in
+        host_server.start — a composition-root bootstrap method outside the modeled HTTP call chains
+        (see host_server's matching allow).
+status: complete
+createdAt: '2026-07-16T15:38:36.519Z'
+updatedAt: '2026-07-16T17:41:49.258Z'

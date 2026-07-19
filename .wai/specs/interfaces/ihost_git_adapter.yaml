@@ -1,6 +1,9 @@
 id: ihost_git_adapter
 name: Host Git Client Adapter Interface
-description: Contract for the hosting server's use of git backing, forwarded to the git portal.
+description: >-
+  Client contract for the sdd_git subsystem's published git portal, bound to the CURRENT project
+  root. Commits are SCOPED: staging confines to .wai/ (or a finer subpath) so a bound REAL
+  repository shared with the project's own codebase is never clobbered — never `git add -A`.
 component: host_git_adapter
 methods:
   - name: enable
@@ -16,9 +19,42 @@ methods:
     signature: 'sync(): void'
     returns: void
   - name: publish
-    description: Publish the locked working tree (commit + push) and return the result (no-op if native).
-    signature: 'publish(message: string): GitPublish'
+    description: >-
+      Stage ONLY the scoped subpath (default .wai/ — never the whole tree), commit with the given
+      message, and push to the bound remote (commit = local save, push = the actual backup; both
+      happen). A no-op returning a clean outcome when nothing under the scoped path changed.
+    signature: 'publish(message: string, subpath: string): GitPublish'
     returns: GitPublish
+    params:
+      - name: message
+        type: string
+      - name: subpath
+        type: string
+        description: >-
+          Staging scope relative to the project root; defaults to .wai/ — a subsystem commit passes
+          .wai/specs/<subsystem>/.
+        optional: true
+  - name: status
+    description: >-
+      The project's git-backing status: bound remote/branch, the periodic-sync setting, and whether
+      the .wai/ tree carries unpublished changes (scoped dirtiness, never the whole working tree).
+      Returns enabled:false when no repository is bound.
+    signature: 'status(): GitBackingStatus'
+    returns: GitBackingStatus
+    params: []
+  - name: configureSync
+    description: >-
+      Persist the project's periodic-sync setting (interval minutes + skip-if-clean) into its
+      git-backing config; an absent interval disables periodic sync for this project.
+    signature: 'configureSync(periodicSyncMinutes: number, skipIfClean: boolean): void'
+    returns: void
+    params:
+      - name: periodicSyncMinutes
+        type: number
+        optional: true
+      - name: skipIfClean
+        type: boolean
+        optional: true
 status: complete
 createdAt: '2026-07-04T16:32:06.430Z'
-updatedAt: '2026-07-04T16:37:37.290Z'
+updatedAt: '2026-07-16T15:22:09.591Z'

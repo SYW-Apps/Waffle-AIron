@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { startDevSession, getCurrentContext, serveApp } from '../../src/server/web.js';
+import { startDevSession, getCurrentContext, serveLegacyApp } from '../../src/server/web.js';
 import {
   registerLocalDevProject,
   listProjectRecords,
@@ -15,7 +15,8 @@ import {
   getWebSessionById,
   listWebSessionsBySubject,
 } from '../../src/server/websessions.js';
-import { routeData } from '../../src/server/http.js';
+import { routeData, initHostInstance } from '../../src/server/http.js';
+import { ensureInstanceIdentity } from '../../src/server/instance.js';
 import type { HostConfig, Principal } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
@@ -39,11 +40,15 @@ describe('local dev session (startDevSession) (sdd_host)', () => {
   let dataDir: string;
   let devCfg: HostConfig;
   let hostedCfg: HostConfig;
+  let devUserId: string;
 
   beforeEach(() => {
     dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-dev-unit-'));
     devCfg = baseCfg(dataDir, { authEnabled: false, devMode: true });
     hostedCfg = baseCfg(dataDir);
+    // The lifecycle init entrypoint seeds the boot-reserved built-in subject
+    // UUIDs; `wairon dev` always runs it before serving.
+    devUserId = ensureInstanceIdentity(dataDir).localDevUserId;
   });
   afterEach(() => {
     try {
@@ -55,7 +60,7 @@ describe('local dev session (startDevSession) (sdd_host)', () => {
 
   it('refuses to mint outside local developer mode (devMode false → throws, mints nothing)', () => {
     expect(() => startDevSession(hostedCfg)).toThrow(/dev session is only available under wairon dev/i);
-    expect(listWebSessionsBySubject(dataDir, 'local-dev')).toHaveLength(0);
+    expect(listWebSessionsBySubject(dataDir, devUserId)).toHaveLength(0);
   });
 
   it('mints a project-scoped local session and REUSES it on a second call (same id, no churn)', () => {
@@ -65,30 +70,32 @@ describe('local dev session (startDevSession) (sdd_host)', () => {
     const id2 = startDevSession(devCfg);
     expect(id2).toBe(id1);
     // Exactly one dev session persisted — reuse, not churn.
-    expect(listWebSessionsBySubject(dataDir, 'local-dev')).toHaveLength(1);
+    expect(listWebSessionsBySubject(dataDir, devUserId)).toHaveLength(1);
 
     const s = getWebSessionById(dataDir, id1)!;
-    expect(s.subject).toEqual({ userId: 'local-dev', kind: 'service', issuer: 'local' });
-    // PROJECT-SCOPED grant on 'local' — never an instance-wide '*' grant.
-    expect(s.grants).toEqual([{ projectId: 'local', permissions: ['mcp:read', 'mcp:write'] }]);
-    expect(s.grants.some((g) => g.projectId === '*')).toBe(false);
+    // The subject is the PERSISTED boot-reserved local-developer UUID — never a
+    // guessable literal like 'local-dev'.
+    expect(s.subject).toEqual({ userId: devUserId, kind: 'human', issuer: 'local', displayName: 'Local developer' });
+    // NARROWED to the one local project — never instance-wide '*'. The session
+    // stores NO permissions; they resolve live from the subject identity.
+    expect(s.projects).toEqual(['local']);
     expect(Date.parse(s.expiresAt)).toBeGreaterThan(Date.now());
   });
 
-  it('getCurrentContext returns local:true under devMode, with the single local project', () => {
+  it('getCurrentContext returns local:true under devMode, as the instance-admin dev subject', () => {
     const id = startDevSession(devCfg);
     const ctx = getCurrentContext(devCfg, id);
     expect(ctx.local).toBe(true);
-    expect(ctx.isAdmin).toBe(false);
-    expect(ctx.canWriteProjects).toBe(true); // mcp:write on 'local'
-    expect(ctx.visibleProjectIds).toEqual(['local']);
+    // The local-developer subject IS a boot-reserved instance admin (full local access).
+    expect(ctx.isAdmin).toBe(true);
+    expect(ctx.subject.userId).toBe(devUserId);
   });
 
   it('getCurrentContext leaves local falsy when the server is NOT in dev mode', () => {
     const s = createWebSession(dataDir, {
       id: '',
       subject: { userId: 'u-1', kind: 'human', issuer: 'local' },
-      grants: [{ projectId: 'proj-a', permissions: ['mcp:read'] }],
+      projects: ['proj-a'],
       createdAt: '',
       expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
     });
@@ -148,6 +155,10 @@ describe('dev-mode HTTP wiring (routeData) (sdd_host)', () => {
   const savedEnv = { ...process.env };
 
   function startServer(cfg: HostConfig): Promise<void> {
+    // Mirror startHostServer: the lifecycle init entrypoint runs before the
+    // listener binds (seeds the instance identity; devMode also seeds the
+    // synthetic 'local' organization unit).
+    initHostInstance(cfg);
     server = http.createServer((req, res) => routeData(cfg, req, res));
     return new Promise((resolve) =>
       server!.listen(0, '127.0.0.1', () => {
@@ -211,16 +222,17 @@ describe('dev-mode HTTP wiring (routeData) (sdd_host)', () => {
     expect(setCookie).toMatch(/^wairon_session=ws_[0-9a-f]+/);
     const sessionId = /wairon_session=(ws_[0-9a-f]+)/.exec(setCookie)![1];
 
-    // Exactly one local-dev session was auto-established.
-    expect(listWebSessionsBySubject(dataDir, 'local-dev')).toHaveLength(1);
+    // Exactly one local-dev session was auto-established (the seeded UUID subject).
+    const devUserId = ensureInstanceIdentity(dataDir).localDevUserId;
+    expect(listWebSessionsBySubject(dataDir, devUserId)).toHaveLength(1);
 
     // The cookie authenticates /web/context, which is signed-in and LOCAL.
     const ctx = await raw({ method: 'GET', path: '/web/context', headers: { cookie: `wairon_session=${sessionId}` } });
     expect(ctx.status).toBe(200);
     const parsed = JSON.parse(ctx.body);
     expect(parsed.local).toBe(true);
-    expect(parsed.subject.userId).toBe('local-dev');
-    expect(parsed.visibleProjectIds).toEqual(['local']);
+    expect(parsed.subject.userId).toBe(devUserId);
+    expect(parsed.isAdmin).toBe(true); // the dev subject is the boot-reserved instance admin
   });
 
   it('devMode: a cookieless GET /web/context auto-logs-in inline (the client never sees a 401)', async () => {
@@ -237,7 +249,7 @@ describe('dev-mode HTTP wiring (routeData) (sdd_host)', () => {
     expect(res.status).toBe(302);
     expect(res.headers['location']).toBe('/');
     expect(String(res.headers['set-cookie']?.[0] ?? '')).toMatch(/^wairon_session=ws_/);
-    expect(listWebSessionsBySubject(dataDir, 'local-dev')).toHaveLength(1);
+    expect(listWebSessionsBySubject(dataDir, ensureInstanceIdentity(dataDir).localDevUserId)).toHaveLength(1);
   });
 
   it('HOSTED (devMode off): /web/dev-login 404s and NO session cookie is ever set — even with the web UI enabled', async () => {
@@ -263,14 +275,14 @@ describe('dev-mode HTTP wiring (routeData) (sdd_host)', () => {
     expect(ctx.headers['set-cookie']).toBeUndefined();
 
     // Nothing was minted the whole time.
-    expect(listWebSessionsBySubject(dataDir, 'local-dev')).toHaveLength(0);
+    expect(listWebSessionsBySubject(dataDir, ensureInstanceIdentity(dataDir).localDevUserId)).toHaveLength(0);
   });
 });
 
 // ── the dev UI reuses the ONE web client (serveApp) ──────────────────────────
 
-describe('dev mode reuses the single web client (serveApp) (sdd_host)', () => {
-  const html = serveApp('/');
+describe('dev mode reuses the single web client (serveLegacyApp) (sdd_host)', () => {
+  const html = serveLegacyApp('/');
 
   it('is exactly one self-contained document — the client is reused, not forked', () => {
     expect((html.match(/<!doctype html/gi) || []).length).toBe(1);

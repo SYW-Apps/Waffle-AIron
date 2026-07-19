@@ -431,6 +431,84 @@ methods:
         description: Unknown surface action
         type: throw
         error: UnknownSurfaceActionError
+  - name: runPacks
+    narrative:
+      - stepNumber: 1
+        description: Dispatch on the action
+        type: switch
+        'on': action
+        cases:
+          - value: add
+            step: 2
+          - value: list
+            step: 4
+          - value: remove
+            step: 6
+        defaultStep: 8
+      - stepNumber: 2
+        description: Vendor and register a pack via the packs adapter
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: addPack
+      - stepNumber: 3
+        description: Return after add
+        type: return
+        outcome: added
+      - stepNumber: 4
+        description: List the loaded packs via the packs adapter
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: listPacks
+      - stepNumber: 5
+        description: Return after list
+        type: return
+        outcome: listed
+      - stepNumber: 6
+        description: Remove a vendored pack via the packs adapter
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: removePack
+      - stepNumber: 7
+        description: Return after remove
+        type: return
+        outcome: removed
+      - stepNumber: 8
+        description: Return on unknown action
+        type: return
+        outcome: unknown action
+  - name: runRules
+    narrative:
+      - stepNumber: 1
+        description: List the active conformance rules via the rules adapter
+        type: call
+        targetComponent: cli_rules_adapter
+        targetMethod: listRules
+      - stepNumber: 2
+        description: Return after list
+        type: return
+        outcome: listed
+  - name: runPatterns
+    narrative:
+      - stepNumber: 1
+        description: List the pack-declared reusable patterns via the patterns adapter
+        type: call
+        targetComponent: cli_patterns_adapter
+        targetMethod: listPatterns
+      - stepNumber: 2
+        description: Return after list
+        type: return
+        outcome: listed
+  - name: runVariants
+    narrative:
+      - stepNumber: 1
+        description: List the component variants via the variants adapter
+        type: call
+        targetComponent: cli_variants_adapter
+        targetMethod: listVariants
+      - stepNumber: 2
+        description: Return after list
+        type: return
+        outcome: listed
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-10T23:16:18.296Z'
+updatedAt: '2026-07-15T12:25:27.118Z'

@@ -1,0 +1,17 @@
+id: skills_core_adapter_impl
+name: Skills Core Adapter Implementation
+description: Client adapter forwarding to the core portal to load extension packs, in src/core/skills.ts.
+contract: iskills_core_adapter
+sourcePath: src/core/skills.ts
+methods:
+  - name: loadProjectExtensions
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal to load and merge the governing extension packs.
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadProjectExtensions
+detail: calls-only
+status: complete
+createdAt: '2026-07-14T20:14:19.137Z'
+updatedAt: '2026-07-14T20:23:49.884Z'

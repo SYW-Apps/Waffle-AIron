@@ -1,6 +1,9 @@
 id: git_adapter_impl
 name: Git Client Adapter Implementation
-description: git I/O against the bound project's checkout, using the container bot identity.
+description: >-
+  git I/O against the bound project's checkout, using the container bot identity. Staging is
+  pathspec-confined — there is deliberately NO stage-everything code path (`git add -A` was the bug
+  that made a shared real repository unsafe).
 contract: igit_adapter
 sourcePath: src/git/adapter.ts
 methods:
@@ -26,11 +29,6 @@ methods:
       - stepNumber: 1
         description: Integrate origin/<defaultBranch> into the working branch (fast-forward/merge)
         type: local
-  - name: commitAll
-    narrative:
-      - stepNumber: 1
-        description: Stage all changes and commit with the bot committer identity; return the new commit SHA
-        type: local
   - name: push
     narrative:
       - stepNumber: 1
@@ -41,6 +39,19 @@ methods:
       - stepNumber: 1
         description: Derive the host's compare/PR URL from the remote, default and working branches
         type: local
+  - name: commitScoped
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Stage ONLY the given subpath (`git add -- <subpath>`), probe the scoped index for staged
+          changes, and when non-empty commit with the bot committer identity; return the new commit
+          SHA, or null when the scoped path was clean
+        type: local
+  - name: isClean
+    narrative:
+      - stepNumber: 1
+        description: Run `git status --porcelain -- <subpath>` and report true when it prints nothing
+        type: local
 lint:
   allow:
     - code: UNDECLARED_DEPENDENCY
@@ -50,4 +61,4 @@ lint:
         cross-subsystem reach.
 status: complete
 createdAt: '2026-07-04T16:33:28.728Z'
-updatedAt: '2026-07-11T20:30:07.313Z'
+updatedAt: '2026-07-16T15:25:36.196Z'

@@ -11,11 +11,19 @@ methods:
       file is absent or unreadable.
     symbol: readLockRecord
   - name: write
-    narrative: []
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Serialize the LockRecord and write it atomically to .wai/lock.json for the bound project,
+          replacing any prior record wholesale — the single lock file is the only lock location, so
+          no stale record can survive a write.
+        type: local
+        assertsInvariants:
+          - lock_record.single-record-per-project
     intent: >-
       Serializes the LockRecord and writes it atomically to .wai/lock.json for the bound project,
       overwriting any prior record.
     symbol: writeLockRecord
 status: complete
 createdAt: '2026-07-04T12:53:38.524Z'
-updatedAt: '2026-07-11T19:14:22.567Z'
+updatedAt: '2026-07-18T14:33:34.180Z'

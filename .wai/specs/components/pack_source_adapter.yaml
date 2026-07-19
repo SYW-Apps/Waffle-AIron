@@ -1,0 +1,15 @@
+id: pack_source_adapter
+name: Pack Source Adapter
+description: >-
+  The filesystem/module I/O boundary for extension-pack loading. Discovers pack refs in the global
+  packs directory, resolves a ref to a concrete target (path-like against the project root; a
+  directory to its entry file; otherwise a Node module id), and reads a target's raw manifest
+  (parsing a YAML file or requiring a JS module). Does no merging or schema validation — that is the
+  extension orchestrator's workflow.
+subsystem: sdd_core
+componentType: Adapter
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-07-14T18:58:42.482Z'
+updatedAt: '2026-07-14T20:16:03.493Z'

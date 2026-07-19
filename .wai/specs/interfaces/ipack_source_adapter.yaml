@@ -1,0 +1,46 @@
+id: ipack_source_adapter
+name: Pack Source Adapter Interface
+description: >-
+  The filesystem/module read surface for extension-pack loading: directory discovery, ref
+  resolution, and raw manifest reading. No parsing/merging.
+component: pack_source_adapter
+methods:
+  - name: globalPacksDir
+    description: Resolve the global packs directory (WAIRON_PACKS_DIR, else ~/.wairon/packs).
+    signature: 'globalPacksDir(): string'
+    returns: string
+    params: []
+  - name: discoverPacks
+    description: >-
+      List pack refs in a directory (YAML/JS files, and subdirectories containing a pack entry
+      file), sorted for deterministic load order.
+    signature: 'discoverPacks(dir: string): string[]'
+    returns: string[]
+    params:
+      - name: dir
+        type: string
+  - name: resolvePackRef
+    description: >-
+      Resolve a ref to a concrete target: a path-like ref against the project root (a directory
+      resolving to its entry file), otherwise a Node module id.
+    signature: 'resolvePackRef(ref: string, projectRoot: string): string'
+    returns: string
+    params:
+      - name: ref
+        type: string
+      - name: projectRoot
+        type: string
+  - name: readManifest
+    description: >-
+      Read a resolved target's pack manifest, deserializing it into an ExtensionPack: parse a YAML
+      pack file, or require a JS pack module and use its export (programmatic rules included).
+      Propagates a read/require/parse failure to the caller, which records it as an
+      EXTENSION_LOAD_ERROR.
+    signature: 'readManifest(target: string): ExtensionPack'
+    returns: ExtensionPack
+    params:
+      - name: target
+        type: string
+status: complete
+createdAt: '2026-07-14T18:59:04.313Z'
+updatedAt: '2026-07-14T20:23:49.239Z'

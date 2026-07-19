@@ -1,0 +1,13 @@
+id: permission_index
+name: Permission Index
+description: >-
+  Read-path projection over the permission-assignment grid, filterable by scope, subject, and
+  capability — serving both hierarchical resolution and admin listing.
+subsystem: sdd_host
+componentType: Index
+owns: []
+dependsOn:
+  - permission_store
+status: complete
+createdAt: '2026-07-15T20:27:03.322Z'
+updatedAt: '2026-07-15T23:30:41.055Z'

@@ -3,10 +3,12 @@ id: principal
 name: Principal
 description: >-
   The authenticated caller identity and authorized scope produced by verifying a credential.
-  Transient (never persisted). Its subject, grants, project set, and role are server-side bindings
-  derived from the token or bootstrap credential, never from client-supplied parameters. The
-  role/projects fields remain a coarse compatibility projection; precise authorization is expressed
-  by grants.
+  Transient (never persisted). Its subject, projects narrowing, and permissionSubject are
+  server-side bindings derived from the token or bootstrap credential, never from client-supplied
+  parameters. The role/projects fields remain a coarse compatibility projection for display; precise
+  authorization is expressed through the permission resolver over the permissionSubject
+  (roleBindings + assignments + the env-anchored instance-admin bypass), never through stored
+  grants.
 fields:
   - name: tokenId
     type: string
@@ -14,20 +16,33 @@ fields:
     optional: false
   - name: role
     type: string
-    description: Coarse compatibility role derived from grants, such as "editor" or "admin".
+    description: >-
+      Coarse compatibility role such as "editor" or "admin", projected for display only — NOT an
+      authorization source (authorization resolves from permissionSubject).
     optional: false
   - name: projects
     type: string[]
-    description: Compatibility projection of project ids this principal may act on; "*" denotes all projects.
+    description: >-
+      Coarse compatibility projection of the token's project narrowing; "*" denotes no narrowing
+      (the resolver still gates per project). Not an authorization source on its own.
     optional: false
   - name: subject
     type: PrincipalSubject
     description: Resolved human, service, or bootstrap identity responsible for the authenticated action.
     optional: true
-  - name: grants
-    type: ProjectGrant[]
-    description: Precise server-derived project and instance permissions for authorization checks.
+  - name: permissionSubject
+    type: PermissionSubject
+    description: >-
+      The resolved permission subject (subjectId + roleBindings + instanceAdmin) for hierarchical
+      authorization. instanceAdmin (the resolver bypass, NON-overridable) is true ONLY for the
+      built-in super-admin subject (issuer 'local', userId === the persisted boot-reserved
+      super-admin UUID seeded at first boot), the bootstrap/master credential, and — under devMode
+      only — the synthetic local-developer subject (its persisted boot-reserved UUID). A regular
+      user is NEVER instanceAdmin: a delegated instance-wide admin holds a project:admin@instance
+      assignment (or the sso-admin role), which resolves as a normal OVERRIDABLE permission, not the
+      bypass. There is no '*'@instance assignment. Replaces the former grants field; precise
+      authorization is expressed through the permission resolver over this subject.
     optional: true
 methods: []
 createdAt: '2026-07-04T12:44:18.529Z'
-updatedAt: '2026-07-08T19:34:59.535Z'
+updatedAt: '2026-07-16T00:26:22.158Z'

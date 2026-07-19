@@ -1,0 +1,37 @@
+kind: value-object
+id: share_link_input
+name: Share Link Input
+description: >-
+  The owner's request to create a share link: which project view to capture, the mode, and the
+  initial controls.
+subsystem: sdd_host
+fields:
+  - name: projectId
+    type: string
+    optional: false
+  - name: view
+    type: string
+    optional: false
+  - name: mode
+    type: string
+    description: '''snapshot'' (default) | ''live''.'
+    optional: false
+  - name: artifacts
+    type: string[]
+    description: Artifact kinds to capture (canvas | html | openapi).
+    optional: false
+  - name: expiresAt
+    type: string
+    optional: true
+  - name: allowDownloadHtml
+    type: boolean
+    optional: true
+  - name: allowDownloadOpenapi
+    type: boolean
+    optional: true
+  - name: frameAncestors
+    type: string[]
+    optional: true
+methods: []
+createdAt: '2026-07-17T22:32:40.007Z'
+updatedAt: '2026-07-17T22:32:40.070Z'

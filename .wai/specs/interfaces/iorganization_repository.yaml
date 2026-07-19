@@ -3,15 +3,6 @@ name: Organization Repository Interface
 description: Facade contract for hosted organization units and project placements.
 component: organization_repository
 methods:
-  - name: upsertUnit
-    description: Create or update one organization unit.
-    signature: 'upsertUnit(unit: OrganizationUnitRecord): OrganizationUnitRecord'
-    returns: OrganizationUnitRecord
-    params:
-      - name: unit
-        type: OrganizationUnitRecord
-    guarantees:
-      - atomic
   - name: listUnits
     description: List organization units, optionally below a parent unit.
     signature: 'listUnits(parentId: string): OrganizationUnitRecord[]'
@@ -47,6 +38,56 @@ methods:
     params:
       - name: id
         type: string
+  - name: createUnit
+    description: >-
+      Facade: create one organization unit through the registry (qualified-id computation and
+      collision rejection happen there).
+    signature: 'createUnit(unit: OrganizationUnitRecord): OrganizationUnitRecord'
+    returns: OrganizationUnitRecord
+    params:
+      - name: unit
+        type: OrganizationUnitRecord
+    guarantees:
+      - atomic
+  - name: updateUnit
+    description: >-
+      Facade: update one organization unit's metadata through the registry (slug/parent changes are
+      rejected there — use reparentUnit).
+    signature: 'updateUnit(unit: OrganizationUnitRecord): OrganizationUnitRecord'
+    returns: OrganizationUnitRecord
+    params:
+      - name: unit
+        type: OrganizationUnitRecord
+    guarantees:
+      - atomic
+  - name: reparentUnit
+    description: >-
+      Facade: move a unit's subtree under a new parent through the registry, returning the old->new
+      qualified-id remap for every moved unit.
+    signature: 'reparentUnit(unitId: string, newParentId?: string): UnitIdRemap[]'
+    returns: UnitIdRemap[]
+    params:
+      - name: unitId
+        type: string
+      - name: newParentId
+        type: string
+        optional: true
+    guarantees:
+      - atomic
+  - name: deleteUnit
+    description: 'Facade: delete one empty organization unit through the registry.'
+    signature: 'deleteUnit(unitId: string): void'
+    returns: void
+    params:
+      - name: unitId
+        type: string
+  - name: deletePlacement
+    description: 'Facade: remove one project placement through the registry.'
+    signature: 'deletePlacement(placementId: string): void'
+    returns: void
+    params:
+      - name: placementId
+        type: string
 status: complete
 createdAt: '2026-07-08T21:13:09.955Z'
-updatedAt: '2026-07-09T22:17:20.540Z'
+updatedAt: '2026-07-15T19:49:28.437Z'

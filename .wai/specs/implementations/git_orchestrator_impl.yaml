@@ -1,6 +1,9 @@
 id: git_orchestrator_impl
 name: Git Orchestrator Implementation
-description: 'The git-backing workflows: enable/disable/sync/isEnabled/publish.'
+description: >-
+  The git-backing workflows: enable/disable/sync/publish/status/configureSync. Publishing is
+  DELIBERATE and SCOPED: staging confines to .wai/ (or a finer subpath) so a bound REAL repository
+  shared with the project's own codebase is never clobbered.
 contract: igit_orchestrator
 sourcePath: src/git/orchestrator.ts
 methods:
@@ -80,33 +83,106 @@ methods:
         description: If not git-backed, publish nothing
         type: branch
         condition: config is null or not enabled
+        onTrueStep: 3
         onFalseStep: 4
       - stepNumber: 3
         description: Return a not-published result (native project)
         type: return
         outcome: not published
       - stepNumber: 4
-        description: Commit the promoted working tree
+        description: >-
+          Commit ONLY the scoped subpath (default .wai/) — pathspec-confined staging, never `git add
+          -A`, so a shared repository's own code is never committed by wairon
         type: call
         targetComponent: git_adapter
-        targetMethod: commitAll
+        targetMethod: commitScoped
       - stepNumber: 5
-        description: Push the working branch
+        description: If the scoped path was clean (no commit produced), publish nothing
+        type: branch
+        condition: the scoped commit produced no commit (clean path)
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Return a not-published result (clean scope — a quiet project never commits noise)
+        type: return
+        outcome: not published (clean)
+      - stepNumber: 7
+        description: Push the working branch (commit = local save, push = the actual backup)
         type: call
         targetComponent: git_adapter
         targetMethod: push
-      - stepNumber: 6
+      - stepNumber: 8
         description: Build the compare URL
         type: call
         targetComponent: git_adapter
         targetMethod: compareUrl
-      - stepNumber: 7
+      - stepNumber: 9
         description: Assemble the GitPublish (published, commitSha, compareUrl)
         type: local
-      - stepNumber: 8
+      - stepNumber: 10
         description: Return the publish result
         type: return
         outcome: GitPublish
+  - name: status
+    narrative:
+      - stepNumber: 1
+        description: Read the git config
+        type: call
+        targetComponent: git_config_registry
+        targetMethod: read
+      - stepNumber: 2
+        description: If not git-backed, report a disabled status
+        type: branch
+        condition: config is null or not enabled
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return enabled:false
+        type: return
+        outcome: disabled status
+      - stepNumber: 4
+        description: Probe whether the scoped .wai/ path holds unpublished changes
+        type: call
+        targetComponent: git_adapter
+        targetMethod: isClean
+      - stepNumber: 5
+        description: >-
+          Assemble the GitBackingStatus from the config (remote/branch/workingBranch, periodic-sync
+          setting) and the scoped dirtiness
+        type: local
+      - stepNumber: 6
+        description: Return the status
+        type: return
+        outcome: git backing status
+  - name: configureSync
+    narrative:
+      - stepNumber: 1
+        description: Read the git config
+        type: call
+        targetComponent: git_config_registry
+        targetMethod: read
+      - stepNumber: 2
+        description: If not git-backed, reject — a sync cadence needs a bound repository
+        type: branch
+        condition: config is null or not enabled
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject configuring sync without a binding
+        type: throw
+        error: not git-backed — bind a repository first
+      - stepNumber: 4
+        description: Merge periodicSyncMinutes and skipIfClean (default true) into the config
+        type: local
+      - stepNumber: 5
+        description: Persist the updated git config
+        type: call
+        targetComponent: git_config_registry
+        targetMethod: write
+      - stepNumber: 6
+        description: Return once persisted
+        type: return
+        outcome: sync setting persisted
 status: complete
 createdAt: '2026-07-04T16:33:44.730Z'
-updatedAt: '2026-07-04T16:37:37.331Z'
+updatedAt: '2026-07-16T15:25:13.846Z'

@@ -1,0 +1,16 @@
+id: git_backing_store
+name: Git Backing Store
+description: >-
+  Authoritative disk-backed holder of the container-level git backing bindings (unit container repos
+  + the instance-structure backup repo), persisted at &lt;dataDir&gt;/git-backing.json. Loaded fresh
+  per call like the other hosted stores; every write goes through write-temp-then-rename so a
+  crashed write leaves the prior state intact. Owned by the git backing repository; never depended
+  on directly by consumers.
+subsystem: sdd_host
+componentType: Store
+owns: []
+dependsOn: []
+durability: read-through
+status: complete
+createdAt: '2026-07-16T15:38:06.730Z'
+updatedAt: '2026-07-19T11:31:01.217Z'

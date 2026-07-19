@@ -7,8 +7,8 @@ description: >-
 component: admin_portal
 methods:
   - name: createProject
-    description: Provision a new isolated project.
-    signature: 'createProject(credential: string, id: string): HostedProjectRecord'
+    description: Provision a new isolated project placed in the REQUIRED owner unit.
+    signature: 'createProject(credential: string, id: string, unitId: string): HostedProjectRecord'
     returns: HostedProjectRecord
     endpoint:
       transport: HTTP
@@ -262,7 +262,8 @@ methods:
   - name: listApprovals
     description: >-
       List approval requests for the human decision surface, optionally filtered by status and
-      project. Human decision surface for approval-backed self-service until the admin UI lands.
+      project. Human decision surface for the project-lifecycle approval exception until the admin
+      UI lands.
     signature: 'listApprovals(credential: string, status: string, project: string): ApprovalRequest[]'
     returns: ApprovalRequest[]
     params:
@@ -280,8 +281,8 @@ methods:
       path: /admin/approvals
   - name: decideApproval
     description: >-
-      Approve or deny a pending approval request. Human decision surface for approval-backed
-      self-service until the admin UI lands.
+      Approve or deny a pending approval request. Human decision surface for the project-lifecycle
+      approval exception until the admin UI lands.
     signature: >-
       decideApproval(credential: string, requestId: string, approved: boolean, reason: string):
       ApprovalRequest
@@ -302,8 +303,8 @@ methods:
       path: /admin/approvals/{id}/decision
   - name: executeApproval
     description: >-
-      Execute an approved request's privileged action. Human decision surface for approval-backed
-      self-service until the admin UI lands.
+      Execute an approved request's privileged action. Human decision surface for the
+      project-lifecycle approval exception until the admin UI lands.
     signature: 'executeApproval(credential: string, requestId: string): string'
     returns: string
     params:
@@ -317,4 +318,4 @@ methods:
       path: /admin/approvals/{id}/execute
 status: complete
 createdAt: '2026-07-04T12:50:05.545Z'
-updatedAt: '2026-07-14T11:43:00.015Z'
+updatedAt: '2026-07-16T00:18:55.142Z'

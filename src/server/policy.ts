@@ -4,12 +4,12 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { runWithProjectRoot } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { AI_PATHS } from '../config/loader.js';
-import { globalPacksDir, discoverPacks } from '../core/extensions.js';
+import { hostCore } from './adapters.js';
 import { authenticateCredential } from './auth.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { executeApprovedCreate } from './admin.js';
 import { resolveProjectRoot } from './projects.js';
-import { resolveScopeFor, permits } from './scope.js';
+import { authorize } from './authorization.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import { sendJson } from './httpio.js';
 import * as packs from './packs.js';
@@ -18,6 +18,7 @@ import type {
   AuditRetentionPolicy,
   HostConfig,
   HostedProjectRecord,
+  HostExposurePolicy,
   IdentityProviderConfig,
   InstancePackPolicy,
   PolicyEvaluationResult,
@@ -44,7 +45,7 @@ import type {
 //   2. Project Policy Orchestrator + Portal — profile-aware project init and
 //      pack/profile policy enforcement. Credential-bearing methods authenticate
 //      and authorize by Principal grants; two pre-authorized entries
-//      (executeApprovedInit, evaluateInitRequest) serve the self-service approval
+//      (executeApprovedInit, evaluateInitRequest) serve the project-lifecycle approval
 //      chain and are never portal-exposed. A null active policy resolves to the
 //      documented PERMISSIVE_DEFAULT_POLICY. Audit appends are best-effort and
 //      never fail the primary action.
@@ -94,6 +95,66 @@ export function setPackPolicyRecord(dataDir: string, policy: InstancePackPolicy)
   fs.writeFileSync(tmp, JSON.stringify(stored, null, 2) + '\n');
   fs.renameSync(tmp, p);
   return stored;
+}
+
+// ── exposure-policy storage (third policy collection) ────────────────────────
+//
+// The instance EXPOSURE policy (webUiEnabled/requireTls posture) joins the
+// policy repository as its third file-backed collection at
+// <dataDir>/exposure-policy.json — the same file the HTTP gate reads, now with
+// a proper read/replace path so the web admin surface can edit it.
+
+function exposurePolicyPath(dataDir: string): string {
+  return path.join(dataDir, 'exposure-policy.json');
+}
+
+/** The compatible default exposure posture: everything mounted on the loopback
+ *  admin listener (matching pre-exposure-policy behavior), TLS required, and the
+ *  unified web UI OFF — a NEW public surface stays opt-in, so an existing
+ *  instance is entirely unaffected until an operator turns it on. */
+export const COMPATIBLE_DEFAULT_EXPOSURE: HostExposurePolicy = {
+  adminApiMode: 'local_only',
+  adminUiEnabled: true,
+  identityApiEnabled: true,
+  landscapeApiEnabled: true,
+  projectPolicyApiEnabled: true,
+  cliControlEnabled: true,
+  requireTls: true,
+  operationsApiEnabled: true,
+  webUiEnabled: false,
+};
+
+/**
+ * Read the persisted instance exposure policy, or null when none has ever been
+ * configured (callers substitute the safe default — web UI off, TLS required);
+ * an unreadable file or structurally invalid JSON fails with a storage error
+ * naming the path.
+ */
+export function getExposurePolicyRecord(dataDir: string): HostExposurePolicy | null {
+  const p = exposurePolicyPath(dataDir);
+  let raw: string;
+  try {
+    raw = fs.readFileSync(p, 'utf8');
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw new Error(`Failed to read exposure policy store at ${p}: ${(e as Error).message}`);
+  }
+  try {
+    return JSON.parse(raw) as HostExposurePolicy;
+  } catch (e) {
+    throw new Error(`Exposure policy store at ${p} contains malformed JSON: ${(e as Error).message}`);
+  }
+}
+
+/** Persist the instance exposure policy wholesale via write-temp-then-rename
+ *  and return it. No stamping — the exposure posture is a plain settings object. */
+export function setExposurePolicyRecord(dataDir: string, policy: HostExposurePolicy): HostExposurePolicy {
+  const p = exposurePolicyPath(dataDir);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  const tmp = `${p}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(policy, null, 2) + '\n');
+  fs.renameSync(tmp, p);
+  return policy;
 }
 
 /**
@@ -241,27 +302,23 @@ export function removeIdentityProviderRecord(dataDir: string, id: string): void 
 // canonical identity.ts helpers; keep this copy in lockstep).
 //
 // Project-scoped methods (evaluateProjectPolicy, reconcileProjectPolicy)
-// authorize on the RESOLVED, org-unit-aware mcp:write scope (scope_specialist:
-// resolveScopeFor + permits) — a unit admin is first-class over the projects
-// placed in its subtree, and a genuine instance-wide grant resolves to
-// scope.all. Only the instance-WIDE capabilities (initializeProjectWithProfile,
-// setPackPolicy) stay on the flat carriesInstancePermission check by design.
+// authorize project:write over the project through the permission resolver — a
+// unit admin is first-class over the projects placed in its subtree, because the
+// resolver's leaf->root walk reaches their unit-scoped permission. Only the
+// instance-WIDE capabilities (initializeProjectWithProfile, setPackPolicy)
+// authorize at the instance root by design.
 
-const PROJECT_CREATE_PERMISSION = 'project:create';
-const MCP_WRITE_PERMISSION = 'mcp:write';
-const POLICY_MANAGE_PERMISSION = 'policy:manage';
+/** Creating a project is its own capability. */
+const PROJECT_CREATE_CAPABILITY = 'project:create';
+/** The legacy `mcp:write` permission maps onto project:write. */
+const PROJECT_WRITE_CAPABILITY = 'project:write';
+/** The legacy `policy:manage` permission maps onto project:admin. */
+const POLICY_MANAGE_CAPABILITY = 'project:admin';
 
-// An instance-wide capability requires a grant scoped to ALL projects (a genuine
-// '*', no orgUnitId) carrying the permission (or the '*' wildcard). A project- or
-// unit-scoped grant, even one carrying the permission, does NOT confer
-// instance-wide reach.
-function carriesInstancePermission(principal: Principal, permission: string): boolean {
-  return (principal.grants ?? []).some(
-    (g) =>
-      g.projectId === '*' &&
-      !g.orgUnitId &&
-      (g.permissions.includes('*') || g.permissions.includes(permission)),
-  );
+// An instance-WIDE capability must resolve at the instance root: a unit- or
+// project-scoped permission, however broad, does NOT confer instance-wide reach.
+function carriesInstancePermission(cfg: HostConfig, principal: Principal, capability: string): boolean {
+  return authorize(cfg.dataDir, principal, capability, 'instance', '').value === 'yes';
 }
 
 /** Authenticate the caller credential or throw (401-mapping). */
@@ -271,7 +328,7 @@ function requirePrincipal(cfg: HostConfig, credential: string | null): Principal
   return principal;
 }
 
-// ── subject / audit helpers (mirrored from identity.ts / selfservice.ts) ─────
+// ── subject / audit helpers (mirrored from identity.ts / projectlifecycle.ts) ─
 
 /** The stable subject for a principal: its resolved subject, or a synthesized
  *  service identity keyed by the credential's token id for legacy credentials. */
@@ -338,13 +395,13 @@ function packStem(ref: string): string {
 /** Resolve one named pack's declarative content from the server-global pack set,
  *  or null when the global set carries no such pack. */
 function readGlobalPackContent(name: string): string | null {
-  const dir = globalPacksDir();
+  const dir = hostCore.globalPacksDir();
   for (const candidate of [path.join(dir, `${name}.yaml`), path.join(dir, `${name}.yml`)]) {
     if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
       return fs.readFileSync(candidate, 'utf8');
     }
   }
-  const match = discoverPacks(dir).find((ref) => packStem(ref) === name || path.basename(ref) === name);
+  const match = hostCore.discoverPacks(dir).find((ref) => packStem(ref) === name || path.basename(ref) === name);
   if (match && fs.statSync(match).isFile()) return fs.readFileSync(match, 'utf8');
   return null;
 }
@@ -505,7 +562,15 @@ function performInit(
     throw new Error('policy violation — project initialization rejected under the active pack policy');
   }
 
-  const record = executeApprovedCreate(cfg, request.id);
+  // Create AND place the project in its required owner unit (executeApprovedCreate
+  // validates the unit and writes the placement, so no init path can mint an
+  // unplaced project the permission resolver cannot see).
+  const record = executeApprovedCreate(
+    cfg,
+    request.id,
+    request.ownerUnitId,
+    principal ? principalSubject(principal) : undefined,
+  );
 
   installPacks(cfg, record.id, [
     ...policy.requiredGlobalPacks,
@@ -545,14 +610,22 @@ export function initializeProjectWithProfile(
   request: ProjectInitRequest,
 ): HostedProjectRecord {
   const principal = requirePrincipal(cfg, credential);
-  if (!carriesInstancePermission(principal, PROJECT_CREATE_PERMISSION)) {
-    throw new ForbiddenError('creating a project requires a project:create grant or an instance-admin grant');
+  // Resolve project:create over the request's REQUIRED owner unit — the resolved
+  // value must be yes (an approval-valued caller must use the execute-primary
+  // project-lifecycle path instead).
+  if (!request.ownerUnitId) {
+    throw new Error(
+      'ProjectInitRequest.ownerUnitId is required — every project is placed in an organization unit at creation.',
+    );
+  }
+  if (authorize(cfg.dataDir, principal, PROJECT_CREATE_CAPABILITY, 'unit', request.ownerUnitId).value !== 'yes') {
+    throw new ForbiddenError('creating a project requires project:create authority over the target unit');
   }
   return performInit(cfg, request, principal);
 }
 
 /**
- * Pre-authorized entry for the self-service approval workflow: performs NO
+ * Pre-authorized entry for the project-lifecycle approval workflow: performs NO
  * authentication (the caller has already enforced approval-based authorization).
  * Runs the shared initialization body. Never exposed on any portal.
  */
@@ -590,9 +663,9 @@ export function evaluateProjectPolicy(
   projectId: string,
 ): PolicyEvaluationResult {
   const principal = requirePrincipal(cfg, credential);
-  if (!permits(resolveScopeFor(cfg, principal, MCP_WRITE_PERMISSION), projectId)) {
+  if (authorize(cfg.dataDir, principal, PROJECT_WRITE_CAPABILITY, 'project', projectId).value !== 'yes') {
     throw new ForbiddenError(
-      "evaluating a project's policy requires a grant covering the project or an instance-admin grant",
+      "evaluating a project's policy requires project:write over the project",
     );
   }
   const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
@@ -624,9 +697,9 @@ export function reconcileProjectPolicy(
   projectId: string,
 ): PolicyEvaluationResult {
   const principal = requirePrincipal(cfg, credential);
-  if (!permits(resolveScopeFor(cfg, principal, MCP_WRITE_PERMISSION), projectId)) {
+  if (authorize(cfg.dataDir, principal, PROJECT_WRITE_CAPABILITY, 'project', projectId).value !== 'yes') {
     throw new ForbiddenError(
-      "reconciling a project's policy requires a grant covering the project or an instance-admin grant",
+      "reconciling a project's policy requires project:write over the project",
     );
   }
   const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
@@ -688,8 +761,8 @@ export function setPackPolicy(
   policy: InstancePackPolicy,
 ): InstancePackPolicy {
   const principal = requirePrincipal(cfg, credential);
-  if (!carriesInstancePermission(principal, POLICY_MANAGE_PERMISSION)) {
-    throw new ForbiddenError('policy administration requires a policy:manage grant or an instance-admin grant');
+  if (!carriesInstancePermission(cfg, principal, POLICY_MANAGE_CAPABILITY)) {
+    throw new ForbiddenError('policy administration requires instance-level project:admin');
   }
 
   const stamped: InstancePackPolicy = { ...policy, updatedBy: principalSubject(principal) };

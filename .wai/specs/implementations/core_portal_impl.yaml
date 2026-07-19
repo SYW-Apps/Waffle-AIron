@@ -201,6 +201,20 @@ methods:
         targetComponent: core_orchestrator
         targetMethod: buildProjectGraph
     detail: calls-only
+  - name: loadProjectExtensions
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the extension orchestrator, which gathers, loads, and merges the governing
+          packs.
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: loadProjectExtensions
+      - stepNumber: 2
+        description: Return the merged LoadedExtensions to the caller.
+        type: return
+        outcome: success
+    detail: calls-only
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-11T11:34:23.986Z'
+updatedAt: '2026-07-14T19:03:04.672Z'

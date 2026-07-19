@@ -1,8 +1,8 @@
 id: approval_repository
 name: Approval Repository
 description: >-
-  Facade for durable hosted approval requests. Self-service MCP, UI, and CLI workflows depend on
-  this repository to create, decide, query, expire, and complete approval-backed actions without
+  Facade for durable hosted approval requests. Project-lifecycle MCP, UI, and CLI workflows depend
+  on this repository to create, decide, query, expire, and complete approval-gated actions without
   touching private store blocks.
 subsystem: sdd_host
 componentType: Repository
@@ -13,4 +13,4 @@ owns:
 dependsOn: []
 status: complete
 createdAt: '2026-07-09T07:19:21.678Z'
-updatedAt: '2026-07-09T19:32:55.744Z'
+updatedAt: '2026-07-16T00:14:49.771Z'

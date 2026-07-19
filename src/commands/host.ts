@@ -8,12 +8,27 @@ import { logger } from '../utils/logger.js';
 import { WaironError } from '../utils/errors.js';
 import * as admin from '../server/admin.js';
 import * as packs from '../server/packs.js';
+import * as permissionadmin from '../server/permissionadmin.js';
+import { mintToken } from '../server/identity.js';
+import { upsertUnit as landscapeUpsertUnit } from '../server/landscape.js';
+import { migratePermissionModel } from '../server/migration.js';
 import { AdminAuthError, LockValidationError } from '../server/admin.js';
 import { startHostServer } from '../server/http.js';
-import { registerLocalDevProject } from '../server/projects.js';
+import { registerLocalDevProject, existingProjectRoot } from '../server/projects.js';
+import { runWithProjectRoot } from '../utils/fs.js';
+import { buildCanvasModel } from '../core/canvas.js';
+import { seedDemoTree } from '../core/demo-seed.js';
 import { upsertIdentityProviderRecord } from '../server/policy.js';
 import { setSecret } from '../utils/secrets.js';
-import type { HostConfig, HostExposurePolicy, IdentityProviderConfig, Role } from '../server/types.js';
+import type {
+  Capability,
+  DisplayRole,
+  HostConfig,
+  HostExposurePolicy,
+  IdentityProviderConfig,
+  PermissionValue,
+  ScopeKind,
+} from '../server/types.js';
 
 // ---------------------------------------------------------------------------
 // CLI Host Client Adapter + host command runners (sdd_cli → sdd_host)
@@ -33,8 +48,21 @@ export interface HostOptions {
   dataDir?: string;
   noAuth?: boolean;
   id?: string;
+  unit?: string;
+  slug?: string;
+  parent?: string;
+  kind?: string;
   project?: string;
   role?: string;
+  owner?: string;
+  label?: string;
+  user?: string;
+  capability?: string;
+  instance?: boolean;
+  subsystem?: string;
+  message?: string;
+  interval?: string | number;
+  skipIfClean?: boolean;
   remote?: string;
   branch?: string;
   target?: string;
@@ -44,6 +72,7 @@ export interface HostOptions {
   name?: string;
   file?: string;
   open?: boolean;
+  force?: boolean;
 }
 
 function resolveHostConfig(options: HostOptions): HostConfig {
@@ -319,7 +348,12 @@ export async function runHostProject(action: string, options: HostOptions = {}):
     switch (action) {
       case 'create': {
         if (!options.id) throw new WaironError('`--id <id>` is required for `host project create`.');
-        const rec = admin.createProject(cfg, cred, options.id);
+        if (!options.unit) {
+          throw new WaironError(
+            '`--unit <unitId>` is required for `host project create` — every project is placed in an organization unit at creation.',
+          );
+        }
+        const rec = admin.createProject(cfg, cred, options.id, options.unit);
         logger.success(`Created project "${rec.id}" at ${chalk.gray(rec.rootPath)}`);
         break;
       }
@@ -346,6 +380,208 @@ export async function runHostProject(action: string, options: HostOptions = {}):
   }
 }
 
+// ── wairon host demo ──────────────────────────────────────────────────────────
+
+/**
+ * Provision a project and seed it with the rich "ShopFlow" example spec tree, so
+ * the architecture canvas renders substantial content across all views. Every
+ * project is placed in an organization unit at creation (permission model), so
+ * this first ensures an owner unit exists (idempotent upsert; defaults to a root
+ * unit named after `--unit`, default "demo"). `--force` destroys and reseeds an
+ * existing project instead of erroring.
+ */
+export async function runHostDemo(options: HostOptions = {}): Promise<void> {
+  const cfg = resolveHostConfig(options);
+  const cred = masterCredential();
+  const id = options.id || 'demo';
+  const unitId = options.unit || 'demo';
+  try {
+    // Ensure the owner unit exists (idempotent — updates it if already present).
+    // A root unit must be a business_entity per the org-unit hierarchy.
+    landscapeUpsertUnit(cfg, cred, {
+      id: unitId,
+      name: unitId,
+      slug: unitId,
+      kind: 'business_entity',
+      status: 'active',
+      createdAt: '',
+      createdBy: { userId: 'master', kind: 'service', issuer: 'local' },
+    });
+
+    const existing = existingProjectRoot(cfg.dataDir, id);
+    if (existing && !options.force) {
+      throw new WaironError(
+        `Project "${id}" already exists at ${existing}. Re-run with --force to destroy and reseed it.`,
+      );
+    }
+    if (existing) admin.destroyProject(cfg, cred, id);
+    const rec = admin.createProject(cfg, cred, id, unitId);
+
+    const summary = runWithProjectRoot(rec.rootPath, () => {
+      seedDemoTree();
+      const model = buildCanvasModel();
+      return {
+        subsystems: model.subsystems.length,
+        components: model.components.length,
+        edges: model.edges.length,
+        crossEdges: model.edges.filter((e) => e.cross).length,
+        types: model.types.length,
+        typeEdges: model.typeEdges.length,
+        databases: model.system.databases?.length ?? 0,
+        narratives: model.components.reduce((n, c) => n + c.narratives.length, 0),
+      };
+    });
+
+    logger.success(`Seeded demo project "${rec.id}" at ${chalk.gray(rec.rootPath)}`);
+    logger.info(
+      `  ${summary.subsystems} subsystems · ${summary.components} components · ${summary.edges} dependency edges (${summary.crossEdges} cross-subsystem)`,
+    );
+    logger.info(
+      `  ${summary.types} types · ${summary.typeEdges} ERD edges · ${summary.databases} databases · ${summary.narratives} narratives`,
+    );
+    logger.blank();
+    logger.info(`Explore it in the web UI canvas (Components / Types / Databases / Flow).`);
+  } catch (e) {
+    throw mapAdminError(e);
+  }
+}
+
+// ── wairon host unit <action> ─────────────────────────────────────────────────
+
+export async function runHostUnit(action: string, options: HostOptions = {}): Promise<void> {
+  const cfg = resolveHostConfig(options);
+  const cred = masterCredential();
+  try {
+    switch (action) {
+      case 'create': {
+        if (!options.slug) throw new WaironError('`--slug <slug>` is required for `host unit create`.');
+        // A unit's qualified dot-path id is its parent's id + '.' + slug; a root
+        // unit's id IS its slug.
+        const qualifiedId = options.parent ? `${options.parent}.${options.slug}` : options.slug;
+        const stored = landscapeUpsertUnit(cfg, cred, {
+          id: qualifiedId,
+          name: options.name ?? options.slug,
+          slug: options.slug,
+          kind: options.kind ?? 'team',
+          ...(options.parent ? { parentId: options.parent } : {}),
+          status: 'active',
+          createdAt: '',
+          createdBy: { userId: 'master', kind: 'service', issuer: 'local' },
+        });
+        logger.success(`Created organization unit "${stored.id}".`);
+        break;
+      }
+      default:
+        throw new WaironError(`Unknown unit action "${action}" (create).`);
+    }
+  } catch (e) {
+    throw mapAdminError(e);
+  }
+}
+
+// ── wairon host doctor ────────────────────────────────────────────────────────
+
+/**
+ * Inspect a hosted data dir for pre-permission-model shapes and (with --fix)
+ * migrate them in place: stored grants → grid assignments, ownerless keys →
+ * synthesized service owners carrying their legacy authority, units → slugs +
+ * qualified dot-path ids with every reference remapped, unplaced projects →
+ * the 'unassigned' root unit, legacy builtin sessions/keys → revoked. This
+ * migration is REQUIRED at rollout: without it every existing user and token
+ * resolves to zero permissions under the live-owner model.
+ */
+export async function runHostDoctor(options: HostOptions & { fix?: boolean } = {}): Promise<void> {
+  const cfg = resolveHostConfig(options);
+  const report = migratePermissionModel(cfg.dataDir, options.fix === true);
+  if (report.findings.length === 0) {
+    logger.success('Hosted data is on the permission model — nothing to migrate.');
+    return;
+  }
+  logger.info(`${report.findings.length} finding(s)${report.applied ? ' — applied' : ' (dry run; re-run with --fix to apply)'}:`);
+  for (const f of report.findings) {
+    logger.info(`  [${f.area.padEnd(8)}] ${f.detail}`);
+  }
+  if (!report.applied) {
+    logger.warn('NOT applied. Without --fix, pre-permission-model users and tokens resolve to ZERO permissions.');
+  }
+}
+
+// ── wairon host permission <action> ──────────────────────────────────────────
+
+const CAPABILITIES: Capability[] = ['project:read', 'project:create', 'project:write', 'project:admin', 'approval:decide', 'share:create'];
+const PERMISSION_VALUES: PermissionValue[] = ['yes', 'approval', 'no', 'inherit'];
+
+/** The assignment scope from the mutually exclusive --project/--unit/--instance flags. */
+function resolveScopeOptions(options: HostOptions): { kind: ScopeKind; id?: string } {
+  if (options.project) return { kind: 'project', id: options.project };
+  if (options.unit) return { kind: 'unit', id: options.unit };
+  return { kind: 'instance' };
+}
+
+export async function runHostPermission(action: string, options: HostOptions = {}): Promise<void> {
+  const cfg = resolveHostConfig(options);
+  const cred = masterCredential();
+  try {
+    switch (action) {
+      case 'set': {
+        if (!options.user) throw new WaironError('`--user <userId>` is required for `host permission set`.');
+        if (!options.capability || !CAPABILITIES.includes(options.capability as Capability)) {
+          throw new WaironError(`\`--capability\` must be one of: ${CAPABILITIES.join(', ')}.`);
+        }
+        const value = (options.value ?? 'yes') as PermissionValue;
+        if (!PERMISSION_VALUES.includes(value)) {
+          throw new WaironError(`\`--value\` must be one of: ${PERMISSION_VALUES.join(', ')}.`);
+        }
+        const scope = resolveScopeOptions(options);
+        const stored = permissionadmin.setAssignment(cfg, cred, {
+          id: '',
+          subjectKind: 'user',
+          subjectId: options.user,
+          scopeKind: scope.kind,
+          ...(scope.id !== undefined ? { scopeId: scope.id } : {}),
+          capability: options.capability as Capability,
+          value,
+          createdAt: '',
+        });
+        logger.success(
+          `Assignment ${stored.id}: ${options.user} ${options.capability}=${value} @ ${scope.kind}${scope.id ? ` ${scope.id}` : ''}`,
+        );
+        break;
+      }
+      case 'list': {
+        const scope = resolveScopeOptions(options);
+        const list = permissionadmin.listAssignments(
+          cfg,
+          cred,
+          options.project || options.unit || options.instance ? scope.kind : undefined,
+          scope.id,
+          options.user ? 'user' : undefined,
+          options.user,
+        );
+        if (!list.length) {
+          logger.info('No assignments.');
+        } else {
+          for (const a of list) {
+            const subject = a.subjectKind === 'everyone' ? 'everyone' : a.subjectId;
+            logger.info(`  ${a.id}  ${String(subject).padEnd(20)} ${a.capability.padEnd(16)} ${a.value.padEnd(9)} ${a.scopeKind}${a.scopeId ? ` ${a.scopeId}` : ''}`);
+          }
+        }
+        break;
+      }
+      case 'remove': {
+        if (!options.id) throw new WaironError('`--id <assignmentId>` is required for `host permission remove`.');
+        permissionadmin.removeAssignment(cfg, cred, options.id);
+        logger.success(`Removed assignment "${options.id}".`);
+        break;
+      }
+      default:
+        throw new WaironError(`Unknown permission action "${action}" (set | list | remove).`);
+    }
+  } catch (e) {
+    throw mapAdminError(e);
+  }
+}
+
 // ── wairon host key <action> ──────────────────────────────────────────────────
 
 export async function runHostKey(action: string, options: HostOptions = {}): Promise<void> {
@@ -355,13 +591,32 @@ export async function runHostKey(action: string, options: HostOptions = {}): Pro
     switch (action) {
       case 'mint': {
         if (!options.project) throw new WaironError('`--project <id|*>` is required for `host key mint`.');
-        const role = (options.role ?? 'editor') as Role;
+        // Owner-bound mint (the assignment-model path): the token carries NO
+        // permissions — it acts as the owner's LIVE permission, narrowed to the
+        // named project. Seed the owner's authority with `host permission set`.
+        if (options.owner) {
+          const key = mintToken(cfg, cred, {
+            ownerUserId: options.owner,
+            label: options.label ?? `cli token (${options.project})`,
+            projects: options.project === '*' ? ['*'] : [options.project],
+          });
+          logger.success(`API key minted for owner "${options.owner}" (shown once — store it now):`);
+          logger.blank();
+          console.log(`  ${chalk.bold(key)}`);
+          logger.blank();
+          break;
+        }
+        const role = (options.role ?? 'editor') as DisplayRole;
         if (role !== 'editor' && role !== 'admin') throw new WaironError('`--role` must be editor or admin.');
         const key = admin.mintKey(cfg, cred, options.project, role);
         logger.success('API key minted (shown once — store it now):');
         logger.blank();
         console.log(`  ${chalk.bold(key)}`);
         logger.blank();
+        logger.warn(
+          'This key has NO owner: under the permission model it resolves to ZERO permissions ' +
+            'on the data plane. Mint with `--owner <userId>` and seed authority with `host permission set`.',
+        );
         break;
       }
       case 'list': {
@@ -369,7 +624,7 @@ export async function runHostKey(action: string, options: HostOptions = {}): Pro
         if (!list.length) {
           logger.info('No keys.');
         } else {
-          for (const r of list) logger.info(`  ${r.id}  ${r.role.padEnd(6)} ${r.projects.join(',')}`);
+          for (const r of list) logger.info(`  ${r.id}  ${(r.role ?? 'editor').padEnd(6)} ${r.projects.join(',')}`);
         }
         break;
       }
@@ -556,8 +811,43 @@ export async function runHostGit(action: string, options: HostOptions = {}): Pro
         logger.success(`Synced "${options.project}" (default → working branch).`);
         break;
       }
+      case 'commit': {
+        if (!options.project) throw new WaironError('`--project <id>` is required for `host git commit`.');
+        const publish = admin.commitProject(cfg, cred, options.project, options.subsystem, options.message);
+        if (!publish.published) {
+          logger.info('Nothing to publish — the scoped .wai/ path is clean (or the project is not git-backed).');
+        } else {
+          logger.success(`Published ${publish.commitSha?.slice(0, 12)}…${publish.compareUrl ? ` (${publish.compareUrl})` : ''}`);
+        }
+        break;
+      }
+      case 'status': {
+        if (!options.project) throw new WaironError('`--project <id>` is required for `host git status`.');
+        const s = admin.getGitBinding(cfg, cred, options.project);
+        if (!s.enabled) {
+          logger.info('Not git-backed.');
+        } else {
+          logger.info(`  remote:   ${s.remote}`);
+          logger.info(`  branch:   ${s.branch} (working: ${s.workingBranch})`);
+          logger.info(`  dirty:    ${s.dirty === true ? 'yes (.wai/ has unpublished changes)' : 'no'}`);
+          logger.info(`  sync:     ${s.periodicSyncMinutes !== undefined ? `every ${s.periodicSyncMinutes}m (skip-if-clean: ${s.skipIfClean !== false})` : 'manual only'}`);
+          if (s.lastSyncAt) logger.info(`  last:     ${s.lastSyncAt}`);
+        }
+        break;
+      }
+      case 'sync-config': {
+        if (!options.project) throw new WaironError('`--project <id>` is required for `host git sync-config`.');
+        const minutes = options.interval !== undefined ? Number(options.interval) : undefined;
+        admin.configureGitSync(cfg, cred, options.project, minutes, options.skipIfClean);
+        logger.success(
+          minutes !== undefined
+            ? `Periodic sync every ${minutes}m for "${options.project}".`
+            : `Periodic sync disabled for "${options.project}".`,
+        );
+        break;
+      }
       default:
-        throw new WaironError(`Unknown git action "${action}" (enable | disable | sync).`);
+        throw new WaironError(`Unknown git action "${action}" (enable | disable | sync | commit | status | sync-config).`);
     }
   } catch (e) {
     throw mapAdminError(e);

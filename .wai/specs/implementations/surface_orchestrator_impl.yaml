@@ -118,6 +118,13 @@ methods:
         type: call
         targetComponent: surface_repository
         targetMethod: removeSnapshot
+lint:
+  allow:
+    - code: CALL_STEP_UNREALIZED
+      reason: >-
+        Child snapshot write-out is realized through the fs adapter's saveSnapshot in the same flow;
+        the transfer adapter's writeSnapshotTo names the cross-project export edge — reconcile the
+        naming when the surfaces subsystem takes its final lock.
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-07-11T18:44:24.352Z'
+updatedAt: '2026-07-18T18:47:54.701Z'

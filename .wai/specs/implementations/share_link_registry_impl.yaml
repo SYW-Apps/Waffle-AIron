@@ -1,0 +1,27 @@
+id: share_link_registry_impl
+name: Share Link Registry Implementation
+description: Write path for share-link records through the store.
+contract: ishare_link_registry
+sourcePath: src/server/sharelinks.ts
+methods:
+  - name: create
+    narrative: []
+    intent: >-
+      Loads the collection, stamps a fresh id + createdAt on the record (persisting its tokenHash
+      only, never a raw token), appends it, and replaces the collection atomically through the
+      store; returns the stored record.
+  - name: update
+    narrative: []
+    intent: >-
+      Loads the collection, replaces the record matching the given id in place (preserving
+      id/createdAt/tokenHash), and swaps the collection atomically; returns the updated record. A
+      missing id is a not-found error.
+  - name: remove
+    narrative: []
+    intent: >-
+      Loads the collection, drops the record with the given id, and swaps atomically; an absent id
+      is a silent no-op.
+detail: intent
+status: complete
+createdAt: '2026-07-18T09:26:18.391Z'
+updatedAt: '2026-07-18T10:10:40.630Z'

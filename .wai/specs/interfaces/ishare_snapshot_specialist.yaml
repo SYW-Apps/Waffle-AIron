@@ -1,0 +1,30 @@
+id: ishare_snapshot_specialist
+name: Share Snapshot Specialist Interface
+description: >-
+  Captures a view into an immutable snapshot payload set at share-creation / refresh. The one place
+  a live view is frozen into what a link serves.
+component: share_snapshot_specialist
+methods:
+  - name: captureSnapshot
+    description: >-
+      For the caller's session and the target project + view, build exactly the requested artifact
+      payloads (canvas model via the host core adapter; openapi / standalone html via the host
+      surfaces adapter / renderer) and return an immutable snapshot ready to persist. The scoped
+      canvas build applies the session's own read authority, so a snapshot can never capture more
+      than its creator may see.
+    signature: >-
+      captureSnapshot(sessionId: string, projectId: string, view: string, artifacts: string[]):
+      ShareSnapshot
+    returns: ShareSnapshot
+    params:
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
+      - name: view
+        type: string
+      - name: artifacts
+        type: string[]
+status: complete
+createdAt: '2026-07-17T22:30:09.552Z'
+updatedAt: '2026-07-18T10:10:40.070Z'

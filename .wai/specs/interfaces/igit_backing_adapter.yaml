@@ -1,0 +1,45 @@
+id: igit_backing_adapter
+name: Git Backing Adapter Interface
+description: >-
+  Contract for git + filesystem I/O against a container backup repository's working copy (not bound
+  to any project root).
+component: git_backing_adapter
+methods:
+  - name: cloneOrOpen
+    description: >-
+      Ensure a working copy of the backing repo exists under the binding's scratch dir (clone on
+      first use, fetch+checkout the branch afterwards) and return its path.
+    signature: 'cloneOrOpen(remote: string, branch: string, workdir: string): string'
+    returns: string
+    params:
+      - name: remote
+        type: string
+      - name: branch
+        type: string
+      - name: workdir
+        type: string
+  - name: mirrorTree
+    description: >-
+      Mirror-export one source directory into a target directory inside the working copy (replace
+      semantics: the target reflects the source exactly, deletions included).
+    signature: 'mirrorTree(sourceDir: string, targetDir: string): void'
+    returns: void
+    params:
+      - name: sourceDir
+        type: string
+      - name: targetDir
+        type: string
+  - name: commitAndPush
+    description: >-
+      Stage the working copy's mirrored content, commit with the bot identity, and push the branch;
+      returns false without committing when nothing changed (skip-if-clean).
+    signature: 'commitAndPush(workdir: string, message: string): boolean'
+    returns: boolean
+    params:
+      - name: workdir
+        type: string
+      - name: message
+        type: string
+status: complete
+createdAt: '2026-07-16T15:39:15.327Z'
+updatedAt: '2026-07-16T15:48:48.920Z'

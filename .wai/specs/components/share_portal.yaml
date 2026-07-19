@@ -1,0 +1,21 @@
+id: share_portal
+name: Share Portal
+description: >-
+  The public, unauthenticated inbound HTTP surface for share links, mounted under /share on the data
+  plane. Serves the shared read-only view page, the snapshot model JSON, a bundled OpenAPI viewer
+  page, and permitted artifact downloads — each addressed by an unguessable token in the path. Sets
+  hardening headers on every response (Referrer-Policy: no-referrer, X-Robots-Tag: noindex, and a
+  Content-Security-Policy frame-ancestors directive derived from the link's embedding allowlist) and
+  establishes no session cookie. Routes every request to the share access orchestrator; performs no
+  authorization itself beyond transport.
+subsystem: sdd_host
+componentType: Portal
+owns: []
+dependsOn:
+  - share_access_orchestrator
+  - host_server
+portalType: HTTP_API
+basePath: /share
+status: complete
+createdAt: '2026-07-17T22:09:53.934Z'
+updatedAt: '2026-07-18T13:16:50.767Z'

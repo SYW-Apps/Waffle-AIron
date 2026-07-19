@@ -1,0 +1,179 @@
+id: cli_packs_adapter_impl
+name: CLI Packs Adapter Implementation
+description: >-
+  The `wairon packs` command family in src/commands/packs.ts. Vendoring/registration are local file
+  operations; listing reads the merged set via the core portal.
+contract: icli_packs_adapter
+sourcePath: src/commands/packs.ts
+methods:
+  - name: addPack
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the pack source to an absolute path and require a pack entry: a missing path or a
+          directory without a pack entry file fails the command before anything is touched.
+        type: local
+      - stepNumber: 2
+        description: Probe-load the pack (scope-aware) to verify it parses BEFORE vendoring anything.
+        type: local
+      - stepNumber: 3
+        description: Gate on the probe result.
+        type: branch
+        condition: the probe reported a load error
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Report the probe error and stop with a non-zero exit code.
+        type: return
+        outcome: probe error reported; exit code 1, nothing vendored or registered
+      - stepNumber: 5
+        description: Split machine-wide install from project vendoring.
+        type: branch
+        condition: '--global install requested'
+        onTrueStep: 6
+        onFalseStep: 8
+      - stepNumber: 6
+        description: >-
+          Copy the pack into the machine-wide packs directory (guarding against a self-copy) and
+          report that it now auto-loads for every project on this machine.
+        type: local
+      - stepNumber: 7
+        description: Done for the global scope.
+        type: return
+        outcome: global install complete
+      - stepNumber: 8
+        description: Project vendoring requires a project.
+        type: branch
+        condition: not inside an initialized wairon project
+        onTrueStep: 9
+        onFalseStep: 10
+      - stepNumber: 9
+        description: Report and stop.
+        type: return
+        outcome: not-a-project error (suggests wairon init or --global); exit code 1
+      - stepNumber: 10
+        description: Vendor the pack into .wai/packs/ under its basename (guarding against a self-copy).
+        type: local
+      - stepNumber: 11
+        description: First registration vs refresh.
+        type: branch
+        condition: the vendored ref is not yet registered in extensions.packs
+        onTrueStep: 12
+        onFalseStep: 14
+      - stepNumber: 12
+        description: >-
+          Append the ref to extensions.packs, save project.yaml, and report the pack as vendored and
+          registered.
+        type: local
+      - stepNumber: 13
+        description: Skip the refresh arm.
+        type: jump
+        toStep: 15
+      - stepNumber: 14
+        description: 'Already registered: refresh the vendored copy from the source and report the refresh.'
+        type: local
+      - stepNumber: 15
+        description: 'Print commit guidance: commit .wai/ so CI and every clone enforce the pack''s doctrine.'
+        type: local
+    detail: intent
+    intent: >-
+      Resolve the pack source (a path or module id), vendor it into the project's .wai/packs (or the
+      global packs dir when --global) and register it in project.yaml under extensions.packs. A
+      directory pack is copied with its entry file; a malformed or unreadable source fails with a
+      clear error and leaves no partial registration.
+  - name: listPacks
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Probe each configured pack ref — the global tier (packs dir) then the project tier
+          (extensions.packs) — for its manifest summary (name, scope, what it provides) and any load
+          error, via the core extension loader's per-pack probe.
+        type: local
+      - stepNumber: 2
+        description: >-
+          Print each pack with its name, scope, version, and what it provides (profiles, languages,
+          rules, skills, patterns), plus any load errors.
+        type: local
+  - name: removePack
+    narrative:
+      - stepNumber: 1
+        description: Split machine-wide removal from project deregistration.
+        type: branch
+        condition: '--global removal requested'
+        onTrueStep: 2
+        onFalseStep: 7
+      - stepNumber: 2
+        description: >-
+          Probe each ref discovered in the global packs directory until one's pack name or file
+          basename matches the requested name.
+        type: local
+      - stepNumber: 3
+        description: Gate on the scan result.
+        type: branch
+        condition: a matching global pack was found
+        onTrueStep: 4
+        onFalseStep: 6
+      - stepNumber: 4
+        description: Delete the matched pack's files from the global packs directory and report the removal.
+        type: local
+      - stepNumber: 5
+        description: Done for the global scope.
+        type: return
+        outcome: global pack removed
+      - stepNumber: 6
+        description: Report and stop.
+        type: return
+        outcome: no such global pack; error with exit code 1
+      - stepNumber: 7
+        description: Project deregistration requires a project.
+        type: branch
+        condition: not inside an initialized wairon project
+        onTrueStep: 8
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Report and stop.
+        type: return
+        outcome: not-a-project error (suggests --global); exit code 1
+      - stepNumber: 9
+        description: >-
+          Probe each ref registered in extensions.packs until one matches the requested name, the
+          raw ref, or its basename.
+        type: local
+      - stepNumber: 10
+        description: Gate on the scan result.
+        type: branch
+        condition: a matching project pack was found
+        onTrueStep: 11
+        onFalseStep: 15
+      - stepNumber: 11
+        description: Deregister the ref from extensions.packs and save project.yaml.
+        type: local
+      - stepNumber: 12
+        description: Only vendored files are deleted.
+        type: branch
+        condition: >-
+          the ref's resolved files lie inside .wai/packs (containment guard — never delete
+          user-owned paths)
+        onTrueStep: 13
+        onFalseStep: 14
+      - stepNumber: 13
+        description: Done.
+        type: return
+        outcome: deregistered and vendored files deleted (reported)
+      - stepNumber: 14
+        description: Done, files preserved.
+        type: return
+        outcome: deregistered; files outside .wai/packs left in place (reported)
+      - stepNumber: 15
+        description: Report and stop.
+        type: return
+        outcome: no matching project pack registered; error with exit code 1
+    detail: intent
+    intent: >-
+      Deregister the named pack from project.yaml (or the global packs registration when --global)
+      and delete its vendored files under .wai/packs. Removing a pack that is not present is
+      reported to the user, not treated as an error.
+detail: calls-only
+status: complete
+createdAt: '2026-07-14T20:10:02.916Z'
+updatedAt: '2026-07-18T18:48:25.511Z'

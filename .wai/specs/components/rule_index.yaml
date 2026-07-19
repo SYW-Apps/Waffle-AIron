@@ -1,0 +1,14 @@
+id: rule_index
+name: Rule Index
+description: >-
+  Read path over the rule store: projects the ordered rule run sequence (built-ins then pack rules)
+  and the full known-issue-code set used to validate lint.allow references. Shares the store's
+  references; never mutates, never goes stale.
+subsystem: sdd_validator
+componentType: Index
+owns: []
+dependsOn:
+  - rule_store
+status: complete
+createdAt: '2026-07-14T19:17:00.705Z'
+updatedAt: '2026-07-14T20:16:07.434Z'

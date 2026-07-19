@@ -1,0 +1,15 @@
+id: icli_variants_adapter
+name: CLI Variants Adapter Interface
+description: Terminal surface for `wairon variants list`.
+component: cli_variants_adapter
+methods:
+  - name: listVariants
+    description: >-
+      Print the component variants in the registry (global + project) with their base stereotype,
+      guidance, and optional target/profile scope.
+    signature: 'listVariants(): void'
+    returns: void
+    params: []
+status: complete
+createdAt: '2026-07-15T12:24:21.149Z'
+updatedAt: '2026-07-15T12:26:32.595Z'

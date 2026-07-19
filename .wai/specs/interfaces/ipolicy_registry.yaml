@@ -48,6 +48,17 @@ methods:
         type: string
     guarantees:
       - atomic
+  - name: setExposurePolicy
+    description: >-
+      Persist the supplied instance exposure policy wholesale via write-temp-then-rename to
+      exposure-policy.json and return it.
+    signature: 'setExposurePolicy(policy: HostExposurePolicy): HostExposurePolicy'
+    returns: HostExposurePolicy
+    params:
+      - name: policy
+        type: HostExposurePolicy
+    guarantees:
+      - atomic
 status: complete
 createdAt: '2026-07-09T20:46:20.093Z'
-updatedAt: '2026-07-10T08:16:27.437Z'
+updatedAt: '2026-07-16T15:28:22.335Z'

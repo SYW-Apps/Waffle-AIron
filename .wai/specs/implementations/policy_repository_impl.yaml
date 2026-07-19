@@ -13,6 +13,7 @@ methods:
         type: call
         targetComponent: policy_index
         targetMethod: getPackPolicy
+    symbol: getPackPolicyRecord
   - name: setPackPolicy
     narrative:
       - stepNumber: 1
@@ -20,6 +21,7 @@ methods:
         type: call
         targetComponent: policy_registry
         targetMethod: setPackPolicy
+    symbol: setPackPolicyRecord
   - name: listIdentityProviders
     narrative:
       - stepNumber: 1
@@ -44,7 +46,23 @@ methods:
         targetComponent: policy_registry
         targetMethod: removeIdentityProvider
     symbol: removeIdentityProviderRecord
+  - name: getExposurePolicy
+    narrative:
+      - stepNumber: 1
+        description: Forward to the policy index
+        type: call
+        targetComponent: policy_index
+        targetMethod: getExposurePolicy
+    symbol: getExposurePolicyRecord
+  - name: setExposurePolicy
+    narrative:
+      - stepNumber: 1
+        description: Forward to the policy registry
+        type: call
+        targetComponent: policy_registry
+        targetMethod: setExposurePolicy
+    symbol: setExposurePolicyRecord
 detail: calls-only
 status: complete
 createdAt: '2026-07-09T20:47:51.139Z'
-updatedAt: '2026-07-11T19:14:22.736Z'
+updatedAt: '2026-07-18T23:33:40.288Z'

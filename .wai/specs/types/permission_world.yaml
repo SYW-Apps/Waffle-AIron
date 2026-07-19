@@ -1,0 +1,28 @@
+kind: value-object
+id: permission_world
+name: PermissionWorld
+description: >-
+  The gathered, read-only data the pure permission resolver walks: all relevant assignments, role
+  definitions, the organization-unit tree, and project placements. The calling orchestrator gathers
+  it (I/O); the resolver performs none.
+subsystem: sdd_host
+fields:
+  - name: assignments
+    type: PermissionAssignment[]
+    description: Permission assignments in scope for the query (any subject kind).
+    optional: false
+  - name: roles
+    type: Role[]
+    description: Role definitions referenced by the subject's bindings.
+    optional: false
+  - name: units
+    type: OrganizationUnitRecord[]
+    description: The organization-unit tree, for the ancestor-chain walk.
+    optional: false
+  - name: placements
+    type: ProjectPlacement[]
+    description: Project placements, to resolve a project's owning unit.
+    optional: false
+methods: []
+createdAt: '2026-07-15T20:25:29.509Z'
+updatedAt: '2026-07-15T20:25:29.554Z'

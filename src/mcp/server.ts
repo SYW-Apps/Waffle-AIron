@@ -15,6 +15,7 @@ import { fileURLToPath } from 'url';
 import { setProjectRoot } from '../utils/fs.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import type { ValidationIssue } from '../core/validation.js';
+import { resolveNarrativeLabels } from '../core/narrative-labels.js';
 import { EndpointSchema, type Endpoint, type SubsystemSpec } from '../models/specs.js';
 import {
   listResources as coreListSkillResources,
@@ -375,7 +376,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
-  reg<{ id: string; name: string; description: string; publicInterfaces?: { type: 'REST' | 'GraphQL' | 'MessageBus' | 'RPC' | 'Custom'; details: string; component?: string; interface?: string }[]; projectPath?: string; targetLanguage?: string; profile?: string; trustedLinks?: { subsystem: string; reason: string }[]; lifecycle?: { phase: 'init' | 'shutdown'; component: string; method: string; description?: string }[] }>(server,
+  reg<{ id: string; name: string; description: string; publicInterfaces?: { type: 'REST' | 'GraphQL' | 'MessageBus' | 'RPC' | 'Custom'; details: string; component?: string; interface?: string }[]; projectPath?: string; targetLanguage?: string; profile?: string; designDepth?: 'components' | 'interfaces' | 'implementations' | 'narratives'; trustedLinks?: { subsystem: string; reason: string }[]; lifecycle?: { phase: 'init' | 'shutdown' | 'cyclic' | 'interrupt' | 'scheduled'; component: string; method: string; description?: string }[] }>(server,
     'sdd_add_subsystem',
     {
       description: 'Add an L1 Subsystem / Service under the system boundary. publicInterfaces should bind each entry to the component that realizes it (the subsystem\'s published surface); if components do not exist yet, add them later with sdd_set_public_interfaces.',
@@ -392,19 +393,20 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         projectPath: z.string().optional().describe('Relative path to external project root for subsystem chaining'),
         targetLanguage: z.string().optional().describe('Override of the system-level targetLanguage for this subsystem'),
         profile: z.string().optional().describe('Architectural profile override for this subsystem (built-ins: backend, frontend-reactive, frontend-controller, lowlevel-os, game-ecs, realtime-embedded, plc-cyclic; extension packs may add more — unknown names get UNKNOWN_PROFILE)'),
+        designDepth: z.enum(['components', 'interfaces', 'implementations', 'narratives']).optional().describe('How deep THIS subsystem commits to designing (overrides project rules.designDepth; default narratives = full depth). Expectation checks below the depth are gated — soundness of authored content always applies.'),
         trustedLinks: z.array(z.object({
           subsystem: z.string().describe('Peer subsystem id'),
           reason: z.string().describe('Why the coupling is sanctioned (e.g. "dispatch latency fast lane")'),
         })).optional().describe('Sanctioned tight couplings with peers — required to acknowledge a mutual subsystem dependency; the Adapter → published Portal shape still applies.'),
         lifecycle: z.array(z.object({
-          phase: z.enum(['init', 'shutdown']).describe('Which lifecycle flow this roots'),
+          phase: z.enum(['init', 'shutdown', 'cyclic', 'interrupt', 'scheduled']).describe('Which lifecycle/execution flow this roots (cyclic = every scan/tick, interrupt = hardware/OS interrupt, scheduled = timer/cron)'),
           component: z.string().describe('Component id whose method the runtime invokes at this phase'),
           method: z.string().describe('Method name on that component\'s interface'),
           description: z.string().optional(),
-        })).optional().describe('Declared init/shutdown flow roots — reachability entrypoints alongside Portals/Observers; required for durable-Store hydration checks (MISSING_HYDRATION).'),
+        })).optional().describe('Declared execution-flow roots — reachability entrypoints alongside Portals/Observers. Only init flows feed the durable-Store hydration check (MISSING_HYDRATION); cyclic/interrupt/scheduled root non-request/response execution models (PLC scan, ISR, cron).'),
       },
     },
-    ({ id, name, description, publicInterfaces, projectPath, targetLanguage, profile, trustedLinks, lifecycle }) => {
+    ({ id, name, description, publicInterfaces, projectPath, targetLanguage, profile, designDepth, trustedLinks, lifecycle }) => {
       try {
         const { loadSystemSpec, saveSubsystemSpec } = requireSpecs();
         const system = loadSystemSpec();
@@ -419,6 +421,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           projectPath,
           ...(targetLanguage ? { targetLanguage } : {}),
           ...(profile ? { profile } : {}),
+          ...(designDepth ? { designDepth } : {}),
           ...(lifecycle ? { lifecycle } : {}),
           trustedLinks: trustedLinks ?? [],
           status: 'draft',
@@ -556,10 +559,10 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
-  reg<{ id: string; name: string; description: string; subsystem: string; componentType: 'Portal' | 'Orchestrator' | 'Supervisor' | 'Actor' | 'Store' | 'Index' | 'Registry' | 'Adapter' | 'Observer' | 'Specialist' | 'Repository' | 'Gateway'; owns?: string[]; dependsOn?: string[]; portalType?: 'HTTP_API' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'CLI' | 'NamedPipe' | 'IPC' | 'Custom'; basePath?: string; dispatch?: { capability: string; component: string; method: string; description?: string }[]; durability?: 'ram-projection' | 'durable' }>(server,
+  reg<{ id: string; name: string; description: string; subsystem: string; componentType: 'Portal' | 'Orchestrator' | 'Supervisor' | 'Actor' | 'Store' | 'Index' | 'Registry' | 'Adapter' | 'Observer' | 'Specialist' | 'Repository' | 'Gateway'; owns?: string[]; dependsOn?: string[]; portalType?: 'HTTP_API' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'CLI' | 'NamedPipe' | 'IPC' | 'Custom'; basePath?: string; dispatch?: { capability: string; component: string; method: string; description?: string }[]; durability?: 'ram-projection' | 'durable' | 'read-through' | 'cache'; emits?: { topic: string; event?: string; description?: string }[]; subscribesTo?: { topic: string; event?: string; description?: string }[]; ext?: Record<string, unknown> }>(server,
     'sdd_add_component',
     {
-      description: 'Add an L2 Component under a subsystem. componentType is a building block (Portal, Orchestrator, Supervisor, Actor, Store, Index, Registry, Adapter, Observer, Specialist) or a pattern (Repository, Gateway). Patterns set "owns" (their private member blocks); all components set "dependsOn" (collaborators — facades or standalone blocks).',
+      description: 'Add an L2 Component under a subsystem. componentType is a building block (Portal, Orchestrator, Supervisor, Actor, Store, Index, Registry, Adapter, Observer, Specialist) or a pattern (Repository, Gateway). Patterns set "owns" (their private member blocks); all components set "dependsOn" (collaborators — facades or standalone blocks). Held/persisted state (configs, permissions, sessions, caches): model the Repository recipe — a Store + Registry (write) + Index (read) owned by a Repository facade consumers depend on; a deliberately standalone Store is the sanctioned lightweight form (workflow-layer consumers + lint.allow on UNOWNED_STORE). Never hold state as fields inside an Orchestrator/Specialist because a Store link was refused.',
       inputSchema: {
         id: z.string().describe('Lowercase identifier for the component'),
         name: z.string().describe('Human-readable display name'),
@@ -576,16 +579,27 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           method: z.string().describe('Method name on the serving component\'s interface'),
           description: z.string().optional(),
         })).optional().describe('Portal-only: capability → component.method dispatch table for generic-handle portals. Gives the reachability walker real edges and is validated against target interfaces (UNSERVED_CAPABILITY).'),
-        durability: z.enum(['ram-projection', 'durable']).optional().describe('Store-only: durable state requires a hydration read-back reachable from a lifecycle init entrypoint (MISSING_HYDRATION); ram-projection declares rebuilt-not-restored state.'),
+        durability: z.enum(['ram-projection', 'durable', 'read-through', 'cache']).optional().describe('Store-only, and every Store should declare one (MISSING_DURABILITY): durable = persisted RAM projection (hydration read-back from a lifecycle init entrypoint required — MISSING_HYDRATION); read-through = persisted with no RAM copy (every read is the read-back, hydration exempt); ram-projection = rebuilt not restored; cache = evictable loss-safe memo state.'),
+        emits: z.array(z.object({
+          topic: z.string().describe('Topic/channel name exactly as used on the bus'),
+          event: z.string().optional().describe('Optional event name within the topic (informational; pairing is by topic)'),
+          description: z.string().optional(),
+        })).optional().describe('Topics this component publishes — every emitted topic needs a subscriber somewhere in the tree (UNCONSUMED_TOPIC).'),
+        subscribesTo: z.array(z.object({
+          topic: z.string().describe('Topic/channel name exactly as used on the bus'),
+          event: z.string().optional(),
+          description: z.string().optional(),
+        })).optional().describe('Topics this component consumes (typical on Observers) — every subscription needs an emitter somewhere in the tree (UNSOURCED_SUBSCRIPTION).'),
+        ext: z.record(z.unknown()).optional().describe('Opaque pack/tool extension data (namespaced keys, e.g. "mypack:priority") — preserved verbatim, never validated or interpreted by the core'),
       },
     },
-    ({ id, name, description, subsystem, componentType, owns, dependsOn, portalType, basePath, dispatch, durability }) => {
+    ({ id, name, description, subsystem, componentType, owns, dependsOn, portalType, basePath, dispatch, durability, emits, subscribesTo, ext }) => {
       try {
         const { loadSubsystemSpec, saveComponentSpec } = requireSpecs();
         const sub = loadSubsystemSpec(subsystem);
         if (!sub) return errText(`Parent subsystem "${subsystem}" does not exist.`);
         const now = new Date().toISOString();
-        saveComponentSpec({
+        const notices = saveComponentSpec({
           id,
           name,
           description,
@@ -597,18 +611,22 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           ...(basePath ? { basePath } : {}),
           ...(dispatch ? { dispatch } : {}),
           ...(durability ? { durability } : {}),
+          ...(emits ? { emits } : {}),
+          ...(subscribesTo ? { subscribesTo } : {}),
+          ...(ext ? { ext } : {}),
           status: 'draft',
           createdAt: now,
           updatedAt: now,
         });
-        return text(`Successfully added L2 Component Spec "${name}" (${id}, ${componentType}).`);
+        const noticeBlock = notices.length ? `\n\nNOTICE:\n- ${notices.join('\n- ')}` : '';
+        return text(`Successfully added L2 Component Spec "${name}" (${id}, ${componentType}).${noticeBlock}`);
       } catch (e) {
         return errText(String(e));
       }
     },
   );
 
-  reg<{ id: string; name: string; description: string; component: string; methods?: { name: string; description: string; signature: string; returns: string; params?: { name: string; type: string; description?: string; optional?: boolean }[]; guarantees?: ('idempotent' | 'atomic' | 'transactional' | 'exactly-once')[]; effect?: 'read' | 'write' }[] }>(server,
+  reg<{ id: string; name: string; description: string; component: string; methods?: { name: string; description: string; signature: string; returns: string; params?: { name: string; type: string; description?: string; optional?: boolean }[]; guarantees?: string[]; effect?: 'read' | 'write'; ext?: Record<string, unknown> }[] }>(server,
     'sdd_define_interface',
     {
       description: 'Define an L3 Contract / Interface with method signatures for a component. Prefer supplying structured `params` per method — they are the authoritative source for type checking (the free-form signature string then becomes display-only and is never heuristically parsed).',
@@ -628,28 +646,57 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
             description: z.string().optional(),
             optional: z.boolean().optional(),
           })).optional().describe('Structured parameters — authoritative for type checking (the prose signature becomes display-only). Strongly preferred.'),
-          guarantees: z.array(z.enum(['idempotent', 'atomic', 'transactional', 'exactly-once'])).optional().describe('Semantic guarantees the method promises (combinable); any guarantee a narrative step asserts must be declared here'),
+          guarantees: z.array(z.string().min(1)).optional().describe('Semantic guarantees the method promises (combinable); any guarantee a narrative step asserts must be declared here. Builtin tokens: idempotent | atomic | transactional | exactly-once; extension packs may declare more (any other token is UNKNOWN_GUARANTEE)'),
           effect: z.enum(['read', 'write']).optional().describe('State-effect direction on the component\'s held state — required on a durable Store\'s contract methods so the durability round-trip rule can pair writes with hydration read-backs'),
+          ext: z.record(z.unknown()).optional().describe('Opaque pack/tool extension data for this method (namespaced keys) — preserved verbatim'),
         })).optional().describe('List of method signature contracts'),
       },
     },
     ({ id, name, description, component, methods }) => {
       try {
-        const { loadComponentSpec, saveInterfaceSpec } = requireSpecs();
+        const { loadComponentSpec, loadInterfaceSpec, saveInterfaceSpec } = requireSpecs();
         const comp = loadComponentSpec(component);
         if (!comp) return errText(`Component "${component}" does not exist.`);
         const now = new Date().toISOString();
-        saveInterfaceSpec({
+        // Redefining an EXISTING interface replaces what the input expresses —
+        // but the input cannot express spec-level lint/ext or per-method
+        // endpoint bindings (sdd_set_endpoints), and may omit per-method ext.
+        // Carry those forward from the previous definition (createdAt likewise)
+        // instead of silently dropping them.
+        const existing = loadInterfaceSpec(id);
+        const carried: string[] = [];
+        if (existing) carried.push('createdAt');
+        if (existing?.lint !== undefined) carried.push('lint');
+        if (existing?.ext !== undefined) carried.push('ext');
+        const specMethods = (methods ?? []).map((m) => {
+          const prev = existing?.methods.find((p) => p.name === m.name);
+          const endpoint = prev?.endpoint;
+          const ext = m.ext ?? prev?.ext;
+          if (prev?.endpoint !== undefined) carried.push(`endpoint (${m.name})`);
+          if (m.ext === undefined && prev?.ext !== undefined) carried.push(`method ext (${m.name})`);
+          return {
+            ...m,
+            ...(endpoint !== undefined ? { endpoint } : {}),
+            ...(ext !== undefined ? { ext } : {}),
+          };
+        });
+        const notices = saveInterfaceSpec({
           id,
           name,
           description,
           component,
-          methods: methods ?? [],
+          methods: specMethods,
+          ...(existing?.lint !== undefined ? { lint: existing.lint } : {}),
+          ...(existing?.ext !== undefined ? { ext: existing.ext } : {}),
           status: 'draft',
-          createdAt: now,
+          createdAt: existing?.createdAt ?? now,
           updatedAt: now,
         });
-        return text(`Successfully defined L3 Interface Contract "${name}" (${id}).`);
+        if (existing) {
+          notices.push(`Interface "${id}" already existed — redefined; carried forward from the previous definition: ${carried.join(', ')}.`);
+        }
+        const noticeBlock = notices.length ? `\n\nNOTICE:\n- ${notices.join('\n- ')}` : '';
+        return text(`Successfully defined L3 Interface Contract "${name}" (${id}).${noticeBlock}`);
       } catch (e) {
         return errText(String(e));
       }
@@ -728,26 +775,37 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   );
 
   const stepNo = () => z.number().int().positive();
+  const labelRef = () => z.string().min(1);
   const narrativeStepInput = z.object({
     stepNumber: stepNo().optional().describe('Defaults to the 1-based array position — jump fields reference these numbers'),
+    label: labelRef().optional().describe('Optional symbolic anchor for this step (unique per narrative). Every jump-by-number field has a *Label twin resolved against these anchors at write time — prefer labels over hand-counted step numbers'),
     description: z.string(),
-    type: z.enum(['local', 'call', 'dispatch', 'branch', 'switch', 'loop', 'try', 'jump', 'return', 'throw']),
+    type: z.enum(['local', 'call', 'dispatch', 'branch', 'switch', 'loop', 'try', 'parallel', 'jump', 'return', 'throw']),
     targetComponent: z.string().optional().describe('call/dispatch: L2 component id (for dispatch, the Portal routed through)'),
     targetMethod: z.string().optional().describe('call: method name on the target'),
+    detach: z.boolean().optional().describe('call/dispatch: fire-and-forget — issue the call and continue without awaiting the result (no later step consumes it)'),
     capability: z.string().optional().describe('dispatch: the capability routed through the target Portal\'s dispatch table (validated against it — UNSERVED_CAPABILITY)'),
-    assertsGuarantees: z.array(z.enum(['idempotent', 'atomic', 'transactional', 'exactly-once'])).optional().describe('Semantic guarantees this step relies on — each must be declared in the called method\'s L3 guarantees (NARRATIVE_SEMANTIC_UNBACKED otherwise)'),
+    assertsGuarantees: z.array(z.string().min(1)).optional().describe('Semantic guarantees this step relies on — each must be declared in the called method\'s L3 guarantees (NARRATIVE_SEMANTIC_UNBACKED otherwise). Builtin tokens: idempotent | atomic | transactional | exactly-once; extension packs may declare more (any other token is UNKNOWN_GUARANTEE)'),
+    assertsInvariants: z.array(z.string()).optional().describe('Declared entity invariants this step upholds, as "<type-id>.<invariant-id>" refs (UNKNOWN_INVARIANT_REF when unresolved); write-effect methods of the entity\'s componentClass must carry one per declared invariant (UNASSERTED_INVARIANT)'),
     condition: z.string().optional().describe('branch / while / doWhile'),
     onTrueStep: stepNo().optional().describe('branch: default = next step'),
-    onFalseStep: stepNo().optional().describe('branch: required'),
+    onTrueLabel: labelRef().optional().describe('branch: symbolic alternative to onTrueStep'),
+    onFalseStep: stepNo().optional().describe('branch: required (or onFalseLabel)'),
+    onFalseLabel: labelRef().optional().describe('branch: symbolic alternative to onFalseStep'),
     on: z.string().optional().describe('switch: the dispatched value'),
-    cases: z.array(z.object({ value: z.string(), step: stepNo() })).optional().describe('switch: required'),
+    cases: z.array(z.object({ value: z.string(), step: stepNo().optional(), label: labelRef().optional() })).optional().describe('switch: required; each case targets its region by step number or label'),
     defaultStep: stepNo().optional().describe('switch: default = next step'),
+    defaultLabel: labelRef().optional().describe('switch: symbolic alternative to defaultStep'),
     loopKind: z.enum(['forEach', 'for', 'while', 'doWhile']).optional().describe('loop: default forEach when "over" is set, else while'),
     over: z.string().optional().describe('loop forEach/for: iteration source'),
-    endStep: stepNo().optional().describe('loop/try: last step of the body region (required)'),
-    catches: z.array(z.object({ error: z.string(), step: stepNo() })).optional().describe('try: handler regions'),
+    endStep: stepNo().optional().describe('loop/try: last step of the body region (required, or endLabel)'),
+    endLabel: labelRef().optional().describe('loop/try: symbolic alternative to endStep'),
+    catches: z.array(z.object({ error: z.string(), step: stepNo().optional(), label: labelRef().optional() })).optional().describe('try: handler regions, each targeted by step number or label'),
     finallyStep: stepNo().optional().describe('try: first step of the always-runs region'),
-    toStep: stepNo().optional().describe('jump: required (break/continue/rejoin)'),
+    finallyLabel: labelRef().optional().describe('try: symbolic alternative to finallyStep'),
+    branches: z.array(z.object({ step: stepNo().optional(), label: labelRef().optional(), name: z.string().optional() })).optional().describe('parallel: >= 2 arm entries (step number or label), ascending, first = the step after the header; arms are contiguous sub-regions of body next..endStep, joining after endStep once ALL complete'),
+    toStep: stepNo().optional().describe('jump: required (break/continue/rejoin), or toLabel'),
+    toLabel: labelRef().optional().describe('jump: symbolic alternative to toStep — resolves to the labeled step at write time'),
     outcome: z.string().optional().describe('return: e.g. "success", "not found"'),
     error: z.string().optional().describe('throw: the raised error'),
   });
@@ -755,16 +813,17 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   const detailEnum = z.enum(['full', 'calls-only', 'intent']);
 
   const conformanceEnum = z.enum(['declared', 'anchored', 'off']);
-  reg<{ id: string; name: string; description: string; contract: string; sourcePath?: string; technologies?: string[]; detail?: 'full' | 'calls-only' | 'intent'; conformance?: 'declared' | 'anchored' | 'off'; methods?: { name: string; detail?: 'full' | 'calls-only' | 'intent'; intent?: string; conformance?: 'declared' | 'anchored' | 'off'; symbol?: string; narrative?: NarrativeStepIn[] }[] }>(server,
+  reg<{ id: string; name: string; description: string; contract: string; sourcePath?: string; simPath?: string; technologies?: string[]; detail?: 'full' | 'calls-only' | 'intent'; conformance?: 'declared' | 'anchored' | 'off'; methods?: { name: string; detail?: 'full' | 'calls-only' | 'intent'; intent?: string; conformance?: 'declared' | 'anchored' | 'off'; symbol?: string; ext?: Record<string, unknown>; narrative?: NarrativeStepIn[] }[] }>(server,
     'sdd_write_narrative',
     {
-      description: 'Write L4 Concrete Implementation spec containing L5 method narratives. Narratives are a FLAT ordered step list; flow steps (branch/switch/loop/try/jump/return/throw) jump by step number — blocks are just skipped regions. Detail dial per method: full (narrative required) | calls-only (call choreography suffices) | intent (prose instead of steps); omitted = stereotype default (Portal/Observer/Adapter: calls-only, Store/Index/Registry: intent, else full). Conformance dial per method or spec: declared | anchored | off — how strictly structural conformance requires contract methods to be realized in the sourcePath file (omitted = Portal: anchored, else declared).',
+      description: 'Write L4 Concrete Implementation spec containing L5 method narratives. Narratives are a FLAT ordered step list; flow steps (branch/switch/loop/try/parallel/jump/return/throw) jump by step number — blocks are just skipped regions. Steps may declare a `label` anchor, and every jump field has a *Label twin (toLabel, onTrueLabel, endLabel, …) resolved to step numbers at write time — prefer labels over hand-counted numbers; an unresolvable label rejects the write. Detail dial per method: full (narrative required) | calls-only (call choreography suffices) | intent (prose instead of steps); omitted = stereotype default (Portal/Observer/Adapter: calls-only, Store/Index/Registry: intent, else full). Conformance dial per method or spec: declared | anchored | off — how strictly structural conformance requires contract methods to be realized in the sourcePath file (omitted = Portal: anchored, else declared).',
       inputSchema: {
         id: z.string().describe('Lowercase identifier, e.g. "vfs_storage"'),
         name: z.string().describe('Human-readable implementation name'),
         description: z.string().describe('Implementation details'),
         contract: z.string().describe('The L3 Interface contract ID this implements'),
         sourcePath: z.string().optional().describe('Optional: target source code file path relative to project root'),
+        simPath: z.string().optional().describe('Optional: the committed integration-sim harness file (project-relative; N:1 sharing allowed). The validator proves it exists and its import graph wires the REAL modules (this component + each direct dependency; technology adapters may stay faked) — running it is CI\'s job. Declaring the first simPath in a subsystem activates MISSING_INTEGRATION_SIM for its other complete non-leaf implementations'),
         technologies: z.array(z.string()).optional().describe('External technologies this implementation binds to (e.g. ["mysql"]) — declares this component\'s ownership tree as the technology\'s home; references outside it are flagged (TECH_LEAKAGE) and contract identifiers must stay intent-language. Only for Adapter/Store/Registry/Index components.'),
         detail: detailEnum.optional().describe('Spec-level narrative detail default for all methods'),
         conformance: conformanceEnum.optional().describe('Spec-level structural-conformance tier default: declared | anchored | off (omitted = stereotype default: Portal → anchored, else declared)'),
@@ -774,41 +833,71 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           intent: z.string().optional().describe('detail: intent — behavioral prose (what it does and how it fails); substitute for a narrative'),
           conformance: conformanceEnum.optional().describe('Conformance tier for this method (overrides the spec default)'),
           symbol: z.string().optional().describe('Code-level name realizing this contract method in the sourcePath file, when it legitimately differs from the intent-language contract name (e.g. put realized by saveSnapshot)'),
+          ext: z.record(z.unknown()).optional().describe('Opaque pack/tool extension data for this method (namespaced keys) — preserved verbatim'),
           narrative: z.array(narrativeStepInput).optional(),
         })).optional().describe('Method implementations containing L5 narratives'),
       },
     },
-    ({ id, name, description, contract, sourcePath, technologies, detail, conformance, methods }) => {
+    ({ id, name, description, contract, sourcePath, simPath, technologies, detail, conformance, methods }) => {
       try {
-        const { loadInterfaceSpec, saveImplementationSpec } = requireSpecs();
+        const { loadInterfaceSpec, loadImplementationSpec, saveImplementationSpec } = requireSpecs();
         const intf = loadInterfaceSpec(contract);
         if (!intf) return errText(`Interface contract "${contract}" does not exist.`);
+        // Re-authoring an EXISTING implementation replaces what the input
+        // expresses — but the input cannot express spec-level lint/ext and may
+        // omit per-method ext. Carry those forward from the previous version
+        // (createdAt likewise) instead of silently dropping them.
+        const existing = loadImplementationSpec(id);
+        const carried: string[] = [];
+        if (existing) carried.push('createdAt');
+        if (existing?.lint !== undefined) carried.push('lint');
+        if (existing?.ext !== undefined) carried.push('ext');
+        const resolvedMethods = (methods ?? []).map(m => {
+          const prev = existing?.methods.find(p => p.name === m.name);
+          const ext = m.ext ?? prev?.ext;
+          if (m.ext === undefined && prev?.ext !== undefined) carried.push(`method ext (${m.name})`);
+          return {
+            ...m,
+            ...(ext !== undefined ? { ext } : {}),
+            narrative: (m.narrative ?? []).map((s, i) => ({ ...s, stepNumber: s.stepNumber ?? i + 1 })),
+          };
+        });
+        // Symbolic *Label references resolve to step numbers before the spec
+        // is saved; an unresolvable reference rejects the whole write.
+        const labelErrors = resolvedMethods.flatMap(m => resolveNarrativeLabels(m.name, m.narrative));
+        if (labelErrors.length) return errText(`Unresolved narrative label references — nothing was saved:\n- ${labelErrors.join('\n- ')}`);
         const now = new Date().toISOString();
-        saveImplementationSpec({
+        const notices = saveImplementationSpec({
           id,
           name,
           description,
           contract,
           sourcePath,
+          simPath,
           technologies,
           detail,
           conformance,
-          methods: (methods ?? []).map(m => ({
-            ...m,
-            narrative: (m.narrative ?? []).map((s, i) => ({ ...s, stepNumber: s.stepNumber ?? i + 1 })),
-          })),
+          ...(existing?.lint !== undefined ? { lint: existing.lint } : {}),
+          ...(existing?.ext !== undefined ? { ext: existing.ext } : {}),
+          // Post-resolution every cases/catches entry has its numeric step —
+          // the *Label twins exist only in the input type, not the spec's.
+          methods: resolvedMethods as Parameters<typeof saveImplementationSpec>[0]['methods'],
           status: 'draft',
-          createdAt: now,
+          createdAt: existing?.createdAt ?? now,
           updatedAt: now,
         });
-        return text(`Successfully saved L4 Implementation Spec "${name}" (${id}) with method narratives.`);
+        if (existing) {
+          notices.push(`Implementation "${id}" already existed — re-authored; carried forward from the previous version: ${carried.join(', ')}.`);
+        }
+        const noticeBlock = notices.length ? `\n\nNOTICE:\n- ${notices.join('\n- ')}` : '';
+        return text(`Successfully saved L4 Implementation Spec "${name}" (${id}) with method narratives.${noticeBlock}`);
       } catch (e) {
         return errText(String(e));
       }
     },
   );
 
-  reg<{ kind: 'entity' | 'value-object'; id: string; name: string; description?: string; subsystem?: string; group?: string; fields?: { name: string; type: string; description?: string; optional?: boolean; key?: 'primary' | 'unique' | 'foreign'; references?: string }[]; methods?: { name: string; signature: string; returns: string; description?: string }[]; componentClass?: string; database?: string; table?: string; linkedEntity?: string }>(server,
+  reg<{ kind: 'entity' | 'value-object'; id: string; name: string; description?: string; subsystem?: string; group?: string; fields?: { name: string; type: string; description?: string; optional?: boolean; key?: 'primary' | 'unique' | 'foreign'; references?: string }[]; methods?: { name: string; signature: string; returns: string; description?: string }[]; componentClass?: string; invariants?: { id: string; description: string }[]; database?: string; table?: string; linkedEntity?: string }>(server,
     'sdd_add_type',
     {
       description: 'Define an entity or value-object type (the data components operate on). Entities are owned by a subsystem; shared value objects omit subsystem (system-level). Fields are data; methods are PURE intrinsic behaviour only — anything needing a collaborator belongs on a component, taking the entity as an argument.',
@@ -829,16 +918,20 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         })).optional().describe('Data fields (type is a primitive or a qualified type id, e.g. "billing.Invoice")'),
         methods: z.array(z.object({ name: z.string(), signature: z.string(), returns: z.string(), description: z.string().optional() })).optional().describe('Pure intrinsic methods only'),
         componentClass: z.string().optional().describe('Optional component id that implements or owns this logical entity'),
+        invariants: z.array(z.object({
+          id: z.string().describe('Stable invariant id, unique within the entity'),
+          description: z.string().describe('The property that must hold, stated precisely'),
+        })).optional().describe('Declared domain invariants (entities): every write-effect method of the componentClass must carry a narrative step asserting each (assertsInvariants) — declarations checked, enforcement never proven'),
         database: z.string().optional().describe('Optional database id for table-schema types'),
         table: z.string().optional().describe('Optional database table name for table-schema types'),
         linkedEntity: z.string().optional().describe('Optional logical entity id represented by this table-schema type'),
       },
     },
-    ({ kind, id, name, description, subsystem, group, fields, methods, componentClass, database, table, linkedEntity }) => {
+    ({ kind, id, name, description, subsystem, group, fields, methods, componentClass, invariants, database, table, linkedEntity }) => {
       try {
         const { saveTypeSpec } = requireSpecs();
         const now = new Date().toISOString();
-        saveTypeSpec({
+        const notices = saveTypeSpec({
           kind,
           id,
           name,
@@ -855,13 +948,15 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           })),
           methods: methods ?? [],
           ...(componentClass ? { componentClass } : {}),
+          ...(invariants?.length ? { invariants } : {}),
           ...(database ? { database } : {}),
           ...(table ? { table } : {}),
           ...(linkedEntity ? { linkedEntity } : {}),
           createdAt: now,
           updatedAt: now,
         });
-        return text(`Successfully defined ${kind} type "${name}" (${id}).`);
+        const noticeBlock = notices.length ? `\n\nNOTICE:\n- ${notices.join('\n- ')}` : '';
+        return text(`Successfully defined ${kind} type "${name}" (${id}).${noticeBlock}`);
       } catch (e) {
         return errText(String(e));
       }
@@ -1011,27 +1106,34 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     const hostedStub = (): CallToolResult =>
       errText('This hosted tool is dispatched by the hosting data plane before reaching the MCP server; it is unavailable outside a hosted request.');
 
-    reg<Record<string, never>>(server, 'sdd_host_request_project_lock', {
-      description: 'Hosted self-service: create an approval request to LOCK the bound project (validate-as-complete gate + commit-scoped lock record). Returns the approval request for tracking; an admin decides it.',
+    reg<Record<string, never>>(server, 'sdd_host_lock_project', {
+      description: 'Hosted project lifecycle (execute-primary): LOCK the bound project (validate-as-complete gate + commit-scoped lock record). Executes directly when your resolved permission is yes and returns the completed outcome; when it is approval, a pending approval request is created instead (await it with sdd_host_await_approval).',
       inputSchema: {},
     }, hostedStub);
-    reg<Record<string, never>>(server, 'sdd_host_request_project_promotion', {
-      description: 'Hosted self-service: create an approval request to PROMOTE the bound, locked project after a StateId re-check. Returns the approval request; an admin decides it.',
+    reg<Record<string, never>>(server, 'sdd_host_promote_project', {
+      description: 'Hosted project lifecycle (execute-primary): PROMOTE the bound, locked project after a StateId re-check. Executes directly when your resolved permission is yes; when it is approval, a pending approval request is created instead.',
       inputSchema: {},
     }, hostedStub);
-    reg<{ id: string }>(server, 'sdd_host_request_project_initialization', {
-      description: 'Hosted self-service: create an approval request to initialize a new hosted project (optionally into an organization unit, with a profile selection). Returns the approval request; an admin decides it.',
+    reg<{ id: string; ownerUnitId: string }>(server, 'sdd_host_initialize_project', {
+      description: 'Hosted project lifecycle (execute-primary): initialize a new hosted project into its REQUIRED owner organization unit (with an optional profile selection). Executes directly when your resolved permission is yes; when it is approval, a pending approval request is created instead.',
       inputSchema: {
         id: z.string().describe('Requested project id'),
         displayName: z.string().optional(),
         description: z.string().optional(),
-        ownerUnitId: z.string().optional().describe('Organization unit to place the project in'),
+        ownerUnitId: z.string().describe('REQUIRED organization unit that owns the new project (every project is placed at creation)'),
         environment: z.string().optional(),
       },
     }, hostedStub);
     reg<{ requestId: string }>(server, 'sdd_host_get_approval_status', {
-      description: 'Hosted self-service: read the status of one of your approval requests.',
+      description: 'Hosted project lifecycle: read the status of one of your approval requests.',
       inputSchema: { requestId: z.string() },
+    }, hostedStub);
+    reg<{ requestId: string; timeoutSeconds?: number }>(server, 'sdd_host_await_approval', {
+      description: 'Hosted project lifecycle: long-poll one of YOUR approval requests until it is decided (approved requests auto-execute, so an approval resolves as completed) or the timeout elapses. Returns the request in its current state.',
+      inputSchema: {
+        requestId: z.string(),
+        timeoutSeconds: z.number().optional().describe('How long to wait server-side (clamped; 0 returns the current state immediately)'),
+      },
     }, hostedStub);
     reg<Record<string, never>>(server, 'sdd_landscape_list_reachable_projects', {
       description: 'Hosted landscape: the projects reachable from the BOUND project through ACTIVE cross-project relations (directional, relations-only), each with the relation ids/kinds and target public interface ids.',
@@ -1048,6 +1150,36 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     reg<{ projectId: string }>(server, 'sdd_landscape_get_project_surface', {
       description: 'Hosted landscape: fetch a visible target project\'s CONTRACT-GRADE surface snapshot (full method contracts, dispatch tables, type closure) at your audience-distance ceiling, origin "exchanged" — save it under .wai/surfaces/ (wairon surface import) so your adapters validate against the declared contract.',
       inputSchema: { projectId: z.string().describe('The visible target project id') },
+    }, hostedStub);
+    reg<Record<string, never>>(server, 'sdd_host_pack_list', {
+      description: 'Hosted project ops: list the BOUND project\'s registered extension packs (requires project:read over it).',
+      inputSchema: {},
+    }, hostedStub);
+    reg<{ name: string; content: string }>(server, 'sdd_host_pack_install', {
+      description: 'Hosted project ops: install a DECLARATIVE extension pack (profiles + language/platform tables — never rule/code packs) into the BOUND project (requires project:admin over it).',
+      inputSchema: {
+        name: z.string().describe('Pack name (letters, digits, dot, underscore, hyphen)'),
+        content: z.string().describe('The declarative pack YAML content'),
+      },
+    }, hostedStub);
+    reg<Record<string, never>>(server, 'sdd_host_policy_evaluate', {
+      description: 'Hosted project ops: evaluate the BOUND project\'s packs and profile selection against the instance pack policy — compliance without side effects (requires project:write over it).',
+      inputSchema: {},
+    }, hostedStub);
+    reg<Record<string, never>>(server, 'sdd_host_policy_reconcile', {
+      description: 'Hosted project ops: reconcile the BOUND project against the instance pack policy — under auto_reconcile enforcement the missing required/default declarative packs are applied (requires project:write over it).',
+      inputSchema: {},
+    }, hostedStub);
+    reg<{ target: string }>(server, 'sdd_host_produce', {
+      description: 'Hosted project ops: run a configured producer projection (Notion/Miro) of the BOUND project to the named target (requires project:admin over it).',
+      inputSchema: { target: z.string().describe('The configured producer target (e.g. notion, miro)') },
+    }, hostedStub);
+    reg<{ subsystem?: string; message?: string }>(server, 'sdd_host_commit_project', {
+      description: 'Hosted project ops: publish a DELIBERATE, .wai/-scoped commit+push of the BOUND project\'s specs to its bound repository (commit = local save, push = the actual backup; a clean scope publishes nothing). The data plane binds ONE project, so there is no project argument. Requires project:write over it.',
+      inputSchema: {
+        subsystem: z.string().optional().describe('Narrow staging to .wai/specs/<subsystem>/ (a convenience — git history stays per-repo)'),
+        message: z.string().optional().describe('Commit message; defaults to a timestamped wairon message'),
+      },
     }, hostedStub);
   }
 

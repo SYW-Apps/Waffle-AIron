@@ -13,6 +13,7 @@ methods:
       configured. Read-only over the store's current reference; never fails on lookups — absence is
       a null result, not an error, which the orchestrator resolves to the documented permissive
       default.
+    symbol: getPackPolicyRecord
   - name: listIdentityProviders
     narrative: []
     intent: >-
@@ -20,7 +21,17 @@ methods:
       empty list when none has been configured. Read-only over the store's reference; never fails on
       lookups — absence is an empty list, not an error.
     symbol: listIdentityProviderRecords
+  - name: getExposurePolicy
+    narrative: []
+    detail: intent
+    intent: >-
+      Return the persisted instance exposure policy read through the store, or null when
+      exposure-policy.json has never been written (callers substitute the safe default — web UI off,
+      TLS required).
+    symbol: getExposurePolicyRecord
 detail: intent
+lint:
+  allow: []
 status: complete
 createdAt: '2026-07-09T20:47:47.802Z'
-updatedAt: '2026-07-11T19:14:22.639Z'
+updatedAt: '2026-07-18T23:45:29.122Z'

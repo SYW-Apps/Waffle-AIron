@@ -15,25 +15,30 @@ import {
 import { createWebSession, getWebSessionById } from '../../src/server/websessions.js';
 import { createProjectRecord } from '../../src/server/projects.js';
 import { upsertUser as repoUpsertUser } from '../../src/server/users.js';
-import { upsertOrganizationUnit, placeProject } from '../../src/server/organization.js';
+import { createUnit, placeProject } from '../../src/server/organization.js';
+import { mintUserToken, allow } from './helpers.js';
+import { ensureInstanceIdentity } from '../../src/server/instance.js';
 import { appendAuditEvent, queryAuditEvents as auditQuery, DEFAULT_AUDIT_POLICY } from '../../src/server/audit.js';
 import type {
   ApiKeyRecord,
   AuditEvent,
+  Capability,
   HostConfig,
   HostedUserRecord,
   OrganizationUnitRecord,
+  PermissionValue,
   PrincipalSubject,
-  ProjectGrant,
   ProjectPlacement,
+  ScopeKind,
 } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
 // Identity Orchestrator + Portal (sdd_host) — exercised through the exported
 // orchestrator functions against a real <dataDir>, mirroring the other server
-// suites. Covers authentication (401), grant-based authorization (403), the
-// token/user/audit workflows, best-effort audit appends, and the audit action
-// distinctions (user.create vs user.update).
+// suites. Covers authentication (401), resolver-based authorization (403), the
+// token/user/audit workflows (mintToken is INSTANCE-ADMIN only — a token acts
+// as its owner's live permission), the reserved-subject guard, best-effort
+// audit appends, and the audit action distinctions (user.create vs user.update).
 // ---------------------------------------------------------------------------
 
 const MASTER = 'master-credential-secret-value';
@@ -46,7 +51,7 @@ function mkUser(over: Partial<HostedUserRecord> & Pick<HostedUserRecord, 'id'>):
   return {
     subject: subject(),
     status: 'active',
-    grants: [],
+    roleBindings: [],
     createdAt: '2000-01-01T00:00:00.000Z',
     ...over,
   };
@@ -55,27 +60,33 @@ function mkUser(over: Partial<HostedUserRecord> & Pick<HostedUserRecord, 'id'>):
 // ── organization scaffolding for Phase 6 scoped-administration tests ──────────
 const ORG_SUB: PrincipalSubject = { userId: 'org-admin', kind: 'human', issuer: 'local' };
 
-function unit(id: string, parentId?: string): OrganizationUnitRecord {
-  return { id, name: id, kind: 'team', parentId, status: 'active', createdAt: '2026-01-01T00:00:00.000Z', createdBy: ORG_SUB };
+function unit(slug: string, parentId?: string): OrganizationUnitRecord {
+  return { id: '', slug, name: slug, kind: 'team', parentId, status: 'active', createdAt: '', createdBy: ORG_SUB };
 }
 function placement(projectId: string, unitId: string): ProjectPlacement {
   return { id: `${projectId}@${unitId}`, projectId, unitId, role: 'owner', createdAt: '2026-01-01T00:00:00.000Z', createdBy: ORG_SUB };
 }
 
+// The QUALIFIED dot-path unit ids the registry computes (parent id + '.' + slug).
+const ACME = 'acme';
+const ENG = 'acme.eng';
+const WEB = 'acme.eng.web';
+const SALES = 'acme.sales';
+
 /**
- * A small org used by the scoped-administration tests, mirroring scope.test.ts:
+ * A small org used by the scoped-administration tests:
  *   acme(root) → eng → web ; acme → sales
- * with projects p-web@web, p-eng@eng, p-sales@sales. A grant scoped to 'eng'
- * therefore covers units {eng, web} and projects {p-web, p-eng} — but never sales.
+ * with projects p-web@WEB, p-eng@ENG, p-sales@SALES. An assignment scoped to ENG
+ * therefore covers units {ENG, WEB} and projects {p-web, p-eng} — never sales.
  */
 function seedOrg(dataDir: string): void {
-  upsertOrganizationUnit(dataDir, unit('acme'));
-  upsertOrganizationUnit(dataDir, unit('eng', 'acme'));
-  upsertOrganizationUnit(dataDir, unit('web', 'eng'));
-  upsertOrganizationUnit(dataDir, unit('sales', 'acme'));
-  placeProject(dataDir, placement('p-web', 'web'));
-  placeProject(dataDir, placement('p-eng', 'eng'));
-  placeProject(dataDir, placement('p-sales', 'sales'));
+  createUnit(dataDir, unit('acme'));
+  createUnit(dataDir, unit('eng', ACME));
+  createUnit(dataDir, unit('web', ENG));
+  createUnit(dataDir, unit('sales', ACME));
+  placeProject(dataDir, placement('p-web', WEB));
+  placeProject(dataDir, placement('p-eng', ENG));
+  placeProject(dataDir, placement('p-sales', SALES));
 }
 
 describe('identity orchestrator (sdd_host)', () => {
@@ -100,30 +111,25 @@ describe('identity orchestrator (sdd_host)', () => {
     }
   });
 
-  // Mint a stored non-admin token carrying the given grants; returns the plaintext.
-  function mintNonAdminToken(grants: ProjectGrant[]): string {
-    const token = 'wk_' + crypto.randomBytes(8).toString('hex');
-    const record: ApiKeyRecord = {
-      id: crypto.randomBytes(6).toString('hex'),
-      keyHash: hashToken(token),
-      role: 'editor',
-      projects: grants.map((g) => g.projectId),
-      grants,
-      createdAt: new Date().toISOString(),
-    };
-    createCredential(dataDir, record);
-    return token;
+  // Mint a grants-free token owned by a FRESH subject holding one assignment.
+  let userSeq = 0;
+  function tokenWith(capability: Capability, scopeKind: ScopeKind, scopeId?: string, value: PermissionValue = 'yes'): string {
+    const userId = `u-tok-${userSeq++}`;
+    allow(dataDir, userId, capability, scopeKind, scopeId, value);
+    return mintUserToken(dataDir, { id: crypto.randomBytes(6).toString('hex'), userId });
+  }
+  // A token whose owner holds NO assignments at all.
+  function plainToken(): string {
+    return mintUserToken(dataDir, { id: crypto.randomBytes(6).toString('hex'), userId: `u-plain-${userSeq++}` });
   }
 
   // Mint a stored token OWNED by a given user id (ownerSubject.userId); returns the plaintext.
-  function mintOwnedToken(ownerUserId: string, grants: ProjectGrant[] = []): string {
+  function mintOwnedToken(ownerUserId: string): string {
     const token = 'wk_' + crypto.randomBytes(8).toString('hex');
     const record: ApiKeyRecord = {
       id: crypto.randomBytes(6).toString('hex'),
       keyHash: hashToken(token),
-      role: 'editor',
-      projects: grants.map((g) => g.projectId),
-      grants,
+      projects: ['*'],
       createdAt: new Date().toISOString(),
       ownerSubject: { userId: ownerUserId, kind: 'human', issuer: 'local' },
     };
@@ -135,20 +141,19 @@ describe('identity orchestrator (sdd_host)', () => {
     return listCredentials(dataDir, '*').find((r) => r.keyHash === tokenHash);
   }
 
-  // ── mintToken ──────────────────────────────────────────────────────────────
+  // ── mintToken (INSTANCE-ADMIN only: a token acts as its owner's live permission) ──
 
-  it('mints a token as instance-admin: returns plaintext, persists a hashed record with owner + grants, and audits token.mint', () => {
+  it('mints a token as instance-admin: returns plaintext, persists a hashed narrowing-only record, and audits token.mint', () => {
     createProjectRecord(dataDir, 'proj-a');
-    const grants: ProjectGrant[] = [{ projectId: 'proj-a', permissions: ['mcp:read', 'mcp:write'] }];
 
-    const token = identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 'ci token', grants });
+    const token = identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 'ci token', projects: ['proj-a'] });
 
     expect(token).toMatch(/^wk_[0-9a-f]+$/);
     const rec = persistedByHash(hashToken(token));
     expect(rec).toBeDefined();
     expect(rec!.keyHash).toBe(hashToken(token)); // only the hash is stored
     expect(rec!.ownerSubject?.userId).toBe('u-owner');
-    expect(rec!.grants).toEqual(grants);
+    expect(rec!.projects).toEqual(['proj-a']); // a NARROWING, never a grant
     expect(rec!.label).toBe('ci token');
     // createdBySubject carries the bootstrap admin identity.
     expect(rec!.createdBySubject?.userId).toBe('bootstrap');
@@ -159,91 +164,37 @@ describe('identity orchestrator (sdd_host)', () => {
     expect(events[0].target).toBe(rec!.id);
   });
 
-  it('mints a token when a non-admin caller holds key:manage AND the delegated permission for every requested project', () => {
+  it('a DELEGATED instance-level project:admin may NOT mint for another user (confused-deputy guard)', () => {
     createProjectRecord(dataDir, 'proj-a');
-    // The caller may only delegate permissions it itself holds (S5): key:manage + mcp:read.
-    const caller = mintNonAdminToken([{ projectId: 'proj-a', permissions: ['key:manage', 'mcp:read'] }]);
-
-    const token = identity.mintToken(cfg, caller, {
-      ownerUserId: 'u-owner',
-      label: 't',
-      grants: [{ projectId: 'proj-a', permissions: ['mcp:read'] }],
-    });
-    expect(token).toMatch(/^wk_/);
+    // The minted token would act as its OWNER's live permission, which can
+    // exceed the delegated minter's own reach — instance-admin only.
+    const delegated = tokenWith('project:admin', 'instance');
+    expect(() =>
+      identity.mintToken(cfg, delegated, { ownerUserId: 'u-owner', label: 't', projects: ['proj-a'] }),
+    ).toThrow(/instance admin/i);
   });
 
-  it('S5: a key:manage-only caller cannot mint a token carrying a permission it lacks for the project', () => {
-    createProjectRecord(dataDir, 'proj-a');
-    // Caller holds key:manage + mcp:read for proj-a, but NOT mcp:write.
-    const caller = mintNonAdminToken([{ projectId: 'proj-a', permissions: ['key:manage', 'mcp:read'] }]);
-
-    // Delegating mcp:write (which the caller does not hold) is refused …
+  it('rejects a mint whose narrowing references an unknown project', () => {
+    // admin passes the gate, so the failure is the project-existence check.
     expect(() =>
-      identity.mintToken(cfg, caller, {
-        ownerUserId: 'u-owner',
-        label: 't',
-        grants: [{ projectId: 'proj-a', permissions: ['mcp:write'] }],
-      }),
-    ).toThrow(ForbiddenError);
-
-    // … while delegating a permission the caller DOES hold succeeds.
-    const token = identity.mintToken(cfg, caller, {
-      ownerUserId: 'u-owner',
-      label: 't',
-      grants: [{ projectId: 'proj-a', permissions: ['mcp:read'] }],
-    });
-    expect(token).toMatch(/^wk_/);
-  });
-
-  it('rejects a mint (403) when the caller lacks key:manage for a requested project', () => {
-    createProjectRecord(dataDir, 'proj-a');
-    const caller = mintNonAdminToken([{ projectId: 'proj-a', permissions: ['mcp:read'] }]);
-
-    expect(() =>
-      identity.mintToken(cfg, caller, {
-        ownerUserId: 'u-owner',
-        label: 't',
-        grants: [{ projectId: 'proj-a', permissions: ['mcp:read'] }],
-      }),
-    ).toThrow(ForbiddenError);
-  });
-
-  it('rejects a mint referencing an unknown project', () => {
-    // admin passes delegation authz, so the failure is the project-existence check.
-    expect(() =>
-      identity.mintToken(cfg, MASTER, {
-        ownerUserId: 'u-owner',
-        label: 't',
-        grants: [{ projectId: 'ghost', permissions: ['mcp:read'] }],
-      }),
+      identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 't', projects: ['ghost'] }),
     ).toThrow(/unknown project/i);
   });
 
-  // Re-review S5: an empty permissions[] must NOT vacuously pass delegation.
-  it('rejects a grant carrying no permissions (empty-array delegation bypass)', () => {
-    createProjectRecord(dataDir, 'proj-a');
-    // A non-admin caller who could otherwise ride the vacuous .every([]) path.
-    const caller = mintOwnedToken('u-weak', [{ projectId: 'proj-a', permissions: ['mcp:read'] }]);
-    expect(() =>
-      identity.mintToken(cfg, caller, {
-        ownerUserId: 'u-weak',
-        label: 't',
-        grants: [{ projectId: 'proj-a', permissions: [] }],
-      }),
-    ).toThrow(/at least one permission/i);
+  it('rejects a mint whose OWNER claims a reserved built-in subject id (legacy literal or persisted UUID)', () => {
+    const instance = ensureInstanceIdentity(dataDir);
+    for (const ownerUserId of ['builtin:superadmin', 'builtin:localdev', instance.superadminUserId, instance.localDevUserId]) {
+      expect(() => identity.mintToken(cfg, MASTER, { ownerUserId, label: 't' })).toThrow(/reserved/i);
+    }
   });
 
-  // Re-review B1: a delegator cannot mint a fresh token for a deactivated user.
+  // Re-review B1: nobody can mint a fresh token for a deactivated user.
   it('refuses to mint a token for a deactivated user', () => {
     createProjectRecord(dataDir, 'proj-a');
     identity.upsertUser(cfg, MASTER, mkUser({ id: 'u-gone', subject: subject({ userId: 'u-gone' }) }));
     identity.setUserStatus(cfg, MASTER, 'u-gone', 'inactive');
     expect(() =>
-      identity.mintToken(cfg, MASTER, {
-        ownerUserId: 'u-gone',
-        label: 't',
-        grants: [{ projectId: 'proj-a', permissions: ['mcp:read'] }],
-      }),
+      identity.mintToken(cfg, MASTER, { ownerUserId: 'u-gone', label: 't', projects: ['proj-a'] }),
     ).toThrow(/deactivated user/i);
   });
 
@@ -271,11 +222,7 @@ describe('identity orchestrator (sdd_host)', () => {
     // Both the record id AND the subject id must be refused.
     for (const ownerUserId of ['rec-9', 'subj-9']) {
       expect(() =>
-        identity.mintToken(cfg, MASTER, {
-          ownerUserId,
-          label: 't',
-          grants: [{ projectId: 'proj-a', permissions: ['mcp:read'] }],
-        }),
+        identity.mintToken(cfg, MASTER, { ownerUserId, label: 't', projects: ['proj-a'] }),
       ).toThrow(/deactivated user/i);
     }
   });
@@ -300,38 +247,19 @@ describe('identity orchestrator (sdd_host)', () => {
     expect(events[0].level).toBe('security');
   });
 
-  it('rejects a revoke (403) when the caller cannot manage the target token scope', () => {
+  it('rejects a revoke (403) for a DELEGATED admin — the administrative kill switch is instance-admin only', () => {
     createCredential(dataDir, {
       id: 'tok-2',
       keyHash: hashToken('wk_x'),
-      role: 'editor',
       projects: ['proj-a'],
       createdAt: new Date().toISOString(),
     });
-    const caller = mintNonAdminToken([{ projectId: 'proj-b', permissions: ['key:manage'] }]);
+    const caller = tokenWith('project:admin', 'instance');
 
     expect(() => identity.revokeToken(cfg, caller, 'tok-2')).toThrow(ForbiddenError);
   });
 
-  // ── replaceUserGrants ──────────────────────────────────────────────────────
-
-  it('replaces a user\'s grants as admin and audits user.grants.replace', () => {
-    repoUpsertUser(dataDir, mkUser({ id: 'u-1' }));
-    const grants: ProjectGrant[] = [{ projectId: 'proj-a', permissions: ['mcp:read'] }];
-
-    const updated = identity.replaceUserGrants(cfg, MASTER, 'u-1', grants);
-    expect(updated.grants).toEqual(grants);
-
-    expect(auditQuery(dataDir, { action: 'user.grants.replace' })).toHaveLength(1);
-  });
-
-  it('rejects replaceUserGrants (403) for a non-admin token', () => {
-    repoUpsertUser(dataDir, mkUser({ id: 'u-1' }));
-    const caller = mintNonAdminToken([{ projectId: 'proj-a', permissions: ['key:manage', 'user:admin'] }]);
-    expect(() => identity.replaceUserGrants(cfg, caller, 'u-1', [])).toThrow(ForbiddenError);
-  });
-
-  // ── upsertUser: create vs update ───────────────────────────────────────────
+  // ── upsertUser: create vs update + the reserved-subject guard ───────────────
 
   it('audits user.create on first upsert and user.update on the second', () => {
     identity.upsertUser(cfg, MASTER, mkUser({ id: 'u-2', subject: subject({ displayName: 'Ada' }) }));
@@ -341,9 +269,24 @@ describe('identity orchestrator (sdd_host)', () => {
     expect(auditQuery(dataDir, { action: 'user.update' })).toHaveLength(1);
   });
 
-  it('rejects upsertUser (403) for a non-admin token', () => {
-    const caller = mintNonAdminToken([{ projectId: 'proj-a', permissions: ['user:admin'] }]);
+  it('rejects upsertUser (403) for a caller with no project:admin reach', () => {
+    const caller = plainToken();
     expect(() => identity.upsertUser(cfg, caller, mkUser({ id: 'u-9' }))).toThrow(ForbiddenError);
+  });
+
+  it('RESERVED-SUBJECT GUARD: even MASTER cannot create a user claiming a built-in subject id', () => {
+    const instance = ensureInstanceIdentity(dataDir);
+    const claims = ['builtin:superadmin', 'builtin:localdev', instance.superadminUserId, instance.localDevUserId];
+    for (const claimed of claims) {
+      // Rejected whether claimed as the record id …
+      expect(() =>
+        identity.upsertUser(cfg, MASTER, mkUser({ id: claimed, subject: subject({ userId: 'harmless' }) })),
+      ).toThrow(/reserved/i);
+      // … or as the record's subject id.
+      expect(() =>
+        identity.upsertUser(cfg, MASTER, mkUser({ id: 'harmless', subject: subject({ userId: claimed }) })),
+      ).toThrow(/reserved/i);
+    }
   });
 
   // ── setUserStatus ──────────────────────────────────────────────────────────
@@ -391,9 +334,9 @@ describe('identity orchestrator (sdd_host)', () => {
     expect(reactivate[0].level).toBe('info');
   });
 
-  it('rejects setUserStatus (403) for a non-admin token', () => {
+  it('rejects setUserStatus (403) for a caller with no project:admin reach', () => {
     repoUpsertUser(dataDir, mkUser({ id: 'u-3' }));
-    const caller = mintNonAdminToken([{ projectId: 'proj-a', permissions: ['user:admin'] }]);
+    const caller = plainToken();
     expect(() => identity.setUserStatus(cfg, caller, 'u-3', 'suspended')).toThrow(ForbiddenError);
   });
 
@@ -404,10 +347,10 @@ describe('identity orchestrator (sdd_host)', () => {
   it('deactivating a user revokes ALL their live web sessions (the auth bridge can no longer resolve them) and counts them in the audit event', () => {
     const future = new Date(Date.now() + 3_600_000).toISOString();
     repoUpsertUser(dataDir, mkUser({ id: 'u-sess', subject: subject({ userId: 'u-sess' }) }));
-    const s1 = createWebSession(dataDir, { id: '', subject: subject({ userId: 'u-sess' }), grants: [], createdAt: '', expiresAt: future });
-    const s2 = createWebSession(dataDir, { id: '', subject: subject({ userId: 'u-sess' }), grants: [], createdAt: '', expiresAt: future });
+    const s1 = createWebSession(dataDir, { id: '', subject: subject({ userId: 'u-sess' }), projects: ['*'], createdAt: '', expiresAt: future });
+    const s2 = createWebSession(dataDir, { id: '', subject: subject({ userId: 'u-sess' }), projects: ['*'], createdAt: '', expiresAt: future });
     // A bystander's session must survive the sweep.
-    const other = createWebSession(dataDir, { id: '', subject: subject({ userId: 'u-other' }), grants: [], createdAt: '', expiresAt: future });
+    const other = createWebSession(dataDir, { id: '', subject: subject({ userId: 'u-other' }), projects: ['*'], createdAt: '', expiresAt: future });
 
     // Both of the user's sessions authenticate through the bridge before deactivation.
     expect(authenticateSession(dataDir, s1.id).authenticated).toBe(true);
@@ -431,44 +374,49 @@ describe('identity orchestrator (sdd_host)', () => {
 
   // ── listUsers authorization ─────────────────────────────────────────────────
 
-  it('lists users for a caller carrying a user-administration grant, and rejects one without', () => {
+  it('lists users for an instance-level project:admin, and rejects a caller without reach', () => {
     repoUpsertUser(dataDir, mkUser({ id: 'u-a' }));
     repoUpsertUser(dataDir, mkUser({ id: 'u-b' }));
 
     // admin sees all.
     expect(identity.listUsers(cfg, MASTER).map((u) => u.id).sort()).toEqual(['u-a', 'u-b']);
 
-    // non-admin with user:admin grant is authorized.
-    const userAdmin = mintNonAdminToken([{ projectId: '*', permissions: ['user:admin'] }]);
+    // a DELEGATED instance-level project:admin is authorized instance-wide.
+    const userAdmin = tokenWith('project:admin', 'instance');
     expect(identity.listUsers(cfg, userAdmin)).toHaveLength(2);
 
-    // non-admin without it is denied.
-    const plain = mintNonAdminToken([{ projectId: 'proj-a', permissions: ['mcp:read'] }]);
+    // a caller without project:admin reach is denied.
+    const plain = tokenWith('project:read', 'project', 'proj-a');
     expect(() => identity.listUsers(cfg, plain)).toThrow(ForbiddenError);
   });
 
   // ── queryAuditEvents authorization ──────────────────────────────────────────
 
-  it('returns audit events for an audit:read caller and rejects one without', () => {
+  it('returns audit events for a project:admin caller and rejects one without', () => {
     appendAuditEvent(dataDir, mkEvent({ action: 'token.mint', level: 'security' }), DEFAULT_AUDIT_POLICY);
 
-    const reader = mintNonAdminToken([{ projectId: '*', permissions: ['audit:read'] }]);
+    const reader = tokenWith('project:admin', 'instance');
     expect(identity.queryAuditEvents(cfg, reader, {}).length).toBeGreaterThanOrEqual(1);
 
-    const plain = mintNonAdminToken([{ projectId: 'proj-a', permissions: ['mcp:read'] }]);
+    const plain = tokenWith('project:read', 'project', 'proj-a');
     expect(() => identity.queryAuditEvents(cfg, plain, {})).toThrow(ForbiddenError);
   });
 
-  // Phase 6 REPLACES the old instance-wide-only gate: a project-scoped audit:read
-  // grant is now AUTHORIZED but its reads are FILTERED to that project's events
-  // (it no longer 403s). An instance-wide grant still reads everything.
-  it('S2 (Phase 6): a project-scoped audit:read grant confers FILTERED access to its project, not 403; instance-wide sees all', () => {
+  // A project-scoped project:admin is AUTHORIZED but its reads are FILTERED to
+  // that project's events (never 403). An instance-level admin reads everything.
+  it('S2: a project-scoped admin gets FILTERED audit access to its project, not 403; instance-level sees all', () => {
+    // The scoped project must exist AND be placed — the resolver enumerates the
+    // org tree, so an unplaced project is in nobody's visibility view.
+    const tenant = createUnit(dataDir, unit('tenant'));
+    createProjectRecord(dataDir, 'acme');
+    placeProject(dataDir, placement('acme', tenant.id));
+
     appendAuditEvent(dataDir, mkEvent({ action: 'evt.acme', projectId: 'acme' }), DEFAULT_AUDIT_POLICY);
     appendAuditEvent(dataDir, mkEvent({ action: 'evt.other', projectId: 'other' }), DEFAULT_AUDIT_POLICY);
     appendAuditEvent(dataDir, mkEvent({ action: 'evt.global' }), DEFAULT_AUDIT_POLICY); // instance-level, no projectId
 
-    // A project-scoped grant carrying audit:read now reads ONLY its own project's events.
-    const scoped = mintNonAdminToken([{ projectId: 'acme', permissions: ['audit:read'] }]);
+    // A project-scoped admin reads ONLY its own project's events.
+    const scoped = tokenWith('project:admin', 'project', 'acme');
     const scopedEvents = identity.queryAuditEvents(cfg, scoped, {});
     expect(scopedEvents.map((e) => e.action)).toEqual(['evt.acme']);
     // Never an out-of-scope project's events, nor instance-level (no-projectId) events.
@@ -477,25 +425,25 @@ describe('identity orchestrator (sdd_host)', () => {
     // A count is scoped identically.
     expect(identity.countAuditEvents(cfg, scoped, {})).toBe(1);
 
-    // The same permission scoped to ALL projects ('*') reads instance-wide.
-    const instanceWide = mintNonAdminToken([{ projectId: '*', permissions: ['audit:read'] }]);
+    // An instance-level admin reads instance-wide.
+    const instanceWide = tokenWith('project:admin', 'instance');
     expect(identity.queryAuditEvents(cfg, instanceWide, {})).toHaveLength(3);
   });
 
-  // ── Phase 6: scoped administration (unit-scoped grants) ──────────────────────
+  // ── scoped administration (unit-scoped assignments) ──────────────────────────
   //
-  // A grant scoped to org unit 'eng' resolves (via the scope specialist) to units
-  // {eng, web} and projects {p-web, p-eng}; 'sales' / 'p-sales' are out of scope.
-  // MASTER is the '*'/'*' bootstrap → scope.all → full super-admin reach.
+  // A project:admin assignment scoped to org unit ENG covers units {ENG, WEB}
+  // and projects {p-web, p-eng}; SALES / 'p-sales' are out of scope. MASTER is
+  // the bootstrap instance-admin → full reach.
 
-  it('queryAuditEvents: a unit-scoped audit:read caller sees only its subtree events, never another unit\'s or instance-level ones', () => {
+  it('queryAuditEvents: a unit-scoped admin sees only its subtree events, never another unit\'s or instance-level ones', () => {
     seedOrg(dataDir);
     appendAuditEvent(dataDir, mkEvent({ action: 'a.web', projectId: 'p-web' }), DEFAULT_AUDIT_POLICY);
     appendAuditEvent(dataDir, mkEvent({ action: 'a.eng', projectId: 'p-eng' }), DEFAULT_AUDIT_POLICY);
     appendAuditEvent(dataDir, mkEvent({ action: 'a.sales', projectId: 'p-sales' }), DEFAULT_AUDIT_POLICY);
     appendAuditEvent(dataDir, mkEvent({ action: 'a.global' }), DEFAULT_AUDIT_POLICY); // no projectId
 
-    const caller = mintNonAdminToken([{ projectId: '', orgUnitId: 'eng', permissions: ['audit:read'] }]);
+    const caller = tokenWith('project:admin', 'unit', ENG);
 
     const events = identity.queryAuditEvents(cfg, caller, {});
     expect(new Set(events.map((e) => e.projectId))).toEqual(new Set(['p-web', 'p-eng']));
@@ -509,162 +457,71 @@ describe('identity orchestrator (sdd_host)', () => {
     expect(identity.queryAuditEvents(cfg, caller, { projectId: 'p-web' })).toHaveLength(1);
     expect(identity.queryAuditEvents(cfg, caller, { projectId: 'p-sales' })).toHaveLength(0);
 
-    // MASTER (super-admin) still reads instance-wide — all four events.
+    // MASTER (instance-admin) still reads instance-wide — all four events.
     expect(identity.queryAuditEvents(cfg, MASTER, {})).toHaveLength(4);
     expect(identity.countAuditEvents(cfg, MASTER, {})).toBe(4);
   });
 
-  it('listUsers: a unit-scoped user:admin caller sees only in-scope-unit users; MASTER sees all (incl. no-unit users)', () => {
+  it('listUsers: a unit-scoped admin sees only in-scope-unit users; MASTER sees all (incl. no-unit users)', () => {
     seedOrg(dataDir);
-    repoUpsertUser(dataDir, mkUser({ id: 'u-web', unitId: 'web' }));
-    repoUpsertUser(dataDir, mkUser({ id: 'u-sales', unitId: 'sales' }));
+    repoUpsertUser(dataDir, mkUser({ id: 'u-web', unitId: WEB }));
+    repoUpsertUser(dataDir, mkUser({ id: 'u-sales', unitId: SALES }));
     repoUpsertUser(dataDir, mkUser({ id: 'u-nounit' })); // no home unit
 
-    const caller = mintNonAdminToken([{ projectId: '', orgUnitId: 'eng', permissions: ['user:admin'] }]);
+    const caller = tokenWith('project:admin', 'unit', ENG);
     expect(identity.listUsers(cfg, caller).map((u) => u.id)).toEqual(['u-web']);
 
-    // A user with no home unit is visible only to a super-admin.
+    // A user with no home unit is visible only to an instance-level admin.
     expect(identity.listUsers(cfg, MASTER).map((u) => u.id).sort()).toEqual(['u-nounit', 'u-sales', 'u-web']);
   });
 
   it('setUserStatus: a unit-scoped admin may act on an in-scope user but is 403 on an out-of-scope one; MASTER may do both', () => {
     seedOrg(dataDir);
-    repoUpsertUser(dataDir, mkUser({ id: 'u-web', unitId: 'web' }));
-    repoUpsertUser(dataDir, mkUser({ id: 'u-sales', unitId: 'sales' }));
+    repoUpsertUser(dataDir, mkUser({ id: 'u-web', unitId: WEB }));
+    repoUpsertUser(dataDir, mkUser({ id: 'u-sales', unitId: SALES }));
 
-    const caller = mintNonAdminToken([{ projectId: '', orgUnitId: 'eng', permissions: ['user:admin'] }]);
+    const caller = tokenWith('project:admin', 'unit', ENG);
 
     // In-scope: allowed.
     expect(identity.setUserStatus(cfg, caller, 'u-web', 'suspended').status).toBe('suspended');
     // Out-of-scope: 403.
     expect(() => identity.setUserStatus(cfg, caller, 'u-sales', 'suspended')).toThrow(ForbiddenError);
 
-    // MASTER (super-admin) may act on both.
+    // MASTER (instance-admin) may act on both.
     expect(identity.setUserStatus(cfg, MASTER, 'u-sales', 'suspended').status).toBe('suspended');
   });
 
   it('upsertUser: a unit-scoped admin may only create/update users within its subtree; MASTER anywhere', () => {
     seedOrg(dataDir);
-    const caller = mintNonAdminToken([{ projectId: '', orgUnitId: 'eng', permissions: ['user:admin'] }]);
+    const caller = tokenWith('project:admin', 'unit', ENG);
 
-    // Create an in-scope user (home unit web) → allowed.
-    expect(identity.upsertUser(cfg, caller, mkUser({ id: 'nw', unitId: 'web' })).id).toBe('nw');
-    // Create an out-of-scope user (home unit sales) → 403.
-    expect(() => identity.upsertUser(cfg, caller, mkUser({ id: 'ns', unitId: 'sales' }))).toThrow(ForbiddenError);
-    // Create a user with no home unit → 403 for a scoped admin.
+    // Create an in-scope user (home unit WEB) → allowed.
+    expect(identity.upsertUser(cfg, caller, mkUser({ id: 'nw', unitId: WEB })).id).toBe('nw');
+    // Create an out-of-scope user (home unit SALES) → 403.
+    expect(() => identity.upsertUser(cfg, caller, mkUser({ id: 'ns', unitId: SALES }))).toThrow(ForbiddenError);
+    // Create a user with no home unit → 403 for a scoped admin (instance root).
     expect(() => identity.upsertUser(cfg, caller, mkUser({ id: 'nn' }))).toThrow(ForbiddenError);
+    // A scoped admin cannot CAPTURE a foreign user by rewriting their home unit
+    // into scope: the existing unit must also be covered.
+    repoUpsertUser(dataDir, mkUser({ id: 'u-foreign', unitId: SALES }));
+    expect(() => identity.upsertUser(cfg, caller, mkUser({ id: 'u-foreign', unitId: WEB }))).toThrow(ForbiddenError);
 
     // MASTER may create any of them.
-    expect(identity.upsertUser(cfg, MASTER, mkUser({ id: 'ms', unitId: 'sales' })).id).toBe('ms');
+    expect(identity.upsertUser(cfg, MASTER, mkUser({ id: 'ms', unitId: SALES })).id).toBe('ms');
   });
 
-  it('replaceUserGrants: escalation guard — a unit admin cannot grant "*" or an out-of-scope unit/project; in-scope grants pass', () => {
-    seedOrg(dataDir);
-    repoUpsertUser(dataDir, mkUser({ id: 'u-web', unitId: 'web' }));
-    repoUpsertUser(dataDir, mkUser({ id: 'u-sales', unitId: 'sales' }));
-
-    // The caller must HOLD every permission it delegates (over the grant's
-    // scope), so it carries user:admin AND mcp:read over eng.
-    const caller = mintNonAdminToken([{ projectId: '', orgUnitId: 'eng', permissions: ['user:admin', 'mcp:read'] }]);
-
-    // In-scope project grant of a held permission → allowed.
-    expect(
-      identity.replaceUserGrants(cfg, caller, 'u-web', [{ projectId: 'p-web', permissions: ['mcp:read'] }]).grants,
-    ).toEqual([{ projectId: 'p-web', permissions: ['mcp:read'] }]);
-    // In-scope unit grant → allowed.
-    expect(
-      identity.replaceUserGrants(cfg, caller, 'u-web', [{ projectId: '', orgUnitId: 'web', permissions: ['mcp:read'] }])
-        .grants,
-    ).toHaveLength(1);
-
-    // Finding 3: the caller cannot assign a permission it does NOT itself hold,
-    // even fully in scope — user:admin does not confer the power to grant
-    // mcp:write / project:destroy.
-    expect(() =>
-      identity.replaceUserGrants(cfg, caller, 'u-web', [{ projectId: 'p-web', permissions: ['mcp:write'] }]),
-    ).toThrow(ForbiddenError);
-    expect(() =>
-      identity.replaceUserGrants(cfg, caller, 'u-web', [{ projectId: '', orgUnitId: 'web', permissions: ['project:destroy'] }]),
-    ).toThrow(ForbiddenError);
-
-    // Escalation attempts are all rejected: instance-wide '*', an out-of-scope
-    // unit, and an out-of-scope specific project.
-    expect(() => identity.replaceUserGrants(cfg, caller, 'u-web', [{ projectId: '*', permissions: ['mcp:read'] }])).toThrow(
-      ForbiddenError,
-    );
-    expect(() =>
-      identity.replaceUserGrants(cfg, caller, 'u-web', [{ projectId: '', orgUnitId: 'sales', permissions: ['mcp:read'] }]),
-    ).toThrow(ForbiddenError);
-    expect(() =>
-      identity.replaceUserGrants(cfg, caller, 'u-web', [{ projectId: 'p-sales', permissions: ['mcp:read'] }]),
-    ).toThrow(ForbiddenError);
-
-    // The target itself must be in scope: u-sales (home unit sales) is 403 even for an in-scope grant.
-    expect(() =>
-      identity.replaceUserGrants(cfg, caller, 'u-sales', [{ projectId: 'p-web', permissions: ['mcp:read'] }]),
-    ).toThrow(ForbiddenError);
-
-    // MASTER (super-admin) may assign an instance-wide '*' grant unrestricted.
-    expect(
-      identity.replaceUserGrants(cfg, MASTER, 'u-web', [{ projectId: '*', permissions: ['mcp:read'] }]).grants,
-    ).toEqual([{ projectId: '*', permissions: ['mcp:read'] }]);
-  });
-
-  it('replaceUserGrants: a DELEGATED instance-wide user:admin (not a true super-admin) still cannot self-escalate to "*"', () => {
-    seedOrg(dataDir);
-    repoUpsertUser(dataDir, mkUser({ id: 'u-web', unitId: 'web' }));
-    // An instance-wide user:admin: scope.all=true for target VISIBILITY (may
-    // manage any user) but NOT a '*'/'*' super-admin — it holds only user:admin.
-    const instAdmin = mintNonAdminToken([{ projectId: '*', permissions: ['user:admin'] }]);
-
-    // It can manage a user's lifecycle anywhere (visibility) — but it cannot
-    // assign authority it does not hold: granting '*' or mcp:read (unheld) is 403.
-    expect(() =>
-      identity.replaceUserGrants(cfg, instAdmin, 'u-web', [{ projectId: '*', permissions: ['*'] }]),
-    ).toThrow(ForbiddenError);
-    expect(() =>
-      identity.replaceUserGrants(cfg, instAdmin, 'u-web', [{ projectId: 'p-web', permissions: ['mcp:read'] }]),
-    ).toThrow(ForbiddenError);
-  });
-
-  it('mintToken: a scoped caller may only delegate within its own scope; MASTER may delegate beyond it', () => {
+  it('mintToken: even a unit-scoped admin may not mint for another user (a token IS its owner, live)', () => {
     seedOrg(dataDir);
     createProjectRecord(dataDir, 'p-web');
-    createProjectRecord(dataDir, 'p-sales');
-    // Caller holds key:manage + mcp:read for the in-scope project p-web only.
-    const caller = mintNonAdminToken([{ projectId: 'p-web', permissions: ['key:manage', 'mcp:read'] }]);
-
-    // Delegating within scope → succeeds.
-    expect(
-      identity.mintToken(cfg, caller, { ownerUserId: 'u-o', label: 't', grants: [{ projectId: 'p-web', permissions: ['mcp:read'] }] }),
-    ).toMatch(/^wk_/);
-
-    // Delegating for an out-of-scope project → 403.
+    // A unit admin's own reach is irrelevant: the minted token would resolve the
+    // OWNER's live permission, which could exceed the minter's — instance-admin only.
+    const caller = tokenWith('project:admin', 'unit', ENG);
     expect(() =>
-      identity.mintToken(cfg, caller, { ownerUserId: 'u-o', label: 't', grants: [{ projectId: 'p-sales', permissions: ['mcp:read'] }] }),
-    ).toThrow(ForbiddenError);
+      identity.mintToken(cfg, caller, { ownerUserId: 'u-o', label: 't', projects: ['p-web'] }),
+    ).toThrow(/instance admin/i);
 
-    // Delegating an instance-wide '*' grant → 403 (only a super-admin may).
-    expect(() =>
-      identity.mintToken(cfg, caller, { ownerUserId: 'u-o', label: 't', grants: [{ projectId: '*', permissions: ['mcp:read'] }] }),
-    ).toThrow(ForbiddenError);
-
-    // MASTER (super-admin) may mint the very grant the scoped caller could not.
-    expect(
-      identity.mintToken(cfg, MASTER, { ownerUserId: 'u-o', label: 't', grants: [{ projectId: 'p-sales', permissions: ['mcp:read'] }] }),
-    ).toMatch(/^wk_/);
-  });
-
-  it('mintToken: an unknown organization unit in a requested grant is rejected', () => {
-    seedOrg(dataDir);
-    // MASTER passes delegation authz, so the failure is the unit-existence check.
-    expect(() =>
-      identity.mintToken(cfg, MASTER, {
-        ownerUserId: 'u-o',
-        label: 't',
-        grants: [{ projectId: '', orgUnitId: 'ghost-unit', permissions: ['mcp:read'] }],
-      }),
-    ).toThrow(/unknown organization unit/i);
+    // MASTER mints; the owner's authority resolves live from THEIR assignments.
+    expect(identity.mintToken(cfg, MASTER, { ownerUserId: 'u-o', label: 't', projects: ['p-web'] })).toMatch(/^wk_/);
   });
 
   // ── pruneAuditEvents ─────────────────────────────────────────────────────────
@@ -678,8 +535,8 @@ describe('identity orchestrator (sdd_host)', () => {
     expect(auditQuery(dataDir, { action: 'audit.prune' })).toHaveLength(1);
   });
 
-  it('rejects pruneAuditEvents (403) for a non-admin token', () => {
-    const reader = mintNonAdminToken([{ projectId: '*', permissions: ['audit:read'] }]);
+  it('rejects pruneAuditEvents (403) for a caller without instance-level project:admin', () => {
+    const reader = tokenWith('project:read', 'instance');
     expect(() => identity.pruneAuditEvents(cfg, reader)).toThrow(ForbiddenError);
   });
 
@@ -704,7 +561,15 @@ describe('identity orchestrator (sdd_host)', () => {
     const owned1 = mintOwnedToken('owner-1');
     const owned2 = mintOwnedToken('owner-1');
     const otherOwner = mintOwnedToken('owner-2');
-    const unowned = mintNonAdminToken([{ projectId: 'proj-a', permissions: ['mcp:read'] }]); // no ownerSubject
+    // A token with NO ownerSubject at all (legacy master-minted shape).
+    const unownedPlain = 'wk_' + crypto.randomBytes(8).toString('hex');
+    createCredential(dataDir, {
+      id: 'unowned-1',
+      keyHash: hashToken(unownedPlain),
+      projects: ['proj-a'],
+      createdAt: new Date().toISOString(),
+    });
+    const unowned = unownedPlain;
 
     const count = revokeAllForOwner(dataDir, 'owner-1');
     expect(count).toBe(2);
@@ -733,7 +598,7 @@ describe('identity orchestrator (sdd_host)', () => {
   // ── authentication ──────────────────────────────────────────────────────────
 
   it('throws an unauthenticated error for a bogus token and for no credential', () => {
-    const req = { ownerUserId: 'u', label: 't', grants: [] };
+    const req = { ownerUserId: 'u', label: 't' };
     expect(() => identity.mintToken(cfg, 'not-a-real-token', req)).toThrow(UnauthenticatedError);
     expect(() => identity.mintToken(cfg, null, req)).toThrow(UnauthenticatedError);
   });

@@ -147,6 +147,11 @@ lint:
         The canvas issue overlay invokes validateSddTree directly; the proper shape is issues passed
         in by the caller — cross-subsystem refactor candidate (diagram_specialist is sdd_core, the
         validator is sdd_validator).
+    - code: CALL_STEP_UNREALIZED
+      reason: >-
+        The graph/diagram builders read spec data through the shared workspace scan performed
+        upstream, not via direct loader calls per kind — the narrative names the data dependencies.
+        Reconcile with the canvas engine epic's renderer extraction.
 status: complete
 createdAt: '2026-07-04T15:59:34.318Z'
-updatedAt: '2026-07-11T20:30:06.716Z'
+updatedAt: '2026-07-18T18:47:54.530Z'

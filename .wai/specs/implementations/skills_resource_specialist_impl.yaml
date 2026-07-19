@@ -1,9 +1,8 @@
 id: skills_resource_specialist_impl
 name: Skills Resource Specialist Implementation
 description: >-
-  Resolves the four built-in SDD skills into MCP-safe descriptors and reads their markdown content
-  from Wairon's packaged skill templates (the same templates skills_exporter copies to the
-  filesystem).
+  Resolves the built-in SDD skills and the pack-provided skills into MCP-safe descriptors and reads
+  their markdown, in src/core/skills.ts.
 contract: iskills_resource_specialist
 sourcePath: src/core/skills.ts
 methods:
@@ -15,11 +14,17 @@ methods:
           sdd-implement, sdd-narrative.
         type: local
       - stepNumber: 2
-        description: >-
-          Build one SkillResourceDescriptor per skill (id, name, description, version, resourceUri,
-          defaultForHostedMcp), mirroring the templates skills_exporter copies to the filesystem.
-        type: local
+        description: Load the governing extension packs to obtain their provided skills.
+        type: call
+        targetComponent: skills_core_adapter
+        targetMethod: loadProjectExtensions
       - stepNumber: 3
+        description: >-
+          Build one SkillResourceDescriptor per built-in skill and per pack skill — pack skills
+          namespaced <pack-id>-<skill-id> and versioned by their source pack — mirroring the
+          templates skills_exporter copies to the filesystem.
+        type: local
+      - stepNumber: 4
         description: Return the descriptor list.
         type: return
         outcome: skill resource descriptors
@@ -27,16 +32,25 @@ methods:
   - name: readSkillResource
     narrative:
       - stepNumber: 1
-        description: Resolve the requested resourceId to its packaged skill template markdown file.
-        type: local
+        description: >-
+          Load the governing extension packs so a namespaced pack-skill resourceId can be resolved
+          to its SKILL.md.
+        type: call
+        targetComponent: skills_core_adapter
+        targetMethod: loadProjectExtensions
       - stepNumber: 2
-        description: Read the skill template's markdown content from Wairon's packaged templates.
+        description: >-
+          Resolve the requested resourceId to a built-in skill template or a pack skill's SKILL.md,
+          rejecting an unknown id.
         type: local
       - stepNumber: 3
+        description: Read the resolved skill's markdown content.
+        type: local
+      - stepNumber: 4
         description: Return the skill content as text.
         type: return
         outcome: skill markdown content
     detail: full
 status: complete
 createdAt: '2026-07-10T12:20:56.185Z'
-updatedAt: '2026-07-10T12:24:00.876Z'
+updatedAt: '2026-07-14T20:14:31.506Z'

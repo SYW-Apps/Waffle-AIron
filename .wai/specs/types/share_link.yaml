@@ -1,0 +1,66 @@
+kind: entity
+id: share_link
+name: Share Link
+description: >-
+  A public share link: an unguessable token (stored only as a salted hash) granting read-only access
+  to a single captured view of one project. Revocable, optionally expiring, with per-link download
+  permissions and an embedding allowlist. The raw token is never persisted.
+subsystem: sdd_host
+fields:
+  - name: id
+    type: string
+    description: Stable link id.
+    optional: false
+    key: primary
+  - name: tokenHash
+    type: string
+    description: Salted hash of the unguessable share token; the raw token is never stored.
+    optional: false
+  - name: projectId
+    type: string
+    description: The shared project.
+    optional: false
+  - name: view
+    type: string
+    description: The captured view kind (architecture | types | databases).
+    optional: false
+  - name: snapshotId
+    type: string
+    description: The immutable snapshot this link serves.
+    optional: false
+    key: foreign
+    references: share_snapshot.id
+  - name: mode
+    type: string
+    description: '''snapshot'' (default) | ''live''.'
+    optional: false
+  - name: enabled
+    type: boolean
+    description: A disabled link refuses all access.
+    optional: false
+  - name: expiresAt
+    type: string
+    description: ISO-8601 expiry; absent = no expiry.
+    optional: true
+  - name: allowDownloadHtml
+    type: boolean
+    description: Permit downloading the standalone HTML export.
+    optional: false
+  - name: allowDownloadOpenapi
+    type: boolean
+    description: Permit downloading the OpenAPI document.
+    optional: false
+  - name: frameAncestors
+    type: string[]
+    description: CSP frame-ancestors embedding allowlist (empty = not embeddable).
+    optional: false
+  - name: createdBy
+    type: PrincipalSubject
+    description: The subject that minted the link.
+    optional: false
+  - name: createdAt
+    type: string
+    optional: false
+methods: []
+createdAt: '2026-07-17T22:32:28.008Z'
+updatedAt: '2026-07-17T22:32:28.020Z'

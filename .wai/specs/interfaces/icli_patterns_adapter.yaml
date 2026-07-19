@@ -1,0 +1,15 @@
+id: icli_patterns_adapter
+name: CLI Patterns Adapter Interface
+description: Terminal surface for `wairon patterns list`.
+component: cli_patterns_adapter
+methods:
+  - name: listPatterns
+    description: >-
+      Print the reusable, versioned pattern definitions declared by loaded packs (id, version,
+      description, source pack).
+    signature: 'listPatterns(): void'
+    returns: void
+    params: []
+status: complete
+createdAt: '2026-07-14T20:09:32.565Z'
+updatedAt: '2026-07-14T20:23:49.099Z'

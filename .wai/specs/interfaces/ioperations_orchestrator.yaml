@@ -53,6 +53,30 @@ methods:
       - name: scope
         type: string
         optional: true
+  - name: getExposurePolicy
+    description: >-
+      Authenticate, require instance-level project:admin, and return the persisted instance exposure
+      policy (webUiEnabled/requireTls posture), substituting the safe default (web UI off) when none
+      has been configured. A read; not audited.
+    signature: 'getExposurePolicy(credential: string): HostExposurePolicy'
+    returns: HostExposurePolicy
+    params:
+      - name: credential
+        type: string
+  - name: setExposurePolicy
+    description: >-
+      Authenticate, require instance-level project:admin, replace the instance exposure policy
+      wholesale through the policy repository, and audit at security level (the exposure posture
+      gates the whole web surface).
+    signature: 'setExposurePolicy(credential: string, policy: HostExposurePolicy): HostExposurePolicy'
+    returns: HostExposurePolicy
+    params:
+      - name: credential
+        type: string
+      - name: policy
+        type: HostExposurePolicy
+    guarantees:
+      - atomic
 status: complete
 createdAt: '2026-07-09T09:10:20.273Z'
-updatedAt: '2026-07-10T17:18:45.456Z'
+updatedAt: '2026-07-16T15:29:11.485Z'

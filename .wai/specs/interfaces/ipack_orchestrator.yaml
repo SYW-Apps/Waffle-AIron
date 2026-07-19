@@ -1,20 +1,27 @@
 id: ipack_orchestrator
 name: Pack Orchestrator Interface
 description: >-
-  Contract for the control-plane pack-management workflows behind the admin portal: authenticate the
-  master credential, then list/install/remove packs at server-global or project scope. Installs are
-  declarative-only (profiles + language/platform tables); code packs are refused on this surface.
+  Contract for the control-plane pack-management workflows: authenticate the caller credential and
+  authorize through the permission resolver — server-global pack management requires instance-level
+  project:admin; per-project install/remove require project:admin over the project, the per-project
+  listing project:read over it — then list/install/remove packs at server-global or project scope.
+  Installs are declarative-only (profiles + language/platform tables); code packs are refused on
+  this surface.
 component: pack_orchestrator
 methods:
   - name: listGlobalPacks
-    description: Authenticate and list the server-global installed packs.
+    description: >-
+      Authenticate, require instance-level project:admin, and list the server-global installed
+      packs.
     signature: 'listGlobalPacks(credential: string): PackDescriptor[]'
     returns: PackDescriptor[]
     params:
       - name: credential
         type: string
   - name: installGlobalPack
-    description: Authenticate and install a declarative pack server-wide (rejecting code packs).
+    description: >-
+      Authenticate, require instance-level project:admin, and install a declarative pack server-wide
+      (rejecting code packs).
     signature: 'installGlobalPack(credential: string, name: string, content: string): PackDescriptor'
     returns: PackDescriptor
     params:
@@ -25,7 +32,7 @@ methods:
       - name: content
         type: string
   - name: removeGlobalPack
-    description: Authenticate and remove a server-global pack.
+    description: Authenticate, require instance-level project:admin, and remove a server-global pack.
     signature: 'removeGlobalPack(credential: string, name: string): void'
     returns: void
     params:
@@ -34,7 +41,9 @@ methods:
       - name: name
         type: string
   - name: listProjectPacks
-    description: Authenticate, bind the project scope, and list its registered packs.
+    description: >-
+      Authenticate, require project:read over the project, bind its scope, and list its registered
+      packs.
     signature: 'listProjectPacks(credential: string, project: string): PackDescriptor[]'
     returns: PackDescriptor[]
     params:
@@ -44,8 +53,8 @@ methods:
         type: string
   - name: installProjectPack
     description: >-
-      Authenticate, bind the project scope, and install a declarative pack into it (rejecting code
-      packs).
+      Authenticate, require project:admin over the project, bind its scope, and install a
+      declarative pack into it (rejecting code packs).
     signature: >-
       installProjectPack(credential: string, project: string, name: string, content: string):
       PackDescriptor
@@ -60,7 +69,9 @@ methods:
       - name: content
         type: string
   - name: removeProjectPack
-    description: Authenticate, bind the project scope, and remove one of its registered packs.
+    description: >-
+      Authenticate, require project:admin over the project, bind its scope, and remove one of its
+      registered packs.
     signature: 'removeProjectPack(credential: string, project: string, name: string): void'
     returns: void
     params:
@@ -72,4 +83,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-04T18:46:52.736Z'
-updatedAt: '2026-07-04T18:48:00.212Z'
+updatedAt: '2026-07-16T15:18:52.571Z'

@@ -189,27 +189,27 @@ methods:
   - name: listApprovals
     narrative:
       - stepNumber: 1
-        description: Forward to the self-service orchestrator
+        description: Forward to the project lifecycle orchestrator
         type: call
-        targetComponent: self_service_orchestrator
+        targetComponent: project_lifecycle_orchestrator
         targetMethod: listPendingRequests
     symbol: listPendingRequests
   - name: decideApproval
     narrative:
       - stepNumber: 1
-        description: Forward to the self-service orchestrator
+        description: Forward to the project lifecycle orchestrator
         type: call
-        targetComponent: self_service_orchestrator
+        targetComponent: project_lifecycle_orchestrator
         targetMethod: decideRequest
     symbol: decideRequest
   - name: executeApproval
     narrative:
       - stepNumber: 1
-        description: Forward to the self-service orchestrator
+        description: Forward to the project lifecycle orchestrator
         type: call
-        targetComponent: self_service_orchestrator
+        targetComponent: project_lifecycle_orchestrator
         targetMethod: executeApprovedRequest
     symbol: executeApprovedRequest
 status: complete
 createdAt: '2026-07-04T12:53:08.445Z'
-updatedAt: '2026-07-11T19:14:21.871Z'
+updatedAt: '2026-07-16T00:14:12.872Z'

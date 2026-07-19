@@ -3,10 +3,11 @@ id: web_graph_node
 name: WebGraphNode
 description: >-
   A single node in a level-of-detail (LOD) web graph payload for the unified web UI. Unifies the
-  hosted landscape tier (organization units, projects) and the project tier (subsystems, components,
-  interfaces, types) into one node shape the client renders at a chosen depth. Kept consistent with
-  LandscapeNode (landscape tier maps onto it) and the local GraphNode (project tier), adding only
-  the LOD/UI fields (level, parentId, issueCount).
+  hosted landscape/environment tier (organization units nested org→dept→team, hosted projects) and
+  the project tier (subsystems, components, interfaces, types) into one node shape the client
+  renders at a chosen depth, as either the whole-environment collapsible hierarchy or a project's
+  canvas. Kept consistent with LandscapeNode (landscape tier maps onto it) and the local GraphNode
+  (project tier), adding only the LOD/UI fields (level, parentId, issueCount, actionable).
 fields:
   - name: id
     type: string
@@ -30,8 +31,10 @@ fields:
   - name: parentId
     type: string
     description: >-
-      Id of the containing node (unit->project, project->subsystem, subsystem->component,
-      component->interface), for hierarchical expand/collapse.
+      Id of the containing node, for hierarchical expand/collapse. Spans the full environment tree:
+      unit→unit (nested organization hierarchy over the qualified unit paths), unit→project,
+      project→subsystem, subsystem→component, component→interface. Absent only at the environment
+      root.
     optional: true
   - name: projectId
     type: string
@@ -47,6 +50,14 @@ fields:
     type: number
     description: Number of validator issues overlaid onto this node (project tier), 0 or absent when clean.
     optional: true
+  - name: actionable
+    type: boolean
+    description: >-
+      True when the caller can act on this scope. False/absent on an ancestor-breadcrumb (context)
+      unit shown read-only only so the tree stays navigable to a deeper actionable scope (the no@org
+      + yes@one-project case) — its non-visible children are omitted. An instance-admin sees every
+      node actionable. Carried through from LandscapeNode.actionable on the landscape tier.
+    optional: true
 methods: []
 createdAt: '2026-07-11T11:31:08.145Z'
-updatedAt: '2026-07-11T11:31:08.188Z'
+updatedAt: '2026-07-15T23:27:40.132Z'

@@ -1,0 +1,27 @@
+kind: value-object
+id: share_artifact_result
+name: Share Artifact Result
+description: >-
+  The outcome of a share artifact download: the payload + content type on success, or a refusal
+  outcome when the token, artifact, or permission is absent.
+subsystem: sdd_host
+fields:
+  - name: found
+    type: boolean
+    optional: false
+  - name: outcome
+    type: string
+    description: served | denied-disabled | denied-expired | not-found | denied-download.
+    optional: false
+  - name: kind
+    type: string
+    optional: true
+  - name: content
+    type: string
+    optional: true
+  - name: contentType
+    type: string
+    optional: true
+methods: []
+createdAt: '2026-07-17T22:32:54.133Z'
+updatedAt: '2026-07-17T22:32:54.204Z'

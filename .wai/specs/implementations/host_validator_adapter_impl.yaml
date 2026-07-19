@@ -11,6 +11,7 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: validateAsComplete
+    symbol: validateProjectAsComplete
 status: complete
 createdAt: '2026-07-04T12:53:08.409Z'
-updatedAt: '2026-07-04T13:06:23.002Z'
+updatedAt: '2026-07-18T23:33:41.227Z'

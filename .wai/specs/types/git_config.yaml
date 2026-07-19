@@ -2,8 +2,9 @@ kind: value-object
 id: git_config
 name: GitConfig
 description: >-
-  A project's git-backing configuration: the canonical repo relocates the source of truth off the
-  container. Persisted at .wai/git.json.
+  A project's git-backing configuration: the binding to the project's REAL repository — wairon
+  manages ONLY the .wai/ tree inside it (commits are .wai/-scoped, never `git add -A`), so the
+  repository is safely shared with the project's own codebase. Persisted at .wai/git.json.
 fields:
   - name: enabled
     type: boolean
@@ -21,6 +22,18 @@ fields:
     type: string
     description: The isolated branch the container commits to (never the default)
     optional: false
+  - name: periodicSyncMinutes
+    type: number
+    description: >-
+      Interval for the periodic .wai/-scoped backup sweep; absent disables periodic sync for this
+      project.
+    optional: true
+  - name: skipIfClean
+    type: boolean
+    description: >-
+      The periodic sweep skips the commit when the scoped path is clean (default true) — a quiet
+      project never commits noise.
+    optional: true
 methods: []
 createdAt: '2026-07-04T16:31:25.752Z'
-updatedAt: '2026-07-04T16:31:25.765Z'
+updatedAt: '2026-07-16T15:23:56.524Z'

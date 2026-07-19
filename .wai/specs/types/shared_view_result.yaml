@@ -1,0 +1,31 @@
+kind: value-object
+id: shared_view_result
+name: Shared View Result
+description: >-
+  The outcome of resolving a share token: whether it was served, and on success the snapshot model
+  plus the link's download permissions. Carries no owner-only fields.
+subsystem: sdd_host
+fields:
+  - name: found
+    type: boolean
+    optional: false
+  - name: outcome
+    type: string
+    description: served | denied-disabled | denied-expired | not-found.
+    optional: false
+  - name: link
+    type: ShareLink
+    optional: true
+  - name: model
+    type: string
+    description: Serialized snapshot canvas model, on success.
+    optional: true
+  - name: allowDownloadHtml
+    type: boolean
+    optional: true
+  - name: allowDownloadOpenapi
+    type: boolean
+    optional: true
+methods: []
+createdAt: '2026-07-17T22:32:51.513Z'
+updatedAt: '2026-07-17T22:32:51.578Z'

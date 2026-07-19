@@ -1,0 +1,19 @@
+id: share_link_store
+name: Share Link Store
+description: >-
+  Authoritative disk-backed holder of public share-link records, persisted at
+  &lt;dataDir&gt;/share-links.json. Each record binds an unguessable token — stored ONLY as a salted
+  hash, never the raw token — to a single read-only view target (project + view kind + captured
+  snapshot id), its mode (snapshot|live), an enabled flag, an optional expiry, per-link download
+  permissions (html/openapi), and an optional frame-ancestors embedding allowlist, plus creator +
+  createdAt. Loaded fresh per call like the other hosted stores; every write goes through
+  write-temp-then-rename so a crashed write leaves the prior state intact. Owned by the share link
+  repository; never depended on directly by consumers.
+subsystem: sdd_host
+componentType: Store
+owns: []
+dependsOn: []
+durability: read-through
+status: complete
+createdAt: '2026-07-17T22:08:52.402Z'
+updatedAt: '2026-07-19T11:31:02.193Z'

@@ -1,0 +1,48 @@
+kind: value-object
+id: extension_pack
+name: ExtensionPack
+description: >-
+  A parsed extension-pack manifest — wairon's plugin unit. A declarative (YAML) pack carries data
+  only (profiles, languages, skills, patterns, guarantees); a programmatic (JS) pack adds rules.
+  Listed in project.yaml under extensions.packs, vendored into .wai/packs for reproducibility.
+fields:
+  - name: name
+    type: string
+    description: The pack's declared name.
+    optional: false
+  - name: profiles
+    type: ProfileDef[]
+    description: Custom architectural profiles, keyed by profile id.
+    optional: false
+  - name: languages
+    type: LanguagePackDef[]
+    description: Custom language/platform tables, keyed by language.
+    optional: false
+  - name: rules
+    type: SddRule[]
+    description: Programmatic conformance rules; empty for declarative packs.
+    optional: false
+  - name: skills
+    type: PackSkill[]
+    description: Pack-provided AI-agent skills, installed to client targets and the MCP resource mirror.
+    optional: false
+  - name: patterns
+    type: PatternDef[]
+    description: Named, versioned reusable pattern definitions referenceable by specs.
+    optional: false
+  - name: guarantees
+    type: string[]
+    description: >-
+      Pack-declared semantic guarantee tokens extending the builtin vocabulary
+      (idempotent/atomic/transactional/exactly-once); a referenced token that is neither builtin nor
+      declared by any loaded pack is flagged UNKNOWN_GUARANTEE.
+    optional: false
+  - name: assertions
+    type: PackAssertion[]
+    description: >-
+      Declarative rule assertions — instances of the closed kinds (forbid-edge / require-field /
+      endpoint-shape), the hosted-safe doctrine channel; an unknown kind fails the pack load loudly.
+    optional: false
+methods: []
+createdAt: '2026-07-14T18:57:01.915Z'
+updatedAt: '2026-07-18T22:42:18.358Z'

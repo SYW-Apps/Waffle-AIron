@@ -1,6 +1,8 @@
 id: ihost_server
 name: Host Server Interface
-description: Lifecycle contract for the HTTP listeners serving the data-plane and admin-plane portals.
+description: >-
+  Lifecycle contract for the hosted instance: one-time boot initialization plus the HTTP listeners
+  serving the data-plane and admin-plane portals.
 component: host_server
 methods:
   - name: start
@@ -13,6 +15,20 @@ methods:
     description: Gracefully drain in-flight requests and shut the listeners down.
     signature: 'stop(): void'
     returns: void
+  - name: init
+    description: >-
+      One-time boot initialization, run BEFORE the listeners bind (the sdd_host lifecycle init
+      entrypoint): seed-or-load the persisted instance identity — first boot generates the
+      boot-reserved built-in subject UUIDs, later boots load them unchanged — and, under devMode,
+      ensure the synthetic local development organization unit exists so dev projects can always be
+      placed (unitId is required at creation).
+    signature: 'init(config: HostConfig): void'
+    returns: void
+    params:
+      - name: config
+        type: HostConfig
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-04T12:49:31.392Z'
-updatedAt: '2026-07-10T11:25:31.080Z'
+updatedAt: '2026-07-16T00:24:57.676Z'

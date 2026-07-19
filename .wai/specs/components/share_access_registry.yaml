@@ -1,0 +1,14 @@
+id: share_access_registry
+name: Share Access Registry
+description: >-
+  Write path for the share access log: append one access entry. Append-only — entries are never
+  mutated or deleted through this path. No authorization: the public access orchestrator records
+  every access attempt, permitted or refused.
+subsystem: sdd_host
+componentType: Registry
+owns: []
+dependsOn:
+  - share_access_store
+status: complete
+createdAt: '2026-07-17T22:09:14.882Z'
+updatedAt: '2026-07-18T09:37:27.208Z'

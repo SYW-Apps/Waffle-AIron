@@ -1,0 +1,24 @@
+id: share_link_index_impl
+name: Share Link Index Implementation
+description: Read path over the share-link store.
+contract: ishare_link_index
+sourcePath: src/server/sharelinks.ts
+methods:
+  - name: byTokenHash
+    narrative: []
+    intent: >-
+      Loads the collection and returns the record whose tokenHash equals the given salted hash, or
+      null when none matches. The hash comparison is the resolution seam; the raw token is never
+      held.
+  - name: getById
+    narrative: []
+    intent: Loads the collection and returns the record with the given id, or null.
+  - name: listByProject
+    narrative: []
+    intent: >-
+      Loads the collection and returns every record whose projectId matches, for the owner's
+      management view.
+detail: intent
+status: complete
+createdAt: '2026-07-18T09:26:27.444Z'
+updatedAt: '2026-07-18T10:10:40.574Z'

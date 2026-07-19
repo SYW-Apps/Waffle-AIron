@@ -1,0 +1,13 @@
+id: share_snapshot_index
+name: Share Snapshot Index
+description: >-
+  Read path over the snapshot store: fetch a captured payload (canvas model / openapi / html) by
+  snapshot id and artifact kind. Never mutates.
+subsystem: sdd_host
+componentType: Index
+owns: []
+dependsOn:
+  - share_snapshot_store
+status: complete
+createdAt: '2026-07-17T22:09:18.376Z'
+updatedAt: '2026-07-18T09:37:26.297Z'

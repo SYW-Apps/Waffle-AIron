@@ -1,0 +1,16 @@
+id: share_snapshot_repository
+name: Share Snapshot Repository
+description: >-
+  Facade over the owned share-snapshot store, registry, and index for the immutable captured
+  payloads a share link serves. Pure 1:1 forwarding — writes to the registry, reads to the index;
+  consumers use this facade only, never the inner blocks.
+subsystem: sdd_host
+componentType: Repository
+owns:
+  - share_snapshot_store
+  - share_snapshot_registry
+  - share_snapshot_index
+dependsOn: []
+status: complete
+createdAt: '2026-07-17T22:09:33.023Z'
+updatedAt: '2026-07-18T09:36:19.536Z'

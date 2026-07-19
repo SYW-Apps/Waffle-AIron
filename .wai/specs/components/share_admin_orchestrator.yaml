@@ -1,0 +1,25 @@
+id: share_admin_orchestrator
+name: Share Admin Orchestrator
+description: >-
+  Owns the OWNER-side share-link workflows on the authenticated web surface, resolver-gated on the
+  new share:create capability over the target's scope: create a share link (capture the snapshot via
+  the snapshot specialist, mint a 256-bit unguessable token, persist ONLY its salted hash, return
+  the raw token to the creator exactly once), refresh a link's snapshot, update a link (enabled /
+  expiry / download permissions / embedding allowlist), disable or remove it, list a scope's links,
+  and read a link's access log. Every mint, disable, and permission change is audited at security
+  level; the raw token is never stored or re-derivable.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - auth_specialist
+  - authorization_specialist
+  - share_link_repository
+  - share_snapshot_repository
+  - share_access_repository
+  - share_snapshot_specialist
+  - audit_repository
+  - credential_registry
+status: complete
+createdAt: '2026-07-17T22:09:46.658Z'
+updatedAt: '2026-07-18T13:17:00.449Z'

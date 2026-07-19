@@ -45,23 +45,6 @@ methods:
       transport: HTTP
       method: GET
       path: /identity/users
-  - name: replaceUserGrants
-    description: Replace one hosted user's project grants after authorization.
-    signature: >-
-      replaceUserGrants(credential: string, userId: string, grants: ProjectGrant[]):
-      HostedUserRecord
-    returns: HostedUserRecord
-    params:
-      - name: credential
-        type: string
-      - name: userId
-        type: string
-      - name: grants
-        type: ProjectGrant[]
-    endpoint:
-      transport: HTTP
-      method: PUT
-      path: /identity/users/{id}/grants
   - name: listAuditEvents
     description: Return admin-only redacted audit events matching the supplied query.
     signature: 'listAuditEvents(credential: string, query: AuditQuery): AuditEvent[]'
@@ -200,4 +183,4 @@ methods:
       path: /identity/audit/count
 status: complete
 createdAt: '2026-07-08T20:19:45.785Z'
-updatedAt: '2026-07-10T08:18:37.775Z'
+updatedAt: '2026-07-15T22:49:31.938Z'

@@ -1,0 +1,13 @@
+id: role_store
+name: Role Store
+description: >-
+  Authoritative in-memory representation of admin-defined permission roles, loaded from the hosted
+  data root. Administrative instance state, not part of any project's SDD subsystem tree.
+subsystem: sdd_host
+componentType: Store
+owns: []
+dependsOn: []
+durability: read-through
+status: complete
+createdAt: '2026-07-15T20:26:52.362Z'
+updatedAt: '2026-07-19T11:31:01.975Z'

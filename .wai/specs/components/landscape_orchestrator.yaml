@@ -22,10 +22,10 @@ dependsOn:
   - landscape_diagram_specialist
   - audit_repository
   - host_core_adapter
-  - scope_specialist
+  - authorization_specialist
   - visibility_specialist
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-08T21:12:56.113Z'
-updatedAt: '2026-07-11T12:03:50.251Z'
+updatedAt: '2026-07-15T21:46:46.061Z'

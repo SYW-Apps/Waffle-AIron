@@ -2,8 +2,9 @@ kind: value-object
 id: token_mint_request
 name: TokenMintRequest
 description: >-
-  Authorized request to mint a user-bound MCP/API token for one hosted project or an explicitly
-  permitted instance scope.
+  Authorized request to mint a user-bound MCP/API token that acts as the owner user, narrowed to a
+  set of projects. The token carries no permissions of its own — it can never exceed the owner's
+  live permission (the resolver gates per project).
 fields:
   - name: ownerUserId
     type: string
@@ -13,16 +14,16 @@ fields:
     type: string
     description: Human-readable token label for administration and audit views.
     optional: false
-  - name: grants
-    type: ProjectGrant[]
-    description: >-
-      Project and instance permissions to grant to the token. The identity orchestrator must verify
-      the caller may delegate each permission.
-    optional: false
   - name: expiresAt
     type: string
     description: Optional ISO-8601 token expiry.
     optional: true
+  - name: projects
+    type: string[]
+    description: >-
+      The project ids the token may act on (or "*" for the owner's full accessible set) — the
+      token's narrowing.
+    optional: false
 methods: []
 createdAt: '2026-07-08T20:17:13.853Z'
-updatedAt: '2026-07-08T20:17:13.896Z'
+updatedAt: '2026-07-15T22:51:35.556Z'

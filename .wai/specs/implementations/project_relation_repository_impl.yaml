@@ -13,6 +13,7 @@ methods:
         type: call
         targetComponent: project_relation_registry
         targetMethod: upsert
+    symbol: upsertProjectRelation
   - name: remove
     narrative:
       - stepNumber: 1
@@ -20,6 +21,7 @@ methods:
         type: call
         targetComponent: project_relation_registry
         targetMethod: remove
+    symbol: removeProjectRelation
   - name: list
     narrative:
       - stepNumber: 1
@@ -27,7 +29,8 @@ methods:
         type: call
         targetComponent: project_relation_index
         targetMethod: list
+    symbol: listProjectRelations
 detail: calls-only
 status: complete
 createdAt: '2026-07-09T22:08:09.780Z'
-updatedAt: '2026-07-09T22:13:39.182Z'
+updatedAt: '2026-07-18T23:33:21.112Z'

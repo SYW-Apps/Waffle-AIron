@@ -1,0 +1,16 @@
+id: git_backing_index_impl
+name: Git Backing Index Implementation
+description: Read path over the git backing store; never mutates.
+contract: igit_backing_index
+sourcePath: src/server/gitbacking.ts
+methods:
+  - name: listBindings
+    narrative: []
+    intent: Return every stored binding read through the store; an empty result is normal, never an error.
+  - name: getBinding
+    narrative: []
+    intent: Return the stored binding whose id matches exactly, or null when absent.
+detail: intent
+status: complete
+createdAt: '2026-07-16T15:39:54.765Z'
+updatedAt: '2026-07-16T15:48:49.371Z'

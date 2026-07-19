@@ -1,0 +1,41 @@
+id: rule_repository_impl
+name: Rule Repository Implementation
+description: >-
+  Facade over the owned rule store, registry, and index in src/core/rules/index.ts. Pure 1:1
+  forwarding — no logic here.
+contract: irule_repository
+sourcePath: src/core/rules/repository.ts
+simPath: tests/core/validation.test.ts
+methods:
+  - name: registerBuiltinRules
+    narrative:
+      - stepNumber: 1
+        description: Forward to the rule registry.
+        type: call
+        targetComponent: rule_registry
+        targetMethod: registerBuiltinRules
+  - name: registerPackRules
+    narrative:
+      - stepNumber: 1
+        description: Forward to the rule registry.
+        type: call
+        targetComponent: rule_registry
+        targetMethod: registerPackRules
+  - name: ruleSequence
+    narrative:
+      - stepNumber: 1
+        description: Forward to the rule index.
+        type: call
+        targetComponent: rule_index
+        targetMethod: ruleSequence
+  - name: knownIssueCodes
+    narrative:
+      - stepNumber: 1
+        description: Forward to the rule index.
+        type: call
+        targetComponent: rule_index
+        targetMethod: knownIssueCodes
+detail: calls-only
+status: complete
+createdAt: '2026-07-14T19:17:53.253Z'
+updatedAt: '2026-07-18T22:34:34.966Z'

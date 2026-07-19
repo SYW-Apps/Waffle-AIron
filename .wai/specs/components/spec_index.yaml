@@ -1,0 +1,14 @@
+id: spec_index
+name: Spec Index
+description: >-
+  Read/lookup face of the spec repository: resolves spec ids and kinds to their file locations
+  across flat and per-subsystem layouts, reads documents through the file store, and parses them
+  against the level schemas — collecting loader issues instead of throwing on a bad file.
+subsystem: sdd_core
+componentType: Index
+owns: []
+dependsOn:
+  - spec_file_store
+status: complete
+createdAt: '2026-07-18T22:57:53.159Z'
+updatedAt: '2026-07-18T22:57:53.892Z'

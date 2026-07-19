@@ -15,6 +15,7 @@ import {
 } from '../../src/server/policy.js';
 import { createCredential, hashToken, listCredentials } from '../../src/server/credentials.js';
 import { findUserByExternalSubject, listUsers as repoListUsers } from '../../src/server/users.js';
+import { mintUserToken, allow } from './helpers.js';
 import {
   appendAuditEvent,
   queryAuditEvents as auditQuery,
@@ -177,18 +178,12 @@ describe('identity SSO orchestrator (sdd_host)', () => {
   });
 
   /** Mint a stored non-admin token carrying the given grants; returns plaintext. */
-  function mintNonAdminToken(grants: ProjectGrant[]): string {
-    const token = 'wk_' + crypto.randomBytes(8).toString('hex');
-    const record: ApiKeyRecord = {
-      id: crypto.randomBytes(6).toString('hex'),
-      keyHash: hashToken(token),
-      role: 'editor',
-      projects: grants.map((g) => g.projectId),
-      grants,
-      createdAt: new Date().toISOString(),
-    };
-    createCredential(dataDir, record);
-    return token;
+  // A grants-free token owned by a FRESH subject holding one grid assignment.
+  let userSeq = 0;
+  function tokenWith(capability: 'project:admin' | 'project:read', scopeKind: 'instance' | 'project', scopeId?: string): string {
+    const userId = `u-tok-${userSeq++}`;
+    allow(dataDir, userId, capability, scopeKind, scopeId);
+    return mintUserToken(dataDir, { id: crypto.randomBytes(6).toString('hex'), userId });
   }
 
   function stateFrom(authUrl: string): string {
@@ -247,21 +242,24 @@ describe('identity SSO orchestrator (sdd_host)', () => {
     const token = await identity.completeSsoLogin(cfg, state, 'auth-code-1');
     expect(token).toMatch(/^wk_[0-9a-f]+$/);
 
-    // The user was provisioned: active, EMPTY grants, id = the resolved subject id.
+    // The user was provisioned: active, NO role bindings (not in an admin group),
+    // id = the resolved subject id, displayName/email from the verified claims.
     const user = findUserByExternalSubject(dataDir, PROVIDER_ID, 'ext-1');
     expect(user).not.toBeNull();
     expect(user!.id).toBe(`sso:${PROVIDER_ID}:ext-1`);
     expect(user!.status).toBe('active');
-    expect(user!.grants).toEqual([]);
+    expect(user!.roleBindings).toEqual([]);
+    expect(user!.displayName).toBe('Alice');
+    expect(user!.email).toBe('alice@corp.example');
 
-    // Only the hashed record is persisted; ownerSubject = the resolved SSO subject.
+    // Only the hashed record is persisted; ownerSubject = the resolved SSO
+    // subject; the token stores NO permissions (it acts as the owner, live).
     const rec = persistedByToken(token);
     expect(rec).toBeDefined();
     expect(rec!.keyHash).toBe(hashToken(token));
     expect(rec!.ownerSubject?.userId).toBe(`sso:${PROVIDER_ID}:ext-1`);
     expect(rec!.ownerSubject?.issuer).toBe(PROVIDER_ID);
     expect(rec!.ownerSubject?.externalSubject).toBe('ext-1');
-    expect(rec!.grants).toEqual([]);
 
     // authenticate() on the new token yields the provisioned user's subject.
     const principal = authenticate(dataDir, token);
@@ -274,28 +272,30 @@ describe('identity SSO orchestrator (sdd_host)', () => {
     expect(events[0].level).toBe('security');
   });
 
-  it('completeSsoLogin (returning user): no duplicate user, and the token carries the user\'s CURRENT grants', async () => {
+  it('completeSsoLogin (returning user): no duplicate user, and the token resolves the user\'s CURRENT role bindings live', async () => {
     upsertIdentityProviderRecord(dataDir, providerConfig());
 
-    // First login provisions the user (empty grants).
+    // First login provisions the user (no bindings).
     const s1 = stateFrom(await identity.startSsoLogin(cfg, PROVIDER_ID, 'https://app.example/cb'));
     await identity.completeSsoLogin(cfg, s1, 'code-1');
 
-    // An admin assigns grants between logins.
-    const grants: ProjectGrant[] = [{ projectId: 'proj-x', permissions: ['mcp:read'] }];
-    identity.replaceUserGrants(cfg, MASTER, `sso:${PROVIDER_ID}:ext-1`, grants);
+    // An admin binds a CUSTOM role between logins (the SSO flow manages only the
+    // built-in sso-admin binding and must preserve every other binding).
+    const userId = `sso:${PROVIDER_ID}:ext-1`;
+    const provisioned = findUserByExternalSubject(dataDir, PROVIDER_ID, 'ext-1')!;
+    identity.upsertUser(cfg, MASTER, { ...provisioned, roleBindings: [{ roleId: 'custom-role' }] });
 
     // Second login for the same external subject.
     const s2 = stateFrom(await identity.startSsoLogin(cfg, PROVIDER_ID, 'https://app.example/cb'));
     const token2 = await identity.completeSsoLogin(cfg, s2, 'code-2');
 
-    // No duplicate user was created.
+    // No duplicate user was created, and the custom binding survived the re-login refresh.
     expect(repoListUsers(dataDir)).toHaveLength(1);
 
-    // The new token carries the user's CURRENT grants (seeded above).
+    // The new token resolves the user's CURRENT bindings LIVE at authentication.
     const principal = authenticate(dataDir, token2);
-    expect(principal.subject?.userId).toBe(`sso:${PROVIDER_ID}:ext-1`);
-    expect(principal.grants).toEqual(grants);
+    expect(principal.subject?.userId).toBe(userId);
+    expect(principal.permissionSubject?.roleBindings).toEqual([{ roleId: 'custom-role' }]);
   });
 
   // ── deactivated returning user is refused (B1) ─────────────────────────────
@@ -360,7 +360,7 @@ describe('identity SSO orchestrator (sdd_host)', () => {
   // ── identity-provider administration (instance-admin only) ─────────────────
 
   it('IdP CRUD is instance-admin gated and audited: admin upserts/lists/removes; an editor token is 403', () => {
-    const editor = mintNonAdminToken([{ projectId: '*', permissions: ['mcp:write'] }]);
+    const editor = tokenWith('project:read', 'instance');
 
     // Editor (not instance-admin) is denied on every IdP admin method.
     expect(() => identity.upsertIdentityProvider(cfg, editor, providerConfig())).toThrow(ForbiddenError);
@@ -390,15 +390,15 @@ describe('identity SSO orchestrator (sdd_host)', () => {
     appendAuditEvent(dataDir, mkEvent({ action: 'idp.count.a' }), DEFAULT_AUDIT_POLICY);
     appendAuditEvent(dataDir, mkEvent({ action: 'idp.count.b' }), DEFAULT_AUDIT_POLICY);
 
-    const reader = mintNonAdminToken([{ projectId: '*', permissions: ['audit:read'] }]);
+    const reader = tokenWith('project:admin', 'instance');
 
     // Counts are consistent with the query index.
     expect(identity.countAuditEvents(cfg, reader, {})).toBe(auditQuery(dataDir, {}).length);
     expect(identity.countAuditEvents(cfg, reader, { action: 'idp.count.a' })).toBe(2);
     expect(identity.countAuditEvents(cfg, MASTER, { action: 'idp.count.b' })).toBe(1);
 
-    // A caller without audit:read (nor instance-admin) is denied.
-    const plain = mintNonAdminToken([{ projectId: 'proj-a', permissions: ['mcp:read'] }]);
+    // A caller without project:admin reach is denied.
+    const plain = tokenWith('project:read', 'project', 'proj-a');
     expect(() => identity.countAuditEvents(cfg, plain, {})).toThrow(ForbiddenError);
   });
 });

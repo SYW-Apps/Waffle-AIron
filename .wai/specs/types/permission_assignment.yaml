@@ -1,0 +1,56 @@
+kind: entity
+id: permission_assignment
+name: PermissionAssignment
+description: >-
+  One (subject × scope × capability → value) permission binding — the atom of the hierarchical grid.
+  A subject is a user, a role, or 'everyone' (a scope default). Resolution walks the target's
+  ancestor chain leaf→root and stops at the nearest scope with a definitive value; within a scope,
+  direct-user outranks role (most-permissive) outranks the everyone-default.
+subsystem: sdd_host
+fields:
+  - name: id
+    type: string
+    description: Stable assignment id.
+    optional: false
+    key: primary
+  - name: subjectKind
+    type: string
+    description: >-
+      user | everyone. (Roles are NOT assignment subjects — a role's capability values live on the
+      Role entity and apply through the user's RoleBindings, anchored at the binding's scope. This
+      keeps a single authoritative source for role permissions.)
+    optional: false
+  - name: subjectId
+    type: string
+    description: The user id; absent when subjectKind is 'everyone' (a scope-wide default).
+    optional: true
+  - name: scopeKind
+    type: string
+    description: instance | unit | project.
+    optional: false
+  - name: scopeId
+    type: string
+    description: Qualified unit id or project id; absent when scopeKind is 'instance'.
+    optional: true
+  - name: capability
+    type: string
+    description: >-
+      project:read | project:create | project:write | project:admin | approval:decide. There is NO
+      '*' capability and no instance-admin assignment — the instance-admin bypass is env-anchored to
+      the built-in super-admin/master, never granted through the assignment grid.
+    optional: false
+  - name: value
+    type: string
+    description: yes | approval | no | inherit.
+    optional: false
+  - name: createdAt
+    type: string
+    description: ISO-8601 creation timestamp.
+    optional: false
+  - name: createdBy
+    type: PrincipalSubject
+    description: Identity that set the assignment.
+    optional: true
+methods: []
+createdAt: '2026-07-15T20:25:17.662Z'
+updatedAt: '2026-07-15T23:07:29.231Z'

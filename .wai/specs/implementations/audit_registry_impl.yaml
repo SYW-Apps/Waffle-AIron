@@ -7,7 +7,78 @@ contract: iaudit_registry
 sourcePath: src/server/audit.ts
 methods:
   - name: append
-    narrative: []
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Capture filter: a disabled policy drops the event silently (successful no-op, disk
+          untouched)
+        type: branch
+        condition: the audit policy is disabled
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Drop the event — capture disabled
+        type: return
+        outcome: silent no-op
+      - stepNumber: 3
+        description: 'Capture filter: the event level must reach the policy''s minimum'
+        type: branch
+        condition: the event level ranks below the policy minimum
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Drop the event — below the capture level
+        type: return
+        outcome: silent no-op
+      - stepNumber: 5
+        description: 'Capture filter: read events are dropped unless the policy includes them'
+        type: branch
+        condition: read events are excluded by policy and the event is a read event
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Drop the read event
+        type: return
+        outcome: silent no-op
+      - stepNumber: 7
+        description: >-
+          Redaction guard: check the ORIGINAL target and metadata for raw-credential patterns,
+          before any transformation
+        type: local
+      - stepNumber: 8
+        description: Anything that still smells like a raw secret is rejected, never persisted
+        type: branch
+        condition: the target or metadata looks like a raw credential
+        onTrueStep: 9
+        onFalseStep: 10
+      - stepNumber: 9
+        description: Reject the event — redact secrets before auditing
+        type: throw
+        error: audit event contains what looks like a raw credential
+      - stepNumber: 10
+        description: >-
+          Apply the metadata mode: 'none' drops metadata entirely; any other mode truncates it to
+          the size cap
+        type: local
+      - stepNumber: 11
+        description: Stamp a fresh id and timestamp when the event carries none
+        type: local
+      - stepNumber: 12
+        description: >-
+          Append the stamped event to the store's authoritative in-memory set and persist the full
+          set to the durable event file (a persistence failure surfaces as a storage error)
+        type: local
+      - stepNumber: 13
+        description: >-
+          Swap the store to the persisted replacement in one assignment, so index reads always
+          observe a consistent set
+        type: call
+        targetComponent: audit_store
+        targetMethod: replaceAll
+      - stepNumber: 14
+        description: Return — the event is durably appended
+        type: return
+        outcome: appended
     intent: >-
       Apply the retention policy's capture filter first — events whose level or category the policy
       excludes are dropped without touching disk (a silent, successful no-op). Validate the
@@ -28,4 +99,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-07-09T17:30:50.941Z'
-updatedAt: '2026-07-09T17:43:51.898Z'
+updatedAt: '2026-07-19T00:01:16.542Z'

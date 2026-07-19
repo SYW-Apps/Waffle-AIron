@@ -1,0 +1,20 @@
+id: igit_backing_index
+name: Git Backing Index Interface
+description: Private read-path contract for container-level backing bindings.
+component: git_backing_index
+methods:
+  - name: listBindings
+    description: Return every stored binding; an empty result is normal, never an error.
+    signature: 'listBindings(): GitBackingBinding[]'
+    returns: GitBackingBinding[]
+    params: []
+  - name: getBinding
+    description: Return one binding by id, or null when absent.
+    signature: 'getBinding(bindingId: string): GitBackingBinding | null'
+    returns: GitBackingBinding | null
+    params:
+      - name: bindingId
+        type: string
+status: complete
+createdAt: '2026-07-16T15:38:55.663Z'
+updatedAt: '2026-07-16T15:48:48.974Z'

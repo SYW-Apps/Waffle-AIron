@@ -1,0 +1,15 @@
+id: role_repository
+name: Role Repository
+description: >-
+  Facade for durable permission-role definitions. Hosted workflows depend on this repository instead
+  of the private role store, registry, or index blocks.
+subsystem: sdd_host
+componentType: Repository
+owns:
+  - role_store
+  - role_registry
+  - role_index
+dependsOn: []
+status: complete
+createdAt: '2026-07-15T20:26:57.322Z'
+updatedAt: '2026-07-15T23:30:41.389Z'

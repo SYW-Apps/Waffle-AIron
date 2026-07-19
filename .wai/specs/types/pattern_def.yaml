@@ -1,0 +1,27 @@
+kind: value-object
+id: pattern_def
+name: PatternDef
+description: >-
+  A named, versioned reusable architecture pattern declared by an extension pack. Core resolves
+  references to it and surfaces it in tooling; the actual pattern constraints are enforced by the
+  pack's own programmatic rules.
+fields:
+  - name: id
+    type: string
+    description: Namespaced pattern id, e.g. org/domain-pattern.
+    optional: false
+  - name: version
+    type: string
+    description: Semantic version of the pattern definition.
+    optional: false
+  - name: description
+    type: string
+    description: Human-readable description of the pattern.
+    optional: true
+  - name: metadata
+    type: Json
+    description: Optional free-form metadata carried with the pattern.
+    optional: true
+methods: []
+createdAt: '2026-07-14T18:56:22.460Z'
+updatedAt: '2026-07-14T18:56:22.506Z'

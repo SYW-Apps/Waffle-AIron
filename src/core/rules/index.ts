@@ -9,6 +9,7 @@ import {
 } from '../../models/index.js';
 import type { ValidationIssue } from '../validation.js';
 import { emptyExtensions, LoadedExtensions } from '../extensions.js';
+import type { VariantDef } from '../variants.js';
 import { ArchProfile, BUILTIN_PROFILES, RuleContext, SddRule, Severity } from './types.js';
 import { BUILTIN_TYPES, matchTypeRef, normalizeLanguage } from './type-analysis.js';
 
@@ -20,10 +21,19 @@ import { narrativeDetailRule } from './narrative-detail.js';
 import { portalsRule } from './portals.js';
 import { stereotypeDepsRule } from './stereotype-deps.js';
 import { patternsRule } from './patterns.js';
+import { facadeForwardingRule } from './facade-forwarding.js';
+import { patternReferencesRule } from './pattern-references.js';
+import { variantReferencesRule } from './variant-references.js';
+import { declarativeAssertionsRule } from './declarative-assertions.js';
 import { profilesRule } from './profiles.js';
 import { publicSurfaceRule } from './public-surface.js';
 import { cyclesRule, reachabilityRule } from './graph.js';
 import { dispatchRule, lifecycleRule, durabilityRule, untypedSeamRule, proseClaimRule } from './semantic-edges.js';
+import { invariantBackingRule } from './invariants.js';
+import { guaranteeTokensRule } from './guarantee-tokens.js';
+import { eventTopologyRule } from './event-topology.js';
+import { narrativeAntipatternsRule } from './narrative-antipatterns.js';
+import { callConformanceRule } from './call-conformance.js';
 import { roundtripRule, namespaceHygieneRule, surfaceFreshnessRule } from './namespace.js';
 import { couplingRule } from './coupling.js';
 import { languageRule } from './language.js';
@@ -31,6 +41,8 @@ import { technologyRule } from './technology.js';
 import { namingRule } from './naming.js';
 import { complexityRule } from './complexity.js';
 import { structuralConformanceRule } from './conformance.js';
+import { integrationConformanceRule } from './integration-conformance.js';
+import { hiddenStateRule } from './hidden-state.js';
 import { dependencyConformanceRule } from './dependency-conformance.js';
 import { lintAllowsRule } from './lint-allows.js';
 import { emptyCodeModel, CodeModel } from '../source-analysis.js';
@@ -52,12 +64,25 @@ export const SDD_RULES: SddRule[] = [
   surfaceFreshnessRule,
   typeReferencesRule,
   contractsRule,
+  // Vocabulary check right after contracts: an unknown token explains why the
+  // consistency findings around it are absent, so surface them together.
+  guaranteeTokensRule,
   narrativeFlowRule,
+  // Antipatterns right after flow soundness: they analyze the same step
+  // graphs and only make sense once the graphs are structurally valid.
+  narrativeAntipatternsRule,
   narrativeDetailRule,
   portalsRule,
   stereotypeDepsRule,
   patternsRule,
+  // Facade shape rides with pattern ownership: same §7 doctrine, narrative side.
+  facadeForwardingRule,
   profilesRule,
+  patternReferencesRule,
+  variantReferencesRule,
+  // Pack-instantiated declarative doctrine rides with the pack-reference
+  // family: same data source, same provenance-bearing findings.
+  declarativeAssertionsRule,
   publicSurfaceRule,
   cyclesRule,
   // Semantic-edge family: dispatch/lifecycle validity BEFORE reachability so a
@@ -69,11 +94,24 @@ export const SDD_RULES: SddRule[] = [
   durabilityRule,
   untypedSeamRule,
   proseClaimRule,
+  // Invariant registry rides with the semantic-edge family: declared entity
+  // invariants must be asserted on every write path (declarations, not proofs).
+  invariantBackingRule,
+  // Pub/sub completeness: emitted topics need subscribers and vice versa.
+  eventTopologyRule,
   // Code↔spec: structural conformance consumes the injected CodeModel (built
   // by the source analysis adapter next to the surface snapshots); dependency
   // conformance lifts its import edges onto the declared dependsOn/owns graph.
   structuralConformanceRule,
+  // Level 3 opener: narrative call steps must be realized as callees of the
+  // realized function (set membership, exact grade).
+  callConformanceRule,
+  // The fields-vs-Store criterion: mutable module state in logic-only files.
+  hiddenStateRule,
   dependencyConformanceRule,
+  // Integration wiring proof rides after the code↔spec family: it consumes
+  // the same code model and speaks about the same sourcePath modules.
+  integrationConformanceRule,
   couplingRule,
   languageRule,
   technologyRule,
@@ -93,6 +131,54 @@ export function composeRuleSequence(extraRules: SddRule[] = []): SddRule[] {
   const base = SDD_RULES.filter(r => r !== lintAllowsRule);
   return [...base, ...extraRules, lintAllowsRule];
 }
+
+// ---------------------------------------------------------------------------
+// Design depth — which layers a project/subsystem COMMITS to designing.
+// EXPECTATION codes (something deeper must exist / be complete) are gated by
+// the effective depth; SOUNDNESS codes (what is authored must be coherent)
+// are deliberately absent from this map and always apply. The gate runs
+// BEFORE severity overrides: a gated code is skipped, period — raising the
+// depth is the way to get it back.
+// ---------------------------------------------------------------------------
+
+type DesignDepth = import('../../models/index.js').DesignDepth;
+
+const DEPTH_RANK: Record<DesignDepth, number> = {
+  components: 2,
+  interfaces: 3,
+  implementations: 4,
+  narratives: 5,
+};
+
+/** Expectation code → the minimum design depth at which it applies. */
+const DEPTH_GATED_CODES: Record<string, DesignDepth> = {
+  // L3 expectations: contract content the design promises at interface depth.
+  MISSING_ENDPOINT: 'interfaces',
+  MISSING_EFFECT_TAG: 'interfaces',
+  UNUSED_TYPE: 'interfaces',
+  // L4 expectations: implementations and their code linkage.
+  MISSING_IMPLEMENTATION_METHOD: 'implementations',
+  MISSING_SOURCE_PATH: 'implementations',
+  MISSING_SOURCE_FILE: 'implementations',
+  SOURCE_PATH_ESCAPES_ROOT: 'implementations',
+  UNREALIZED_METHOD: 'implementations',
+  CONFORMANCE_ANALYSIS_SKIPPED: 'implementations',
+  CONFORMANCE_DEGRADED: 'implementations',
+  UNDECLARED_DEPENDENCY: 'implementations',
+  UNREALIZED_DEPENDENCY: 'implementations',
+  MISSING_INTEGRATION_SIM: 'implementations',
+  // L5 expectations: narratives and everything whose fuel is narrative edges
+  // (the reachability walk and the hydration round-trip would drown a
+  // narrative-less tree in findings about flows nobody designed).
+  MISSING_NARRATIVE: 'narratives',
+  INTENT_FLOOR: 'narratives',
+  UNNARRATED_COMPLEXITY: 'narratives',
+  DETAIL_BELOW_STEREOTYPE: 'narratives',
+  UNASSERTED_INVARIANT: 'narratives',
+  MISSING_HYDRATION: 'narratives',
+  UNUSED_COMPONENT: 'narratives',
+  UNUSED_METHOD: 'narratives',
+};
 
 // Completeness rules downgrade to warnings while the surrounding specs are
 // still draft/design — the tree is allowed to be unfinished, not inconsistent.
@@ -116,6 +202,19 @@ const COMPLETENESS_RULES = new Set([
   'CONFORMANCE_ANALYSIS_SKIPPED',
   'UNDECLARED_DEPENDENCY',
   'UNREALIZED_DEPENDENCY',
+  // Detail sufficiency reads the realized code like the conformance family
+  // does — a draft tree is allowed to disagree with its code.
+  'UNNARRATED_COMPLEXITY',
+  // Invariant assertions are narrative completeness — a draft tree may not
+  // have written its write-path narratives yet.
+  'UNASSERTED_INVARIANT',
+  // Call-step realization reads the realized code — a draft tree is allowed
+  // to disagree with its code.
+  'CALL_STEP_UNREALIZED',
+  // Integration-sim gate: a draft tree may not have written its harness yet.
+  'MISSING_INTEGRATION_SIM',
+  'SIM_FILE_MISSING',
+  'UNWIRED_INTEGRATION_SIM',
 ]);
 
 export interface ScopeFilterOptions {
@@ -176,6 +275,8 @@ export interface BuildContextOptions {
   scopeSubsystem?: string;
   /** Loaded extension packs (pack profiles/languages/rules); empty when absent. */
   extensions?: LoadedExtensions;
+  /** Loaded component-variant registry (dynamic layer on top of packs); empty when absent. */
+  variants?: VariantDef[];
   /** Stored surface snapshots for cross-tree/remote reference resolution. */
   surfaceSnapshots?: import('../../models/index.js').SurfaceSnapshot[];
   /** Source-code model for structural conformance; empty when not built. */
@@ -218,6 +319,37 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
   }
 
   const isSpecInScope = makeScopeFilter({ components, interfaces, implementations, types, scopeSubsystem });
+
+  // ---- design depth resolution --------------------------------------------
+  // specId → owning subsystem, so a finding can be judged under the depth of
+  // the subsystem it belongs to (project default otherwise).
+  const subsystemOfSpec = new Map<string, string>();
+  for (const s of subsystems) subsystemOfSpec.set(s.id, s.id);
+  for (const c of components) subsystemOfSpec.set(c.id, c.subsystem);
+  for (const i of interfaces) {
+    const comp = componentMap.get(i.component);
+    if (comp) subsystemOfSpec.set(i.id, comp.subsystem);
+  }
+  for (const im of implementations) {
+    const contract = interfaceMap.get(im.contract);
+    const comp = contract ? componentMap.get(contract.component) : undefined;
+    if (comp) subsystemOfSpec.set(im.id, comp.subsystem);
+  }
+  for (const t of types) {
+    if (t.subsystem) subsystemOfSpec.set(t.id, t.subsystem);
+  }
+
+  const profileDepth = (profileName: string | undefined): import('../../models/index.js').DesignDepth | undefined =>
+    profileName ? extensions.profiles[profileName]?.rules?.designDepth : undefined;
+
+  const effectiveDesignDepth = (subsystemId: string | undefined): import('../../models/index.js').DesignDepth => {
+    const sub = subsystemId ? subsystems.find(s => s.id === subsystemId) : undefined;
+    return sub?.designDepth
+      ?? rules?.designDepth
+      ?? profileDepth(sub?.profile)
+      ?? profileDepth(projectType)
+      ?? 'narratives';
+  };
 
   const isComponentDraft = (compId: string): boolean => {
     const comp = componentMap.get(compId);
@@ -275,9 +407,19 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     ruleCode: string,
     defaultSeverity: Severity,
     isDraftContext?: boolean,
+    subsystemId?: string,
   ): Severity | 'off' => {
+    // Explicit project config wins over everything.
     if (rules?.sddRuleSeverity?.[ruleCode]) {
       return rules.sddRuleSeverity[ruleCode];
+    }
+    // Then the governing pack profile's severity overrides — the mechanism a
+    // platform pack (e.g. a low-code profile) uses to auto-apply its doctrine
+    // to every subsystem running under it, scoped to those subsystems only.
+    const sub = subsystemId ? subsystems.find(s => s.id === subsystemId) : undefined;
+    const profileSeverity = extensions.profiles[sub?.profile ?? projectType]?.rules?.sddRuleSeverity?.[ruleCode];
+    if (profileSeverity) {
+      return profileSeverity;
     }
     if (isDraftContext && COMPLETENESS_RULES.has(ruleCode)) {
       return 'warning';
@@ -306,7 +448,12 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
   for (const im of implementations) collectAllows(im.id, im.lint);
   for (const t of types) collectAllows(t.id, t.lint);
 
-  const knownIssueCodes = new Set([...SDD_RULES, ...extensions.rules].flatMap(r => r.codes.map(c => c.code)));
+  const knownIssueCodes = new Set([
+    ...[...SDD_RULES, ...extensions.rules].flatMap(r => r.codes.map(c => c.code)),
+    // Declarative assertions bring their own namespaced codes — lint.allow
+    // and severity overrides treat them exactly like builtins.
+    ...extensions.assertions.map(a => a.fullCode),
+  ]);
 
   const addIssue = (
     defaultSeverity: Severity,
@@ -318,7 +465,15 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     if (scopeSubsystem && specId && !isSpecInScope(specId)) {
       return;
     }
-    const severity = getRuleSeverity(code, defaultSeverity, isDraftContext);
+    const owner = specId ? subsystemOfSpec.get(specId) : undefined;
+    // Design-depth gate (before severity resolution): expectation codes below
+    // the effective depth are skipped entirely — the team declared it does
+    // not design that layer, so nothing at that layer can be "missing".
+    const requiredDepth = DEPTH_GATED_CODES[code];
+    if (requiredDepth) {
+      if (DEPTH_RANK[effectiveDesignDepth(owner)] < DEPTH_RANK[requiredDepth]) return;
+    }
+    const severity = getRuleSeverity(code, defaultSeverity, isDraftContext, owner);
     if (severity === 'off') return;
     if (specId) {
       const allow = allowLookup.get(specId)?.get(code);
@@ -357,7 +512,8 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     isTypeResolved,
     targetLanguageFor,
     isSpecInScope,
-    ext: { profiles: extensions.profiles, languages: extensions.languages },
+    ext: { profiles: extensions.profiles, languages: extensions.languages, patterns: extensions.patterns, guarantees: extensions.guarantees, assertions: extensions.assertions },
+    variants: opts.variants ?? [],
     surfaceSnapshots: opts.surfaceSnapshots ?? [],
     codeModel: opts.codeModel ?? emptyCodeModel(),
     lintAllows,

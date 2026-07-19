@@ -1,0 +1,74 @@
+id: ishare_portal
+name: Share Portal Interface
+description: >-
+  Public unauthenticated HTTP surface for share links under /share. Each method sets the hardening
+  headers (Referrer-Policy: no-referrer, X-Robots-Tag: noindex, CSP frame-ancestors from the link's
+  allowlist), sets no session cookie, and routes to the share access orchestrator.
+component: share_portal
+methods:
+  - name: getSharedView
+    description: >-
+      Serve the read-only shared-view HTML page for a token (the app rendering the link's snapshot).
+      Derives the request meta (IP / user-agent / referer) and delegates to the access orchestrator;
+      404s an unknown/disabled/expired token.
+    signature: 'getSharedView(token: string, meta: ShareRequestMeta): string'
+    returns: string
+    params:
+      - name: token
+        type: string
+      - name: meta
+        type: ShareRequestMeta
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /share/:token
+  - name: getSharedModel
+    description: Serve the link's immutable snapshot model as JSON for the view page to render.
+    signature: 'getSharedModel(token: string, meta: ShareRequestMeta): SharedViewResult'
+    returns: SharedViewResult
+    params:
+      - name: token
+        type: string
+      - name: meta
+        type: ShareRequestMeta
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /share/:token/model
+  - name: getSharedOpenApi
+    description: >-
+      Serve a bundled, self-contained OpenAPI viewer (Swagger/Redoc) page for a link whose snapshot
+      captured an openapi artifact.
+    signature: 'getSharedOpenApi(token: string, meta: ShareRequestMeta): string'
+    returns: string
+    params:
+      - name: token
+        type: string
+      - name: meta
+        type: ShareRequestMeta
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /share/:token/openapi
+  - name: downloadSharedArtifact
+    description: >-
+      Serve a permitted downloadable artifact (html | openapi) for a token, or 404/403 when absent
+      or not permitted.
+    signature: >-
+      downloadSharedArtifact(token: string, kind: string, meta: ShareRequestMeta):
+      ShareArtifactResult
+    returns: ShareArtifactResult
+    params:
+      - name: token
+        type: string
+      - name: kind
+        type: string
+      - name: meta
+        type: ShareRequestMeta
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /share/:token/download/:kind
+status: complete
+createdAt: '2026-07-17T22:30:37.401Z'
+updatedAt: '2026-07-18T10:10:39.843Z'

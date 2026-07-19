@@ -68,6 +68,31 @@ methods:
         targetComponent: core_portal
         targetMethod: buildProjectGraph
     detail: calls-only
+  - name: globalPacksDir
+    narrative: []
+    detail: intent
+    intent: >-
+      Forwards to the core extension loader's global-packs-directory resolution (WAIRON_PACKS_DIR,
+      else the default), so the hosted pack store never reaches into sdd_core directly.
+  - name: discoverPacks
+    narrative: []
+    detail: intent
+    intent: >-
+      Forwards to the core extension loader's directory discovery, returning the pack refs found in
+      the given directory (empty for a missing/unreadable directory, never an error).
+  - name: loadExtensionPacks
+    narrative: []
+    detail: intent
+    intent: >-
+      Forwards to the core extension loader, loading the given refs against the project root into a
+      LoadedExtensions (a failed pack rides on the result's errors rather than throwing).
+  - name: checkDeclarativePack
+    narrative: []
+    detail: intent
+    intent: >-
+      Validates the parsed manifest against the declarative-pack schema via the core loader,
+      returning the first schema error message or null when valid — so the hosted store can reject
+      non-declarative (rule/code) packs over the API.
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-07-11T11:34:25.486Z'
+updatedAt: '2026-07-15T06:53:04.167Z'

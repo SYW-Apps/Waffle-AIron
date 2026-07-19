@@ -1,6 +1,8 @@
 id: igit_orchestrator
 name: Git Orchestrator Interface
-description: Contract for the git-backing workflows.
+description: >-
+  Contract for the git-backing workflows: bind the project to its REAL repository, keep the working
+  branch integrated, and publish DELIBERATE, .wai/-scoped commits (never `git add -A`).
 component: git_orchestrator
 methods:
   - name: enable
@@ -16,9 +18,38 @@ methods:
     signature: 'sync(): void'
     returns: void
   - name: publish
-    description: Commit + push the working branch and produce the compare URL; no-op when not git-backed.
-    signature: 'publish(message: string): GitPublish'
+    description: >-
+      Commit ONLY the scoped subpath (default .wai/), push the working branch, and produce the
+      compare URL; no-op when not git-backed or when the scoped path is clean.
+    signature: 'publish(message: string, subpath: string): GitPublish'
     returns: GitPublish
+    params:
+      - name: message
+        type: string
+      - name: subpath
+        type: string
+        description: Staging scope relative to the repo root; defaults to .wai/.
+        optional: true
+  - name: status
+    description: >-
+      The project's git-backing status: bound remote/branch, periodic-sync setting, and scoped .wai/
+      dirtiness; enabled:false when no config exists.
+    signature: 'status(): GitBackingStatus'
+    returns: GitBackingStatus
+    params: []
+  - name: configureSync
+    description: >-
+      Persist the periodic-sync setting (interval + skip-if-clean) into the project's git-backing
+      config; rejects when the project is not git-backed.
+    signature: 'configureSync(periodicSyncMinutes: number, skipIfClean: boolean): void'
+    returns: void
+    params:
+      - name: periodicSyncMinutes
+        type: number
+        optional: true
+      - name: skipIfClean
+        type: boolean
+        optional: true
 status: complete
 createdAt: '2026-07-04T16:31:53.451Z'
-updatedAt: '2026-07-04T16:37:37.266Z'
+updatedAt: '2026-07-16T15:24:20.921Z'

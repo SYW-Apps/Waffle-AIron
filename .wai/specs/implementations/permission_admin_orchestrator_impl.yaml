@@ -1,0 +1,536 @@
+id: permission_admin_orchestrator_impl
+name: Permission Admin Orchestrator Implementation
+description: >-
+  Role, assignment, and role-binding management: authenticate, authorize through the authorization
+  specialist (instance-level project:admin for roles, project:admin over the scope for
+  assignments/bindings), mutate through the role/permission/user repositories, and audit at security
+  level. Reserves the built-in role ids (e.g. 'sso-admin' — intrinsic, not stored) against
+  create/update/delete, and rejects any attempt to set the reserved '*' capability (there is no
+  instance-admin assignment — the bypass is env-anchored to the built-in admin).
+contract: ipermission_admin_orchestrator
+sourcePath: src/server/permissionadmin.ts
+methods:
+  - name: listRoles
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Resolve the caller's project:admin permission at instance scope
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the role listing
+        type: throw
+        error: Forbidden — listing roles requires instance-level project:admin
+      - stepNumber: 5
+        description: List all defined roles through the role repository
+        type: call
+        targetComponent: role_repository
+        targetMethod: listRoles
+      - stepNumber: 6
+        description: Return the roles
+        type: return
+        outcome: the defined roles
+  - name: setAssignment
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          HARD RESERVATION: if the assignment is the reserved '*' capability at instance scope,
+          reject before any authorization
+        type: branch
+        condition: the assignment's capability is '*' at instance scope (the reserved instance-admin marker)
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the reserved marker unconditionally
+        type: throw
+        error: >-
+          Forbidden — the instance-admin marker ('*'@instance) is reserved to the built-in admin
+          account
+      - stepNumber: 4
+        description: Resolve the caller's project:admin permission over the assignment's scope
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 5
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Reject the assignment
+        type: throw
+        error: Forbidden — setting an assignment requires project:admin over its scope
+      - stepNumber: 7
+        description: >-
+          Canonicalize a user-kind subjectId onto the subject's userId (the id every live principal
+          carries — a record id passed from the Users list resolves through the user record; an id
+          with no record passes through), then upsert the assignment through the permission
+          repository
+        type: call
+        targetComponent: permission_repository
+        targetMethod: setAssignment
+      - stepNumber: 8
+        description: Append a redacted audit event without letting a failure fail the write
+        type: try
+        endStep: 10
+        catches:
+          - error: audit append failure
+            step: 11
+      - stepNumber: 9
+        description: Append the redacted permission.set audit event (security level)
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 10
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 12
+      - stepNumber: 11
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 12
+        description: Return the stored assignment
+        type: return
+        outcome: the stored assignment
+  - name: removeAssignment
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Look up the assignment by id to read its own scope
+        type: call
+        targetComponent: permission_repository
+        targetMethod: getAssignment
+      - stepNumber: 3
+        description: If no assignment matches, reject as not found
+        type: branch
+        condition: no assignment matches the id
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject as not found
+        type: throw
+        error: not found
+      - stepNumber: 5
+        description: >-
+          Resolve the caller's project:admin permission over the assignment's OWN scope (never a
+          caller-supplied one)
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 6
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 7
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Reject the removal
+        type: throw
+        error: Forbidden — removing an assignment requires project:admin over its scope
+      - stepNumber: 8
+        description: Remove the assignment through the permission repository
+        type: call
+        targetComponent: permission_repository
+        targetMethod: removeAssignment
+      - stepNumber: 9
+        description: Append a redacted audit event without letting a failure fail the removal
+        type: try
+        endStep: 11
+        catches:
+          - error: audit append failure
+            step: 12
+      - stepNumber: 10
+        description: Append the redacted permission.remove audit event (security level)
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 11
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 13
+      - stepNumber: 12
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 13
+        description: Return once the assignment has been removed
+        type: return
+        outcome: assignment removed
+  - name: listAssignments
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Resolve the caller's project:admin permission over the queried scope
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the assignment listing
+        type: throw
+        error: Forbidden — listing assignments requires project:admin over the scope
+      - stepNumber: 5
+        description: >-
+          List assignments through the permission repository; a user-subject filter matches the raw
+          id AND its canonical form, so legacy rows keyed by a diverged record id stay visible next
+          to canonical ones
+        type: call
+        targetComponent: permission_repository
+        targetMethod: listAssignments
+      - stepNumber: 6
+        description: Return the assignments
+        type: return
+        outcome: the assignments
+  - name: bindRole
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Resolve the caller's project:admin permission over the binding's scope
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the role binding
+        type: throw
+        error: Forbidden — binding a role requires project:admin over the scope
+      - stepNumber: 5
+        description: Look up the target user by id
+        type: call
+        targetComponent: user_repository
+        targetMethod: getById
+      - stepNumber: 6
+        description: If no user matches, reject as not found
+        type: branch
+        condition: no user matches userId
+        onTrueStep: 7
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Reject as not found
+        type: throw
+        error: not found
+      - stepNumber: 8
+        description: >-
+          Add the {roleId, scopeKind, scopeId} binding to the user's roleBindings (idempotent — no
+          duplicate)
+        type: local
+      - stepNumber: 9
+        description: Persist the updated user record through the user repository
+        type: call
+        targetComponent: user_repository
+        targetMethod: upsert
+      - stepNumber: 10
+        description: Append a redacted audit event without letting a failure fail the binding
+        type: try
+        endStep: 12
+        catches:
+          - error: audit append failure
+            step: 13
+      - stepNumber: 11
+        description: Append the redacted role.bind audit event (security level)
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 12
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 14
+      - stepNumber: 13
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 14
+        description: Return the updated user record
+        type: return
+        outcome: the updated user record
+  - name: unbindRole
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Resolve the caller's project:admin permission over the binding's scope
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the role unbinding
+        type: throw
+        error: Forbidden — unbinding a role requires project:admin over the scope
+      - stepNumber: 5
+        description: Look up the target user by id
+        type: call
+        targetComponent: user_repository
+        targetMethod: getById
+      - stepNumber: 6
+        description: If no user matches, reject as not found
+        type: branch
+        condition: no user matches userId
+        onTrueStep: 7
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Reject as not found
+        type: throw
+        error: not found
+      - stepNumber: 8
+        description: Remove the matching {roleId, scopeKind, scopeId} binding from the user's roleBindings
+        type: local
+      - stepNumber: 9
+        description: Persist the updated user record through the user repository
+        type: call
+        targetComponent: user_repository
+        targetMethod: upsert
+      - stepNumber: 10
+        description: Append a redacted audit event without letting a failure fail the unbinding
+        type: try
+        endStep: 12
+        catches:
+          - error: audit append failure
+            step: 13
+      - stepNumber: 11
+        description: Append the redacted role.unbind audit event (security level)
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 12
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 14
+      - stepNumber: 13
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 14
+        description: Return the updated user record
+        type: return
+        outcome: the updated user record
+  - name: createRole
+    narrative:
+      - stepNumber: 1
+        description: >-
+          If the role id is a reserved built-in id (e.g. 'sso-admin'), reject before anything else —
+          built-in roles are intrinsic constants, not admin-defined stored rows
+        type: branch
+        condition: the role id is a reserved built-in id
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Reject creating over a reserved built-in role
+        type: throw
+        error: Forbidden — built-in reserved roles are intrinsic and cannot be created or overridden
+      - stepNumber: 3
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 4
+        description: Resolve the caller's project:admin permission at instance scope (roles are instance-level)
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 5
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Reject the role management
+        type: throw
+        error: Forbidden — managing roles requires instance-level project:admin
+      - stepNumber: 7
+        description: Create the role through the role repository
+        type: call
+        targetComponent: role_repository
+        targetMethod: createRole
+      - stepNumber: 8
+        description: Append a redacted audit event without letting a failure fail the write
+        type: try
+        endStep: 10
+        catches:
+          - error: audit append failure
+            step: 11
+      - stepNumber: 9
+        description: Append the redacted role.create audit event (security level)
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 10
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 12
+      - stepNumber: 11
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 12
+        description: Return the stored role
+        type: return
+        outcome: the stored role
+  - name: updateRole
+    narrative:
+      - stepNumber: 1
+        description: If the role id is a reserved built-in id (e.g. 'sso-admin'), reject before anything else
+        type: branch
+        condition: the role id is a reserved built-in id
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Reject modifying a reserved built-in role
+        type: throw
+        error: Forbidden — built-in reserved roles are intrinsic and cannot be modified
+      - stepNumber: 3
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 4
+        description: Resolve the caller's project:admin permission at instance scope
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 5
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Reject the role management
+        type: throw
+        error: Forbidden — managing roles requires instance-level project:admin
+      - stepNumber: 7
+        description: Update the role through the role repository
+        type: call
+        targetComponent: role_repository
+        targetMethod: updateRole
+      - stepNumber: 8
+        description: Append a redacted audit event without letting a failure fail the write
+        type: try
+        endStep: 10
+        catches:
+          - error: audit append failure
+            step: 11
+      - stepNumber: 9
+        description: Append the redacted role.update audit event (security level)
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 10
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 12
+      - stepNumber: 11
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 12
+        description: Return the stored role
+        type: return
+        outcome: the stored role
+  - name: deleteRole
+    narrative:
+      - stepNumber: 1
+        description: If the role id is a reserved built-in id (e.g. 'sso-admin'), reject before anything else
+        type: branch
+        condition: the role id is a reserved built-in id
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Reject deleting a reserved built-in role
+        type: throw
+        error: Forbidden — built-in reserved roles are intrinsic and cannot be deleted
+      - stepNumber: 3
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 4
+        description: Resolve the caller's project:admin permission at instance scope
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 5
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Reject the role management
+        type: throw
+        error: Forbidden — managing roles requires instance-level project:admin
+      - stepNumber: 7
+        description: Delete the role through the role repository (bindings to it become inert)
+        type: call
+        targetComponent: role_repository
+        targetMethod: deleteRole
+      - stepNumber: 8
+        description: Append a redacted audit event without letting a failure fail the delete
+        type: try
+        endStep: 10
+        catches:
+          - error: audit append failure
+            step: 11
+      - stepNumber: 9
+        description: Append the redacted role.delete audit event (security level)
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 10
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 12
+      - stepNumber: 11
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 12
+        description: Return once the role has been deleted
+        type: return
+        outcome: role deleted
+detail: full
+status: complete
+createdAt: '2026-07-15T22:01:26.906Z'
+updatedAt: '2026-07-19T14:59:59.557Z'

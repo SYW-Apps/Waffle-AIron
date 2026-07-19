@@ -1,0 +1,56 @@
+id: ipermission_registry
+name: Permission Registry Interface
+description: >-
+  Private write-path contract for the permission-assignment grid. Enforces one value per
+  (subjectKind, subjectId, scopeKind, scopeId, capability) key; performs no authorization.
+component: permission_registry
+methods:
+  - name: setAssignment
+    description: >-
+      Upsert one assignment: replace any existing value for the same (subjectKind, subjectId,
+      scopeKind, scopeId, capability) key, stamp id/createdAt on create, persist durably, and
+      refresh the store. Setting value 'inherit' clears an override (equivalent to removing the
+      assignment).
+    signature: 'setAssignment(assignment: PermissionAssignment): PermissionAssignment'
+    returns: PermissionAssignment
+    params:
+      - name: assignment
+        type: PermissionAssignment
+    guarantees:
+      - atomic
+  - name: removeAssignment
+    description: >-
+      Remove one assignment by id, persist durably, and refresh the store; removing an absent
+      assignment is a no-op.
+    signature: 'removeAssignment(assignmentId: string): void'
+    returns: void
+    params:
+      - name: assignmentId
+        type: string
+  - name: remapScope
+    description: >-
+      Rewrite the scopeId of every assignment referencing an old unit/project id to its new id per
+      the supplied remap (applied when an organization unit is renamed or moved), persist durably,
+      and refresh the store.
+    signature: 'remapScope(remap: UnitIdRemap[]): void'
+    returns: void
+    params:
+      - name: remap
+        type: UnitIdRemap[]
+    guarantees:
+      - atomic
+  - name: removeAssignmentsForScopes
+    description: >-
+      Remove every assignment whose scopeId is in the given set (the scopes of a cascade-deleted
+      unit subtree), persist durably, and refresh the store. Prevents orphaned grants/denies from
+      resurrecting if a unit is later recreated at the same qualified path.
+    signature: 'removeAssignmentsForScopes(scopeIds: string[]): void'
+    returns: void
+    params:
+      - name: scopeIds
+        type: string[]
+    guarantees:
+      - atomic
+status: complete
+createdAt: '2026-07-15T20:27:53.130Z'
+updatedAt: '2026-07-15T22:22:07.239Z'

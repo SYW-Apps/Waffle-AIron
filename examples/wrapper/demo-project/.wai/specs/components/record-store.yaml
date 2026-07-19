@@ -4,6 +4,9 @@ name: Record Store
 description: Row-level persistence for scenario records, delegating raw access to the adapter.
 subsystem: scenario-hub
 componentType: Store
+# read-through: rows live in the sheet, no RAM copy — every read hits the
+# adapter, so there is nothing to hydrate at boot.
+durability: read-through
 dependsOn: [sheets-adapter]
 createdAt: '2026-07-03T12:00:00Z'
 updatedAt: '2026-07-03T12:00:00Z'

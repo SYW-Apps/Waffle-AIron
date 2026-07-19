@@ -1,0 +1,150 @@
+id: ipermission_admin_orchestrator
+name: Permission Admin Orchestrator Interface
+description: >-
+  Control-plane contract for managing roles, the permission-assignment grid, and user role bindings.
+  Every method authenticates the caller and authorizes via the authorization specialist; role
+  management requires instance-level project:admin, assignment/binding management requires
+  project:admin over the target scope. The reserved '*' instance-admin marker is never settable
+  here.
+component: permission_admin_orchestrator
+methods:
+  - name: createRole
+    description: >-
+      Authenticate, require instance-level project:admin, create a role through the role repository,
+      and audit. Roles are instance-level templates.
+    signature: 'createRole(credential: string, role: Role): Role'
+    returns: Role
+    params:
+      - name: credential
+        type: string
+      - name: role
+        type: Role
+    guarantees:
+      - atomic
+  - name: updateRole
+    description: >-
+      Authenticate, require instance-level project:admin, update a role's metadata/permissions
+      through the role repository, and audit.
+    signature: 'updateRole(credential: string, role: Role): Role'
+    returns: Role
+    params:
+      - name: credential
+        type: string
+      - name: role
+        type: Role
+    guarantees:
+      - atomic
+  - name: deleteRole
+    description: >-
+      Authenticate, require instance-level project:admin, delete a role through the role repository,
+      and audit. Bindings referencing a deleted role become inert (the resolver ignores unknown
+      roles).
+    signature: 'deleteRole(credential: string, roleId: string): void'
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: roleId
+        type: string
+  - name: listRoles
+    description: Authenticate, require instance-level project:admin, and list all defined roles.
+    signature: 'listRoles(credential: string): Role[]'
+    returns: Role[]
+    params:
+      - name: credential
+        type: string
+  - name: setAssignment
+    description: >-
+      Authenticate, reject the reserved '*' instance-admin marker, require project:admin over the
+      assignment's scope, upsert the assignment through the permission repository, and audit at
+      security level.
+    signature: 'setAssignment(credential: string, assignment: PermissionAssignment): PermissionAssignment'
+    returns: PermissionAssignment
+    params:
+      - name: credential
+        type: string
+      - name: assignment
+        type: PermissionAssignment
+    guarantees:
+      - atomic
+  - name: removeAssignment
+    description: >-
+      Authenticate, look up the assignment (not-found when absent), require project:admin over ITS
+      scope (never a caller-supplied one), remove it through the permission repository, and audit.
+    signature: 'removeAssignment(credential: string, assignmentId: string): void'
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: assignmentId
+        type: string
+  - name: listAssignments
+    description: >-
+      Authenticate, require project:admin over the queried scope, and list assignments filtered by
+      scope/subject through the permission repository.
+    signature: >-
+      listAssignments(credential: string, scopeKind: string, scopeId: string, subjectKind: string,
+      subjectId: string): PermissionAssignment[]
+    returns: PermissionAssignment[]
+    params:
+      - name: credential
+        type: string
+      - name: scopeKind
+        type: string
+        optional: true
+      - name: scopeId
+        type: string
+        optional: true
+      - name: subjectKind
+        type: string
+        optional: true
+      - name: subjectId
+        type: string
+        optional: true
+  - name: bindRole
+    description: >-
+      Authenticate, require project:admin over the binding's scope, add a {roleId, scope} binding to
+      the target user's roleBindings (idempotent) through the user repository, and audit.
+    signature: >-
+      bindRole(credential: string, userId: string, roleId: string, scopeKind: string, scopeId:
+      string): HostedUserRecord
+    returns: HostedUserRecord
+    params:
+      - name: credential
+        type: string
+      - name: userId
+        type: string
+      - name: roleId
+        type: string
+      - name: scopeKind
+        type: string
+        optional: true
+      - name: scopeId
+        type: string
+        optional: true
+    guarantees:
+      - atomic
+  - name: unbindRole
+    description: >-
+      Authenticate, require project:admin over the binding's scope, remove the matching {roleId,
+      scope} binding from the target user's roleBindings through the user repository, and audit.
+    signature: >-
+      unbindRole(credential: string, userId: string, roleId: string, scopeKind: string, scopeId:
+      string): HostedUserRecord
+    returns: HostedUserRecord
+    params:
+      - name: credential
+        type: string
+      - name: userId
+        type: string
+      - name: roleId
+        type: string
+      - name: scopeKind
+        type: string
+        optional: true
+      - name: scopeId
+        type: string
+        optional: true
+status: complete
+createdAt: '2026-07-15T22:00:18.881Z'
+updatedAt: '2026-07-15T22:22:07.140Z'

@@ -22,7 +22,7 @@ dependsOn:
   - visibility_specialist
   - host_surfaces_adapter
   - project_registry
-  - scope_specialist
+  - authorization_specialist
 status: complete
 createdAt: '2026-07-11T12:02:27.573Z'
-updatedAt: '2026-07-11T12:09:30.052Z'
+updatedAt: '2026-07-15T21:41:23.988Z'

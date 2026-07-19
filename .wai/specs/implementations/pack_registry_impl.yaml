@@ -74,7 +74,22 @@ methods:
       Returns empty reference lists (never throws) when the project has no config or no
       extensions/profile selection, and carries no filesystem paths so the result is safe for
       redacted diagnostics.
+  - name: storeListGlobalPacks
+    narrative: []
+    intent: >-
+      Reads the server-global pack directory fresh and returns one PackDescriptor per vendored
+      declarative pack — no credential gate; internal pre-authorized read.
+  - name: executeApprovedListProjectPacks
+    narrative: []
+    intent: >-
+      Lists the declarative packs vendored into the bound project's tree — no credential gate; the
+      approval workflow or resolver has already authorized the caller.
+  - name: executeApprovedInstallProjectPack
+    narrative: []
+    intent: >-
+      Vendors the pack content into the bound project's tree and registers the reference — no
+      credential gate; the approval workflow or resolver has already authorized the caller.
 detail: intent
 status: complete
 createdAt: '2026-07-04T18:42:57.340Z'
-updatedAt: '2026-07-10T12:37:01.067Z'
+updatedAt: '2026-07-19T08:57:37.902Z'

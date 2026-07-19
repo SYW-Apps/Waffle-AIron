@@ -89,6 +89,30 @@ methods:
       runSurface(action: string, options: { audience?: string; format?: string; out?: string;
       source?: string; origin?: string }): Promise<void>
     returns: Promise<void>
+  - name: runPacks
+    description: Handle `wairon packs <action>` (add | list | remove), dispatching to the packs adapter.
+    signature: 'runPacks(action: string): void'
+    returns: void
+    params:
+      - name: action
+        type: string
+  - name: runRules
+    description: Handle `wairon rules list`, printing the active conformance rule set.
+    signature: 'runRules(): void'
+    returns: void
+    params: []
+  - name: runPatterns
+    description: Handle `wairon patterns list`, printing the pack-declared reusable pattern definitions.
+    signature: 'runPatterns(): void'
+    returns: void
+    params: []
+  - name: runVariants
+    description: >-
+      Handle `wairon variants list`, printing the component variants declared in the registry
+      (global + project).
+    signature: 'runVariants(): void'
+    returns: void
+    params: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-10T23:14:32.127Z'
+updatedAt: '2026-07-15T12:25:26.914Z'

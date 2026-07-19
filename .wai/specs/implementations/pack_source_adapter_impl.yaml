@@ -1,0 +1,48 @@
+id: pack_source_adapter_impl
+name: Pack Source Adapter Implementation
+description: >-
+  Filesystem/module reads for extension packs, in src/core/extensions.ts. Pure I/O leaves — no
+  cross-component calls.
+contract: ipack_source_adapter
+sourcePath: src/core/extensions.ts
+methods:
+  - name: globalPacksDir
+    narrative: []
+    intent: >-
+      Returns the global packs directory: the WAIRON_PACKS_DIR environment variable when set,
+      otherwise ~/.wairon/packs. Pure path resolution that never touches the filesystem, so it
+      cannot fail.
+  - name: discoverPacks
+    narrative: []
+    intent: >-
+      Reads the given directory and returns the pack refs found — *.yaml/*.yml/*.cjs/*.js files plus
+      any subdirectory containing a pack entry file (pack.yaml | pack.cjs | index.cjs | …) — sorted
+      for deterministic load order. A missing or unreadable directory yields an empty list rather
+      than an error, so an absent global packs folder is never fatal.
+  - name: resolvePackRef
+    narrative: []
+    intent: >-
+      Resolves a ref to a concrete load target. A path-like ref (relative, absolute, or *.yaml)
+      resolves against the project root, and if it names a directory its pack entry file is returned
+      (throwing when the directory has no entry file). Any other ref is returned unchanged for Node
+      module resolution from the project root.
+  - name: readManifest
+    narrative: []
+    detail: intent
+    intent: >-
+      Reads a resolved target's pack manifest and deserializes it into an ExtensionPack: a
+      *.yaml/*.yml target is parsed as YAML (throwing on a missing or empty file); any other target
+      is required as a CommonJS module and its default/module export used (carrying programmatic
+      rules). Any read/require/parse failure propagates to the caller, which records it as an
+      EXTENSION_LOAD_ERROR.
+detail: intent
+lint:
+  allow:
+    - code: UNNARRATED_COMPLEXITY
+      reason: >-
+        readManifest's branching is format dispatch plus defensive parse fallbacks (YAML pack file
+        vs required JS module); behavior is fully stated in the L3 contract and every failure
+        propagates to EXTENSION_LOAD_ERROR — a narrative would restate a parser, not add spec.
+status: complete
+createdAt: '2026-07-14T19:00:52.644Z'
+updatedAt: '2026-07-18T14:19:01.542Z'

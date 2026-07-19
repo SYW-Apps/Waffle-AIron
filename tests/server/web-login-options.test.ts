@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { getLoginOptions, serveApp } from '../../src/server/web.js';
+import { getLoginOptions, serveLegacyApp } from '../../src/server/web.js';
 import { upsertIdentityProviderRecord, listIdentityProviderRecords } from '../../src/server/policy.js';
 import { routeData } from '../../src/server/http.js';
 import type { HostConfig, IdentityProviderConfig } from '../../src/server/types.js';
@@ -227,8 +227,8 @@ describe('IdentityProviderConfig.displayName round-trip (sdd_host policy reposit
 
 // ── Served client shell: the dynamic login screen wiring ─────────────────────
 
-describe('web portal client shell dynamic login screen (sdd_host)', () => {
-  const html = serveApp('/');
+describe('web portal legacy client shell dynamic login screen (sdd_host)', () => {
+  const html = serveLegacyApp('/');
 
   it('fetches /web/login-options and renders per-provider sign-in buttons', () => {
     expect(html).toContain('/web/login-options');

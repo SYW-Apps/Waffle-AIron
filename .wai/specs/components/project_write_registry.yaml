@@ -1,0 +1,13 @@
+id: project_write_registry
+name: Project Write Registry
+description: >-
+  Write path of the project repository: allocates isolated project roots and creates/removes
+  hosted-project records through the store's backing file.
+subsystem: sdd_host
+componentType: Registry
+owns: []
+dependsOn:
+  - project_store
+status: complete
+createdAt: '2026-07-19T08:59:50.135Z'
+updatedAt: '2026-07-19T09:00:40.287Z'

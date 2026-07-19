@@ -30,23 +30,30 @@ interface PackProbe {
   profiles: number;
   languages: number;
   rules: number;
+  skills: number;
+  patterns: number;
   error?: string;
 }
 
 /** Load a single pack ref in isolation to learn its name/contents. */
 function probePack(ref: string, baseRoot: string, scope: PackScope): PackProbe {
   const loaded = loadExtensionPacks([{ ref, scope }], baseRoot);
-  if (loaded.errors.length) return { profiles: 0, languages: 0, rules: 0, error: loaded.errors[0] };
+  if (loaded.errors.length) return { profiles: 0, languages: 0, rules: 0, skills: 0, patterns: 0, error: loaded.errors[0] };
   return {
     name: loaded.packNames[0],
     profiles: Object.keys(loaded.profiles).length,
     languages: Object.keys(loaded.languages).length,
     rules: loaded.rules.length,
+    skills: loaded.skills.length,
+    patterns: loaded.patterns.length,
   };
 }
 
 function describe(probe: PackProbe): string {
-  return `${probe.profiles} profile(s), ${probe.languages} language(s), ${probe.rules} rule(s)`;
+  const parts = [`${probe.profiles} profile(s)`, `${probe.languages} language(s)`, `${probe.rules} rule(s)`];
+  if (probe.skills) parts.push(`${probe.skills} skill(s)`);
+  if (probe.patterns) parts.push(`${probe.patterns} pattern(s)`);
+  return parts.join(', ');
 }
 
 /** The unit to vendor: the file itself, or the whole directory of a directory pack. */
@@ -62,7 +69,7 @@ function resolveSourceUnit(source: string): { abs: string; isDir: boolean } {
   return { abs, isDir };
 }
 
-export async function runPacksAdd(source: string, options: { global?: boolean } = {}): Promise<void> {
+export async function addPack(source: string, options: { global?: boolean } = {}): Promise<void> {
   const { abs } = resolveSourceUnit(source);
 
   // Verify the pack loads BEFORE vendoring it anywhere.
@@ -114,7 +121,7 @@ export async function runPacksAdd(source: string, options: { global?: boolean } 
   logger.info(`${describe(probe)} — commit .wai/ so CI and every clone enforce it.`);
 }
 
-export async function runPacksList(): Promise<void> {
+export async function listPacks(): Promise<void> {
   const inProject = isProjectInitialized();
   const config = inProject ? loadProjectConfig() : undefined;
   const useGlobal = config?.extensions?.useGlobalPacks ?? true;
@@ -148,7 +155,7 @@ export async function runPacksList(): Promise<void> {
   logger.info('Rules from packs show up in `wairon rules list`; add packs with `wairon packs add <source> [--global]`.');
 }
 
-export async function runPacksRemove(name: string, options: { global?: boolean } = {}): Promise<void> {
+export async function removePack(name: string, options: { global?: boolean } = {}): Promise<void> {
   if (options.global) {
     for (const ref of discoverPacks(globalPacksDir())) {
       const probe = probePack(ref, path.dirname(ref), 'global');

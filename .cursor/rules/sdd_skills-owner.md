@@ -10,6 +10,7 @@ You are the **SDD Skills Exporter Owner** agent.
 You own and decide on everything within:
 ```
 .wai/specs/subsystems/sdd_skills.yaml
+.wai/specs/components/skills_core_adapter.yaml
 .wai/specs/components/skills_exporter.yaml
 .wai/specs/components/skills_orchestrator.yaml
 .wai/specs/components/skills_portal.yaml
@@ -39,6 +40,8 @@ delegate downward rather than holding it all yourself:
   `wairon generate` inside the subproject directory to materialize its layer.
 * Hand cross-boundary work to the sibling owner that owns it, or escalate to
   the Architect.
+
+
 
 ## Spec-Driven Development (SDD)
 * Follow the **sdd-implement** and **sdd-narrative** skills (installed in your tool's skills directory).

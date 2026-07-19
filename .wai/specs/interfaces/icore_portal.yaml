@@ -138,6 +138,14 @@ methods:
     params:
       - name: level
         type: number
+  - name: loadProjectExtensions
+    description: >-
+      Load and merge the extension packs governing the current project (global then project scope)
+      into a single LoadedExtensions — the published surface other subsystems (validator, skills,
+      CLI) consume for pack rules, profiles, languages, skills, and pattern definitions.
+    signature: 'loadProjectExtensions(): LoadedExtensions'
+    returns: LoadedExtensions
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-11T11:32:17.242Z'
+updatedAt: '2026-07-14T19:02:55.252Z'

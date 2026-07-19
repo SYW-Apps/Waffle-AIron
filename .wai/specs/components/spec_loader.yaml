@@ -1,8 +1,19 @@
-id: "spec_loader"
-name: "Spec Loader"
-description: "I/O manager for specification YAML files under .wai/specs/"
-subsystem: "sdd_core"
-componentType: "Registry"
+id: spec_loader
+name: Spec Loader
+description: >-
+  The spec repository — authoritative state boundary of the product. A pure facade over its owned
+  faces: loads forward 1:1 to the Spec Index, saves and the round-trip dry run forward 1:1 to the
+  Spec Registry, and all file I/O lives in the Spec File Store. Consumers depend on this facade
+  only.
+subsystem: sdd_core
+componentType: Repository
+owns:
+  - spec_file_store
+  - spec_registry
+  - spec_index
 dependsOn: []
-createdAt: "2026-06-10T19:28:00.000Z"
-updatedAt: "2026-06-10T19:28:00.000Z"
+lint:
+  allow: []
+status: complete
+createdAt: '2026-06-10T19:28:00.000Z'
+updatedAt: '2026-07-18T22:57:53.226Z'

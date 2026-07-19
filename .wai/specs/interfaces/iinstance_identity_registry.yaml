@@ -1,0 +1,24 @@
+id: iinstance_identity_registry
+name: Instance Identity Registry Interface
+description: >-
+  Private write-path contract for the singleton InstanceIdentity: create-once seeding, never
+  rotation.
+component: instance_identity_registry
+methods:
+  - name: seed
+    description: >-
+      Create-once seeding: when no record exists, generate cryptographically random UUIDs for the
+      built-in super-admin and local-developer subjects, stamp createdAt, and persist the record
+      atomically to instance.json; when a record already exists, return it unchanged. Idempotent —
+      ids are never regenerated or rotated.
+    signature: 'seed(now: string): InstanceIdentity'
+    returns: InstanceIdentity
+    params:
+      - name: now
+        type: string
+    guarantees:
+      - idempotent
+      - atomic
+status: complete
+createdAt: '2026-07-16T00:24:11.063Z'
+updatedAt: '2026-07-16T07:27:54.451Z'

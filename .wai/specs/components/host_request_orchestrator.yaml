@@ -1,18 +1,17 @@
 id: host_request_orchestrator
 name: Host Request Orchestrator
 description: >-
-  Owns the per-request data-plane workflow: authenticate the bearer token to a principal, resolve
-  the authorized project (honoring an optional client selector only within the token's authorized
-  set), bind the request-scoped project root, then dispatch the sdd_* tool call into the reused MCP
-  tool surface within that scope. It also dispatches the approval-backed self-service MCP tools
-  (sdd_host_request_project_initialization, sdd_host_request_project_lock,
-  sdd_host_request_project_promotion, sdd_host_get_approval_status) to the self-service
-  orchestrator, and the four hosted landscape MCP tools (sdd_landscape_list_reachable_projects,
-  sdd_landscape_list_reachable_project_interfaces, sdd_landscape_list_visible_surfaces,
-  sdd_landscape_get_project_surface) to the surface exchange orchestrator with currentProjectId
-  bound to the request-scoped project, instead of the scoped MCP tool surface. Rejects unknown
-  tokens and cross-project access. Appends a redacted audit event for every handled data-plane tool
-  call; append failures are recorded as server diagnostics and never fail the request.
+  Per-request data-plane orchestrator: authenticate the bearer token, resolve and bind the
+  authorized project scope (rejecting cross-project access), then dispatch the sdd_* tool call into
+  the reused MCP tool surface within that scope. It also dispatches the execute-primary
+  project-lifecycle MCP tools (sdd_host_initialize_project, sdd_host_lock_project,
+  sdd_host_promote_project, sdd_host_get_approval_status, sdd_host_await_approval) to the project
+  lifecycle orchestrator, the four hosted landscape MCP tools to the surface exchange orchestrator,
+  and the project-ops MCP tools (sdd_host_pack_list, sdd_host_pack_install,
+  sdd_host_policy_evaluate, sdd_host_policy_reconcile, sdd_host_produce, sdd_host_commit_project —
+  all bound to THE one authorized project; instance-level operations are deliberately absent from
+  the data plane) to the project ops orchestrator — each already resolver-gated upstream, bypassing
+  the ordinary data-plane permission check. Appends a redacted audit event per handled call.
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
@@ -22,8 +21,10 @@ dependsOn:
   - host_mcp_adapter
   - host_core_adapter
   - audit_repository
-  - self_service_orchestrator
+  - project_lifecycle_orchestrator
   - surface_exchange_orchestrator
+  - authorization_specialist
+  - project_ops_orchestrator
 status: complete
 createdAt: '2026-07-04T12:33:41.786Z'
-updatedAt: '2026-07-11T12:04:17.286Z'
+updatedAt: '2026-07-16T15:36:19.271Z'

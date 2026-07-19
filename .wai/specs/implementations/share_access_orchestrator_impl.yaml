@@ -1,0 +1,115 @@
+id: share_access_orchestrator_impl
+name: Share Access Orchestrator Implementation
+description: >-
+  Public token-gated resolution: hash-lookup, refusal on disabled/expired/unknown, access logging,
+  snapshot/artifact serving. No session.
+contract: ishare_access_orchestrator
+sourcePath: src/server/shareaccess.ts
+methods:
+  - name: resolveSharedView
+    narrative:
+      - stepNumber: 1
+        description: Salted-hash the presented token for lookup.
+        type: local
+      - stepNumber: 2
+        description: Resolve the token hash to its link, or null.
+        type: call
+        targetComponent: share_link_repository
+        targetMethod: byTokenHash
+      - stepNumber: 3
+        description: No link matched the token hash.
+        type: branch
+        condition: link is null
+        onFalseStep: 6
+      - stepNumber: 4
+        description: Record a not-found access.
+        type: call
+        targetComponent: share_access_repository
+        targetMethod: append
+      - stepNumber: 5
+        description: A not-found result carrying no data.
+        type: return
+        outcome: not-found
+      - stepNumber: 6
+        description: The link is disabled or past its expiry.
+        type: branch
+        condition: not enabled or expired
+        onFalseStep: 9
+      - stepNumber: 7
+        description: Record a denied access (disabled or expired).
+        type: call
+        targetComponent: share_access_repository
+        targetMethod: append
+      - stepNumber: 8
+        description: A denied result.
+        type: return
+        outcome: denied
+      - stepNumber: 9
+        description: Load the link's immutable snapshot.
+        type: call
+        targetComponent: share_snapshot_repository
+        targetMethod: get
+      - stepNumber: 10
+        description: Record a served access.
+        type: call
+        targetComponent: share_access_repository
+        targetMethod: append
+      - stepNumber: 11
+        description: The snapshot model plus the link's download permissions; no session is established.
+        type: return
+        outcome: served
+  - name: downloadArtifact
+    narrative:
+      - stepNumber: 1
+        description: Salted-hash the presented token.
+        type: local
+      - stepNumber: 2
+        description: Resolve the token hash to its link.
+        type: call
+        targetComponent: share_link_repository
+        targetMethod: byTokenHash
+      - stepNumber: 3
+        description: No link, or the link is disabled or expired.
+        type: branch
+        condition: link missing, disabled, or expired
+        onFalseStep: 6
+      - stepNumber: 4
+        description: Record a denied access.
+        type: call
+        targetComponent: share_access_repository
+        targetMethod: append
+      - stepNumber: 5
+        description: A refusal.
+        type: return
+        outcome: denied
+      - stepNumber: 6
+        description: The requested download kind is not permitted by the link.
+        type: branch
+        condition: download of this kind not allowed
+        onFalseStep: 9
+      - stepNumber: 7
+        description: Record a denied-download access.
+        type: call
+        targetComponent: share_access_repository
+        targetMethod: append
+      - stepNumber: 8
+        description: A refusal.
+        type: return
+        outcome: denied-download
+      - stepNumber: 9
+        description: Load the permitted artifact payload.
+        type: call
+        targetComponent: share_snapshot_repository
+        targetMethod: getArtifact
+      - stepNumber: 10
+        description: Record a served access.
+        type: call
+        targetComponent: share_access_repository
+        targetMethod: append
+      - stepNumber: 11
+        description: The artifact payload and its content type.
+        type: return
+        outcome: served
+status: complete
+createdAt: '2026-07-18T09:30:59.945Z'
+updatedAt: '2026-07-18T10:10:40.238Z'

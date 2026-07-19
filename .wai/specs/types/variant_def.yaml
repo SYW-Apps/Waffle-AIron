@@ -1,0 +1,35 @@
+kind: value-object
+id: variant_def
+name: VariantDef
+description: >-
+  A component variant: a named, base-anchored specialization of a core stereotype (a "kind of
+  Adapter/Specialist/…") carrying implementation guidance. Lives in a dynamic registry on top of
+  packs (global + project); the base stays authoritative for generic semantics.
+fields:
+  - name: id
+    type: string
+    description: Variant id referenced by a component's variant (e.g. publisher, org/external-config-adapter).
+    optional: false
+  - name: base
+    type: string
+    description: >-
+      The core stereotype this variant specializes — authoritative for generic semantics (Adapter,
+      Specialist, …).
+    optional: false
+  - name: guidance
+    type: string
+    description: >-
+      How to implement a component of this variant; the recipe reused across same-variant
+      components.
+    optional: false
+  - name: target
+    type: string
+    description: 'Optional: only applies for the given target language.'
+    optional: true
+  - name: profile
+    type: string
+    description: 'Optional: only applies under the given architectural profile.'
+    optional: true
+methods: []
+createdAt: '2026-07-15T12:23:33.024Z'
+updatedAt: '2026-07-15T12:23:33.035Z'

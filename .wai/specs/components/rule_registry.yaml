@@ -1,0 +1,14 @@
+id: rule_registry
+name: Rule Registry
+description: >-
+  Write path for the rule set: seeds the built-in SDD conformance rules and registers programmatic
+  pack rules (after the built-ins, so project pack order is precedence) into the rule store. Holds
+  no state itself.
+subsystem: sdd_validator
+componentType: Registry
+owns: []
+dependsOn:
+  - rule_store
+status: complete
+createdAt: '2026-07-14T19:16:58.718Z'
+updatedAt: '2026-07-14T20:16:06.953Z'

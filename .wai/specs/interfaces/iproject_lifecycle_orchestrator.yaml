@@ -1,0 +1,142 @@
+id: iproject_lifecycle_orchestrator
+name: Project Lifecycle Orchestrator Interface
+description: >-
+  Project lifecycle contract for initialize/lock/promote requested over MCP, CLI, or UI.
+  Execute-primary: every method authenticates the caller credential and resolves the caller's
+  permission — yes executes the action directly and returns its natural result, approval creates a
+  pending ApprovalRequest (the security exception), no raises Forbidden. Approved requests
+  auto-execute on decision.
+component: project_lifecycle_orchestrator
+methods:
+  - name: initializeProject
+    description: >-
+      Execute-primary project initialization. Authenticate the caller, validate the
+      ProjectInitRequest structurally, evaluate it against the active instance pack policy
+      (enforce-mode violations reject immediately; warn-mode findings ride the summary), then
+      resolve the caller's project:create permission over the required owner unit: yes -> initialize
+      the project directly via the policy orchestrator's pre-authorized executeApprovedInit and
+      return a completed ProjectActionOutcome; approval -> create a pending project:init
+      ApprovalRequest and return a pending-approval outcome; no -> Forbidden.
+    signature: 'initializeProject(credential: string, request: ProjectInitRequest): ProjectActionOutcome'
+    returns: ProjectActionOutcome
+    params:
+      - name: credential
+        type: string
+      - name: request
+        type: ProjectInitRequest
+    guarantees:
+      - atomic
+  - name: lockProject
+    description: >-
+      Execute-primary project lock. Authenticate the caller and resolve their project:write
+      permission over the project: yes -> lock directly via the admin plane's pre-authorized
+      executeApprovedLock and return a completed ProjectActionOutcome carrying the lock record;
+      approval -> create a pending project:lock ApprovalRequest and return a pending-approval
+      outcome; no -> Forbidden.
+    signature: 'lockProject(credential: string, projectId: string): ProjectActionOutcome'
+    returns: ProjectActionOutcome
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+    guarantees:
+      - atomic
+  - name: promoteProject
+    description: >-
+      Execute-primary project promotion. Authenticate the caller and resolve their project:write
+      permission over the project: yes -> promote directly via the admin plane's pre-authorized
+      executeApprovedPromote and return a completed ProjectActionOutcome carrying the promote
+      result; approval -> create a pending project:promote ApprovalRequest and return a
+      pending-approval outcome; no -> Forbidden.
+    signature: 'promoteProject(credential: string, projectId: string): ProjectActionOutcome'
+    returns: ProjectActionOutcome
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+    guarantees:
+      - atomic
+  - name: getApprovalStatus
+    description: >-
+      Authenticate the caller, lazily expire overdue pending requests, then return one approval
+      request visible only to its original requester (matching subject or requesting token id) or to
+      a caller whose resolved approval:decide permission over the request's project is yes; never
+      exposes unrelated requests.
+    signature: 'getApprovalStatus(credential: string, requestId: string): ApprovalRequest'
+    returns: ApprovalRequest
+    params:
+      - name: credential
+        type: string
+      - name: requestId
+        type: string
+  - name: listPendingRequests
+    description: >-
+      Authenticate the caller, gather the permission world, expire overdue pending requests, then
+      list pending approval requests the caller may decide: an instance-admin sees all; otherwise a
+      request is included only when the caller's resolved approval:decide permission over the
+      request's project is yes. Optionally narrowed to one project.
+    signature: 'listPendingRequests(credential: string, projectId: string): ApprovalRequest[]'
+    returns: ApprovalRequest[]
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+        optional: true
+  - name: decideRequest
+    description: >-
+      Authenticate the caller and resolve their approval:decide permission over the decided
+      request's project (must be yes); reject self-approval (decidedBy MUST differ from requestedBy
+      — a yes-permission caller executes directly and never enters the approval path, so this guard
+      cannot deadlock); record the approve/deny decision; then AUTO-EXECUTE an approved request
+      immediately by dispatching by kind to the pre-authorized entrypoints (project:init ->
+      executeApprovedInit; project:lock/project:promote -> the admin plane) and mark it completed.
+      Audit at security level. A re-evaluation failure at execution leaves the approval approved,
+      not completed (retryable via executeApprovedRequest).
+    signature: 'decideRequest(credential: string, decision: ApprovalDecision): ApprovalRequest'
+    returns: ApprovalRequest
+    params:
+      - name: credential
+        type: string
+      - name: decision
+        type: ApprovalDecision
+    guarantees:
+      - atomic
+  - name: executeApprovedRequest
+    description: >-
+      Authenticate the caller credential, authorize the original requester or an instance-admin,
+      require the request to be approved and unexpired, then dispatch by kind: project:init to the
+      policy orchestrator's pre-authorized executeApprovedInit (which enforces pack policy,
+      provisions the project via the admin plane, applies required/default packs, and records the
+      profile selection), and project:lock / project:promote to the admin plane's pre-authorized
+      executeApprovedLock / executeApprovedPromote; mark the approval completed, and audit the
+      execution at security level. Rejects pending, denied, expired, completed, or unauthorized
+      requests.
+    signature: 'executeApprovedRequest(credential: string, requestId: string): string'
+    returns: string
+    params:
+      - name: credential
+        type: string
+      - name: requestId
+        type: string
+  - name: awaitApproval
+    description: >-
+      Long-poll for a decision so an MCP agent can wait then continue: authenticate the caller (only
+      the original requester may await), then block server-side re-reading the request until it
+      leaves pending status (approved/denied/completed/expired) or the timeout elapses, and return
+      the request in its current state. Pairs with decideRequest's auto-execute so an approved
+      request returns already completed.
+    signature: 'awaitApproval(credential: string, requestId: string, timeoutSeconds: number): ApprovalRequest'
+    returns: ApprovalRequest
+    params:
+      - name: credential
+        type: string
+      - name: requestId
+        type: string
+      - name: timeoutSeconds
+        type: number
+status: complete
+createdAt: '2026-07-16T00:08:59.412Z'
+updatedAt: '2026-07-16T07:27:54.607Z'

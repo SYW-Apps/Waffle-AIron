@@ -1,0 +1,13 @@
+id: irole_index
+name: Role Index Interface
+description: 'Private read-path contract over the role collection: single-role lookup and full listing.'
+component: role_index
+methods:
+  - name: listRoles
+    description: Return every defined role.
+    signature: 'listRoles(): Role[]'
+    returns: Role[]
+    params: []
+status: complete
+createdAt: '2026-07-15T20:27:36.106Z'
+updatedAt: '2026-07-16T15:03:12.140Z'

@@ -3,15 +3,11 @@ import * as path from 'path';
 import { runWithProjectRoot, getProjectRoot } from '../utils/fs.js';
 import { parseYaml, readYamlFile } from '../utils/yaml.js';
 import { loadProjectConfig, saveProjectConfig, AI_PATHS } from '../config/loader.js';
-import {
-  globalPacksDir,
-  discoverPacks,
-  loadExtensionPacks,
-  DeclarativePackSchema,
-  type PackScope,
-} from '../core/extensions.js';
-import { authenticateMaster } from './auth.js';
-import { AdminAuthError } from './errors.js';
+import type { PackScope } from '../core/extensions.js';
+import { hostCore } from './adapters.js';
+import { authenticateCredential } from './auth.js';
+import { authorize } from './authorization.js';
+import { AdminAuthError, UnauthenticatedError } from './errors.js';
 import { existingProjectRoot } from './projects.js';
 import type { HostConfig, PackDescriptor, ProjectPackReference, ProjectProfileSelection } from './types.js';
 
@@ -31,7 +27,8 @@ import type { HostConfig, PackDescriptor, ProjectPackReference, ProjectProfileSe
 // language/platform tables — pure data); programmatic rule/code packs are refused
 // here and must be installed via the trusted filesystem (a baked image layer, a
 // mounted packs volume, or `wairon packs add`). The orchestrator layer adds
-// master-credential auth and project-scope binding.
+// resolver authorization (instance-level project:admin for the global tier;
+// project:admin/project:read over the project for its tier) and scope binding.
 // ---------------------------------------------------------------------------
 
 const NAME_RE = /^[A-Za-z0-9._-]+$/;
@@ -57,16 +54,16 @@ function assertDeclarative(content: string): void {
   } catch (e) {
     throw new Error(`Not a valid declarative pack: ${e instanceof Error ? e.message : String(e)}. ${guidance}`);
   }
-  const result = DeclarativePackSchema.safeParse(parsed);
-  if (!result.success) {
-    throw new Error(`Not a valid declarative pack (${result.error.issues[0]?.message ?? 'shape mismatch'}). ${guidance}`);
+  const err = hostCore.checkDeclarativePack(parsed);
+  if (err) {
+    throw new Error(`Not a valid declarative pack (${err}). ${guidance}`);
   }
 }
 
 /** Load one pack ref in isolation to learn its name and contents. Never throws
  *  for a bad pack — the load error rides on the descriptor. */
 function probe(loadRef: string, baseRoot: string, scope: PackScope, displayRef: string): PackDescriptor {
-  const loaded = loadExtensionPacks([{ ref: loadRef, scope }], baseRoot);
+  const loaded = hostCore.loadExtensionPacks([{ ref: loadRef, scope }], baseRoot);
   if (loaded.errors.length) {
     return { name: path.basename(displayRef), scope, ref: displayRef, profiles: 0, languages: 0, rules: 0, error: loaded.errors[0] };
   }
@@ -108,7 +105,7 @@ function imagePacksDir(): string {
 
 /** Probe every pack in one server-global tier, tagging each descriptor's tier. */
 function probeTier(dir: string, tier: 'image' | 'instance'): PackDescriptor[] {
-  return discoverPacks(dir).map((full) => {
+  return hostCore.discoverPacks(dir).map((full) => {
     const d = probe(full, path.dirname(full), 'global', path.basename(full));
     d.tier = tier;
     return d;
@@ -129,7 +126,7 @@ function probeTier(dir: string, tier: 'image' | 'instance'): PackDescriptor[] {
  * operations orchestrator calls it directly after its own operations:read check.
  */
 export function storeListGlobalPacks(): PackDescriptor[] {
-  const instance = probeTier(globalPacksDir(), 'instance');
+  const instance = probeTier(hostCore.globalPacksDir(), 'instance');
   const instanceNames = new Set(instance.map((d) => d.name));
   const image = probeTier(imagePacksDir(), 'image').map((d) =>
     instanceNames.has(d.name) ? { ...d, shadowed: true } : d,
@@ -141,7 +138,7 @@ function storeInstallGlobalPack(name: string, content: string): PackDescriptor {
   assertName(name);
   assertDeclarative(content);
   // Installs write the MUTABLE instance tier only; the image layer is immutable.
-  const dir = globalPacksDir();
+  const dir = hostCore.globalPacksDir();
   const file = path.join(dir, `${name}.yaml`);
   writeFileAtomic(file, content);
   const descriptor = probe(file, dir, 'global', `${name}.yaml`);
@@ -154,10 +151,10 @@ function storeRemoveGlobalPack(name: string): void {
   // Removals touch the MUTABLE instance tier only; a pack that lives solely in
   // the immutable image layer cannot be removed here. Removing an instance pack
   // that shadowed a same-named image pack re-exposes the image pack.
-  const dir = globalPacksDir();
-  const match = discoverPacks(dir).find((ref) => stem(ref) === name || path.basename(ref) === name);
+  const dir = hostCore.globalPacksDir();
+  const match = hostCore.discoverPacks(dir).find((ref) => stem(ref) === name || path.basename(ref) === name);
   if (!match) {
-    const inImage = discoverPacks(imagePacksDir()).some(
+    const inImage = hostCore.discoverPacks(imagePacksDir()).some(
       (ref) => stem(ref) === name || path.basename(ref) === name,
     );
     throw new Error(
@@ -260,10 +257,33 @@ export function readProjectReferences(rootPath: string): ProjectPackReference {
   }
 }
 
-// ── pack_orchestrator: master-credential auth + project-scope binding ──────────
+// ── pack_orchestrator: resolver auth + project-scope binding ──────────────────
+//
+// Server-global pack management is instance configuration → INSTANCE-level
+// project:admin. Per-project install/remove require project:admin over that
+// project; the per-project listing requires project:read. The master credential
+// and the built-in admin pass via the resolver bypass.
 
-function requireAdmin(credential: string | null): void {
-  if (!authenticateMaster(credential).authenticated) throw new AdminAuthError();
+/** Authenticate the caller credential or throw (401-mapping). */
+function requirePrincipal(cfg: HostConfig, credential: string | null) {
+  const principal = authenticateCredential(cfg.dataDir, credential);
+  if (!principal.authenticated) throw new UnauthenticatedError();
+  return principal;
+}
+
+/** Require the caller's resolved capability over a scope to be yes. */
+function requireCap(
+  cfg: HostConfig,
+  credential: string | null,
+  capability: string,
+  scopeKind: 'instance' | 'project',
+  scopeId: string,
+  denial: string,
+): void {
+  const principal = requirePrincipal(cfg, credential);
+  if (authorize(cfg.dataDir, principal, capability, scopeKind, scopeId).value !== 'yes') {
+    throw new AdminAuthError(denial);
+  }
 }
 
 function boundProject(cfg: HostConfig, project: string): string {
@@ -272,28 +292,28 @@ function boundProject(cfg: HostConfig, project: string): string {
   return root;
 }
 
-export function listGlobalPacks(_cfg: HostConfig, credential: string | null): PackDescriptor[] {
-  requireAdmin(credential);
+export function listGlobalPacks(cfg: HostConfig, credential: string | null): PackDescriptor[] {
+  requireCap(cfg, credential, 'project:admin', 'instance', '', 'Forbidden — managing server-global packs requires instance-level project:admin');
   return storeListGlobalPacks();
 }
 
-export function installGlobalPack(_cfg: HostConfig, credential: string | null, name: string, content: string): PackDescriptor {
-  requireAdmin(credential);
+export function installGlobalPack(cfg: HostConfig, credential: string | null, name: string, content: string): PackDescriptor {
+  requireCap(cfg, credential, 'project:admin', 'instance', '', 'Forbidden — managing server-global packs requires instance-level project:admin');
   return storeInstallGlobalPack(name, content);
 }
 
-export function removeGlobalPack(_cfg: HostConfig, credential: string | null, name: string): void {
-  requireAdmin(credential);
+export function removeGlobalPack(cfg: HostConfig, credential: string | null, name: string): void {
+  requireCap(cfg, credential, 'project:admin', 'instance', '', 'Forbidden — managing server-global packs requires instance-level project:admin');
   storeRemoveGlobalPack(name);
 }
 
 export function listProjectPacks(cfg: HostConfig, credential: string | null, project: string): PackDescriptor[] {
-  requireAdmin(credential);
+  requireCap(cfg, credential, 'project:read', 'project', project, 'Forbidden — listing a project\'s packs requires project:read over it');
   return executeApprovedListProjectPacks(cfg, project);
 }
 
 export function installProjectPack(cfg: HostConfig, credential: string | null, project: string, name: string, content: string): PackDescriptor {
-  requireAdmin(credential);
+  requireCap(cfg, credential, 'project:admin', 'project', project, 'Forbidden — installing a project pack requires project:admin over the project');
   return executeApprovedInstallProjectPack(cfg, project, name, content);
 }
 
@@ -309,6 +329,6 @@ export function executeApprovedInstallProjectPack(cfg: HostConfig, project: stri
 }
 
 export function removeProjectPack(cfg: HostConfig, credential: string | null, project: string, name: string): void {
-  requireAdmin(credential);
+  requireCap(cfg, credential, 'project:admin', 'project', project, 'Forbidden — removing a project pack requires project:admin over the project');
   runWithProjectRoot(boundProject(cfg, project), () => storeRemoveProjectPack(name));
 }

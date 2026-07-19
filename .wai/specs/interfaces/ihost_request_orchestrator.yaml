@@ -9,17 +9,16 @@ methods:
     description: >-
       Authenticate the bearer token, resolve the authorized project root (rejecting cross-project
       access), bind the request-scoped root, then dispatch the sdd_* tool call within that scope.
-      For an ordinary scoped sdd_* tool the tool is classified as a read or a write and the
-      principal's grant for the bound project MUST carry the matching data-plane permission
-      (mcp:read for reads — sdd_get_*/sdd_validate_*; mcp:write for writes —
-      sdd_add_/sdd_update_/sdd_delete_/sdd_write_/sdd_define_/sdd_set_/sdd_initialize_/sdd_externalize_/sdd_internalize_/sdd_move_;
-      a '*' permission covers both), consulting principal.grants rather than the coarse
-      role/projects projection; a missing permission is rejected with a clear MCP error before
-      dispatch. The approval-backed self-service MCP tools and the hosted landscape discovery MCP
-      tools are dispatched to their orchestrators (already gated) instead of the scoped MCP tool
-      surface and bypass this data-plane permission gate. Appends a redacted audit event for every
-      handled data-plane tool call; append failures are recorded as server diagnostics and never
-      fail the request.
+      For an ordinary scoped sdd_* tool the tool is classified as a read (sdd_get_*/sdd_validate_*)
+      or a write (every other name — the explicit write prefixes AND any unrecognized or newly added
+      name, failing closed) and the caller's resolved permission for the matching capability
+      (project:read for reads, project:write for writes) over the bound project MUST be yes,
+      resolved through the authorization specialist; a missing permission is rejected with a clear
+      MCP error before dispatch. The execute-primary project-lifecycle MCP tools and the hosted
+      landscape discovery MCP tools are dispatched to their orchestrators (already gated) instead of
+      the scoped MCP tool surface and bypass this data-plane permission gate. Appends a redacted
+      audit event for every handled data-plane tool call; append failures are recorded as server
+      diagnostics and never fail the request.
     signature: 'handleRequest(request: HttpRequest): HttpResponse'
     returns: HttpResponse
     params:
@@ -33,4 +32,4 @@ methods:
     returns: HttpResponse
 status: complete
 createdAt: '2026-07-04T12:49:34.974Z'
-updatedAt: '2026-07-10T17:23:56.427Z'
+updatedAt: '2026-07-16T00:14:58.247Z'

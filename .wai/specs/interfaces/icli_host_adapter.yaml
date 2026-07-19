@@ -7,8 +7,8 @@ description: >-
 component: cli_host_adapter
 methods:
   - name: createProject
-    description: Forward project provisioning to the admin portal.
-    signature: 'createProject(credential: string, id: string): HostedProjectRecord'
+    description: Forward project provisioning to the admin portal (REQUIRED owner unitId).
+    signature: 'createProject(credential: string, id: string, unitId: string): HostedProjectRecord'
     returns: HostedProjectRecord
   - name: destroyProject
     description: Forward project teardown to the admin portal.
@@ -40,4 +40,4 @@ methods:
     returns: PromoteResult
 status: complete
 createdAt: '2026-07-04T12:49:25.392Z'
-updatedAt: '2026-07-04T13:06:22.786Z'
+updatedAt: '2026-07-16T00:18:56.547Z'

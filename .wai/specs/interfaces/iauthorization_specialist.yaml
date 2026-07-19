@@ -1,0 +1,43 @@
+id: iauthorization_specialist
+name: Authorization Specialist Interface
+description: >-
+  The I/O-backed authorization seam. The caller has already authenticated (holds a Principal with
+  its permissionSubject); this gathers the permission world and delegates to the pure resolver.
+  Performs no authentication and no workflow routing.
+component: authorization_specialist
+methods:
+  - name: authorize
+    description: >-
+      Gather the permission world (assignments, roles, organization units, placements) and resolve
+      the principal's effective permission (yes/approval/no) for the capability at the target scope
+      through the permission resolver, using the principal's permissionSubject. Consumers branch on
+      the returned value: yes acts, approval gates, no denies.
+    signature: >-
+      authorize(principal: Principal, capability: string, scopeKind: string, scopeId: string):
+      EffectivePermission
+    returns: EffectivePermission
+    params:
+      - name: principal
+        type: Principal
+      - name: capability
+        type: string
+      - name: scopeKind
+        type: string
+      - name: scopeId
+        type: string
+  - name: visibleScopes
+    description: >-
+      Gather the permission world and compute the scopes on which the principal's effective
+      permission for the capability is yes or approval (actionable), plus their ancestor breadcrumb
+      (context) — for scope-filtered control-plane listings and the hierarchical UI. Delegates to
+      the resolver's resolveVisibleScopes.
+    signature: 'visibleScopes(principal: Principal, capability: string): VisibleScope[]'
+    returns: VisibleScope[]
+    params:
+      - name: principal
+        type: Principal
+      - name: capability
+        type: string
+status: complete
+createdAt: '2026-07-15T21:31:59.946Z'
+updatedAt: '2026-07-15T22:22:07.088Z'

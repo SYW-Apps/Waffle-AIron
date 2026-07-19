@@ -33,7 +33,10 @@
   },
   "scripts": {
     "dev": "tsx src/cli/index.ts",
-    "build": "tsup && node -e \"const fs=require('fs'); fs.cpSync('src/templates','dist/templates',{recursive:true});\"",
+    "build": "tsup && node -e \"const fs=require('fs'); fs.cpSync('src/templates','dist/templates',{recursive:true});\" && node scripts/embed-web.mjs",
+    "gen:canvas": "node scripts/gen-canvas-engine.mjs",
+    "build:web": "node scripts/gen-canvas-engine.mjs && npm --prefix web install --no-audit --no-fund && npm --prefix web run build",
+    "build:all": "npm run build:web && npm run build",
     "build:watch": "tsup --watch",
     "build:binary": "npm run build && pkg dist/cli/index.js --config package.json --target node20-linux-x64,node20-win-x64,node20-macos-x64 --output wairon --compress GZip",
     "typecheck": "tsc --noEmit",
@@ -44,7 +47,8 @@
   },
   "pkg": {
     "assets": [
-      "dist/templates/**/*"
+      "dist/templates/**/*",
+      "dist/webapp.html"
     ],
     "scripts": [],
     "outputPath": "bin"
@@ -56,7 +60,8 @@
     "inquirer": "^8.2.6",
     "js-yaml": "^4.1.0",
     "ora": "^5.4.1",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "swagger-ui-dist": "^5.32.9"
   },
   "devDependencies": {
     "@types/inquirer": "^8.2.10",

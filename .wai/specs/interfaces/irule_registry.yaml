@@ -1,0 +1,22 @@
+id: irule_registry
+name: Rule Registry Interface
+description: Write path that populates the rule store with the built-in rules and any programmatic pack rules.
+component: rule_registry
+methods:
+  - name: registerBuiltinRules
+    description: Seed the built-in SDD conformance rule set into the store, in canonical run order.
+    signature: 'registerBuiltinRules(): void'
+    returns: void
+    params: []
+  - name: registerPackRules
+    description: >-
+      Register programmatic pack rules after the built-ins (so a later pack's rules run last); each
+      is validated to be rule-shaped before it is added.
+    signature: 'registerPackRules(packRules: SddRule[]): void'
+    returns: void
+    params:
+      - name: packRules
+        type: SddRule[]
+status: complete
+createdAt: '2026-07-14T19:17:14.262Z'
+updatedAt: '2026-07-14T20:23:49.332Z'

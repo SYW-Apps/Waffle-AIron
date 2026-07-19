@@ -53,6 +53,42 @@ methods:
     params:
       - name: level
         type: number
+  - name: globalPacksDir
+    description: >-
+      Resolve the server-global instance packs directory (WAIRON_PACKS_DIR), forwarded to the core
+      extension loader.
+    signature: 'globalPacksDir(): string'
+    returns: string
+    params: []
+  - name: discoverPacks
+    description: >-
+      List the pack refs in a directory (sorted, deterministic), forwarded to the core extension
+      loader.
+    signature: 'discoverPacks(dir: string): string[]'
+    returns: string[]
+    params:
+      - name: dir
+        type: string
+  - name: loadExtensionPacks
+    description: >-
+      Load the given pack refs against a project root into a LoadedExtensions, forwarded to the core
+      extension loader (used by the hosted pack store to probe a pack in isolation).
+    signature: 'loadExtensionPacks(refs: Json, projectRoot: string): LoadedExtensions'
+    returns: LoadedExtensions
+    params:
+      - name: refs
+        type: Json
+      - name: projectRoot
+        type: string
+  - name: checkDeclarativePack
+    description: >-
+      Validate a parsed manifest against the declarative-pack schema; returns the first error
+      message, or null when it is a valid declarative pack.
+    signature: 'checkDeclarativePack(manifest: Json): string | null'
+    returns: string | null
+    params:
+      - name: manifest
+        type: Json
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-07-11T11:32:18.805Z'
+updatedAt: '2026-07-15T06:52:59.636Z'

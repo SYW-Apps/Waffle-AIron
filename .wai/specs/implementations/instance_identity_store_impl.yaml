@@ -1,0 +1,23 @@
+id: instance_identity_store_impl
+name: Instance Identity Store Implementation
+description: >-
+  Authoritative in-memory singleton InstanceIdentity record loaded from and swapped as instance.json
+  under the hosted data root.
+contract: iinstance_identity_store
+sourcePath: src/server/instance.ts
+methods:
+  - name: load
+    narrative: []
+    intent: >-
+      Read the persisted instance identity from instance.json under the hosted data root and hold it
+      as the authoritative in-memory record; an absent file resolves to null (the instance has never
+      been seeded) without creating anything.
+  - name: replace
+    narrative: []
+    intent: >-
+      Swap the in-memory record to the supplied identity; the registry has already persisted it
+      durably.
+detail: intent
+status: complete
+createdAt: '2026-07-16T00:24:37.545Z'
+updatedAt: '2026-07-16T07:27:54.809Z'

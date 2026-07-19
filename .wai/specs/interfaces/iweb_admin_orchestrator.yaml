@@ -45,19 +45,6 @@ methods:
         type: string
       - name: status
         type: string
-  - name: replaceUserGrants
-    description: >-
-      Forward to identity_orchestrator.replaceUserGrants with the session as the credential;
-      replaces a user's grants wholesale, privilege-escalation-guarded upstream.
-    signature: 'replaceUserGrants(sessionId: string, userId: string, grants: ProjectGrant[]): HostedUserRecord'
-    returns: HostedUserRecord
-    params:
-      - name: sessionId
-        type: string
-      - name: userId
-        type: string
-      - name: grants
-        type: ProjectGrant[]
   - name: listIdentityProviders
     description: >-
       Forward to identity_orchestrator.listIdentityProviders with the session as the credential;
@@ -181,6 +168,138 @@ methods:
     params:
       - name: sessionId
         type: string
+  - name: removeUnit
+    description: >-
+      Resolve the session to a Principal, require an instance-wide admin grant, then dispose of the
+      organization unit per the UnitDisposition: migrate/absorb/alternative reparent its child units
+      and re-point its project placements onto the destination (an existing target unit, the parent,
+      or a freshly created replacement sibling), applying the returned id remap to placement and
+      exposeTo references, then delete the emptied unit; cascade deletes the whole subtree and its
+      placements. Appends a best-effort org.unit.remove (security) audit event.
+    signature: 'removeUnit(sessionId: string, unitId: string, disposition: UnitDisposition): void'
+    returns: void
+    params:
+      - name: sessionId
+        type: string
+      - name: unitId
+        type: string
+      - name: disposition
+        type: UnitDisposition
+  - name: listRoles
+    description: >-
+      Forward to permission_admin_orchestrator.listRoles with the session as the credential
+      (instance-admin only upstream).
+    signature: 'listRoles(sessionId: string): Role[]'
+    returns: Role[]
+    params:
+      - name: sessionId
+        type: string
+  - name: createRole
+    description: Forward to permission_admin_orchestrator.createRole with the session as the credential.
+    signature: 'createRole(sessionId: string, role: Role): Role'
+    returns: Role
+    params:
+      - name: sessionId
+        type: string
+      - name: role
+        type: Role
+  - name: updateRole
+    description: Forward to permission_admin_orchestrator.updateRole with the session as the credential.
+    signature: 'updateRole(sessionId: string, role: Role): Role'
+    returns: Role
+    params:
+      - name: sessionId
+        type: string
+      - name: role
+        type: Role
+  - name: deleteRole
+    description: Forward to permission_admin_orchestrator.deleteRole with the session as the credential.
+    signature: 'deleteRole(sessionId: string, roleId: string): void'
+    returns: void
+    params:
+      - name: sessionId
+        type: string
+      - name: roleId
+        type: string
+  - name: listAssignments
+    description: >-
+      Forward to permission_admin_orchestrator.listAssignments with the session as the credential
+      (project:admin over the scope upstream).
+    signature: >-
+      listAssignments(sessionId: string, scopeKind: string, scopeId: string, subjectKind: string,
+      subjectId: string): PermissionAssignment[]
+    returns: PermissionAssignment[]
+    params:
+      - name: sessionId
+        type: string
+      - name: scopeKind
+        type: string
+        optional: true
+      - name: scopeId
+        type: string
+        optional: true
+      - name: subjectKind
+        type: string
+        optional: true
+      - name: subjectId
+        type: string
+        optional: true
+  - name: setAssignment
+    description: Forward to permission_admin_orchestrator.setAssignment with the session as the credential.
+    signature: 'setAssignment(sessionId: string, assignment: PermissionAssignment): PermissionAssignment'
+    returns: PermissionAssignment
+    params:
+      - name: sessionId
+        type: string
+      - name: assignment
+        type: PermissionAssignment
+  - name: removeAssignment
+    description: Forward to permission_admin_orchestrator.removeAssignment with the session as the credential.
+    signature: 'removeAssignment(sessionId: string, assignmentId: string): void'
+    returns: void
+    params:
+      - name: sessionId
+        type: string
+      - name: assignmentId
+        type: string
+  - name: bindRole
+    description: Forward to permission_admin_orchestrator.bindRole with the session as the credential.
+    signature: >-
+      bindRole(sessionId: string, userId: string, roleId: string, scopeKind: string, scopeId:
+      string): HostedUserRecord
+    returns: HostedUserRecord
+    params:
+      - name: sessionId
+        type: string
+      - name: userId
+        type: string
+      - name: roleId
+        type: string
+      - name: scopeKind
+        type: string
+        optional: true
+      - name: scopeId
+        type: string
+        optional: true
+  - name: unbindRole
+    description: Forward to permission_admin_orchestrator.unbindRole with the session as the credential.
+    signature: >-
+      unbindRole(sessionId: string, userId: string, roleId: string, scopeKind: string, scopeId:
+      string): HostedUserRecord
+    returns: HostedUserRecord
+    params:
+      - name: sessionId
+        type: string
+      - name: userId
+        type: string
+      - name: roleId
+        type: string
+      - name: scopeKind
+        type: string
+        optional: true
+      - name: scopeId
+        type: string
+        optional: true
 status: complete
 createdAt: '2026-07-13T18:27:58.377Z'
-updatedAt: '2026-07-14T12:31:03.458Z'
+updatedAt: '2026-07-15T22:49:34.435Z'

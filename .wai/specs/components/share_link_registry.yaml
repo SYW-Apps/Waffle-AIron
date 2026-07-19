@@ -1,0 +1,15 @@
+id: share_link_registry
+name: Share Link Registry
+description: >-
+  Write path for share-link records: create (stamp id/createdAt, persist the salted token hash —
+  never the raw token), update (toggle enabled, change expiry, download permissions, or the
+  embedding allowlist), and remove. Carries no authorization — the share admin orchestrator gates
+  every write against the share:create capability.
+subsystem: sdd_host
+componentType: Registry
+owns: []
+dependsOn:
+  - share_link_store
+status: complete
+createdAt: '2026-07-17T22:09:10.386Z'
+updatedAt: '2026-07-18T09:37:23.042Z'

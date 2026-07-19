@@ -1,0 +1,24 @@
+id: iinstance_identity_store
+name: Instance Identity Store Interface
+description: >-
+  Private contract for the authoritative in-memory singleton InstanceIdentity record, loaded from
+  and swapped as one backing file (instance.json under the hosted data root).
+component: instance_identity_store
+methods:
+  - name: load
+    description: >-
+      Load the persisted instance identity from instance.json under the hosted data root and hold it
+      as the authoritative in-memory record; resolves null when the instance has never been seeded.
+    signature: 'load(): InstanceIdentity | null'
+    returns: InstanceIdentity | null
+    params: []
+  - name: replace
+    description: Swap the in-memory record to the supplied identity after the registry has persisted it.
+    signature: 'replace(identity: InstanceIdentity): void'
+    returns: void
+    params:
+      - name: identity
+        type: InstanceIdentity
+status: complete
+createdAt: '2026-07-16T00:24:07.724Z'
+updatedAt: '2026-07-16T07:27:54.555Z'

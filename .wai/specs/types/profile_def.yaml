@@ -1,0 +1,36 @@
+kind: value-object
+id: profile_def
+name: ProfileDef
+description: >-
+  A pack-defined architectural profile. family opts into the built-in stereotype fencing; the
+  explicit forbidden/discouraged stereotype lists carry the profile's own doctrine with a stated
+  reason. Registered under a profile id and validated against subsystem/project profiles
+  (UNKNOWN_PROFILE for unregistered names).
+fields:
+  - name: family
+    type: string
+    description: backend-like | frontend-like | neutral — opts into built-in stereotype fencing.
+    optional: false
+  - name: forbiddenStereotypes
+    type: StereotypeConstraint[]
+    description: Stereotypes this profile forbids (PROFILE_FORBIDDEN_STEREOTYPE, error).
+    optional: false
+  - name: discouragedStereotypes
+    type: StereotypeConstraint[]
+    description: Stereotypes this profile discourages (PROFILE_DISCOURAGED_STEREOTYPE, warning).
+    optional: false
+  - name: rules
+    type: Json
+    description: Optional partial RulesConfig overrides (rule severities etc.) the profile applies.
+    optional: true
+  - name: allowedEdges
+    type: string[]
+    description: >-
+      Edge deltas (ALLOW half of the profile-scoped dependency matrix): {from[], to[], reason}
+      entries licensing intra-subsystem dependsOn edges the builtin stereotype matrix refuses, for
+      components governed by this profile. Cross-subsystem boundary rules and pattern containment
+      are never relaxable; the DENY half is a forbid-edge declarative assertion.
+    optional: false
+methods: []
+createdAt: '2026-07-14T18:56:48.916Z'
+updatedAt: '2026-07-18T23:05:10.746Z'

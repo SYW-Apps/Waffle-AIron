@@ -2,6 +2,7 @@ node_modules/
 dist/
 *.js.map
 *.d.ts.map
+*.tsbuildinfo
 coverage/
 .env
 .env.local

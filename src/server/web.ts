@@ -1,26 +1,27 @@
 import * as crypto from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
 import type { IncomingMessage, ServerResponse } from 'http';
-import { signSsoState, verifySsoState, authenticateSession, verifyBuiltinAdmin } from './auth.js';
+import { signSsoState, verifySsoState, authenticateSession, verifyBuiltinAdmin, localDevSubject } from './auth.js';
 import { resolveEndpoints, buildAuthorizationUrl, exchangeCode, resolveSubject, resolveGroups } from './idp.js';
 import {
   resolveEnabledProvider,
   tryAppendAudit,
   buildSsoAuditEvent,
-  applySsoAdminBundle,
   isInAdminGroup,
-  isSuperAdminGrant,
-  ssoAdminBundleGrant,
   ANONYMOUS_SSO_ACTOR,
   type SsoStatePayload,
 } from './identity.js';
+import { SSO_ADMIN_ROLE_ID } from './types.js';
 import * as webadmin from './webadmin.js';
 import * as webproject from './webproject.js';
+import * as projectops from './projectops.js';
 import { listIdentityProviderRecords } from './policy.js';
 import { assertAllowedRedirectUri } from './idp.js';
 import { getHealthReport, getUsage } from './operations.js';
-import { listPendingRequests, decideRequest } from './selfservice.js';
+import { listPendingRequests, decideRequest } from './projectlifecycle.js';
 import { UnauthenticatedError, ForbiddenError, AdminAuthError } from './errors.js';
-import { findUserByExternalSubject, upsertUser, replaceUserGrants as repoReplaceUserGrants } from './users.js';
+import { findUserByExternalSubject, upsertUser } from './users.js';
 import {
   createWebSession,
   removeWebSession,
@@ -29,20 +30,32 @@ import {
   listWebSessionsBySubject,
 } from './websessions.js';
 import { resolveProjectRoot } from './projects.js';
+import * as shareadmin from './shareadmin.js';
 import { runWithProjectRoot } from '../utils/fs.js';
-import { hostCore, validateProjectAsComplete } from './adapters.js';
+import { hostCore, hostSurfaces, validateProjectAsComplete } from './adapters.js';
+import { swaggerUiPage } from './swagger.js';
 import { generateLandscape } from './landscape.js';
 import { sendJson } from './httpio.js';
 import type { ValidationIssue } from '../core/validation.js';
 import type {
   ApprovalDecision,
+  AuditQuery,
+  GitBackingBinding,
   HostConfig,
   HostedUserRecord,
+  HostExposurePolicy,
   IdentityProviderConfig,
+  InstancePackPolicy,
   LandscapeGraphModel,
   OrganizationUnitRecord,
+  PermissionAssignment,
   PrincipalSubject,
-  ProjectGrant,
+  ProjectProfileSelection,
+  Role,
+  ScopeKind,
+  ShareLinkInput,
+  ShareLinkUpdate,
+  UnitDisposition,
   WebContext,
   WebGraphModel,
   WebGraphNode,
@@ -84,9 +97,6 @@ import type {
  *  bound a stolen cookie. The auth specialist rejects a session past its expiry. */
 const WEB_SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
 
-/** The write permissions that make a caller a project author in the web client. */
-const WRITE_PERMISSIONS = ['mcp:write', 'project:create'];
-
 // ── Local developer server (`wairon dev`) conventions ────────────────────────
 //
 // The single-project dev server auto-signs a synthetic local-developer identity
@@ -94,9 +104,13 @@ const WRITE_PERMISSIONS = ['mcp:write', 'project:create'];
 // leaked dev session can only touch that one local tree. These constants are the
 // sole source of those conventions (subject id, project id, session lifetime).
 
-/** The synthetic identity behind the local dev session: a service principal issued
- *  locally. Its userId is the subject key startDevSession lists/reuses by. */
-const DEV_SUBJECT: PrincipalSubject = { userId: 'local-dev', kind: 'service', issuer: 'local' };
+/** The synthetic identity behind the local dev session: the PERSISTED
+ *  boot-reserved local-developer UUID, resolved through the auth specialist
+ *  (which owns built-in subject recognition — see auth.localDevSubject; it
+ *  throws when the instance identity has never been seeded). */
+function devSubject(cfg: HostConfig): PrincipalSubject {
+  return localDevSubject(cfg.dataDir);
+}
 
 /** The fixed hosted-project id the dev server registers the cwd under. */
 const DEV_PROJECT_ID = 'local';
@@ -174,11 +188,13 @@ export async function startSignIn(
  * Complete a browser SSO sign-in: verify the signed state (tampered/expired is
  * rejected), resolve the bound enabled provider, exchange the code and resolve the
  * external subject, look up the hosted user by issuer + external subject, provision
- * a first-login active user with EMPTY grants when absent, reject re-login for an
- * existing deactivated user before creating a session, create a browser session
- * bound to the resolved subject and the user's CURRENT grants (prior sessions left
- * intact — multi-device), append a best-effort web.signin (security) audit event,
- * and return the new session id. Unauthenticated by nature — no caller credential.
+ * a first-login active user (binding the built-in sso-admin role when the verified
+ * groups match adminGroupClaims) when absent, reject re-login for an existing
+ * deactivated user before creating a session, refresh the sso-admin role binding
+ * against the verified membership, and create a permission-free browser session
+ * bound to the resolved subject (prior sessions left intact — multi-device);
+ * append a best-effort web.signin (security) audit event and return the new
+ * session id. Unauthenticated by nature — no caller credential.
  * `expectedNonce` is the value of the browser's SSO-nonce cookie: it MUST equal
  * the nonce inside the signed state, proving the completing browser is the one
  * that started the flow (login-CSRF defense). Async: exchangeCode does provider
@@ -220,9 +236,12 @@ export async function completeSignIn(cfg: HostConfig, state: string, code: strin
       id: subject.userId,
       subject,
       status: 'active',
-      // first-login: the enumerated SSO-admin bundle (never *:*) when the verified
-      // groups match adminGroupClaims, otherwise empty — an admin assigns grants.
-      grants: inAdminGroup ? [ssoAdminBundleGrant()] : [],
+      // first-login: bind the built-in sso-admin ROLE when the verified groups
+      // match adminGroupClaims, otherwise no bindings — an admin assigns roles
+      // and grid assignments later. Permissions never live on the user record;
+      // the role resolves through the permission resolver (project:admin +
+      // project:create @instance, OVERRIDABLE — never the instance-admin bypass).
+      roleBindings: inAdminGroup ? [{ roleId: SSO_ADMIN_ROLE_ID }] : [],
       createdAt: new Date().toISOString(),
     };
     user = upsertUser(cfg.dataDir, provisioned); // step 15
@@ -236,24 +255,30 @@ export async function completeSignIn(cfg: HostConfig, state: string, code: strin
     throw new ForbiddenError('deactivated user may not sign in');
   }
 
-  // steps 18–19: refresh the stored grants when they disagree with the admin-group
-  // membership — entering the group appends the enumerated bundle, leaving it
-  // drops the bundle on this login (server-driven, straight through the repository;
-  // the bundle is enumerated, so the *:* hard reservation is preserved).
-  const applied = applySsoAdminBundle(user.grants, inAdminGroup);
-  if (applied.changed) {
-    user = repoReplaceUserGrants(cfg.dataDir, user.id, applied.grants);
+  // steps 18–19: refresh the sso-admin ROLE BINDING when it disagrees with the
+  // verified admin-group membership — entering the group binds the role, leaving
+  // it unbinds it on this login (server-driven, straight through the repository).
+  const bindings = user.roleBindings ?? [];
+  const hasSsoAdmin = bindings.some((b) => b.roleId === SSO_ADMIN_ROLE_ID);
+  if (hasSsoAdmin !== inAdminGroup) {
+    user = upsertUser(cfg.dataDir, {
+      ...user,
+      roleBindings: inAdminGroup
+        ? [...bindings, { roleId: SSO_ADMIN_ROLE_ID }]
+        : bindings.filter((b) => b.roleId !== SSO_ADMIN_ROLE_ID),
+    });
   }
 
   // Build the new WebSession (the repository mints the reserved-prefix id and
-  // stamps createdAt/lastSeenAt). Grants = the user's CURRENT grants with any
-  // reserved instance-wide super-admin (*:*) grant filtered out — *:* is reserved
-  // to the built-in admin account, so no SSO login can ever mint a session carrying
-  // it. Prior sessions are LEFT INTACT so one principal may hold concurrent sessions.
+  // stamps createdAt/lastSeenAt). The session stores NO permissions and no
+  // narrowing ('*'): the auth specialist resolves the subject's permissionSubject
+  // (roleBindings + instanceAdmin) LIVE on every request, so revocations take
+  // effect immediately. Prior sessions are LEFT INTACT so one principal may hold
+  // concurrent sessions.
   const session: WebSession = {
     id: '', // web_session_repository mints a ws_-prefixed id
     subject: user.subject,
-    grants: user.grants.filter((g) => !isSuperAdminGrant(g)),
+    projects: ['*'],
     createdAt: '', // stamped by the registry
     expiresAt: new Date(Date.now() + WEB_SESSION_TTL_MS).toISOString(),
     providerId,
@@ -330,12 +355,14 @@ export function signInWithPassword(cfg: HostConfig, user: string, password: stri
     throw new UnauthenticatedError();
   }
 
-  // step 7: success clears the throttle; the session carries the ONLY *:* grant.
+  // step 7: success clears the throttle. The session stores NO permissions —
+  // the subject IS the persisted built-in super-admin, so the auth specialist
+  // resolves instanceAdmin (the resolver bypass) live at authentication.
   loginThrottle.delete(key);
   const session: WebSession = {
     id: '', // web_session_repository mints a ws_-prefixed id
     subject,
-    grants: [{ projectId: '*', permissions: ['*'] }],
+    projects: ['*'],
     createdAt: '', // stamped by the registry
     expiresAt: new Date(now + WEB_SESSION_TTL_MS).toISOString(),
   };
@@ -365,8 +392,7 @@ export function signOut(cfg: HostConfig, sessionId: string): void {
 /**
  * Resolve the session to a Principal via the single auth authority's session
  * bridge (an expired/absent session is rejected), record activity by touching
- * lastSeenAt to now, then derive the capability flags and assemble the WebContext.
- * Reads only; not audited.
+ * lastSeenAt to now, and assemble the slim WebContext. Reads only; not audited.
  */
 export function getCurrentContext(cfg: HostConfig, sessionId: string): WebContext {
   const principal = authenticateSession(cfg.dataDir, sessionId); // step 1
@@ -374,37 +400,16 @@ export function getCurrentContext(cfg: HostConfig, sessionId: string): WebContex
 
   touchWebSession(cfg.dataDir, sessionId, new Date().toISOString()); // step 2
 
-  // step 3: derive the capability flags from the principal's grants.
-  const grants = principal.grants ?? [];
-  // Instance admin = a genuine '*' grant, not a unit-scoped '*'+orgUnitId one.
-  const isAdmin = grants.some((g) => g.projectId === '*' && !g.orgUnitId);
-  // A write permission — or the '*' wildcard (which the permission model treats as
-  // covering every permission) — makes the caller a project author.
-  const canWriteProjects = grants.some(
-    (g) => g.permissions.includes('*') || WRITE_PERMISSIONS.some((p) => g.permissions.includes(p)),
-  );
-  // Union of the projects NAMED in the caller's grants and the projects their
-  // RESOLVED, org-unit-aware scope surfaces. Deriving this from named ids alone
-  // left a super-admin ('*' grant, no named ids) or a unit admin ('*'+orgUnitId)
-  // with an EMPTY selector; the resolved scope adds the actual project records
-  // they can read (all, or the unit subtree). Named ids keep dev mode's single
-  // 'local' project (not a hosted record) and any specifically-granted project.
-  const namedProjectIds = grants.filter((g) => g.projectId !== '*').map((g) => g.projectId);
-  const scopedProjectIds = webproject.listProjects(cfg, sessionId).map((r) => r.id);
-  const visibleProjectIds = [...new Set([...namedProjectIds, ...scopedProjectIds])];
-  const visibleUnitIds = [
-    ...new Set(grants.filter((g) => g.orgUnitId !== undefined && g.orgUnitId !== '').map((g) => g.orgUnitId as string)),
-  ];
-
+  // step 3: the coarse instance-admin flag comes from the resolved permission
+  // subject (the env-anchored super-admin / master / devMode subject — the
+  // resolver bypass). The context carries NO permission projections: the client
+  // lists projects via /web/projects (resolver-filtered server-side) and drives
+  // delegated/SSO admin chrome from its project:admin visible scopes.
   return {
     subject: principal.subject ?? { userId: principal.tokenId, kind: 'service', issuer: 'local' },
-    grants,
-    isAdmin,
-    canWriteProjects,
-    visibleProjectIds,
-    visibleUnitIds,
+    isAdmin: principal.permissionSubject?.instanceAdmin === true,
     // local signals the reused client to hide the tenancy/login chrome. It is the
-    // server posture (cfg.devMode), never a session/grant property — only the local
+    // server posture (cfg.devMode), never a session property — only the local
     // developer server sets it, so the hosted UI always sees local=false.
     local: !!cfg.devMode,
   }; // step 4
@@ -414,10 +419,11 @@ export function getCurrentContext(cfg: HostConfig, sessionId: string): WebContex
  * Mint (or reuse) the local-developer session for the single-project dev server and
  * return its id. REFUSED unless the server is in local developer mode (cfg.devMode)
  * — this is the ONLY unauthenticated session-minting path and it exists solely for
- * `wairon dev` (loopback, auth off). The session is bound to a synthetic
- * local-developer subject with a grant on the ONE local project (never an
- * instance-wide '*' grant), so a leaked dev session is scoped to that one local
- * project. Reuses an existing dev session rather than churning the store on every
+ * `wairon dev` (loopback, auth off). The session is bound to the persisted
+ * boot-reserved local-developer subject, narrowed to the ONE local project; it
+ * carries NO permissions of its own — the auth specialist resolves THIS subject's
+ * permissionSubject (instanceAdmin = full local access) live at authentication.
+ * Reuses an existing dev session rather than churning the store on every
  * cookieless hit.
  */
 export function startDevSession(cfg: HostConfig): string {
@@ -427,19 +433,21 @@ export function startDevSession(cfg: HostConfig): string {
   }
 
   // step 3: list existing sessions for the synthetic local-developer subject.
-  const existing = listWebSessionsBySubject(cfg.dataDir, DEV_SUBJECT.userId);
+  const dev = devSubject(cfg);
+  const existing = listWebSessionsBySubject(cfg.dataDir, dev.userId);
 
   // steps 4–5: reuse an existing dev session (no churn).
   if (existing.length > 0) {
     return existing[0].id;
   }
 
-  // step 6: build a new session bound to the local-developer subject with a single
-  // PROJECT-SCOPED grant on the one local project (never instance-wide '*').
+  // step 6: build a new session bound to the local-developer subject, narrowed to
+  // the one local project (never instance-wide '*'); the session stores NO
+  // permissions — authentication resolves them live from the subject identity.
   const session: WebSession = {
     id: '', // web_session_repository mints a ws_-prefixed id
-    subject: DEV_SUBJECT,
-    grants: [{ projectId: DEV_PROJECT_ID, permissions: ['mcp:read', 'mcp:write'] }],
+    subject: dev,
+    projects: [DEV_PROJECT_ID],
     createdAt: '', // stamped by the registry
     expiresAt: new Date(Date.now() + DEV_SESSION_TTL_MS).toISOString(),
   };
@@ -591,6 +599,47 @@ export function getWebProjectCanvas(cfg: HostConfig, sessionId: string, projectI
 }
 
 /**
+ * The full CanvasModel (data, not HTML) for one authorized project — the JSON
+ * sibling of getWebProjectCanvas. Same scoped authorization: authenticate the
+ * session, confirm the project is in the caller's resolved mcp:read set (cross-
+ * project → Forbidden), bind its isolated root, and build the model over the
+ * bound tree. Consumed by the web app's in-React canvas renderer so it mounts the
+ * shared renderer directly instead of iframing the static HTML.
+ */
+export function getWebProjectCanvasModel(cfg: HostConfig, sessionId: string, projectId: string): unknown {
+  const principal = authenticateSession(cfg.dataDir, sessionId);
+  if (!principal.authenticated) throw new UnauthenticatedError();
+  if (!webproject.listProjects(cfg, sessionId).some((r) => r.id === projectId)) {
+    throw new ForbiddenError('project not authorized or unknown');
+  }
+  const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
+  if (!root) {
+    throw new ForbiddenError('project not authorized or unknown');
+  }
+  return runWithProjectRoot(root, () => hostCore.buildCanvasDataModel());
+}
+
+/**
+ * An interactive Swagger UI page for one authorized project's public surface.
+ * Same scoped authorization as the canvas. The OWNER sees the FULL surface
+ * (audience 'project' ceiling — every gateway entry), unlike a public share link,
+ * which projects only the external surface.
+ */
+export function getWebProjectOpenApi(cfg: HostConfig, sessionId: string, projectId: string): string {
+  const principal = authenticateSession(cfg.dataDir, sessionId);
+  if (!principal.authenticated) throw new UnauthenticatedError();
+  if (!webproject.listProjects(cfg, sessionId).some((r) => r.id === projectId)) {
+    throw new ForbiddenError('project not authorized or unknown');
+  }
+  const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
+  if (!root) throw new ForbiddenError('project not authorized or unknown');
+  const result = runWithProjectRoot(root, () => hostSurfaces.exportBoundSurface('project', 'openapi')) as {
+    rendered?: string;
+  };
+  return swaggerUiPage(result.rendered ?? '{}', projectId);
+}
+
+/**
  * Reshape an already-scoped LandscapeGraphModel into a level-of-detail
  * WebGraphModel: orgUnit → kind 'unit' at level 0 (carrying its parent unit as
  * parentId, derived from the hierarchy edges), project → kind 'project' at level 0,
@@ -626,6 +675,8 @@ function reshapeLandscapeGraph(model: LandscapeGraphModel, level: number): WebGr
     const node: WebGraphNode = { id: n.id, label: n.label, kind, level: nodeLevel };
     if (n.projectId !== undefined) node.projectId = n.projectId;
     if (n.status !== undefined) node.status = n.status;
+    // Carry actionability through: a breadcrumb ancestor renders read-only.
+    if (n.actionable !== undefined) node.actionable = n.actionable;
     const parentId = parentOf.get(n.id);
     if (parentId !== undefined) node.parentId = parentId;
     nodes.push(node);
@@ -777,7 +828,44 @@ function nonceMatches(a: string | null, b: string | null): boolean {
  * picker, no account menu) and the single local project's canvas fills the
  * viewport with no chrome.
  */
-export function serveApp(_path: string): string {
+/**
+ * Locate the built, self-contained React web UI (dist/webapp.html, produced by
+ * `npm run build:web` + scripts/embed-web.mjs) and return its HTML, or null when
+ * it is not present. Resolved from __dirname with the same candidate-path pattern
+ * the canvas templates use, so it works from the bundled dist entry, the CLI
+ * entry, and `tsx` dev (reading web/dist directly). A cheap read-through — the
+ * app document is fetched once per navigation, so no caching is warranted.
+ */
+function loadReactBundle(): string | null {
+  const candidates = [
+    path.resolve(__dirname, 'webapp.html'), // dist/index.js -> dist/webapp.html
+    path.resolve(__dirname, '..', 'webapp.html'), // dist/cli/index.js -> dist/webapp.html
+    path.resolve(__dirname, '..', '..', 'web', 'dist', 'index.html'), // tsx dev: src/server -> web/dist
+  ];
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate)) return fs.readFileSync(candidate, 'utf8');
+    } catch {
+      /* try the next candidate */
+    }
+  }
+  return null;
+}
+
+/**
+ * Serve the web application document. Prefers the built React single-page bundle
+ * (dist/webapp.html); during the migration, when that bundle is absent it falls
+ * back to the legacy hand-written shell so the UI is never broken. The React app
+ * is route-agnostic (BrowserRouter reads window.location), so the same document
+ * is returned for every /web app path — the SPA renders the matching view.
+ */
+export function serveApp(pathname: string): string {
+  const bundle = loadReactBundle();
+  if (bundle) return bundle;
+  return serveLegacyApp(pathname);
+}
+
+export function serveLegacyApp(_path: string): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -905,7 +993,33 @@ nav.tabs button.active { background:var(--hover-bg); color:var(--accent); }
 
 /* ---- admin view ---- */
 .admin-wrap { height:100%; display:flex; flex-direction:column; }
-.subtabs { display:flex; gap:2px; padding:8px 14px; border-bottom:1px solid var(--chrome-border); background:var(--chrome); flex:0 0 auto; }
+.subtabs { display:flex; gap:2px; padding:8px 14px; border-bottom:1px solid var(--chrome-border); background:var(--chrome); flex:0 0 auto; overflow-x:auto; flex-wrap:nowrap; scrollbar-width:thin; }
+.subtabs button { flex:0 0 auto; white-space:nowrap; }
+nav.tabs { overflow-x:auto; flex-wrap:nowrap; }
+nav.tabs button { flex:0 0 auto; white-space:nowrap; }
+/* Responsive button-group overflow: any .btnrow that is too narrow scrolls
+   horizontally instead of hiding buttons off the right edge (the overflow bug). */
+.btnrow { display:flex; gap:6px; overflow-x:auto; flex-wrap:nowrap; scrollbar-width:thin; }
+.btnrow > * { flex:0 0 auto; white-space:nowrap; }
+/* Environment hierarchy tree (root → orgs → units → projects). */
+ul.envtree { list-style:none; margin:0; padding:0 0 0 18px; }
+ul.envtree.envtree { }
+.envnode { margin:1px 0; }
+.envrow { display:flex; align-items:center; gap:7px; padding:5px 8px; border-radius:8px; }
+.envrow:hover { background:var(--hover-bg); }
+.envnode.breadcrumb > .envrow { opacity:0.6; }
+.envtwist { width:14px; text-align:center; color:var(--dim); cursor:pointer; user-select:none; font-size:11px; }
+.envicon { color:var(--dim); font-size:11px; }
+.envlabel { font-size:13px; font-weight:600; cursor:pointer; }
+.envnode[data-kind="unit"] > .envrow .envlabel { cursor:default; }
+.envkind { font-size:10.5px; color:var(--dim); text-transform:uppercase; letter-spacing:.04em; }
+.envkids { margin-left:4px; border-left:1px solid var(--chrome-border); }
+/* Per-project ops tabs — the SAME look as the admin subtabs, with a clear
+   active state (the previous plain buttons gave no current-tab feedback). */
+.optabs { display:flex; gap:2px; margin-bottom:8px; overflow-x:auto; flex-wrap:nowrap; scrollbar-width:thin; border-bottom:1px solid var(--chrome-border); padding-bottom:6px; }
+.optabs button { flex:0 0 auto; white-space:nowrap; border:1px solid transparent; background:transparent; color:var(--dim); padding:6px 12px; border-radius:8px; cursor:pointer; font-size:12px; font-weight:600; }
+.optabs button:hover { background:var(--hover-bg); color:var(--ink); }
+.optabs button.active { background:var(--hover-bg); color:var(--accent); border-color:var(--chrome-border); }
 .subtabs button { border:1px solid transparent; background:transparent; color:var(--dim); padding:6px 12px; border-radius:8px; cursor:pointer; font-size:12px; font-weight:600; }
 .subtabs button.active { background:var(--hover-bg); color:var(--accent); border-color:var(--chrome-border); }
 .admin-body { flex:1; min-height:0; overflow:auto; padding:16px 20px; }
@@ -980,7 +1094,8 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   <header id="topbar">
     <span class="brand syw-gradient-text">wairon</span>
     <nav class="tabs" id="navTabs">
-      <button data-view="canvas" class="active">Canvas</button>
+      <button data-view="environment" class="active">Environment</button>
+      <button data-view="canvas">Canvas</button>
       <button data-view="specs">Specs</button>
       <button data-view="projects">Projects</button>
       <button data-view="admin" id="navAdmin" hidden>Admin</button>
@@ -999,8 +1114,13 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     </div>
   </header>
   <div id="wrap">
+    <!-- Environment view (the whole-environment permission-filtered hierarchy) -->
+    <div class="view active" id="view-environment">
+      <div class="pane-r"><div id="envBody" style="max-width:1000px;margin:0 auto;padding:8px 0"><div class="hint">Loading…</div></div></div>
+    </div>
+
     <!-- Canvas view (existing embedded architecture canvas) -->
-    <div class="view active" id="view-canvas">
+    <div class="view" id="view-canvas">
       <iframe id="cv" title="Architecture canvas" referrerpolicy="same-origin"></iframe>
       <div class="empty" id="empty" hidden><div class="box"><h3>No project in scope</h3><p>There are no projects you can view yet.</p></div></div>
     </div>
@@ -1024,16 +1144,30 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
         <div class="subtabs" id="adminSubtabs">
           <button data-panel="approvals" class="active">Approvals</button>
           <button data-panel="users">Users</button>
+          <button data-panel="roles">Roles</button>
+          <button data-panel="permissions">Permissions</button>
           <button data-panel="providers">Identity Providers</button>
-          <button data-panel="org">Organization</button>
+          <button data-panel="org">Units</button>
+          <button data-panel="packs">Packs</button>
+          <button data-panel="policy">Policy</button>
+          <button data-panel="audit">Audit</button>
+          <button data-panel="backups">Backups</button>
+          <button data-panel="exposure">Exposure</button>
           <button data-panel="landscape">Landscape</button>
           <button data-panel="health">Health</button>
         </div>
         <div class="admin-body">
           <div class="apanel active" id="ap-approvals"><div class="hint">Loading…</div></div>
           <div class="apanel" id="ap-users"><div class="hint">Loading…</div></div>
+          <div class="apanel" id="ap-roles"><div class="hint">Loading…</div></div>
+          <div class="apanel" id="ap-permissions"><div class="hint">Loading…</div></div>
           <div class="apanel" id="ap-providers"><div class="hint">Loading…</div></div>
           <div class="apanel" id="ap-org"><div class="hint">Loading…</div></div>
+          <div class="apanel" id="ap-packs"><div class="hint">Loading…</div></div>
+          <div class="apanel" id="ap-policy"><div class="hint">Loading…</div></div>
+          <div class="apanel" id="ap-audit"><div class="hint">Loading…</div></div>
+          <div class="apanel" id="ap-backups"><div class="hint">Loading…</div></div>
+          <div class="apanel" id="ap-exposure"><div class="hint">Loading…</div></div>
           <div class="apanel" id="ap-landscape"><div class="hint">Loading…</div></div>
           <div class="apanel" id="ap-health"><div class="hint">Loading…</div></div>
         </div>
@@ -1075,6 +1209,10 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   // ---- state --------------------------------------------------------------
   var ctx = null;
   var selectedProjectId = '';
+  // Whether the Admin tab is shown. True for the env super-admin (ctx.isAdmin)
+  // AND for a DELEGATED/SSO instance admin — detected by probing a resolver-gated
+  // instance-admin read, since the slim context carries no permission projection.
+  var adminVisible = false;
 
   // ---- boot ---------------------------------------------------------------
   function boot() {
@@ -1163,24 +1301,45 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     var isLocal = !!(ctx && ctx.local);
     $('topbar').hidden = isLocal;
     $('whoLbl').textContent = (ctx.subject && (ctx.subject.displayName || ctx.subject.email || ctx.subject.userId)) || 'signed in';
+    // The "admin" BADGE marks the env super-admin specifically; the Admin TAB
+    // shows for any instance-level admin (env super-admin OR a delegated/SSO
+    // admin who holds project:admin@instance). The slim context only carries the
+    // env-super flag, so a delegated admin is detected by probing a
+    // resolver-gated instance-admin read (/web/admin/roles → project:admin@instance).
     $('adminBadge').hidden = !ctx.isAdmin;
-    $('navAdmin').hidden = !ctx.isAdmin;      // the Admin tab appears only for admins
-    // Role-aware: developers who cannot author see a read-only marker AND the spec
-    // editor's write affordances are disabled (below).
-    $('roBadge').hidden = !!ctx.canWriteProjects;
+    adminVisible = !!ctx.isAdmin;
+    $('navAdmin').hidden = !adminVisible;
+    if (!adminVisible) {
+      api('/web/admin/roles').then(function (r) {
+        if (r.ok) { adminVisible = true; $('navAdmin').hidden = false; }
+      }).catch(function () { /* not an instance admin — tab stays hidden */ });
+    }
+    // The context carries no permission projections: write authority is enforced
+    // per request server-side (the resolver). Per-project ops (git/packs/policy/
+    // producers) are reachable by any signed-in user from the Projects view and
+    // gated per project server-side.
+    $('roBadge').hidden = true;
 
-    var pids = ctx.visibleProjectIds || [];
-    var sel = $('projSel'); sel.innerHTML = '';
-    pids.forEach(function (pid) {
-      var o = document.createElement('option'); o.value = pid; o.textContent = pid; sel.appendChild(o);
+    // The project selector comes from /web/projects — the resolver-filtered
+    // listing of projects this principal can act on (dev mode lists the single
+    // registered "local" project the same way).
+    api('/web/projects').then(function (r) { return r.ok ? r.json() : {}; }).then(function (list) {
+      // The route returns { projects: [...] } — read the array off the wrapper.
+      var pids = ((list && list.projects) || []).map(function (rec) { return rec.id; });
+      var sel = $('projSel'); sel.innerHTML = '';
+      pids.forEach(function (pid) {
+        var o = document.createElement('option'); o.value = pid; o.textContent = pid; sel.appendChild(o);
+      });
+      // Default the selection to the first visible project.
+      selectedProjectId = pids.length ? pids[0] : '';
+      sel.value = selectedProjectId;
+      // Hide the picker when there is nothing to choose (or in local single-project mode).
+      $('projCtl').style.display = (!isLocal && pids.length > 0) ? 'flex' : 'none';
+      // Local dev mode lands on the single project's canvas; hosted lands on the
+      // whole-environment hierarchy so a user starts from the top and drills in.
+      if (isLocal) { setView('canvas'); loadCanvas(); }
+      else { setView('environment'); }
     });
-    // Default the selection to the first visible project.
-    selectedProjectId = pids.length ? pids[0] : '';
-    sel.value = selectedProjectId;
-    // Hide the picker when there is nothing to choose (or in local single-project mode).
-    $('projCtl').style.display = (!isLocal && pids.length > 0) ? 'flex' : 'none';
-    setView('canvas');
-    loadCanvas();
   }
 
   // ---- small helpers ------------------------------------------------------
@@ -1215,12 +1374,13 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   var currentView = 'canvas';
   function setView(name) {
     currentView = name;
-    ['canvas', 'specs', 'projects', 'admin', 'connect'].forEach(function (v) {
+    ['environment', 'canvas', 'specs', 'projects', 'admin', 'connect'].forEach(function (v) {
       var el = $('view-' + v); if (el) el.classList.toggle('active', v === name);
     });
     Array.prototype.forEach.call($('navTabs').children, function (b) {
       b.classList.toggle('active', b.getAttribute('data-view') === name);
     });
+    if (name === 'environment') renderEnvironment();
     if (name === 'specs') loadSpecList();
     if (name === 'projects') renderProjects();
     if (name === 'admin') loadAdminPanel(currentPanel);
@@ -1229,10 +1389,87 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   Array.prototype.forEach.call($('navTabs').children, function (b) {
     b.addEventListener('click', function () {
       var v = b.getAttribute('data-view');
-      if (v === 'admin' && !(ctx && ctx.isAdmin)) return;
+      if (v === 'admin' && !adminVisible) return;
       setView(v);
     });
   });
+
+  // ---- environment hierarchy (root → orgs → units → projects) -------------
+  // The whole-environment tree, permission-filtered SERVER-side: getGraph on the
+  // landscape tier returns only nodes the caller may see (actionable scopes plus
+  // the ancestor breadcrumbs that keep them navigable to the root). Breadcrumb
+  // (non-actionable) nodes render read-only; actionable projects open the canvas.
+  function renderEnvironment() {
+    var box = $('envBody');
+    box.innerHTML = '<div class="hint">Loading the environment…</div>';
+    api('/web/graph?tier=landscape&level=1').then(function (r) {
+      if (r.status === 401) throw new Error('Session expired — sign in again.');
+      if (!r.ok) throw new Error('environment ' + r.status);
+      return r.json();
+    }).then(function (g) {
+      var nodes = (g.nodes || []).filter(function (n) { return n.kind === 'unit' || n.kind === 'project'; });
+      if (!nodes.length) { box.innerHTML = '<div class="hint">No organization units or projects in your scope yet.</div>'; return; }
+      var byParent = {};
+      var byId = {};
+      nodes.forEach(function (n) { byId[n.id] = n; });
+      nodes.forEach(function (n) {
+        // Treat a parent that is not itself in the visible set as a root (the
+        // breadcrumb chain always reaches a shown ancestor or the top).
+        var key = (n.parentId && byId[n.parentId]) ? n.parentId : '__root__';
+        (byParent[key] = byParent[key] || []).push(n);
+      });
+      function sortNodes(a, b) { return (a.kind + (a.label || a.id)).localeCompare(b.kind + (b.label || b.id)); }
+      function renderLevel(parentKey) {
+        var kids = (byParent[parentKey] || []).slice().sort(sortNodes);
+        if (!kids.length) return '';
+        var out = '<ul class="envtree">';
+        kids.forEach(function (n) {
+          var hasKids = !!(byParent[n.id] && byParent[n.id].length);
+          var act = n.actionable ? '' : ' breadcrumb';
+          var icon = n.kind === 'unit' ? '▸' : '●';
+          var badge = n.kind === 'project'
+            ? '<span class="pill ' + (n.status === 'active' ? 'ok' : 'warn') + '">' + esc(n.status || 'project') + '</span>'
+            : '<span class="envkind">unit</span>';
+          out += '<li class="envnode' + act + '" data-id="' + esc(n.id) + '" data-kind="' + esc(n.kind) + '"' + (n.kind === 'project' ? ' data-open="' + esc(n.projectId || n.id) + '"' : '') + '>'
+            + '<div class="envrow">'
+            + '<span class="envtwist"' + (hasKids ? ' data-tw="1"' : '') + '>' + (hasKids ? '▾' : '') + '</span>'
+            + '<span class="envicon">' + icon + '</span>'
+            + '<span class="envlabel">' + esc(n.label || n.id) + '</span>'
+            + badge
+            + (n.actionable ? '' : ' <span class="hint" style="font-size:11px">(read-only)</span>')
+            + '</div>';
+          if (hasKids) out += '<div class="envkids">' + renderLevel(n.id) + '</div>';
+          out += '</li>';
+        });
+        return out + '</ul>';
+      }
+      box.innerHTML = '<h2 style="margin:0 0 4px">Environment</h2>'
+        + '<p style="color:var(--dim);margin:0 0 12px;font-size:12.5px">Everything you can see, from the root down. Click a project to open its canvas. Collapse a unit with its ▾.</p>'
+        + renderLevel('__root__');
+      // Expand/collapse.
+      Array.prototype.forEach.call(box.querySelectorAll('[data-tw]'), function (tw) {
+        tw.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          var li = tw.parentNode.parentNode;
+          var kids = li.querySelector('.envkids');
+          if (!kids) return;
+          var collapsed = kids.style.display === 'none';
+          kids.style.display = collapsed ? '' : 'none';
+          tw.textContent = collapsed ? '▾' : '▸';
+        });
+      });
+      // Open a project's canvas.
+      Array.prototype.forEach.call(box.querySelectorAll('[data-open]'), function (li) {
+        li.querySelector('.envlabel').addEventListener('click', function () {
+          var pid = li.getAttribute('data-open');
+          selectedProjectId = pid;
+          var sel = $('projSel'); if (sel) { sel.value = pid; }
+          setView('canvas');
+          loadCanvas();
+        });
+      });
+    }).catch(function (e) { box.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+  }
 
   // ---- embedded canvas ----------------------------------------------------
   function loadCanvas() {
@@ -1273,7 +1510,10 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     selectedSpec = { kind: kind, id: id };
     var insp = $('insp'); insp.innerHTML = '<div class="hint">Loading ' + esc(id) + '…</div>';
     mcp('sdd_get_spec', { kind: kind, id: id }).then(function (spec) {
-      var canWrite = !!(ctx && ctx.canWriteProjects);
+      // Write authority is enforced per request by the resolver server-side; a
+      // save from a read-only principal is refused with a clear error. Scope-
+      // aware read-only chrome returns with the roles/assignments UI.
+      var canWrite = true;
       var desc = (spec && spec.description) || '';
       insp.innerHTML =
         '<h2>' + esc((spec && spec.name) || id) + '</h2>'
@@ -1315,12 +1555,13 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   });
 
   // ---- admin view (control-plane pages) -----------------------------------
+  var ADMIN_PANELS = ['approvals', 'users', 'roles', 'permissions', 'providers', 'org', 'packs', 'policy', 'audit', 'backups', 'exposure', 'landscape', 'health'];
   var currentPanel = 'approvals';
   Array.prototype.forEach.call($('adminSubtabs').children, function (b) {
     b.addEventListener('click', function () {
       currentPanel = b.getAttribute('data-panel');
       Array.prototype.forEach.call($('adminSubtabs').children, function (x) { x.classList.toggle('active', x === b); });
-      ['approvals', 'users', 'providers', 'org', 'landscape', 'health'].forEach(function (p) { $('ap-' + p).classList.toggle('active', p === currentPanel); });
+      ADMIN_PANELS.forEach(function (p) { $('ap-' + p).classList.toggle('active', p === currentPanel); });
       loadAdminPanel(currentPanel);
     });
   });
@@ -1350,10 +1591,24 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
     } else if (panel === 'users') {
       renderUsersPanel(el);
+    } else if (panel === 'roles') {
+      renderRolesPanel(el);
+    } else if (panel === 'permissions') {
+      renderPermissionsPanel(el);
     } else if (panel === 'providers') {
       renderProvidersPanel(el);
     } else if (panel === 'org') {
       renderOrgPanel(el);
+    } else if (panel === 'packs') {
+      renderPacksPanel(el);
+    } else if (panel === 'policy') {
+      renderPolicyPanel(el);
+    } else if (panel === 'audit') {
+      renderAuditPanel(el);
+    } else if (panel === 'backups') {
+      renderBackupsPanel(el);
+    } else if (panel === 'exposure') {
+      renderExposurePanel(el);
     } else if (panel === 'landscape') {
       adminGet('landscape').then(function (g) {
         var units = (g.nodes || []).filter(function (n) { return n.nodeKind === 'unit'; });
@@ -1446,16 +1701,23 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       var html = '<div class="toolbar"><button class="mini" id="uNew">New user</button></div><div id="uForm"></div>';
       if (!users.length) html += '<div class="hint">No users in your scope yet.</div>';
       else {
-        html += '<table class="grid"><thead><tr><th>User</th><th>Status</th><th>Unit</th><th>Grants</th><th></th></tr></thead><tbody>';
+        html += '<table class="grid"><thead><tr><th>User</th><th>Status</th><th>Unit</th><th>Roles</th><th></th></tr></thead><tbody>';
         users.forEach(function (u, i) {
           var st = u.status === 'active' ? 'ok' : 'warn';
-          var grants = (u.grants || []).map(function (g) { return esc(g.projectId) + ':' + esc((g.permissions || []).join('/')); }).join(', ');
-          html += '<tr><td>' + esc(u.subject && u.subject.userId) + '</td>'
+          // Permissions live in role bindings + the assignment grid — the record
+          // carries no grants. (A dedicated roles/assignments editor is the next
+          // UI phase; bindings are shown read-only here.)
+          var roles = (u.roleBindings || []).map(function (b) {
+            return esc(b.roleId) + (b.scopeId ? '@' + esc(b.scopeId) : '');
+          }).join(', ');
+          // Prefer a human name, then email, then the opaque subject id.
+          var who = esc(u.displayName || u.email || (u.subject && u.subject.userId) || '')
+            + (u.email && u.displayName ? ' <span class="hint">' + esc(u.email) + '</span>' : '');
+          html += '<tr><td>' + who + '</td>'
             + '<td><span class="pill ' + st + '">' + esc(u.status) + '</span></td>'
             + '<td>' + esc(u.unitId || '—') + '</td>'
-            + '<td>' + (grants || '<span class="hint">none</span>') + '</td>'
+            + '<td>' + (roles || '<span class="hint">none</span>') + '</td>'
             + '<td style="white-space:nowrap"><button class="mini" data-edit="' + i + '">Edit</button> '
-            + '<button class="mini" data-grants="' + i + '">Grants</button> '
             + '<button class="mini" data-setstatus="' + i + '">Status</button></td></tr>';
         });
         html += '</tbody></table>';
@@ -1464,9 +1726,6 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       $('uNew').addEventListener('click', function () { userForm(el, null); });
       Array.prototype.forEach.call(el.querySelectorAll('[data-edit]'), function (b) {
         b.addEventListener('click', function () { userForm(el, users[+b.getAttribute('data-edit')]); });
-      });
-      Array.prototype.forEach.call(el.querySelectorAll('[data-grants]'), function (b) {
-        b.addEventListener('click', function () { grantsForm(el, users[+b.getAttribute('data-grants')]); });
       });
       Array.prototype.forEach.call(el.querySelectorAll('[data-setstatus]'), function (b) {
         b.addEventListener('click', function () { statusForm(el, users[+b.getAttribute('data-setstatus')]); });
@@ -1504,7 +1763,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
         id: $('uId').value.trim() || subject.userId,
         subject: subject,
         status: $('uStatus').value,
-        grants: (user && user.grants) || [],
+        roleBindings: (user && user.roleBindings) || [],
         createdAt: (user && user.createdAt) || new Date().toISOString(),
       };
       var unit = $('uUnit').value.trim(); if (unit) rec.unitId = unit;
@@ -1528,51 +1787,6 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
         .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
     });
   }
-  function grantsForm(el, user) {
-    var box = $('uForm');
-    var grants = ((user && user.grants) || []).map(function (g) {
-      return { projectId: g.projectId, permissions: (g.permissions || []).join(', '), orgUnitId: g.orgUnitId || '' };
-    });
-    function draw() {
-      var html = '<div class="formcard"><h3>Grants — ' + esc(user.subject && user.subject.userId) + '</h3><div id="gRows">';
-      grants.forEach(function (g, i) {
-        html += '<div class="grant-row">'
-          + '<input data-g="proj" data-i="' + i + '" value="' + esc(g.projectId) + '" placeholder="projectId or *" />'
-          + '<input data-g="perm" data-i="' + i + '" value="' + esc(g.permissions) + '" placeholder="mcp:read, mcp:write, *" />'
-          + '<input data-g="unit" data-i="' + i + '" value="' + esc(g.orgUnitId) + '" placeholder="org unit (optional)" />'
-          + '<button class="mini danger" data-del="' + i + '">Remove</button></div>';
-      });
-      html += '</div><div class="rowbtns"><button class="mini" id="gAdd">Add grant</button> <button class="btn-primary" style="width:auto" id="gSave">Save grants</button> <button class="mini" id="gCancel">Cancel</button> <span class="msg" id="gMsg"></span></div></div>';
-      box.innerHTML = html;
-      function sync() {
-        Array.prototype.forEach.call(box.querySelectorAll('[data-g]'), function (inp) {
-          var i = +inp.getAttribute('data-i'); var f = inp.getAttribute('data-g');
-          if (f === 'proj') grants[i].projectId = inp.value;
-          else if (f === 'perm') grants[i].permissions = inp.value;
-          else grants[i].orgUnitId = inp.value;
-        });
-      }
-      Array.prototype.forEach.call(box.querySelectorAll('[data-del]'), function (b) {
-        b.addEventListener('click', function () { sync(); grants.splice(+b.getAttribute('data-del'), 1); draw(); });
-      });
-      $('gAdd').addEventListener('click', function () { sync(); grants.push({ projectId: '', permissions: '', orgUnitId: '' }); draw(); });
-      $('gCancel').addEventListener('click', function () { box.innerHTML = ''; });
-      $('gSave').addEventListener('click', function () {
-        sync();
-        var msg = $('gMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
-        var out = grants.filter(function (g) { return g.projectId.trim(); }).map(function (g) {
-          var o = { projectId: g.projectId.trim(), permissions: commaList(g.permissions) };
-          if (g.orgUnitId && g.orgUnitId.trim()) o.orgUnitId = g.orgUnitId.trim();
-          return o;
-        });
-        postAndParse('/web/admin/users/grants', { userId: user.id, grants: out })
-          .then(function () { renderUsersPanel(el); })
-          .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
-      });
-    }
-    draw();
-  }
-
   // ---- Identity Providers / SSO (admin) -----------------------------------
   function renderProvidersPanel(el) {
     el.innerHTML = '<div class="hint">Loading…</div>';
@@ -1667,12 +1881,28 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     adminGet('org/units').then(function (d) {
       var units = d.units || [];
       var html = '<div class="toolbar"><button class="mini" id="oNew">New unit</button><button class="mini" id="oPlace">Place a project</button></div><div id="oForm"></div>';
+      html += '<p style="color:var(--dim);font-size:12px;margin:6px 0">Units nest into a hierarchy (business entity → department → team). The tree here is your whole organization structure — a unit id is its qualified dot-path (e.g. <code>acme.it.team-a</code>). Assign users a home unit and bind roles per unit on the Permissions tab.</p>';
       if (!units.length) html += '<div class="hint">No organization units yet.</div>';
       else {
-        html += '<table class="grid"><thead><tr><th>Name</th><th>ID</th><th>Kind</th><th>Parent</th><th>Visibility</th><th></th></tr></thead><tbody>';
-        units.forEach(function (u, i) {
-          html += '<tr><td>' + esc(u.name) + '</td><td>' + esc(u.id) + '</td><td>' + esc(u.kind) + '</td><td>' + esc(u.parentId || '—') + '</td><td>' + esc(u.visibility || 'inherit') + '</td>'
-            + '<td><button class="mini" data-edit="' + i + '">Edit</button></td></tr>';
+        // Order the units as a hierarchy: each child after its parent, indented
+        // by its depth in the qualified dot-path.
+        var byId = {}; units.forEach(function (u) { byId[u.id] = u; });
+        var roots = units.filter(function (u) { return !u.parentId || !byId[u.parentId]; });
+        var ordered = [];
+        (function walk(list, depth) {
+          list.slice().sort(function (a, b) { return (a.name || a.id).localeCompare(b.name || b.id); }).forEach(function (u) {
+            ordered.push({ u: u, depth: depth });
+            walk(units.filter(function (c) { return c.parentId === u.id; }), depth + 1);
+          });
+        })(roots, 0);
+        html += '<table class="grid"><thead><tr><th>Unit</th><th>ID</th><th>Kind</th><th>Visibility</th><th></th></tr></thead><tbody>';
+        ordered.forEach(function (row) {
+          var u = row.u;
+          var indent = '';
+          for (var k = 0; k < row.depth; k++) indent += '<span style="opacity:.35">│&nbsp;</span>';
+          var i = units.indexOf(u);
+          html += '<tr><td>' + indent + esc(u.name) + '</td><td><code>' + esc(u.id) + '</code></td><td>' + esc(u.kind) + '</td><td>' + esc(u.visibility || 'inherit') + '</td>'
+            + '<td style="white-space:nowrap"><button class="mini" data-edit="' + i + '">Edit</button> <button class="mini danger" data-remove="' + i + '">Remove</button></td></tr>';
         });
         html += '</tbody></table>';
       }
@@ -1682,46 +1912,92 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       Array.prototype.forEach.call(el.querySelectorAll('[data-edit]'), function (b) {
         b.addEventListener('click', function () { orgUnitForm(el, units, units[+b.getAttribute('data-edit')]); });
       });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-remove]'), function (b) {
+        b.addEventListener('click', function () { removeUnitForm(el, units, units[+b.getAttribute('data-remove')]); });
+      });
     }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
   }
   function orgUnitForm(el, units, u) {
     var box = $('oForm'); var creating = !u; u = u || {};
-    var parentOpts = opt('', '(none — root unit)', !u.parentId);
+    // A unit's id is its QUALIFIED dot-path (parent id + '.' + slug); the server
+    // computes it from the slug + parent. Slug/parent are immutable after
+    // creation (a move is a separate operation), so they are read-only on edit.
+    var parentOpts = opt('', '(none — a root/tenant unit)', !u.parentId);
     units.forEach(function (x) { if (x.id !== u.id) parentOpts += opt(x.id, x.name + ' (' + x.id + ')', u.parentId === x.id); });
     var vis = u.visibility || 'inherit';
     var visOpts = opt('inherit', 'inherit', vis === 'inherit') + opt('open', 'open', vis === 'open') + opt('closed', 'closed', vis === 'closed');
-    var html = '<div class="formcard"><h3>' + (creating ? 'New organization unit' : 'Edit ' + esc(u.name)) + '</h3>';
+    var ro = creating ? '' : ' disabled';
+    var html = '<div class="formcard"><h3>' + (creating ? 'New unit' : 'Edit ' + esc(u.name)) + '</h3>';
     html += '<div class="frow">'
-      + fcol('Name', '<input id="oName" value="' + esc(u.name || '') + '" />')
-      + fcol('Unit ID', '<input id="oId" value="' + esc(u.id || '') + '"' + (creating ? '' : ' readonly') + ' placeholder="optional — auto if blank" />')
+      + fcol('Name', '<input id="oName" value="' + esc(u.name || '') + '" placeholder="e.g. SYW Apps" />')
+      + fcol('Slug', '<input id="oSlug" value="' + esc(u.slug || '') + '"' + ro + ' placeholder="lowercase, [a-z0-9-], no dots" />')
       + '</div>';
     html += '<div class="frow">'
-      + fcol('Kind', '<select id="oKind">' + ['organization', 'department', 'team', 'domain'].map(function (k) { return opt(k, k, (u.kind || 'team') === k); }).join('') + '</select>')
-      + fcol('Parent unit', '<select id="oParent">' + parentOpts + '</select>')
+      + fcol('Kind', '<select id="oKind"' + ro + '>' + ['business_entity', 'department', 'team', 'portfolio', 'group'].map(function (k) { return opt(k, k.replace('_', ' '), (u.kind || 'team') === k); }).join('') + '</select>')
+      + fcol('Parent unit', '<select id="oParent"' + ro + '>' + parentOpts + '</select>')
       + fcol('Visibility', '<select id="oVis">' + visOpts + '</select>')
       + '</div>';
+    if (!creating) html += '<p class="hint" style="font-size:11px">Slug, kind, and parent are fixed after creation. Only the name and visibility can be edited here.</p>';
     html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="oSave">' + (creating ? 'Create unit' : 'Save') + '</button> <button class="mini" id="oCancel">Cancel</button> <span class="msg" id="oMsg"></span></div></div>';
     box.innerHTML = html;
     $('oCancel').addEventListener('click', function () { box.innerHTML = ''; });
     $('oSave').addEventListener('click', function () {
       var msg = $('oMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
+      // On EDIT the server preserves the id/slug/parent (metadata-only update),
+      // so we send the existing id; on CREATE we send the slug + parent and the
+      // server computes the qualified id.
       var rec = {
-        id: $('oId').value.trim(),
+        id: creating ? '' : u.id,
+        slug: creating ? $('oSlug').value.trim() : u.slug,
         name: $('oName').value.trim(),
-        kind: $('oKind').value.trim() || 'team',
+        kind: creating ? $('oKind').value : u.kind,
         status: u.status || 'active',
         createdAt: u.createdAt || '',
         createdBy: u.createdBy || (ctx && ctx.subject) || { userId: '', kind: 'human', issuer: 'local' },
       };
-      var par = $('oParent').value; if (par) rec.parentId = par;
+      if (creating) { var par = $('oParent').value; if (par) rec.parentId = par; }
+      else if (u.parentId) rec.parentId = u.parentId;
       var v = $('oVis').value; if (v) rec.visibility = v;
       postAndParse('/web/admin/org/units', rec).then(function () { renderOrgPanel(el); })
         .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
     });
   }
+  function removeUnitForm(el, units, u) {
+    var box = $('oForm');
+    var others = units.filter(function (x) { return x.id !== u.id; });
+    var targetOpts = others.map(function (x) { return opt(x.id, x.name + ' (' + x.id + ')', false); }).join('');
+    var html = '<div class="formcard"><h3>Remove ' + esc(u.name) + '</h3>';
+    html += '<p class="hint" style="font-size:12px">A unit is never silently deleted — choose what happens to its child units and placed projects.</p>';
+    html += '<div class="frow">' + fcol('Disposition', '<select id="rmKind">'
+      + opt('absorb', 'absorb — move content into the parent', true)
+      + opt('migrate', 'migrate — move content into another unit', false)
+      + opt('alternative', 'alternative — rename (new sibling, move content in)', false)
+      + opt('cascade', 'cascade — DELETE this unit and its whole subtree', false)
+      + '</select>') + '</div>';
+    html += '<div class="frow" id="rmMigrate" style="display:none">' + fcol('Target unit', '<select id="rmTarget">' + targetOpts + '</select>') + '</div>';
+    html += '<div class="frow" id="rmAlt" style="display:none">' + fcol('New slug', '<input id="rmSlug" placeholder="lowercase-slug" />') + fcol('New name', '<input id="rmName" placeholder="optional" />') + '</div>';
+    html += '<div class="rowbtns"><button class="btn-primary danger" style="width:auto" id="rmGo">Remove unit</button> <button class="mini" id="rmCancel">Cancel</button> <span class="msg" id="rmMsg"></span></div></div>';
+    box.innerHTML = html;
+    function tog() {
+      $('rmMigrate').style.display = $('rmKind').value === 'migrate' ? '' : 'none';
+      $('rmAlt').style.display = $('rmKind').value === 'alternative' ? '' : 'none';
+    }
+    $('rmKind').addEventListener('change', tog); tog();
+    $('rmCancel').addEventListener('click', function () { box.innerHTML = ''; });
+    $('rmGo').addEventListener('click', function () {
+      var msg = $('rmMsg'); msg.className = 'msg'; msg.textContent = 'Removing…';
+      var disp = { kind: $('rmKind').value };
+      if (disp.kind === 'migrate') disp.targetUnitId = $('rmTarget').value;
+      if (disp.kind === 'alternative') { disp.newSlug = $('rmSlug').value.trim(); var nm = $('rmName').value.trim(); if (nm) disp.newName = nm; }
+      postAndParse('/web/admin/org/units/remove', { unitId: u.id, disposition: disp }).then(function () { renderOrgPanel(el); })
+        .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+    });
+  }
   function placementForm(el, units) {
     var box = $('oForm');
-    var pids = (ctx && ctx.visibleProjectIds) || [];
+    // The project ids come from the already-populated selector (fed by
+    // /web/projects, the resolver-filtered listing).
+    var pids = Array.prototype.map.call($('projSel').options, function (o) { return o.value; });
     var projCtl = pids.length ? '<select id="plProj">' + pids.map(function (pid) { return opt(pid, pid, false); }).join('') + '</select>' : '<input id="plProj" placeholder="projectId" />';
     var unitOpts = units.map(function (u) { return opt(u.id, u.name + ' (' + u.id + ')', false); }).join('');
     var html = '<div class="formcard"><h3>Place a project into a unit</h3>';
@@ -1737,10 +2013,392 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     });
   }
 
+  // ---- Roles (admin) ------------------------------------------------------
+  // The permission model's role templates. Built-in reserved roles (e.g.
+  // sso-admin) are intrinsic — the server refuses to create/edit/delete them, so
+  // only admin-defined roles are listed here.
+  var CAPS = ['project:read', 'project:create', 'project:write', 'project:admin', 'approval:decide'];
+  var VALUES = ['yes', 'approval', 'no', 'inherit'];
+  function renderRolesPanel(el) {
+    el.innerHTML = '<div class="hint">Loading…</div>';
+    adminGet('roles').then(function (d) {
+      var roles = d.roles || [];
+      var html = '<div class="toolbar"><button class="mini" id="rNew">New role</button></div><div id="rForm"></div>';
+      if (!roles.length) html += '<div class="hint">No admin-defined roles yet. Built-in roles (like sso-admin) are intrinsic and not listed.</div>';
+      else {
+        html += '<table class="grid"><thead><tr><th>Role</th><th>ID</th><th>Permissions</th><th></th></tr></thead><tbody>';
+        roles.forEach(function (r, i) {
+          var perms = (r.permissions || []).map(function (p) { return esc(p.capability) + '=' + esc(p.value); }).join(', ');
+          html += '<tr><td>' + esc(r.name || r.id) + '</td><td>' + esc(r.id) + '</td><td>' + perms + '</td>'
+            + '<td style="white-space:nowrap"><button class="mini" data-edit="' + i + '">Edit</button> <button class="mini danger" data-del="' + esc(r.id) + '">Delete</button></td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+      el.innerHTML = html;
+      $('rNew').addEventListener('click', function () { roleForm(el, null); });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-edit]'), function (b) {
+        b.addEventListener('click', function () { roleForm(el, roles[+b.getAttribute('data-edit')]); });
+      });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-del]'), function (b) {
+        b.addEventListener('click', function () {
+          if (!confirm('Delete role "' + b.getAttribute('data-del') + '"? Bindings to it become inert.')) return;
+          postAndParse('/web/admin/roles/remove', { id: b.getAttribute('data-del') }).then(function () { renderRolesPanel(el); })
+            .catch(function (e) { alert(e.message); });
+        });
+      });
+    }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+  }
+  function roleForm(el, r) {
+    var box = $('rForm'); var creating = !r; r = r || {};
+    var permByCap = {};
+    (r.permissions || []).forEach(function (p) { permByCap[p.capability] = p.value; });
+    var html = '<div class="formcard"><h3>' + (creating ? 'New role' : 'Edit ' + esc(r.name || r.id)) + '</h3>';
+    html += '<div class="frow">'
+      + fcol('Role ID', '<input id="rId" value="' + esc(r.id || '') + '"' + (creating ? '' : ' readonly') + ' placeholder="lowercase-slug" />')
+      + fcol('Name', '<input id="rName" value="' + esc(r.name || '') + '" />')
+      + '</div>';
+    html += '<p style="color:var(--dim);font-size:12px;margin:6px 0">Roles GRANT only (yes / approval); a role never denies, so no / inherit is non-deciding. Leave a capability at "(none)" to omit it.</p>';
+    html += '<table class="grid"><thead><tr><th>Capability</th><th>Value</th></tr></thead><tbody>';
+    CAPS.forEach(function (cap) {
+      var cur = permByCap[cap];
+      var sel = '<select data-cap="' + esc(cap) + '">' + opt('', '(none)', !cur)
+        + ['yes', 'approval', 'inherit'].map(function (v) { return opt(v, v, cur === v); }).join('') + '</select>';
+      html += '<tr><td>' + esc(cap) + '</td><td>' + sel + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="rSave">' + (creating ? 'Create role' : 'Save') + '</button> <button class="mini" id="rCancel">Cancel</button> <span class="msg" id="rMsg"></span></div></div>';
+    box.innerHTML = html;
+    $('rCancel').addEventListener('click', function () { box.innerHTML = ''; });
+    $('rSave').addEventListener('click', function () {
+      var msg = $('rMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
+      var perms = [];
+      Array.prototype.forEach.call(box.querySelectorAll('[data-cap]'), function (s) {
+        if (s.value) perms.push({ capability: s.getAttribute('data-cap'), value: s.value });
+      });
+      var rec = { id: $('rId').value.trim(), name: $('rName').value.trim() || $('rId').value.trim(), permissions: perms, createdAt: r.createdAt || '' };
+      var path = creating ? '/web/admin/roles' : '/web/admin/roles/update';
+      postAndParse(path, rec).then(function () { renderRolesPanel(el); })
+        .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+    });
+  }
+
+  // ---- Permissions (admin) ------------------------------------------------
+  // The assignment grid (subject × scope × capability → value) plus per-user
+  // role bindings — THE surface for granting anything in the permission model.
+  function renderPermissionsPanel(el) {
+    el.innerHTML = '<div class="hint">Loading…</div>';
+    Promise.all([
+      adminGet('org/units').then(function (d) { return d.units || []; }),
+      adminGet('users').then(function (d) { return d.users || []; }),
+      adminGet('roles').then(function (d) { return d.roles || []; }).catch(function () { return []; }),
+    ]).then(function (res) {
+      var units = res[0], users = res[1], roles = res[2];
+      var html = '<div class="cards"><div class="stat"><div class="k">Grant a permission</div><div class="v" style="font-size:13px;color:var(--dim)">subject × scope × capability → value</div></div></div>';
+      // ── assignment form ──
+      html += '<div class="formcard"><h3>Set an assignment</h3><div class="frow">'
+        + fcol('Subject', '<select id="paSubjKind">' + opt('user', 'a user', true) + opt('everyone', 'everyone (scope default)', false) + '</select>')
+        + fcol('User', '<select id="paUser">' + users.map(function (u) { return opt(u.id, (u.displayName || (u.subject && u.subject.userId) || u.id), false); }).join('') + '</select>')
+        + '</div><div class="frow">'
+        + fcol('Scope', '<select id="paScopeKind">' + opt('instance', 'instance', false) + opt('unit', 'a unit', true) + opt('project', 'a project', false) + '</select>')
+        + fcol('Unit', '<select id="paUnit">' + units.map(function (u) { return opt(u.id, u.name + ' (' + u.id + ')', false); }).join('') + '</select>')
+        + fcol('Project', (function () { var pids = Array.prototype.map.call($('projSel').options, function (o) { return o.value; }); return '<select id="paProject">' + pids.map(function (p) { return opt(p, p, false); }).join('') + '</select>'; })())
+        + '</div><div class="frow">'
+        + fcol('Capability', '<select id="paCap">' + CAPS.map(function (c) { return opt(c, c, c === 'project:read'); }).join('') + '</select>')
+        + fcol('Value', '<select id="paVal">' + VALUES.map(function (v) { return opt(v, v, v === 'yes'); }).join('') + '</select>')
+        + '</div>';
+      html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="paSet">Set assignment</button> <span class="msg" id="paMsg"></span></div></div>';
+      // ── role binding form ──
+      html += '<div class="formcard"><h3>Bind a role to a user</h3><div class="frow">'
+        + fcol('User', '<select id="pbUser">' + users.map(function (u) { return opt(u.id, (u.displayName || (u.subject && u.subject.userId) || u.id), false); }).join('') + '</select>')
+        + fcol('Role', '<select id="pbRole">' + [{ id: 'sso-admin', name: 'sso-admin (built-in)' }].concat(roles).map(function (r) { return opt(r.id, r.name || r.id, false); }).join('') + '</select>')
+        + '</div><div class="frow">'
+        + fcol('Scope', '<select id="pbScopeKind">' + opt('instance', 'instance', true) + opt('unit', 'a unit', false) + '</select>')
+        + fcol('Unit', '<select id="pbUnit">' + units.map(function (u) { return opt(u.id, u.name + ' (' + u.id + ')', false); }).join('') + '</select>')
+        + '</div><div class="rowbtns"><button class="btn-primary" style="width:auto" id="pbBind">Bind</button> <button class="mini" id="pbUnbind">Unbind</button> <span class="msg" id="pbMsg"></span></div></div>';
+      // ── existing assignments listing ──
+      html += '<div class="formcard"><h3>Assignments <button class="mini" id="paReload" style="font-weight:400">Reload</button></h3><div id="paList"><div class="hint">Loading…</div></div></div>';
+      el.innerHTML = html;
+
+      function toggleScope(kindSel, unitSel, projSel) {
+        var k = $(kindSel).value;
+        var u = $(unitSel); if (u) u.parentNode.parentNode.style.display = k === 'unit' ? '' : 'none';
+        if (projSel) { var p = $(projSel); if (p) p.parentNode.parentNode.style.display = k === 'project' ? '' : 'none'; }
+      }
+      function toggleSubject() { var u = $('paUser'); u.parentNode.parentNode.style.display = $('paSubjKind').value === 'user' ? '' : 'none'; }
+      $('paScopeKind').addEventListener('change', function () { toggleScope('paScopeKind', 'paUnit', 'paProject'); });
+      $('paSubjKind').addEventListener('change', toggleSubject);
+      $('pbScopeKind').addEventListener('change', function () { toggleScope('pbScopeKind', 'pbUnit', null); });
+      toggleScope('paScopeKind', 'paUnit', 'paProject'); toggleSubject(); toggleScope('pbScopeKind', 'pbUnit', null);
+
+      function scopeFields(kindSel, unitSel, projSel) {
+        var k = $(kindSel).value, out = { scopeKind: k };
+        if (k === 'unit') out.scopeId = $(unitSel).value;
+        else if (k === 'project' && projSel) out.scopeId = $(projSel).value;
+        return out;
+      }
+      $('paSet').addEventListener('click', function () {
+        var msg = $('paMsg'); msg.className = 'msg'; msg.textContent = 'Setting…';
+        var a = Object.assign({ id: '', subjectKind: $('paSubjKind').value, capability: $('paCap').value, value: $('paVal').value, createdAt: '' }, scopeFields('paScopeKind', 'paUnit', 'paProject'));
+        if (a.subjectKind === 'user') a.subjectId = $('paUser').value;
+        postAndParse('/web/admin/permissions', a).then(function () { msg.className = 'msg ok'; msg.textContent = 'Set.'; loadAssignments(); })
+          .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+      });
+      $('pbBind').addEventListener('click', function () { bindRole('/web/admin/roles/bind', 'Bound.'); });
+      $('pbUnbind').addEventListener('click', function () { bindRole('/web/admin/roles/unbind', 'Unbound.'); });
+      function bindRole(path, okText) {
+        var msg = $('pbMsg'); msg.className = 'msg'; msg.textContent = '…';
+        var b = Object.assign({ userId: $('pbUser').value, roleId: $('pbRole').value }, scopeFields('pbScopeKind', 'pbUnit', null));
+        postAndParse(path, b).then(function () { msg.className = 'msg ok'; msg.textContent = okText; })
+          .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+      }
+      $('paReload').addEventListener('click', loadAssignments);
+      function loadAssignments() {
+        var host = $('paList'); host.innerHTML = '<div class="hint">Loading…</div>';
+        api('/web/admin/permissions').then(function (r) { return r.ok ? r.json() : { assignments: [] }; }).then(function (d) {
+          var rows = d.assignments || [];
+          if (!rows.length) { host.innerHTML = '<div class="hint">No assignments yet.</div>'; return; }
+          var t = '<table class="grid"><thead><tr><th>Subject</th><th>Scope</th><th>Capability</th><th>Value</th><th></th></tr></thead><tbody>';
+          rows.forEach(function (a) {
+            var subj = a.subjectKind === 'everyone' ? 'everyone' : a.subjectId;
+            var scope = a.scopeKind + (a.scopeId ? ' ' + a.scopeId : '');
+            t += '<tr><td>' + esc(subj) + '</td><td>' + esc(scope) + '</td><td>' + esc(a.capability) + '</td><td><span class="pill">' + esc(a.value) + '</span></td>'
+              + '<td><button class="mini danger" data-rm="' + esc(a.id) + '">Remove</button></td></tr>';
+          });
+          host.innerHTML = t + '</tbody></table>';
+          Array.prototype.forEach.call(host.querySelectorAll('[data-rm]'), function (b) {
+            b.addEventListener('click', function () {
+              postAndParse('/web/admin/permissions/remove', { id: b.getAttribute('data-rm') }).then(loadAssignments).catch(function (e) { alert(e.message); });
+            });
+          });
+        }).catch(function (e) { host.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+      }
+      loadAssignments();
+    }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+  }
+
+  // ---- Packs (admin: server-global declarative packs) ---------------------
+  function renderPacksPanel(el) {
+    el.innerHTML = '<div class="hint">Loading…</div>';
+    adminGet('packs').then(function (d) {
+      var packs = d.packs || [];
+      var html = '<div class="toolbar"><button class="mini" id="pkNew">Install a declarative pack</button></div><div id="pkForm"></div>';
+      html += '<p style="color:var(--dim);font-size:12px;margin:6px 0">Only DECLARATIVE packs (profiles + language/platform tables) install here. Code packs stay filesystem-only.</p>';
+      if (!packs.length) html += '<div class="hint">No server-global packs installed.</div>';
+      else {
+        html += '<table class="grid"><thead><tr><th>Name</th><th>Tier</th><th>Profiles</th><th>Languages</th><th></th></tr></thead><tbody>';
+        packs.forEach(function (p) {
+          var shadow = p.shadowed ? ' <span class="pill warn">shadowed</span>' : '';
+          var rm = p.tier === 'instance' ? '<button class="mini danger" data-rm="' + esc(p.name) + '">Remove</button>' : '<span class="hint">image (immutable)</span>';
+          html += '<tr><td>' + esc(p.name) + shadow + '</td><td>' + esc(p.tier || '—') + '</td><td>' + (p.profiles || 0) + '</td><td>' + (p.languages || 0) + '</td><td>' + rm + '</td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+      el.innerHTML = html;
+      $('pkNew').addEventListener('click', function () {
+        $('pkForm').innerHTML = '<div class="formcard"><h3>Install a declarative pack</h3>'
+          + '<div class="frow">' + fcol('Pack name', '<input id="pkName" placeholder="my-pack" />') + '</div>'
+          + '<div class="frow">' + fcol('Content (YAML)', '<textarea id="pkContent" rows="8" style="width:100%;font-family:monospace"></textarea>', true) + '</div>'
+          + '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="pkSave">Install</button> <button class="mini" id="pkCancel">Cancel</button> <span class="msg" id="pkMsg"></span></div></div>';
+        $('pkCancel').addEventListener('click', function () { $('pkForm').innerHTML = ''; });
+        $('pkSave').addEventListener('click', function () {
+          var msg = $('pkMsg'); msg.className = 'msg'; msg.textContent = 'Installing…';
+          postAndParse('/web/admin/packs', { name: $('pkName').value.trim(), content: $('pkContent').value })
+            .then(function () { renderPacksPanel(el); }).catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+        });
+      });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-rm]'), function (b) {
+        b.addEventListener('click', function () {
+          if (!confirm('Remove server-global pack "' + b.getAttribute('data-rm') + '"?')) return;
+          postAndParse('/web/admin/packs/remove', { name: b.getAttribute('data-rm') }).then(function () { renderPacksPanel(el); }).catch(function (e) { alert(e.message); });
+        });
+      });
+    }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+  }
+
+  // ---- Policy (admin: the instance pack/profile policy) -------------------
+  function renderPolicyPanel(el) {
+    el.innerHTML = '<div class="hint">Loading…</div>';
+    adminGet('policy').then(function (p) {
+      var modes = ['warn', 'block', 'auto_reconcile'];
+      var html = '<div class="formcard"><h3>Instance pack &amp; profile policy</h3>';
+      html += '<div class="frow">'
+        + fcol('Required global packs (comma-sep)', '<input id="poReq" value="' + esc((p.requiredGlobalPacks || []).join(', ')) + '" />')
+        + fcol('Default project packs (comma-sep)', '<input id="poDef" value="' + esc((p.defaultProjectPacks || []).join(', ')) + '" />')
+        + '</div><div class="frow">'
+        + fcol('Allowed profiles (comma-sep)', '<input id="poAllowed" value="' + esc((p.allowedProfileIds || []).join(', ')) + '" />')
+        + fcol('Required profiles (comma-sep)', '<input id="poReqProf" value="' + esc((p.requiredProfileIds || []).join(', ')) + '" />')
+        + '</div><div class="frow">'
+        + fcol('Blocked packs (comma-sep)', '<input id="poBlocked" value="' + esc((p.blockedPackNames || []).join(', ')) + '" />')
+        + fcol('Enforcement', '<select id="poMode">' + modes.map(function (m) { return opt(m, m, (p.enforcementMode || 'warn') === m); }).join('') + '</select>')
+        + fcol('Require profile selection', '<select id="poRequireSel">' + opt('false', 'no', !p.requireProfileSelection) + opt('true', 'yes', !!p.requireProfileSelection) + '</select>')
+        + '</div>';
+      html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="poSave">Save policy</button> <span class="msg" id="poMsg"></span></div></div>';
+      el.innerHTML = html;
+      $('poSave').addEventListener('click', function () {
+        var msg = $('poMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
+        var rec = Object.assign({}, p, {
+          requiredGlobalPacks: commaList($('poReq').value),
+          defaultProjectPacks: commaList($('poDef').value),
+          allowedProfileIds: commaList($('poAllowed').value),
+          requiredProfileIds: commaList($('poReqProf').value),
+          blockedPackNames: commaList($('poBlocked').value),
+          enforcementMode: $('poMode').value,
+          requireProfileSelection: $('poRequireSel').value === 'true',
+        });
+        postAndParse('/web/admin/policy', rec).then(function () { msg.className = 'msg ok'; msg.textContent = 'Saved.'; })
+          .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+      });
+    }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+  }
+
+  // ---- Audit (admin: scope-filtered redacted viewer) ----------------------
+  function renderAuditPanel(el) {
+    var html = '<div class="formcard"><h3>Audit log</h3><div class="frow">'
+      + fcol('Project', '<input id="auProj" placeholder="(all in scope)" />')
+      + fcol('Category', '<input id="auCat" placeholder="(any)" />')
+      + fcol('Action', '<input id="auAction" placeholder="(any)" />')
+      + fcol('Min level', '<select id="auLevel">' + opt('', '(any)', true) + opt('info', 'info', false) + opt('security', 'security', false) + '</select>')
+      + '</div><div class="rowbtns"><button class="mini" id="auGo">Search</button> <span class="msg" id="auMsg"></span></div></div>';
+    html += '<div id="auList"><div class="hint">Search to load audit events.</div></div>';
+    el.innerHTML = html;
+    function query() {
+      var qp = [];
+      if ($('auProj').value.trim()) qp.push('projectId=' + encodeURIComponent($('auProj').value.trim()));
+      if ($('auCat').value.trim()) qp.push('category=' + encodeURIComponent($('auCat').value.trim()));
+      if ($('auAction').value.trim()) qp.push('action=' + encodeURIComponent($('auAction').value.trim()));
+      if ($('auLevel').value) qp.push('minimumLevel=' + encodeURIComponent($('auLevel').value));
+      qp.push('limit=200');
+      return qp.join('&');
+    }
+    $('auGo').addEventListener('click', function () {
+      var msg = $('auMsg'); msg.className = 'msg'; msg.textContent = 'Searching…';
+      adminGet('audit?' + query()).then(function (d) {
+        msg.textContent = '';
+        var rows = d.events || [];
+        if (!rows.length) { $('auList').innerHTML = '<div class="hint">No matching audit events in your scope.</div>'; return; }
+        var t = '<table class="grid"><thead><tr><th>When</th><th>Level</th><th>Action</th><th>Actor</th><th>Project</th><th>Target</th></tr></thead><tbody>';
+        rows.forEach(function (e2) {
+          var lv = e2.level === 'security' ? 'warn' : 'ok';
+          t += '<tr><td style="white-space:nowrap">' + esc(e2.timestamp) + '</td><td><span class="pill ' + lv + '">' + esc(e2.level) + '</span></td><td>' + esc(e2.action) + '</td><td>' + esc(e2.actor && (e2.actor.displayName || e2.actor.userId) || '—') + '</td><td>' + esc(e2.projectId || '—') + '</td><td>' + esc(e2.target || '—') + '</td></tr>';
+        });
+        $('auList').innerHTML = t + '</tbody></table>';
+      }).catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+    });
+  }
+
+  // ---- Backups (admin: container-level git backing) -----------------------
+  function renderBackupsPanel(el) {
+    el.innerHTML = '<div class="hint">Loading…</div>';
+    Promise.all([
+      adminGet('git-backing').then(function (d) { return d.bindings || []; }),
+      adminGet('org/units').then(function (d) { return d.units || []; }).catch(function () { return []; }),
+    ]).then(function (res) {
+      var bindings = res[0], units = res[1];
+      // Git credentials: the shared PAT the git adapters inject into https
+      // remotes (clone/fetch/push). Write-only — set once, rotate any time.
+      var html = '<div class="formcard"><h3>Git credentials (Personal Access Token)</h3>'
+        + '<p class="hint" style="font-size:12px">Stored write-only as the <code>git-token</code> secret and injected into https remotes for clone/push. Set this before binding a private repo; re-set to rotate. Without it, private clones fail (<code>could not read Username</code>).</p>'
+        + '<div class="rowbtns"><input id="gitPat" type="password" placeholder="ghp_… / PAT" style="flex:1;max-width:360px" /> <button class="mini" id="gitPatSave">Save token</button> <span class="msg" id="gitPatMsg"></span></div></div>';
+      html += '<div class="toolbar"><button class="mini" id="bkNew">Bind a backup repo</button></div><div id="bkForm"></div>';
+      html += '<p style="color:var(--dim);font-size:12px;margin:6px 0">A unit binding mirrors the .wai/ trees of its subtree projects; the instance binding backs up the whole instance structure. The secret store is never mirrored.</p>';
+      if (!bindings.length) html += '<div class="hint">No backup repositories bound.</div>';
+      else {
+        html += '<table class="grid"><thead><tr><th>Scope</th><th>Remote</th><th>Branch</th><th>Sync</th><th>Last</th><th></th></tr></thead><tbody>';
+        bindings.forEach(function (b) {
+          var scope = b.scopeKind === 'instance' ? 'instance' : ('unit ' + b.scopeId);
+          var sync = b.periodicSyncMinutes !== undefined ? ('every ' + b.periodicSyncMinutes + 'm') : 'manual';
+          html += '<tr><td>' + esc(scope) + '</td><td>' + esc(b.remote) + '</td><td>' + esc(b.branch) + '</td><td>' + esc(sync) + '</td><td>' + esc(b.lastSyncAt || '—') + '</td>'
+            + '<td style="white-space:nowrap"><button class="mini" data-sync="' + esc(b.id) + '">Sync now</button> <button class="mini danger" data-rm="' + esc(b.id) + '">Remove</button></td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+      el.innerHTML = html;
+      $('gitPatSave').addEventListener('click', function () {
+        var m = $('gitPatMsg'); m.className = 'msg'; m.textContent = 'Saving…';
+        postAndParse('/web/admin/secrets', { key: 'git-token', value: $('gitPat').value })
+          .then(function () { m.className = 'msg ok'; m.textContent = 'Token saved.'; $('gitPat').value = ''; })
+          .catch(function (e) { m.className = 'msg bad'; m.textContent = e.message; });
+      });
+      $('bkNew').addEventListener('click', function () {
+        var unitOpts = units.map(function (u) { return opt(u.id, u.name + ' (' + u.id + ')', false); }).join('');
+        $('bkForm').innerHTML = '<div class="formcard"><h3>Bind a backup repository</h3><div class="frow">'
+          + fcol('Scope', '<select id="bkKind">' + opt('unit', 'a unit subtree', true) + opt('instance', 'the whole instance', false) + '</select>')
+          + fcol('Unit', '<select id="bkUnit">' + unitOpts + '</select>')
+          + '</div><div class="frow">'
+          + fcol('Remote URL', '<input id="bkRemote" placeholder="git remote URL" />')
+          + fcol('Branch', '<input id="bkBranch" value="main" />')
+          + fcol('Sync every (min, blank=manual)', '<input id="bkInterval" placeholder="" />')
+          + '</div><div class="rowbtns"><button class="btn-primary" style="width:auto" id="bkSave">Bind</button> <button class="mini" id="bkCancel">Cancel</button> <span class="msg" id="bkMsg"></span></div></div>';
+        function tog() { $('bkUnit').parentNode.parentNode.style.display = $('bkKind').value === 'unit' ? '' : 'none'; }
+        $('bkKind').addEventListener('change', tog); tog();
+        $('bkCancel').addEventListener('click', function () { $('bkForm').innerHTML = ''; });
+        $('bkSave').addEventListener('click', function () {
+          var msg = $('bkMsg'); msg.className = 'msg'; msg.textContent = 'Binding…';
+          var rec = { id: '', scopeKind: $('bkKind').value, remote: $('bkRemote').value.trim(), branch: $('bkBranch').value.trim() || 'main', createdAt: '', createdBy: (ctx && ctx.subject) || { userId: '', kind: 'human', issuer: 'local' } };
+          if (rec.scopeKind === 'unit') rec.scopeId = $('bkUnit').value;
+          var iv = $('bkInterval').value.trim(); if (iv) rec.periodicSyncMinutes = Number(iv);
+          postAndParse('/web/admin/git-backing', rec).then(function () { renderBackupsPanel(el); }).catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+        });
+      });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-sync]'), function (b) {
+        b.addEventListener('click', function () {
+          b.disabled = true; b.textContent = 'Syncing…';
+          postAndParse('/web/admin/git-backing/sync', { id: b.getAttribute('data-sync') }).then(function () { renderBackupsPanel(el); }).catch(function (e) { alert(e.message); b.disabled = false; b.textContent = 'Sync now'; });
+        });
+      });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-rm]'), function (b) {
+        b.addEventListener('click', function () {
+          if (!confirm('Remove this backup binding? The repository itself is untouched.')) return;
+          postAndParse('/web/admin/git-backing/remove', { id: b.getAttribute('data-rm') }).then(function () { renderBackupsPanel(el); }).catch(function (e) { alert(e.message); });
+        });
+      });
+    }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+  }
+
+  // ---- Exposure (admin: instance web/TLS posture) -------------------------
+  function renderExposurePanel(el) {
+    el.innerHTML = '<div class="hint">Loading…</div>';
+    adminGet('exposure').then(function (x) {
+      function toggle(id, label, val) {
+        return fcol(label, '<select id="' + id + '">' + opt('false', 'off', !val) + opt('true', 'on', !!val) + '</select>');
+      }
+      var html = '<div class="formcard"><h3>Instance exposure</h3>';
+      html += '<p style="color:var(--dim);font-size:12px;margin:0 0 8px">The exposure posture gates the whole web/admin surface. Changes take effect on the next server start for mount flags; the web UI flag gates immediately.</p>';
+      html += '<div class="frow">'
+        + toggle('exWebUi', 'Web UI enabled', x.webUiEnabled)
+        + toggle('exTls', 'Require TLS', x.requireTls)
+        + toggle('exAdminUi', 'Browser admin UI', x.adminUiEnabled)
+        + '</div><div class="frow">'
+        + toggle('exIdentity', 'Identity/audit API', x.identityApiEnabled)
+        + toggle('exLandscape', 'Landscape API', x.landscapeApiEnabled)
+        + toggle('exPolicy', 'Project-policy API', x.projectPolicyApiEnabled)
+        + toggle('exOps', 'Operations API', x.operationsApiEnabled)
+        + '</div>';
+      html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="exSave">Save exposure</button> <span class="msg" id="exMsg"></span></div></div>';
+      el.innerHTML = html;
+      $('exSave').addEventListener('click', function () {
+        var msg = $('exMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
+        var rec = Object.assign({}, x, {
+          webUiEnabled: $('exWebUi').value === 'true',
+          requireTls: $('exTls').value === 'true',
+          adminUiEnabled: $('exAdminUi').value === 'true',
+          identityApiEnabled: $('exIdentity').value === 'true',
+          landscapeApiEnabled: $('exLandscape').value === 'true',
+          projectPolicyApiEnabled: $('exPolicy').value === 'true',
+          operationsApiEnabled: $('exOps').value === 'true',
+        });
+        postAndParse('/web/admin/exposure', rec).then(function () { msg.className = 'msg ok'; msg.textContent = 'Saved.'; })
+          .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+      });
+    }).catch(function (e) { el.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+  }
+
   // ---- Connect an agent (self-service; any signed-in user) ----------------
   function renderConnect() {
     var box = $('connectBody');
-    var pids = (ctx && ctx.visibleProjectIds) || [];
+    // The project ids come from the already-populated selector (fed by
+    // /web/projects, the resolver-filtered listing).
+    var pids = Array.prototype.map.call($('projSel').options, function (o) { return o.value; });
     var html = '<h2 style="margin:0 0 4px">Connect an agent</h2>';
     html += '<p style="color:var(--dim);margin:0 0 12px;font-size:12.5px">Mint a single-project MCP token to hand to an AI agent.</p>';
     html += '<div class="note">This token is <strong>separate from your login</strong>. It is an agent credential scoped to exactly one project — signing out never affects it, and it can never sign in to this web UI. It is <strong>owned by you</strong>, so deactivating your account revokes it. Copy it now; the full token is shown only once.</div>';
@@ -1813,12 +2471,11 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   }
 
   // ---- Projects (lifecycle management; any signed-in user) ----------------
-  // Lists the caller's in-scope projects (GET /web/projects — scoped read). Create
-  // and the per-row Lock / Promote / Destroy actions are shown only to callers whose
-  // capability flags mark them project authors/admins, but the SERVER enforces the
-  // real per-action grant scope, so a 403 is surfaced gracefully rather than trusted
-  // to the client's flags.
-  function projectsCanManage() { return !!(ctx && (ctx.canWriteProjects || ctx.isAdmin)); }
+  // Lists the caller's in-scope projects (GET /web/projects — resolver-filtered).
+  // The management affordances are always offered; the SERVER resolves the real
+  // per-action permission, so a 403 is surfaced gracefully rather than trusted
+  // to client-side flags. Scope-aware chrome returns with the roles UI.
+  function projectsCanManage() { return true; }
 
   function renderProjects() {
     var box = $('projectsBody');
@@ -1829,8 +2486,10 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       html += '<div class="formcard"><h3>Create a project</h3>';
       html += '<div class="frow">'
         + fcol('Project ID', '<input id="npId" placeholder="lowercase letters, digits, hyphen" />')
-        + fcol('Organization unit', '<input id="npUnit" placeholder="optional — required if you are unit-scoped" />')
+        + fcol('Organization unit', '<input id="npUnit" placeholder="required owner unit id" />')
+        + fcol('Profiles (comma-sep, optional)', '<input id="npProfiles" placeholder="e.g. backend, strict" />')
         + '</div>';
+      html += '<p style="color:var(--dim);font-size:12px;margin:2px 0 8px">The instance pack policy applies at creation (required/default packs, profile requirements). A profile selection is required only if the policy demands one.</p>';
       html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="npCreate">Create project</button> <span class="msg" id="npMsg"></span></div></div>';
     }
     html += '<div class="formcard"><h3>Your projects <span class="msg" id="plNote" style="font-weight:400"></span></h3><div id="plList"><div class="hint">Loading…</div></div></div>';
@@ -1842,8 +2501,9 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
         if (!id) { msg.className = 'msg bad'; msg.textContent = 'Project ID is required.'; return; }
         var payload = { id: id };
         var unit = $('npUnit').value.trim(); if (unit) payload.unitId = unit;
+        var profs = commaList($('npProfiles').value); if (profs.length) payload.profileSelection = { profileIds: profs };
         postAndParse('/web/projects', payload)
-          .then(function () { msg.className = 'msg ok'; msg.textContent = 'Created.'; $('npId').value = ''; $('npUnit').value = ''; loadProjects(); })
+          .then(function () { msg.className = 'msg ok'; msg.textContent = 'Created.'; $('npId').value = ''; $('npUnit').value = ''; $('npProfiles').value = ''; loadProjects(); })
           .catch(function (e) { msg.className = 'msg bad'; msg.textContent = projectErr(e); });
       });
     }
@@ -1864,15 +2524,20 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       if (!projs.length) { host.innerHTML = '<div class="hint">No projects in your scope yet.</div>'; return; }
       var rows = projs.map(function (p) {
         var st = p.status === 'active' ? 'ok' : 'warn';
-        var actions = canManage
+        var actions = (canManage
           ? '<button class="mini" data-lock="' + esc(p.id) + '">Lock</button> '
             + '<button class="mini" data-promote="' + esc(p.id) + '">Promote</button> '
-            + '<button class="mini danger" data-destroy="' + esc(p.id) + '">Destroy</button>'
-          : '<span class="hint">read-only</span>';
+            + '<button class="mini danger" data-destroy="' + esc(p.id) + '">Destroy</button> '
+          : '')
+          + '<button class="mini" data-ops="' + esc(p.id) + '">Ops</button>';
         return '<tr><td>' + esc(p.id) + '</td><td><span class="pill ' + st + '">' + esc(p.status || '—') + '</span></td>'
-          + '<td style="white-space:nowrap">' + actions + '</td></tr>';
+          + '<td class="btnrow" style="white-space:nowrap">' + actions + '</td></tr>'
+          + '<tr class="opsrow" id="ops-' + esc(p.id) + '" hidden><td colspan="3"></td></tr>';
       }).join('');
       host.innerHTML = '<table class="grid"><thead><tr><th>Project</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
+      Array.prototype.forEach.call(host.querySelectorAll('[data-ops]'), function (b) {
+        b.addEventListener('click', function () { toggleProjectOps(b.getAttribute('data-ops')); });
+      });
       Array.prototype.forEach.call(host.querySelectorAll('[data-lock]'), function (b) {
         b.addEventListener('click', function () { projectAction('/web/projects/lock', { projectId: b.getAttribute('data-lock') }, b, 'Locking…', 'Lock'); });
       });
@@ -1904,6 +2569,130 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       btn.disabled = false; btn.textContent = label;
       if (note) { note.className = 'msg bad'; note.textContent = projectErr(e); }
     });
+  }
+
+  // ---- per-project ops (packs / policy / producers / git) -----------------
+  // Reachable by any signed-in user; every action is authorized per project
+  // server-side (project:read for the pack listing, project:write for policy and
+  // git commit/sync, project:admin for pack install and producers).
+  function toggleProjectOps(pid) {
+    var row = $('ops-' + pid);
+    if (!row) return;
+    if (!row.hidden) { row.hidden = true; return; }
+    row.hidden = false;
+    var cell = row.firstChild;
+    cell.innerHTML = '<div class="opsbox" style="padding:10px 6px"><div class="optabs" id="optabs-' + esc(pid) + '">'
+      + '<button data-op="git" data-p="' + esc(pid) + '">Git backing</button>'
+      + '<button data-op="packs" data-p="' + esc(pid) + '">Packs</button>'
+      + '<button data-op="policy" data-p="' + esc(pid) + '">Policy</button>'
+      + '<button data-op="producers" data-p="' + esc(pid) + '">Producers</button>'
+      + '</div><div id="opsBody-' + esc(pid) + '"><div class="hint">Loading…</div></div></div>';
+    Array.prototype.forEach.call(cell.querySelectorAll('[data-op]'), function (b) {
+      b.addEventListener('click', function () { projectOpsSection(pid, b.getAttribute('data-op')); });
+    });
+    projectOpsSection(pid, 'git');
+  }
+  function projectOpsSection(pid, section) {
+    var body = $('opsBody-' + pid);
+    if (!body) return;
+    // Highlight the active tab (subtab-style), like the primary admin subtabs.
+    var tabs = $('optabs-' + pid);
+    if (tabs) Array.prototype.forEach.call(tabs.children, function (b) { b.classList.toggle('active', b.getAttribute('data-op') === section); });
+    body.innerHTML = '<div class="hint">Loading…</div>';
+    var enc = encodeURIComponent(pid);
+    if (section === 'git') {
+      api('/web/projects/git?projectId=' + enc).then(function (r) { return r.json(); }).then(function (s) {
+        var html;
+        if (!s.enabled) {
+          html = '<div class="frow">' + fcol('Remote URL', '<input id="gRemote-' + esc(pid) + '" placeholder="git remote URL" />')
+            + fcol('Branch', '<input id="gBranch-' + esc(pid) + '" value="main" />') + '</div>'
+            + '<div class="rowbtns"><button class="mini" id="gBind-' + esc(pid) + '">Bind repository</button> <span class="msg" id="gMsg-' + esc(pid) + '"></span></div>'
+            + '<p class="hint">wairon commits ONLY the .wai/ tree — the repo can be shared with the project code.</p>';
+        } else {
+          html = '<table class="grid"><tbody>'
+            + '<tr><td>Remote</td><td>' + esc(s.remote) + '</td></tr>'
+            + '<tr><td>Branch</td><td>' + esc(s.branch) + ' (working: ' + esc(s.workingBranch) + ')</td></tr>'
+            + '<tr><td>.wai/ changes</td><td>' + (s.dirty ? '<span class="pill warn">unpublished</span>' : '<span class="pill ok">clean</span>') + '</td></tr>'
+            + '<tr><td>Periodic sync</td><td>' + (s.periodicSyncMinutes !== undefined ? ('every ' + s.periodicSyncMinutes + 'm') : 'manual') + '</td></tr>'
+            + '</tbody></table>'
+            + '<div class="btnrow" style="margin-top:8px"><button class="mini" id="gCommit-' + esc(pid) + '">Commit .wai/ now</button>'
+            + '<button class="mini" id="gSync-' + esc(pid) + '">Sync from default</button>'
+            + '<button class="mini danger" id="gUnbind-' + esc(pid) + '">Unbind</button></div>'
+            + '<span class="msg" id="gMsg-' + esc(pid) + '"></span>';
+        }
+        body.innerHTML = html;
+        var msg = function () { return $('gMsg-' + pid); };
+        var reload = function () { projectOpsSection(pid, 'git'); };
+        if (!s.enabled) {
+          $('gBind-' + pid).addEventListener('click', function () {
+            msg().textContent = 'Binding…';
+            postAndParse('/web/projects/git', { projectId: pid, remote: $('gRemote-' + pid).value.trim(), branch: $('gBranch-' + pid).value.trim() || 'main' }).then(reload).catch(function (e) { msg().className = 'msg bad'; msg().textContent = e.message; });
+          });
+        } else {
+          $('gCommit-' + pid).addEventListener('click', function () {
+            msg().className = 'msg'; msg().textContent = 'Committing…';
+            postAndParse('/web/projects/git/commit', { projectId: pid }).then(function (d) { msg().className = 'msg ok'; msg().textContent = d.published ? 'Published ' + (d.commitSha || '').slice(0, 12) : 'Nothing to publish (clean).'; reload(); }).catch(function (e) { msg().className = 'msg bad'; msg().textContent = e.message; });
+          });
+          $('gSync-' + pid).addEventListener('click', function () {
+            msg().className = 'msg'; msg().textContent = 'Syncing…';
+            postAndParse('/web/projects/git/sync', { projectId: pid }).then(function () { msg().className = 'msg ok'; msg().textContent = 'Synced.'; }).catch(function (e) { msg().className = 'msg bad'; msg().textContent = e.message; });
+          });
+          $('gUnbind-' + pid).addEventListener('click', function () {
+            if (!confirm('Unbind the repository for "' + pid + '"? The checkout stays.')) return;
+            postAndParse('/web/projects/git/disconnect', { projectId: pid }).then(reload).catch(function (e) { msg().className = 'msg bad'; msg().textContent = e.message; });
+          });
+        }
+      }).catch(function (e) { body.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+    } else if (section === 'packs') {
+      api('/web/projects/packs?projectId=' + enc).then(function (r) { if (r.status === 403) throw new Error('Requires project:read.'); return r.json(); }).then(function (d) {
+        var packs = d.packs || [];
+        var html = packs.length
+          ? '<table class="grid"><thead><tr><th>Pack</th><th>Profiles</th><th></th></tr></thead><tbody>' + packs.map(function (p) { return '<tr><td>' + esc(p.name) + '</td><td>' + (p.profiles || 0) + '</td><td><button class="mini danger" data-rmp="' + esc(p.name) + '">Remove</button></td></tr>'; }).join('') + '</tbody></table>'
+          : '<div class="hint">No project packs.</div>';
+        html += '<div class="rowbtns" style="margin-top:8px"><input id="ppName-' + esc(pid) + '" placeholder="pack name" style="max-width:180px" /> <input id="ppContent-' + esc(pid) + '" placeholder="YAML content" style="flex:1" /> <button class="mini" id="ppAdd-' + esc(pid) + '">Install</button> <span class="msg" id="ppMsg-' + esc(pid) + '"></span></div>';
+        body.innerHTML = html;
+        var reload = function () { projectOpsSection(pid, 'packs'); };
+        $('ppAdd-' + pid).addEventListener('click', function () {
+          var m = $('ppMsg-' + pid); m.className = 'msg'; m.textContent = 'Installing…';
+          postAndParse('/web/projects/packs', { projectId: pid, name: $('ppName-' + pid).value.trim(), content: $('ppContent-' + pid).value }).then(reload).catch(function (e) { m.className = 'msg bad'; m.textContent = e.message; });
+        });
+        Array.prototype.forEach.call(body.querySelectorAll('[data-rmp]'), function (b) {
+          b.addEventListener('click', function () { postAndParse('/web/projects/packs/remove', { projectId: pid, name: b.getAttribute('data-rmp') }).then(reload).catch(function (e) { alert(e.message); }); });
+        });
+      }).catch(function (e) { body.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+    } else if (section === 'policy') {
+      api('/web/projects/policy?projectId=' + enc).then(function (r) { if (r.status === 403) throw new Error('Requires project:write.'); return r.json(); }).then(function (ev) {
+        var ok = ev.compliant !== false && (!ev.violations || !ev.violations.length);
+        var html = '<div class="cards"><div class="stat"><div class="k">Compliance</div><div class="v">' + (ok ? '<span class="pill ok">compliant</span>' : '<span class="pill warn">drift</span>') + '</div></div></div>';
+        if (ev.messages && ev.messages.length) html += '<ul>' + ev.messages.map(function (m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul>';
+        html += '<div class="rowbtns"><button class="mini" id="polRec-' + esc(pid) + '">Reconcile</button> <span class="msg" id="polMsg-' + esc(pid) + '"></span></div>';
+        body.innerHTML = html;
+        $('polRec-' + pid).addEventListener('click', function () {
+          var m = $('polMsg-' + pid); m.className = 'msg'; m.textContent = 'Reconciling…';
+          postAndParse('/web/projects/policy/reconcile', { projectId: pid }).then(function () { projectOpsSection(pid, 'policy'); }).catch(function (e) { m.className = 'msg bad'; m.textContent = e.message; });
+        });
+      }).catch(function (e) { body.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+    } else if (section === 'producers') {
+      api('/web/projects/producers?projectId=' + enc).then(function (r) { if (r.status === 403) throw new Error('Requires project:admin.'); return r.json(); }).then(function (d) {
+        var prods = d.producers || [];
+        var html = prods.length
+          ? '<table class="grid"><thead><tr><th>Target</th><th>Parent page</th><th></th></tr></thead><tbody>' + prods.map(function (p) { return '<tr><td>' + esc(p.target || p.id) + '</td><td>' + esc(p.parentPageId || '—') + '</td><td class="btnrow"><button class="mini" data-run="' + esc(p.target || p.id) + '">Run</button> <button class="mini danger" data-rmpr="' + esc(p.target || p.id) + '">Remove</button></td></tr>'; }).join('') + '</tbody></table>'
+          : '<div class="hint">No producers configured.</div>';
+        html += '<div class="rowbtns" style="margin-top:8px"><select id="prTarget-' + esc(pid) + '">' + opt('notion', 'notion', true) + opt('miro', 'miro', false) + '</select> <input id="prPage-' + esc(pid) + '" placeholder="parent page id" style="flex:1" /> <button class="mini" id="prAdd-' + esc(pid) + '">Configure</button> <span class="msg" id="prMsg-' + esc(pid) + '"></span></div>';
+        body.innerHTML = html;
+        var reload = function () { projectOpsSection(pid, 'producers'); };
+        $('prAdd-' + pid).addEventListener('click', function () {
+          var m = $('prMsg-' + pid); m.className = 'msg'; m.textContent = 'Configuring…';
+          postAndParse('/web/projects/producers', { projectId: pid, target: $('prTarget-' + pid).value, parentPageId: $('prPage-' + pid).value.trim() }).then(reload).catch(function (e) { m.className = 'msg bad'; m.textContent = e.message; });
+        });
+        Array.prototype.forEach.call(body.querySelectorAll('[data-run]'), function (b) {
+          b.addEventListener('click', function () { b.disabled = true; b.textContent = 'Running…'; postAndParse('/web/projects/producers/run', { projectId: pid, target: b.getAttribute('data-run') }).then(function () { b.textContent = 'Done'; }).catch(function (e) { alert(e.message); b.disabled = false; b.textContent = 'Run'; }); });
+        });
+        Array.prototype.forEach.call(body.querySelectorAll('[data-rmpr]'), function (b) {
+          b.addEventListener('click', function () { postAndParse('/web/projects/producers/remove', { projectId: pid, target: b.getAttribute('data-rmpr') }).then(reload).catch(function (e) { alert(e.message); }); });
+        });
+      }).catch(function (e) { body.innerHTML = '<div class="hint bad">' + esc(e.message) + '</div>'; });
+    }
   }
 
   boot();
@@ -1957,9 +2746,39 @@ function adminSetUserStatus(cfg: HostConfig, sessionId: string, body: Body, res:
   sendJson(res, 200, webadmin.setUserStatus(cfg, sessionId, String(body?.userId ?? ''), String(body?.status ?? '')));
 }
 
-/** Replace a hosted user's grants; forwards to web_admin_orchestrator.replaceUserGrants. */
-function adminReplaceUserGrants(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(res, 200, webadmin.replaceUserGrants(cfg, sessionId, String(body?.userId ?? ''), (body?.grants ?? []) as ProjectGrant[]));
+// Share links (owner-side; gated on share:create). Each forwards straight to the
+// share admin orchestrator — the same portal→orchestrator shape as every other
+// /web/admin route — passing the ws_ session as the credential.
+/** Create a share link (mint the token once); forwards to share_admin_orchestrator.createShareLink. */
+function adminCreateShareLink(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 201, shareadmin.createShareLink(cfg, sessionId, (body ?? {}) as unknown as ShareLinkInput));
+}
+
+/** List a project's share links; forwards to share_admin_orchestrator.listShareLinks. */
+function adminListShareLinks(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  sendJson(res, 200, { links: shareadmin.listShareLinks(cfg, sessionId, url.searchParams.get('projectId') ?? '') });
+}
+
+/** Re-capture a link's immutable snapshot; forwards to share_admin_orchestrator.refreshSnapshot. */
+function adminRefreshShareSnapshot(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, shareadmin.refreshSnapshot(cfg, sessionId, String(body?.linkId ?? '')));
+}
+
+/** Update a link's mutable settings; forwards to share_admin_orchestrator.updateShareLink. */
+function adminUpdateShareLink(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, shareadmin.updateShareLink(cfg, sessionId, String(body?.linkId ?? ''), (body?.changes ?? {}) as ShareLinkUpdate));
+}
+
+/** Revoke a share link; forwards to share_admin_orchestrator.removeShareLink. */
+function adminRemoveShareLink(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  shareadmin.removeShareLink(cfg, sessionId, String(body?.linkId ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+
+/** Read a link's access log; forwards to share_admin_orchestrator.getShareAccessLog. */
+function adminGetShareAccessLog(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  const limit = Number(url.searchParams.get('limit') ?? '100') || 100;
+  sendJson(res, 200, { entries: shareadmin.getShareAccessLog(cfg, sessionId, url.searchParams.get('linkId') ?? '', limit) });
 }
 
 /** List identity-provider (SSO) configurations; forwards to web_admin_orchestrator.listIdentityProviders. */
@@ -2009,6 +2828,13 @@ function adminListSecretRefs(cfg: HostConfig, sessionId: string, res: ServerResp
   sendJson(res, 200, { refs: webadmin.listSecretRefs(cfg, sessionId) });
 }
 
+/** Set/update one integration secret (e.g. git-token); forwards to
+ *  web_admin_orchestrator.setSecret. The value is write-only (never read back). */
+function adminSetSecret(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  webadmin.setSecret(cfg, sessionId, String(body?.key ?? ''), String(body?.value ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+
 /** Create or update an organization unit; forwards to web_admin_orchestrator.upsertOrganizationUnit. */
 function adminUpsertOrgUnit(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
   sendJson(res, 200, webadmin.upsertOrganizationUnit(cfg, sessionId, body as OrganizationUnitRecord));
@@ -2017,6 +2843,81 @@ function adminUpsertOrgUnit(cfg: HostConfig, sessionId: string, body: Body, res:
 /** Place a project into an organization unit; forwards to web_admin_orchestrator.placeProject. */
 function adminPlaceProject(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
   webadmin.placeProject(cfg, sessionId, String(body?.projectId ?? ''), String(body?.unitId ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+
+/** Remove an organization unit per its disposition (migrate/alternative/absorb/
+ *  cascade); forwards to web_admin_orchestrator.removeUnit. */
+function adminRemoveUnit(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  webadmin.removeUnit(cfg, sessionId, String(body?.unitId ?? ''), (body?.disposition ?? {}) as UnitDisposition);
+  sendJson(res, 200, { ok: true });
+}
+
+/** The optional {scopeKind, scopeId} pair from a request body (role bindings). */
+function bodyScope(body: Body): { scopeKind?: ScopeKind; scopeId?: string } {
+  return {
+    scopeKind: body?.scopeKind ? (String(body.scopeKind) as ScopeKind) : undefined,
+    scopeId: body?.scopeId !== undefined ? String(body.scopeId) : undefined,
+  };
+}
+
+/** List permission roles; forwards to web_admin_orchestrator.listRoles. */
+function adminListRoles(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
+  sendJson(res, 200, { roles: webadmin.listRoles(cfg, sessionId) });
+}
+
+/** Create a permission role; forwards to web_admin_orchestrator.createRole. */
+function adminCreateRole(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, webadmin.createRole(cfg, sessionId, body as Role));
+}
+
+/** Update a permission role; forwards to web_admin_orchestrator.updateRole. */
+function adminUpdateRole(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, webadmin.updateRole(cfg, sessionId, body as Role));
+}
+
+/** Delete a permission role by id; forwards to web_admin_orchestrator.deleteRole. */
+function adminDeleteRole(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  webadmin.deleteRole(cfg, sessionId, String(body?.id ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+
+/** Bind a role to a user at a scope; forwards to web_admin_orchestrator.bindRole. */
+function adminBindRole(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  const scope = bodyScope(body);
+  sendJson(res, 200, webadmin.bindRole(cfg, sessionId, String(body?.userId ?? ''), String(body?.roleId ?? ''), scope.scopeKind, scope.scopeId));
+}
+
+/** Unbind a role from a user at a scope; forwards to web_admin_orchestrator.unbindRole. */
+function adminUnbindRole(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  const scope = bodyScope(body);
+  sendJson(res, 200, webadmin.unbindRole(cfg, sessionId, String(body?.userId ?? ''), String(body?.roleId ?? ''), scope.scopeKind, scope.scopeId));
+}
+
+/** List permission assignments filtered by scope/subject query params; forwards
+ *  to web_admin_orchestrator.listAssignments. */
+function adminListAssignments(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  const q = (name: string): string | undefined => url.searchParams.get(name) ?? undefined;
+  sendJson(res, 200, {
+    assignments: webadmin.listAssignments(
+      cfg,
+      sessionId,
+      q('scopeKind') as ScopeKind | undefined,
+      q('scopeId'),
+      q('subjectKind') as 'user' | 'everyone' | undefined,
+      q('subjectId'),
+    ),
+  });
+}
+
+/** Upsert a permission assignment; forwards to web_admin_orchestrator.setAssignment. */
+function adminSetAssignment(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, webadmin.setAssignment(cfg, sessionId, body as PermissionAssignment));
+}
+
+/** Remove a permission assignment by id; forwards to web_admin_orchestrator.removeAssignment. */
+function adminRemoveAssignment(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  webadmin.removeAssignment(cfg, sessionId, String(body?.id ?? ''));
   sendJson(res, 200, { ok: true });
 }
 
@@ -2030,16 +2931,28 @@ function adminPlaceProject(cfg: HostConfig, sessionId: string, body: Body, res: 
 // UNCHANGED (a caller lacking the grant is refused with AdminAuthError → 403).
 // Cookie-authenticated POSTs are CSRF-gated in http.ts (routeData) like /web/logout.
 
-/** List the projects the caller can manage; forwards to web_project_orchestrator.listProjects. */
+/** List the projects the caller can manage, each annotated with its home unit;
+ *  forwards to web_project_orchestrator.listProjects. */
 function projectList(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
   sendJson(res, 200, { projects: webproject.listProjects(cfg, sessionId) });
 }
 
-/** Create a project; forwards to web_project_orchestrator.createProject. The
- *  optional org unit is required for a unit-scoped creator (enforced upstream). */
+/** Create a project placed in the REQUIRED owner unit, optionally with a
+ *  profile selection; forwards to web_project_orchestrator.createProject, which
+ *  routes through the policy-aware initialization (missing/unknown unit and
+ *  policy violations reject upstream). */
 function projectCreate(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  const unitId = body?.unitId ? String(body.unitId) : undefined;
-  sendJson(res, 201, webproject.createProject(cfg, sessionId, String(body?.id ?? ''), unitId));
+  sendJson(
+    res,
+    201,
+    webproject.createProject(
+      cfg,
+      sessionId,
+      String(body?.id ?? ''),
+      String(body?.unitId ?? ''),
+      body?.profileSelection as ProjectProfileSelection | undefined,
+    ),
+  );
 }
 
 /** Lock a project; forwards to web_project_orchestrator.lockProject. */
@@ -2056,6 +2969,155 @@ function projectPromote(cfg: HostConfig, sessionId: string, body: Body, res: Ser
 function projectDestroy(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
   webproject.destroyProject(cfg, sessionId, String(body?.id ?? ''));
   sendJson(res, 200, { ok: true });
+}
+
+// ── Project ops plane (packs / policy / producers / git / audit / exposure) ──
+//
+// Thin portal handlers forwarding to the project ops orchestrator with the
+// session as the credential; the OWNING orchestrators re-apply the exact
+// resolver authorization (instance-level project:admin for the global/instance
+// surfaces; project:admin / project:write / project:read over the project for
+// its surfaces). Cookie POSTs are CSRF-gated in http.ts like /web/logout.
+
+const q = (url: URL, name: string): string | undefined => url.searchParams.get(name) ?? undefined;
+
+function opsListGlobalPacks(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
+  sendJson(res, 200, { packs: projectops.listGlobalPacks(cfg, sessionId) });
+}
+function opsInstallGlobalPack(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, projectops.installGlobalPack(cfg, sessionId, String(body?.name ?? ''), String(body?.content ?? '')));
+}
+function opsRemoveGlobalPack(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  projectops.removeGlobalPack(cfg, sessionId, String(body?.name ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+function opsListProjectPacks(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  sendJson(res, 200, { packs: projectops.listProjectPacks(cfg, sessionId, q(url, 'projectId') ?? '') });
+}
+function opsInstallProjectPack(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, projectops.installProjectPack(cfg, sessionId, String(body?.projectId ?? ''), String(body?.name ?? ''), String(body?.content ?? '')));
+}
+function opsRemoveProjectPack(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  projectops.removeProjectPack(cfg, sessionId, String(body?.projectId ?? ''), String(body?.name ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+function opsGetPackPolicy(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
+  sendJson(res, 200, projectops.getPackPolicy(cfg, sessionId));
+}
+function opsSetPackPolicy(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, projectops.setPackPolicy(cfg, sessionId, body as InstancePackPolicy));
+}
+function opsPolicyEvaluate(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  sendJson(res, 200, projectops.evaluateProjectPolicy(cfg, sessionId, q(url, 'projectId') ?? ''));
+}
+function opsPolicyReconcile(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, projectops.reconcileProjectPolicy(cfg, sessionId, String(body?.projectId ?? '')));
+}
+function opsListProducers(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  sendJson(res, 200, { producers: projectops.listProducers(cfg, sessionId, q(url, 'projectId') ?? '') });
+}
+function opsConfigureProducer(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  projectops.configureProducer(cfg, sessionId, String(body?.projectId ?? ''), String(body?.target ?? ''), String(body?.parentPageId ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+function opsRemoveProducer(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  projectops.removeProducer(cfg, sessionId, String(body?.projectId ?? ''), String(body?.target ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+async function opsRunProducer(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): Promise<void> {
+  await projectops.produceProducer(cfg, sessionId, String(body?.projectId ?? ''), String(body?.target ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+function opsGitStatus(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  sendJson(res, 200, projectops.getGitBinding(cfg, sessionId, q(url, 'projectId') ?? ''));
+}
+function opsGitBind(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  const pat = body?.pat ? String(body.pat) : undefined;
+  sendJson(res, 200, projectops.enableGit(cfg, sessionId, String(body?.projectId ?? ''), String(body?.remote ?? ''), String(body?.branch ?? ''), pat));
+}
+function opsGitUnbind(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  projectops.disableGit(cfg, sessionId, String(body?.projectId ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+function opsGitSync(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  projectops.syncGit(cfg, sessionId, String(body?.projectId ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+function opsGitCommit(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(
+    res,
+    200,
+    projectops.commitProject(
+      cfg,
+      sessionId,
+      String(body?.projectId ?? ''),
+      typeof body?.subsystem === 'string' && body.subsystem ? body.subsystem : undefined,
+      typeof body?.message === 'string' && body.message ? body.message : undefined,
+    ),
+  );
+}
+function opsGitSyncConfig(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  projectops.configureGitSync(
+    cfg,
+    sessionId,
+    String(body?.projectId ?? ''),
+    typeof body?.periodicSyncMinutes === 'number' ? body.periodicSyncMinutes : undefined,
+    typeof body?.skipIfClean === 'boolean' ? body.skipIfClean : undefined,
+  );
+  sendJson(res, 200, { ok: true });
+}
+function opsListGitBacking(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
+  sendJson(res, 200, { bindings: projectops.listBackingBindings(cfg, sessionId) });
+}
+function opsBindGitBacking(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  // Strip the inline PAT out of the binding shape — it is stored write-only in
+  // the secret store, NEVER persisted into the binding record.
+  const pat = body?.pat ? String(body.pat) : undefined;
+  const binding = { ...(body ?? {}) } as Record<string, unknown>;
+  delete binding.pat;
+  sendJson(res, 200, projectops.bindBackingScope(cfg, sessionId, binding as unknown as GitBackingBinding, pat));
+}
+function opsUnbindGitBacking(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  projectops.unbindBackingScope(cfg, sessionId, String(body?.id ?? ''));
+  sendJson(res, 200, { ok: true });
+}
+function opsSyncGitBacking(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, { published: projectops.syncBackingScope(cfg, sessionId, String(body?.id ?? '')) });
+}
+/** Build an AuditQuery from the viewer's query params (all optional). */
+function auditQueryFrom(url: URL): AuditQuery {
+  const query: AuditQuery = {};
+  const projectId = q(url, 'projectId');
+  const actorUserId = q(url, 'actorUserId');
+  const category = q(url, 'category');
+  const action = q(url, 'action');
+  const outcome = q(url, 'outcome');
+  const minimumLevel = q(url, 'minimumLevel');
+  const from = q(url, 'from');
+  const to = q(url, 'to');
+  const limit = q(url, 'limit');
+  if (projectId) query.projectId = projectId;
+  if (actorUserId) query.actorUserId = actorUserId;
+  if (category) query.category = category;
+  if (action) query.action = action;
+  if (outcome) query.outcome = outcome;
+  if (minimumLevel) query.minimumLevel = minimumLevel;
+  if (from) query.from = from;
+  if (to) query.to = to;
+  if (limit !== undefined) query.limit = Number(limit);
+  return query;
+}
+function opsAuditQuery(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  sendJson(res, 200, { events: projectops.queryAuditEvents(cfg, sessionId, auditQueryFrom(url)) });
+}
+function opsAuditCount(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  sendJson(res, 200, { count: projectops.countAuditEvents(cfg, sessionId, auditQueryFrom(url)) });
+}
+function opsGetExposure(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
+  sendJson(res, 200, projectops.getExposurePolicy(cfg, sessionId));
+}
+function opsSetExposure(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, projectops.setExposurePolicy(cfg, sessionId, body as HostExposurePolicy));
 }
 
 /**
@@ -2079,8 +3141,11 @@ export async function handleWebRequest(
   const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent); // ['web', ...] or []
   const sessionId = ctx.sessionId ?? '';
   try {
-    // GET / — the client app shell.
-    if (req.method === 'GET' && url.pathname === '/') {
+    // GET / (or any in-app client route that isn't a /web/* API path) — the
+    // single-page app document. http.ts only forwards genuine browser navigations
+    // (GET + Accept: text/html) here, so this SPA history-fallback lets BrowserRouter
+    // deep links (/projects, /admin/…) survive a refresh or a shared link.
+    if (req.method === 'GET' && (url.pathname === '/' || parts[0] !== 'web')) {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       res.end(serveApp(url.pathname));
       return;
@@ -2186,6 +3251,24 @@ export async function handleWebRequest(
       return;
     }
 
+    // GET /web/canvas-model?projectId= → the same authorized project's CanvasModel
+    // as JSON (the data sibling of /web/canvas). Lets the React app mount the shared
+    // canvas renderer directly rather than iframing the HTML. Cross-project → 403.
+    if (req.method === 'GET' && parts.length === 2 && parts[1] === 'canvas-model') {
+      const projectId = url.searchParams.get('projectId') ?? '';
+      return sendJson(res, 200, getWebProjectCanvasModel(cfg, sessionId, projectId));
+    }
+
+    // GET /web/openapi?projectId= → the project's full public surface as an
+    // interactive Swagger UI page (owner view — all audiences). Cross-project → 403.
+    if (req.method === 'GET' && parts.length === 2 && parts[1] === 'openapi') {
+      const projectId = url.searchParams.get('projectId') ?? '';
+      const html = getWebProjectOpenApi(cfg, sessionId, projectId);
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(html);
+      return;
+    }
+
     // ── Agent-token self-service (any signed-in user) ────────────────────────
     // GET /web/tokens → list the caller's OWN minted MCP tokens (redacted). A read,
     // so it carries no CSRF requirement (only cookie-auth POSTs are gated above).
@@ -2233,6 +3316,69 @@ export async function handleWebRequest(
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'destroy') {
         return projectDestroy(cfg, sessionId, body, res);
       }
+
+      // ── Per-project ops (packs / policy / producers / git) ────────────────
+      // GET /web/projects/packs?projectId= — the project's registered packs (project:read).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'packs') {
+        return opsListProjectPacks(cfg, sessionId, url, res);
+      }
+      // POST /web/projects/packs { projectId, name, content } — declarative install (project:admin).
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'packs') {
+        return opsInstallProjectPack(cfg, sessionId, body, res);
+      }
+      // POST /web/projects/packs/remove { projectId, name }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'remove') {
+        return opsRemoveProjectPack(cfg, sessionId, body, res);
+      }
+      // GET /web/projects/policy?projectId= — pack/profile compliance (project:write).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'policy') {
+        return opsPolicyEvaluate(cfg, sessionId, url, res);
+      }
+      // POST /web/projects/policy/reconcile { projectId }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'policy' && parts[3] === 'reconcile') {
+        return opsPolicyReconcile(cfg, sessionId, body, res);
+      }
+      // GET /web/projects/producers?projectId= — configured producer targets (project:admin).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'producers') {
+        return opsListProducers(cfg, sessionId, url, res);
+      }
+      // POST /web/projects/producers { projectId, target, parentPageId }
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'producers') {
+        return opsConfigureProducer(cfg, sessionId, body, res);
+      }
+      // POST /web/projects/producers/remove { projectId, target }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'producers' && parts[3] === 'remove') {
+        return opsRemoveProducer(cfg, sessionId, body, res);
+      }
+      // POST /web/projects/producers/run { projectId, target }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'producers' && parts[3] === 'run') {
+        return opsRunProducer(cfg, sessionId, body, res);
+      }
+      // GET /web/projects/git?projectId= — the git-backing status (project:admin).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'git') {
+        return opsGitStatus(cfg, sessionId, url, res);
+      }
+      // POST /web/projects/git { projectId, remote, branch } — bind the REAL repo.
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'git') {
+        return opsGitBind(cfg, sessionId, body, res);
+      }
+      // POST /web/projects/git/disconnect { projectId }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'git' && parts[3] === 'disconnect') {
+        return opsGitUnbind(cfg, sessionId, body, res);
+      }
+      // POST /web/projects/git/sync { projectId } — integrate the default branch (project:write).
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'git' && parts[3] === 'sync') {
+        return opsGitSync(cfg, sessionId, body, res);
+      }
+      // POST /web/projects/git/commit { projectId, subsystem?, message? } — the
+      // deliberate .wai/-scoped commit+push (project:write).
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'git' && parts[3] === 'commit') {
+        return opsGitCommit(cfg, sessionId, body, res);
+      }
+      // POST /web/projects/git/sync-config { projectId, periodicSyncMinutes?, skipIfClean? }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'git' && parts[3] === 'sync-config') {
+        return opsGitSyncConfig(cfg, sessionId, body, res);
+      }
     }
 
     // ── Admin control-plane, session-scoped (slice 3) ────────────────────────
@@ -2255,10 +3401,6 @@ export async function handleWebRequest(
       // POST /web/admin/users/status { userId, status }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'users' && parts[3] === 'status') {
         return adminSetUserStatus(cfg, sessionId, body, res);
-      }
-      // POST /web/admin/users/grants { userId, grants }
-      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'users' && parts[3] === 'grants') {
-        return adminReplaceUserGrants(cfg, sessionId, body, res);
       }
       // POST /web/admin/users { ...HostedUserRecord }
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'users') {
@@ -2284,13 +3426,143 @@ export async function handleWebRequest(
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'secrets') {
         return adminListSecretRefs(cfg, sessionId, res);
       }
+      // POST /web/admin/secrets { key, value } — set/update an integration secret.
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'secrets') {
+        return adminSetSecret(cfg, sessionId, body, res);
+      }
       // POST /web/admin/org/units { ...OrganizationUnitRecord }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'org' && parts[3] === 'units') {
         return adminUpsertOrgUnit(cfg, sessionId, body, res);
       }
+      // POST /web/admin/org/units/remove { unitId, disposition } — dispose of a
+      // unit (migrate/alternative/absorb/cascade); never a silent cascade.
+      if (req.method === 'POST' && parts.length === 5 && parts[2] === 'org' && parts[3] === 'units' && parts[4] === 'remove') {
+        return adminRemoveUnit(cfg, sessionId, body, res);
+      }
       // POST /web/admin/org/placements { projectId, unitId }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'org' && parts[3] === 'placements') {
         return adminPlaceProject(cfg, sessionId, body, res);
+      }
+
+      // ── Permission roles / assignments / bindings (permission_admin) ──────
+      // GET /web/admin/roles — stored (admin-defined) roles (instance-admin upstream).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'roles') {
+        return adminListRoles(cfg, sessionId, res);
+      }
+      // POST /web/admin/roles { ...Role } — create a role.
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'roles') {
+        return adminCreateRole(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/roles/update { ...Role } — update a role's metadata/permissions.
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'roles' && parts[3] === 'update') {
+        return adminUpdateRole(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/roles/remove { id } — delete a role (bindings become inert).
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'roles' && parts[3] === 'remove') {
+        return adminDeleteRole(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/roles/bind { userId, roleId, scopeKind?, scopeId? }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'roles' && parts[3] === 'bind') {
+        return adminBindRole(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/roles/unbind { userId, roleId, scopeKind?, scopeId? }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'roles' && parts[3] === 'unbind') {
+        return adminUnbindRole(cfg, sessionId, body, res);
+      }
+      // GET /web/admin/permissions?scopeKind=&scopeId=&subjectKind=&subjectId= —
+      // the assignment grid, scope-authorized upstream.
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'permissions') {
+        return adminListAssignments(cfg, sessionId, url, res);
+      }
+      // POST /web/admin/permissions { ...PermissionAssignment } — upsert one assignment.
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'permissions') {
+        return adminSetAssignment(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/permissions/remove { id } — remove one assignment.
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'permissions' && parts[3] === 'remove') {
+        return adminRemoveAssignment(cfg, sessionId, body, res);
+      }
+
+      // ── Instance ops (packs / policy / audit / exposure / git backing) ────
+      // GET /web/admin/packs — server-global packs (instance-level project:admin).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'packs') {
+        return opsListGlobalPacks(cfg, sessionId, res);
+      }
+      // POST /web/admin/packs { name, content } — declarative install, instance tier.
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'packs') {
+        return opsInstallGlobalPack(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/packs/remove { name }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'remove') {
+        return opsRemoveGlobalPack(cfg, sessionId, body, res);
+      }
+      // GET /web/admin/policy — the instance pack/profile policy (any authenticated read).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'policy') {
+        return opsGetPackPolicy(cfg, sessionId, res);
+      }
+      // POST /web/admin/policy { ...InstancePackPolicy } — replace it (instance-level project:admin).
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'policy') {
+        return opsSetPackPolicy(cfg, sessionId, body, res);
+      }
+      // GET /web/admin/audit?projectId=&category=&action=&minimumLevel=&from=&to=&limit= —
+      // the scoped, redacted audit viewer (filtered to project:admin visible scopes).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'audit') {
+        return opsAuditQuery(cfg, sessionId, url, res);
+      }
+      // GET /web/admin/audit/count — the scoped audit-event count for pagination.
+      if (req.method === 'GET' && parts.length === 4 && parts[2] === 'audit' && parts[3] === 'count') {
+        return opsAuditCount(cfg, sessionId, url, res);
+      }
+      // GET /web/admin/exposure — the effective instance exposure policy.
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'exposure') {
+        return opsGetExposure(cfg, sessionId, res);
+      }
+      // POST /web/admin/exposure { ...HostExposurePolicy } — replace it (audited).
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'exposure') {
+        return opsSetExposure(cfg, sessionId, body, res);
+      }
+      // GET /web/admin/git-backing — the container-level backup bindings in reach.
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'git-backing') {
+        return opsListGitBacking(cfg, sessionId, res);
+      }
+      // POST /web/admin/git-backing { ...GitBackingBinding } — bind a unit container
+      // repo or the instance-structure backup repo.
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'git-backing') {
+        return opsBindGitBacking(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/git-backing/remove { id }
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'git-backing' && parts[3] === 'remove') {
+        return opsUnbindGitBacking(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/git-backing/sync { id } — run the mirror sync now.
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'git-backing' && parts[3] === 'sync') {
+        return opsSyncGitBacking(cfg, sessionId, body, res);
+      }
+
+      // ── Share links (owner-side; gated on share:create) ───────────────────
+      // POST /web/admin/share { ...ShareLinkInput } — create a link (token once).
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'share') {
+        return adminCreateShareLink(cfg, sessionId, body, res);
+      }
+      // GET /web/admin/share?projectId= — a project's share links.
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'share') {
+        return adminListShareLinks(cfg, sessionId, url, res);
+      }
+      // POST /web/admin/share/refresh { linkId } — re-capture the snapshot.
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'share' && parts[3] === 'refresh') {
+        return adminRefreshShareSnapshot(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/share/update { linkId, changes } — mutable settings.
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'share' && parts[3] === 'update') {
+        return adminUpdateShareLink(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/share/remove { linkId } — revoke.
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'share' && parts[3] === 'remove') {
+        return adminRemoveShareLink(cfg, sessionId, body, res);
+      }
+      // GET /web/admin/share/access?linkId=&limit= — the link's access log.
+      if (req.method === 'GET' && parts.length === 4 && parts[2] === 'share' && parts[3] === 'access') {
+        return adminGetShareAccessLog(cfg, sessionId, url, res);
       }
 
       // ── Existing scoped control-plane reads (unchanged) ───────────────────

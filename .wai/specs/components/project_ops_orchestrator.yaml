@@ -1,0 +1,25 @@
+id: project_ops_orchestrator
+name: Project Ops Orchestrator
+description: >-
+  The single operational seam that surfaces the control-plane project/instance operations to BOTH
+  the web portal (browser session as the credential) and the MCP data plane (bearer token as the
+  credential): declarative packs (global + per-project), pack/profile policy (read/replace,
+  per-project evaluate/reconcile), producer targets (configure/list/remove/run), per-project git
+  backing (bind/unbind/sync/commit/status/sync-cadence), the scoped audit viewer, and the instance
+  exposure policy. Every method is a pure 1:1 forward passing the caller's credential to the OWNING
+  orchestrator, which authenticates and authorizes through the permission resolver — no
+  authorization logic and no state lives here, so the two portals stay lean and the gates stay
+  single-sourced.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - pack_orchestrator
+  - project_policy_orchestrator
+  - admin_orchestrator
+  - identity_orchestrator
+  - operations_orchestrator
+  - git_backing_orchestrator
+status: complete
+createdAt: '2026-07-16T15:29:55.392Z'
+updatedAt: '2026-07-16T17:41:44.385Z'

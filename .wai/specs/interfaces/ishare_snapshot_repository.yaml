@@ -1,0 +1,35 @@
+id: ishare_snapshot_repository
+name: Share Snapshot Repository Interface
+description: >-
+  Facade contract for the immutable captured payloads. Pure 1:1 forwarding: write to the registry,
+  reads to the index.
+component: share_snapshot_repository
+methods:
+  - name: put
+    description: 'Facade: persist a captured snapshot through the registry.'
+    signature: 'put(snapshot: ShareSnapshot): ShareSnapshot'
+    returns: ShareSnapshot
+    params:
+      - name: snapshot
+        type: ShareSnapshot
+    guarantees:
+      - atomic
+  - name: get
+    description: 'Facade: a captured snapshot by id through the index.'
+    signature: 'get(snapshotId: string): ShareSnapshot | null'
+    returns: ShareSnapshot | null
+    params:
+      - name: snapshotId
+        type: string
+  - name: getArtifact
+    description: 'Facade: one captured artifact of a snapshot through the index.'
+    signature: 'getArtifact(snapshotId: string, kind: string): string | null'
+    returns: string | null
+    params:
+      - name: snapshotId
+        type: string
+      - name: kind
+        type: string
+status: complete
+createdAt: '2026-07-17T22:29:54.324Z'
+updatedAt: '2026-07-18T10:10:40.015Z'

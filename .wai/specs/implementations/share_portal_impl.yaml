@@ -1,0 +1,46 @@
+id: share_portal_impl
+name: Share Portal Implementation
+description: >-
+  Public /share HTTP surface: sets no-referrer / noindex / frame-ancestors, no session cookie, and
+  routes to the share access orchestrator.
+contract: ishare_portal
+sourcePath: src/server/sharehttp.ts
+methods:
+  - name: getSharedView
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Derive the request meta and resolve the token; on success render the read-only shared-view
+          page (which loads the snapshot model), else 404.
+        type: call
+        targetComponent: share_access_orchestrator
+        targetMethod: resolveSharedView
+    symbol: serveSharedView
+  - name: getSharedModel
+    narrative:
+      - stepNumber: 1
+        description: Resolve the token and return the snapshot model JSON for the view page to render.
+        type: call
+        targetComponent: share_access_orchestrator
+        targetMethod: resolveSharedView
+    symbol: serveSharedModel
+  - name: getSharedOpenApi
+    narrative:
+      - stepNumber: 1
+        description: Fetch the permitted OpenAPI document and wrap it in a bundled, self-contained viewer page.
+        type: call
+        targetComponent: share_access_orchestrator
+        targetMethod: downloadArtifact
+    symbol: serveSharedOpenApi
+  - name: downloadSharedArtifact
+    narrative:
+      - stepNumber: 1
+        description: Serve the permitted artifact download (html | openapi), or 404/403.
+        type: call
+        targetComponent: share_access_orchestrator
+        targetMethod: downloadArtifact
+    symbol: serveSharedDownload
+conformance: declared
+status: complete
+createdAt: '2026-07-18T09:31:51.087Z'
+updatedAt: '2026-07-18T13:16:52.063Z'

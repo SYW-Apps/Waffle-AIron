@@ -7,16 +7,6 @@ description: >-
 contract: iorganization_registry
 sourcePath: src/server/organization.ts
 methods:
-  - name: upsertUnit
-    narrative: []
-    intent: >-
-      Stamp the new unit's id and createdAt on create (preserving both on update) and default status
-      to active, validate that parentId — when set — resolves to an existing unit, and reject any
-      change that would introduce a cycle in the unit tree (a unit reachable from itself through
-      parent links). Then rewrite the persisted unit collection via write-temp-then-rename, refresh
-      the store with replaceAll, and return the stored unit. Persistence failures leave the previous
-      collections intact and surface as storage errors. Authorization is enforced by the
-      orchestrator, not here.
   - name: placeProject
     narrative: []
     intent: >-
@@ -25,7 +15,231 @@ methods:
       error otherwise. Then rewrite the persisted placement collection via write-temp-then-rename,
       refresh the store, and return the stored placement. Persistence failures leave the previous
       collections intact. Authorization is enforced by the orchestrator, not here.
+  - name: createUnit
+    narrative:
+      - stepNumber: 1
+        description: Read the authoritative unit set (shared in-memory state loaded by the facade)
+        type: local
+      - stepNumber: 2
+        description: The slug must match the lowercase dot-free slug shape ('.' separates the qualified path)
+        type: branch
+        condition: the slug is empty or violates the slug pattern
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the invalid slug
+        type: throw
+        error: invalid organization unit slug
+      - stepNumber: 4
+        description: A named parent must resolve to an existing unit
+        type: branch
+        condition: a parentId is set and does not resolve to an existing unit
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Reject the unresolved parent
+        type: throw
+        error: parentId does not resolve to an existing unit
+      - stepNumber: 6
+        description: >-
+          Compute the QUALIFIED id from the parent path plus slug — a root unit's id IS its slug;
+          any incoming id is ignored
+        type: local
+      - stepNumber: 7
+        description: >-
+          Never a silent overwrite: the qualified id must be free AND no sibling may already use the
+          slug under the same parent (legacy ids may not follow the qualified convention)
+        type: branch
+        condition: a unit already holds the qualified id, or a sibling already uses the slug
+        onTrueStep: 8
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Reject the collision
+        type: throw
+        error: organization unit collision
+      - stepNumber: 9
+        description: Stamp createdAt and default the status to active
+        type: local
+      - stepNumber: 10
+        description: Persist units and placements together durably (write-temp-then-rename)
+        type: local
+      - stepNumber: 11
+        description: Refresh the store to the persisted state
+        type: call
+        targetComponent: organization_store
+        targetMethod: replaceAll
+      - stepNumber: 12
+        description: Return the stored unit — authorization is the orchestrator's job, not here
+        type: return
+        outcome: the stored unit
+    detail: intent
+    intent: >-
+      Compute the unit's qualified id from its parentId path plus slug (a root unit's id is its
+      slug), verify the parent resolves to an existing unit when set, and reject a collision — an
+      existing unit already holding that qualified id, or a sibling already using the slug — with a
+      validation error. Stamp createdAt and default status to active, then rewrite the persisted
+      unit collection via write-temp-then-rename, refresh the store with replaceAll, and return the
+      stored unit. Persistence failures leave the previous collections intact. Authorization is
+      enforced by the orchestrator, not here.
+  - name: updateUnit
+    narrative:
+      - stepNumber: 1
+        description: Read the authoritative unit set and locate the record by id
+        type: local
+      - stepNumber: 2
+        description: The unit must exist
+        type: branch
+        condition: no unit holds the id
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the unknown unit
+        type: throw
+        error: organization unit not found
+      - stepNumber: 4
+        description: This method updates METADATA only — slug and parent changes are moves
+        type: branch
+        condition: the update attempts to change slug or parentId
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Reject the disguised move — a rename/move goes through reparentUnit
+        type: throw
+        error: slug/parentId cannot change here
+      - stepNumber: 6
+        description: >-
+          Merge the metadata fields (name, kind, status, visibility, exposeTo) onto the existing
+          record, preserving id, slug, parentId, createdAt, and createdBy
+        type: local
+      - stepNumber: 7
+        description: Persist units and placements together durably
+        type: local
+      - stepNumber: 8
+        description: Refresh the store to the persisted state
+        type: call
+        targetComponent: organization_store
+        targetMethod: replaceAll
+      - stepNumber: 9
+        description: Return the stored unit
+        type: return
+        outcome: the stored unit
+    detail: intent
+    intent: >-
+      Load the existing unit by id (validation error when absent) and apply only metadata changes —
+      name, kind, status, visibility, exposeTo — while preserving id, slug, parentId, createdAt, and
+      createdBy; reject any attempt to change slug or parentId, which are moves via reparentUnit.
+      Rewrite the persisted unit collection via write-temp-then-rename, refresh the store, and
+      return the stored unit.
+  - name: reparentUnit
+    narrative:
+      - stepNumber: 1
+        description: Read the authoritative unit set and locate the moving unit by id
+        type: local
+      - stepNumber: 2
+        description: The moving unit must exist
+        type: branch
+        condition: no unit holds unitId
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject the unknown unit
+        type: throw
+        error: organization unit not found
+      - stepNumber: 4
+        description: A named new parent must resolve (an empty newParentId promotes the unit to a root)
+        type: branch
+        condition: a new parent is named and does not resolve to an existing unit
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Reject the unresolved new parent
+        type: throw
+        error: new parent does not resolve
+      - stepNumber: 6
+        description: Collect the ids of the moving unit's WHOLE subtree
+        type: local
+      - stepNumber: 7
+        description: A unit can never move under itself or one of its own descendants
+        type: branch
+        condition: the new parent lies inside the moving subtree
+        onTrueStep: 8
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Reject the cycle
+        type: throw
+        error: cannot move a unit under its own subtree
+      - stepNumber: 9
+        description: >-
+          Recompute every moving unit's qualified id parent-first from the new parent path, until
+          the subtree is fully resolved
+        type: loop
+        condition: moving units remain without a recomputed id
+        loopKind: while
+        endStep: 10
+      - stepNumber: 10
+        description: Derive each child's qualified id from its parent's already-recomputed id plus its slug
+        type: local
+      - stepNumber: 11
+        description: >-
+          Collision check: a recomputed id must not collide OUTSIDE the moving subtree (inside it,
+          old ids vacate in the same atomic write)
+        type: branch
+        condition: a recomputed id collides with a unit outside the subtree
+        onTrueStep: 12
+        onFalseStep: 13
+      - stepNumber: 12
+        description: Reject the collision — resolve the slug clash first
+        type: throw
+        error: recomputed id collides outside the moving subtree
+      - stepNumber: 13
+        description: >-
+          Rewrite the moving units' ids and parentIds, and follow every exposeTo[] reference to a
+          moved id across ALL units
+        type: local
+      - stepNumber: 14
+        description: >-
+          Rewrite every project placement's unitId onto the recomputed ids — both collections
+          persist together, so referential integrity holds atomically
+        type: local
+      - stepNumber: 15
+        description: Persist units and placements together durably
+        type: local
+      - stepNumber: 16
+        description: Refresh the store to the persisted state
+        type: call
+        targetComponent: organization_store
+        targetMethod: replaceAll
+      - stepNumber: 17
+        description: >-
+          Return the old→new UnitIdRemap for every moved unit — the caller rewrites EXTERNAL
+          references (assignment scopes, home units, role-binding scopes)
+        type: return
+        outcome: the old→new unit-id remap
+    detail: intent
+    intent: >-
+      Resolve the unit and its full descendant subtree, reject the move when newParentId is the unit
+      itself or one of its descendants (cycle) or does not resolve, and recompute every moved unit's
+      qualified id from the new parent path (an empty newParentId promotes to a root). Reject the
+      move if any recomputed id collides with a unit outside the moving subtree. Rewrite the renamed
+      subtree AND every exposeTo[] entry across all units that referenced a moved id into the
+      persisted unit collection via write-temp-then-rename, refresh the store, and return the
+      old->new UnitIdRemap for every moved unit. Persistence failures leave the previous collections
+      intact.
+  - name: deleteUnit
+    narrative: []
+    detail: intent
+    intent: >-
+      Reject the delete when the unit still has child units or project placements. Remove the unit
+      from the collection and strip its id from every other unit's exposeTo[] list, rewrite via
+      write-temp-then-rename, and refresh the store; deleting an absent unit is a no-op.
+  - name: deletePlacement
+    narrative: []
+    detail: intent
+    intent: >-
+      Remove the placement with the given id from the placement collection — the placed project
+      itself is untouched — rewrite via write-temp-then-rename, and refresh the store; an absent
+      placement is a no-op.
 detail: intent
 status: complete
 createdAt: '2026-07-09T22:07:46.272Z'
-updatedAt: '2026-07-09T22:13:33.327Z'
+updatedAt: '2026-07-19T00:01:40.761Z'

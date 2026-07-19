@@ -113,23 +113,30 @@ export const languageRule: SddRule = {
       for (const implMethod of impl.methods) {
         for (const step of implMethod.narrative) {
           // The full construct keyspace: branch | switch | forEach | for |
-          // while | doWhile | try | throw | jump (local/call/return are
-          // universal and never gated).
-          const construct = step.type === 'loop'
-            ? (step.loopKind ?? (step.over ? 'forEach' : 'while'))
-            : step.type;
-          const guidance = gaps[construct];
-          if (!guidance) continue;
-          const label = construct === 'doWhile' ? 'a do-while loop'
-            : (construct === 'forEach' || construct === 'for' || construct === 'while') ? `a ${construct} loop`
-              : `a ${construct} step`;
-          ctx.addIssue(
-            'warning',
-            'LANGUAGE_FOREIGN_FLOW',
-            `Step ${step.stepNumber} of "${implMethod.name}" in implementation "${impl.id}" uses ${label}, but the target language is ${normalizeLanguage(lang)}: ${guidance}.`,
-            impl.id,
-            isDraftCtx,
-          );
+          // while | doWhile | try | throw | jump | parallel | detach
+          // (local/call/return are universal and never gated; detach is a
+          // call-step flag gated as its own construct).
+          const constructs: string[] = [
+            step.type === 'loop'
+              ? (step.loopKind ?? (step.over ? 'forEach' : 'while'))
+              : step.type,
+          ];
+          if (step.detach) constructs.push('detach');
+          for (const construct of constructs) {
+            const guidance = gaps[construct];
+            if (!guidance) continue;
+            const label = construct === 'doWhile' ? 'a do-while loop'
+              : (construct === 'forEach' || construct === 'for' || construct === 'while') ? `a ${construct} loop`
+                : construct === 'detach' ? 'a detached (fire-and-forget) call'
+                  : `a ${construct} step`;
+            ctx.addIssue(
+              'warning',
+              'LANGUAGE_FOREIGN_FLOW',
+              `Step ${step.stepNumber} of "${implMethod.name}" in implementation "${impl.id}" uses ${label}, but the target language is ${normalizeLanguage(lang)}: ${guidance}.`,
+              impl.id,
+              isDraftCtx,
+            );
+          }
         }
       }
     }

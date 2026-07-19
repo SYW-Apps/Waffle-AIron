@@ -324,6 +324,20 @@ describe('resolveSubject (JWKS verification)', () => {
     expect(subject.email).toBe('alice@corp.example');
   });
 
+  it('falls back to preferred_username / given+family when the name claim is absent', async () => {
+    const endpoints = await resolveEndpoints(cfg());
+    // No `name` (many IdPs — Keycloak/Authentik dev — send only
+    // preferred_username): the display name falls back to it rather than
+    // leaving the UI to show the opaque subject id.
+    const pref = await resolveSubject(cfg(), endpoints, summaryFor({ name: undefined, preferred_username: 'alice.dev' }));
+    expect(pref.displayName).toBe('alice.dev');
+    // given_name + family_name compose when preferred_username is also absent.
+    const composed = await resolveSubject(cfg(), endpoints, summaryFor({ name: undefined, given_name: 'Ada', family_name: 'Lovelace' }));
+    expect(composed.displayName).toBe('Ada Lovelace');
+    // Full `name` still wins when present.
+    expect((await resolveSubject(cfg(), endpoints, summaryFor({ preferred_username: 'ignored' }))).displayName).toBe('Alice');
+  });
+
   it('rejects a TAMPERED id_token (payload altered after signing)', async () => {
     const endpoints = await resolveEndpoints(cfg());
     const valid = JSON.parse(summaryFor());

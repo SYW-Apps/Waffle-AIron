@@ -8,7 +8,7 @@ import * as crypto from 'node:crypto';
 import { handleMcpRequest } from '../../src/server/request.js';
 import { queryAuditEvents } from '../../src/server/audit.js';
 import { createProject } from '../../src/server/admin.js';
-import { createCredential, hashToken } from '../../src/server/credentials.js';
+import { mintUserToken, allow, seedUnit } from './helpers.js';
 import { refreshPublicSurface, upsertRelation } from '../../src/server/landscape.js';
 import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 import type {
@@ -66,10 +66,12 @@ describe('handleMcpRequest landscape discovery dispatch (end-to-end)', () => {
     process.env.WAIRON_ADMIN_TOKEN = MASTER;
     cfg = { host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: true };
 
-    // Two registered, provisioned isolated projects. alpha is the "current"
-    // project; beta publishes a redacted public surface and is the neighbour.
-    createProject(cfg, MASTER, 'alpha');
-    const beta = createProject(cfg, MASTER, 'beta');
+    // Two registered, provisioned isolated projects PLACED in one shared unit
+    // (same tenant — the unit-graph visibility gate stays open between them).
+    // alpha is the "current" project; beta publishes a redacted public surface.
+    const unit = seedUnit(dataDir, 'shared');
+    createProject(cfg, MASTER, 'alpha', unit.id);
+    const beta = createProject(cfg, MASTER, 'beta', unit.id);
 
     // Seed beta's L0 public surface (raw, un-schema'd publicInterfaces) — with a
     // method object carrying a full signature + narrative that MUST be redacted.
@@ -162,33 +164,14 @@ describe('handleMcpRequest landscape discovery dispatch (end-to-end)', () => {
     };
   }
 
-  /** Mint a stored token with a known id, projects, grants, and owner subject;
-   *  returns the plaintext bearer. */
-  function mintToken(opts: { id: string; projects: string[]; grants: ProjectGrant[]; userId: string }): string {
-    const token = 'wk_' + crypto.randomBytes(8).toString('hex');
-    const record: ApiKeyRecord = {
-      id: opts.id,
-      keyHash: hashToken(token),
-      role: 'editor',
-      projects: opts.projects,
-      grants: opts.grants,
-      createdAt: new Date().toISOString(),
-      ownerSubject: subject({ userId: opts.userId }),
-    };
-    createCredential(dataDir, record);
-    return token;
-  }
-
-  /** An editor agent token scoped to `project` with mcp:read + mcp:write over it.
-   *  Note: landscape discovery is authenticated-only (no landscape grant required
-   *  over the wire); the ordinary sdd_* regression call needs mcp:read. */
+  /** An editor agent token narrowed to `project`, whose OWNER holds
+   *  project:read + project:write over it (the observer gate resolves the
+   *  owner's live permission; the ordinary sdd_* regression call needs
+   *  project:read). */
   function agentToken(id: string, project: string, userId: string): string {
-    return mintToken({
-      id,
-      projects: [project],
-      grants: [{ projectId: project, permissions: ['mcp:read', 'mcp:write'] }],
-      userId,
-    });
+    allow(dataDir, userId, 'project:read', 'project', project);
+    allow(dataDir, userId, 'project:write', 'project', project);
+    return mintUserToken(dataDir, { id, userId, projects: [project] });
   }
 
   const post = (bodyObj: unknown, token: string, project: string) =>
@@ -323,10 +306,11 @@ describe('handleMcpRequest landscape discovery dispatch (end-to-end)', () => {
     const res = await post({ jsonrpc: '2.0', id: 9, method: 'tools/list', params: {} }, token, 'alpha');
     const body = await res.text();
     for (const name of [
-      'sdd_host_request_project_initialization',
-      'sdd_host_request_project_lock',
-      'sdd_host_request_project_promotion',
+      'sdd_host_initialize_project',
+      'sdd_host_lock_project',
+      'sdd_host_promote_project',
       'sdd_host_get_approval_status',
+      'sdd_host_await_approval',
       'sdd_landscape_list_reachable_projects',
       'sdd_landscape_list_reachable_project_interfaces',
       'sdd_landscape_list_visible_surfaces',

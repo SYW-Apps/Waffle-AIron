@@ -9,9 +9,10 @@ import {
   authenticateMaster,
   authenticateSession,
 } from '../../src/server/auth.js';
-import { isInstanceAdmin } from '../../src/server/identity.js';
+import { isInstanceAdmin } from '../../src/server/authorization.js';
 import { signInWithPassword, __resetLoginThrottle } from '../../src/server/web.js';
 import { createProjectRecord } from '../../src/server/projects.js';
+import { ensureInstanceIdentity } from '../../src/server/instance.js';
 import type { HostConfig } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
@@ -87,9 +88,7 @@ describe('mintKey refuses instance-wide super-admin (*:*) keys (sdd_host)', () =
     expect(principal.authenticated).toBe(true);
     expect(principal.role).toBe('editor');
     expect(principal.projects).toEqual(['proj-a']);
-    expect(principal.grants).toEqual([
-      { projectId: 'proj-a', permissions: ['mcp:read', 'mcp:write'], role: 'editor' },
-    ]);
+    // The record carries NO permissions — authority resolves live per request.
     expect(isInstanceAdmin(principal)).toBe(false);
   });
 
@@ -104,7 +103,10 @@ describe('mintKey refuses instance-wide super-admin (*:*) keys (sdd_host)', () =
     expect(isInstanceAdmin(viaCredential)).toBe(true);
   });
 
-  it('a built-in password-login session REMAINS a full *:* super-admin (not a minted key)', () => {
+  it('a built-in password-login session REMAINS the instance super-admin (not a minted key)', () => {
+    // The built-in subject is a persisted boot-reserved UUID — seed it first
+    // (the lifecycle init entrypoint does this at boot).
+    ensureInstanceIdentity(dataDir);
     const sessionId = signInWithPassword(cfg, ADMIN_USER, ADMIN_PASSWORD);
     const principal = authenticateSession(dataDir, sessionId);
     expect(principal.authenticated).toBe(true);

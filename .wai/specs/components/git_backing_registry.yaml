@@ -1,0 +1,15 @@
+id: git_backing_registry
+name: Git Backing Registry
+description: >-
+  Write path for container-level git backing bindings: upsert stamps id/createdAt and validates the
+  scope shape (a 'unit' binding names a scopeId, an 'instance' binding names none; one binding per
+  scope — a second bind to the same scope replaces it); remove deletes by id; touch records
+  lastSyncAt after a successful sweep. Performs NO authorization (the orchestrator's job).
+subsystem: sdd_host
+componentType: Registry
+owns: []
+dependsOn:
+  - git_backing_store
+status: complete
+createdAt: '2026-07-16T15:38:09.992Z'
+updatedAt: '2026-07-16T17:41:46.146Z'

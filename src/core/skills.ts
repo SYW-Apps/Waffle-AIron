@@ -2,6 +2,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { ensureDir, fromProjectRoot } from '../utils/fs.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
+import { loadProjectExtensions as loadCoreExtensions, LoadedPackSkill } from './extensions.js';
 
 // ---------------------------------------------------------------------------
 // SDD skills export
@@ -13,6 +14,31 @@ import { WAIRON_VERSION } from '../config/defaults.js';
 // ---------------------------------------------------------------------------
 
 const SKILL_NAMES = ['sdd-architect', 'sdd-narrative', 'sdd-auditor', 'sdd-implement'];
+
+/** skills_core_adapter: forward to the core surface to load the governing extension packs (for their pack-provided skills). */
+function loadProjectExtensions() {
+  return loadCoreExtensions();
+}
+
+/**
+ * The install/resource id for a pack skill: namespaced by pack id so it never
+ * collides with the reserved built-in sdd-* skills or another pack's skills.
+ */
+function packSkillId(skill: LoadedPackSkill): string {
+  const ns = skill.pack.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return `${ns}-${skill.id}`;
+}
+
+/** Parse a SKILL.md's YAML frontmatter (name + description) from its raw content. */
+function readFrontmatter(raw: string, fallbackName: string): { name: string; description: string } {
+  const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(raw);
+  const block = match ? match[1] : '';
+  const field = (key: string): string => {
+    const m = new RegExp(`^${key}:\\s*(.*)$`, 'm').exec(block);
+    return m ? m[1].trim() : '';
+  };
+  return { name: field('name') || fallbackName, description: field('description') };
+}
 
 function builtinSkillsDir(): string {
   return path.resolve(__dirname, '..', 'templates', 'skills');
@@ -81,6 +107,10 @@ export function exportSddSkills(targetTypes?: string[]): SkillsExportResult {
   const skipped: string[] = [];
   let fileCount = 0;
 
+  // Pack-provided skills discovered from the loaded extension packs (empty when
+  // no packs declare any — so projects without pack skills see no change).
+  const packSkills = loadProjectExtensions().skills;
+
   for (const type of types) {
     const destDir = skillsDirForTarget(type);
     if (!destDir) {
@@ -97,6 +127,18 @@ export function exportSddSkills(targetTypes?: string[]): SkillsExportResult {
       // `wairon` CLI, so there is no dev-path command to substitute.
       const content = fs.readFileSync(srcPath, 'utf-8');
       const destPath = skillDestPath(type, destDir, name);
+      ensureDir(path.dirname(destPath));
+      fs.writeFileSync(destPath, content, 'utf-8');
+      fileCount++;
+    }
+
+    // Pack skills targeting this client: installed namespaced <pack-id>-<skill-id>.
+    for (const skill of packSkills) {
+      if (!skill.targets.includes(type)) continue;
+      if (!fs.existsSync(skill.sourcePath)) continue;
+      const id = packSkillId(skill);
+      const content = fs.readFileSync(skill.sourcePath, 'utf-8');
+      const destPath = skillDestPath(type, destDir, id);
       ensureDir(path.dirname(destPath));
       fs.writeFileSync(destPath, content, 'utf-8');
       fileCount++;
@@ -198,21 +240,14 @@ export class SkillResourceNotFoundError extends Error {
 
 /** Parse a skill template's YAML frontmatter for its name and description. */
 function readSkillFrontmatter(name: string): { name: string; description: string } {
-  const raw = fs.readFileSync(skillTemplatePath(name), 'utf-8');
-  const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(raw);
-  const block = match ? match[1] : '';
-  const field = (key: string): string => {
-    const m = new RegExp(`^${key}:\\s*(.*)$`, 'm').exec(block);
-    return m ? m[1].trim() : '';
-  };
-  return { name: field('name') || name, description: field('description') };
+  return readFrontmatter(fs.readFileSync(skillTemplatePath(name), 'utf-8'), name);
 }
 
 // ── skills_resource_specialist ─────────────────────────────────────────────
 
 /** List the four built-in SDD skills as MCP-safe resource descriptors. */
 export function listSkillResources(): SkillResourceDescriptor[] {
-  return RESOURCE_SKILL_IDS.map((id) => {
+  const builtin: SkillResourceDescriptor[] = RESOURCE_SKILL_IDS.map((id) => {
     const fm = readSkillFrontmatter(id);
     return {
       id,
@@ -223,10 +258,28 @@ export function listSkillResources(): SkillResourceDescriptor[] {
       defaultForHostedMcp: true,
     };
   });
+  // Pack-provided skills (namespaced by pack id), published alongside the built-ins.
+  const pack: SkillResourceDescriptor[] = loadProjectExtensions().skills
+    .filter((s) => fs.existsSync(s.sourcePath))
+    .map((skill) => {
+      const id = packSkillId(skill);
+      const fm = readFrontmatter(fs.readFileSync(skill.sourcePath, 'utf-8'), id);
+      return {
+        id,
+        name: fm.name,
+        description: fm.description,
+        version: skill.packVersion ?? WAIRON_VERSION,
+        resourceUri: `${SKILL_RESOURCE_SCHEME}://${id}`,
+        defaultForHostedMcp: true,
+      };
+    });
+  return [...builtin, ...pack];
 }
 
 /** Read one built-in skill's markdown content from the packaged templates. */
 export function readSkillResource(resourceId: string): string {
+  const packSkill = loadProjectExtensions().skills.find((s) => packSkillId(s) === resourceId);
+  if (packSkill) return fs.readFileSync(packSkill.sourcePath, 'utf-8');
   return fs.readFileSync(skillTemplatePath(resourceId), 'utf-8');
 }
 

@@ -1,0 +1,258 @@
+id: share_admin_orchestrator_impl
+name: Share Admin Orchestrator Implementation
+description: >-
+  Owner-side workflows gated on share:create, audited at security level; the raw token is returned
+  once and never stored.
+contract: ishare_admin_orchestrator
+sourcePath: src/server/shareadmin.ts
+methods:
+  - name: createShareLink
+    narrative:
+      - stepNumber: 1
+        description: Resolve the session to a Principal.
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateSession
+      - stepNumber: 2
+        description: Require share:create over the target project's scope.
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: The effective permission is not yes.
+        type: branch
+        condition: permission is not yes
+        onFalseStep: 5
+      - stepNumber: 4
+        description: 'Refuse: minting a share link requires share:create over the project.'
+        type: throw
+        error: ForbiddenError
+      - stepNumber: 5
+        description: Capture the requested view + artifacts into an immutable snapshot.
+        type: call
+        targetComponent: share_snapshot_specialist
+        targetMethod: captureSnapshot
+      - stepNumber: 6
+        description: Persist the snapshot.
+        type: call
+        targetComponent: share_snapshot_repository
+        targetMethod: put
+      - stepNumber: 7
+        description: >-
+          Mint a 256-bit token and compute its salted hash; the raw token is held only for the
+          return.
+        type: local
+      - stepNumber: 8
+        description: Persist the link record with the token HASH only, pointing at the snapshot.
+        type: call
+        targetComponent: share_link_repository
+        targetMethod: create
+      - stepNumber: 9
+        description: Audit the mint at security level (the link id, never the token).
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 10
+        description: The stored record plus the raw token, returned exactly once.
+        type: return
+        outcome: created
+  - name: refreshSnapshot
+    narrative:
+      - stepNumber: 1
+        description: Resolve the session to a Principal.
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateSession
+      - stepNumber: 2
+        description: Load the link, or not-found.
+        type: call
+        targetComponent: share_link_repository
+        targetMethod: getById
+      - stepNumber: 3
+        description: Require share:create over the link's project scope.
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 4
+        description: Not permitted.
+        type: branch
+        condition: permission is not yes
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Refuse the refresh.
+        type: throw
+        error: ForbiddenError
+      - stepNumber: 6
+        description: Re-capture the view into a new immutable snapshot.
+        type: call
+        targetComponent: share_snapshot_specialist
+        targetMethod: captureSnapshot
+      - stepNumber: 7
+        description: Persist the new snapshot.
+        type: call
+        targetComponent: share_snapshot_repository
+        targetMethod: put
+      - stepNumber: 8
+        description: Repoint the link at the new snapshot (the old one is retired).
+        type: call
+        targetComponent: share_link_repository
+        targetMethod: update
+      - stepNumber: 9
+        description: Audit the refresh.
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 10
+        description: The updated link.
+        type: return
+        outcome: refreshed
+  - name: updateShareLink
+    narrative:
+      - stepNumber: 1
+        description: Resolve the session to a Principal.
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateSession
+      - stepNumber: 2
+        description: Load the link.
+        type: call
+        targetComponent: share_link_repository
+        targetMethod: getById
+      - stepNumber: 3
+        description: Require share:create over the link's scope.
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 4
+        description: Not permitted.
+        type: branch
+        condition: permission is not yes
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Refuse the update.
+        type: throw
+        error: ForbiddenError
+      - stepNumber: 6
+        description: >-
+          Apply the mutable settings (enabled / expiry / download permissions / embedding
+          allowlist).
+        type: call
+        targetComponent: share_link_repository
+        targetMethod: update
+      - stepNumber: 7
+        description: Audit an enabled/permission change at security level.
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 8
+        description: The updated link.
+        type: return
+        outcome: updated
+  - name: removeShareLink
+    narrative:
+      - stepNumber: 1
+        description: Resolve the session to a Principal.
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateSession
+      - stepNumber: 2
+        description: Load the link.
+        type: call
+        targetComponent: share_link_repository
+        targetMethod: getById
+      - stepNumber: 3
+        description: Require share:create over the link's scope.
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 4
+        description: Not permitted.
+        type: branch
+        condition: permission is not yes
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Refuse the revocation.
+        type: throw
+        error: ForbiddenError
+      - stepNumber: 6
+        description: Delete the link record (its token no longer resolves).
+        type: call
+        targetComponent: share_link_repository
+        targetMethod: remove
+      - stepNumber: 7
+        description: Audit the revocation at security level.
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 8
+        description: The link is gone.
+        type: return
+        outcome: removed
+  - name: listShareLinks
+    narrative:
+      - stepNumber: 1
+        description: Resolve the session to a Principal.
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateSession
+      - stepNumber: 2
+        description: Require share:create over the project scope.
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: Not permitted.
+        type: branch
+        condition: permission is not yes
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Refuse the listing.
+        type: throw
+        error: ForbiddenError
+      - stepNumber: 5
+        description: List the project's links (records only, never a raw token).
+        type: call
+        targetComponent: share_link_repository
+        targetMethod: listByProject
+      - stepNumber: 6
+        description: The project's share links.
+        type: return
+        outcome: list
+  - name: getShareAccessLog
+    narrative:
+      - stepNumber: 1
+        description: Resolve the session to a Principal.
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateSession
+      - stepNumber: 2
+        description: Load the link.
+        type: call
+        targetComponent: share_link_repository
+        targetMethod: getById
+      - stepNumber: 3
+        description: Require share:create over the link's scope.
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 4
+        description: Not permitted.
+        type: branch
+        condition: permission is not yes
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Refuse the access-log read.
+        type: throw
+        error: ForbiddenError
+      - stepNumber: 6
+        description: Return the link's recent access entries.
+        type: call
+        targetComponent: share_access_repository
+        targetMethod: listByLink
+      - stepNumber: 7
+        description: The access entries for anomaly review.
+        type: return
+        outcome: list
+status: complete
+createdAt: '2026-07-18T09:31:20.840Z'
+updatedAt: '2026-07-18T10:10:40.459Z'

@@ -32,6 +32,20 @@ methods:
         type: call
         targetComponent: git_orchestrator
         targetMethod: publish
+  - name: status
+    narrative:
+      - stepNumber: 1
+        description: Forward to the git orchestrator
+        type: call
+        targetComponent: git_orchestrator
+        targetMethod: status
+  - name: configureSync
+    narrative:
+      - stepNumber: 1
+        description: Forward to the git orchestrator
+        type: call
+        targetComponent: git_orchestrator
+        targetMethod: configureSync
 status: complete
 createdAt: '2026-07-04T16:33:49.226Z'
-updatedAt: '2026-07-04T16:37:37.344Z'
+updatedAt: '2026-07-16T15:25:32.335Z'

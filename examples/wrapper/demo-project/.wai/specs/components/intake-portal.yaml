@@ -6,5 +6,9 @@ subsystem: scenario-hub
 componentType: Portal
 portalType: MessageBus
 dependsOn: [routing-orchestrator]
+lint:
+  allow:
+    - code: UNSOURCED_SUBSCRIPTION
+      reason: the records topic is emitted by the external automation platform's trigger, not by anything in this tree — the sanctioned external-source exception.
 createdAt: '2026-07-03T12:00:00Z'
 updatedAt: '2026-07-03T12:00:00Z'

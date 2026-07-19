@@ -1,0 +1,26 @@
+id: rule_index_impl
+name: Rule Index Implementation
+description: >-
+  Read path in src/core/rules/index.ts: ordered run sequence and known-code projections over the
+  rule store.
+contract: irule_index
+sourcePath: src/core/rules/repository.ts
+simPath: tests/core/validation.test.ts
+methods:
+  - name: ruleSequence
+    narrative: []
+    intent: >-
+      Read the rule store's rules and return them as the ordered run sequence — built-ins first,
+      then pack rules, in registration order. A read-only projection sharing the store's references.
+  - name: knownIssueCodes
+    narrative: []
+    intent: >-
+      Read the rule store's rules and aggregate every RuleCode each can emit into the known-code set
+      used to validate lint.allow references (UNKNOWN_LINT_ALLOW_CODE). Read-only, derived fresh
+      from the store.
+detail: intent
+lint:
+  allow: []
+status: complete
+createdAt: '2026-07-14T19:17:48.847Z'
+updatedAt: '2026-07-18T22:34:35.024Z'

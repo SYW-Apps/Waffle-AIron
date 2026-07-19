@@ -1,0 +1,13 @@
+id: role_registry
+name: Role Registry
+description: >-
+  Write-path component for permission roles: create, update, and delete role definitions. Never
+  modifies project spec trees.
+subsystem: sdd_host
+componentType: Registry
+owns: []
+dependsOn:
+  - role_store
+status: complete
+createdAt: '2026-07-15T20:26:53.872Z'
+updatedAt: '2026-07-15T23:30:41.345Z'

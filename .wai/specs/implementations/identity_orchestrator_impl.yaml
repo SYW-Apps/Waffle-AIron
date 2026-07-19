@@ -1,598 +1,36 @@
 id: identity_orchestrator_impl
 name: Identity Orchestrator Implementation
 description: >-
-  Hosted identity control-plane workflows: authenticate the caller credential, gather organization
-  data and resolve authorization scope (instance-wide or unit-scoped), then manage user-bound
-  MCP/API tokens, user grants, identity-provider (SSO) configuration, and admin-only audit access;
-  plus the unauthenticated headless SSO login pair. Audit appends are best-effort and never fail the
-  primary action.
+  Hosted identity control-plane workflows: authenticate the caller credential, then manage
+  user-bound MCP/API tokens, hosted user records + their role bindings, identity-provider (SSO)
+  configuration, and admin-only audit access; plus the unauthenticated headless SSO login pair.
+  Authorization resolves through the permission resolver (project:admin over the relevant scope, or
+  the env-anchored instance-admin bypass) — never stored grants. Audit appends are best-effort and
+  never fail the primary action.
 contract: iidentity_orchestrator
 sourcePath: src/server/identity.ts
 methods:
-  - name: mintToken
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the caller credential (bootstrap or user-bound token)
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateCredential
-      - stepNumber: 2
-        description: >-
-          HARD RESERVATION: if any requested grant is the reserved instance-wide super-admin shape
-          (projectId '*' with no orgUnitId and permissions including '*'), reject before any
-          authorization — the check is unconditional and cannot be overridden by any caller
-          authority
-        type: branch
-        condition: >-
-          any requested grant is the reserved instance-wide super-admin shape (projectId '*' with no
-          orgUnitId and permissions including '*')
-        onTrueStep: 3
-        onFalseStep: 4
-      - stepNumber: 3
-        description: >-
-          Reject the reserved grant unconditionally — even a super-admin or master caller may not
-          mint a *:* token (the built-in admin session and the master principal are not minted
-          records and are unaffected)
-        type: throw
-        error: Forbidden — instance-wide super-admin (*:*) is reserved to the built-in admin account
-      - stepNumber: 4
-        description: Gather all organization units to expand any unit-scoped delegation authority
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listUnits
-      - stepNumber: 5
-        description: Gather all project placements to map in-scope units to their hosted projects
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listPlacements
-      - stepNumber: 6
-        description: >-
-          Deny the delegation unless the caller may delegate every requested grant: the caller lacks
-          an instance-wide admin grant AND, for some requested grant in request.grants and some
-          permission it carries, the caller's authorization scope for that permission — resolved via
-          scope_specialist.resolveScope(principal.grants, that permission, the gathered units, the
-          gathered placements), which expands the caller's unit-scoped grants across each unit's
-          recursive subtree — does not cover the requested grant's target: a requested specific
-          projectId must appear in that scope's projectIds and a requested orgUnitId must appear in
-          that scope's unitIds. Holding key:manage alone never suffices to delegate arbitrary
-          permissions.
-        type: branch
-        condition: >-
-          the caller lacks an instance-wide admin grant and, for some requested (target, permission)
-          in request.grants, the caller's resolved scope for that permission does not cover the
-          requested target project or unit
-        onTrueStep: 7
-        onFalseStep: 8
-      - stepNumber: 7
-        description: Reject the delegation
-        type: throw
-        error: Forbidden — caller may not delegate the requested grants
-      - stepNumber: 8
-        description: List hosted projects to validate the request
-        type: call
-        targetComponent: project_registry
-        targetMethod: list
-      - stepNumber: 9
-        description: >-
-          Verify that every specific projectId referenced in request.grants exists among the known
-          projects and every orgUnitId referenced exists among the gathered units
-        type: local
-      - stepNumber: 10
-        description: If any requested project id or org unit id is unknown, reject
-        type: branch
-        condition: a requested project id or org unit id is unknown
-        onTrueStep: 11
-        onFalseStep: 12
-      - stepNumber: 11
-        description: Reject the unknown project or unit
-        type: throw
-        error: unknown project or organization unit
-      - stepNumber: 12
-        description: Generate a cryptographically random token and compute its salted hash
-        type: local
-      - stepNumber: 13
-        description: >-
-          Build the ApiKeyRecord (hashed token, ownerSubject from the request, createdBySubject from
-          the actor principal, grants, label, expiresAt, plus the role/projects compatibility
-          projection derived from the grants)
-        type: local
-      - stepNumber: 14
-        description: Persist the credential record
-        type: call
-        targetComponent: credential_registry
-        targetMethod: create
-      - stepNumber: 15
-        description: Append a redacted audit event without letting a failure fail the mint
-        type: try
-        endStep: 17
-        catches:
-          - error: audit append failure
-            step: 18
-      - stepNumber: 16
-        description: Append the redacted token.mint audit event under the active retention policy
-        type: call
-        targetComponent: audit_repository
-        targetMethod: append
-      - stepNumber: 17
-        description: On a successful append, continue to the return and skip the audit-failure handler
-        type: jump
-        toStep: 19
-      - stepNumber: 18
-        description: Record the audit append failure as a server diagnostic and continue
-        type: local
-      - stepNumber: 19
-        description: Return the plaintext token (shown exactly once)
-        type: return
-        outcome: plaintext token returned once
-  - name: replaceUserGrants
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the caller credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateCredential
-      - stepNumber: 2
-        description: >-
-          HARD RESERVATION: if any incoming grant is the reserved instance-wide super-admin shape
-          (projectId '*' with no orgUnitId and permissions including '*'), reject before any
-          authorization — unconditional, even for a super-admin (enumerated instance-wide bundles
-          remain assignable by a super-admin)
-        type: branch
-        condition: >-
-          any incoming grant is the reserved instance-wide super-admin shape (projectId '*' with no
-          orgUnitId and permissions including '*')
-        onTrueStep: 3
-        onFalseStep: 4
-      - stepNumber: 3
-        description: >-
-          Reject the reserved grant unconditionally — even a super-admin or master caller may not
-          assign *:* to a user record
-        type: throw
-        error: Forbidden — instance-wide super-admin (*:*) is reserved to the built-in admin account
-      - stepNumber: 4
-        description: Gather all organization units to resolve the caller's user-administration scope
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listUnits
-      - stepNumber: 5
-        description: Gather all project placements
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listPlacements
-      - stepNumber: 6
-        description: Resolve the caller's user:admin scope over the organization tree
-        type: call
-        targetComponent: scope_specialist
-        targetMethod: resolveScope
-      - stepNumber: 7
-        description: Look up the existing user record by id to determine its current home unit
-        type: call
-        targetComponent: user_repository
-        targetMethod: getById
-      - stepNumber: 8
-        description: If no user matches userId, reject as not found
-        type: branch
-        condition: no user matches userId
-        onTrueStep: 9
-        onFalseStep: 10
-      - stepNumber: 9
-        description: Reject as not found
-        type: throw
-        error: not found
-      - stepNumber: 10
-        description: >-
-          Deny unless the caller's scope permits this grant replacement: scope.all is false AND
-          either (a) the target user's home unitId is missing or not in scope.unitIds, or (b) the
-          incoming grants would exceed the caller's own authority — they include an instance-wide
-          '*' grant, or any project/unit outside the caller's scope for the permissions being
-          granted (privilege-escalation guard). A super-admin (scope.all) bypasses both checks.
-        type: branch
-        condition: >-
-          scope.all is false and (the target user's home unit is outside scope.unitIds, or the
-          incoming grants exceed the caller's own scoped authority)
-        onTrueStep: 11
-        onFalseStep: 12
-      - stepNumber: 11
-        description: Reject the grant administration
-        type: throw
-        error: >-
-          Forbidden — grant administration requires scope over the target user's home unit and may
-          not exceed the caller's own authority
-      - stepNumber: 12
-        description: Replace the user's grants wholesale through the repository
-        type: call
-        targetComponent: user_repository
-        targetMethod: replaceGrants
-      - stepNumber: 13
-        description: Append a redacted audit event without letting a failure fail the grant replacement
-        type: try
-        endStep: 15
-        catches:
-          - error: audit append failure
-            step: 16
-      - stepNumber: 14
-        description: Append the redacted user.grants.replace audit event under the active retention policy
-        type: call
-        targetComponent: audit_repository
-        targetMethod: append
-      - stepNumber: 15
-        description: On a successful append, continue to the return and skip the audit-failure handler
-        type: jump
-        toStep: 17
-      - stepNumber: 16
-        description: Record the audit append failure as a server diagnostic and continue
-        type: local
-      - stepNumber: 17
-        description: Return the updated user record
-        type: return
-        outcome: updated user record
-  - name: listUsers
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the caller credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateCredential
-      - stepNumber: 2
-        description: Gather all organization units to resolve the caller's user-administration scope
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listUnits
-      - stepNumber: 3
-        description: Gather all project placements
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listPlacements
-      - stepNumber: 4
-        description: Resolve the caller's user:admin scope over the organization tree
-        type: call
-        targetComponent: scope_specialist
-        targetMethod: resolveScope
-      - stepNumber: 5
-        description: >-
-          If the caller has no user-administration scope (scope.all is false and the scope is empty
-          — no in-scope units and no in-scope projects), deny
-        type: branch
-        condition: scope.all is false and the scope is empty (no in-scope units and no in-scope projects)
-        onTrueStep: 6
-        onFalseStep: 7
-      - stepNumber: 6
-        description: Reject the listing
-        type: throw
-        error: Forbidden — user administration required
-      - stepNumber: 7
-        description: List hosted users, optionally narrowed to one project's grant holders
-        type: call
-        targetComponent: user_repository
-        targetMethod: list
-      - stepNumber: 8
-        description: >-
-          When scope.all is false, filter the returned users to those whose home unitId is in the
-          caller's in-scope units (scope.unitIds); when scope.all is true, keep every user. Honor
-          any optional project narrowing already applied.
-        type: local
-      - stepNumber: 9
-        description: Return the hosted user records filtered to the caller's scope
-        type: return
-        outcome: scoped hosted user records
-  - name: queryAuditEvents
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the caller credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateCredential
-      - stepNumber: 2
-        description: Gather all organization units to resolve the caller's audit-read scope
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listUnits
-      - stepNumber: 3
-        description: Gather all project placements
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listPlacements
-      - stepNumber: 4
-        description: Resolve the caller's audit:read scope over the organization tree
-        type: call
-        targetComponent: scope_specialist
-        targetMethod: resolveScope
-      - stepNumber: 5
-        description: >-
-          If the caller has no audit-read scope (scope.all is false and the scope is empty — no
-          in-scope projects and no in-scope units), deny
-        type: branch
-        condition: scope.all is false and the scope is empty (no in-scope projects and no in-scope units)
-        onTrueStep: 6
-        onFalseStep: 7
-      - stepNumber: 6
-        description: Reject the audit read
-        type: throw
-        error: Forbidden — audit read access required
-      - stepNumber: 7
-        description: >-
-          When scope.all is false, constrain the audit query to the caller's in-scope projects
-          (scope.projectIds); when scope.all is true, leave the query unconstrained (instance-wide
-          audit read)
-        type: local
-      - stepNumber: 8
-        description: Return redacted audit events matching the scoped query
-        type: call
-        targetComponent: audit_repository
-        targetMethod: query
-      - stepNumber: 9
-        description: Return the redacted audit events scoped to the caller
-        type: return
-        outcome: redacted audit events
-  - name: countAuditEvents
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the caller credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateCredential
-      - stepNumber: 2
-        description: Gather all organization units to resolve the caller's audit-read scope
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listUnits
-      - stepNumber: 3
-        description: Gather all project placements
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listPlacements
-      - stepNumber: 4
-        description: Resolve the caller's audit:read scope over the organization tree
-        type: call
-        targetComponent: scope_specialist
-        targetMethod: resolveScope
-      - stepNumber: 5
-        description: If the caller has no audit-read scope (scope.all is false and the scope is empty), deny
-        type: branch
-        condition: scope.all is false and the scope is empty (no in-scope projects and no in-scope units)
-        onTrueStep: 6
-        onFalseStep: 7
-      - stepNumber: 6
-        description: Reject the audit read
-        type: throw
-        error: Forbidden — audit read access required
-      - stepNumber: 7
-        description: >-
-          When scope.all is false, constrain the audit query to the caller's in-scope projects
-          (scope.projectIds); when scope.all is true, leave the query unconstrained
-        type: local
-      - stepNumber: 8
-        description: Count redacted audit events matching the scoped query through the audit repository
-        type: call
-        targetComponent: audit_repository
-        targetMethod: count
-      - stepNumber: 9
-        description: Return the audit event count scoped to the caller
-        type: return
-        outcome: audit event count
-  - name: upsertUser
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the caller credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateCredential
-      - stepNumber: 2
-        description: >-
-          HARD RESERVATION: if the incoming record carries a grant of the reserved instance-wide
-          super-admin shape (projectId '*' with no orgUnitId and permissions including '*'), reject
-          before any authorization — unconditional, even for a super-admin
-        type: branch
-        condition: >-
-          the incoming record carries a grant of the reserved instance-wide super-admin shape
-          (projectId '*' with no orgUnitId and permissions including '*')
-        onTrueStep: 3
-        onFalseStep: 4
-      - stepNumber: 3
-        description: >-
-          Reject the reserved grant unconditionally — even a super-admin or master caller may not
-          store *:* on a user record
-        type: throw
-        error: Forbidden — instance-wide super-admin (*:*) is reserved to the built-in admin account
-      - stepNumber: 4
-        description: Gather all organization units to resolve the caller's user-administration scope
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listUnits
-      - stepNumber: 5
-        description: Gather all project placements
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listPlacements
-      - stepNumber: 6
-        description: Resolve the caller's user:admin scope over the organization tree
-        type: call
-        targetComponent: scope_specialist
-        targetMethod: resolveScope
-      - stepNumber: 7
-        description: >-
-          Look up any existing user record by id to distinguish creation from update and to read its
-          current home unit
-        type: call
-        targetComponent: user_repository
-        targetMethod: getById
-      - stepNumber: 8
-        description: >-
-          Deny unless the caller's scope permits the target user's home unit: scope.all is false AND
-          either the incoming record's home unitId is missing or not in scope.unitIds, or (when
-          updating an existing user) the existing user's home unitId is not in scope.unitIds. A
-          super-admin (scope.all) bypasses the check.
-        type: branch
-        condition: >-
-          scope.all is false and the target user's home unit (incoming record, or existing record on
-          update) is missing or outside scope.unitIds
-        onTrueStep: 9
-        onFalseStep: 10
-      - stepNumber: 9
-        description: Reject the user administration
-        type: throw
-        error: Forbidden — user administration requires scope over the target user's home unit
-      - stepNumber: 10
-        description: >-
-          Build the redacted audit event with action user.create when no record existed, or
-          user.update otherwise
-        type: local
-      - stepNumber: 11
-        description: Create or update the hosted user through the repository
-        type: call
-        targetComponent: user_repository
-        targetMethod: upsert
-      - stepNumber: 12
-        description: Append the audit event without letting a failure fail the upsert
-        type: try
-        endStep: 14
-        catches:
-          - error: audit append failure
-            step: 15
-      - stepNumber: 13
-        description: >-
-          Append the redacted user.create or user.update audit event under the active retention
-          policy
-        type: call
-        targetComponent: audit_repository
-        targetMethod: append
-      - stepNumber: 14
-        description: On a successful append, continue to the return and skip the audit-failure handler
-        type: jump
-        toStep: 16
-      - stepNumber: 15
-        description: Record the audit append failure as a server diagnostic and continue
-        type: local
-      - stepNumber: 16
-        description: Return the stored user record
-        type: return
-        outcome: stored user record
-  - name: setUserStatus
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the caller credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateCredential
-      - stepNumber: 2
-        description: Gather all organization units to resolve the caller's user-administration scope
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listUnits
-      - stepNumber: 3
-        description: Gather all project placements
-        type: call
-        targetComponent: organization_repository
-        targetMethod: listPlacements
-      - stepNumber: 4
-        description: Resolve the caller's user:admin scope over the organization tree
-        type: call
-        targetComponent: scope_specialist
-        targetMethod: resolveScope
-      - stepNumber: 5
-        description: Look up the target user by id to read its home unit
-        type: call
-        targetComponent: user_repository
-        targetMethod: getById
-      - stepNumber: 6
-        description: If no user matches userId, reject as not found
-        type: branch
-        condition: no user matches userId
-        onTrueStep: 7
-        onFalseStep: 8
-      - stepNumber: 7
-        description: Reject as not found
-        type: throw
-        error: not found
-      - stepNumber: 8
-        description: >-
-          Deny unless the caller's scope permits the target user's home unit: scope.all is false and
-          the user's home unitId is missing or not in scope.unitIds. A super-admin (scope.all)
-          bypasses the check.
-        type: branch
-        condition: scope.all is false and the target user's home unit is missing or outside scope.unitIds
-        onTrueStep: 9
-        onFalseStep: 10
-      - stepNumber: 9
-        description: Reject the user administration
-        type: throw
-        error: Forbidden — user administration requires scope over the target user's home unit
-      - stepNumber: 10
-        description: Set the user's lifecycle status through the repository
-        type: call
-        targetComponent: user_repository
-        targetMethod: setStatus
-      - stepNumber: 11
-        description: >-
-          If the new status is not 'active' (a deactivation), revoke all of the user's credentials
-          before auditing; an active status skips straight to the audit append
-        type: branch
-        condition: the new status is not 'active'
-        onTrueStep: 12
-        onFalseStep: 14
-      - stepNumber: 12
-        description: >-
-          Revoke every non-revoked credential owned by the user so existing tokens can no longer
-          authenticate, capturing the revoked count for the audit event
-        type: call
-        targetComponent: credential_registry
-        targetMethod: revokeAllForOwner
-      - stepNumber: 13
-        description: >-
-          Still on the deactivation path, revoke every one of the user's browser sessions too, so a
-          deactivation also invalidates live web sessions (a separate credential type from tokens
-          that the auth bridge accepts on the data plane), capturing the revoked-session count for
-          the audit event
-        type: call
-        targetComponent: web_session_repository
-        targetMethod: removeAllForSubject
-      - stepNumber: 14
-        description: Append the audit event without letting a failure fail the status change
-        type: try
-        endStep: 16
-        catches:
-          - error: audit append failure
-            step: 17
-      - stepNumber: 15
-        description: >-
-          Append the redacted audit event under the active retention policy — action
-          'user.deactivate' at security level (including the revoked-token and revoked-session
-          counts) when the status change deactivated the user, otherwise 'user.status.set' at info
-          level
-        type: call
-        targetComponent: audit_repository
-        targetMethod: append
-      - stepNumber: 16
-        description: On a successful append, continue to the return and skip the audit-failure handler
-        type: jump
-        toStep: 18
-      - stepNumber: 17
-        description: Record the audit append failure as a server diagnostic and continue
-        type: local
-      - stepNumber: 18
-        description: Return the updated user record
-        type: return
-        outcome: updated user record
   - name: revokeToken
     narrative:
       - stepNumber: 1
-        description: Authenticate the caller credential
+        description: Authenticate the caller credential to the calling principal
         type: call
         targetComponent: auth_specialist
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
-          If the caller's grants cover neither key:manage for the token's scope nor an instance-wide
-          admin grant, deny
+          If the caller is not an instance admin (permissionSubject.instanceAdmin is false), deny —
+          cross-user token revocation is an instance-admin operation; a user revokes their own
+          tokens through revokeSelfToken (ownership-checked), so key:manage/grant scope is neither
+          required nor consulted
         type: branch
-        condition: >-
-          the caller's grants cover neither key:manage for the token's scope nor an instance-wide
-          admin grant
+        condition: the caller is not an instance admin (permissionSubject.instanceAdmin is false)
+        onTrueStep: 3
         onFalseStep: 4
       - stepNumber: 3
-        description: Reject the revocation
+        description: Reject the cross-user revocation
         type: throw
-        error: Forbidden — caller may not manage this token
+        error: Forbidden — revoking another user's token requires instance-admin
       - stepNumber: 4
         description: Revoke the credential record by token id
         type: call
@@ -621,55 +59,7 @@ methods:
         description: Return once revoked
         type: return
         outcome: revoked
-  - name: pruneAuditEvents
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the caller credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateCredential
-      - stepNumber: 2
-        description: If the caller lacks an instance-wide admin grant, deny
-        type: branch
-        condition: the caller lacks an instance-wide admin grant
-        onFalseStep: 4
-      - stepNumber: 3
-        description: Reject the audit administration
-        type: throw
-        error: Forbidden — audit administration requires an instance-wide admin grant
-      - stepNumber: 4
-        description: >-
-          Resolve the active AuditRetentionPolicy from the host config, using the secure default
-          policy when unset
-        type: local
-      - stepNumber: 5
-        description: Apply the retention policy and delete expired audit events
-        type: call
-        targetComponent: audit_repository
-        targetMethod: prune
-      - stepNumber: 6
-        description: Append a redacted audit event without letting a failure fail the prune
-        type: try
-        endStep: 8
-        catches:
-          - error: audit append failure
-            step: 9
-      - stepNumber: 7
-        description: Append the redacted audit.prune audit event under the active retention policy
-        type: call
-        targetComponent: audit_repository
-        targetMethod: append
-      - stepNumber: 8
-        description: On a successful append, continue to the return and skip the audit-failure handler
-        type: jump
-        toStep: 10
-      - stepNumber: 9
-        description: Record the audit append failure as a server diagnostic and continue
-        type: local
-      - stepNumber: 10
-        description: Return the number of events removed
-        type: return
-        outcome: removed count
+    detail: full
   - name: startSsoLogin
     narrative:
       - stepNumber: 1
@@ -818,10 +208,11 @@ methods:
       - stepNumber: 14
         description: >-
           Build a new active HostedUserRecord for the resolved subject — first-login provisioning:
-          status active, createdAt now, grants = the enumerated instance-wide SSO-admin bundle
-          ({projectId '*', permissions ['user:admin', 'project:create', 'audit:read']} —
-          deliberately NOT *:*) when in the admin group, otherwise empty (an admin assigns grants
-          afterwards)
+          status active, createdAt now, displayName + email read from the verified id_token claims
+          (name/preferred_username and email, when present), roleBindings = a binding to the
+          built-in 'sso-admin' role at instance scope when in the admin group, otherwise empty (an
+          admin assigns roles/permissions afterwards). The sso-admin role grants project:admin +
+          project:create instance-wide, never *:*.
         type: local
       - stepNumber: 15
         description: Persist the newly provisioned first-login user record through the user repository
@@ -842,33 +233,36 @@ methods:
         error: deactivated user may not re-login
       - stepNumber: 18
         description: >-
-          If the user's stored grants disagree with the SSO-admin membership (in the admin group but
-          missing the enumerated bundle, or out of the group but still carrying it), refresh them;
-          otherwise skip the refresh
+          If the user's stored profile or bindings are stale, refresh them; otherwise skip the
+          refresh. Stale when the roleBindings disagree with the SSO-admin membership decided from
+          the verified groups claim (in the admin group but missing the sso-admin binding, or out of
+          the group but still carrying it), OR the verified id_token now reports a different
+          displayName/email than the stored record.
         type: branch
         condition: >-
-          the user's stored grants disagree with the SSO-admin membership decided from the verified
-          groups claim
+          the user's stored profile or bindings are stale (roleBindings disagree with the SSO-admin
+          membership, or the verified displayName/email differ from the stored record)
         onTrueStep: 19
         onFalseStep: 20
       - stepNumber: 19
         description: >-
-          Persist the refreshed grants through the user repository: append the enumerated SSO-admin
-          bundle on entry into the admin group, drop it on exit (server-driven; the bundle is
-          enumerated — never *:* — so the hard reservation is preserved)
+          Persist the refreshed record through the user repository: add the built-in sso-admin role
+          binding on entry into the admin group and drop it on exit, and update displayName/email to
+          the latest verified claims (server-driven; sso-admin grants project:admin + project:create
+          instance-wide, never *:* — the reservation is preserved).
         type: call
         targetComponent: user_repository
-        targetMethod: replaceGrants
+        targetMethod: upsert
       - stepNumber: 20
         description: >-
           Resolve the effective user record (the freshly provisioned record on first login,
-          otherwise the existing match, with the grants refresh applied) and mint a user-bound
+          otherwise the existing match with the binding refresh applied) and mint a user-bound
           token: generate a cryptographically random token, compute its salted hash, and build the
           ApiKeyRecord (keyHash, ownerSubject = the resolved user's subject, createdBySubject = the
-          resolved user's subject, grants = the resolved user's CURRENT grants with any reserved
-          instance-wide super-admin (*:*) grant filtered out — *:* is reserved to the built-in admin
-          account, so no SSO login can ever mint a credential carrying it — createdAt now, plus the
-          role/projects compatibility projection derived from the filtered grants)
+          resolved user's subject, projects = '*' so the token acts as the user across their
+          accessible projects with the resolver gating per project, createdAt now); the token
+          carries NO grants — the auth specialist resolves the owner's permissionSubject live from
+          roleBindings + assignments.
         type: local
       - stepNumber: 21
         description: Persist only the hashed credential record
@@ -900,144 +294,90 @@ methods:
         description: Return the plaintext user-bound token (shown exactly once)
         type: return
         outcome: plaintext token returned once
-  - name: listIdentityProviders
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the caller credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateCredential
-      - stepNumber: 2
-        description: If the caller lacks an instance-wide admin grant, deny
-        type: branch
-        condition: the caller lacks an instance-wide admin grant
-        onFalseStep: 4
-      - stepNumber: 3
-        description: Reject the identity-provider administration
-        type: throw
-        error: Forbidden — identity-provider administration requires an instance-wide admin grant
-      - stepNumber: 4
-        description: List the configured identity providers through the policy repository
-        type: call
-        targetComponent: policy_repository
-        targetMethod: listIdentityProviders
-      - stepNumber: 5
-        description: Return the identity-provider configurations
-        type: return
-        outcome: identity-provider configurations
-  - name: upsertIdentityProvider
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the caller credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateCredential
-      - stepNumber: 2
-        description: If the caller lacks an instance-wide admin grant, deny
-        type: branch
-        condition: the caller lacks an instance-wide admin grant
-        onFalseStep: 4
-      - stepNumber: 3
-        description: Reject the identity-provider administration
-        type: throw
-        error: Forbidden — identity-provider administration requires an instance-wide admin grant
-      - stepNumber: 4
-        description: >-
-          Create or update the identity-provider configuration through the policy repository (the
-          config carries a clientSecretRef, never a raw secret)
-        type: call
-        targetComponent: policy_repository
-        targetMethod: upsertIdentityProvider
-      - stepNumber: 5
-        description: Append a redacted audit event without letting a failure fail the upsert
-        type: try
-        endStep: 7
-        catches:
-          - error: audit append failure
-            step: 8
-      - stepNumber: 6
-        description: >-
-          Append the redacted idp.upsert audit event (security level) under the active retention
-          policy
-        type: call
-        targetComponent: audit_repository
-        targetMethod: append
-      - stepNumber: 7
-        description: On a successful append, continue to the return and skip the audit-failure handler
-        type: jump
-        toStep: 9
-      - stepNumber: 8
-        description: Record the audit append failure as a server diagnostic and continue
-        type: local
-      - stepNumber: 9
-        description: Return the stored identity-provider configuration
-        type: return
-        outcome: stored identity-provider configuration
-  - name: removeIdentityProvider
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the caller credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateCredential
-      - stepNumber: 2
-        description: If the caller lacks an instance-wide admin grant, deny
-        type: branch
-        condition: the caller lacks an instance-wide admin grant
-        onFalseStep: 4
-      - stepNumber: 3
-        description: Reject the identity-provider administration
-        type: throw
-        error: Forbidden — identity-provider administration requires an instance-wide admin grant
-      - stepNumber: 4
-        description: >-
-          Remove the identity-provider configuration by id through the policy repository (an unknown
-          id is rejected)
-        type: call
-        targetComponent: policy_repository
-        targetMethod: removeIdentityProvider
-      - stepNumber: 5
-        description: Append a redacted audit event without letting a failure fail the removal
-        type: try
-        endStep: 7
-        catches:
-          - error: audit append failure
-            step: 8
-      - stepNumber: 6
-        description: >-
-          Append the redacted idp.remove audit event (security level) under the active retention
-          policy
-        type: call
-        targetComponent: audit_repository
-        targetMethod: append
-      - stepNumber: 7
-        description: On a successful append, continue to the return and skip the audit-failure handler
-        type: jump
-        toStep: 9
-      - stepNumber: 8
-        description: Record the audit append failure as a server diagnostic and continue
-        type: local
-      - stepNumber: 9
-        description: Return once the identity-provider configuration has been removed
-        type: return
-        outcome: identity provider removed
   - name: mintSelfToken
-    narrative: []
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          Resolve the caller's project:read over the EXACT requested project through the resolver
+          (self-scoped: a unit assignment covers its own subtree, never another tenant's)
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: The caller must already hold read authority over the project
+        type: branch
+        condition: the resolved project:read value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: 'Refuse: caller lacks project:read on the requested project'
+        type: throw
+        error: Forbidden — no project:read
+      - stepNumber: 5
+        description: A write-narrowed token additionally requires project:write
+        type: branch
+        condition: write narrowing is requested and the resolved project:write value is not yes
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: 'Refuse: caller lacks project:write on the requested project'
+        type: throw
+        error: Forbidden — no project:write
+      - stepNumber: 7
+        description: >-
+          Mint a fresh random token and build the caller-owned record NARROWED to exactly the one
+          project — the record stores NO permissions: the data-plane gate resolves the owner's LIVE
+          permission per request, so revoking the owner cuts the token off
+        type: local
+      - stepNumber: 8
+        description: Persist the credential record (hashed token only — the plaintext is never stored)
+        type: call
+        targetComponent: credential_registry
+        targetMethod: create
+      - stepNumber: 9
+        description: Append the redacted token.mint.self (security) audit event best-effort
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: appendAuditBestEffort
+      - stepNumber: 10
+        description: Return the plaintext token — shown exactly once
+        type: return
+        outcome: the plaintext token
     detail: intent
     intent: >-
-      Authenticate the caller credential (ws_ session or token) to the calling principal via the
-      auth specialist. Verify the principal's own grants already cover mcp:read on projectId (and
-      mcp:write when write is true), rejecting Forbidden otherwise; because the minted token is no
-      broader than the caller's own authority this is self-scoped, so key:manage is neither required
-      nor consulted. Generate a random token and salted hash and build an ApiKeyRecord OWNED by the
-      caller (ownerSubject and createdBySubject = the principal's subject) with exactly one grant on
-      projectId carrying mcp:read (and mcp:write when write) plus the role/projects compatibility
-      projection, persist only the hashed record through the credential registry, append a
+      Authenticate the caller (ws_ session or token) to the calling principal via the auth
+      specialist. Mint a token OWNED BY the caller (ownerSubject and createdBySubject = the
+      principal's subject) narrowed to exactly one project (projects = [projectId]); the token
+      carries NO grants — it acts as the caller's OWN live permission on that project, so the
+      resolver gates read vs write at use time and the token can never exceed the caller's access
+      (self-scoped, so key:manage is neither required nor consulted). The write flag is advisory
+      (token label only). Persist only the hashed record through the credential registry, append a
       best-effort redacted token.mint.self (security) audit event, and return the plaintext exactly
       once. Because the token is owned by the caller, a later deactivation of that user revokes it
       via revokeAllForOwner.
   - name: listSelfTokens
-    narrative: []
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          Return the caller's OWN minted credential records through the credential registry,
+          redacted — hashed token only, with id/project/label/createdAt/revokedAt
+        type: call
+        targetComponent: credential_registry
+        targetMethod: listByOwner
+      - stepNumber: 3
+        description: Return the redacted records — a read, not audited
+        type: return
+        outcome: the caller's own redacted credential records
     detail: intent
     intent: >-
       Authenticate the caller credential to the calling principal, list the principal's own
@@ -1046,7 +386,43 @@ methods:
       id, authorized project, label, createdAt and revokedAt, so the client can show a user their
       agent tokens and offer revoke. A read; not audited.
   - name: revokeSelfToken
-    narrative: []
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: List the caller's OWN tokens through the credential registry
+        type: call
+        targetComponent: credential_registry
+        targetMethod: listByOwner
+      - stepNumber: 3
+        description: Only a token the caller owns may be revoked
+        type: branch
+        condition: tokenId is not among the caller's own tokens
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Refuse as not found — no cross-user revocation, no key:manage escalation, no existence
+          leak
+        type: throw
+        error: token not found
+      - stepNumber: 5
+        description: Revoke the token through the credential registry
+        type: call
+        targetComponent: credential_registry
+        targetMethod: revoke
+      - stepNumber: 6
+        description: Append the redacted token.revoke.self (security) audit event best-effort
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: appendAuditBestEffort
+      - stepNumber: 7
+        description: Return — the token is revoked
+        type: return
+        outcome: void
     detail: intent
     intent: >-
       Authenticate the caller credential to the calling principal, fetch the principal's own tokens
@@ -1054,6 +430,657 @@ methods:
       as not found, so there is no cross-user revocation and no key:manage escalation), then revoke
       it through the credential registry and append a best-effort redacted token.revoke.self
       (security) audit event.
+  - name: listUsers
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          Compute the caller's project:admin visible scopes over the organization tree (the units
+          they may administer)
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: visibleScopes
+      - stepNumber: 3
+        description: If the caller has no actionable unit scope, deny
+        type: branch
+        condition: the caller has no actionable unit scope in the visible set
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the listing
+        type: throw
+        error: Forbidden — user administration required
+      - stepNumber: 5
+        description: >-
+          List hosted users through the repository, optionally narrowed by status (the user store
+          owns NO project filter — membership is a grid question)
+        type: call
+        targetComponent: user_repository
+        targetMethod: list
+      - stepNumber: 6
+        description: >-
+          If a caller-supplied project filter is present, resolve its holders from the permission
+          grid; otherwise skip to the scope filter
+        type: branch
+        condition: a caller-supplied project filter is present
+        onFalseStep: 8
+      - stepNumber: 7
+        description: >-
+          List the DIRECT user assignments at that project scope through the permission repository
+          and narrow the listing to those subject ids (user records carry no project reference of
+          their own)
+        type: call
+        targetComponent: permission_repository
+        targetMethod: listAssignments
+      - stepNumber: 8
+        description: >-
+          Filter the returned users to those whose home unit is an actionable unit in the visible
+          set (an instance-admin keeps every user), intersected with the grid-resolved project
+          holders when a project filter was supplied
+        type: local
+      - stepNumber: 9
+        description: Return the hosted user records filtered to the caller's scope
+        type: return
+        outcome: scoped hosted user records
+    detail: full
+  - name: setUserStatus
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Look up the target user by id to read its home unit and existence
+        type: call
+        targetComponent: user_repository
+        targetMethod: getById
+      - stepNumber: 3
+        description: If no user matches userId, reject as not found
+        type: branch
+        condition: no user matches userId
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject as not found
+        type: throw
+        error: not found
+      - stepNumber: 5
+        description: Resolve the caller's project:admin permission over the target user's home unit
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 6
+        description: If the effective project:admin value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 7
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Reject the user administration
+        type: throw
+        error: Forbidden — user administration requires project:admin over the target user's home unit
+      - stepNumber: 8
+        description: Set the user's lifecycle status through the repository
+        type: call
+        targetComponent: user_repository
+        targetMethod: setStatus
+      - stepNumber: 9
+        description: >-
+          If the new status is not 'active' (a deactivation), revoke the user's credentials and
+          sessions; an active status skips to the audit
+        type: branch
+        condition: the new status is not 'active'
+        onTrueStep: 10
+        onFalseStep: 12
+      - stepNumber: 10
+        description: >-
+          Revoke every non-revoked credential owned by the user so existing tokens can no longer
+          authenticate, capturing the revoked count
+        type: call
+        targetComponent: credential_registry
+        targetMethod: revokeAllForOwner
+      - stepNumber: 11
+        description: >-
+          Revoke every one of the user's browser sessions too, so a deactivation invalidates live
+          web sessions, capturing the revoked-session count
+        type: call
+        targetComponent: web_session_repository
+        targetMethod: removeAllForSubject
+      - stepNumber: 12
+        description: Append the audit event without letting a failure fail the status change
+        type: try
+        endStep: 14
+        catches:
+          - error: audit append failure
+            step: 15
+      - stepNumber: 13
+        description: >-
+          Append the redacted user.deactivate (security, with revoked counts) or user.status.set
+          (info) audit event under the active retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 14
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 16
+      - stepNumber: 15
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 16
+        description: Return the updated user record
+        type: return
+        outcome: updated user record
+    detail: full
+  - name: queryAuditEvents
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Compute the caller's project:admin visible scopes over the organization tree
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: visibleScopes
+      - stepNumber: 3
+        description: If the caller has no actionable project scope, deny
+        type: branch
+        condition: the caller has no actionable project scope in the visible set
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the audit read
+        type: throw
+        error: Forbidden — audit read access required
+      - stepNumber: 5
+        description: >-
+          Constrain the audit query to the caller's actionable project scopes (an instance-admin
+          leaves it unconstrained — instance-wide audit read)
+        type: local
+      - stepNumber: 6
+        description: Return redacted audit events matching the scoped query
+        type: call
+        targetComponent: audit_repository
+        targetMethod: query
+      - stepNumber: 7
+        description: Return the redacted audit events scoped to the caller
+        type: return
+        outcome: redacted audit events
+    detail: full
+  - name: countAuditEvents
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Compute the caller's project:admin visible scopes over the organization tree
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: visibleScopes
+      - stepNumber: 3
+        description: If the caller has no actionable project scope, deny
+        type: branch
+        condition: the caller has no actionable project scope in the visible set
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the audit read
+        type: throw
+        error: Forbidden — audit read access required
+      - stepNumber: 5
+        description: >-
+          Constrain the audit query to the caller's actionable project scopes (an instance-admin
+          leaves it unconstrained)
+        type: local
+      - stepNumber: 6
+        description: Count redacted audit events matching the scoped query through the audit repository
+        type: call
+        targetComponent: audit_repository
+        targetMethod: count
+      - stepNumber: 7
+        description: Return the audit event count scoped to the caller
+        type: return
+        outcome: audit event count
+    detail: full
+  - name: upsertUser
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          Look up any existing user record by id to distinguish creation from update and to read its
+          current home unit
+        type: call
+        targetComponent: user_repository
+        targetMethod: getById
+      - stepNumber: 3
+        description: >-
+          Resolve the caller's project:admin permission over the target user's home unit (the
+          incoming record's, or the existing record's on update)
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 4
+        description: If the effective project:admin value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Reject the user administration
+        type: throw
+        error: Forbidden — user administration requires project:admin over the target user's home unit
+      - stepNumber: 6
+        description: >-
+          Check the target record's subject id against the reserved built-in subject ids (the
+          persisted boot-reserved UUIDs and the legacy 'builtin:*' literals)
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: isReservedSubject
+      - stepNumber: 7
+        description: If the target subject id is reserved, reject
+        type: branch
+        condition: the target record's subject id is reserved
+        onTrueStep: 8
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Reject the reserved subject id
+        type: throw
+        error: >-
+          Forbidden — the built-in subject ids are reserved and can never be claimed by a user
+          record
+      - stepNumber: 9
+        description: >-
+          Build the redacted audit event with action user.create when no record existed, or
+          user.update otherwise
+        type: local
+      - stepNumber: 10
+        description: >-
+          Create or update the hosted user (subject, status, home unit, roleBindings) through the
+          repository
+        type: call
+        targetComponent: user_repository
+        targetMethod: upsert
+      - stepNumber: 11
+        description: Append the audit event without letting a failure fail the upsert
+        type: try
+        endStep: 13
+        catches:
+          - error: audit append failure
+            step: 14
+      - stepNumber: 12
+        description: >-
+          Append the redacted user.create or user.update audit event under the active retention
+          policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 13
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 15
+      - stepNumber: 14
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 15
+        description: Return the stored user record
+        type: return
+        outcome: stored user record
+    detail: full
+  - name: mintToken
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential to the calling principal
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          Resolve the token's owner user by request.ownerUserId — matching the record id or the
+          record's subject userId (record id wins) — to confirm existence and read status
+        type: call
+        targetComponent: user_repository
+        targetMethod: findByRecordOrSubjectId
+      - stepNumber: 3
+        description: If no user matches request.ownerUserId, reject as not found
+        type: branch
+        condition: no user matches request.ownerUserId
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject minting for an unknown owner
+        type: throw
+        error: unknown owner user
+      - stepNumber: 5
+        description: >-
+          If the owner user's status is not 'active', reject — a fresh token must never revive a
+          deactivated user whose credentials were revoked at deactivation
+        type: branch
+        condition: the owner user's status is not 'active'
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Reject minting a token for a deactivated user
+        type: throw
+        error: cannot mint a token for a deactivated user
+      - stepNumber: 7
+        description: >-
+          If the caller is not an instance admin (permissionSubject.instanceAdmin is false), deny —
+          the minted token acts as the OWNER's live permission, which may exceed a non-super-admin
+          minter's own authority (confused deputy); only the env-anchored instance-admin dominates
+          every owner
+        type: branch
+        condition: the caller is not an instance admin (permissionSubject.instanceAdmin is false)
+        onTrueStep: 8
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Reject minting a token on behalf of another user without instance-admin
+        type: throw
+        error: >-
+          Forbidden — minting a token for another user requires instance-admin; delegated minting
+          bounded by the minter's own scope is a future enhancement, and a user mints their own
+          single-project tokens via mintSelfToken
+      - stepNumber: 9
+        description: >-
+          Generate a cryptographically random token, compute its salted hash, and build the
+          ApiKeyRecord (keyHash, ownerSubject = the owner user's subject, createdBySubject = the
+          caller's subject, projects = request.projects narrowing, createdAt now, optional
+          expiresAt); the token carries NO grants — within its narrowing it acts as the owner's live
+          permission and the resolver gates per project
+        type: local
+      - stepNumber: 10
+        description: Persist only the hashed credential record
+        type: call
+        targetComponent: credential_registry
+        targetMethod: create
+      - stepNumber: 11
+        description: Append a redacted audit event without letting a failure fail the mint
+        type: try
+        endStep: 13
+        catches:
+          - error: audit append failure
+            step: 14
+      - stepNumber: 12
+        description: >-
+          Append the redacted token.mint audit event (security level) under the active retention
+          policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 13
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 15
+      - stepNumber: 14
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 15
+        description: Return the plaintext token (shown exactly once)
+        type: return
+        outcome: plaintext token returned once
+    detail: full
+  - name: pruneAuditEvents
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          Resolve the caller's project:admin permission over instance scope (the env-anchored
+          instance-admin passes via bypass; a delegated project:admin@instance also passes)
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective project:admin value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the audit administration
+        type: throw
+        error: Forbidden — audit administration requires instance-wide project:admin
+      - stepNumber: 5
+        description: >-
+          Resolve the active AuditRetentionPolicy from the host config, using the secure default
+          policy when unset
+        type: local
+      - stepNumber: 6
+        description: Apply the retention policy and delete expired audit events
+        type: call
+        targetComponent: audit_repository
+        targetMethod: prune
+      - stepNumber: 7
+        description: Append a redacted audit event without letting a failure fail the prune
+        type: try
+        endStep: 9
+        catches:
+          - error: audit append failure
+            step: 10
+      - stepNumber: 8
+        description: Append the redacted audit.prune audit event under the active retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 9
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 11
+      - stepNumber: 10
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 11
+        description: Return the number of events removed
+        type: return
+        outcome: removed count
+    detail: full
+  - name: listIdentityProviders
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Resolve the caller's project:admin permission over instance scope
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective project:admin value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the identity-provider administration
+        type: throw
+        error: Forbidden — identity-provider administration requires instance-wide project:admin
+      - stepNumber: 5
+        description: List the configured identity providers through the policy repository
+        type: call
+        targetComponent: policy_repository
+        targetMethod: listIdentityProviders
+      - stepNumber: 6
+        description: Return the identity-provider configurations
+        type: return
+        outcome: identity-provider configurations
+    detail: full
+  - name: upsertIdentityProvider
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Resolve the caller's project:admin permission over instance scope
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective project:admin value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the identity-provider administration
+        type: throw
+        error: Forbidden — identity-provider administration requires instance-wide project:admin
+      - stepNumber: 5
+        description: >-
+          Create or update the identity-provider configuration through the policy repository (the
+          config carries a clientSecretRef, never a raw secret)
+        type: call
+        targetComponent: policy_repository
+        targetMethod: upsertIdentityProvider
+      - stepNumber: 6
+        description: Append a redacted audit event without letting a failure fail the upsert
+        type: try
+        endStep: 8
+        catches:
+          - error: audit append failure
+            step: 9
+      - stepNumber: 7
+        description: >-
+          Append the redacted idp.upsert audit event (security level) under the active retention
+          policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 8
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 10
+      - stepNumber: 9
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 10
+        description: Return the stored identity-provider configuration
+        type: return
+        outcome: stored identity-provider configuration
+    detail: full
+  - name: removeIdentityProvider
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Resolve the caller's project:admin permission over instance scope
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective project:admin value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the identity-provider administration
+        type: throw
+        error: Forbidden — identity-provider administration requires instance-wide project:admin
+      - stepNumber: 5
+        description: >-
+          Remove the identity-provider configuration by id through the policy repository (an unknown
+          id is rejected)
+        type: call
+        targetComponent: policy_repository
+        targetMethod: removeIdentityProvider
+      - stepNumber: 6
+        description: Append a redacted audit event without letting a failure fail the removal
+        type: try
+        endStep: 8
+        catches:
+          - error: audit append failure
+            step: 9
+      - stepNumber: 7
+        description: >-
+          Append the redacted idp.remove audit event (security level) under the active retention
+          policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 8
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 10
+      - stepNumber: 9
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 10
+        description: Return once the identity-provider configuration has been removed
+        type: return
+        outcome: identity provider removed
+    detail: full
+  - name: resolveEnabledProvider
+    narrative:
+      - stepNumber: 1
+        description: Resolve the configured identity providers through the policy repository
+        type: call
+        targetComponent: policy_repository
+        targetMethod: listIdentityProviders
+      - stepNumber: 2
+        description: Select the provider configuration whose id is providerId
+        type: local
+      - stepNumber: 3
+        description: If the provider is unknown or not enabled, reject
+        type: branch
+        condition: the provider is unknown or not enabled
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject with the identical unknown-or-disabled error (no existence leak)
+        type: throw
+        error: unknown or disabled identity provider
+      - stepNumber: 5
+        description: Return the enabled provider configuration
+        type: return
+        outcome: the enabled provider configuration
+  - name: appendAuditBestEffort
+    narrative:
+      - stepNumber: 1
+        description: Attempt the append — a failure must never escape into the caller's primary action
+        type: try
+        endStep: 2
+        catches:
+          - error: audit append failure
+            step: 4
+      - stepNumber: 2
+        description: Append the redacted audit event under the active retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 3
+        description: On a successful append, skip the failure handler
+        type: jump
+        toStep: 5
+      - stepNumber: 4
+        description: Record the append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 5
+        description: Return — the append was attempted best-effort
+        type: return
+        outcome: void
+    symbol: tryAppendAudit
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-07-14T11:04:17.156Z'
+updatedAt: '2026-07-19T13:29:42.967Z'

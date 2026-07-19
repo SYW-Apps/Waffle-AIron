@@ -1,0 +1,33 @@
+id: spec_file_store_impl
+name: Spec File Store Implementation
+description: >-
+  Raw YAML file I/O over the shared yaml/fs utilities (readYamlFile, writeYamlFile, listFiles,
+  listFilesRecursive) as imported and used by the spec workspace.
+contract: ispec_file_store
+sourcePath: src/core/specs.ts
+methods:
+  - name: read
+    narrative: []
+    detail: intent
+    intent: >-
+      Reads the YAML document at the given project-relative spec path and parses it into a plain
+      object; returns null when the file is absent or empty, and propagates a parse error for
+      malformed YAML.
+    symbol: readYamlFile
+  - name: write
+    narrative: []
+    detail: intent
+    intent: >-
+      Serializes the given document as YAML and writes it to the spec path, creating parent
+      directories as needed; filesystem failures propagate to the caller.
+    symbol: writeYamlFile
+  - name: listTree
+    narrative: []
+    detail: intent
+    intent: >-
+      Recursively lists YAML spec files under the given directory tree; returns an empty list when
+      the root is absent rather than failing.
+    symbol: listFilesRecursive
+status: complete
+createdAt: '2026-07-18T22:57:53.471Z'
+updatedAt: '2026-07-18T22:59:16.876Z'

@@ -14,6 +14,7 @@ methods:
         type: call
         targetComponent: public_surface_registry
         targetMethod: replaceSnapshot
+    symbol: replacePublicSurfaceSnapshot
   - name: getSnapshot
     narrative:
       - stepNumber: 1
@@ -21,6 +22,7 @@ methods:
         type: call
         targetComponent: public_surface_index
         targetMethod: getSnapshot
+    symbol: getPublicSurfaceSnapshot
   - name: findInterface
     narrative:
       - stepNumber: 1
@@ -28,7 +30,8 @@ methods:
         type: call
         targetComponent: public_surface_index
         targetMethod: findInterface
+    symbol: findPublicInterface
 detail: calls-only
 status: complete
 createdAt: '2026-07-09T22:08:25.014Z'
-updatedAt: '2026-07-09T22:13:42.683Z'
+updatedAt: '2026-07-18T23:33:22.515Z'

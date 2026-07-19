@@ -3,8 +3,9 @@ import { readLockRecord, writeLockRecord } from '../core/lockfile.js';
 import { loadSystemSpec, loadSubsystemSpecs, buildProjectGraph } from '../core/specs.js';
 import { provisionProject, promoteAllComplete } from '../core/provision.js';
 import { validateAsComplete } from '../core/validation.js';
-import { renderDiagram } from '../core/diagram.js';
+import { renderDiagram, buildCanvasDataModel } from '../core/diagram.js';
 import { loadProjectConfig } from '../config/loader.js';
+import { globalPacksDir, discoverPacks, loadExtensionPacks, DeclarativePackSchema } from '../core/extensions.js';
 import { createMcpServer } from '../mcp/server.js';
 import * as gitPortal from '../git/index.js';
 import * as producerPortal from '../producers/index.js';
@@ -27,12 +28,25 @@ export const hostCore = {
   writeLockRecord,
   promoteAllComplete,
   renderDiagram,
+  // The full CanvasModel as data (the JSON sibling of renderDiagram('canvas')) —
+  // consumed by the web app's in-React canvas renderer.
+  buildCanvasDataModel,
   // L0/L1 reads used by the landscape plane to project a redacted public-surface
   // snapshot; thin forwarders to the core spec reads (request-scoped root).
   loadSystemSpec,
   loadSubsystemSpecs,
   // Level-of-detail project-tier graph for the web UI, forwarded to core_portal.
   buildProjectGraph,
+  // Extension-pack loading forwarded to sdd_core — used by the hosted pack store
+  // (pack_registry) and the policy plane's required/default-pack application.
+  globalPacksDir,
+  discoverPacks,
+  loadExtensionPacks,
+  /** Validate a parsed manifest as a declarative pack; returns the first error message, or null when valid. */
+  checkDeclarativePack: (raw: unknown): string | null => {
+    const result = DeclarativePackSchema.safeParse(raw);
+    return result.success ? null : (result.error.issues[0]?.message ?? 'shape mismatch');
+  },
 };
 
 // host_validator_adapter → sdd_validator (validator_portal)
@@ -48,12 +62,15 @@ export function createScopedServer(): McpServer {
   return createMcpServer({ hostedTools: true });
 }
 
-// host_git_adapter → sdd_git (git_portal)
+// host_git_adapter → sdd_git (git_portal). publish forwards the SCOPED subpath
+// (default .wai/) so staging never touches a shared repository's own code.
 export const hostGit = {
   enable: gitPortal.enable,
   disable: gitPortal.disable,
   sync: gitPortal.sync,
   publish: gitPortal.publish,
+  status: gitPortal.status,
+  configureSync: gitPortal.configureSync,
 };
 
 // host_producer_adapter → sdd_producers (producer_portal)

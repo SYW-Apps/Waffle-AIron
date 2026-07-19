@@ -21,12 +21,18 @@ import { runDomainsList, runDomainsScan, runDomainsAdd, runDomainsRemove } from 
 import { runSkillsList, runSkillsInstall } from '../commands/skills.js';
 import { runDoctor } from '../commands/doctor.js';
 import { runDiagram } from '../commands/diagram.js';
-import { runRulesList } from '../commands/rules.js';
-import { runPacksAdd, runPacksList, runPacksRemove } from '../commands/packs.js';
+import { listRules } from '../commands/rules.js';
+import { listPatterns } from '../commands/patterns.js';
+import { listVariants } from '../commands/variants.js';
+import { addPack, listPacks, removePack } from '../commands/packs.js';
 import {
   runServe,
   runDev,
   runHostProject,
+  runHostDemo,
+  runHostUnit,
+  runHostPermission,
+  runHostDoctor,
   runHostKey,
   runHostLock,
   runHostPromote,
@@ -77,7 +83,7 @@ program
   .action(async (opts) => {
     await runInit({ yes: opts.yes });
     for (const source of opts.pack as string[]) {
-      await runPacksAdd(source);
+      await addPack(source);
     }
   });
 
@@ -165,6 +171,24 @@ program
 // rules
 // ---------------------------------------------------------------------------
 
+// cli_runner dispatch for the pack-ecosystem commands — consistent with
+// runValidate/runGenerate/…: the orchestrator routes each subcommand to its
+// command adapter rather than the commander action calling the adapter inline.
+async function runRules(): Promise<void> {
+  await listRules();
+}
+async function runPatterns(): Promise<void> {
+  await listPatterns();
+}
+async function runVariants(): Promise<void> {
+  await listVariants();
+}
+async function runPacks(action: string, arg?: string, opts: { global?: boolean } = {}): Promise<void> {
+  if (action === 'add') await addPack(arg!, opts);
+  else if (action === 'list') await listPacks();
+  else if (action === 'remove') await removePack(arg!, opts);
+}
+
 const rulesCmd = program
   .command('rules')
   .description('The SDD conformance rule registry (the architecture linter)');
@@ -174,7 +198,7 @@ rulesCmd
   .alias('ls')
   .description('List every conformance rule, its issue codes, default severities, and project overrides')
   .action(async () => {
-    await runRulesList();
+    await runRules();
   });
 
 // ---------------------------------------------------------------------------
@@ -190,7 +214,7 @@ packsCmd
   .alias('ls')
   .description('List global and project extension packs with what they provide')
   .action(async () => {
-    await runPacksList();
+    await runPacks('list');
   });
 
 packsCmd
@@ -198,7 +222,7 @@ packsCmd
   .description('Vendor a pack into the project (.wai/packs/ + project.yaml), or install machine-wide with --global')
   .option('-g, --global', 'install into the global packs folder (WAIRON_PACKS_DIR or ~/.wairon/packs)')
   .action(async (source, opts) => {
-    await runPacksAdd(source, { global: opts.global });
+    await runPacks('add', source, { global: opts.global });
   });
 
 packsCmd
@@ -207,7 +231,39 @@ packsCmd
   .description('Deregister a pack by name (deletes vendored files under .wai/packs); --global removes a machine-wide pack')
   .option('-g, --global', 'remove from the global packs folder')
   .action(async (name, opts) => {
-    await runPacksRemove(name, { global: opts.global });
+    await runPacks('remove', name, { global: opts.global });
+  });
+
+// ---------------------------------------------------------------------------
+// patterns
+// ---------------------------------------------------------------------------
+
+const patternsCmd = program
+  .command('patterns')
+  .description('Reusable, versioned architecture patterns declared by extension packs');
+
+patternsCmd
+  .command('list')
+  .alias('ls')
+  .description('List the reusable pattern definitions declared by loaded packs (id, version, source pack)')
+  .action(async () => {
+    await runPatterns();
+  });
+
+// ---------------------------------------------------------------------------
+// variants
+// ---------------------------------------------------------------------------
+
+const variantsCmd = program
+  .command('variants')
+  .description('Component variants — base-anchored kinds + implementation guidance (a dynamic layer on top of packs)');
+
+variantsCmd
+  .command('list')
+  .alias('ls')
+  .description('List the component variants in the registry (global + project) with their base and guidance')
+  .action(async () => {
+    await runVariants();
   });
 
 // ---------------------------------------------------------------------------
@@ -409,20 +465,79 @@ hostCmd
   .command('project <action>')
   .description('create | list | destroy a hosted project')
   .option('--id <id>', 'project id (for create/destroy)')
+  .option('--unit <unitId>', 'owner organization unit (REQUIRED for create — every project is placed at creation)')
   .option('--data-dir <path>', 'data root (default WAIRON_DATA_DIR or ~/.wairon/data)')
   .action(async (action: string, opts) => {
-    await runHostProject(action, { id: opts.id, dataDir: opts.dataDir });
+    await runHostProject(action, { id: opts.id, unit: opts.unit, dataDir: opts.dataDir });
+  });
+
+hostCmd
+  .command('demo')
+  .description('provision a project seeded with a rich example spec tree, so the canvas has content to render')
+  .option('--id <id>', 'project id', 'demo')
+  .option('--unit <unitId>', 'owner unit id (created if absent)', 'demo')
+  .option('--force', 'destroy and reseed the project if it already exists')
+  .option('--data-dir <path>', 'data root (default WAIRON_DATA_DIR or ~/.wairon/data)')
+  .action(async (opts) => {
+    await runHostDemo({ id: opts.id, unit: opts.unit, force: opts.force, dataDir: opts.dataDir });
+  });
+
+hostCmd
+  .command('unit <action>')
+  .description('create an organization unit (projects are placed into units at creation)')
+  .option('--slug <slug>', 'unit slug (REQUIRED for create; a root unit\'s id IS its slug)')
+  .option('--name <name>', 'display name (defaults to the slug)')
+  .option('--kind <kind>', 'unit kind (business_entity | department | team | …)', 'team')
+  .option('--parent <unitId>', 'qualified id of the parent unit (omit for a root unit)')
+  .option('--data-dir <path>', 'data root')
+  .action(async (action: string, opts) => {
+    await runHostUnit(action, { slug: opts.slug, name: opts.name, kind: opts.kind, parent: opts.parent, dataDir: opts.dataDir });
+  });
+
+hostCmd
+  .command('doctor')
+  .description('migrate a hosted data dir to the permission model (grants → assignments, owners, unit ids, placements); dry-run without --fix')
+  .option('--fix', 'apply the migration (REQUIRED at rollout — legacy users/tokens otherwise resolve to zero permissions)')
+  .option('--data-dir <path>', 'data root')
+  .action(async (opts) => {
+    await runHostDoctor({ fix: opts.fix, dataDir: opts.dataDir });
+  });
+
+hostCmd
+  .command('permission <action>')
+  .description('set | list | remove a permission assignment (the subject×scope×capability grid)')
+  .option('--user <userId>', 'the subject user id (for set; optional filter for list)')
+  .option('--capability <capability>', 'project:read | project:create | project:write | project:admin | approval:decide')
+  .option('--value <value>', 'yes | approval | no | inherit', 'yes')
+  .option('--project <id>', 'anchor the assignment at a project scope')
+  .option('--unit <unitId>', 'anchor the assignment at an organization-unit scope')
+  .option('--instance', 'anchor the assignment at the instance scope (the default)')
+  .option('--id <assignmentId>', 'assignment id (for remove)')
+  .option('--data-dir <path>', 'data root')
+  .action(async (action: string, opts) => {
+    await runHostPermission(action, {
+      user: opts.user,
+      capability: opts.capability,
+      value: opts.value,
+      project: opts.project,
+      unit: opts.unit,
+      instance: opts.instance,
+      id: opts.id,
+      dataDir: opts.dataDir,
+    });
   });
 
 hostCmd
   .command('key <action>')
   .description('mint | list | revoke an API key')
   .option('--project <id>', 'project id or * (for mint/list)')
-  .option('--role <role>', 'editor | admin (for mint)', 'editor')
+  .option('--owner <userId>', 'mint an owner-bound token acting as this user\'s live permission (assignment model)')
+  .option('--label <label>', 'display label for an owner-bound token')
+  .option('--role <role>', 'editor | admin (legacy ownerless mint)', 'editor')
   .option('--id <id>', 'key id (for revoke)')
   .option('--data-dir <path>', 'data root')
   .action(async (action: string, opts) => {
-    await runHostKey(action, { project: opts.project, role: opts.role, id: opts.id, dataDir: opts.dataDir });
+    await runHostKey(action, { project: opts.project, owner: opts.owner, label: opts.label, role: opts.role, id: opts.id, dataDir: opts.dataDir });
   });
 
 hostCmd
@@ -445,13 +560,26 @@ hostCmd
 
 hostCmd
   .command('git <action>')
-  .description('enable | disable | sync git backing (repo becomes the source of truth; lock opens a PR)')
+  .description('enable | disable | sync | commit | status | sync-config — bind a project to its REAL repo (wairon commits ONLY .wai/)')
   .option('--project <id>', 'project id')
   .option('--remote <url>', 'git remote URL (for enable)')
   .option('--branch <name>', 'default branch PRs target (for enable)', 'main')
+  .option('--subsystem <id>', 'narrow a commit to .wai/specs/<subsystem>/ (staging convenience — history stays per-repo)')
+  .option('-m, --message <message>', 'commit message (for commit)')
+  .option('--interval <minutes>', 'periodic-sync interval in minutes (for sync-config; omit to disable)')
+  .option('--no-skip-if-clean', 'commit on every periodic tick even when the scoped path is clean (for sync-config)')
   .option('--data-dir <path>', 'data root')
   .action(async (action: string, opts) => {
-    await runHostGit(action, { project: opts.project, remote: opts.remote, branch: opts.branch, dataDir: opts.dataDir });
+    await runHostGit(action, {
+      project: opts.project,
+      remote: opts.remote,
+      branch: opts.branch,
+      subsystem: opts.subsystem,
+      message: opts.message,
+      interval: opts.interval,
+      skipIfClean: opts.skipIfClean,
+      dataDir: opts.dataDir,
+    });
   });
 
 hostCmd

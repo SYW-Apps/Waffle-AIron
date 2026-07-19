@@ -1,9 +1,251 @@
 # Changelog
 
-## Unreleased (minor — from v4.0.0)
+## Unreleased (major — from v4.3.0)
 
-Post-v4.0.0 fixes and additive capabilities around chained subprojects and
-agent-topology scale (merge with `[minor]` → v4.1.0).
+Accumulated capabilities since v4.0.0 around extension packs, the hosted
+server, chained subprojects, agent-topology scale, the RBAC permission model,
+and the Level-3 semantic-conformance program. Interim tags v4.1.0–v4.3.0 were
+cut from earlier dev merges, so some earlier bullets shipped in those; the
+release line's package.json (on main, currently 4.3.0) is authoritative —
+dev's stale version fields are bumped by the auto-tag workflow at release
+time, never by hand. **Merge dev → main with `[major]` in the merge commit
+message → v5.0.0** (the RBAC permission model changes hosted authorization
+behavior, and the stereotype matrix gained newly enforced edges).
+
+### Level-3 semantic conformance + model-review program (new, `feat/level3-conformance`)
+
+The validator moves from structural/topological checking toward semantic and
+behavioral checking, plus the configurability and doctrine fixes from an
+independent model review. All new checks default to **warnings** (lint.allow-
+suppressible) unless noted; existing clean trees stay clean unless listed under
+*migration* below.
+
+**New rule codes** (see `wairon rules list` for the full descriptions):
+
+- Detail sufficiency: `UNNARRATED_COMPLEXITY` (realized cyclomatic complexity —
+  exact AST grade only — over `rules.complexity.maxUnnarratedComplexity`,
+  default 8, while the method sits below `detail: full` with no narrative),
+  `DETAIL_BELOW_STEREOTYPE` (explicit dial below a logic stereotype's full floor).
+- Invariant registry: entities declare `invariants:` (anchored via
+  `componentClass`); narrative steps assert them via `assertsInvariants` —
+  `UNASSERTED_INVARIANT`, `INVARIANT_UNANCHORED` (warnings),
+  `UNKNOWN_INVARIANT_REF`, `DUPLICATE_INVARIANT_ID` (errors). Declarations
+  checked; enforcement never proven.
+- L5 antipatterns (provable-only): `INESCAPABLE_CYCLE` (step cycle with no exit
+  and no terminator), `MEANINGLESS_BRANCH`, `UNCONDITIONAL_CALL_CYCLE`
+  (cross-component call cycle unavoidable on every path).
+- Code↔spec Level 3 opener: `CALL_STEP_UNREALIZED` — every narrative `call`
+  step must appear among the realized function's callees (set membership,
+  same-file helper closure, symbol overrides + N:1 identity forwarding
+  honored; exact grade only; aggregated one finding per method).
+- Store/Registry doctrine: `UNOWNED_STORE` (two sanctioned shapes: Repository
+  recommended, deliberate standalone Store via lint.allow),
+  `REGISTRY_WITHOUT_STORE` (a storeless standalone Registry is mistyped or
+  orphaned), `ARCHITECTURE_VIOLATION_REGISTRY_DEP` (Registry outbound: its
+  Store or a backend Adapter only), `HIDDEN_STATE` (module-scope mutable
+  bindings in files realizing only logic stereotypes), `MISSING_DURABILITY`
+  (every Store declares its durability), `PORTAL_WRITE_SHORTCUT` (error — a
+  Portal narrative calling a write-effect facade method).
+- Event topology: components declare `emits:` / `subscribesTo:`; paired with
+  MessageBus endpoint directions — `UNCONSUMED_TOPIC`, `UNSOURCED_SUBSCRIPTION`
+  (silent on trees with no event edges).
+- Guarantee vocabulary: `UNKNOWN_GUARANTEE` — a guarantee token on an L3 method
+  or a narrative `assertsGuarantees` that is neither builtin
+  (`idempotent | atomic | transactional | exactly-once`) nor declared by a
+  loaded pack. The token consistency checks match literally, so an undeclared
+  token silently escapes them.
+- Facade rule now enforced: `FACADE_FORWARDING` — a Repository/Gateway facade
+  method with an authored narrative that is not exactly one `call` step to an
+  owned member (the standard §7 claim, previously "mechanically enforceable"
+  but unimplemented; dogfooded at zero cost — wairon's own 63 narrated facade
+  methods all conform).
+- **Static integration gate** (docs/design/integration-conformance.md §4,
+  implemented): L4 `simPath` names the committed integration harness (N:1
+  sharing like `sourcePath`). `SIM_FILE_MISSING` (no such file / escapes
+  root), `UNWIRED_INTEGRATION_SIM` (the harness's exact-grade import graph,
+  closed over the analyzed modules, does not reach the component's own
+  module + each direct dependency's — any module of the target subsystem for
+  cross-subsystem edges; technology-boundary fakes sanctioned), and
+  `MISSING_INTEGRATION_SIM` — which activates **per subsystem** once its
+  first `simPath` is declared (adoption made mechanical; un-adopted trees
+  see nothing). Wiring is proven statically; execution stays CI's job.
+  wairon's own sdd_validator subsystem adopts first: all 7 non-leaf
+  implementations declare `tests/core/validation.test.ts`, which wires the
+  real registry/store/adapters.
+- **Sim path coverage** (`SIM_PATH_UNCOVERED`, §4.5): a harness may claim
+  coverage with string anchors — `"sim:<component>.<method>"` (happy path)
+  and `"sim:<component>.<method>:<label>"` (the error path of the `throw`
+  step carrying that narrative label). Opt-in per component (its first
+  `sim:` anchor activates the expectation); unlabeled throw steps are never
+  expected — the step label IS the path's renumber-proof identity. Anchors
+  prove paths are NAMED; execution and assertion quality stay CI's job.
+
+**New config & schema surface:**
+
+- `rules.designDepth: components | interfaces | implementations | narratives`
+  (default `narratives`) + per-subsystem `designDepth` override + pack-profile
+  default — expectation checks below the declared depth are gated; soundness
+  of authored content always applies.
+- Pack profiles (`ProfileDef.rules`) can now carry `sddRuleSeverity` (applies
+  to their subsystems; explicit project config wins) alongside the existing
+  documentation/complexity/naming and the new designDepth.
+- **Profile edge-deltas**: `ProfileDef.allowedEdges` — `{from[], to[],
+  reason}` entries LICENSE intra-subsystem `dependsOn` edges the builtin
+  stereotype matrix refuses, for components governed by the profile (the
+  review's "game-ecs would error on its own idiom" fixed: an ECS pack
+  licenses `Specialist → Store`). Cross-subsystem boundary rules and pattern
+  containment are never relaxable; the DENY half is a `forbid-edge`
+  declarative assertion. Together these complete the profile-scoped matrix
+  mechanism (severity deltas + allow deltas + deny assertions).
+- `durability` grows to `durable | read-through | ram-projection | cache`
+  (only `durable` requires the hydration round-trip).
+- Lifecycle entrypoint `phase` grows to `init | shutdown | cyclic | interrupt |
+  scheduled` — all root the reachability walker; only `init` feeds hydration.
+- `ext:` — an opaque, verbatim-preserved extension-data map on every spec kind
+  and on L3/L4 methods, for pack rules to read.
+- **Declarative rule assertions** (docs/design/declarative-rule-dsl.md): a
+  declarative pack may carry `assertions:` — instances of three closed kinds
+  (`forbid-edge` selector-matched dependency/ownership bans, `require-field`
+  over top-level and `ext.*` fields with optional closed value sets,
+  `endpoint-shape` transport allowlists + address patterns) with pack-local
+  codes surfaced namespaced (`<PACK>_<CODE>`), declared severities, and the
+  doctrine reason quoted in every finding. Packs add rule INSTANCES, never
+  rule logic — the hosted (declarative-only) pack path finally carries real
+  doctrine; an unknown kind fails the pack load loudly. Assertion codes join
+  `knownIssueCodes`, so lint.allow and `sddRuleSeverity` treat them exactly
+  like builtins.
+- **Pack-declarable guarantee tokens**: the guarantee schema is now open
+  (`z.string()`); a pack manifest may declare `guarantees: [compensating, …]`
+  to extend the vocabulary. The narrative↔contract consistency check
+  (`NARRATIVE_SEMANTIC_UNBACKED`) applies to pack tokens exactly as to
+  builtins; the MCP `guarantees`/`assertsGuarantees` inputs accept any
+  declared token.
+- **Symbolic step labels**: a narrative step may declare a `label` anchor, and
+  every jump-by-number flow field has a `*Label` twin (`toLabel`,
+  `onTrueLabel`, `onFalseLabel`, `defaultLabel`, `endLabel`, `finallyLabel`,
+  plus `label` in `cases`/`catches`/`branches` entries) resolved to step
+  numbers at write time — the stored spec keeps plain numbers. Guards LLM
+  step-counting off-by-ones: an unknown/duplicate label REJECTS the write,
+  and an `sdd_update_spec` delta can reference labels anchored on
+  pre-existing steps (resolution runs post-merge, against the final
+  numbering).
+- **`parallel` fan-out/join step + `detach` call flag** (flow algebra
+  extension sanctioned by the technology-boundaries design record §4; the
+  model review's GPU/robotics/backend convergence). A `parallel` header owns
+  body `next..endStep`, covered by ≥2 contiguous ordered arms
+  (`branches: [{step}]`); the join is implicit after `endStep` once ALL arms
+  complete — `stepGraph()` routes an arm's last step to the join, never into
+  its neighbor (nesting handled). `detach: true` on a call/dispatch step is
+  fire-and-forget. Soundness lives in the narrative-flow rule (arm coverage,
+  ordering, region overlap, dangling entries); `updateSpec` relocates
+  `branches[].step` on insert/delete and refuses to delete an arm entry
+  target; language/platform packs gate both via `unsupportedFlow`
+  (`parallel:`, `detach:`).
+  `UNCONDITIONAL_CALL_CYCLE` treats arms as alternatives for now
+  (under-reports across parallel regions — conservative direction).
+- **Parallel/detach rendering across the diagram surfaces.** The canvas flow
+  modal renders a `parallel` header as a fan-out BAR spanning one lane per
+  arm, with the implicit join bar after `endStep` (all arms complete before
+  flow continues) — an arm's last step wires into the join, never into its
+  neighbor arm. A detached call hangs its callee OFF the flow as a ghost
+  node reached by a dashed open arrow annotated "detached", while the firing
+  step's own lane continues normally — failure visibly does not propagate.
+  Both survive the "Hide error paths" toggle (they are not error paths), and
+  the flow modal's draw.io/Excalidraw exports keep the bars and ghosts. The
+  Mermaid sequence exporter maps endStep-bounded parallel regions onto
+  `par`/`and` fragments (mirroring loop/critical) and renders detached
+  calls/dispatches as async open arrows (`-)`, annotated, no activation, no
+  return). The Steps list spells both out (`∥ parallel — arms …`,
+  `⇢ detached — fire & forget`).
+- Cross-subsystem: a `trustedLink` on the SOURCE subsystem licenses a direct
+  in-process edge to the peer's published Portal (no Adapter shim); Portals may
+  depend on Repository/Index for reads.
+- FeatureComponent arity relaxed: exactly one Orchestrator + **one or more**
+  Views (was exactly one of each) — a feature slice with list/detail/form
+  faces no longer needs artificial per-view slices. Foreign member types
+  inside the slice are still rejected.
+- Honest profile labeling: `lowlevel-os` / `game-ecs` / `realtime-embedded`
+  are now labeled as *blueprints* everywhere they're described (init menu,
+  roadmap) — today they enforce only backend-family fencing; the described
+  platform validations are explicitly marked unimplemented, and doctrine is
+  expected from extension packs. `plc-cyclic`'s unimplemented narrative
+  checks are likewise marked.
+- Placement notices: `sdd_add_type` (and siblings) explain flat-layout
+  placement and never-relocate semantics instead of silently "ignoring" the
+  subsystem parameter. `doctor --fix` still performs no flat→nested migration
+  (known gap).
+- sdd-implement's Definition of Done now includes an integration sim against
+  real dependencies (docs/design/integration-conformance.md holds the designed
+  static gate); the standard gains a transactions & unit-of-work + outbox
+  doctrine and the two-path store doctrine.
+
+**Migration for existing trees:** `MISSING_DURABILITY` fires once per
+undeclared Store (declare one of the four modes); storeless standalone
+Registries get `REGISTRY_WITHOUT_STORE` (retype to a `read-through` Store, or
+lint.allow); narrative-bearing trees may see `CALL_STEP_UNREALIZED` where
+per-method `symbol` maps are missing. `Store → Registry` edges are now errors
+(the standard always said so; none existed in wairon's own tree).
+
+**Dogfood: spec_loader promoted to a real Repository.** The
+REGISTRY_WITHOUT_STORE debt marker on wairon's own spec loader is retired the
+honest way: `spec_loader` is now a Repository owning `spec_file_store`
+(read-through Store over the YAML tree, `readYamlFile`/`writeYamlFile`/
+`listFilesRecursive` symbols), `spec_registry` (validated write face + the
+round-trip dry run), and `spec_index` (read/lookup face). The facade's 16
+methods are pure 1:1 forwards — verified by the new `FACADE_FORWARDING` rule
+on a real remodel. Spec-tree-only change; the code already had this shape.
+
+### Extension packs: pack-provided AI skills + versioned pattern references (new)
+
+Two generic extension-pack capabilities so profiles and wrapper products can
+carry more reusable, versioned knowledge — while wairon's core model stays
+portable. Both are opt-in and change nothing for projects that don't use them.
+
+- **Pack-provided AI-agent skills.** A directory pack can ship declarative
+  `skills:` (SKILL.md files); `wairon skills install` / `generate` install them
+  into the supported client targets, and the hosted MCP server publishes them
+  through the same `wairon-skill://` resource mirror as the built-ins. Skills
+  install **namespaced `<pack-id>-<skill-id>`** (the built-in `sdd-*` names are
+  reserved), so skills from different packs never collide and provenance +
+  version are legible in `wairon skills list`. These are AI-client skills, not
+  MCP tools.
+- **Versioned reusable pattern references.** Packs declare named, versioned
+  `patterns:`; a component references one via `patterns: [{ id, version }]`.
+  Wairon resolves the reference (`UNKNOWN_PATTERN_REF`, plus
+  `PATTERN_VERSION_MISMATCH` for a pinned version no pack provides), lists them
+  with `wairon patterns list`, and exposes them to pack rules via
+  `ctx.ext.patterns` — the pattern's actual constraints are enforced by its
+  declaring pack's own rules. Publishes a reusable architecture convention
+  across projects without copy-pasting a spec shape.
+
+Internally, the previously-unmodeled core extension machinery is now first-class
+in wairon's own spec tree — the pack loader, the conformance rule set as a
+proper in-memory **Repository**, and the `packs`/`rules`/`patterns` CLI — held to
+the same conformance gate as everything else. See `docs/extending-wairon.md`.
+
+### Component variants (new)
+
+A **variant** is a named, base-anchored specialization of a core stereotype — a
+"kind of `Adapter`/`Specialist`/…" (e.g. a `publisher`) — carrying implementation
+guidance. It gives components domain vocabulary and, crucially, tells the
+**implementer** "this is the same kind as those other components — reuse one
+shared approach instead of reinventing it per instance." The base stereotype
+stays authoritative for all generic semantics; the variant only adds vocabulary,
+a rule target, and the guidance. (A cross-cutting capability like `retriable` is
+*not* a variant — that stays a method `guarantee`.)
+
+- **A dynamic registry on top of packs.** Variants live outside packs — define
+  one on demand (no pack edit/release) and share it anywhere (a tiny portable
+  YAML). Loaded from `WAIRON_VARIANTS_DIR` (machine/org-wide) then `.wai/variants/`
+  (project wins), so a good variant is reusable across projects, orgs, tenants.
+- **One per component, strictly base-anchored.** A component declares a single
+  `variant`; `base` is required, so a variant is always "a kind of `<stereotype>`".
+  Resolution: `UNKNOWN_VARIANT` (undeclared) and `VARIANT_BASE_MISMATCH` (the
+  component's stereotype ≠ the variant's base, error).
+- **Deep implementer integration.** A component's variant guidance and its
+  same-variant siblings are injected into the generated owner/implementer agent
+  context, so same-variant components get implemented consistently. Listed by
+  `wairon variants list`; exposed to pack rules via `ctx.variants`.
 
 ### Hosted server: real SSO + web admin UI + agent tokens (new)
 
@@ -144,6 +386,34 @@ session surface, and a container CVE scan — all fixed:
   removed from the runtime layer (the server runs `node` directly). The image
   ships no perl/npm and scans **0 critical / 0 high**, down from 1 critical /
   20 high on the previous debian base; size 488 MB → 318 MB.
+
+### Post-RBAC web UI: permission grid, canvas engine, hierarchical environment
+
+The three deliberately-deferred UI epics, landed after the RBAC merge:
+
+- **Permissions admin view** (`/admin/permissions`) — the whole assignment
+  grid (subject × scope × capability → value) with scope/subject filters, a
+  scope-defaults (everyone) section, and a set-assignment form over the
+  existing hardened endpoints. Canonical-subject semantics throughout: the UI
+  displays record ids and submits them (the API canonicalizes); grid rows
+  resolve back to users by BOTH subject userId and record id, with a
+  "legacy key" badge on diverged-key rows.
+- **Canvas engine epic** — floating header (the classic renderer's solid top
+  bar becomes a floating toolbar over a full-bleed canvas, yielding to the
+  details panel), and **data-plane realtime**: successful MCP `sdd_*` writes
+  now nudge the project's realtime channel, so open canvases live-update on
+  agent spec edits (previously only `/web` mutations pushed). The event
+  carries no data — authorization stays at the scoped REST refetch.
+- **Hierarchical environment canvas** — the landscape is filtered by the
+  permission RESOLVER (`resolveVisibleScopes`), never a display projection:
+  ancestor units of a deeper actionable scope now appear as read-only
+  BREADCRUMBS (`actionable: false`, other children omitted) so the hierarchy
+  stays navigable in the no@org + yes@one-project case; every node carries
+  `actionable`, carried through `/web/graph` to the environment canvas.
+  Cross-tenant invisibility is pinned by a dedicated two-tenant test suite.
+- **Header overflow → dropdown** — canvas header controls that no longer fit
+  collapse into a trailing "⋯" menu (horizontal scroll remains the
+  last-resort fallback).
 
 ### Unified web UI (opt-in)
 

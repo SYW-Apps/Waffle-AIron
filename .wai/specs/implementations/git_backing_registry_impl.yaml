@@ -1,0 +1,29 @@
+id: git_backing_registry_impl
+name: Git Backing Registry Implementation
+description: >-
+  Write path for container-level backing bindings: stamping, scope-shape validation,
+  one-binding-per-scope replacement, and lastSyncAt touching. No authorization here.
+contract: igit_backing_registry
+sourcePath: src/server/gitbacking.ts
+methods:
+  - name: upsertBinding
+    narrative: []
+    intent: >-
+      Validate the scope shape (a 'unit' binding must name a scopeId, an 'instance' binding must
+      not), stamp a random id and createdAt on create, replace any existing binding covering the
+      SAME scope (at most one per scope — a re-bind is a replacement, never a duplicate), persist
+      the collection atomically, and return the stored binding.
+  - name: removeBinding
+    narrative: []
+    intent: >-
+      Filter the binding with the given id out of the collection (an absent id is a no-op) and
+      persist atomically. The backing repository itself is untouched.
+  - name: touchSync
+    narrative: []
+    intent: >-
+      Set lastSyncAt on the binding with the given id (an absent id is a no-op) and persist
+      atomically.
+detail: intent
+status: complete
+createdAt: '2026-07-16T15:39:53.590Z'
+updatedAt: '2026-07-16T15:48:49.481Z'

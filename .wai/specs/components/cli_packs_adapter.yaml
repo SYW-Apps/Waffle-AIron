@@ -1,0 +1,14 @@
+id: cli_packs_adapter
+name: CLI Packs Client Adapter
+description: >-
+  Local client adapter in sdd_cli for the `wairon packs` command family. Vendors a pack into
+  .wai/packs and registers it in project.yaml (add), lists the loaded packs and what each provides
+  via the core portal (list), and deregisters plus deletes a vendored pack (remove).
+subsystem: sdd_cli
+componentType: Adapter
+owns: []
+dependsOn:
+  - core_portal
+status: complete
+createdAt: '2026-07-14T20:08:56.448Z'
+updatedAt: '2026-07-14T20:16:12.038Z'

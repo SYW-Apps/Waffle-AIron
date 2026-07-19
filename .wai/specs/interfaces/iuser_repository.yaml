@@ -22,14 +22,14 @@ methods:
       - name: externalSubject
         type: string
   - name: list
-    description: List hosted users for admin UI and audit investigation workflows.
-    signature: 'list(status: string, projectId: string): HostedUserRecord[]'
+    description: >-
+      List hosted users for admin UI and audit investigation workflows, optionally narrowed by
+      status. There is no project filter: project membership is a permission-grid question the
+      identity orchestrator answers.
+    signature: 'list(status: string): HostedUserRecord[]'
     returns: HostedUserRecord[]
     params:
       - name: status
-        type: string
-        optional: true
-      - name: projectId
         type: string
         optional: true
   - name: upsert
@@ -52,19 +52,28 @@ methods:
         type: string
     guarantees:
       - atomic
-  - name: replaceGrants
+  - name: remapUnitReferences
     description: >-
-      Replace a user's grants through the repository facade after authorization has been completed
-      by the orchestrator.
-    signature: 'replaceGrants(id: string, grants: ProjectGrant[]): HostedUserRecord'
-    returns: HostedUserRecord
+      Facade: rewrite/clear user home units and role-binding scopes for a unit rename/move/cascade
+      through the registry.
+    signature: 'remapUnitReferences(remap: UnitIdRemap[], removedScopeIds: string[]): void'
+    returns: void
+    params:
+      - name: remap
+        type: UnitIdRemap[]
+      - name: removedScopeIds
+        type: string[]
+    guarantees:
+      - atomic
+  - name: findByRecordOrSubjectId
+    description: >-
+      Resolve one hosted user by record id OR the record's subject userId — an exact record-id match
+      wins; null when absent under both.
+    signature: 'findByRecordOrSubjectId(id: string): HostedUserRecord | null'
+    returns: HostedUserRecord | null
     params:
       - name: id
         type: string
-      - name: grants
-        type: ProjectGrant[]
-    guarantees:
-      - atomic
 status: complete
 createdAt: '2026-07-08T20:16:35.931Z'
-updatedAt: '2026-07-09T17:43:43.810Z'
+updatedAt: '2026-07-19T13:29:42.726Z'

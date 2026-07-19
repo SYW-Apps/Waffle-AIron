@@ -1,0 +1,13 @@
+id: instance_identity_index
+name: Instance Identity Index
+description: >-
+  Read path over the instance identity store: exposes the persisted boot-reserved built-in subject
+  UUIDs to authentication (instance-admin comparison and the reserved-subject guard).
+subsystem: sdd_host
+componentType: Index
+owns: []
+dependsOn:
+  - instance_identity_store
+status: complete
+createdAt: '2026-07-16T00:23:55.929Z'
+updatedAt: '2026-07-16T15:04:53.141Z'

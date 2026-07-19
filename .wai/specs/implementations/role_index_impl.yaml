@@ -1,0 +1,13 @@
+id: role_index_impl
+name: Role Index Implementation
+description: Read path over the in-memory role collection.
+contract: irole_index
+sourcePath: src/server/roles.ts
+methods:
+  - name: listRoles
+    narrative: []
+    intent: Return every role in the in-memory collection.
+detail: intent
+status: complete
+createdAt: '2026-07-15T20:28:42.876Z'
+updatedAt: '2026-07-16T15:03:23.316Z'

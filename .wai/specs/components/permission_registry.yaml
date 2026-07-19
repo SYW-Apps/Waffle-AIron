@@ -1,0 +1,14 @@
+id: permission_registry
+name: Permission Registry
+description: >-
+  Write-path component for permission assignments: upsert one assignment (one value per
+  subject/scope/capability key), remove one, and remap assignment scopes when an organization unit
+  is renamed or moved. Never modifies project spec trees.
+subsystem: sdd_host
+componentType: Registry
+owns: []
+dependsOn:
+  - permission_store
+status: complete
+createdAt: '2026-07-15T20:27:01.456Z'
+updatedAt: '2026-07-15T23:30:41.104Z'

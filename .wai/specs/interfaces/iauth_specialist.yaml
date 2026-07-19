@@ -2,16 +2,18 @@ id: iauth_specialist
 name: Auth Specialist Interface
 description: >-
   Contract for credential verification into a Principal. The single authentication authority; it
-  resolves the credential's subject, token id, role, authorized project set, and precise grants but
-  performs no workflow authorization routing.
+  resolves the credential's subject, token id, projects narrowing, and live permissionSubject but
+  performs no workflow authorization routing. Instance-admin recognition compares the persisted
+  boot-reserved built-in subject UUIDs (seeded at first boot), never account names or literal ids.
 component: auth_specialist
 methods:
   - name: authenticate
     description: >-
       Verify a data-plane bearer token by constant-time comparison of its hash against stored
-      records; resolves the Principal's subject and grants from the credential record when present
-      (legacy records fall back to the role/projects projection) and rejects expired (expiresAt) or
-      revoked (revokedAt) records, or rejects as unauthenticated when no record matches.
+      records; resolve the Principal's subject and live permissionSubject (subjectId, roleBindings,
+      instanceAdmin by persisted boot-reserved UUID comparison) from the credential record and its
+      owner user record; reject expired or revoked records and a DEACTIVATED owner user as
+      unauthenticated, or reject as unauthenticated when no record matches.
     signature: 'authenticate(token: string): Principal'
     returns: Principal
     params:
@@ -20,7 +22,8 @@ methods:
   - name: authenticateMaster
     description: >-
       Verify the bootstrap/control-plane master credential by constant-time comparison; return an
-      administrative Principal (admin role over all projects) or reject.
+      administrative Principal (admin role over all projects, permissionSubject with instanceAdmin
+      true) or reject.
     signature: 'authenticateMaster(credential: string): Principal'
     returns: Principal
     params:
@@ -40,13 +43,15 @@ methods:
     returns: ViewGrant
   - name: authenticateCredential
     description: >-
-      Verify a control-plane credential and resolve it to a Principal. Accepts three credential
-      kinds through this single authority: the bootstrap/master credential, a stored user-bound
-      bearer token, and a browser web-session id (reserved prefix) resolved via the
-      web_session_repository. Because a session resolves to the same Principal a token yields, every
-      existing scoped endpoint authenticates a browser session with no per-endpoint change. Rejects
-      expired/revoked tokens and expired/absent sessions as unauthenticated. Shares one
-      session-resolution helper with authenticateSession.
+      Verify a control-plane credential and resolve it to a Principal (with its live
+      permissionSubject). Accepts three credential kinds through this single authority: the
+      bootstrap/master credential, a stored user-bound bearer token, and a browser web-session id
+      (reserved prefix) resolved via the web_session_repository. Because a session resolves to the
+      same Principal a token yields, every existing scoped endpoint authenticates a browser session
+      with no per-endpoint change. instanceAdmin resolves by comparing the subject against the
+      persisted boot-reserved UUIDs (issuer 'local'), or the master credential. Rejects
+      expired/revoked tokens, a DEACTIVATED owner user, and expired/absent sessions as
+      unauthenticated.
     signature: 'authenticateCredential(credential: string): Principal'
     returns: Principal
     params:
@@ -73,12 +78,13 @@ methods:
         type: string
   - name: authenticateSession
     description: >-
-      Resolve a browser session id to a Principal — the auth bridge that lets the unified web UI
-      reuse every existing endpoint with a session cookie in place of a bearer token. Look up the
-      session through the web session repository; reject an absent or expired session (past
-      expiresAt) as unauthenticated. Assemble the Principal directly from the session's stored
-      PrincipalSubject and server-derived grants (with the role/projects compatibility projection
-      derived from those grants) — no token record lookup. Performs no authorization routing itself.
+      Resolve a browser session id to a Principal (with its live permissionSubject) — the auth
+      bridge that lets the unified web UI reuse every existing endpoint with a session cookie in
+      place of a bearer token. Look up the session through the web session repository; reject an
+      absent or expired session, or a DEACTIVATED session user, as unauthenticated. Assemble the
+      Principal from the session's stored PrincipalSubject and resolved permissionSubject;
+      instanceAdmin compares the subject against the persisted boot-reserved super-admin UUID (or,
+      under devMode, the local-developer UUID). Performs no authorization routing itself.
     signature: 'authenticateSession(sessionId: string): Principal'
     returns: Principal
     params:
@@ -93,9 +99,11 @@ methods:
       branching, so no user-enumeration or early-exit timing signal exists. When either configured
       value is unset, password login is DISABLED and every attempt resolves to null (the server
       still starts — SSO-only posture). On a full match, returns the stable built-in super-admin
-      subject (userId 'builtin:superadmin', kind 'human', issuer 'local'); on any mismatch returns
-      null. Never throws and performs no session, grant, throttle, or audit work — the web
-      orchestrator owns the session mint and the failed-attempt throttle.
+      subject (kind 'human', issuer 'local', userId = the PERSISTED boot-reserved super-admin UUID
+      read through the instance identity repository — never an account-name-derived id); on any
+      mismatch, or when the instance identity has never been seeded, returns null. Never throws and
+      performs no session, throttle, or audit work — the web orchestrator owns the session mint and
+      the failed-attempt throttle.
     signature: 'verifyBuiltinAdmin(user: string, password: string): PrincipalSubject | null'
     returns: PrincipalSubject | null
     params:
@@ -103,6 +111,19 @@ methods:
         type: string
       - name: password
         type: string
+  - name: isReservedSubject
+    description: >-
+      Reserved-subject guard: return true when the candidate userId is an id user records may NEVER
+      claim — the persisted boot-reserved super-admin or local-developer UUID (read through the
+      instance identity repository) or a legacy reserved literal ('builtin:superadmin' /
+      'builtin:localdev'). Defense-in-depth companion to the UUID scheme (UUID = unguessable, guard
+      = unclaimable); identity.upsertUser enforces it on every user write so an admin-created user
+      can never inherit the built-in bypass.
+    signature: 'isReservedSubject(userId: string): boolean'
+    returns: boolean
+    params:
+      - name: userId
+        type: string
 status: complete
 createdAt: '2026-07-04T12:49:50.542Z'
-updatedAt: '2026-07-14T11:04:16.119Z'
+updatedAt: '2026-07-16T00:25:31.942Z'

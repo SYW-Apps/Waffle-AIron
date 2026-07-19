@@ -1,6 +1,9 @@
 id: igit_adapter
 name: Git Client Adapter Interface
-description: Contract for git I/O against the bound project's checkout.
+description: >-
+  Contract for git I/O against the bound project's checkout. Staging is always SCOPED to an explicit
+  pathspec — there is deliberately no stage-everything operation, so a repository shared with the
+  project's own codebase can never have foreign files committed by wairon.
 component: git_adapter
 methods:
   - name: clone
@@ -19,10 +22,6 @@ methods:
     description: Integrate the default branch into the current working branch.
     signature: 'integrateDefault(defaultBranch: string): void'
     returns: void
-  - name: commitAll
-    description: Stage and commit the working tree; return the new commit SHA.
-    signature: 'commitAll(message: string): string'
-    returns: string
   - name: push
     description: Push the given branch to the remote.
     signature: 'push(branch: string): void'
@@ -31,6 +30,28 @@ methods:
     description: Build the host-agnostic compare/PR URL for workingBranch -> defaultBranch.
     signature: 'compareUrl(remote: string, defaultBranch: string, workingBranch: string): string'
     returns: string
+  - name: commitScoped
+    description: >-
+      Stage ONLY the given subpath (pathspec-confined — never the whole tree) and commit; returns
+      the new commit SHA, or null when nothing under the subpath changed (a clean scope never
+      produces an empty commit).
+    signature: 'commitScoped(subpath: string, message: string): string | null'
+    returns: string | null
+    params:
+      - name: subpath
+        type: string
+        description: Pathspec relative to the repo root, e.g. .wai/ or .wai/specs/<subsystem>/.
+      - name: message
+        type: string
+  - name: isClean
+    description: >-
+      True when the given subpath holds no uncommitted changes (scoped `status --porcelain --
+      <subpath>`), backing the periodic sweep's skip-if-clean check.
+    signature: 'isClean(subpath: string): boolean'
+    returns: boolean
+    params:
+      - name: subpath
+        type: string
 status: complete
 createdAt: '2026-07-04T16:31:59.438Z'
-updatedAt: '2026-07-04T16:37:37.242Z'
+updatedAt: '2026-07-16T15:24:09.061Z'

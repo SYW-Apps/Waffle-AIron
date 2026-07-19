@@ -11,6 +11,10 @@ dependsOn:
   - cli_host_adapter
   - cli_producer_adapter
   - cli_surfaces_client_adapter
+  - cli_packs_adapter
+  - cli_rules_adapter
+  - cli_patterns_adapter
+  - cli_variants_adapter
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-07-10T23:12:53.687Z'
+updatedAt: '2026-07-15T12:25:23.003Z'

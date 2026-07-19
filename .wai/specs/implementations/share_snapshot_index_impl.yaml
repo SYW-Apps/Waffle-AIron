@@ -1,0 +1,18 @@
+id: share_snapshot_index_impl
+name: Share Snapshot Index Implementation
+description: Read path over the snapshot store.
+contract: ishare_snapshot_index
+sourcePath: src/server/sharesnapshots.ts
+methods:
+  - name: get
+    narrative: []
+    intent: Reads the snapshot with the given id through the store, or null when absent.
+  - name: getArtifact
+    narrative: []
+    intent: >-
+      Reads the snapshot and returns the requested artifact field (canvasModel | html | openapi) as
+      its serialized payload, or null when the snapshot or that artifact is absent.
+detail: intent
+status: complete
+createdAt: '2026-07-18T09:26:30.446Z'
+updatedAt: '2026-07-18T10:10:40.863Z'

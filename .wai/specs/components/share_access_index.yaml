@@ -1,0 +1,13 @@
+id: share_access_index
+name: Share Access Index
+description: >-
+  Read path over the share access log: list access entries for a given share link,
+  most-recent-first, for the owner's access-log view and anomaly review. Never mutates.
+subsystem: sdd_host
+componentType: Index
+owns: []
+dependsOn:
+  - share_access_store
+status: complete
+createdAt: '2026-07-17T22:09:19.687Z'
+updatedAt: '2026-07-18T09:37:27.759Z'

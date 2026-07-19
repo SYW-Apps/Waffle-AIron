@@ -85,6 +85,29 @@ methods:
       - name: rootPath
         type: string
         description: Absolute filesystem root of the project's isolated .wai/ tree.
+  - name: storeListGlobalPacks
+    description: >-
+      List the server-global declarative packs straight from the store layer — the PRE-AUTHORIZED
+      read used by internal health and policy flows (no credential: the caller has already enforced
+      authorization).
+    signature: 'storeListGlobalPacks(): PackDescriptor[]'
+    returns: PackDescriptor[]
+  - name: executeApprovedListProjectPacks
+    description: >-
+      Pre-authorized entry for the approval workflow and internal policy flows: list the packs
+      vendored into a bound project WITHOUT authentication — the caller has already enforced
+      approval-based or resolver authorization. Never exposed on any portal.
+    signature: 'executeApprovedListProjectPacks(project: string): PackDescriptor[]'
+    returns: PackDescriptor[]
+  - name: executeApprovedInstallProjectPack
+    description: >-
+      Pre-authorized entry for the approval workflow and internal policy flows: vendor and register
+      one declarative pack into a bound project WITHOUT authentication — the caller has already
+      enforced approval-based or resolver authorization. Never exposed on any portal.
+    signature: >-
+      executeApprovedInstallProjectPack(project: string, name: string, content: string):
+      PackDescriptor
+    returns: PackDescriptor
 status: complete
 createdAt: '2026-07-04T18:42:41.273Z'
-updatedAt: '2026-07-10T12:36:30.695Z'
+updatedAt: '2026-07-19T08:57:35.337Z'

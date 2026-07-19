@@ -1,0 +1,20 @@
+id: iproject_write_registry
+name: Project Write Registry Interface
+description: Write-face contract of the project repository.
+component: project_write_registry
+methods:
+  - name: create
+    description: >-
+      Validate the id against path traversal, allocate the isolated project root directory, and
+      persist an active HostedProjectRecord. Fails if the id already exists.
+    signature: 'create(id: string): HostedProjectRecord'
+    returns: HostedProjectRecord
+  - name: remove
+    description: >-
+      Delete the project record and recursively remove its isolated tree. Idempotent for a missing
+      id.
+    signature: 'remove(id: string): void'
+    returns: void
+status: complete
+createdAt: '2026-07-19T09:00:02.108Z'
+updatedAt: '2026-07-19T09:00:49.562Z'

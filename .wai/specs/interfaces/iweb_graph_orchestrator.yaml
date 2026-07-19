@@ -10,13 +10,17 @@ methods:
   - name: getGraph
     description: >-
       Resolve the session to a Principal (rejecting an expired/absent session as unauthenticated).
-      For tier 'landscape', delegate to the landscape orchestrator's already-scoped landscape
+      For tier 'landscape', delegate to the landscape orchestrator's already permission-filtered
       generation (presenting the session id as the credential per the auth bridge) and reshape the
-      LandscapeGraphModel into a level-of-detail WebGraphModel. For tier 'project', resolve and bind
-      the requested project's isolated root within the principal's authorized set through the
-      project registry (rejecting cross-project access), project its spec tree at the requested
-      level via the host core adapter, overlay validator issues as per-node issue counts, and return
-      it. An unknown tier is rejected.
+      LandscapeGraphModel into a level-of-detail WebGraphModel: the WHOLE environment as a
+      collapsible containment hierarchy (organization units nested org→dept→team, then their hosted
+      projects), filtered to the caller's project:read visible scopes with ancestor-breadcrumb units
+      carried through as read-only context (actionable=false) so a single deep-authorized project
+      stays reachable without leaking its siblings. For tier 'project', resolve and bind the
+      requested project's isolated root within the principal's authorized set through the project
+      registry (rejecting cross-project access), project its spec tree at the requested level via
+      the host core adapter, overlay validator issues as per-node issue counts, and return it. An
+      unknown tier is rejected.
     signature: 'getGraph(sessionId: string, tier: string, projectId: string, level: number): WebGraphModel'
     returns: WebGraphModel
     params:
@@ -47,4 +51,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-11T11:33:03.119Z'
-updatedAt: '2026-07-11T16:37:06.153Z'
+updatedAt: '2026-07-15T23:27:55.709Z'

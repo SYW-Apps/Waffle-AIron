@@ -1,0 +1,37 @@
+id: ishare_access_orchestrator
+name: Share Access Orchestrator Interface
+description: >-
+  Public, unauthenticated, token-gated access. Resolves a token by salted-hash lookup, refuses
+  disabled/expired/unknown, records EVERY access, and serves only the link's immutable snapshot or a
+  permitted artifact. Establishes no session and grants nothing beyond the single shared view.
+component: share_access_orchestrator
+methods:
+  - name: resolveSharedView
+    description: >-
+      Salted-hash the presented token and look up its link; refuse a disabled, expired, or unknown
+      token; record the access (IP / user-agent / referer / outcome); on success return the link's
+      immutable snapshot model plus its download permissions. Never establishes a session.
+    signature: 'resolveSharedView(token: string, meta: ShareRequestMeta): SharedViewResult'
+    returns: SharedViewResult
+    params:
+      - name: token
+        type: string
+      - name: meta
+        type: ShareRequestMeta
+  - name: downloadArtifact
+    description: >-
+      Resolve the token as above, then serve a captured artifact (html | openapi) ONLY when the link
+      enables that download; record the access with its outcome. Refuses when the link, artifact, or
+      permission is absent.
+    signature: 'downloadArtifact(token: string, kind: string, meta: ShareRequestMeta): ShareArtifactResult'
+    returns: ShareArtifactResult
+    params:
+      - name: token
+        type: string
+      - name: kind
+        type: string
+      - name: meta
+        type: ShareRequestMeta
+status: complete
+createdAt: '2026-07-17T22:30:27.895Z'
+updatedAt: '2026-07-18T10:10:39.256Z'

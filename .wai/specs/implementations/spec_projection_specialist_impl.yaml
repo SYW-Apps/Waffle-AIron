@@ -71,6 +71,13 @@ methods:
         description: Return the GraphModel
         type: return
         outcome: GraphModel
+lint:
+  allow:
+    - code: CALL_STEP_UNREALIZED
+      reason: >-
+        The projection narratives name one loader edge per spec kind; the realized path batches
+        through fewer loader calls (system/subsystems/components/interfaces) — overclaimed steps to
+        be reconciled with the next producer refresh.
 status: complete
 createdAt: '2026-07-04T17:39:59.030Z'
-updatedAt: '2026-07-04T18:04:22.511Z'
+updatedAt: '2026-07-18T18:47:54.589Z'

@@ -1,19 +1,23 @@
 id: pack_orchestrator
 name: Pack Orchestrator
 description: >-
-  Owns the control-plane pack-management workflow: master-credential auth, then list/install/remove
-  extension packs at server-global scope or (binding the project's isolated root first) at a hosted
-  project's scope. Enforces the surface policy that installs are declarative-only — profiles and
-  language/platform tables, never executable rule code — delegating the store I/O and the
-  declarative-schema check to the pack registry. A dedicated orchestrator so the master admin
-  workflow stays focused on project/key/lock/promote lifecycle.
+  Owns the control-plane pack-management workflow: authenticate the caller credential, authorize
+  through the permission resolver — server-global pack management requires INSTANCE-level
+  project:admin (packs are instance configuration); per-project install/remove require project:admin
+  over that project and the per-project listing requires project:read over it — then
+  list/install/remove extension packs, binding the project's isolated root first for project scope.
+  Enforces the surface policy that installs are declarative-only — profiles and language/platform
+  tables, never executable rule code — delegating the store I/O and the declarative-schema check to
+  the pack registry. Reached from the admin portal, the web portal (session as credential), and the
+  MCP data plane (bearer as credential) through the project ops orchestrator.
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
 dependsOn:
   - auth_specialist
+  - authorization_specialist
   - pack_registry
   - project_registry
 status: complete
 createdAt: '2026-07-04T18:46:35.024Z'
-updatedAt: '2026-07-11T20:29:49.926Z'
+updatedAt: '2026-07-16T15:18:37.605Z'

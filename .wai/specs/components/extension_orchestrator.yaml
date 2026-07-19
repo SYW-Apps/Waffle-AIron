@@ -1,0 +1,23 @@
+id: extension_orchestrator
+name: Extension Orchestrator
+description: >-
+  Owns the extension-pack load workflow. Gathers the scoped refs (global packs unless opted out,
+  then the project's declared packs), resolves and reads each through the pack source adapter,
+  parses and validates it against the pack schema, and merges the results (project packs win on
+  collision) into a single LoadedExtensions carrying rules, profiles, languages, skills, patterns,
+  per-pack provenance, and collected load errors (a failed pack becomes an EXTENSION_LOAD_ERROR,
+  never a silent skip).
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - pack_source_adapter
+lint:
+  allow:
+    - code: UNUSED_METHOD
+      reason: >-
+        loadExtensions is a public library-embedding entry point (see docs/extending-wairon.md),
+        invoked by wrapper products rather than from the internal call graph.
+status: complete
+createdAt: '2026-07-14T18:58:45.602Z'
+updatedAt: '2026-07-14T20:16:05.761Z'

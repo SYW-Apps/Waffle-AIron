@@ -3,20 +3,28 @@ import { authenticateCredential } from './auth.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { listProjectRecords } from './projects.js';
 import { sendJson } from './httpio.js';
-import { resolveScopeFor } from './scope.js';
+import { authorize, visibleScopes, actionableProjectIds, isInstanceAdmin } from './authorization.js';
+import {
+  COMPATIBLE_DEFAULT_EXPOSURE,
+  getExposurePolicyRecord,
+  setExposurePolicyRecord,
+} from './policy.js';
+import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import * as packs from './packs.js';
 import { listProjectRelations } from './relations.js';
 import { getPublicSurfaceSnapshot } from './surfaces.js';
 import type {
+  AuditEvent,
   DiagnosticCheckResult,
   HostConfig,
   HostedProjectRecord,
+  HostExposurePolicy,
   InstanceHealthReport,
   Principal,
+  PrincipalSubject,
   ProjectPackReference,
   ResourceQuotaPolicy,
   ResourceUsageSnapshot,
-  ScopeResolution,
   ProjectRelationRecord,
   ProjectPublicSurfaceSnapshot,
 } from './types.js';
@@ -41,7 +49,9 @@ import type {
 // HostExposurePolicy `operationsApiEnabled` flag; http.ts gates the mount.
 // ---------------------------------------------------------------------------
 
-const OPERATIONS_READ_PERMISSION = 'operations:read';
+/** Operations reads are project reads: the legacy `operations:read` permission
+ *  maps onto the hierarchical model's project:read capability. */
+const OPERATIONS_READ_CAPABILITY = 'project:read';
 
 /** The advisory quota policy resolved when HostConfig.quotaPolicy is unset:
  *  disabled, so quota evaluation is a no-op until an operator opts in. */
@@ -63,18 +73,25 @@ function requirePrincipal(cfg: HostConfig, credential: string | null): Principal
   return principal;
 }
 
-/** Resolve the caller's operations:read scope, rejecting a caller with no reach
- *  at all (scope.all is false and neither an in-scope project nor unit). */
-function requireOperationsReadScope(cfg: HostConfig, principal: Principal): ScopeResolution {
-  const scope = resolveScopeFor(cfg, principal, OPERATIONS_READ_PERMISSION);
-  if (!scope.all && scope.projectIds.length === 0 && scope.unitIds.length === 0) {
-    throw new ForbiddenError('operations read access required');
-  }
-  return scope;
+/** The caller's operations-read view: every scope for an instance-admin, else
+ *  their actionable project:read scopes. Rejects a caller with no reach at all. */
+interface OperationsReadScope {
+  all: boolean;
+  projectIds: string[];
 }
 
-/** Narrow hosted project records to the caller's scope (a super-admin keeps all). */
-function narrowToScope(projects: HostedProjectRecord[], scope: ScopeResolution): HostedProjectRecord[] {
+/** Resolve the caller's operations-read scope, rejecting a caller with no reach. */
+function requireOperationsReadScope(cfg: HostConfig, principal: Principal): OperationsReadScope {
+  if (isInstanceAdmin(principal)) return { all: true, projectIds: [] };
+  const scopes = visibleScopes(cfg.dataDir, principal, OPERATIONS_READ_CAPABILITY);
+  if (scopes.length === 0) {
+    throw new ForbiddenError('operations read access required');
+  }
+  return { all: false, projectIds: actionableProjectIds(scopes) };
+}
+
+/** Narrow hosted project records to the caller's scope (an instance-admin keeps all). */
+function narrowToScope(projects: HostedProjectRecord[], scope: OperationsReadScope): HostedProjectRecord[] {
   if (scope.all) return projects;
   return projects.filter((p) => scope.projectIds.includes(p.id));
 }
@@ -406,6 +423,81 @@ export function evaluateQuota(
   const usage = collectUsage(projects, scope);
   const policy = resolveQuotaPolicy(cfg);
   return evaluateUsage(usage, policy);
+}
+
+// ── instance exposure policy (the operations plane's ONLY mutation) ──────────
+//
+// The exposure posture (webUiEnabled/requireTls, admin-plane mount flags) gates
+// the whole web surface, so both the read and the replace require INSTANCE-level
+// project:admin, and the replace is audited at security level.
+
+/** The subject behind an action for audit provenance. */
+function principalSubject(principal: Principal): PrincipalSubject {
+  return (
+    principal.subject ?? { userId: 'token:' + principal.tokenId, kind: 'service', issuer: 'local' }
+  );
+}
+
+/** Append a redacted audit event best-effort — never fails the primary action. */
+function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
+  try {
+    appendAuditEvent(cfg.dataDir, event, DEFAULT_AUDIT_POLICY);
+  } catch (err) {
+    console.error(
+      `[operations] audit append failed for "${event.action}": ` +
+        (err instanceof Error ? err.message : String(err)),
+    );
+  }
+}
+
+function requireInstanceExposureAdmin(cfg: HostConfig, credential: string | null): Principal {
+  const principal = requirePrincipal(cfg, credential);
+  if (authorize(cfg.dataDir, principal, 'project:admin', 'instance', '').value !== 'yes') {
+    throw new ForbiddenError('exposure administration requires instance-level project:admin');
+  }
+  return principal;
+}
+
+/**
+ * Authenticate, require instance-level project:admin, and return the EFFECTIVE
+ * instance exposure policy: the persisted record merged over the compatible
+ * default (web UI off, TLS required), so unset flags read as their defaults.
+ * A read; not audited.
+ */
+export function getExposurePolicy(cfg: HostConfig, credential: string | null): HostExposurePolicy {
+  requireInstanceExposureAdmin(cfg, credential);
+  return { ...COMPATIBLE_DEFAULT_EXPOSURE, ...(getExposurePolicyRecord(cfg.dataDir) ?? {}) };
+}
+
+/**
+ * Authenticate, require instance-level project:admin, replace the instance
+ * exposure policy wholesale through the policy repository (normalized over the
+ * compatible default so the persisted record is always complete), and audit at
+ * security level — the exposure posture gates the whole web surface.
+ */
+export function setExposurePolicy(
+  cfg: HostConfig,
+  credential: string | null,
+  exposure: HostExposurePolicy,
+): HostExposurePolicy {
+  const principal = requireInstanceExposureAdmin(cfg, credential);
+  const stored = setExposurePolicyRecord(cfg.dataDir, {
+    ...COMPATIBLE_DEFAULT_EXPOSURE,
+    ...exposure,
+  });
+  const event: AuditEvent = {
+    id: '',
+    timestamp: '',
+    level: 'security',
+    category: 'admin',
+    action: 'exposure.set',
+    outcome: 'success',
+    actor: principalSubject(principal),
+    target: 'exposure-policy',
+  };
+  if (principal.tokenId) event.tokenId = principal.tokenId;
+  tryAppendAudit(cfg, event);
+  return stored;
 }
 
 // ── Operations Portal (HTTP) ─────────────────────────────────────────────────

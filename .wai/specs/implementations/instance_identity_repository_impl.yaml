@@ -1,0 +1,28 @@
+id: instance_identity_repository_impl
+name: Instance Identity Repository Implementation
+description: >-
+  Facade over the owned instance identity store, registry, and index. Pure 1:1 forwarding — the
+  write to the registry, the read to the index; no logic here.
+contract: iinstance_identity_repository
+sourcePath: src/server/instance.ts
+methods:
+  - name: ensureSeeded
+    narrative:
+      - stepNumber: 1
+        description: Forward to the instance identity registry
+        type: call
+        targetComponent: instance_identity_registry
+        targetMethod: seed
+    symbol: ensureInstanceIdentity
+  - name: get
+    narrative:
+      - stepNumber: 1
+        description: Forward to the instance identity index
+        type: call
+        targetComponent: instance_identity_index
+        targetMethod: get
+    symbol: getInstanceIdentity
+detail: calls-only
+status: complete
+createdAt: '2026-07-16T00:24:47.202Z'
+updatedAt: '2026-07-18T23:33:30.993Z'

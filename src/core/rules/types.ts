@@ -8,7 +8,8 @@ import {
   RulesConfig,
   SurfaceSnapshot,
 } from '../../models/index.js';
-import type { ProfileDef, LanguagePackDef } from '../extensions.js';
+import type { ProfileDef, LanguagePackDef, LoadedPattern, LoadedAssertion } from '../extensions.js';
+import type { VariantDef } from '../variants.js';
 import type { CodeModel } from '../source-analysis.js';
 
 // ---------------------------------------------------------------------------
@@ -96,14 +97,27 @@ export interface RuleContext {
   isSpecInScope(specId: string): boolean;
 
   /**
-   * Extension-pack data (empty objects when no packs are loaded): pack-
-   * registered profiles and language/platform tables. Rules merge these over
-   * their built-in tables.
+   * Extension-pack data (empty when no packs are loaded): pack-registered
+   * profiles, language/platform tables, and reusable pattern definitions.
+   * Rules merge these over their built-in tables and resolve spec references
+   * (component.patterns) against ext.patterns.
    */
   ext: {
     profiles: Record<string, ProfileDef>;
     languages: Record<string, LanguagePackDef>;
+    patterns: LoadedPattern[];
+    /** Pack-declared semantic guarantee tokens — unioned with SEMANTIC_GUARANTEES by the guarantee-token rule. */
+    guarantees: string[];
+    /** Declarative rule assertions (closed kinds, pack-instantiated) evaluated by the declarative-assertions rule. */
+    assertions: LoadedAssertion[];
   };
+
+  /**
+   * Component-variant registry (the dynamic layer on top of packs; empty when
+   * none): the resolution set for component.variant references — each a
+   * base-anchored specialization carrying implementation guidance.
+   */
+  variants: VariantDef[];
 
   /**
    * Bookkeeping for per-spec lint suppressions (lint.allow). Suppression

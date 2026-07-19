@@ -3,16 +3,19 @@ import * as path from 'path';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { runWithProjectRoot } from '../utils/fs.js';
 import { authenticate, authenticateSession, verifyViewToken } from './auth.js';
+import { authorize } from './authorization.js';
 import { WEB_SESSION_PREFIX } from './types.js';
 import { resolveProjectRoot, existingProjectRoot } from './projects.js';
 import { createScopedServer, hostCore } from './adapters.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import {
-  requestProjectInitialization,
-  requestProjectLock,
-  requestProjectPromotion,
-  getRequestStatus,
-} from './selfservice.js';
+  initializeProject,
+  lockProject,
+  promoteProject,
+  getApprovalStatus,
+  awaitApproval,
+} from './projectlifecycle.js';
+import * as projectops from './projectops.js';
 import {
   listReachableProjectsForMcp,
   listReachableProjectInterfacesForMcp,
@@ -40,6 +43,7 @@ import type {
 import { bearerToken, sendJson } from './httpio.js';
 // Historical import site for these helpers — republish them.
 export { bearerToken, sendJson } from './httpio.js';
+import { publishChange } from './realtime.js';
 
 function projectSelector(req: IncomingMessage): string | null {
   const h = req.headers['x-wairon-project'];
@@ -128,15 +132,17 @@ export function auditToolCall(
   }
 }
 
-// ── Data-plane self-service + surface-exchange dispatch (steps 10–28) ────────
+// ── Data-plane project-lifecycle + surface-exchange dispatch (steps 10–28) ───
 
-/** The four approval-backed self-service tools the data plane handles directly,
- *  bypassing the scoped sdd_* MCP server. Every other tool falls through to it. */
-const SELF_SERVICE_TOOLS = new Set<string>([
-  'sdd_host_request_project_initialization',
-  'sdd_host_request_project_lock',
-  'sdd_host_request_project_promotion',
+/** The five execute-primary project-lifecycle tools the data plane handles
+ *  directly, bypassing the scoped sdd_* MCP server. Every other tool falls
+ *  through to it. */
+const PROJECT_LIFECYCLE_TOOLS = new Set<string>([
+  'sdd_host_initialize_project',
+  'sdd_host_lock_project',
+  'sdd_host_promote_project',
   'sdd_host_get_approval_status',
+  'sdd_host_await_approval',
 ]);
 
 /** The four hosted landscape tools the data plane handles directly, routing
@@ -147,6 +153,19 @@ const LANDSCAPE_DISCOVERY_TOOLS = new Set<string>([
   'sdd_landscape_list_reachable_project_interfaces',
   'sdd_landscape_list_visible_surfaces',
   'sdd_landscape_get_project_surface',
+]);
+
+/** The six hosted project-ops tools the data plane handles directly, routing
+ *  them to the project ops orchestrator — ALWAYS bound to THE one authorized
+ *  project (instance-level operations are deliberately absent from the data
+ *  plane). Each is resolver-gated upstream by its owning orchestrator. */
+const PROJECT_OPS_TOOLS = new Set<string>([
+  'sdd_host_pack_list',
+  'sdd_host_pack_install',
+  'sdd_host_policy_evaluate',
+  'sdd_host_policy_reconcile',
+  'sdd_host_produce',
+  'sdd_host_commit_project',
 ]);
 
 /** The MCP tool-result envelope — the exact shape the scoped sdd_* server returns:
@@ -191,7 +210,7 @@ function toolErrorResult(err: unknown): McpToolResult {
 
 // ── Granular data-plane permission gate (step 25–27 of handleRequest) ────────
 //
-// On the ordinary sdd_* dispatch path (the self-service / landscape branch is
+// On the ordinary sdd_* dispatch path (the project-lifecycle / landscape branch is
 // already gated by its orchestrator), classify the tool and require the
 // principal's grant FOR THE BOUND PROJECT to carry the matching data-plane
 // permission before it reaches the scoped MCP server.
@@ -215,44 +234,64 @@ const WRITE_TOOL_PREFIXES = [
 const READ_TOOL_PREFIXES = ['sdd_get_', 'sdd_validate_'];
 
 /**
- * The data-plane permission a tool requires: `mcp:read` for a read tool (a name
- * starting with sdd_get_ / sdd_validate_), otherwise `mcp:write`. Unknown / other
- * names are treated as writes (fail safe) so a novel tool can never slip past on a
- * read-only grant.
+ * The data-plane capability a tool requires: `project:read` for a read tool (a
+ * name starting with sdd_get_ / sdd_validate_), otherwise `project:write`.
+ *
+ * FAIL CLOSED: a read is ONLY the explicit read prefixes. The known write
+ * prefixes and any unrecognized or newly added tool name are all treated as
+ * writes, so a novel tool can never slip past on read-level permission.
  */
-function requiredDataPlanePermission(toolName: string): 'mcp:read' | 'mcp:write' {
-  if (READ_TOOL_PREFIXES.some((p) => toolName.startsWith(p))) return 'mcp:read';
-  if (WRITE_TOOL_PREFIXES.some((p) => toolName.startsWith(p))) return 'mcp:write';
-  return 'mcp:write';
+function requiredDataPlaneCapability(toolName: string): 'project:read' | 'project:write' {
+  if (READ_TOOL_PREFIXES.some((p) => toolName.startsWith(p))) return 'project:read';
+  if (WRITE_TOOL_PREFIXES.some((p) => toolName.startsWith(p))) return 'project:write';
+  return 'project:write';
 }
 
+/** Lifecycle/ops tools whose SUCCESS changes state other live views are
+ *  showing (project status, placements, packs) — not the read-shaped ones
+ *  (get_approval_status, landscape discovery) and not the external-side-effect
+ *  ones (produce, commit — the spec tree itself is unchanged). */
+const MUTATING_HOST_TOOLS = new Set([
+  'sdd_host_initialize_project',
+  'sdd_host_lock_project',
+  'sdd_host_promote_project',
+  'sdd_host_await_approval', // a decided approval may have executed the action
+  'sdd_host_policy_reconcile',
+]);
+
 /**
- * True when the principal's grant FOR THE BOUND PROJECT carries the required
- * data-plane permission: a grant whose projectId is the bound project (or the
- * instance-wide '*') carrying that permission — or the '*' permission wildcard,
- * which covers both read and write. Consults principal.grants, NOT the coarse
- * role/projects projection, so a read-only token (mcp:read only) is correctly
- * refused writes.
+ * The realtime channels a SUCCESSFUL data-plane tool call invalidates: a spec-
+ * mutating sdd_* write wakes the bound project's channel (open canvases refetch
+ * through their own scoped REST reads — the event carries no data, so
+ * authorization stays at the read); a mutating lifecycle tool also wakes the
+ * projects list. Publishing is an OPTIMIZATION, so unlike the permission gate
+ * (which fails closed to write) an unknown tool publishes nothing.
  */
-function grantPermitsDataPlane(principal: Principal, projectId: string, permission: string): boolean {
-  return (principal.grants ?? []).some(
-    (g) =>
-      // exact bound-project grant, or a genuine instance-wide '*' (NOT a
-      // unit-scoped grant that merely carries '*'+orgUnitId — that is bounded
-      // to its subtree and must not confer instance-wide data-plane reach).
-      (g.projectId === projectId || (g.projectId === '*' && !g.orgUnitId)) &&
-      (g.permissions.includes('*') || g.permissions.includes(permission)),
-  );
+export function mcpChangeChannels(body: unknown, projectId: string, response: unknown): string[] {
+  if (deriveMcpOutcome(response) !== 'success') return [];
+  const msg = jsonRpcRequest(body);
+  if (!msg || msg.method !== 'tools/call') return [];
+  const name = msg.params?.name;
+  if (typeof name !== 'string') return [];
+  if (WRITE_TOOL_PREFIXES.some((p) => name.startsWith(p))) return [`project:${projectId}`];
+  if (MUTATING_HOST_TOOLS.has(name)) return [`project:${projectId}`, 'projects'];
+  return [];
 }
 
 /**
  * Enforce the granular data-plane permission for an ordinary sdd_* `tools/call`.
  * Returns an `isError` tool-result response to send (and NOT dispatch) when the
- * bound project is not covered for the needed permission, or undefined to let the
- * call proceed. A non-`tools/call` message (initialize, tools/list) or a call with
- * no tool name is never gated — those do not mutate project state.
+ * caller lacks the needed capability over the BOUND project, or undefined to let
+ * the call proceed. A non-`tools/call` message (initialize, tools/list) or a call
+ * with no tool name is never gated — those do not mutate project state.
+ *
+ * This resolves through the permission resolver over the bound project, so a
+ * token always acts as its owner's LIVE permission: the token's `projects`
+ * narrowing (enforced separately at resolveProjectRoot) bounds WHICH projects it
+ * may name, and this gate decides what it may DO there.
  */
 function dataPlanePermissionError(
+  cfg: HostConfig,
   principal: Principal,
   projectId: string,
   body: unknown,
@@ -262,8 +301,8 @@ function dataPlanePermissionError(
   const name = msg.params?.name;
   if (typeof name !== 'string' || name.length === 0) return undefined;
 
-  const needed = requiredDataPlanePermission(name);
-  if (grantPermitsDataPlane(principal, projectId, needed)) return undefined;
+  const needed = requiredDataPlaneCapability(name);
+  if (authorize(cfg.dataDir, principal, needed, 'project', projectId).value === 'yes') return undefined;
 
   return {
     jsonrpc: '2.0',
@@ -276,8 +315,8 @@ function dataPlanePermissionError(
 }
 
 /**
- * Steps 10–24: when the message is a `tools/call` for one of the four approval-backed
- * self-service tools or one of the two hosted landscape discovery tools, dispatch it to
+ * Steps 10–24: when the message is a `tools/call` for one of the five execute-primary
+ * project-lifecycle tools or one of the hosted landscape discovery tools, dispatch it to
  * the matching orchestrator — re-authenticating the RAW bearer credential (the
  * orchestrators are the single auth authority) — and shape the outcome into the standard
  * JSON-RPC tool-result envelope. Returns the full JSON-RPC response to send, or undefined
@@ -291,16 +330,19 @@ function dataPlanePermissionError(
  * as its decoded ProjectInitRequest arguments, and interface discovery reads its TARGET
  * project (the neighbour to inspect, still gated by reachability) from arguments.projectId.
  */
-export function dispatchSelfServiceTool(
+export async function dispatchProjectLifecycleTool(
   cfg: HostConfig,
   credential: string | null,
   projectId: string,
   body: unknown,
-): { jsonrpc: '2.0'; id: unknown; result: McpToolResult } | undefined {
+): Promise<{ jsonrpc: '2.0'; id: unknown; result: McpToolResult } | undefined> {
   const msg = jsonRpcRequest(body);
   if (!msg || msg.method !== 'tools/call') return undefined;
   const name = msg.params?.name;
-  if (typeof name !== 'string' || !(SELF_SERVICE_TOOLS.has(name) || LANDSCAPE_DISCOVERY_TOOLS.has(name))) {
+  if (
+    typeof name !== 'string' ||
+    !(PROJECT_LIFECYCLE_TOOLS.has(name) || LANDSCAPE_DISCOVERY_TOOLS.has(name) || PROJECT_OPS_TOOLS.has(name))
+  ) {
     return undefined;
   }
 
@@ -310,14 +352,23 @@ export function dispatchSelfServiceTool(
   try {
     let value: unknown;
     switch (name) {
-      case 'sdd_host_request_project_initialization':
-        value = requestProjectInitialization(cfg, credential, args as unknown as ProjectInitRequest);
+      case 'sdd_host_initialize_project':
+        value = initializeProject(cfg, credential, args as unknown as ProjectInitRequest);
         break;
-      case 'sdd_host_request_project_lock':
-        value = requestProjectLock(cfg, credential, projectId); // bound project; args ignored
+      case 'sdd_host_lock_project':
+        value = lockProject(cfg, credential, projectId); // bound project; args ignored
         break;
-      case 'sdd_host_request_project_promotion':
-        value = requestProjectPromotion(cfg, credential, projectId); // bound project; args ignored
+      case 'sdd_host_promote_project':
+        value = promoteProject(cfg, credential, projectId); // bound project; args ignored
+        break;
+      case 'sdd_host_await_approval':
+        // Long-poll for a decision on the caller's own approval request.
+        value = await awaitApproval(
+          cfg,
+          credential,
+          String(args.requestId ?? ''),
+          Number(args.timeoutSeconds ?? 0),
+        );
         break;
       case 'sdd_landscape_list_reachable_projects':
         // currentProjectId = the BOUND project; never taken from arguments.
@@ -341,8 +392,41 @@ export function dispatchSelfServiceTool(
         // targetProjectId from arguments.projectId. Visibility-gated.
         value = getProjectSurfaceForMcp(cfg, credential, projectId, String(args.projectId ?? ''));
         break;
+      // ── Hosted project ops — always the BOUND project (no project argument
+      // exists on the data plane); resolver-gated by the owning orchestrators.
+      case 'sdd_host_pack_list':
+        value = projectops.listProjectPacks(cfg, credential, projectId);
+        break;
+      case 'sdd_host_pack_install':
+        value = projectops.installProjectPack(
+          cfg,
+          credential,
+          projectId,
+          String(args.name ?? ''),
+          String(args.content ?? ''),
+        );
+        break;
+      case 'sdd_host_policy_evaluate':
+        value = projectops.evaluateProjectPolicy(cfg, credential, projectId);
+        break;
+      case 'sdd_host_policy_reconcile':
+        value = projectops.reconcileProjectPolicy(cfg, credential, projectId);
+        break;
+      case 'sdd_host_produce':
+        await projectops.produceProducer(cfg, credential, projectId, String(args.target ?? ''));
+        value = { ok: true };
+        break;
+      case 'sdd_host_commit_project':
+        value = projectops.commitProject(
+          cfg,
+          credential,
+          projectId,
+          typeof args.subsystem === 'string' && args.subsystem ? args.subsystem : undefined,
+          typeof args.message === 'string' && args.message ? args.message : undefined,
+        );
+        break;
       default: // 'sdd_host_get_approval_status'
-        value = getRequestStatus(cfg, credential, String(args.requestId ?? ''));
+        value = getApprovalStatus(cfg, credential, String(args.requestId ?? ''));
         break;
     }
     result = { content: [{ type: 'text', text: JSON.stringify(value) }] };
@@ -379,16 +463,16 @@ export async function handleMcpRequest(
       return;
     }
   } else {
-    // Trusted-network mode: no credential required, but a project must still be
-    // named. The anonymous principal is a super-admin, so it carries an
-    // instance-wide '*'/'*' grant — this satisfies the granular data-plane
-    // permission gate below exactly as the master credential does.
+    // Trusted-network mode (auth disabled): no credential required, but a project
+    // must still be named. The anonymous principal is an instance-admin, so it
+    // holds the resolver bypass — satisfying the data-plane gate below exactly as
+    // the master credential does.
     principal = {
       tokenId: 'anonymous',
       role: 'admin',
       projects: ['*'],
       authenticated: true,
-      grants: [{ projectId: '*', permissions: ['*'] }],
+      permissionSubject: { subjectId: 'anonymous', roleBindings: [], instanceAdmin: true },
     };
   }
 
@@ -399,7 +483,7 @@ export async function handleMcpRequest(
   }
 
   // A JSON-RPC BATCH would let a second, unchecked request ride past the gates
-  // below: the permission gate, self-service dispatch, and audit each inspect a
+  // below: the permission gate, project-lifecycle dispatch, and audit each inspect a
   // SINGLE message, but the transport dispatches every message in a batch array.
   // A read-only (mcp:read) token could smuggle a write tool as the second element
   // — unauthorized AND unaudited. The hosted data plane authorizes and audits
@@ -420,24 +504,29 @@ export async function handleMcpRequest(
     // The project id is the basename of its isolated root (<dataDir>/projects/<id>).
     const projectId = path.basename(root);
 
-    // Steps 10–24: the four approval-backed self-service tools and the two hosted
+    // Steps 10–24: the five execute-primary project-lifecycle tools and the hosted
     // landscape discovery tools are handled here, bypassing the scoped sdd_* MCP
     // server. The response still flows through the SAME best-effort audit path
     // (auditToolCall) the scoped dispatch uses.
-    const dispatchedResponse = dispatchSelfServiceTool(cfg, cred, projectId, body);
+    const dispatchedResponse = await dispatchProjectLifecycleTool(cfg, cred, projectId, body);
     if (dispatchedResponse !== undefined) {
       sendJson(res, 200, dispatchedResponse);
       auditToolCall(cfg.dataDir, principal, projectId, body, deriveMcpOutcome(dispatchedResponse));
+      // Realtime: nudge the channels a successful lifecycle mutation touched.
+      for (const ch of mcpChangeChannels(body, projectId, dispatchedResponse)) publishChange(ch);
       return;
     }
 
     // Steps 25–27: enforce the granular data-plane permission BEFORE dispatching
-    // an ordinary sdd_* tool. A read tool needs mcp:read, a write tool needs
-    // mcp:write (a '*' permission or the instance-wide '*'/'*' grant covers both),
-    // consulted from the principal's grant for the BOUND project. A refusal is an
-    // isError tool result (HTTP still 200) and the tool is never dispatched; it
-    // still flows through the SAME best-effort audit path.
-    const permissionError = dataPlanePermissionError(principal, projectId, body);
+    // an ordinary sdd_* tool. A read tool needs project:read, every other tool
+    // project:write (fail closed), resolved LIVE through the hierarchical
+    // permission resolver over the BOUND project. Capabilities match EXACTLY —
+    // there is no wildcard capability, and the '*'@instance instance-admin
+    // marker is reserved (setAssignment rejects it); only the env-anchored
+    // instance-admin subjects bypass the walk. A refusal is an isError tool
+    // result (HTTP still 200) and the tool is never dispatched; it still flows
+    // through the SAME best-effort audit path.
+    const permissionError = dataPlanePermissionError(cfg, principal, projectId, body);
     if (permissionError !== undefined) {
       sendJson(res, 200, permissionError);
       auditToolCall(cfg.dataDir, principal, projectId, body, deriveMcpOutcome(permissionError));
@@ -470,6 +559,9 @@ export async function handleMcpRequest(
 
     // Steps 23–27: audit the handled data-plane tool call (best-effort).
     auditToolCall(cfg.dataDir, principal, projectId, body, deriveMcpOutcome(response));
+    // Realtime: a successful sdd_* WRITE changed the spec tree — nudge the
+    // project channel so open canvases/views refetch (spec-tree change → live).
+    for (const ch of mcpChangeChannels(body, projectId, response)) publishChange(ch);
   });
 }
 

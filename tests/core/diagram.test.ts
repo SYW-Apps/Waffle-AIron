@@ -222,4 +222,131 @@ describe('diagram generation from the spec tree', () => {
     // both regions (try + loop) end at step 4 → two closing `end` lines
     expect(mmd.split('\n').filter(l => l.trim() === 'end')).toHaveLength(2);
   });
+
+  it('renders parallel regions as par/and fragments and detached calls as async arrows with no return', () => {
+    buildFixture();
+    // An expandable detached target: the notifier has its own narrative, so
+    // the walk can prove no activation/return is emitted for detached calls.
+    saveComponentSpec({
+      id: 'billing-notifier', name: 'Billing Notifier', description: 'd', subsystem: 'billing',
+      componentType: 'Actor', owns: [], dependsOn: [], createdAt: now, updatedAt: now,
+    } as any);
+    saveInterfaceSpec({
+      id: 'ibilling-notifier',
+      name: 'IBillingNotifier',
+      description: 'contract',
+      component: 'billing-notifier',
+      methods: [{ name: 'send', description: 'send', signature: 'send(): void', returns: 'void' }],
+      createdAt: now,
+      updatedAt: now,
+    });
+    saveImplementationSpec({
+      id: 'billing-notifier-impl',
+      name: 'Notifier Impl',
+      description: 'impl',
+      contract: 'ibilling-notifier',
+      methods: [{
+        name: 'send',
+        narrative: [{ stepNumber: 1, description: 'Deliver the notification', type: 'local' }],
+      }],
+      createdAt: now,
+      updatedAt: now,
+    });
+    saveImplementationSpec({
+      id: 'billing-orchestrator-impl',
+      name: 'Orchestrator Impl',
+      description: 'impl',
+      contract: 'ibilling-orchestrator',
+      methods: [{
+        name: 'process',
+        narrative: [
+          { stepNumber: 1, description: 'Validate the request', type: 'local' },
+          { stepNumber: 2, description: 'Fan out side effects', type: 'parallel', endStep: 6, branches: [{ step: 3, name: 'notify' }, { step: 5, name: 'audit' }] },
+          { stepNumber: 3, description: 'Fire the notification', type: 'call', targetComponent: 'billing-notifier', targetMethod: 'send', detach: true },
+          { stepNumber: 4, description: 'Format the receipt', type: 'local' },
+          { stepNumber: 5, description: 'Persist the audit record', type: 'call', targetComponent: 'billing-repo', targetMethod: 'save' },
+          { stepNumber: 6, description: 'Record the audit trail', type: 'local' },
+          { stepNumber: 7, description: 'done', type: 'return', outcome: 'done' },
+        ],
+      }],
+      createdAt: now,
+      updatedAt: now,
+    } as any);
+    invalidateSpecCache();
+
+    const mmd = generateSequenceDiagram('billing-orchestrator', 'process');
+    // par fragment opens at the header (first arm's name folded into the label)…
+    expect(mmd).toContain('par Fan out side effects — notify');
+    // …the second arm's entry starts its `and` block…
+    expect(mmd).toContain('and audit');
+    // …and the region closes exactly once after endStep.
+    expect(mmd.split('\n').filter(l => l.trim() === 'end')).toHaveLength(1);
+    // Detached call: async OPEN arrow, annotated, no activation…
+    expect(mmd).toMatch(/billing_orchestrator-\)billing_notifier: send\(\) — detached/);
+    expect(mmd).not.toContain('->>+billing_notifier');
+    // …still expanded (the callee's own steps show)…
+    expect(mmd).toContain('Note over billing_notifier: Deliver the notification');
+    // …but NO return arrow — failure does not propagate to the caller's flow.
+    expect(mmd).not.toContain('billing_notifier-->>-');
+    // The synchronous arm call is unchanged.
+    expect(mmd).toMatch(/billing_orchestrator->>billing_repo: save\(\)/);
+  });
+
+  it('renders a nested parallel (parallel inside an arm) as properly nested par/and/end fragments', () => {
+    buildFixture();
+    saveImplementationSpec({
+      id: 'billing-orchestrator-impl',
+      name: 'Orchestrator Impl',
+      description: 'impl',
+      contract: 'ibilling-orchestrator',
+      methods: [{
+        name: 'process',
+        narrative: [
+          { stepNumber: 1, description: 'Validate the request', type: 'local' },
+          // Outer region: arms "ship" (steps 3-5, holding the inner region) and "bill" (steps 6).
+          { stepNumber: 2, description: 'Fan out both pipelines', type: 'parallel', endStep: 7, branches: [{ step: 3, name: 'ship' }, { step: 6, name: 'bill' }] },
+          // Inner region NESTED inside the outer's first arm: arms "pack" and "label".
+          { stepNumber: 3, description: 'Run inner pair', type: 'parallel', endStep: 5, branches: [{ step: 4, name: 'pack' }, { step: 5, name: 'label' }] },
+          { stepNumber: 4, description: 'Pack the parcel', type: 'local' },
+          { stepNumber: 5, description: 'Print the label', type: 'local' },
+          { stepNumber: 6, description: 'Charge the card', type: 'call', targetComponent: 'billing-repo', targetMethod: 'save' },
+          { stepNumber: 7, description: 'Reconcile the outcome', type: 'local' },
+          { stepNumber: 8, description: 'done', type: 'return', outcome: 'done' },
+        ],
+      }],
+      createdAt: now,
+      updatedAt: now,
+    } as any);
+    invalidateSpecCache();
+
+    const mmd = generateSequenceDiagram('billing-orchestrator', 'process');
+    const lines = mmd.split('\n').map(l => l.trim());
+    const outerPar = lines.indexOf('par Fan out both pipelines — ship');
+    const innerPar = lines.indexOf('par Run inner pair — pack');
+    const innerAnd = lines.indexOf('and label');
+    const outerAnd = lines.indexOf('and bill');
+    const ends = lines.reduce<number[]>((acc, l, i) => (l === 'end' ? [...acc, i] : acc), []);
+
+    // Both fragments open — the inner one INSIDE the outer's first arm…
+    expect(outerPar).toBeGreaterThanOrEqual(0);
+    expect(innerPar).toBeGreaterThan(outerPar);
+    // …the inner region starts its second arm, then CLOSES before the outer's
+    // second arm begins — proper nesting, not interleaving…
+    expect(innerAnd).toBeGreaterThan(innerPar);
+    expect(ends).toHaveLength(2);
+    expect(ends[0]).toBeGreaterThan(innerAnd);
+    expect(outerAnd).toBeGreaterThan(ends[0]);
+    expect(ends[1]).toBeGreaterThan(outerAnd);
+    // …with each inner arm's body inside its own block…
+    const packPos = lines.indexOf('Note over billing_orchestrator: Pack the parcel');
+    const labelPos = lines.indexOf('Note over billing_orchestrator: Print the label');
+    expect(packPos).toBeGreaterThan(innerPar);
+    expect(packPos).toBeLessThan(innerAnd);
+    expect(labelPos).toBeGreaterThan(innerAnd);
+    expect(labelPos).toBeLessThan(ends[0]);
+    // …and the outer second arm's synchronous call inside the outer fragment.
+    const savePos = lines.findIndex(l => /billing_orchestrator->>billing_repo: save\(\)/.test(l));
+    expect(savePos).toBeGreaterThan(outerAnd);
+    expect(savePos).toBeLessThan(ends[1]);
+  });
 });

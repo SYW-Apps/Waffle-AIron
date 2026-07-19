@@ -8,12 +8,13 @@ component: admin_orchestrator
 methods:
   - name: createProject
     description: >-
-      Authenticate the caller (bootstrap master or a user token). Resolve the caller's
-      project:create scope over the organization tree: a super-admin (instance-wide grant) may
-      create any project and optionally place it in a target unit; a unit-scoped creator holding
-      project:create for an organization unit MUST supply a target unit within their scope, and the
-      new project is auto-placed there. Allocate the project, bootstrap its isolated spec tree, and
-      place it when a target unit is given.
+      Authenticate the caller (bootstrap master or a user token). Validate the REQUIRED target
+      unitId (every project is placed at creation so the permission resolver can always enumerate it
+      — a fresh instance must create its first organization unit before creating projects; wairon
+      dev provisions a synthetic local unit at boot). Resolve the caller's project:create permission
+      over the target unit via the authorization seam (must be yes; an approval-valued caller must
+      use the execute-primary project-lifecycle path). Allocate the project, bootstrap its isolated
+      spec tree, and place it in the target unit.
     signature: 'createProject(credential: string, id: string, unitId: string): HostedProjectRecord'
     returns: HostedProjectRecord
     params:
@@ -24,14 +25,13 @@ methods:
       - name: unitId
         type: string
         description: >-
-          Optional target organization unit to place the new project in. Required (and must be
-          within scope) for a unit-scoped creator; optional for a super-admin.
-        optional: true
+          REQUIRED target organization unit that owns the new project; the caller's project:create
+          permission is resolved over it and the project is auto-placed there.
   - name: destroyProject
     description: >-
-      Authenticate the caller (bootstrap master or a user token), require the caller's
-      project:destroy scope to permit the target project (a super-admin permits any), and deregister
-      the project and its tree.
+      Authenticate the caller (bootstrap master or a user token), resolve the caller's project:admin
+      permission over the target project via the authorization seam (must be yes; an instance-admin
+      permits any), and deregister the project and its tree.
     signature: 'destroyProject(credential: string, id: string): void'
     returns: void
   - name: listProjects
@@ -41,12 +41,12 @@ methods:
   - name: mintKey
     description: >-
       Authenticate the master credential and mint a project-scoped API key. REFUSES any request that
-      would produce an instance-wide super-admin credential: the legacy admin role projects to a
-      {projectId '*', permissions '*'} grant and the '*' project wildcard is instance-wide, so role
-      admin and project '*' are both rejected — only project-scoped, non-super-admin keys are
-      mintable. The env-anchored built-in admin account (the WAIRON_ADMIN_TOKEN master credential
-      and the WAIRON_ADMIN_USER web login) is the only instance-wide *:* super-admin; those
-      principals are not minted keys and their authentication paths are unaffected.
+      would produce an instance-wide super-admin credential: the legacy role 'admin' and the '*'
+      project wildcard are instance-wide and both are rejected — only project-scoped,
+      non-super-admin keys are mintable. The env-anchored built-in admin account (the
+      WAIRON_ADMIN_TOKEN master credential and the WAIRON_ADMIN_USER web login) is the only
+      instance-wide super-admin; those principals are not minted keys and their authentication paths
+      are unaffected.
     signature: 'mintKey(credential: string, project: string, role: string): string'
     returns: string
   - name: revokeKey
@@ -59,16 +59,18 @@ methods:
     returns: ApiKeyRecord[]
   - name: lockProject
     description: >-
-      Authenticate the caller (bootstrap master or a user token), require the caller's lock:create
-      scope to permit the target project, bind the project scope, validate-as-complete, and on
-      success promote statuses and write the StateId-scoped lock record.
+      Authenticate the caller (bootstrap master or a user token), resolve the caller's project:write
+      permission over the target project via the authorization seam (must be yes), bind the project
+      scope, validate-as-complete, and on success promote statuses and write the StateId-scoped lock
+      record.
     signature: 'lockProject(credential: string, project: string): LockRecord'
     returns: LockRecord
   - name: promoteProject
     description: >-
-      Authenticate the caller (bootstrap master or a user token), require the caller's
-      promote:mark-ready scope to permit the target project, bind scope, read the lock, re-check the
-      current StateId, and mark ready-for-promotion only when it still matches; reject stale locks.
+      Authenticate the caller (bootstrap master or a user token), resolve the caller's project:write
+      permission over the target project via the authorization seam (must be yes), bind scope, read
+      the lock, re-check the current StateId, and mark ready-for-promotion only when it still
+      matches; reject stale locks.
     signature: 'promoteProject(credential: string, project: string): PromoteResult'
     returns: PromoteResult
   - name: generateDiagram
@@ -85,38 +87,95 @@ methods:
     returns: string
   - name: enableGit
     description: >-
-      Authenticate, ensure the project exists, and enable git backing (clone the remote into it on
-      an isolated working branch).
+      Authenticate, require project:admin over the project, ensure it exists, and bind it to its
+      REAL repository (clone the remote into it on an isolated working branch). Wairon manages ONLY
+      the .wai/ tree inside the repo — commits are .wai/-scoped, so the repository can be shared
+      with the project's own codebase.
     signature: >-
       enableGit(credential: string, project: string, remote: string, branch: string):
       HostedProjectRecord
     returns: HostedProjectRecord
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: remote
+        type: string
+      - name: branch
+        type: string
   - name: disableGit
-    description: Authenticate and disable git backing for the project.
+    description: >-
+      Authenticate, require project:admin over the project, and disable its git backing (the
+      repository binding; the working tree is untouched).
     signature: 'disableGit(credential: string, project: string): void'
     returns: void
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
   - name: syncGit
-    description: Authenticate and sync the project's default branch into its working branch.
+    description: >-
+      Authenticate, require project:write over the project, and sync the project's default branch
+      into its working branch.
     signature: 'syncGit(credential: string, project: string): void'
     returns: void
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
   - name: configureProducer
-    description: Authenticate and configure a producer target for a project.
+    description: >-
+      Authenticate, require project:admin over the project, and configure a producer target for it
+      (tokens come from the secret store by ref, never inline).
     signature: >-
       configureProducer(credential: string, project: string, target: string, parentPageId: string):
       void
     returns: void
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: target
+        type: string
+      - name: parentPageId
+        type: string
   - name: produceProducer
-    description: Authenticate, mint a signed canvas link, and project the project to the target.
+    description: >-
+      Authenticate, require project:admin over the project, mint a signed canvas link, and project
+      the project to the target.
     signature: 'produceProducer(credential: string, project: string, target: string): void'
     returns: void
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: target
+        type: string
   - name: removeProducer
-    description: Authenticate and remove a producer target.
+    description: Authenticate, require project:admin over the project, and remove a producer target.
     signature: 'removeProducer(credential: string, project: string, target: string): void'
     returns: void
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: target
+        type: string
   - name: listProducers
-    description: Authenticate and list a project's configured producers.
+    description: Authenticate, require project:admin over the project, and list its configured producers.
     signature: 'listProducers(credential: string, project: string): ProducerConfig[]'
     returns: ProducerConfig[]
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
   - name: setSecret
     description: Authenticate and set an integration secret at runtime (no restart).
     signature: 'setSecret(credential: string, key: string, value: string): void'
@@ -128,18 +187,25 @@ methods:
   - name: executeApprovedCreate
     description: >-
       Pre-authorized entry for the approval workflow: performs the same privileged action as
-      createProject but WITHOUT credential authentication — the caller (self_service_orchestrator)
-      has already enforced approval-based authorization. Never exposed on any portal.
-    signature: 'executeApprovedCreate(id: string): HostedProjectRecord'
+      createProject but WITHOUT credential authentication — the caller
+      (project_lifecycle_orchestrator) has already enforced permission-based authorization. Creates
+      the project and places it in the REQUIRED owner unit. Never exposed on any portal.
+    signature: 'executeApprovedCreate(id: string, unitId: string): HostedProjectRecord'
     returns: HostedProjectRecord
     params:
       - name: id
         type: string
+      - name: unitId
+        type: string
+        description: >-
+          REQUIRED owner organization unit the new project is placed in (from
+          ProjectInitRequest.ownerUnitId).
   - name: executeApprovedLock
     description: >-
       Pre-authorized entry for the approval workflow: performs the same privileged action as
-      lockProject but WITHOUT credential authentication — the caller (self_service_orchestrator) has
-      already enforced approval-based authorization. Never exposed on any portal.
+      lockProject but WITHOUT credential authentication — the caller
+      (project_lifecycle_orchestrator) has already enforced permission-based authorization. Never
+      exposed on any portal.
     signature: 'executeApprovedLock(projectId: string): LockRecord'
     returns: LockRecord
     params:
@@ -148,13 +214,81 @@ methods:
   - name: executeApprovedPromote
     description: >-
       Pre-authorized entry for the approval workflow: performs the same privileged action as
-      promoteProject but WITHOUT credential authentication — the caller (self_service_orchestrator)
-      has already enforced approval-based authorization. Never exposed on any portal.
+      promoteProject but WITHOUT credential authentication — the caller
+      (project_lifecycle_orchestrator) has already enforced permission-based authorization. Never
+      exposed on any portal.
     signature: 'executeApprovedPromote(projectId: string): PromoteResult'
     returns: PromoteResult
     params:
       - name: projectId
         type: string
+  - name: commitProject
+    description: >-
+      Authenticate, require project:write over the project, and publish a DELIBERATE, SCOPED backup:
+      stage ONLY .wai/ (or the finer .wai/specs/<subsystem>/ subpath when given), commit, and push —
+      commit is the local save, push is the actual backup; both happen. Never `git add -A`: a shared
+      real repository's own code is never staged. CAVEAT: a subsystem-scoped commit is a staging
+      convenience only — git history is per-repo, so the log still interleaves all commits; the
+      project is the clean unit. A no-op when nothing under the scoped path changed. Returns the
+      publish outcome (commit id or clean).
+    signature: >-
+      commitProject(credential: string, project: string, subsystem: string, message: string):
+      GitPublish
+    returns: GitPublish
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: subsystem
+        type: string
+        optional: true
+      - name: message
+        type: string
+        optional: true
+  - name: getGitBinding
+    description: >-
+      Authenticate, require project:admin over the project, and return its git-backing status:
+      whether a repository is bound, the remote/branch, the periodic-sync setting, and whether the
+      .wai/ tree is dirty (unpublished changes). A read; not audited.
+    signature: 'getGitBinding(credential: string, project: string): GitBackingStatus'
+    returns: GitBackingStatus
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+  - name: runPeriodicGitSync
+    description: >-
+      Pre-authorized internal entry for the host supervisor's periodic backup timer — performs NO
+      authentication and is never exposed on any portal. Iterates the git-bound projects whose
+      binding enables periodic sync, and for each publishes a .wai/-scoped commit+push, skipping
+      clean projects (skip-if-clean) so a quiet project never commits noise. Failures are recorded
+      per project and never abort the sweep.
+    signature: 'runPeriodicGitSync(): void'
+    returns: void
+    params: []
+  - name: configureGitSync
+    description: >-
+      Authenticate, require project:admin over the project, and persist its periodic-sync setting
+      (interval minutes + skip-if-clean; an absent interval disables periodic sync). Configuring the
+      backup cadence is repository-binding administration, distinct from the project:write commit
+      itself.
+    signature: >-
+      configureGitSync(credential: string, project: string, periodicSyncMinutes: number,
+      skipIfClean: boolean): void
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: periodicSyncMinutes
+        type: number
+        optional: true
+      - name: skipIfClean
+        type: boolean
+        optional: true
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-07-14T11:42:59.964Z'
+updatedAt: '2026-07-16T15:26:18.659Z'

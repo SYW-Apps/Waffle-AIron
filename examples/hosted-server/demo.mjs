@@ -59,9 +59,16 @@ async function main() {
   if (!existsSync(CLI)) { console.error(`Build first: \`npm run build\` (missing ${CLI})`); process.exit(2); }
   console.log(`data dir: ${DATA}`);
 
-  step('Control plane (in-process): provision an isolated project + mint a scoped editor key');
-  console.log('  ' + cli(['host', 'project', 'create', '--id', 'demo']).replace(/\s+/g, ' '));
-  const key = (cli(['host', 'key', 'mint', '--project', 'demo', '--role', 'editor']).match(/wk_[a-f0-9]+/) || [])[0];
+  step('Control plane (in-process): provision an isolated project + mint an owner-bound agent key');
+  // Every project is placed in an organization unit at creation, so seed one first.
+  // A top-level unit must be a business_entity per the org-unit hierarchy.
+  console.log('  ' + cli(['host', 'unit', 'create', '--slug', 'demo-co', '--kind', 'business_entity']).replace(/\s+/g, ' '));
+  console.log('  ' + cli(['host', 'project', 'create', '--id', 'demo', '--unit', 'demo-co']).replace(/\s+/g, ' '));
+  // A token carries NO permissions of its own — it acts as its OWNER's live
+  // permission. Seed the owner's read+write assignment, then mint their token.
+  console.log('  ' + cli(['host', 'permission', 'set', '--user', 'ci-agent', '--capability', 'project:read', '--project', 'demo']).replace(/\s+/g, ' '));
+  console.log('  ' + cli(['host', 'permission', 'set', '--user', 'ci-agent', '--capability', 'project:write', '--project', 'demo']).replace(/\s+/g, ' '));
+  const key = (cli(['host', 'key', 'mint', '--project', 'demo', '--owner', 'ci-agent']).match(/wk_[a-f0-9]+/) || [])[0];
   ok(!!key, `minted key ${key ? key.slice(0, 12) + '…' : '(none!)'}`);
   ok(existsSync(specPath), 'isolated .wai/ tree provisioned');
 

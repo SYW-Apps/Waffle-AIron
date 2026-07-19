@@ -1,0 +1,87 @@
+id: ishare_admin_orchestrator
+name: Share Admin Orchestrator Interface
+description: >-
+  Owner-side share-link workflows on the authenticated web surface, resolver-gated on the
+  share:create capability over the target's scope. Mint/disable/permission changes are audited at
+  security level; the raw token is returned to the creator exactly once and never stored.
+component: share_admin_orchestrator
+methods:
+  - name: createShareLink
+    description: >-
+      Require share:create over the target's project scope; capture the snapshot; mint a 256-bit
+      token; persist the record with ONLY the token's salted hash; audit the mint at security level;
+      return the raw token exactly once plus the stored record.
+    signature: 'createShareLink(sessionId: string, input: ShareLinkInput): ShareLinkCreated'
+    returns: ShareLinkCreated
+    params:
+      - name: sessionId
+        type: string
+      - name: input
+        type: ShareLinkInput
+    guarantees:
+      - atomic
+  - name: refreshSnapshot
+    description: >-
+      Require share:create over the link's scope; re-capture the view into a new immutable snapshot
+      and repoint the link at it (the old snapshot is retired); audit.
+    signature: 'refreshSnapshot(sessionId: string, linkId: string): ShareLink'
+    returns: ShareLink
+    params:
+      - name: sessionId
+        type: string
+      - name: linkId
+        type: string
+  - name: updateShareLink
+    description: >-
+      Require share:create over the link's scope; apply the mutable settings (enabled, expiry,
+      download permissions, embedding allowlist); audit a permission/enabled change at security
+      level.
+    signature: 'updateShareLink(sessionId: string, linkId: string, changes: ShareLinkUpdate): ShareLink'
+    returns: ShareLink
+    params:
+      - name: sessionId
+        type: string
+      - name: linkId
+        type: string
+      - name: changes
+        type: ShareLinkUpdate
+    guarantees:
+      - atomic
+  - name: removeShareLink
+    description: >-
+      Require share:create over the link's scope; delete the link (and its captured snapshot); audit
+      the revocation at security level.
+    signature: 'removeShareLink(sessionId: string, linkId: string): void'
+    returns: void
+    params:
+      - name: sessionId
+        type: string
+      - name: linkId
+        type: string
+  - name: listShareLinks
+    description: >-
+      Require share:create over the project scope; list the project's share links (records only —
+      never a raw token).
+    signature: 'listShareLinks(sessionId: string, projectId: string): ShareLink[]'
+    returns: ShareLink[]
+    params:
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
+  - name: getShareAccessLog
+    description: >-
+      Require share:create over the link's scope; return the link's recent access entries (IP /
+      user-agent / referer / outcome) for anomaly review.
+    signature: 'getShareAccessLog(sessionId: string, linkId: string, limit: number): ShareAccessEntry[]'
+    returns: ShareAccessEntry[]
+    params:
+      - name: sessionId
+        type: string
+      - name: linkId
+        type: string
+      - name: limit
+        type: number
+status: complete
+createdAt: '2026-07-17T22:30:21.126Z'
+updatedAt: '2026-07-18T10:10:39.494Z'

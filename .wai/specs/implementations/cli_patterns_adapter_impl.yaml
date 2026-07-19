@@ -1,0 +1,24 @@
+id: cli_patterns_adapter_impl
+name: CLI Patterns Adapter Implementation
+description: >-
+  The `wairon patterns list` command in src/commands/patterns.ts. Reads pack-declared pattern
+  definitions via the core portal.
+contract: icli_patterns_adapter
+sourcePath: src/commands/patterns.ts
+methods:
+  - name: listPatterns
+    narrative:
+      - stepNumber: 1
+        description: Load the merged extension set via the core portal.
+        type: call
+        targetComponent: core_portal
+        targetMethod: loadProjectExtensions
+      - stepNumber: 2
+        description: >-
+          Print each reusable pattern definition: id, version, description, and the source pack that
+          declares it.
+        type: local
+detail: calls-only
+status: complete
+createdAt: '2026-07-14T20:10:09.297Z'
+updatedAt: '2026-07-14T20:23:49.552Z'

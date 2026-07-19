@@ -1,0 +1,43 @@
+id: share_snapshot_specialist_impl
+name: Share Snapshot Specialist Implementation
+description: Freezes a project view into an immutable snapshot payload set via the core + surfaces adapters.
+contract: ishare_snapshot_specialist
+sourcePath: src/server/sharesnapshots.ts
+methods:
+  - name: captureSnapshot
+    narrative:
+      - stepNumber: 1
+        description: Start an empty snapshot payload set stamped with the project id, view, and capture time.
+        type: local
+      - stepNumber: 2
+        description: Render the bound project's view into the canvas-model payload the shared engine renders.
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: renderDiagram
+      - stepNumber: 3
+        description: An HTML export was requested for this link.
+        type: branch
+        condition: artifacts includes 'html'
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Render the standalone self-contained HTML export payload.
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: renderDiagram
+      - stepNumber: 5
+        description: An OpenAPI document was requested for this link.
+        type: branch
+        condition: artifacts includes 'openapi'
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Project the OpenAPI document payload at the shared audience ceiling.
+        type: call
+        targetComponent: host_surfaces_adapter
+        targetMethod: exportBoundSurface
+      - stepNumber: 7
+        description: The immutable snapshot payload set, ready to persist.
+        type: return
+        outcome: snapshot
+status: complete
+createdAt: '2026-07-18T09:30:49.067Z'
+updatedAt: '2026-07-18T10:10:41.032Z'

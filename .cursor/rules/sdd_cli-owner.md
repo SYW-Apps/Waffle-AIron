@@ -12,18 +12,26 @@ You own and decide on everything within:
 .wai/specs/subsystems/sdd_cli.yaml
 .wai/specs/components/cli_core_adapter.yaml
 .wai/specs/components/cli_host_adapter.yaml
+.wai/specs/components/cli_packs_adapter.yaml
+.wai/specs/components/cli_patterns_adapter.yaml
 .wai/specs/components/cli_producer_adapter.yaml
+.wai/specs/components/cli_rules_adapter.yaml
 .wai/specs/components/cli_runner.yaml
 .wai/specs/components/cli_skills_adapter.yaml
 .wai/specs/components/cli_surfaces_client_adapter.yaml
 .wai/specs/components/cli_validator_adapter.yaml
+.wai/specs/components/cli_variants_adapter.yaml
 src/commands/subsystem.ts
 src/commands/host.ts
+src/commands/packs.ts
+src/commands/patterns.ts
 src/commands/produce.ts
+src/commands/rules.ts
 src/cli/index.ts
 src/commands/skills.ts
 src/commands/surface.ts
 src/commands/validate.ts
+src/commands/variants.ts
 ```
 
 ## Responsibilities
@@ -47,6 +55,8 @@ delegate downward rather than holding it all yourself:
   `wairon generate` inside the subproject directory to materialize its layer.
 * Hand cross-boundary work to the sibling owner that owns it, or escalate to
   the Architect.
+
+
 
 ## Spec-Driven Development (SDD)
 * Follow the **sdd-implement** and **sdd-narrative** skills (installed in your tool's skills directory).

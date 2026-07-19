@@ -29,6 +29,12 @@ import { buildDrawioXml, buildExcalidrawScene } from './diagram-export.js';
 // (micro-layered). "Externals" shows ghost references to out-of-scope
 // dependencies. Per-view layout rearrangements persist in localStorage.
 //
+// SCOPE NOTE (deliberate, revisit in the canvas-engine epic): the model
+// projects structure + contracts + flow. Newer component-level semantics —
+// durability, emits/subscribesTo event topology, ext maps, method effect
+// tags, type invariants, narrative step labels — are NOT projected yet;
+// omitting a field here means "not visualized", never "not persisted".
+//
 // ---------------------------------------------------------------------------
 
 export interface CanvasModel {
@@ -57,6 +63,9 @@ export interface CanvasModel {
     portalType?: string;
     status?: string;
     public: boolean;
+    /** The L0 gateway entry id this component backs (the OpenAPI operation tag),
+     *  present only for a component published in the system's public surface. */
+    apiTag?: string;
     owner?: string;
     owns: string[];
     dependsOn: string[];
@@ -94,6 +103,10 @@ export interface CanvasModel {
         catches?: { error: string; step: number }[];
         fin?: number;
         to?: number;
+        /** parallel: arm entry steps (contiguous ordered sub-regions of the body). */
+        branches?: { step: number; name?: string }[];
+        /** call/dispatch: fire-and-forget — failure does not propagate to this flow. */
+        detach?: boolean;
         outcome?: string;
         err?: string;
       }[];
@@ -137,6 +150,13 @@ export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
     for (const pi of sub.publicInterfaces) {
       if (pi.component) publicComponents.add(pi.component);
     }
+  }
+  // The combined project OpenAPI tags each operation with its L0 gateway entry id.
+  // Map the backing component → that tag so a portal's "View OpenAPI" can deep-link
+  // straight to its section of the combined spec.
+  const apiTagOf = new Map<string, string>();
+  for (const pi of system?.publicInterfaces ?? []) {
+    if (pi.component && pi.id) apiTagOf.set(pi.component, pi.id);
   }
 
   const ownerOf = new Map<string, string>();
@@ -182,6 +202,10 @@ export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
             ...(s.catches && s.catches.length ? { catches: s.catches } : {}),
             ...(s.finallyStep !== undefined ? { fin: s.finallyStep } : {}),
             ...(s.toStep !== undefined ? { to: s.toStep } : {}),
+            ...(s.branches && s.branches.length
+              ? { branches: s.branches.map(b => ({ step: b.step, ...(b.name ? { name: b.name } : {}) })) }
+              : {}),
+            ...(s.detach ? { detach: true } : {}),
             ...(s.outcome ? { outcome: s.outcome } : {}),
             ...(s.error ? { err: s.error } : {}),
           })),
@@ -197,6 +221,7 @@ export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
       ...(comp.portalType ? { portalType: comp.portalType } : {}),
       ...(comp.status ? { status: comp.status } : {}),
       public: publicComponents.has(comp.id),
+      ...(apiTagOf.has(comp.id) ? { apiTag: apiTagOf.get(comp.id) } : {}),
       ...(ownerOf.has(comp.id) ? { owner: ownerOf.get(comp.id) } : {}),
       owns: comp.owns.filter(o => componentIds.has(o)),
       dependsOn: comp.dependsOn,
@@ -460,10 +485,19 @@ body[data-theme="light"] {
   --card: #f7fafc;
   --danger: #c22f3e; --warn: #9a6a00;
 }
-body { margin:0; background:var(--bg); color:var(--ink); font:13px/1.45 "Inter", system-ui, "Segoe UI", sans-serif; overflow:hidden; }
+body { margin:0; position:relative; background:var(--bg); color:var(--ink); font:13px/1.45 "Inter", system-ui, "Segoe UI", sans-serif; overflow:hidden; }
 body[data-theme="syw"] { background-image: var(--syw-deep-space); background-attachment: fixed; }
 
-header { display:flex; align-items:center; gap:10px; padding:0 14px; height:52px; background:var(--chrome); border-bottom:1px solid var(--chrome-border); position:relative; z-index:20; }
+/* Floating header: the toolbar hovers over a FULL-BLEED canvas (blueprint-
+   designer style) instead of reserving a solid top bar. It anchors to the body
+   (position:relative there) and yields to the details panel when that is open. */
+header { display:flex; align-items:center; gap:10px; padding:0 14px; height:52px; background:var(--chrome); border:1px solid var(--chrome-border); border-radius:12px; box-shadow:var(--syw-deep-shadow); position:absolute; top:10px; left:12px; right:12px; z-index:20; overflow-x:auto; scrollbar-width:thin; }
+body:not(.panel-closed) header { right:calc(var(--panel-width, 380px) + 19px); }
+/* Responsive overflow: on a narrow header the toolbar buttons must stay
+   REACHABLE (scroll) rather than wrapping off the right edge. Groups keep their
+   own shape; nothing shrinks below its content width. */
+header > * { flex:0 0 auto; }
+header .toolbar, header .tabs, header .grp { display:flex; align-items:center; gap:6px; flex:0 0 auto; }
 header .brand { font-weight:800; font-size:17px; letter-spacing:.02em; }
 #crumbs { display:flex; align-items:center; gap:4px; max-width:34vw; overflow-x:auto; white-space:nowrap; scrollbar-width:thin; }
 #crumbs .crumb { border:none; background:transparent; color:var(--dim); cursor:pointer; font:inherit; font-size:12.5px; padding:4px 7px; border-radius:7px; }
@@ -484,11 +518,24 @@ header input[type="search"]::placeholder { color:var(--dim); }
 .seg button.active { background:var(--accent); color:#fff; font-weight:700; }
 
 .dropdown { position:relative; }
-.dropdown .menu { display:none; position:absolute; right:0; top:calc(100% + 6px); background:var(--chrome); border:1px solid var(--chrome-border); border-radius:10px; box-shadow:var(--syw-deep-shadow); min-width:200px; padding:6px; z-index:120; }
-.dropdown.open .menu { display:block; }
+/* Fixed (viewport-anchored) + JS-positioned on open, so the menu overlays the
+   whole page and is NEVER clipped by the header's overflow-x:auto (or, in the
+   embedded canvas, the app's scroll container) — which would otherwise trap it
+   inside the canvas and force a scrollbar. Position is set in wireDropdown. */
+.dropdown .menu { display:none; position:fixed; max-height:calc(100vh - 80px); overflow-y:auto; background:var(--chrome); border:1px solid var(--chrome-border); border-radius:10px; box-shadow:var(--syw-deep-shadow); min-width:200px; padding:6px; z-index:120; }
+/* Child combinator, deliberately: a dropdown moved INTO the "⋯" overflow menu
+   must not auto-open when the More dropdown opens (a descendant selector would
+   match every nested menu under .dropdown.open). */
+.dropdown.open > .menu { display:block; }
 .dropdown .menu button { display:block; width:100%; text-align:left; border:none; background:transparent; color:var(--ink); padding:8px 10px; border-radius:7px; cursor:pointer; font:inherit; font-size:12.5px; }
 .dropdown .menu button:hover { background:var(--hover-bg); }
 .dropdown .menu .hint { display:block; color:var(--dim); font-size:10.5px; }
+/* Header controls collapsed into the "⋯" overflow menu: whole items (buttons
+   or nested dropdowns) stack vertically; a nested dropdown's own menu still
+   opens fixed-positioned over the page. */
+#moreMenu .dropdown { display:block; width:100%; }
+#moreMenu .dropdown > .tbtn, #moreMenu > .tbtn { display:block; width:100%; text-align:left; border:none; background:transparent; margin:2px 0; }
+#moreMenu .dropdown > .tbtn:hover, #moreMenu > .tbtn:hover { background:var(--hover-bg); }
 
 /* Settings panel — toggle switches */
 .settings-menu { min-width:266px; }
@@ -510,13 +557,16 @@ body[data-theme="light"] .selectControl { color-scheme:light; }
 .toggle input:checked + .track { background:var(--accent); border-color:var(--accent); }
 .toggle input:checked + .track::after { transform:translateX(16px); background:#fff; }
 
-#wrap { display:flex; height:calc(100vh - 52px); }
+#wrap { display:flex; height:100vh; }
 #stage { flex:1; min-width:0; position:relative; }
 #cy { position:absolute; inset:0; }
 .legend { position:absolute; left:12px; bottom:12px; background:var(--chrome); border:1px solid var(--chrome-border); border-radius:10px; padding:8px 12px; font-size:11px; color:var(--dim); z-index:5; pointer-events:none; }
 .legend .sw { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; vertical-align:-1px; border:1.5px solid; }
-.viewhint { position:absolute; top:10px; left:12px; color:var(--dim); font-size:11px; background:var(--chrome); border:1px solid var(--chrome-border); border-radius:9px; padding:5px 10px; z-index:5; pointer-events:none; }
-#typesWarn { position:absolute; top:10px; left:50%; transform:translateX(-50%); color:var(--ink); font-size:12px; background:var(--chrome); border:1px solid var(--warn); border-radius:9px; padding:6px 12px; z-index:6; max-width:72vw; box-shadow:var(--syw-deep-shadow); display:none; }
+/* Stage overlays clear the floating header (52px + 10px top + 10px gap). The
+   header hides in presentation mode, where they return to the top edge. */
+.viewhint { position:absolute; top:72px; left:12px; color:var(--dim); font-size:11px; background:var(--chrome); border:1px solid var(--chrome-border); border-radius:9px; padding:5px 10px; z-index:5; pointer-events:none; }
+body.presentation .viewhint { top:10px; }
+#typesWarn { position:absolute; top:72px; left:50%; transform:translateX(-50%); color:var(--ink); font-size:12px; background:var(--chrome); border:1px solid var(--warn); border-radius:9px; padding:6px 12px; z-index:6; max-width:72vw; box-shadow:var(--syw-deep-shadow); display:none; }
 #typesWarn button { margin-left:8px; }
 
 #panelResizer { flex:0 0 7px; cursor:col-resize; background:var(--chrome); border-left:1px solid var(--chrome-border); border-right:1px solid var(--line); z-index:11; position:relative; }
@@ -551,17 +601,36 @@ body:not(.panel-closed) #panelToggle { background:var(--accent); color:#fff; bor
 #panel .issue.warning { border-left-color:var(--warn); }
 #panel .issue code { font-size:10.5px; color:var(--dim); }
 
-body.presentation header, body.presentation #panel, body.presentation .legend { display:none; }
-body.presentation #panelResizer { display:none; }
+/* Presentation mode = the canvas page, focused: the header chrome and legend
+   are hidden, but the details panel stays TOGGLE-ABLE (the current settings are
+   still applied). It does NOT force browser fullscreen (F11) — exiting is one
+   step, not two. */
+body.presentation header, body.presentation .legend { display:none; }
+/* Embed mode (?_embed=true): the canvas is rendered inside the wairon web app's
+   own chrome, so its redundant brand mark is hidden — the interactive toolbar
+   (views, search, settings) stays. Keeps the iframe from showing a second logo. */
+body.embed header .brand { display:none; }
+/* Embedded in the web UI: the app owns the brand + theme, so hide the canvas's
+   own brand mark and Theme toggle (the host drives the canvas theme). */
+body.embed #themeBtn { display:none; }
+/* The details panel hides by default in presentation, but the floating details
+   toggle brings it back without leaving presentation mode. */
+body.presentation #panel, body.presentation #panelResizer { display:none; }
+body.presentation.show-details #panel { display:block; }
+body.presentation.show-details #panelResizer { display:block; }
 body.presentation #wrap { height:100vh; }
-#exitPresent { display:none; position:fixed; top:10px; right:10px; z-index:100; border:1px solid var(--chrome-border); background:var(--chrome); color:var(--ink); border-radius:9px; padding:7px 13px; cursor:pointer; opacity:0.06; transition:opacity .15s ease; font:inherit; }
-#exitPresent:hover { opacity:1; box-shadow:var(--syw-glow); }
-body.presentation #exitPresent { display:block; }
+#exitPresent, #presentDetails { display:none; position:fixed; top:10px; z-index:100; border:1px solid var(--chrome-border); background:var(--chrome); color:var(--ink); border-radius:9px; padding:7px 13px; cursor:pointer; opacity:0.06; transition:opacity .15s ease; font:inherit; }
+#exitPresent { right:10px; }
+#presentDetails { right:190px; }
+#exitPresent:hover, #presentDetails:hover { opacity:1; box-shadow:var(--syw-glow); }
+body.presentation #exitPresent, body.presentation #presentDetails { display:block; }
 
 @media (max-width: 860px) {
   #wrap { position:relative; }
   #panel { position:absolute; top:0; right:0; bottom:0; width:min(var(--panel-width, 360px), calc(100vw - 44px)); flex-basis:auto; box-shadow:var(--syw-deep-shadow); }
   #panelResizer { position:absolute; top:0; bottom:0; right:min(var(--panel-width, 360px), calc(100vw - 44px)); width:7px; flex-basis:auto; box-shadow:-3px 0 10px rgba(0,0,0,.18); }
+  /* The panel overlays the stage here, so the floating header keeps full width. */
+  body:not(.panel-closed) header { right:12px; }
 }
 
 #flowModal { display:none; position:fixed; inset:0; background:rgba(4,6,12,0.6); backdrop-filter:blur(3px); z-index:80; align-items:center; justify-content:center; }
@@ -576,12 +645,14 @@ body.presentation #exitPresent { display:block; }
 #flowModal.steps #flowSteps { display:block; }
 #flowSteps .fstep { border:1px solid var(--line); border-radius:9px; background:var(--card); padding:9px 12px; margin:8px 0; font-size:12.5px; }
 #flowSteps .fstep .num { display:inline-block; min-width:22px; font-weight:700; color:var(--accent); }
-#flowSteps .fstep .call { color:var(--accent); cursor:pointer; text-decoration:underline dotted; }
+#flowSteps .fstep .call { color:var(--dim); }
+#flowSteps .fstep .call.drillstep { color:var(--accent); cursor:pointer; text-decoration:underline; }
+#flowSteps .fstep .call.drillstep:hover { opacity:.82; }
 #flowModal .hintbar { padding:6px 14px; color:var(--dim); font-size:11px; border-top:1px solid var(--line); }
 </style>
 </head>
 <body data-theme="syw">
-<header>
+<header id="hdr">
   <span class="brand syw-gradient-text">wairon</span>
   <div class="seg" id="modeSeg" title="Switch between the component architecture, the type ERD, or the database schemas">
     <button data-vm="components" class="active">Components</button>
@@ -655,6 +726,10 @@ body.presentation #exitPresent { display:block; }
   </div>
   <button class="tbtn" id="themeBtn" title="Toggle theme">◐ Theme</button>
   <button class="tbtn" id="presentBtn" title="Presentation mode (hides menus)">⛶ Present</button>
+  <div class="dropdown" id="moreDd" style="display:none">
+    <button class="tbtn" id="moreBtn" title="More options">⋯</button>
+    <div class="menu" id="moreMenu"></div>
+  </div>
 </header>
 <div id="wrap">
   <div id="stage">
@@ -666,6 +741,7 @@ body.presentation #exitPresent { display:block; }
   <div id="panelResizer" title="Drag to resize details sidebar"></div>
   <div id="panel"></div>
 </div>
+<button id="presentDetails">Details</button>
 <button id="exitPresent">✕ Exit presentation</button>
 <div id="flowModal">
   <div class="box">
@@ -706,6 +782,12 @@ var MODEL = __MODEL_JSON__;
   var store = (typeof localStorage !== 'undefined') ? localStorage : null;
   var inBrowser = (typeof window !== 'undefined');
   var STORE_KEY = 'wairon:canvas2:' + MODEL.system.name;
+
+  // Embed mode: when the canvas is iframed inside the wairon web app
+  // (?_embed=true), hide its own brand mark so the app's chrome isn't doubled.
+  if (inBrowser && document.body && new URLSearchParams(window.location.search).get('_embed') === 'true') {
+    document.body.classList.add('embed');
+  }
 
   // ---- indexes -------------------------------------------------------------
   var compById = {};
@@ -822,7 +904,7 @@ var MODEL = __MODEL_JSON__;
     query: '',
     selected: null,
     selectedKind: null,
-    theme: saved.theme === 'light' ? 'light' : 'syw',
+    theme: (typeof opts !== 'undefined' && opts && opts.theme) ? (opts.theme === 'light' ? 'light' : 'syw') : (saved.theme === 'light' ? 'light' : 'syw'),
     typesDetail: ['full', 'fields', 'keys', 'names'].indexOf(saved.typesDetail) >= 0 ? saved.typesDetail : 'full',
     typesRenderAll: false,
     layout: ['layered', 'force', 'concentric', 'grid'].indexOf(saved.layout) >= 0 ? saved.layout : 'layered',
@@ -2387,6 +2469,14 @@ var MODEL = __MODEL_JSON__;
   cy.on('dbltap', 'node', function (ev) {
     var t = idOf(ev.target);
     if (t.proxy || t.group) return;
+    // Optional host hook (web UI): double-clicking a leaf component node hands the
+    // id back to the embedder (e.g. the environment view opens that project's
+    // canvas). The opts object only exists when the engine is mounted as a module;
+    // in the standalone export it is undefined, so this is inert there.
+    if (typeof opts !== 'undefined' && opts && opts.onNodeOpen && t.kind === 'component') {
+      opts.onNodeOpen('component', t.id);
+      return;
+    }
     if (t.cluster) { navigateTo('types', t.id); return; }
     if (t.kind === 'type') {
       // Double-clicking an FK field row jumps to the referenced type.
@@ -2513,24 +2603,45 @@ var MODEL = __MODEL_JSON__;
     persist();
   });
 
+  // Presentation mode is CSS-only — it does NOT trigger browser F11 fullscreen,
+  // so exiting is a single step (the ✕ button), not "exit F11 then exit
+  // presentation". The details panel stays reachable via a floating toggle, so
+  // presentation is "the canvas focused with the current settings", not a
+  // stripped view.
   function setPresentation(on) {
-    if (document.body.classList) document.body.classList[on ? 'add' : 'remove']('presentation');
-    if (inBrowser) {
-      try {
-        if (on && document.documentElement && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
-        else if (!on && document.exitFullscreen && document.fullscreenElement) document.exitFullscreen();
-      } catch (e) { /* fullscreen unavailable */ }
+    if (document.body.classList) {
+      document.body.classList[on ? 'add' : 'remove']('presentation');
+      if (!on) document.body.classList.remove('show-details');
     }
     setTimeout(function () { cy.resize(); cy.fit(undefined, 40); }, 60);
   }
   document.getElementById('presentBtn').addEventListener('click', function () { setPresentation(true); });
   document.getElementById('exitPresent').addEventListener('click', function () { setPresentation(false); });
+  document.getElementById('presentDetails').addEventListener('click', function () {
+    if (document.body.classList) document.body.classList.toggle('show-details');
+    setTimeout(function () { cy.resize(); cy.fit(undefined, 40); }, 60);
+  });
 
+  // Anchor a fixed dropdown menu just under its button, right-aligned, clamped to
+  // the viewport. Fixed positioning means it floats over the whole page and is
+  // never clipped by the header's overflow (or the embedded canvas's scroll box).
+  function positionDropdownMenu(dd, btn) {
+    var menu = dd.querySelector ? dd.querySelector('.menu') : null;
+    if (!menu || !btn.getBoundingClientRect || typeof window === 'undefined') return;
+    var r = btn.getBoundingClientRect();
+    menu.style.top = (r.bottom + 6) + 'px';
+    menu.style.left = 'auto';
+    menu.style.right = Math.max(6, window.innerWidth - r.right) + 'px';
+  }
   function wireDropdown(ddId, btnId) {
     var dd = document.getElementById(ddId);
-    document.getElementById(btnId).addEventListener('click', function (ev) {
+    var btn = document.getElementById(btnId);
+    btn.addEventListener('click', function (ev) {
       if (ev && ev.stopPropagation) ev.stopPropagation();
-      if (dd.classList) dd.classList.toggle('open');
+      if (!dd.classList) return;
+      var opening = !dd.classList.contains('open');
+      dd.classList.toggle('open');
+      if (opening) positionDropdownMenu(dd, btn);
     });
     return dd;
   }
@@ -2538,6 +2649,7 @@ var MODEL = __MODEL_JSON__;
   var fdd = wireDropdown('flowExportDd', 'flowExportBtn');
   var ldd = wireDropdown('layoutDd', 'layoutBtn');
   var sdd = wireDropdown('settingsDd', 'settingsBtn');
+  var mdd = wireDropdown('moreDd', 'moreBtn');
   // Keep the settings panel open while flipping switches (clicks inside it don't
   // bubble to the document-level close handler).
   (function () {
@@ -2572,6 +2684,7 @@ var MODEL = __MODEL_JSON__;
       if (fdd.classList) fdd.classList.remove('open');
       if (ldd.classList) ldd.classList.remove('open');
       if (sdd.classList) sdd.classList.remove('open');
+      if (mdd && mdd.classList) mdd.classList.remove('open');
     });
     document.addEventListener('keydown', function (ev) {
       if (ev.key === 'Escape') {
@@ -2582,6 +2695,97 @@ var MODEL = __MODEL_JSON__;
       }
     });
   }
+
+  // ── Responsive header overflow → "⋯" dropdown ─────────────────────────────
+  // When the floating header no longer fits its controls, trailing items
+  // COLLAPSE into the More menu instead of relying on horizontal scroll —
+  // every control stays one click away. Whole items move (listeners survive
+  // reparenting); a hidden placeholder pins each item's original position so
+  // restoring keeps the exact order. Collapse order = least-used first.
+  (function () {
+    if (typeof window === 'undefined') return;
+    var hdr = document.getElementById('hdr');
+    var moreDd = document.getElementById('moreDd');
+    var moreMenu = document.getElementById('moreMenu');
+    if (!hdr || !moreDd || !moreMenu || !hdr.getBoundingClientRect) return;
+    // Collapse order = least-used first. A dropdown trigger moves with its
+    // WRAPPER (the .dropdown div) so its own menu keeps working from the More
+    // menu (menus are fixed-positioned at the trigger's rect).
+    var COLLAPSE = ['themeBtn', 'resetBtn', 'exportBtn', 'layoutBtn', 'presentBtn', 'fitBtn', 'panelToggle'];
+    var markers = {};
+    function movableFor(id) {
+      var el = document.getElementById(id);
+      if (!el) return null;
+      var p = el.parentNode;
+      if (p && p.className && String(p.className).indexOf('dropdown') >= 0 && p !== moreMenu) return p;
+      return el;
+    }
+    function markerFor(id, el) {
+      if (!markers[id]) {
+        var m = document.createElement('span');
+        m.style.display = 'none';
+        el.parentNode.insertBefore(m, el);
+        markers[id] = m;
+      }
+      return markers[id];
+    }
+    var collapsed = [];
+    // True content overflow in px, measured with FRACTIONAL rect precision:
+    // scrollWidth/clientWidth are rounded integers and scrollWidth never reads
+    // below clientWidth, so a sub-pixel overflow that still paints a scrollbar
+    // is invisible to them. Positive = overflowing; negative = headroom.
+    function overflowPx() {
+      var box = hdr.getBoundingClientRect();
+      var edge = box.left;
+      for (var c = hdr.firstElementChild; c; c = c.nextElementSibling) {
+        var cr = c.getBoundingClientRect();
+        if (cr.width > 0 && cr.right > edge) edge = cr.right;
+      }
+      return edge - (box.right - 14); // 14 = the header's right padding
+    }
+    function reflow() {
+      // Not laid out (hidden tab, non-browser DOM) — measuring would misfire.
+      var box = hdr.getBoundingClientRect();
+      if (!box || box.width <= 0) return;
+      // Restore everything, then collapse until the row fits (idempotent).
+      for (var i = collapsed.length - 1; i >= 0; i--) {
+        var it = collapsed[i];
+        if (it.el && it.marker && it.marker.parentNode) it.marker.parentNode.insertBefore(it.el, it.marker);
+      }
+      collapsed = [];
+      moreDd.style.display = 'none';
+      hdr.scrollLeft = 0;
+      var guard = 0;
+      // Demand a few px of headroom, not a bare fit — the marginal-fit widths
+      // are exactly where the phantom scrollbar appeared.
+      while (overflowPx() > -8 && guard < COLLAPSE.length) {
+        var id = COLLAPSE[guard++];
+        var el = movableFor(id);
+        if (!el || el === moreDd || el.parentNode === moreMenu) continue;
+        var m = markerFor(id, el);
+        // A dropdown moved while open would strand its fixed-positioned menu.
+        if (el.classList) el.classList.remove('open');
+        moreDd.style.display = '';
+        moreMenu.appendChild(el);
+        collapsed.push({ el: el, marker: m });
+      }
+      if (collapsed.length === 0) moreDd.style.display = 'none';
+    }
+    var raf = null;
+    var defer = window.requestAnimationFrame
+      ? window.requestAnimationFrame.bind(window)
+      : window.setTimeout.bind(window);
+    function schedule() {
+      if (raf !== null) return;
+      raf = defer(function () { raf = null; reflow(); });
+    }
+    if (typeof ResizeObserver !== 'undefined') {
+      new ResizeObserver(schedule).observe(hdr);
+    } else if (window.addEventListener) {
+      window.addEventListener('resize', schedule);
+    }
+    schedule();
+  })();
   function fileBase() {
     var scope = state.view.kind === 'types' ? 'types'
       : state.view.id ? state.view.id.replace(/::/g, '-') : 'system';
@@ -2669,6 +2873,34 @@ var MODEL = __MODEL_JSON__;
     }
     return null;
   }
+  // Intent prose (the detail dial's alternative to a step narrative).
+  function intentFor(compId, method) {
+    var c = compById[compId];
+    if (!c || !c.intents) return null;
+    for (var i = 0; i < c.intents.length; i++) {
+      if (c.intents[i].method === method) return c.intents[i].text;
+    }
+    return null;
+  }
+  // The method's L3 contract (signature/description/returns) if declared.
+  function methodInfo(compId, method) {
+    var c = compById[compId];
+    if (!c) return null;
+    for (var i = 0; i < c.interfaces.length; i++) {
+      var ms = c.interfaces[i].methods;
+      for (var j = 0; j < ms.length; j++) {
+        if (ms[j].name === method) return { intf: c.interfaces[i], m: ms[j] };
+      }
+    }
+    return null;
+  }
+  // A call target is "openable" when we can show SOMETHING for it: a step
+  // narrative, an intent paragraph, or at least its contract. This lets the user
+  // drill into intent-only / contract-only methods (see the explanation there),
+  // not just fully-narrated ones.
+  function openable(compId, method) {
+    return !!(narrativeFor(compId, method) || intentFor(compId, method) || methodInfo(compId, method));
+  }
   function flowTitle() {
     var top = flowStack[flowStack.length - 1];
     return top.comp + '.' + top.method;
@@ -2695,14 +2927,49 @@ var MODEL = __MODEL_JSON__;
     nums.forEach(function (n, i) { idx[n] = i; });
     function nextOf(n) { var i = idx[n]; return i !== undefined && i + 1 < nums.length ? nums[i + 1] : null; }
 
-    // Region depth (loop/try bodies) → indentation; loop body ends flow back
-    // to their header instead of falling through.
+    // Region depth (loop/try/parallel bodies) → indentation; loop body ends
+    // flow back to their header instead of falling through.
     var depth = {}, open = [], loopEnd = {};
     steps.forEach(function (s) {
       while (open.length && open[open.length - 1] < s.n) open.pop();
       depth[s.n] = open.length;
-      if ((s.kind === 'loop' || s.kind === 'try') && s.end !== undefined) open.push(s.end);
+      if ((s.kind === 'loop' || s.kind === 'try' || s.kind === 'parallel') && s.end !== undefined) open.push(s.end);
       if (s.kind === 'loop' && s.end !== undefined) loopEnd[s.end] = s.n;
+    });
+
+    // Parallel fan-out/join: arms are contiguous ordered sub-regions of the
+    // body; an arm's LAST step continues at the region's JOIN bar (a virtual
+    // node, id 'j'+header), never into its neighbor arm. Built outermost-first
+    // (ascending header) so a nested parallel whose endStep is an outer arm
+    // end resolves its continuation through the outer mapping — mirrors the
+    // validator's stepGraph() fallNext generalization.
+    var joins = [];         // [{id, header, end, arms}] — virtual join-bar nodes
+    var virtualNode = {};   // non-step node ids (join bars, detached ghosts)
+    var armEndJoin = {};    // arm-end step → the join id it flows into
+    var joinCont = {};      // join id → what runs after the region (step or outer join)
+    function fallNext(n) { return armEndJoin[n] !== undefined ? armEndJoin[n] : nextOf(n); }
+    steps.forEach(function (p) {
+      if (p.kind !== 'parallel' || p.end === undefined || !(p.branches && p.branches.length >= 2)) return;
+      var jid = 'j' + p.n;
+      var pEntries = p.branches.map(function (b) { return b.step; }).sort(function (a, b) { return a - b; });
+      joinCont[jid] = fallNext(p.end);
+      joins.push({ id: jid, header: p.n, end: p.end, arms: pEntries.length });
+      virtualNode[jid] = 1;
+      for (var ai = 0; ai < pEntries.length; ai++) {
+        var armEnd = ai + 1 < pEntries.length ? prevOf(pEntries[ai + 1]) : p.end;
+        if (armEnd !== null && armEnd >= pEntries[ai]) armEndJoin[armEnd] = jid;
+      }
+    });
+
+    // Detached (fire-and-forget) calls: the callee hangs OFF the flow as a
+    // ghost node reached by a dashed open arrow, while the caller's own lane
+    // continues immediately — failure does not propagate back.
+    var detached = [];
+    steps.forEach(function (s) {
+      if (!s.detach || !(s.kind === 'call' || s.kind === 'dispatch') || !s.call) return;
+      var did = 'd' + s.n;
+      detached.push({ id: did, from: s.n, comp: s.call.component, method: s.call.method });
+      virtualNode[did] = 1;
     });
 
     // Lanes: structured-flowchart X assignment. Loop/try bodies, branch
@@ -2742,34 +3009,51 @@ var MODEL = __MODEL_JSON__;
           if (endN !== null && endN >= cs) shiftSpan(cs, endN, ci + 1);
         });
       }
+      if (s.kind === 'parallel' && s.end !== undefined && s.branches && s.branches.length >= 2) {
+        // One lane per arm: arm 0 stays under the fan-out bar; each further
+        // arm shifts into its own lane, side by side (like case blocks).
+        var armStarts = s.branches.map(function (b) { return b.step; })
+          .filter(function (n2) { return byN[n2]; })
+          .sort(function (a, b) { return a - b; });
+        armStarts.forEach(function (as2, ai) {
+          if (ai === 0) return;
+          var aEnd = ai + 1 < armStarts.length ? prevOf(armStarts[ai + 1]) : s.end;
+          if (aEnd !== null && aEnd >= as2) shiftSpan(as2, aEnd, ai);
+        });
+      }
     });
     var lane = {};
     nums.forEach(function (n, i) { lane[n] = laneAdd[i]; });
 
     var edges = [];
-    function E(a, b, kind, label) { if (b !== null && b !== undefined && byN[b]) edges.push({ from: a, to: b, kind: kind, label: label || '' }); }
+    function E(a, b, kind, label) { if (b !== null && b !== undefined && (byN[b] || virtualNode[b])) edges.push({ from: a, to: b, kind: kind, label: label || '' }); }
     steps.forEach(function (s) {
       var n = s.n;
       switch (s.kind) {
         case 'branch':
-          E(n, s.onTrue !== undefined ? s.onTrue : nextOf(n), 'true', 'true');
+          E(n, s.onTrue !== undefined ? s.onTrue : fallNext(n), 'true', 'true');
           E(n, s.onFalse, 'false', 'false');
           break;
         case 'switch':
           (s.cases || []).forEach(function (cse) { E(n, cse.step, 'case', cse.value); });
-          E(n, s.defaultStep !== undefined ? s.defaultStep : nextOf(n), 'default', 'default');
+          E(n, s.defaultStep !== undefined ? s.defaultStep : fallNext(n), 'default', 'default');
           break;
         case 'loop':
           E(n, nextOf(n), 'enter', s.loopKind === 'doWhile' ? 'do' : '');
           if (s.end !== undefined) {
             E(s.end, n, 'back', s.loopKind === 'doWhile' ? 'while ' + (s.cond || '') : '\\u27F3');
-            E(n, nextOf(s.end), 'exit', 'done');
+            E(n, fallNext(s.end), 'exit', 'done');
           }
           break;
         case 'try':
           E(n, nextOf(n), 'seq');
           (s.catches || []).forEach(function (cc) { E(n, cc.step, 'error', cc.error); });
           if (s.fin !== undefined) E(n, s.fin, 'finally', 'finally');
+          break;
+        case 'parallel':
+          // Fan-out: the header bar forks to EVERY arm entry; the implicit
+          // join (all arms complete) is the virtual bar wired up below.
+          (s.branches || []).forEach(function (br) { E(n, br.step, 'fork', br.name || ''); });
           break;
         case 'jump':
           E(n, s.to, 'jump');
@@ -2778,10 +3062,16 @@ var MODEL = __MODEL_JSON__;
         case 'throw':
           break;
         default:
-          if (loopEnd[n] === undefined) E(n, nextOf(n), 'seq');
+          // Fall-through — except a loop body end (flows back to its header)
+          // and an arm end (flows into the join bar, never the neighbor arm).
+          if (loopEnd[n] === undefined) E(n, fallNext(n), armEndJoin[n] !== undefined ? 'join' : 'seq');
       }
     });
-    return { steps: steps, edges: edges, depth: depth, lane: lane, first: nums.length ? nums[0] : null };
+    // Join bars continue at the step after the region (or the outer join);
+    // detached ghosts hang off their firing step with an annotated open arrow.
+    joins.forEach(function (j) { E(j.id, joinCont[j.id], 'seq'); });
+    detached.forEach(function (d) { E(d.from, d.id, 'detached', 'detached'); });
+    return { steps: steps, edges: edges, depth: depth, lane: lane, first: nums.length ? nums[0] : null, joins: joins, detached: detached };
   }
 
   // "Hide error paths": drop everything only reachable through error edges —
@@ -2806,6 +3096,10 @@ var MODEL = __MODEL_JSON__;
       depth: graph.depth,
       lane: graph.lane,
       first: graph.first,
+      // Join bars and detached ghosts are NOT error paths — they survive the
+      // toggle whenever their region/firing step does.
+      joins: (graph.joins || []).filter(function (j) { return keep[j.id]; }),
+      detached: (graph.detached || []).filter(function (d) { return keep[d.id]; }),
     };
   }
 
@@ -2815,6 +3109,7 @@ var MODEL = __MODEL_JSON__;
       case 'switch': return s.n + '. \\u25C7 switch ' + (s.on || s.text);
       case 'loop': return s.n + '. \\u27F3 ' + (s.loopKind === 'doWhile' ? 'do' : (s.loopKind || 'forEach')) + (s.over ? ' ' + s.over : s.cond ? ' while ' + s.cond : '');
       case 'try': return s.n + '. \\u26E8 try \\u2014 ' + s.text;
+      case 'parallel': return s.n + '. \\u2225 ' + s.text;
       case 'jump': return s.n + '. \\u21B7 ' + s.text;
       case 'return': return s.n + '. \\u23CE return' + (s.outcome ? ' \\u2014 ' + s.outcome : '');
       case 'throw': return s.n + '. \\u26A1 throw' + (s.err ? ' ' + s.err : '');
@@ -2833,31 +3128,84 @@ var MODEL = __MODEL_JSON__;
 
     var eles = [];
     eles.push({ data: { id: 'start', label: (c ? c.name : top.comp) + '.' + top.method + '()', w: 280, h: 44, tw: 260 }, position: { x: 0, y: 0 }, classes: 'flowstart' });
+    var rowOf = {};
+    graph.steps.forEach(function (s2, i2) { rowOf[s2.n] = i2 + 1; });
+    var joinByHeader = {};
+    (graph.joins || []).forEach(function (j2) { joinByHeader[j2.header] = j2; });
     graph.steps.forEach(function (s, i) {
       var id = 'n' + s.n;
       var isCall = (s.kind === 'call' || s.kind === 'dispatch') && !!s.call;
-      var callable = isCall && !!narrativeFor(s.call.component, s.call.method);
+      // A detached call's target renders as a separate ghost node (below), so
+      // the step node itself stays plain and undrillable.
+      var isDetached = isCall && !!s.detach;
+      var callable = isCall && !isDetached && openable(s.call.component, s.call.method);
       var isCond = s.kind === 'branch' || s.kind === 'switch' || s.kind === 'loop';
-      var label = flowStepLabel(s) + (isCall ? '\\n\\u2192 ' + s.call.component + '.' + s.call.method + '()' + (callable ? '  \\u21B4' : '') : '');
+      var label = flowStepLabel(s) + (isCall && !isDetached ? '\\n\\u2192 ' + s.call.component + '.' + s.call.method + '()' + (callable ? '  \\u21B4' : '') : '');
       var cls = s.kind === 'branch' || s.kind === 'switch' ? 'flowcond'
         : s.kind === 'loop' ? 'flowloop'
         : s.kind === 'try' ? 'flowtry'
+        : s.kind === 'parallel' ? 'flowfork'
         : s.kind === 'return' ? 'flowend'
         : s.kind === 'throw' ? 'flowthrow'
         : s.kind === 'jump' ? 'flowjumpn'
         : isCall ? 'flowcall' : 'flowlocal';
+      // A parallel header renders as a fan-out BAR spanning its arm lanes
+      // (label above); its implicit join bar is added after the loop.
+      var jinfo = s.kind === 'parallel' ? joinByHeader[s.n] : undefined;
+      var laneN = graph.lane[s.n] || 0;
       eles.push({
         data: {
           id: id, label: label,
-          w: isCond ? 320 : 300, h: isCall ? 58 : isCond ? 64 : 46, tw: isCond ? 210 : 280,
+          w: jinfo ? 344 * (jinfo.arms - 1) + 320 : isCond ? 320 : 300,
+          h: jinfo ? 16 : isCall ? 58 : isCond ? 64 : 46,
+          tw: jinfo ? 344 * (jinfo.arms - 1) + 280 : isCond ? 210 : 280,
           callComp: isCall ? s.call.component : '', callMethod: isCall ? s.call.method : '',
         },
-        // Rows keep code order (Y); lanes give branches/cases their own
+        // Rows keep code order (Y); lanes give branches/cases/arms their own
         // column (X), wide enough that side-by-side nodes never overlap.
-        position: { x: (graph.lane[s.n] || 0) * 344, y: (i + 1) * 92 },
+        position: { x: jinfo ? (laneN + (jinfo.arms - 1) / 2) * 344 : laneN * 344, y: (i + 1) * 92 },
         classes: cls + (callable ? ' drill' : ''),
       });
     });
+    // Implicit join bars: one per parallel region, spanning the arm lanes just
+    // below the body's last row — all arms complete before flow continues.
+    (graph.joins || []).forEach(function (j) {
+      // A pruned/dangling endStep must not orphan the bar's edges — park it
+      // after the last kept row instead of dropping it.
+      var rEnd = rowOf[j.end] !== undefined ? rowOf[j.end] : graph.steps.length;
+      var laneJ = graph.lane[j.header] || 0;
+      var barW = 344 * (j.arms - 1) + 320;
+      eles.push({
+        data: { id: 'n' + j.id, label: 'join \\u2014 all ' + j.arms + ' arms', w: barW, h: 16, tw: barW - 40 },
+        position: { x: (laneJ + (j.arms - 1) / 2) * 344, y: rEnd * 92 + 46 },
+        classes: 'flowjoin',
+      });
+    });
+    // Detached-call ghosts: the callee sits OFF the flow lane, reached by a
+    // dashed open arrow labeled "detached" — failure does not propagate back.
+    (graph.detached || []).forEach(function (d) {
+      if (rowOf[d.from] === undefined) return;
+      var dCallable = openable(d.comp, d.method);
+      eles.push({
+        data: {
+          id: 'n' + d.id,
+          label: d.comp + '.' + d.method + '()' + (dCallable ? '  \\u21B4' : '') + '\\ndetached \\u2014 fire & forget',
+          w: 260, h: 52, tw: 240, callComp: d.comp, callMethod: d.method,
+        },
+        position: { x: ((graph.lane[d.from] || 0)) * 344 + 330, y: rowOf[d.from] * 92 },
+        classes: 'flowdetach' + (dCallable ? ' drill' : ''),
+      });
+    });
+    // No L5 narrative for the opened method: instead of an empty chart, show
+    // its intent paragraph (or contract description) as a single note node, so a
+    // drilled-in intent-only / contract-only method still explains itself.
+    if (!narrative) {
+      var noteText = intentFor(top.comp, top.method);
+      var miN = methodInfo(top.comp, top.method);
+      if (!noteText && miN) noteText = miN.m.description + (miN.m.returns ? '  \\u2192 returns ' + miN.m.returns : '');
+      eles.push({ data: { id: 'intentNote', label: noteText || 'No narrative or intent recorded for this method.', w: 380, h: 120, tw: 340 }, position: { x: 0, y: 120 }, classes: 'flowintent' });
+      eles.push({ data: { id: 'fe-intent', source: 'start', target: 'intentNote', lbl: '' } });
+    }
     if (graph.first !== null) eles.push({ data: { id: 'fe-start', source: 'start', target: 'n' + graph.first, lbl: '' } });
     graph.edges.forEach(function (e, i) {
       var cls = e.kind === 'error' ? 'fErr'
@@ -2865,6 +3213,9 @@ var MODEL = __MODEL_JSON__;
         : e.kind === 'false' ? 'fAlt'
         : e.kind === 'jump' || e.kind === 'finally' ? 'fJump'
         : e.kind === 'case' || e.kind === 'default' ? 'fAlt'
+        : e.kind === 'fork' ? 'fFork'
+        : e.kind === 'join' ? 'fJoin'
+        : e.kind === 'detached' ? 'fDetach'
         : e.kind === 'exit' ? 'fAlt' : '';
       eles.push({ data: { id: 'fe' + i, source: 'n' + e.from, target: 'n' + e.to, lbl: e.label }, classes: cls });
     });
@@ -2880,6 +3231,13 @@ var MODEL = __MODEL_JSON__;
       { selector: '.flowend', style: { shape: 'round-rectangle', 'background-color': t.stereo.entry.fill, 'border-color': t.stereo.entry.stroke, color: t.stereo.entry.text, 'border-width': 2.5 } },
       { selector: '.flowthrow', style: { shape: 'round-rectangle', 'background-color': t.ghostFill, 'border-color': t.issue, color: t.issue, 'border-width': 2.5 } },
       { selector: '.flowjumpn', style: { 'background-color': t.ghostFill, 'border-color': t.ghostStroke, 'border-style': 'dotted', color: t.ghostText } },
+      // Parallel fan-out/join bars (UML activity style): solid slim bars; the
+      // fork carries the step label above it, the join a small caption below.
+      { selector: '.flowfork', style: { 'background-color': t.ink, 'border-color': t.ink, color: t.ink, 'text-valign': 'top', 'text-margin-y': -6, 'font-weight': 'bold' } },
+      { selector: '.flowjoin', style: { 'background-color': t.ink, 'border-color': t.ink, color: t.edgeText, 'text-valign': 'bottom', 'text-margin-y': 6, 'font-size': 9.5 } },
+      // Detached-call ghost: visibly off the flow, no failure propagation.
+      { selector: '.flowdetach', style: { 'background-color': t.ghostFill, 'border-color': t.ghostStroke, 'border-style': 'dashed', color: t.ghostText, 'font-style': 'italic' } },
+      { selector: '.flowintent', style: { shape: 'round-rectangle', width: 'label', height: 'label', padding: '16px', 'background-color': t.ghostFill, 'border-color': t.ghostStroke, 'border-style': 'dashed', color: t.innerText, 'text-max-width': 340, 'text-wrap': 'wrap', 'font-size': 11.5, 'text-valign': 'center', 'text-halign': 'center', 'font-style': 'italic' } },
       { selector: '.drill', style: { 'border-width': 2.5 } },
       { selector: 'edge', style: { 'curve-style': 'bezier', width: 1.6, 'line-color': t.pageEdge, 'target-arrow-shape': 'triangle', 'target-arrow-color': t.pageEdge, label: 'data(lbl)', 'font-size': 9.5, color: t.edgeText, 'text-background-color': t.bgLabel, 'text-background-opacity': 0.85, 'text-rotation': 'autorotate' } },
       // Long edges (false/case/exit, jumps, error paths) route orthogonally:
@@ -2891,6 +3249,12 @@ var MODEL = __MODEL_JSON__;
       { selector: 'edge.fBack', style: { 'line-style': 'dashed', 'curve-style': 'unbundled-bezier', 'control-point-distances': [-70], 'control-point-weights': [0.5] } },
       { selector: 'edge.fErr', style: { 'line-style': 'dashed', 'curve-style': 'taxi', 'taxi-direction': 'downward', 'taxi-turn': -34, 'taxi-turn-min-distance': 10, 'line-color': t.issue, 'target-arrow-color': t.issue, color: t.issue } },
       { selector: 'edge.fJump', style: { 'line-style': 'dotted', 'curve-style': 'taxi', 'taxi-direction': 'downward', 'taxi-turn': -34, 'taxi-turn-min-distance': 10 } },
+      // Fork fan-out is a first-class flow edge (slightly heavier); the join
+      // collectors route orthogonally down their own (empty) lane corridor.
+      { selector: 'edge.fFork', style: { width: 2.2 } },
+      { selector: 'edge.fJoin', style: { width: 2.2, 'curve-style': 'taxi', 'taxi-direction': 'downward', 'taxi-turn': -34, 'taxi-turn-min-distance': 10 } },
+      // Detached: dashed OPEN arrow — fire-and-forget, no failure propagation.
+      { selector: 'edge.fDetach', style: { 'line-style': 'dashed', 'target-arrow-shape': 'vee' } },
     ];
 
     if (!flowCy) {
@@ -2915,6 +3279,7 @@ var MODEL = __MODEL_JSON__;
       case 'switch': return '\\u25C7 switch on ' + (s.on || s.text) + ' \\u2014 ' + (s.cases || []).map(function (c) { return c.value + ' \\u2192 ' + c.step; }).join(', ') + (s.defaultStep !== undefined ? ', default \\u2192 ' + s.defaultStep : '');
       case 'loop': return '\\u27F3 ' + (s.loopKind || 'forEach') + (s.over ? ' ' + s.over : '') + (s.cond ? ' while ' + s.cond : '') + (s.end !== undefined ? ' (body \\u2192 ' + s.end + ')' : '');
       case 'try': return '\\u26E8 try (body \\u2192 ' + s.end + ')' + (s.catches || []).map(function (c) { return ' \\u2014 on ' + c.error + ' \\u2192 ' + c.step; }).join('') + (s.fin !== undefined ? ' \\u2014 finally \\u2192 ' + s.fin : '');
+      case 'parallel': return '\\u2225 parallel \\u2014 arms ' + (s.branches || []).map(function (b) { return (b.name ? b.name + ' ' : '') + '\\u2192 ' + b.step; }).join(', ') + (s.end !== undefined ? ' (join after ' + s.end + ')' : '');
       case 'jump': return '\\u21B7 \\u2192 step ' + s.to + (s.text ? ' \\u2014 ' + s.text : '');
       case 'return': return '\\u23CE return' + (s.outcome ? ' \\u2014 ' + s.outcome : '') + (s.text ? ' (' + s.text + ')' : '');
       case 'throw': return '\\u26A1 throw' + (s.err ? ' ' + s.err : '') + (s.text ? ' \\u2014 ' + s.text : '');
@@ -2925,20 +3290,39 @@ var MODEL = __MODEL_JSON__;
     var top = flowStack[flowStack.length - 1];
     var narrative = narrativeFor(top.comp, top.method);
     var el = document.getElementById('flowSteps');
-    var html = (narrative ? narrative.steps : []).map(function (s) {
+    if (!narrative) {
+      // No step-by-step narrative — show the method's contract + intent prose so
+      // a drilled-in intent-only / contract-only method still explains itself.
+      var intent = intentFor(top.comp, top.method);
+      var mi = methodInfo(top.comp, top.method);
+      var parts = ['<div class="fstep" style="opacity:.7">No step-by-step narrative \\u2014 showing intent / contract:</div>'];
+      if (mi) {
+        parts.push('<div class="fstep"><code>' + escText(mi.m.signature) + '</code></div>');
+        parts.push('<div class="fstep">' + escText(mi.m.description) + (mi.m.returns ? ' \\u2014 returns ' + escText(mi.m.returns) : '') + '</div>');
+      }
+      if (intent) parts.push('<div class="fstep" style="font-style:italic">' + escText(intent) + '</div>');
+      if (!mi && !intent) parts.push('<div class="fstep">No intent or contract recorded for this method.</div>');
+      el.innerHTML = parts.join('');
+      return;
+    }
+    var html = narrative.steps.map(function (s) {
       var callHtml = '';
       if (s.call) {
-        var callable = !!narrativeFor(s.call.component, s.call.method);
+        var callable = openable(s.call.component, s.call.method);
         callHtml = ' \\u2192 <span class="call' + (callable ? ' drillstep' : '') + '" data-dc="' + s.call.component + '" data-dm="' + s.call.method + '">'
-          + s.call.component + '.' + s.call.method + '()' + (callable ? ' \\u21B4' : '') + '</span>';
+          + s.call.component + '.' + s.call.method + '()' + (callable ? ' \\u21B4' : '') + '</span>'
+          + (s.detach ? ' <span style="opacity:.72">\\u21E2 detached \\u2014 fire &amp; forget</span>' : '');
       }
       return '<div class="fstep"><span class="num">' + s.n + '.</span> ' + escText(flowStepText(s)) + callHtml + '</div>';
-    }).join('') || '<div class="fstep">No narrative steps.</div>';
+    }).join('');
     el.innerHTML = html;
+    // Single click on the styled step link drills in (it looks like a hyperlink,
+    // so it behaves like one). The flowchart graph keeps double-click, since a
+    // single tap in a dense chart is too easy to land accidentally.
     var drills = el.querySelectorAll('.drillstep');
     for (var i = 0; i < drills.length; i++) {
       (function (d) {
-        d.addEventListener('dblclick', function () { drillFlow(d.getAttribute('data-dc'), d.getAttribute('data-dm')); });
+        d.addEventListener('click', function () { drillFlow(d.getAttribute('data-dc'), d.getAttribute('data-dm')); });
       })(drills[i]);
     }
   }
@@ -3004,8 +3388,16 @@ var MODEL = __MODEL_JSON__;
     var comps = [], edges = [];
     comps.push({ id: 'start', name: flowTitle() + '()', subsystem: 'flow', componentType: 'Start', public: false, owns: [] });
     graph.steps.forEach(function (s) {
-      var name = flowStepLabel(s) + (s.call ? ' \\u2192 ' + s.call.component + '.' + s.call.method + '()' : '');
+      var name = flowStepLabel(s) + (s.call && !s.detach ? ' \\u2192 ' + s.call.component + '.' + s.call.method + '()' : '');
       comps.push({ id: 'n' + s.n, name: name, subsystem: 'flow', componentType: (s.kind === 'call' || s.kind === 'dispatch') ? 'Call' : 'Step', public: false, owns: [] });
+    });
+    // Virtual flow nodes (join bars, detached-call ghosts) export as plain
+    // steps so the editable diagrams keep the fan-out/join and detachment.
+    (graph.joins || []).forEach(function (j) {
+      comps.push({ id: 'n' + j.id, name: '\\u2225 join \\u2014 all ' + j.arms + ' arms', subsystem: 'flow', componentType: 'Step', public: false, owns: [] });
+    });
+    (graph.detached || []).forEach(function (d) {
+      comps.push({ id: 'n' + d.id, name: d.comp + '.' + d.method + '() \\u2014 detached', subsystem: 'flow', componentType: 'Call', public: false, owns: [] });
     });
     if (graph.first !== null) edges.push({ from: 'start', to: 'n' + graph.first, cross: false });
     graph.edges.forEach(function (e) {
@@ -3135,6 +3527,44 @@ var MODEL = __MODEL_JSON__;
     return '<div class="openbtn"><button class="tbtn" data-open-kind="' + kind + '" data-open-id="' + esc(id) + '">\\u25B8 Open as view</button></div>';
   }
 
+  // ---- OpenAPI affordance ---------------------------------------------------
+  // A component "exposes an API" when any of its contract methods carries an HTTP
+  // endpoint. The details panel offers a "View OpenAPI" button that opens the
+  // project's rendered surface: in the web app via the host hook (opts.onOpenApi),
+  // on a served shared page as a sibling path (/share/<token>/openapi). In a
+  // downloaded standalone file (file://) there is no server, so it is hidden.
+  function componentExposesApi(c) {
+    return (c.interfaces || []).some(function (i) {
+      return (i.methods || []).some(function (m) { return m.endpoint && m.endpoint.transport === 'HTTP'; });
+    });
+  }
+  function openApiSiblingHref() {
+    if (typeof window === 'undefined' || !/^https?:$/.test(window.location.protocol)) return null;
+    return window.location.pathname.replace(/\\/$/, '') + '/openapi';
+  }
+  function openApiAllowed() {
+    return (typeof opts !== 'undefined' && opts && opts.onOpenApi) || openApiSiblingHref() !== null;
+  }
+  // The OpenAPI document is a PROJECT-level artifact (the whole project's external
+  // gateway surface), so the affordance is offered up the whole hierarchy where
+  // it is contextually relevant: a portal that exposes HTTP, its subsystem, and
+  // the project root — each opens the same project surface.
+  function subsystemExposesApi(sid) {
+    return MODEL.components.some(function (x) {
+      return (x.subsystem === sid || (x.subsystem || '').indexOf(sid + '::') === 0) && componentExposesApi(x);
+    });
+  }
+  function projectExposesApi() {
+    return MODEL.components.some(componentExposesApi);
+  }
+  // tag = the component's L0 gateway entry id (its section in the combined spec),
+  // so a portal deep-links straight to its own operations; a subsystem/project
+  // passes '' and opens the whole combined document.
+  function openApiButton(exposes, tag) {
+    if (!exposes || !openApiAllowed()) return '';
+    return '<div class="openbtn"><button class="tbtn" data-openapi-tag="' + esc(tag || '') + '">\\u25A4 View OpenAPI \\u2197</button></div>';
+  }
+
   function renderPanel() {
     var head = '', body = '';
     // With nothing selected, describe the CURRENT VIEW SCOPE rather than the
@@ -3155,7 +3585,8 @@ var MODEL = __MODEL_JSON__;
         + (c.status ? staticChip(c.status) : '')
         + (scopeFocus ? staticChip('current view') : '')
         + chip(c.subsystem, 'subsystem', c.subsystem)
-        + (scopeFocus ? '' : openViewButton('component', c.id, c.owns.length > 0));
+        + (scopeFocus ? '' : openViewButton('component', c.id, c.owns.length > 0))
+        + openApiButton(componentExposesApi(c), c.apiTag);
       
       var linkedTypes = MODEL.types.filter(function (t) { return t.componentClass === c.id; });
       if (linkedTypes.length) {
@@ -3314,7 +3745,8 @@ var MODEL = __MODEL_JSON__;
         + (s.targetLanguage ? staticChip(s.targetLanguage) : '')
         + (s.status ? staticChip(s.status) : '')
         + (scopeFocus ? staticChip('current view') : '')
-        + (scopeFocus ? '' : openViewButton('subsystem', s.id, subKids > 0));
+        + (scopeFocus ? '' : openViewButton('subsystem', s.id, subKids > 0))
+        + openApiButton(subsystemExposesApi(s.id), '');
       body += '<p class="desc">' + esc(s.description) + '</p>';
       if (s.trustedLinks.length) {
         body += section('Trusted links (fast lanes)', s.trustedLinks.length, s.trustedLinks.map(function (t2) {
@@ -3332,7 +3764,8 @@ var MODEL = __MODEL_JSON__;
         + (MODEL.system.targetLanguage ? staticChip(MODEL.system.targetLanguage) : '')
         + staticChip(MODEL.subsystems.length + ' subsystems')
         + staticChip(MODEL.components.length + ' components')
-        + (MODEL.types.length ? '<div class="openbtn"><button class="tbtn" id="openTypesBtn">\\u25B8 Types (ERD) \\u2014 ' + MODEL.types.length + '</button></div>' : '');
+        + (MODEL.types.length ? '<div class="openbtn"><button class="tbtn" id="openTypesBtn">\\u25B8 Types (ERD) \\u2014 ' + MODEL.types.length + '</button></div>' : '')
+        + openApiButton(projectExposesApi(), '');
       if (MODEL.system.vision) body += '<p class="desc">' + esc(MODEL.system.vision) + '</p>';
       body += '<p class="desc">Each view shows one scope\\u2019s direct children \\u2014 double-click a box (or use \\u201COpen as view\\u201D) to drill in, and the breadcrumb to come back. Derived from <code style="display:inline">.wai/specs/</code>.</p>';
       if (state.showIssues && MODEL.issues.length) body += section('All validation issues', MODEL.issues.length, issueHtml(MODEL.issues), true);
@@ -3359,6 +3792,17 @@ var MODEL = __MODEL_JSON__;
     var typesOpen = document.getElementById('openTypesBtn');
     if (typesOpen && typesOpen.addEventListener && panel.innerHTML.indexOf('openTypesBtn') >= 0) {
       typesOpen.addEventListener('click', function () { navigateTo('types', null); });
+    }
+    var oapis = panel.querySelectorAll('[data-openapi-tag]');
+    for (var oi = 0; oi < oapis.length; oi++) {
+      (function (b) {
+        b.addEventListener('click', function () {
+          var tag = b.getAttribute('data-openapi-tag') || '';
+          if (typeof opts !== 'undefined' && opts && opts.onOpenApi) { opts.onOpenApi(tag); return; }
+          var href = openApiSiblingHref();
+          if (href) window.open(href + (tag ? '#/' + tag : ''), '_blank', 'noopener');
+        });
+      })(oapis[oi]);
     }
     var flows = panel.querySelectorAll('[data-flow-comp]');
     for (var j = 0; j < flows.length; j++) {

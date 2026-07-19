@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import type { HostedUserRecord, ProjectGrant } from './types.js';
+import type { HostedUserRecord, UnitIdRemap } from './types.js';
 
 // ---------------------------------------------------------------------------
 // User Repository (sdd_host)
@@ -114,20 +114,57 @@ function registrySetStatus(dataDir: string, id: string, status: string): HostedU
 }
 
 /**
- * Replace a user's grants wholesale with the supplied set — no merging, since the
- * caller has already computed and authorized the final grant state. An unknown id
- * fails with a not-found error. Persists atomically and returns the updated record.
+ * Rewrite every user's home unitId and role-binding scopeIds per the remap (a
+ * unit rename/move), and clear any home unitId or role-binding scoped to a
+ * removedScopeId (a cascade-deleted subtree). Persists atomically.
+ *
+ * Without this, a moved unit would leave users pointing at a qualified id that
+ * no longer exists — and a binding orphaned at a reused path would silently
+ * resurrect when a unit is later recreated there.
  */
-function registryReplaceGrants(dataDir: string, id: string, grants: ProjectGrant[]): HostedUserRecord {
+function registryRemapUnitReferences(
+  dataDir: string,
+  remap: UnitIdRemap[],
+  removedScopeIds: string[],
+): void {
+  if (remap.length === 0 && removedScopeIds.length === 0) return;
+  const lookup = new Map(remap.map((r) => [r.oldId, r.newId]));
+  const removed = new Set(removedScopeIds);
   const records = loadStore(dataDir);
-  const idx = records.findIndex((r) => r.id === id);
-  if (idx === -1) {
-    throw new Error(`Hosted user "${id}" not found.`);
-  }
-  const stored: HostedUserRecord = { ...records[idx], grants };
-  records[idx] = stored;
-  replaceAll(dataDir, records);
-  return stored;
+  let changed = false;
+
+  const rewritten = records.map((record) => {
+    const next: HostedUserRecord = { ...record };
+
+    if (next.unitId) {
+      const moved = lookup.get(next.unitId);
+      if (moved) {
+        next.unitId = moved;
+        changed = true;
+      } else if (removed.has(next.unitId)) {
+        delete next.unitId;
+        changed = true;
+      }
+    }
+
+    if (next.roleBindings && next.roleBindings.length > 0) {
+      const bindings = next.roleBindings
+        .filter((b) => !(b.scopeId && removed.has(b.scopeId)))
+        .map((b) => (b.scopeId && lookup.has(b.scopeId) ? { ...b, scopeId: lookup.get(b.scopeId) } : b));
+      if (
+        bindings.length !== next.roleBindings.length ||
+        bindings.some((b, i) => b.scopeId !== next.roleBindings?.[i]?.scopeId)
+      ) {
+        next.roleBindings = bindings;
+        changed = true;
+      }
+    }
+
+    return next;
+  });
+
+  if (!changed) return;
+  replaceAll(dataDir, rewritten);
 }
 
 // ── Index (read path) ──────────────────────────────────────────────────────
@@ -135,6 +172,23 @@ function registryReplaceGrants(dataDir: string, id: string, grants: ProjectGrant
 /** Return the record whose id matches exactly, or null when absent. */
 function indexGetById(dataDir: string, id: string): HostedUserRecord | null {
   return loadStore(dataDir).find((r) => r.id === id) ?? null;
+}
+
+/**
+ * Return the record whose RECORD id OR subject userId matches, or null. An
+ * exact record-id match wins over a subject-userId match.
+ *
+ * Admin-created users can carry a record id that DIVERGES from their subject's
+ * userId, and a credential's ownerSubject.userId (or an admin-supplied owner id)
+ * may name either one. Every identity-critical resolution — the live
+ * status/roleBindings gate (auth.resolvePermissionSubject), the mint
+ * deactivation guard (identity.mintToken), the revocation sweep — must resolve
+ * by BOTH ids through this one lookup, or a divergent-id user dodges it with
+ * the other id.
+ */
+function indexFindByRecordOrSubjectId(dataDir: string, id: string): HostedUserRecord | null {
+  const records = loadStore(dataDir);
+  return records.find((r) => r.id === id) ?? records.find((r) => r.subject?.userId === id) ?? null;
 }
 
 /**
@@ -154,19 +208,16 @@ function indexFindByExternalSubject(
 }
 
 /**
- * List users filtered by the optional status and the optional project id — a
- * project filter matches users holding at least one grant scoped to that project
- * or an instance-wide ('*') grant — sorted by id for stable pagination.
+ * List users filtered by the optional status, sorted by id for stable
+ * pagination. There is NO project filter here: a user record carries no project
+ * reference of its own — "who is on project X" is a permission-grid question,
+ * answered by the identity orchestrator intersecting this listing with the
+ * grid's direct assignments.
  */
-function indexList(dataDir: string, status?: string, projectId?: string): HostedUserRecord[] {
+function indexList(dataDir: string, status?: string): HostedUserRecord[] {
   let records = loadStore(dataDir);
   if (status) {
     records = records.filter((r) => r.status === status);
-  }
-  if (projectId) {
-    records = records.filter((r) =>
-      r.grants.some((g) => g.projectId === projectId || g.projectId === '*'),
-    );
   }
   return records.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
@@ -178,6 +229,13 @@ export function getUserById(dataDir: string, id: string): HostedUserRecord | nul
   return indexGetById(dataDir, id);
 }
 
+/** Return one hosted user by record id OR subject userId (record id wins), or
+ *  null when absent — the divergent-id-safe lookup identity-critical callers
+ *  (live auth gate, mint deactivation guard) must use. */
+export function findUserByRecordOrSubjectId(dataDir: string, id: string): HostedUserRecord | null {
+  return indexFindByRecordOrSubjectId(dataDir, id);
+}
+
 /** Return one hosted user by external issuer subject or null when absent. */
 export function findUserByExternalSubject(
   dataDir: string,
@@ -187,9 +245,9 @@ export function findUserByExternalSubject(
   return indexFindByExternalSubject(dataDir, issuer, externalSubject);
 }
 
-/** List hosted users, optionally narrowed by status or project id. */
-export function listUsers(dataDir: string, status?: string, projectId?: string): HostedUserRecord[] {
-  return indexList(dataDir, status, projectId);
+/** List hosted users, optionally narrowed by status. */
+export function listUsers(dataDir: string, status?: string): HostedUserRecord[] {
+  return indexList(dataDir, status);
 }
 
 /** Create or update a hosted user through the repository facade (atomic). */
@@ -202,11 +260,18 @@ export function setUserStatus(dataDir: string, id: string, status: string): Host
   return registrySetStatus(dataDir, id, status);
 }
 
-/** Replace a user's grants through the repository facade after authorization (atomic). */
-export function replaceUserGrants(
+/**
+ * Rewrite/clear user home units and role-binding scopes for a unit
+ * rename/move/cascade through the repository facade (atomic).
+ *
+ * (There is no replaceUserGrants: grants are gone. A user's permissions are
+ * managed through role bindings and the assignment grid — see
+ * permission_admin_orchestrator's bindRole / setAssignment.)
+ */
+export function remapUnitReferences(
   dataDir: string,
-  id: string,
-  grants: ProjectGrant[],
-): HostedUserRecord {
-  return registryReplaceGrants(dataDir, id, grants);
+  remap: UnitIdRemap[],
+  removedScopeIds: string[],
+): void {
+  registryRemapUnitReferences(dataDir, remap, removedScopeIds);
 }

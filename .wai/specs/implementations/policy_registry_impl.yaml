@@ -18,6 +18,7 @@ methods:
       previous record intact and surfaces as a storage error. Authorization is enforced by the
       orchestrator, not here; the registry owns only server-side stamping and durable replacement of
       the one active record.
+    symbol: setPackPolicyRecord
   - name: upsertIdentityProvider
     narrative: []
     intent: >-
@@ -38,7 +39,16 @@ methods:
       and return once removed. A persistence failure leaves the previous collection intact and
       surfaces as a storage error. Authorization is enforced by the orchestrator, not here.
     symbol: removeIdentityProviderRecord
+  - name: setExposurePolicy
+    narrative: []
+    detail: intent
+    intent: >-
+      Persist the supplied instance exposure policy wholesale to exposure-policy.json under the
+      hosted data root via write-temp-then-rename (a crash never truncates the file), refresh the
+      store, and return the stored policy. No stamping — the exposure posture is a plain settings
+      object.
+    symbol: setExposurePolicyRecord
 detail: intent
 status: complete
 createdAt: '2026-07-09T20:47:44.803Z'
-updatedAt: '2026-07-11T19:14:22.675Z'
+updatedAt: '2026-07-18T23:45:29.205Z'

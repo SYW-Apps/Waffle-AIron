@@ -1,0 +1,24 @@
+id: permission_admin_orchestrator
+name: Permission Admin Orchestrator
+description: >-
+  Control-plane management workflows for the permission model: role definitions
+  (create/update/delete/list), the assignment grid (set/remove/list one subject×scope×capability
+  value), and user role bindings (bind/unbind a role to a user at a scope). Every method
+  authenticates the caller and authorizes through the authorization specialist — role management
+  requires instance-level project:admin; assignment and binding management require project:admin
+  over the target scope — enforces the hard reservation (the '*' instance-admin marker is never
+  settable here), and audits at security level. Grant management (the legacy replaceUserGrants) is
+  superseded by setAssignment/bindRole here.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - auth_specialist
+  - authorization_specialist
+  - role_repository
+  - permission_repository
+  - user_repository
+  - audit_repository
+status: complete
+createdAt: '2026-07-15T21:59:54.605Z'
+updatedAt: '2026-07-16T07:27:54.297Z'

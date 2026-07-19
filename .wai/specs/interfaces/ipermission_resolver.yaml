@@ -1,0 +1,61 @@
+id: ipermission_resolver
+name: Permission Resolver Interface
+description: >-
+  Pure hierarchical permission-resolution contract. Given a resolved subject and the gathered world
+  (assignments, roles, org tree, placements), it computes effective permissions and visibility by
+  the nearest-ancestor walk. It performs no I/O and never authenticates — the caller has
+  authenticated the principal and gathered the world.
+component: permission_resolver
+methods:
+  - name: resolvePermission
+    description: >-
+      Pure: compute the subject's effective permission for a capability at a target scope (unit or
+      project). An instance-admin subject resolves to yes (source instance-admin), bypassing the
+      walk. Otherwise build the target's ancestor chain leaf->root (a project's chain begins at its
+      placement unit) and stop at the nearest scope with a definitive value. At each scope,
+      precedence is: a definitive direct-user assignment scoped here; else the most-permissive
+      GRANTING value among the subject's roles ANCHORED here (an unscoped/instance-wide binding
+      anchors at the instance root, so a broadly-bound role can never defeat a nearer per-scope
+      deny; roles grant only — a role 'no'/'inherit' is non-deciding); else the everyone-default
+      here; else 'inherit' (continue upward). Reaching the root with nothing definitive yields the
+      instance default 'no'. Returns the value plus the deciding source and scope.
+    signature: >-
+      resolvePermission(subject: PermissionSubject, capability: string, targetScopeKind: string,
+      targetScopeId: string, world: PermissionWorld): EffectivePermission
+    returns: EffectivePermission
+    params:
+      - name: subject
+        type: PermissionSubject
+      - name: capability
+        type: string
+      - name: targetScopeKind
+        type: string
+      - name: targetScopeId
+        type: string
+      - name: world
+        type: PermissionWorld
+    guarantees:
+      - idempotent
+  - name: resolveVisibleScopes
+    description: >-
+      Pure: compute the scopes on which the subject's effective permission for the GIVEN capability
+      is yes or approval (each marked actionable), plus their ancestor units (marked context-only
+      breadcrumb). An instance-admin sees every scope as actionable. Never includes an ancestor's
+      other (non-actionable) children; the returned view is deduplicated by scope with actionable
+      winning over context.
+    signature: >-
+      resolveVisibleScopes(subject: PermissionSubject, capability: string, world: PermissionWorld):
+      VisibleScope[]
+    returns: VisibleScope[]
+    params:
+      - name: subject
+        type: PermissionSubject
+      - name: capability
+        type: string
+      - name: world
+        type: PermissionWorld
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-07-15T20:28:12.840Z'
+updatedAt: '2026-07-15T22:22:07.339Z'

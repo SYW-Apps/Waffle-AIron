@@ -2,9 +2,9 @@ kind: value-object
 id: project_init_request
 name: ProjectInitRequest
 description: >-
-  Hosted project initialization request used by self-service, admin UI, CLI, or MCP-assisted setup.
-  It captures project identity plus explicit profile selection without exposing raw filesystem
-  paths.
+  Hosted project initialization request used by the project-lifecycle tools, admin UI, CLI, or
+  MCP-assisted setup. It captures project identity, the required owning organization unit, and
+  explicit profile selection without exposing raw filesystem paths.
 fields:
   - name: id
     type: string
@@ -20,8 +20,11 @@ fields:
     optional: true
   - name: ownerUnitId
     type: string
-    description: Optional organization unit that owns the project.
-    optional: true
+    description: >-
+      The organization unit that owns the project. REQUIRED — every project is placed at creation so
+      the permission resolver can always enumerate it; a fresh instance must create its first
+      organization unit before initializing projects.
+    optional: false
   - name: environment
     type: string
     description: Optional environment label such as "development", "staging", or "production".
@@ -34,4 +37,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-07-08T21:58:47.944Z'
-updatedAt: '2026-07-08T21:58:47.971Z'
+updatedAt: '2026-07-16T00:18:37.663Z'

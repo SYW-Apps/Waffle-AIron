@@ -4,6 +4,10 @@ import * as path from 'path';
 import * as os from 'os';
 import { validateSddTree } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
+import { loadProjectExtensions } from '../../src/core/extensions.js';
+import { listSkillResources } from '../../src/core/skills.js';
+import { loadProjectVariants } from '../../src/core/variants.js';
+import { resolveAgentTopology } from '../../src/core/agent_resolver.js';
 
 // ---------------------------------------------------------------------------
 // Extension packs: declarative YAML packs (custom profiles + language tables),
@@ -247,6 +251,166 @@ profiles:
       expect(err).toBeDefined();
       expect(err!.severity).toBe('error');
       expect(res.valid).toBe(false);
+    } finally { proj.cleanup(); }
+  });
+
+  it('resolves a component pattern reference to a pack-declared pattern and flags an unknown one', () => {
+    const proj = createTempProject(['.wai/packs/patterns.yaml']);
+    proj.writeFile('.wai/packs/patterns.yaml', `name: pattern-pack
+patterns:
+  - id: org/domain-pattern
+    version: 1.0.0
+    description: The canonical domain shape.
+`);
+    proj.writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem');
+    proj.writeSpec('component', 'known-a', `schemaVersion: 1.0.0
+id: known-a
+name: known-a
+description: d
+subsystem: sub-a
+componentType: Specialist
+patterns:
+  - id: org/domain-pattern
+    version: 1.0.0`);
+    proj.writeSpec('component', 'unknown-a', `schemaVersion: 1.0.0
+id: unknown-a
+name: unknown-a
+description: d
+subsystem: sub-a
+componentType: Specialist
+patterns:
+  - id: org/missing-pattern`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.issues.some(i => i.code === 'UNKNOWN_PATTERN_REF' && i.specId === 'unknown-a')).toBe(true);
+      expect(res.issues.some(i => i.code === 'UNKNOWN_PATTERN_REF' && i.specId === 'known-a')).toBe(false);
+    } finally { proj.cleanup(); }
+  });
+
+  it('warns PATTERN_VERSION_MISMATCH for a pinned version no pack provides', () => {
+    const proj = createTempProject(['.wai/packs/patterns.yaml']);
+    proj.writeFile('.wai/packs/patterns.yaml', `name: pattern-pack
+patterns:
+  - id: org/domain-pattern
+    version: 1.0.0
+`);
+    proj.writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem');
+    proj.writeSpec('component', 'comp-a', `schemaVersion: 1.0.0
+id: comp-a
+name: comp-a
+description: d
+subsystem: sub-a
+componentType: Specialist
+patterns:
+  - id: org/domain-pattern
+    version: 2.0.0`);
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.issues.some(i => i.code === 'PATTERN_VERSION_MISMATCH' && i.specId === 'comp-a')).toBe(true);
+    } finally { proj.cleanup(); }
+  });
+
+  it('loads pack-provided skills with provenance and a resolved SKILL.md path', () => {
+    const proj = createTempProject(['.wai/packs/skillpack']);
+    proj.writeFile('.wai/packs/skillpack/pack.yaml', `name: skillpack
+version: 2.1.0
+skills:
+  - id: domain-implementer
+    source: skills/domain-implementer/SKILL.md
+    targets: [claude, gemini]
+`);
+    proj.writeFile('.wai/packs/skillpack/skills/domain-implementer/SKILL.md', '---\nname: Domain Implementer\ndescription: platform guidance\n---\nbody');
+    proj.activate();
+    try {
+      const skills = loadProjectExtensions().skills;
+      expect(skills.length).toBe(1);
+      expect(skills[0].id).toBe('domain-implementer');
+      expect(skills[0].pack).toBe('skillpack');
+      expect(skills[0].packVersion).toBe('2.1.0');
+      expect(skills[0].targets).toEqual(['claude', 'gemini']);
+      expect(fs.existsSync(skills[0].sourcePath)).toBe(true);
+    } finally { proj.cleanup(); }
+  });
+
+  it('publishes pack skills as namespaced <pack-id>-<skill-id> MCP resources', () => {
+    const proj = createTempProject(['.wai/packs/skillpack']);
+    proj.writeFile('.wai/packs/skillpack/pack.yaml', `name: skillpack
+version: 2.1.0
+skills:
+  - id: domain-implementer
+    source: skills/domain-implementer/SKILL.md
+    targets: [claude]
+`);
+    proj.writeFile('.wai/packs/skillpack/skills/domain-implementer/SKILL.md', '---\nname: Domain Implementer\ndescription: platform guidance\n---\nbody');
+    proj.activate();
+    try {
+      const packRes = listSkillResources().find(r => r.id === 'skillpack-domain-implementer');
+      expect(packRes).toBeDefined();
+      expect(packRes!.version).toBe('2.1.0');
+      expect(packRes!.name).toBe('Domain Implementer');
+    } finally { proj.cleanup(); }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Component variants: a dynamic registry (on top of packs) of base-anchored
+// component kinds + implementation guidance, resolved by UNKNOWN_VARIANT /
+// VARIANT_BASE_MISMATCH and injected into the generated agent context.
+// ---------------------------------------------------------------------------
+
+describe('component variants', () => {
+  it('resolves a component variant and flags unknown / base-mismatched ones', () => {
+    const proj = createTempProject();
+    proj.writeFile('.wai/variants/publisher.yaml', `id: publisher
+base: Specialist
+guidance: Fan-out emitter; reuse the shared publisher helper.
+`);
+    proj.writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem');
+    proj.writeSpec('component', 'pub-a', 'schemaVersion: 1.0.0\nid: pub-a\nname: pub-a\ndescription: d\nsubsystem: sub-a\ncomponentType: Specialist\nvariant: publisher');
+    proj.writeSpec('component', 'bad-base', 'schemaVersion: 1.0.0\nid: bad-base\nname: bad-base\ndescription: d\nsubsystem: sub-a\ncomponentType: Adapter\nvariant: publisher');
+    proj.writeSpec('component', 'unknown-v', 'schemaVersion: 1.0.0\nid: unknown-v\nname: unknown-v\ndescription: d\nsubsystem: sub-a\ncomponentType: Specialist\nvariant: nope');
+    proj.activate();
+    try {
+      const res = validateSddTree();
+      expect(res.issues.some(i => i.code === 'UNKNOWN_VARIANT' && i.specId === 'unknown-v')).toBe(true);
+      expect(res.issues.some(i => i.code === 'VARIANT_BASE_MISMATCH' && i.specId === 'bad-base')).toBe(true);
+      expect(res.issues.some(i => (i.code === 'UNKNOWN_VARIANT' || i.code === 'VARIANT_BASE_MISMATCH') && i.specId === 'pub-a')).toBe(false);
+    } finally { proj.cleanup(); }
+  });
+
+  it('merges global (WAIRON_VARIANTS_DIR) and project variants, project winning', () => {
+    const globalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-global-variants-'));
+    fs.writeFileSync(path.join(globalDir, 'shared.yaml'), 'id: shared\nbase: Adapter\nguidance: global version\n');
+    fs.writeFileSync(path.join(globalDir, 'publisher.yaml'), 'id: publisher\nbase: Specialist\nguidance: global publisher\n');
+    process.env.WAIRON_VARIANTS_DIR = globalDir;
+    const proj = createTempProject();
+    proj.writeFile('.wai/variants/publisher.yaml', 'id: publisher\nbase: Specialist\nguidance: PROJECT publisher\n');
+    proj.activate();
+    try {
+      const byId = new Map(loadProjectVariants().map(v => [v.id, v]));
+      expect(byId.get('shared')?.guidance).toBe('global version');
+      expect(byId.get('publisher')?.guidance).toBe('PROJECT publisher');
+    } finally {
+      proj.cleanup();
+      delete process.env.WAIRON_VARIANTS_DIR;
+      try { fs.rmSync(globalDir, { recursive: true, force: true }); } catch { /* win */ }
+    }
+  });
+
+  it('injects variant guidance + same-variant siblings into the owner agent context', () => {
+    const proj = createTempProject();
+    proj.writeFile('.wai/variants/publisher.yaml', 'id: publisher\nbase: Specialist\nguidance: Fan-out emitter, reuse the shared helper.\n');
+    proj.writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem');
+    proj.writeSpec('component', 'pub-a', 'schemaVersion: 1.0.0\nid: pub-a\nname: pub-a\ndescription: d\nsubsystem: sub-a\ncomponentType: Specialist\nvariant: publisher');
+    proj.writeSpec('component', 'pub-b', 'schemaVersion: 1.0.0\nid: pub-b\nname: pub-b\ndescription: d\nsubsystem: sub-a\ncomponentType: Specialist\nvariant: publisher');
+    proj.activate();
+    try {
+      const owner = resolveAgentTopology().find(a => a.id === 'sub-a-owner');
+      expect(owner?.variantGuidance).toContain('publisher');
+      expect(owner?.variantGuidance).toContain('Fan-out emitter');
+      expect(owner?.variantGuidance).toContain('pub-b');
     } finally { proj.cleanup(); }
   });
 });

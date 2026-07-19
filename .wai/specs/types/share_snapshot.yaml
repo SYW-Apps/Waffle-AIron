@@ -1,0 +1,39 @@
+kind: entity
+id: share_snapshot
+name: Share Snapshot
+description: >-
+  An immutable, point-in-time capture of a project view that a share link serves — written once at
+  share-creation (or refresh) and never mutated, so a link always shows exactly what was shared
+  regardless of later spec changes.
+subsystem: sdd_host
+fields:
+  - name: id
+    type: string
+    description: Stable snapshot id.
+    optional: false
+    key: primary
+  - name: projectId
+    type: string
+    optional: false
+  - name: view
+    type: string
+    optional: false
+  - name: capturedAt
+    type: string
+    description: ISO-8601 capture time.
+    optional: false
+  - name: canvasModel
+    type: string
+    description: Serialized CanvasModel JSON for the view.
+    optional: true
+  - name: openapi
+    type: string
+    description: Serialized OpenAPI document, when captured.
+    optional: true
+  - name: html
+    type: string
+    description: Standalone HTML export, when captured.
+    optional: true
+methods: []
+createdAt: '2026-07-17T22:32:32.574Z'
+updatedAt: '2026-07-17T22:32:32.638Z'

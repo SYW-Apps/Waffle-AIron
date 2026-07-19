@@ -1,0 +1,15 @@
+id: variant_registry_adapter
+name: Variant Registry Adapter
+description: >-
+  The filesystem loader for the component-variant registry — a dynamic layer on top of packs. Reads
+  variant definitions from the global variants directory (WAIRON_VARIANTS_DIR) and the project's
+  .wai/variants/, and merges them (project wins on id collision) into the VariantDef set the
+  validator and agent resolver consume. A malformed variant file is skipped, never fatal; the
+  registry lives outside packs so variants can be defined and shared without a pack release.
+subsystem: sdd_core
+componentType: Adapter
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-07-15T12:23:50.906Z'
+updatedAt: '2026-07-15T12:25:44.662Z'

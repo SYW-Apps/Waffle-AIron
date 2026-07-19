@@ -1,0 +1,14 @@
+id: rule_store
+name: Rule Store
+description: >-
+  Authoritative in-memory set of registered SDD conformance rules — the built-in rule set plus any
+  programmatic pack rules, held in registration order. A ram-projection rebuilt on each validation
+  run (seeded from code, then extended from loaded packs), never persisted to disk.
+subsystem: sdd_validator
+componentType: Store
+owns: []
+dependsOn: []
+durability: ram-projection
+status: complete
+createdAt: '2026-07-14T19:16:56.217Z'
+updatedAt: '2026-07-14T20:16:06.021Z'

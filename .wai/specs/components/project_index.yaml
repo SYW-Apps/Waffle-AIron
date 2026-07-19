@@ -1,0 +1,13 @@
+id: project_index
+name: Project Index
+description: >-
+  Read path of the project repository: record listings and the authorization-narrowed root
+  resolution (a selector can never widen a principal's scope; only active projects resolve).
+subsystem: sdd_host
+componentType: Index
+owns: []
+dependsOn:
+  - project_store
+status: complete
+createdAt: '2026-07-19T08:59:51.799Z'
+updatedAt: '2026-07-19T09:00:40.571Z'

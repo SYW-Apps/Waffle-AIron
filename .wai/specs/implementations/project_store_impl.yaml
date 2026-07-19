@@ -1,0 +1,19 @@
+id: project_store_impl
+name: Project Record Store Implementation
+description: Read-through file I/O over the data-dir project registry file.
+contract: iproject_store
+sourcePath: src/server/projects.ts
+methods:
+  - name: read
+    narrative: []
+    intent: >-
+      Reads and parses the project registry file fresh from disk; an absent or malformed file yields
+      the empty set.
+    symbol: load
+  - name: write
+    narrative: []
+    intent: Serializes the full record set and writes it to the project registry file.
+    symbol: save
+status: complete
+createdAt: '2026-07-19T09:00:07.147Z'
+updatedAt: '2026-07-19T09:00:59.728Z'

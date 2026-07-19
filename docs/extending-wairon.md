@@ -119,6 +119,110 @@ Semantics worth knowing:
 - Unregistered `profile` / `projectType` names get `UNKNOWN_PROFILE`
   (warning) naming the registered set.
 
+## Pack-provided AI-agent skills
+
+A **directory** pack can ship declarative AI-client skills (SKILL.md files)
+alongside its manifest. `wairon skills install` / `wairon generate` install
+them into the supported client targets, and the hosted MCP server publishes
+them through the same `wairon-skill://` resource mirror as the built-ins — so
+a profile can carry platform/domain implementation guidance while wairon stays
+platform-agnostic. These are **AI-client skills, not MCP tools**.
+
+```yaml
+name: appenser              # a directory pack: pack.yaml + skills/
+version: 1.2.0              # optional; shown as the skill's provenance version
+
+skills:
+  - id: domain-implementer
+    source: skills/domain-implementer/SKILL.md   # relative to the pack directory
+    targets: [claude, gemini]                     # client targets to install into
+```
+
+- **Namespaced install.** Every pack skill installs as
+  `<pack-id>-<skill-id>` (e.g. `appenser-domain-implementer`) — so skills from
+  different packs never collide, and provenance is legible in the name. The
+  built-in `sdd-*` skill names are reserved; a pack cannot shadow them.
+- **Provenance + version** come from the pack (`name` + `version`), visible in
+  `wairon skills list` and each MCP resource descriptor.
+- **Reproducibility** is automatic — pack skills are vendored under
+  `.wai/packs/` and pinned in `project.yaml`, so they travel with the repo.
+- **No change when unused** — projects with no pack skills install exactly the
+  built-ins, as before.
+
+## Reusable, versioned pattern references
+
+Packs can declare named, versioned architecture patterns; component specs
+reference them, and wairon resolves + surfaces the reference. This publishes a
+reusable convention across projects without copy-pasting a spec shape, and
+makes adoption/versioning explicit. Core only validates *identity* — the
+pattern's actual constraints are enforced by the **pack's own rules**.
+
+```yaml
+patterns:
+  - id: org/domain-pattern
+    version: 1.0.0
+    description: The organization's canonical domain-module shape.
+```
+
+A component opts in via `patterns` (matching pack + version):
+
+```yaml
+# a component spec
+patterns:
+  - id: org/domain-pattern
+    version: 1.0.0            # optional; omit to accept any resolved version
+```
+
+- A reference to a pattern no loaded pack declares is `UNKNOWN_PATTERN_REF`; a
+  pinned version with no match is `PATTERN_VERSION_MISMATCH` (both warnings,
+  tunable via `rules.sddRuleSeverity`).
+- Loaded patterns are listed by `wairon patterns list` (id, version, source
+  pack) and exposed to programmatic pack rules via `ctx.ext.patterns`, giving
+  them a stable, typed target to enforce against.
+
+## Component variants (a dynamic layer on top of packs)
+
+A **variant** is a named, base-anchored specialization of a core stereotype — a
+"kind of `Adapter`/`Specialist`/…" (e.g. a `publisher`) — carrying implementation
+guidance so the implementer treats every component of the same variant alike,
+reusing one shared approach instead of reinventing it per instance. The base
+stereotype stays authoritative for all of wairon's generic semantics and
+dependency rules; the variant adds domain vocabulary + a stable rule target + the
+guidance.
+
+Variants deliberately live **outside packs**: define one on demand — no pack edit
+or release — and share it anywhere (a variant is a tiny, portable YAML). Loaded
+from a machine/org-wide directory and the project, so a good variant is reusable
+across projects, orgs, and tenants.
+
+```yaml
+# .wai/variants/publisher.yaml  (or WAIRON_VARIANTS_DIR for machine/org-wide)
+id: publisher
+base: Specialist                 # required — the stereotype this variant specializes
+guidance: >
+  In-process fan-out emitter. Reuse the shared publisher helper; do not
+  reimplement dispatch per instance.
+# target: typescript             # optional — only applies for this target language
+# profile: event-driven          # optional — only applies under this profile
+```
+```yaml
+# on a component
+componentType: Specialist
+variant: publisher
+```
+
+- A component's `variant` must resolve to a declared variant (`UNKNOWN_VARIANT`)
+  and its stereotype must equal the variant's `base` (`VARIANT_BASE_MISMATCH`,
+  error). A variant is always *a kind of a stereotype* — so cross-cutting
+  attributes (retriable, cached) can't be variants; those stay method `guarantees`.
+- **One variant per component**: a genuine combination is a *new* combined variant,
+  not two stacked (combining is almost always a purity smell).
+- Listed by `wairon variants list`; exposed to programmatic pack rules via
+  `ctx.variants` (a stable, typed target); and — the payoff — a component's
+  variant guidance and its same-variant siblings are **injected into the generated
+  owner/implementer agent context**, so the implementer reuses one shared approach
+  across every component of that variant.
+
 ## Programmatic packs (JS)
 
 A CommonJS module: the same declarative fields, plus `rules`. The pack does

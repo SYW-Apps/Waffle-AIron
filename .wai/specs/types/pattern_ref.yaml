@@ -1,0 +1,19 @@
+kind: value-object
+id: pattern_ref
+name: PatternRef
+description: >-
+  A reference from a component spec to a pack-declared reusable pattern. Resolved against the loaded
+  packs' pattern definitions (UNKNOWN_PATTERN_REF when unresolved); an optional version pins a
+  specific pattern version.
+fields:
+  - name: id
+    type: string
+    description: The referenced pattern id (must resolve to a loaded PatternDef).
+    optional: false
+  - name: version
+    type: string
+    description: Pinned pattern version; omit to accept any resolved version.
+    optional: true
+methods: []
+createdAt: '2026-07-14T18:56:25.520Z'
+updatedAt: '2026-07-14T18:56:25.563Z'

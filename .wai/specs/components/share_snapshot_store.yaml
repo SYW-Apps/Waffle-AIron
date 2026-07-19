@@ -1,0 +1,17 @@
+id: share_snapshot_store
+name: Share Snapshot Store
+description: >-
+  Authoritative disk-backed holder of the immutable captured payloads a share link serves — the
+  point-in-time canvas-model JSON, OpenAPI document, and/or standalone HTML export — keyed by
+  snapshot id under &lt;dataDir&gt;/share-snapshots/. A snapshot is written ONCE at capture and
+  never mutated, so a link always serves exactly what was shared regardless of later spec changes.
+  Loaded per call; write-once via write-temp-then-rename. Owned by the share snapshot repository;
+  never depended on directly.
+subsystem: sdd_host
+componentType: Store
+owns: []
+dependsOn: []
+durability: read-through
+status: complete
+createdAt: '2026-07-17T22:09:04.882Z'
+updatedAt: '2026-07-19T11:31:02.265Z'

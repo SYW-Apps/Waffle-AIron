@@ -19,6 +19,7 @@ import {
 } from '../../src/server/policy.js';
 import { routeAdmin } from '../../src/server/http.js';
 import { createProject } from '../../src/server/admin.js';
+import { mintUserToken, allow, seedUnit, createPlacedProject } from './helpers.js';
 import { listProjectPacks } from '../../src/server/packs.js';
 import { ForbiddenError } from '../../src/server/identity.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
@@ -96,22 +97,6 @@ describe('project policy orchestrator (sdd_host)', () => {
     }
   });
 
-  /** Mint a stored token with a KNOWN id, given grants, and optional subject. */
-  function mintToken(opts: { id: string; grants: ProjectGrant[]; subject?: PrincipalSubject }): string {
-    const token = 'wk_' + crypto.randomBytes(8).toString('hex');
-    const record: ApiKeyRecord = {
-      id: opts.id,
-      keyHash: hashToken(token),
-      role: 'editor',
-      projects: opts.grants.map((g) => g.projectId),
-      grants: opts.grants,
-      createdAt: new Date().toISOString(),
-      ...(opts.subject ? { ownerSubject: opts.subject } : {}),
-    };
-    createCredential(dataDir, record);
-    return token;
-  }
-
   /** Seed a declarative pack named `name` into the server-global pack set. */
   function seedGlobalPack(name: string): void {
     fs.writeFileSync(path.join(packsDir, `${name}.yaml`), `name: ${name}\nprofiles: {}\nlanguages: {}\n`);
@@ -132,7 +117,7 @@ describe('project policy orchestrator (sdd_host)', () => {
   it('get before any set: the storage facade returns null; the orchestrator returns the permissive default', () => {
     expect(getPackPolicyRecord(dataDir)).toBeNull();
 
-    const reader = mintToken({ id: 'r', grants: [{ projectId: '*', permissions: ['mcp:read'] }], subject: subject() });
+    const reader = mintUserToken(dataDir, { id: 'r', userId: 'u-r' });
     const pol = getPackPolicy(cfg, reader);
     expect(pol.enforcementMode).toBe('warn');
     expect(pol.requireProfileSelection).toBe(false);
@@ -155,8 +140,9 @@ describe('project policy orchestrator (sdd_host)', () => {
 
   // ── setPackPolicy authorization + stamping + audit ───────────────────────
 
-  it('setPackPolicy: policy:manage gated — 403 for a plain editor token, admin stamps caller updatedBy and audits at security level', () => {
-    const editor = mintToken({ id: 'ed', grants: [{ projectId: '*', permissions: ['mcp:write'] }], subject: subject({ userId: 'u-ed' }) });
+  it('setPackPolicy: project:admin gated — 403 for a plain writer token, admin stamps caller updatedBy and audits at security level', () => {
+    allow(dataDir, 'u-ed', 'project:write', 'instance', undefined);
+    const editor = mintUserToken(dataDir, { id: 'ed', userId: 'u-ed' });
     expect(() => setPackPolicy(cfg, editor, samplePolicy())).toThrow(ForbiddenError);
 
     const before = Date.now();
@@ -174,27 +160,36 @@ describe('project policy orchestrator (sdd_host)', () => {
     expect(audit[0].level).toBe('security');
   });
 
-  it('setPackPolicy: a policy:manage grant is authorized and stamps its own subject', () => {
-    const mgr = mintToken({ id: 'mg', grants: [{ projectId: '*', permissions: ['policy:manage'] }], subject: subject({ userId: 'u-mg' }) });
+  it('setPackPolicy: a delegated instance-level project:admin is authorized and stamps its own subject', () => {
+    allow(dataDir, 'u-mg', 'project:admin', 'instance', undefined);
+    const mgr = mintUserToken(dataDir, { id: 'mg', userId: 'u-mg' });
     const stored = setPackPolicy(cfg, mgr, samplePolicy());
     expect(stored.updatedBy?.userId).toBe('u-mg');
   });
 
-  // ── S2: policy:manage / project:create are INSTANCE capabilities (cross-tenant) ─
+  // ── S2: policy administration is an INSTANCE capability (cross-tenant) ──────
   //
-  // A PROJECT-SCOPED grant carrying the instance permission must NOT satisfy an
-  // instance-wide capability. Only an instance-wide ({projectId:'*'}) grant passes.
+  // A PROJECT- or UNIT-scoped project:admin must NOT satisfy an instance-level
+  // capability. Only an instance-level assignment (or the instance-admin bypass)
+  // passes, and a unit-scoped creator cannot create into a foreign unit.
 
-  it('S2: a project-scoped policy:manage / project:create grant is rejected (403); an instance-wide grant passes', () => {
-    // Project-scoped policy:manage → still denied; instance-wide → authorized.
-    const projMgr = mintToken({ id: 's2-pm', grants: [{ projectId: 'acme', permissions: ['policy:manage'] }], subject: subject({ userId: 'u-s2pm' }) });
+  it('S2: scoped project:admin / project:create never widen to the instance; instance-level passes', () => {
+    // Project-scoped project:admin → still denied; instance-level → authorized.
+    allow(dataDir, 'u-s2pm', 'project:admin', 'project', 'acme');
+    const projMgr = mintUserToken(dataDir, { id: 's2-pm', userId: 'u-s2pm' });
     expect(() => setPackPolicy(cfg, projMgr, samplePolicy())).toThrow(ForbiddenError);
-    const instMgr = mintToken({ id: 's2-im', grants: [{ projectId: '*', permissions: ['policy:manage'] }], subject: subject({ userId: 'u-s2im' }) });
+    allow(dataDir, 'u-s2im', 'project:admin', 'instance', undefined);
+    const instMgr = mintUserToken(dataDir, { id: 's2-im', userId: 'u-s2im' });
     expect(setPackPolicy(cfg, instMgr, samplePolicy()).id).toBeTruthy();
 
-    // Project-scoped project:create → still denied; nothing is provisioned.
-    const projCreator = mintToken({ id: 's2-pc', grants: [{ projectId: 'acme', permissions: ['project:create'] }], subject: subject({ userId: 'u-s2pc' }) });
-    expect(() => initializeProjectWithProfile(cfg, projCreator, { id: 'nope-s2' })).toThrow(ForbiddenError);
+    // A creator scoped to unit A may NOT create into unit B; nothing is provisioned.
+    const unitA = seedUnit(dataDir, 'unit-a');
+    const unitB = seedUnit(dataDir, 'unit-b');
+    allow(dataDir, 'u-s2pc', 'project:create', 'unit', unitA.id);
+    const projCreator = mintUserToken(dataDir, { id: 's2-pc', userId: 'u-s2pc' });
+    expect(() =>
+      initializeProjectWithProfile(cfg, projCreator, { id: 'nope-s2', ownerUnitId: unitB.id }),
+    ).toThrow(ForbiddenError);
     expect(existingProjectRoot(dataDir, 'nope-s2')).toBeNull();
   });
 
@@ -225,16 +220,17 @@ describe('project policy orchestrator (sdd_host)', () => {
 
   it('executeApprovedInit: block mode with a violation throws and creates no project', () => {
     setPackPolicy(cfg, MASTER, samplePolicy({ enforcementMode: 'block', requireProfileSelection: true }));
-    expect(() => executeApprovedInit(cfg, { id: 'blocked-proj' })).toThrow(/policy violation/i);
+    expect(() => executeApprovedInit(cfg, { id: 'blocked-proj', ownerUnitId: 'nowhere' })).toThrow(/policy violation/i);
     expect(existingProjectRoot(dataDir, 'blocked-proj')).toBeNull();
   });
 
-  it('executeApprovedInit: happy path creates the project, vendors required+default packs, and records the profile selection', () => {
+  it('executeApprovedInit: happy path creates + PLACES the project, vendors required+default packs, and records the profile selection', () => {
     seedGlobalPack('foo');
     seedGlobalPack('bar');
     setPackPolicy(cfg, MASTER, samplePolicy({ requiredGlobalPacks: ['foo'], defaultProjectPacks: ['bar'] }));
 
-    const rec = executeApprovedInit(cfg, { id: 'happy-proj' });
+    const unit = seedUnit(dataDir, 'happy-unit');
+    const rec = executeApprovedInit(cfg, { id: 'happy-proj', ownerUnitId: unit.id });
     expect(rec.id).toBe('happy-proj');
 
     // Packs really installed — asserted via the packs module list.
@@ -251,29 +247,33 @@ describe('project policy orchestrator (sdd_host)', () => {
 
   // ── initializeProjectWithProfile (gated) ─────────────────────────────────
 
-  it('initializeProjectWithProfile: a project:create grant works and attributes selectedBy to the caller; a plain mcp:write token is 403', () => {
-    const creator = mintToken({ id: 'cr', grants: [{ projectId: '*', permissions: ['project:create'] }], subject: subject({ userId: 'u-cr' }) });
-    const writer = mintToken({ id: 'wr', grants: [{ projectId: '*', permissions: ['mcp:write'] }], subject: subject({ userId: 'u-wr' }) });
+  it('initializeProjectWithProfile: instance-level project:create works and attributes selectedBy; a plain writer is 403', () => {
+    const unit = seedUnit(dataDir, 'creator-unit');
+    allow(dataDir, 'u-cr', 'project:create', 'instance', undefined);
+    const creator = mintUserToken(dataDir, { id: 'cr', userId: 'u-cr' });
+    allow(dataDir, 'u-wr', 'project:write', 'instance', undefined);
+    const writer = mintUserToken(dataDir, { id: 'wr', userId: 'u-wr' });
 
-    expect(() => initializeProjectWithProfile(cfg, writer, { id: 'nope-proj' })).toThrow(ForbiddenError);
+    expect(() => initializeProjectWithProfile(cfg, writer, { id: 'nope-proj', ownerUnitId: unit.id })).toThrow(ForbiddenError);
     expect(existingProjectRoot(dataDir, 'nope-proj')).toBeNull();
 
-    const rec = initializeProjectWithProfile(cfg, creator, { id: 'creator-proj' });
+    const rec = initializeProjectWithProfile(cfg, creator, { id: 'creator-proj', ownerUnitId: unit.id });
     expect(existingProjectRoot(dataDir, 'creator-proj')).toBeTruthy();
     expect(readRawConfig(rec.rootPath).profileSelection.selectedBy.userId).toBe('u-cr');
   });
 
   // ── evaluate + reconcile on an existing project ──────────────────────────
 
-  it('evaluateProjectPolicy: requires a grant covering the project (403 for a plain reader)', () => {
-    createProject(cfg, MASTER, 'guard-proj');
-    const reader = mintToken({ id: 'gr', grants: [{ projectId: 'guard-proj', permissions: ['mcp:read'] }], subject: subject() });
+  it('evaluateProjectPolicy: requires project:write over the project (403 for a plain reader)', () => {
+    createPlacedProject(cfg, MASTER, 'guard-proj');
+    allow(dataDir, 'u-gr', 'project:read', 'project', 'guard-proj');
+    const reader = mintUserToken(dataDir, { id: 'gr', userId: 'u-gr' });
     expect(() => evaluateProjectPolicy(cfg, reader, 'guard-proj')).toThrow(ForbiddenError);
   });
 
   it('evaluate + reconcile: a non-compliant project becomes compliant after auto_reconcile installs the required pack, and both are audited', () => {
     seedGlobalPack('foo');
-    createProject(cfg, MASTER, 'plain-proj'); // provisioned, no packs
+    createPlacedProject(cfg, MASTER, 'plain-proj'); // provisioned, no packs
     setPackPolicy(cfg, MASTER, samplePolicy({ requiredGlobalPacks: ['foo'], enforcementMode: 'auto_reconcile' }));
 
     const before = evaluateProjectPolicy(cfg, MASTER, 'plain-proj');
@@ -295,7 +295,7 @@ describe('project policy orchestrator (sdd_host)', () => {
 
   it('reconcileProjectPolicy: leaves gaps in place when the policy mode does not permit auto-reconciliation', () => {
     seedGlobalPack('foo');
-    createProject(cfg, MASTER, 'warn-proj');
+    createPlacedProject(cfg, MASTER, 'warn-proj');
     setPackPolicy(cfg, MASTER, samplePolicy({ requiredGlobalPacks: ['foo'], enforcementMode: 'warn' }));
 
     const res = reconcileProjectPolicy(cfg, MASTER, 'warn-proj');
@@ -381,8 +381,10 @@ describe('project policy portal (sdd_host http)', () => {
     expect((await api('GET', '/instance/pack-policy', { cred: MASTER })).status).toBe(200);
     expect((await api('GET', '/instance/pack-policy')).status).toBe(401);
 
-    // POST /projects/init → 201, project provisioned on disk.
-    const init = await api('POST', '/projects/init', { cred: MASTER, body: { id: 'http-proj' } });
+    // POST /projects/init → 201, project provisioned on disk and PLACED in its
+    // required owner unit.
+    const unit = seedUnit(dataDir, 'http-unit');
+    const init = await api('POST', '/projects/init', { cred: MASTER, body: { id: 'http-proj', ownerUnitId: unit.id } });
     expect(init.status).toBe(201);
     expect(init.json.id).toBe('http-proj');
     expect(existingProjectRoot(dataDir, 'http-proj')).toBeTruthy();

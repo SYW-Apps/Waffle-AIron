@@ -1,0 +1,22 @@
+id: iproject_store
+name: Project Record Store Interface
+description: >-
+  Contract for the persisted hosted-project record set. Read-through file I/O over the data-dir
+  project registry file.
+component: project_store
+methods:
+  - name: read
+    description: >-
+      Load the persisted project records fresh from the backing file (absent file reads as the empty
+      set).
+    signature: 'read(): HostedProjectRecord[]'
+    returns: HostedProjectRecord[]
+    effect: read
+  - name: write
+    description: Persist the full project record set to the backing file.
+    signature: 'write(records: HostedProjectRecord[]): void'
+    returns: void
+    effect: write
+status: complete
+createdAt: '2026-07-19T08:59:56.882Z'
+updatedAt: '2026-07-19T09:00:49.096Z'

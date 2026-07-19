@@ -20,7 +20,13 @@ import {
   buildLandscapeGraph,
 } from '../../src/server/landscape.js';
 import { routeAdmin } from '../../src/server/http.js';
+import { getWebGraph } from '../../src/server/web.js';
+import { createWebSession } from '../../src/server/websessions.js';
 import { createProject } from '../../src/server/admin.js';
+import { mintUserToken, allow, seedUnit } from './helpers.js';
+import { createProjectRecord } from '../../src/server/projects.js';
+import { hostCore } from '../../src/server/adapters.js';
+import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
 import { upsertProjectRelation } from '../../src/server/relations.js';
 import { getPublicSurfaceSnapshot } from '../../src/server/surfaces.js';
@@ -52,7 +58,13 @@ const MASTER = 'master-credential-secret-value';
 const SUBJECT: PrincipalSubject = { userId: 'u-test', kind: 'human', issuer: 'local' };
 
 function unitRec(over: Partial<OrganizationUnitRecord> = {}): OrganizationUnitRecord {
-  return { id: '', name: 'Unit', kind: 'team', status: 'active', createdAt: '', createdBy: SUBJECT, ...over };
+  const name = over.name ?? 'Unit';
+  // The slug (the qualified-id segment) derives from the name unless supplied.
+  const slug = over.slug ?? name.toLowerCase().replace(/[^a-z0-9-]+/g, '-');
+  // Default to a business_entity so helper-created ROOT units satisfy the org-unit
+  // hierarchy (a root must be a business_entity; business_entity also nests under
+  // business_entity, so helper-created children stay valid too).
+  return { id: '', name, slug, kind: 'business_entity', status: 'active', createdAt: '', createdBy: SUBJECT, ...over };
 }
 
 function placementRec(over: Partial<ProjectPlacement> = {}): ProjectPlacement {
@@ -96,26 +108,19 @@ describe('landscape orchestrator (sdd_host)', () => {
     }
   });
 
-  /** Mint a stored token with a unique id and the given grants. */
+  /** Assignment-model token factories: each mints a fresh owner whose authority
+   *  comes exclusively from the grid (legacy landscape:manage → project:admin,
+   *  landscape:read → project:read). */
   let tokenSeq = 0;
-  function mintToken(grants: ProjectGrant[]): string {
-    const token = 'wk_' + crypto.randomBytes(8).toString('hex');
-    const record: ApiKeyRecord = {
-      id: `tok-${tokenSeq++}`,
-      keyHash: hashToken(token),
-      role: 'editor',
-      projects: grants.map((g) => g.projectId),
-      grants,
-      createdAt: new Date().toISOString(),
-      ownerSubject: SUBJECT,
-    };
-    createCredential(dataDir, record);
-    return token;
+  function tokenWith(capability: 'project:admin' | 'project:read' | 'project:write', scopeKind: 'instance' | 'unit' | 'project', scopeId?: string): string {
+    const userId = `u-${capability.replace(':', '-')}-${tokenSeq}`;
+    allow(dataDir, userId, capability, scopeKind, scopeId);
+    return mintUserToken(dataDir, { id: `tok-${tokenSeq++}`, userId });
   }
 
-  const manageToken = () => mintToken([{ projectId: '*', permissions: ['landscape:manage'] }]);
-  const readToken = () => mintToken([{ projectId: '*', permissions: ['landscape:read'] }]);
-  const plainToken = () => mintToken([{ projectId: '*', permissions: ['mcp:write'] }]);
+  const manageToken = () => tokenWith('project:admin', 'instance');
+  const readToken = () => tokenWith('project:read', 'instance');
+  const plainToken = () => tokenWith('project:write', 'instance');
 
   /** Seed L0 publicInterfaces into a provisioned project's raw system spec. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -127,9 +132,14 @@ describe('landscape orchestrator (sdd_host)', () => {
     writeYamlFile(p, raw);
   }
 
-  /** Create a hosted project and return its record. */
+  /** Create a hosted project at the REGISTRY level (no placement) and return its
+   *  record — these suites build their own unit/placement topologies explicitly,
+   *  and several pin the legacy no-units / unplaced-project postures the doctor
+   *  migration still has to handle. */
   function project(id: string): HostedProjectRecord {
-    return createProject(cfg, MASTER, id);
+    const rec = createProjectRecord(dataDir, id);
+    runWithProjectRoot(rec.rootPath, () => hostCore.provisionProject(id));
+    return rec;
   }
 
   // ── organization-unit / placement admin gating + audit ────────────────────
@@ -137,7 +147,7 @@ describe('landscape orchestrator (sdd_host)', () => {
   it('upsertUnit: a landscape:manage grant creates the unit and audits unit.upsert; a plain token is 403', () => {
     expect(() => upsertUnit(cfg, plainToken(), unitRec({ name: 'Team A' }))).toThrow(ForbiddenError);
 
-    const stored = upsertUnit(cfg, manageToken(), unitRec({ name: 'Team A', kind: 'team' }));
+    const stored = upsertUnit(cfg, manageToken(), unitRec({ name: 'Team A' }));
     expect(stored.id).toBeTruthy();
     expect(stored.name).toBe('Team A');
     expect(stored.status).toBe('active');
@@ -476,23 +486,33 @@ describe('landscape orchestrator (sdd_host)', () => {
   // carries NO unit-management authority, and its reads see only its own project —
   // never the whole instance.
 
-  const projManageToken = () => mintToken([{ projectId: 'acme', permissions: ['landscape:manage'] }]);
-  const projReadToken = () => mintToken([{ projectId: 'acme', permissions: ['landscape:read'] }]);
+  const projManageToken = () => tokenWith('project:admin', 'project', 'acme');
+  const projReadToken = () => tokenWith('project:read', 'project', 'acme');
 
-  it('scoped model: a project-scoped landscape grant confers only its project scope — not unit management, not an instance-wide view', () => {
-    // A project-scoped grant carries no unit scope → it can never manage org units.
+  it('scoped model: a project-scoped assignment confers only its project scope — not unit management, not an instance-wide view', () => {
+    // A hosted, PLACED 'acme' anchors the project-scoped assignments (an
+    // unplaced project is in nobody's visible set — the resolver enumerates the
+    // org tree).
+    const tenant = seedUnit(dataDir, 'tenant');
+    project('acme');
+    project('other');
+    placeProject(cfg, MASTER, placementRec({ projectId: 'acme', unitId: tenant.id }));
+    placeProject(cfg, MASTER, placementRec({ projectId: 'other', unitId: tenant.id }));
+
+    // A project-scoped admin carries no root-unit authority → never manages roots.
     expect(() => upsertUnit(cfg, projManageToken(), unitRec({ name: 'X' }))).toThrow(ForbiddenError);
 
-    // A project-scoped landscape:read grant is NOT denied outright — it has reach —
-    // but its view is narrowed to its one project (here empty, since 'acme' is not a
-    // hosted project), never the whole instance.
+    // A project-scoped project:read is NOT denied outright — it has reach — but
+    // its view is narrowed to its one project, never the whole instance.
     const scopedGraph = generateLandscape(cfg, projReadToken());
-    expect(scopedGraph.nodes.some((n) => n.nodeKind === 'project')).toBe(false);
+    const scopedProjects = scopedGraph.nodes.filter((n) => n.nodeKind === 'project').map((n) => n.projectId);
+    expect(scopedProjects).toEqual(['acme']);
     expect(listRelations(cfg, projReadToken())).toEqual([]);
 
-    // The instance-wide ({projectId:'*'}) equivalents retain full access.
+    // The instance-level equivalents retain full access.
     expect(upsertUnit(cfg, manageToken(), unitRec({ name: 'X' })).id).toBeTruthy();
-    expect(Array.isArray(generateLandscape(cfg, readToken()).nodes)).toBe(true);
+    const fullProjects = generateLandscape(cfg, readToken()).nodes.filter((n) => n.nodeKind === 'project');
+    expect(fullProjects.length).toBe(2);
     expect(listRelations(cfg, readToken())).toEqual([]);
   });
 
@@ -503,10 +523,8 @@ describe('landscape orchestrator (sdd_host)', () => {
   // scope; writes require the target to fall inside it. A super-admin (MASTER /
   // instance-wide grant) is unaffected — the suites above already assert that.
 
-  const unitManageToken = (unitId: string) =>
-    mintToken([{ projectId: '', orgUnitId: unitId, permissions: ['landscape:manage'] }]);
-  const unitReadToken = (unitId: string) =>
-    mintToken([{ projectId: '', orgUnitId: unitId, permissions: ['landscape:read'] }]);
+  const unitManageToken = (unitId: string) => tokenWith('project:admin', 'unit', unitId);
+  const unitReadToken = (unitId: string) => tokenWith('project:read', 'unit', unitId);
 
   /** Seed a two-branch org: unit A (the in-scope subtree) and sibling unit B (out
    *  of scope) under a shared root, each owning a source + dst project with a
@@ -566,10 +584,14 @@ describe('landscape orchestrator (sdd_host)', () => {
     expect(rels.map((r) => r.id)).toEqual([relIn.id]);
     expect(rels.map((r) => r.id)).not.toContain(relOut.id);
 
-    // generateLandscape: only unit A and its projects appear; unit B, its projects,
-    // and the root (out of A's subtree) are filtered out.
+    // generateLandscape: unit A (actionable) and its projects appear; the ROOT
+    // appears only as a read-only ancestor BREADCRUMB (actionable false) so the
+    // hierarchy stays navigable; unit B and its projects are filtered out.
     const graph = generateLandscape(cfg, tokenA);
-    expect(graph.nodes.filter((n) => n.nodeKind === 'orgUnit').map((n) => n.unitId)).toEqual([unitA.id]);
+    const unitNodes = graph.nodes.filter((n) => n.nodeKind === 'orgUnit');
+    expect(unitNodes.map((n) => n.unitId).sort()).toEqual(['root', unitA.id].sort());
+    expect(unitNodes.find((n) => n.unitId === unitA.id)?.actionable).toBe(true);
+    expect(unitNodes.find((n) => n.unitId === 'root')?.actionable).toBe(false);
     expect(
       graph.nodes
         .filter((n) => n.nodeKind === 'project')
@@ -577,6 +599,8 @@ describe('landscape orchestrator (sdd_host)', () => {
         .sort(),
     ).toEqual(['a-dst', 'a-src']);
     expect(graph.nodes.some((n) => n.projectId === 'b-src' || n.projectId === 'b-dst')).toBe(false);
+    // The breadcrumb root never exposes its OTHER child (unit B stays invisible).
+    expect(graph.nodes.some((n) => n.nodeKind === 'orgUnit' && n.unitId !== 'root' && n.unitId !== unitA.id)).toBe(false);
 
     // No edge dangles to a filtered-out node; the in-scope relation edge survives.
     const nodeIds = new Set(graph.nodes.map((n) => n.id));
@@ -757,7 +781,7 @@ describe('landscape portal (sdd_host http)', () => {
 
   it('the seven landscape endpoints respond with the correct statuses through routeAdmin', async () => {
     // PUT /landscape/units/{id} → 200.
-    const unit = await api('PUT', '/landscape/units/team-1', { cred: MASTER, body: { name: 'Team 1', kind: 'team' } });
+    const unit = await api('PUT', '/landscape/units/team-1', { cred: MASTER, body: { name: 'Team 1', kind: 'business_entity' } });
     expect(unit.status).toBe(200);
     expect(unit.json.id).toBe('team-1');
 
@@ -767,8 +791,9 @@ describe('landscape portal (sdd_host http)', () => {
     expect(place.json.projectId).toBe('proj-1');
     expect(place.json.unitId).toBe('team-1');
 
-    // Provision a real target project + surface for the relation.
-    const dst = createProject(cfg, MASTER, 'dst-proj');
+    // Provision a real target project + surface for the relation (placed into
+    // the unit the endpoints created — every project is placed at creation).
+    const dst = createProject(cfg, MASTER, 'dst-proj', 'team-1');
     seedSurface(dst.rootPath, 'dst-api');
 
     // POST /landscape/projects/{id}/public-surface/refresh → 200.
@@ -818,5 +843,126 @@ describe('landscape portal (sdd_host http)', () => {
     const res = await api('GET', '/admin/projects', { cred: MASTER });
     expect(res.status).toBe(200);
     expect(Array.isArray(res.json)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Hierarchical environment canvas: permission-filtered landscape (the resolver,
+// never a display projection). The S2-family standard: cross-tenant
+// invisibility gets its own two-tenant tests, and the no@org + yes@one-project
+// breadcrumb case is pinned end-to-end (generateLandscape actionability + the
+// /web graph reshape carrying it to the environment canvas).
+// ---------------------------------------------------------------------------
+
+describe('landscape visibility: breadcrumbs + two-tenant invisibility', () => {
+  let dataDir: string;
+  let cfg: HostConfig;
+  const savedEnv = { ...process.env };
+
+  beforeEach(() => {
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-landvis-'));
+    process.env.WAIRON_ADMIN_TOKEN = MASTER;
+    cfg = { host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: true };
+  });
+
+  afterEach(() => {
+    process.env = { ...savedEnv };
+    try {
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    } catch {
+      /* windows file locks */
+    }
+  });
+
+  let seq = 0;
+  function userToken(userId: string): string {
+    return mintUserToken(dataDir, { id: `lv-tok-${seq++}`, userId });
+  }
+
+  /** Two tenants side by side: a business entity each, one placed project each. */
+  function seedTwoTenants() {
+    createProjectRecord(dataDir, 'ten-a-app');
+    createProjectRecord(dataDir, 'ten-b-app');
+    const ua = upsertUnit(cfg, MASTER, unitRec({ name: 'Tenant A', slug: 'tenant-a' }));
+    const ub = upsertUnit(cfg, MASTER, unitRec({ name: 'Tenant B', slug: 'tenant-b' }));
+    placeProject(cfg, MASTER, placementRec({ projectId: 'ten-a-app', unitId: ua.id }));
+    placeProject(cfg, MASTER, placementRec({ projectId: 'ten-b-app', unitId: ub.id }));
+    return { ua, ub };
+  }
+
+  it('two tenants are mutually invisible: a unit admin of A sees no node, edge, or id of B', () => {
+    const { ua, ub } = seedTwoTenants();
+    allow(dataDir, 'lv-admin-a', 'project:admin', 'unit', ua.id);
+    const g = generateLandscape(cfg, userToken('lv-admin-a'));
+
+    const unitA = g.nodes.find((n) => n.nodeKind === 'orgUnit' && n.unitId === ua.id);
+    expect(unitA).toBeDefined();
+    expect(unitA?.actionable).toBe(true);
+    const projA = g.nodes.find((n) => n.nodeKind === 'project' && n.projectId === 'ten-a-app');
+    expect(projA?.actionable).toBe(true);
+
+    // Tenant B never appears — not as a node, not as an edge endpoint.
+    expect(g.nodes.some((n) => n.unitId === ub.id || n.projectId === 'ten-b-app')).toBe(false);
+    const bIds = [`unit:${ub.id}`, 'project:ten-b-app'];
+    expect(g.edges.some((e) => bIds.includes(e.from) || bIds.includes(e.to))).toBe(false);
+  });
+
+  it('an instance admin sees both tenants, every node actionable', () => {
+    const { ua, ub } = seedTwoTenants();
+    const g = generateLandscape(cfg, MASTER, 'instance');
+    for (const unitId of [ua.id, ub.id]) {
+      const node = g.nodes.find((n) => n.nodeKind === 'orgUnit' && n.unitId === unitId);
+      expect(node?.actionable).toBe(true);
+    }
+    for (const pid of ['ten-a-app', 'ten-b-app']) {
+      expect(g.nodes.find((n) => n.projectId === pid)?.actionable).toBe(true);
+    }
+  });
+
+  it('no@org + yes@one-project: the ancestor chain shows as read-only breadcrumbs, siblings stay invisible', () => {
+    createProjectRecord(dataDir, 'bc-mine');
+    createProjectRecord(dataDir, 'bc-sibling');
+    const root = upsertUnit(cfg, MASTER, unitRec({ name: 'Org Root', slug: 'org-root' }));
+    const team = upsertUnit(cfg, MASTER, unitRec({ name: 'Team', slug: 'team', parentId: root.id }));
+    placeProject(cfg, MASTER, placementRec({ projectId: 'bc-mine', unitId: team.id }));
+    placeProject(cfg, MASTER, placementRec({ projectId: 'bc-sibling', unitId: team.id }));
+
+    allow(dataDir, 'lv-bc', 'project:read', 'unit', root.id, 'no');
+    allow(dataDir, 'lv-bc', 'project:read', 'project', 'bc-mine');
+    const g = generateLandscape(cfg, userToken('lv-bc'));
+
+    // The ancestor chain is present but read-only (actionable false).
+    expect(g.nodes.find((n) => n.unitId === team.id)?.actionable).toBe(false);
+    expect(g.nodes.find((n) => n.unitId === root.id)?.actionable).toBe(false);
+    // The actionable project sits under its breadcrumb unit (placement kept).
+    expect(g.nodes.find((n) => n.projectId === 'bc-mine')?.actionable).toBe(true);
+    expect(g.edges.some((e) => e.from === `unit:${team.id}` && e.to === 'project:bc-mine')).toBe(true);
+    // The breadcrumb NEVER exposes the ancestor unit''s other children.
+    expect(g.nodes.some((n) => n.projectId === 'bc-sibling')).toBe(false);
+    // The unit hierarchy edge root→team survives for navigation.
+    expect(g.edges.some((e) => e.from === `unit:${root.id}` && e.to === `unit:${team.id}`)).toBe(true);
+  });
+
+  it('the /web graph reshape carries actionability to the environment canvas', () => {
+    createProjectRecord(dataDir, 'bc2-mine');
+    const root = upsertUnit(cfg, MASTER, unitRec({ name: 'Root2', slug: 'root2' }));
+    const team = upsertUnit(cfg, MASTER, unitRec({ name: 'Team2', slug: 'team2', parentId: root.id }));
+    placeProject(cfg, MASTER, placementRec({ projectId: 'bc2-mine', unitId: team.id }));
+    allow(dataDir, 'lv-web', 'project:read', 'project', 'bc2-mine');
+
+    const session = createWebSession(dataDir, {
+      id: '',
+      subject: { userId: 'lv-web', kind: 'human', issuer: 'local' },
+      projects: ['*'],
+      createdAt: '',
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+    });
+    const web = getWebGraph(cfg, session.id, 'landscape', '', 1);
+    const unitNode = web.nodes.find((n) => n.kind === 'unit' && n.id === `unit:${team.id}`);
+    expect(unitNode?.actionable).toBe(false);
+    const projNode = web.nodes.find((n) => n.kind === 'project' && n.projectId === 'bc2-mine');
+    expect(projNode?.actionable).toBe(true);
+    // parentId spans the unit nesting so the client can rebuild the tree.
+    expect(unitNode?.parentId).toBe(`unit:${root.id}`);
   });
 });

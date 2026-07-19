@@ -1,0 +1,41 @@
+id: ipermission_index
+name: Permission Index Interface
+description: >-
+  Private read-path projection over the permission-assignment grid, filterable for hierarchical
+  resolution (by the ancestor scope ids) and for admin listing (by subject).
+component: permission_index
+methods:
+  - name: listAssignments
+    description: >-
+      List assignments, narrowed by any combination of: scopeIds (the target's ancestor chain),
+      subjectKind, subjectId, and capability. All filters optional; an empty filter returns every
+      assignment.
+    signature: >-
+      listAssignments(scopeIds: string[], subjectKind: string, subjectId: string, capability:
+      string): PermissionAssignment[]
+    returns: PermissionAssignment[]
+    params:
+      - name: scopeIds
+        type: string[]
+        optional: true
+      - name: subjectKind
+        type: string
+        optional: true
+      - name: subjectId
+        type: string
+        optional: true
+      - name: capability
+        type: string
+        optional: true
+  - name: getAssignment
+    description: >-
+      Return one assignment by id, or null when absent — used to authorize a removal against the
+      assignment's own scope.
+    signature: 'getAssignment(assignmentId: string): PermissionAssignment | null'
+    returns: PermissionAssignment | null
+    params:
+      - name: assignmentId
+        type: string
+status: complete
+createdAt: '2026-07-15T20:27:57.661Z'
+updatedAt: '2026-07-15T22:22:07.188Z'

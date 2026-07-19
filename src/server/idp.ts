@@ -78,7 +78,22 @@ interface IdTokenClaims {
   exp?: number;
   email?: string;
   name?: string;
+  /** Common display-name claims IdPs send when `name` is absent (Keycloak,
+   *  Authentik, Entra often populate preferred_username / given_name only). */
+  preferred_username?: string;
+  given_name?: string;
+  family_name?: string;
   groups?: string[];
+}
+
+/** Best display name from the standard OIDC claims: full `name`, else the
+ *  given+family pair, else `preferred_username`. Undefined when none is present. */
+function claimsDisplayName(c: IdTokenClaims): string | undefined {
+  const name = c.name?.trim();
+  if (name) return name;
+  const full = [c.given_name?.trim(), c.family_name?.trim()].filter(Boolean).join(' ').trim();
+  if (full) return full;
+  return c.preferred_username?.trim() || undefined;
 }
 
 /** Raw provider token response (fields this adapter reads); never returned. */
@@ -345,6 +360,9 @@ export async function exchangeCode(
       exp: claims.exp,
       email: claims.email,
       name: claims.name,
+      preferred_username: claims.preferred_username,
+      given_name: claims.given_name,
+      family_name: claims.family_name,
       groups: claims.groups,
     },
     tokenType: token.token_type ?? 'Bearer',
@@ -554,7 +572,7 @@ export async function resolveSubject(
     kind: 'human',
     issuer: config.id,
     externalSubject: subject,
-    displayName: claims.name?.trim() || undefined,
+    displayName: claimsDisplayName(claims),
     email,
   };
 }

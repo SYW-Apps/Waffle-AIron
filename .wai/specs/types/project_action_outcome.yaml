@@ -1,0 +1,42 @@
+kind: value-object
+id: project_action_outcome
+name: ProjectActionOutcome
+description: >-
+  The standardized result of a project lifecycle action (initialize/lock/promote). Execute-primary:
+  when the caller is authorized the action runs and status is 'completed' with the natural result;
+  when the caller's effective permission is 'approval' the action is not run and status is
+  'pending-approval' carrying the created request. A 'no' permission never returns this — it raises
+  Forbidden.
+subsystem: sdd_host
+fields:
+  - name: status
+    type: string
+    description: >-
+      completed (the action executed) | pending-approval (an approval request was created and awaits
+      a decision).
+    optional: false
+  - name: action
+    type: string
+    description: project:init | project:lock | project:promote.
+    optional: false
+  - name: summary
+    type: string
+    description: >-
+      Human-readable outcome (for completed, the result detail; for pending-approval, that a request
+      was submitted).
+    optional: false
+  - name: approval
+    type: ApprovalRequest
+    description: The pending approval request, present only when status is 'pending-approval'.
+    optional: true
+  - name: lock
+    type: LockRecord
+    description: The lock record, present when a project:lock completed.
+    optional: true
+  - name: promote
+    type: PromoteResult
+    description: The promote result, present when a project:promote completed.
+    optional: true
+methods: []
+createdAt: '2026-07-16T00:08:34.090Z'
+updatedAt: '2026-07-16T00:08:34.095Z'

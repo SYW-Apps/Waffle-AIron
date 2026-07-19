@@ -1,0 +1,26 @@
+id: rule_registry_impl
+name: Rule Registry Implementation
+description: >-
+  Write path in src/core/rules/index.ts: seeds built-in rules and registers pack rules into the rule
+  store.
+contract: irule_registry
+sourcePath: src/core/rules/repository.ts
+simPath: tests/core/validation.test.ts
+methods:
+  - name: registerBuiltinRules
+    narrative: []
+    intent: >-
+      Add each built-in SDD conformance rule to the rule store in canonical run order via the
+      store's addRule. Against a fresh ram-projection store this seeds the set once at the start of
+      a validation run.
+  - name: registerPackRules
+    narrative: []
+    intent: >-
+      For each programmatic pack rule, verify it is rule-shaped ({ name, description, codes, check
+      }) and append it to the rule store after the built-ins via addRule, so a later project pack's
+      rules run last. A malformed entry is refused as an EXTENSION_LOAD_ERROR upstream rather than
+      silently added.
+detail: intent
+status: complete
+createdAt: '2026-07-14T19:17:45.532Z'
+updatedAt: '2026-07-18T22:34:35.082Z'

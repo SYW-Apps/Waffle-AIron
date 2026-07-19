@@ -46,15 +46,22 @@ methods:
         targetComponent: user_registry
         targetMethod: setStatus
     symbol: setUserStatus
-  - name: replaceGrants
+  - name: remapUnitReferences
     narrative:
       - stepNumber: 1
         description: Forward to the user registry
         type: call
         targetComponent: user_registry
-        targetMethod: replaceGrants
-    symbol: replaceUserGrants
+        targetMethod: remapUnitReferences
+  - name: findByRecordOrSubjectId
+    narrative:
+      - stepNumber: 1
+        description: Forward to the user index
+        type: call
+        targetComponent: user_index
+        targetMethod: findByRecordOrSubjectId
+    symbol: findUserByRecordOrSubjectId
 detail: calls-only
 status: complete
 createdAt: '2026-07-09T17:30:25.703Z'
-updatedAt: '2026-07-11T19:14:22.956Z'
+updatedAt: '2026-07-19T13:29:42.806Z'

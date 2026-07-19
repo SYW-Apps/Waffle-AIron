@@ -1,0 +1,39 @@
+kind: value-object
+id: rule_context
+name: RuleContext
+description: >-
+  The shared read-model and issue sink passed to every validation rule's check. Carries the loaded
+  spec collections (system, subsystems, components, interfaces, implementations, types) plus derived
+  lookup maps, the source-code model, per-spec lint-allow bookkeeping, and the extension-pack data
+  (ext). Rules report findings through its addIssue, which applies scope filtering, user severity
+  overrides, and draft-context downgrades. Only the salient fields are modeled here; the full
+  read-model is described in prose.
+fields:
+  - name: components
+    type: ComponentSpec[]
+    description: >-
+      The loaded component specs the rules read (representative of the full spec collections
+      carried).
+    optional: false
+  - name: ext
+    type: RuleExt
+    description: >-
+      Extension-pack data merged into validation: profiles, languages, and reusable pattern
+      definitions.
+    optional: false
+  - name: variants
+    type: VariantDef[]
+    description: >-
+      Component-variant registry (the dynamic layer on top of packs; empty when none) — the
+      resolution set for component.variant references, exposed to programmatic pack rules.
+    optional: false
+methods: []
+lint:
+  allow:
+    - code: UNUSED_TYPE
+      reason: >-
+        RuleContext is the shared read-model and issue sink passed to every rule's check — behaviour
+        held by the rule registry, not a modeled method parameter; the type documents that contract
+        for the design record.
+createdAt: '2026-07-14T18:57:12.033Z'
+updatedAt: '2026-07-15T12:23:36.051Z'

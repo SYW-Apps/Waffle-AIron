@@ -1,0 +1,20 @@
+id: authorization_specialist
+name: Authorization Specialist
+description: >-
+  The single I/O-backed authorization entry the control-plane and project-lifecycle workflows call
+  after authenticating. Gathers the permission world (assignments, roles, organization units,
+  placements) once and delegates the pure computation to the permission resolver: authorize returns
+  a caller's effective permission for a capability at a target scope; visibleScopes returns the
+  scopes actionable for a capability plus their ancestor breadcrumb. Reads repositories but holds no
+  state; every workflow authorizes through this one seam instead of re-gathering.
+subsystem: sdd_host
+componentType: Specialist
+owns: []
+dependsOn:
+  - organization_repository
+  - permission_repository
+  - role_repository
+  - permission_resolver
+status: complete
+createdAt: '2026-07-15T21:31:49.217Z'
+updatedAt: '2026-07-16T00:14:52.080Z'

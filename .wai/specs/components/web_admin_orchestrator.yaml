@@ -15,9 +15,13 @@ owns: []
 dependsOn:
   - identity_orchestrator
   - auth_specialist
+  - authorization_specialist
   - organization_repository
+  - permission_repository
+  - user_repository
   - audit_repository
   - secret_registry
+  - permission_admin_orchestrator
 status: complete
 createdAt: '2026-07-13T18:27:33.510Z'
-updatedAt: '2026-07-14T12:31:03.407Z'
+updatedAt: '2026-07-15T22:02:17.796Z'

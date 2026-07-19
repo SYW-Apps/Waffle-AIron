@@ -1,0 +1,38 @@
+id: permission_registry_impl
+name: Permission Registry Implementation
+description: >-
+  Write path for the permission-assignment grid: keyed upsert, removal, and unit-move scope remap,
+  with durable persistence and store refresh. No authorization.
+contract: ipermission_registry
+sourcePath: src/server/permissions.ts
+methods:
+  - name: setAssignment
+    narrative: []
+    intent: >-
+      Find any existing assignment with the same (subjectKind, subjectId, scopeKind, scopeId,
+      capability) key; when value is 'inherit', remove that override, otherwise upsert — replacing
+      the existing value in place or stamping id/createdAt on a new one. Rewrite the persisted
+      collection via write-temp-then-rename, refresh the store with replaceAll, and return the
+      stored assignment. Persistence failures leave the previous collection intact.
+  - name: removeAssignment
+    narrative: []
+    intent: >-
+      Remove the assignment with the given id from the collection, rewrite via
+      write-temp-then-rename, and refresh the store; an absent assignment is a no-op.
+  - name: remapScope
+    narrative: []
+    intent: >-
+      For every assignment whose scopeId matches an old id in the remap, rewrite it to the
+      corresponding new id (a unit rename/move), then rewrite the persisted collection via
+      write-temp-then-rename and refresh the store. Assignments outside the remap are untouched.
+  - name: removeAssignmentsForScopes
+    narrative: []
+    detail: intent
+    intent: >-
+      Drop every assignment whose scopeId appears in the supplied set (a cascade-deleted subtree),
+      rewrite the persisted collection via write-temp-then-rename, and refresh the store.
+      Assignments outside the set are untouched; an empty set is a no-op.
+detail: intent
+status: complete
+createdAt: '2026-07-15T20:29:02.068Z'
+updatedAt: '2026-07-15T22:22:07.814Z'

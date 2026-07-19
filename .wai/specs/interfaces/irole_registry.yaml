@@ -1,0 +1,41 @@
+id: irole_registry
+name: Role Registry Interface
+description: >-
+  Private write-path contract for permission roles. Owns id/timestamp stamping and duplicate-id
+  rejection; performs no authorization.
+component: role_registry
+methods:
+  - name: createRole
+    description: >-
+      Create one role: stamp id (when absent) and createdAt, reject a duplicate id, persist the full
+      role collection durably, and refresh the store.
+    signature: 'createRole(role: Role): Role'
+    returns: Role
+    params:
+      - name: role
+        type: Role
+    guarantees:
+      - atomic
+  - name: updateRole
+    description: >-
+      Update one existing role by id (name, description, permissions), preserving
+      createdAt/createdBy; validation error when absent. Persist durably and refresh the store.
+    signature: 'updateRole(role: Role): Role'
+    returns: Role
+    params:
+      - name: role
+        type: Role
+    guarantees:
+      - atomic
+  - name: deleteRole
+    description: >-
+      Delete one role by id, persist durably, and refresh the store; deleting an absent role is a
+      no-op. Callers are responsible for clearing role bindings that reference it.
+    signature: 'deleteRole(roleId: string): void'
+    returns: void
+    params:
+      - name: roleId
+        type: string
+status: complete
+createdAt: '2026-07-15T20:27:34.104Z'
+updatedAt: '2026-07-15T22:22:07.491Z'

@@ -1,0 +1,20 @@
+id: instance_identity_registry_impl
+name: Instance Identity Registry Implementation
+description: >-
+  Create-once write path for the singleton InstanceIdentity persisted atomically to instance.json
+  under the hosted data root.
+contract: iinstance_identity_registry
+sourcePath: src/server/instance.ts
+methods:
+  - name: seed
+    narrative: []
+    intent: >-
+      When the store already holds a record, return it unchanged (idempotent — ids are never
+      regenerated or rotated). Otherwise generate cryptographically random UUIDs (crypto.randomUUID)
+      for the built-in super-admin and local-developer subjects, stamp createdAt from the supplied
+      timestamp, write the record atomically to instance.json (temp file + rename), swap it into the
+      store, and return it. Fails by throwing on an unwritable data root; it never partially seeds.
+detail: intent
+status: complete
+createdAt: '2026-07-16T00:24:41.756Z'
+updatedAt: '2026-07-16T07:27:54.706Z'

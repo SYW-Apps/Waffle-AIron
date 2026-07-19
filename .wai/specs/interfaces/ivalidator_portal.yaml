@@ -21,6 +21,13 @@ methods:
       severity relaxation) without mutating any spec. The as-complete gate a lock requires.
     signature: 'validateAsComplete(): ValidationResult'
     returns: ValidationResult
+  - name: listRules
+    description: >-
+      List the active conformance rule set (built-ins plus loaded pack rules) for `wairon rules
+      list`.
+    signature: 'listRules(): SddRule[]'
+    returns: SddRule[]
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-04T12:48:21.665Z'
+updatedAt: '2026-07-14T20:09:04.994Z'

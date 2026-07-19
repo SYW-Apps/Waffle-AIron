@@ -10,6 +10,7 @@ dependsOn:
   - validator_core_adapter
   - validator_surfaces_adapter
   - source_analysis_adapter
+  - rule_repository
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-07-11T17:52:29.410Z'
+updatedAt: '2026-07-14T19:21:21.528Z'

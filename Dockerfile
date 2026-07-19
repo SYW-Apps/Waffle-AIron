@@ -16,9 +16,19 @@ FROM node:24-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
+# Web UI deps (separate package under web/): copy manifests first so this layer
+# caches independently of the app source. The React bundle is built self-contained
+# and embedded into dist/ — nothing from web/ ships to the runtime image.
+COPY web/package.json web/package-lock.json ./web/
+RUN npm --prefix web ci
 COPY tsconfig.json tsup.config.ts ./
 COPY src ./src
-RUN npm run build
+COPY scripts ./scripts
+COPY web ./web
+# Build the web bundle first (web/dist/index.html), then the backend + embed step
+# (npm run build) which copies it to dist/webapp.html. Deps are already installed,
+# so invoke the web build directly instead of build:all (which would reinstall).
+RUN npm --prefix web run build && npm run build
 
 # ---- runtime ----
 FROM node:24-alpine AS runtime

@@ -43,6 +43,21 @@ export function resolveSecret(key: string): string | null {
   return null;
 }
 
+/**
+ * Resolve the git token for one connection: its OWN per-connection secret
+ * (`credentialRef`) first, then the shared instance-wide `git-token`. This lets
+ * each backup binding / project git connection carry a distinct PAT (a different
+ * org or account) while a connection without its own PAT still works off the
+ * shared token. Returns null when neither is set.
+ */
+export function resolveGitToken(credentialRef?: string | null): string | null {
+  if (credentialRef) {
+    const own = resolveSecret(credentialRef);
+    if (own) return own;
+  }
+  return resolveSecret('git-token');
+}
+
 /** Set a secret at runtime in the data-dir store (read live — no restart). */
 export function setSecret(key: string, value: string): void {
   const p = storePath();

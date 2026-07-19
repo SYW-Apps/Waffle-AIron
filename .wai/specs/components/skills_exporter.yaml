@@ -1,8 +1,13 @@
-id: "skills_exporter"
-name: "Skills Exporter"
-description: "Copies the static SDD AI Skill definitions to user-approved local AI CLI configuration directories."
-subsystem: "sdd_skills"
-componentType: "Adapter"
-dependsOn: []
-createdAt: "2026-06-10T19:28:00.000Z"
-updatedAt: "2026-06-10T19:28:00.000Z"
+id: skills_exporter
+name: Skills Exporter
+description: >-
+  Copies the static SDD AI Skill definitions to user-approved local AI CLI configuration
+  directories.
+subsystem: sdd_skills
+componentType: Adapter
+owns: []
+dependsOn:
+  - skills_core_adapter
+status: complete
+createdAt: '2026-06-10T19:28:00.000Z'
+updatedAt: '2026-07-14T20:13:59.352Z'

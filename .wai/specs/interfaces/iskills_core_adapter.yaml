@@ -1,0 +1,15 @@
+id: iskills_core_adapter
+name: Skills Core Adapter Interface
+description: Loads the governing extension packs for the skills subsystem via the core portal.
+component: skills_core_adapter
+methods:
+  - name: loadProjectExtensions
+    description: >-
+      Load and merge the governing extension packs via the core portal, returning the
+      LoadedExtensions whose skills the exporter and resource specialist consume.
+    signature: 'loadProjectExtensions(): LoadedExtensions'
+    returns: LoadedExtensions
+    params: []
+status: complete
+createdAt: '2026-07-14T20:14:02.590Z'
+updatedAt: '2026-07-14T20:23:49.468Z'

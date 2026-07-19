@@ -1,0 +1,32 @@
+id: role_registry_impl
+name: Role Registry Implementation
+description: >-
+  Write path for permission roles: id/timestamp stamping, duplicate-id rejection, durable
+  persistence, and store refresh. No authorization.
+contract: irole_registry
+sourcePath: src/server/roles.ts
+methods:
+  - name: createRole
+    narrative: []
+    intent: >-
+      Stamp the role's id (a slug derived from the name when absent) and createdAt, reject a
+      duplicate id with a validation error, rewrite the persisted role collection via
+      write-temp-then-rename, refresh the store with replaceAll, and return the stored role.
+      Persistence failures leave the previous collection intact. Authorization is enforced by the
+      orchestrator, not here.
+  - name: updateRole
+    narrative: []
+    intent: >-
+      Load the existing role by id (validation error when absent), apply
+      name/description/permissions while preserving id/createdAt/createdBy, rewrite via
+      write-temp-then-rename, refresh the store, and return the stored role.
+  - name: deleteRole
+    narrative: []
+    intent: >-
+      Remove the role with the given id from the collection, rewrite via write-temp-then-rename, and
+      refresh the store; an absent role is a no-op. Clearing role bindings that reference it is the
+      orchestrator's responsibility.
+detail: intent
+status: complete
+createdAt: '2026-07-15T20:28:40.375Z'
+updatedAt: '2026-07-15T22:22:08.074Z'

@@ -42,6 +42,8 @@ delegate downward rather than holding it all yourself:
 * Hand cross-boundary work to the sibling owner that owns it, or escalate to
   the Architect.
 
+
+
 ## Spec-Driven Development (SDD)
 * Follow the **sdd-implement** and **sdd-narrative** skills (installed in your tool's skills directory).
 * Implementation must match L3 interfaces and L5 narratives exactly.

@@ -5,15 +5,20 @@ import * as path from 'path';
 import { handleMcpRequest, handleViewDiagram } from './request.js';
 import { sendJson, bearerToken } from './httpio.js';
 import { handleWebRequest, sessionCookieValue, startDevSession, setSessionCookie } from './web.js';
+import { getRealtimeHub, channelsForWebMutation, publishChange } from './realtime.js';
+import { serveSharedView, serveSharedModel, serveSharedOpenApi, serveSharedDownload } from './sharehttp.js';
 import * as admin from './admin.js';
 import * as packs from './packs.js';
+import { ensureInstanceIdentity } from './instance.js';
+import { createUnit, getOrganizationUnit } from './organization.js';
 import * as identity from './identity.js';
-import * as selfservice from './selfservice.js';
+import * as projectlifecycle from './projectlifecycle.js';
 import * as policy from './policy.js';
 import * as landscape from './landscape.js';
 import * as operations from './operations.js';
-import { AdminAuthError, LockValidationError } from './admin.js';
-import type { ApprovalDecision, HostConfig, HostExposurePolicy, Role } from './types.js';
+import { AdminAuthError, LockValidationError, runPeriodicGitSync } from './admin.js';
+import { runPeriodicBackingSync } from './gitbacking.js';
+import type { ApprovalDecision, DisplayRole, HostConfig, HostExposurePolicy, PrincipalSubject } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Host HTTP Portal + Host Server (sdd_host)
@@ -118,11 +123,41 @@ function webCsrfHeaderPresent(req: IncomingMessage): boolean {
 const WEB_MUTATION_PATHS = new Set<string>([
   '/web/admin/users',
   '/web/admin/users/status',
-  '/web/admin/users/grants',
   '/web/admin/providers',
   '/web/admin/providers/remove',
   '/web/admin/org/units',
+  '/web/admin/org/units/remove',
   '/web/admin/org/placements',
+  '/web/admin/secrets',
+  '/web/admin/roles',
+  '/web/admin/roles/update',
+  '/web/admin/roles/remove',
+  '/web/admin/roles/bind',
+  '/web/admin/roles/unbind',
+  '/web/admin/permissions',
+  '/web/admin/permissions/remove',
+  '/web/admin/packs',
+  '/web/admin/packs/remove',
+  '/web/admin/policy',
+  '/web/admin/exposure',
+  '/web/admin/git-backing',
+  '/web/admin/git-backing/remove',
+  '/web/admin/git-backing/sync',
+  '/web/admin/share',
+  '/web/admin/share/refresh',
+  '/web/admin/share/update',
+  '/web/admin/share/remove',
+  '/web/projects/packs',
+  '/web/projects/packs/remove',
+  '/web/projects/policy/reconcile',
+  '/web/projects/producers',
+  '/web/projects/producers/remove',
+  '/web/projects/producers/run',
+  '/web/projects/git',
+  '/web/projects/git/disconnect',
+  '/web/projects/git/sync',
+  '/web/projects/git/commit',
+  '/web/projects/git/sync-config',
   '/web/tokens',
   '/web/tokens/revoke',
   '/web/projects',
@@ -150,6 +185,34 @@ export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResp
   }
   if (req.method === 'GET' && url.pathname === '/view/diagram') {
     handleViewDiagram(cfg, req, res);
+    return;
+  }
+
+  // Public share surface: GET /share/:token[/model|/openapi|/download/:kind].
+  // Unauthenticated + token-gated (the share access orchestrator resolves the
+  // token, logs the access, and sets the hardening headers). Gated by the same
+  // web-UI exposure switch as the app, so disabling the web UI disables sharing.
+  if (req.method === 'GET' && url.pathname.startsWith('/share/')) {
+    if (!resolveExposurePolicy(cfg).webUiEnabled && cfg.devMode !== true) {
+      sendJson(res, 404, { error: 'not found' });
+      return;
+    }
+    const parts = url.pathname.split('/').filter(Boolean); // ['share', token, sub?, kind?]
+    const token = decodeURIComponent(parts[1] ?? '');
+    const sub = parts[2];
+    if (!token) {
+      sendJson(res, 404, { error: 'not found' });
+    } else if (!sub) {
+      serveSharedView(cfg, token, req, res);
+    } else if (sub === 'model') {
+      serveSharedModel(cfg, token, req, res);
+    } else if (sub === 'openapi') {
+      serveSharedOpenApi(cfg, token, req, res);
+    } else if (sub === 'download' && parts[3]) {
+      serveSharedDownload(cfg, token, decodeURIComponent(parts[3]), req, res);
+    } else {
+      sendJson(res, 404, { error: 'not found' });
+    }
     return;
   }
 
@@ -181,8 +244,20 @@ export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResp
   }
 
   // Unified web UI (opt-in): the app shell at '/' and the thin /web/* routes.
-  const isWebPath =
-    url.pathname === '/' || url.pathname === '/web' || url.pathname.startsWith('/web/');
+  // The web UI is a client-routed single-page app (BrowserRouter), so a browser
+  // navigation to an in-app path like /projects or /admin must also return the
+  // app document — the SPA then renders the matching view. This history-fallback
+  // is scoped to genuine browser navigations (GET + Accept: text/html) that are
+  // NOT an API surface, so JSON fetches to unknown routes still get a JSON 404 and
+  // asset requests (favicon, etc., which don't send text/html) fall through.
+  const isApiWebPath = url.pathname === '/web' || url.pathname.startsWith('/web/');
+  const isAppNavigation =
+    req.method === 'GET' &&
+    !isApiWebPath &&
+    !url.pathname.startsWith('/view') &&
+    !url.pathname.startsWith('/mcp') &&
+    (req.headers['accept'] ?? '').includes('text/html');
+  const isWebPath = url.pathname === '/' || isApiWebPath || isAppNavigation;
   if (isWebPath) {
     const exposure = resolveExposurePolicy(cfg);
     // LOCAL DEV MODE (`wairon dev`, strictly cfg.devMode): the web UI is always on,
@@ -229,7 +304,15 @@ export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResp
     }
 
     const proceed = (body: unknown): Promise<void> =>
-      handleWebRequest(cfg, req, res, body, url, { sessionId: sessionCredential, secureCookie });
+      handleWebRequest(cfg, req, res, body, url, { sessionId: sessionCredential, secureCookie }).then(() => {
+        // Realtime: after a state-changing web mutation succeeds, nudge the
+        // channels it touched so other sessions refetch. The event carries NO
+        // data (a bare refetch), and a spurious nudge after a failed mutation is
+        // harmless — the refetch just returns the unchanged, scope-filtered view.
+        if (req.method === 'POST' && res.statusCode < 400) {
+          for (const ch of channelsForWebMutation(url.pathname, body)) publishChange(ch);
+        }
+      });
     (req.method === 'POST' ? readBody(req) : Promise.resolve(undefined))
       .then(proceed)
       .catch((err) => {
@@ -259,22 +342,8 @@ export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResp
 // <dataDir>/exposure-policy.json is read (a partial object is fine — its flags
 // override the compatible default). Env/flag plumbing can come later.
 
-/** The compatible default: everything mounted on the loopback admin listener,
- *  matching pre-exposure-policy behavior. */
-const COMPATIBLE_DEFAULT_EXPOSURE: HostExposurePolicy = {
-  adminApiMode: 'local_only',
-  adminUiEnabled: true,
-  identityApiEnabled: true,
-  landscapeApiEnabled: true,
-  projectPolicyApiEnabled: true,
-  cliControlEnabled: true,
-  requireTls: true,
-  operationsApiEnabled: true,
-  // The unified web UI is a NEW public surface on the data plane, so it is
-  // OPT-IN: false here keeps existing instances unaffected (every /web path and
-  // the app shell answer 404 until an operator turns it on).
-  webUiEnabled: false,
-};
+// The compatible default posture lives with the exposure repository
+// (policy.ts) so the admin edit surface and this gate share one source.
 
 /** Read an optional <dataDir>/exposure-policy.json override (a partial policy);
  *  absent/malformed yields undefined so the compatible default stands. */
@@ -293,7 +362,7 @@ function readExposurePolicyFile(dataDir: string): Partial<HostExposurePolicy> | 
  *  default so unset flags keep current (mounted) behavior. */
 export function resolveExposurePolicy(cfg: HostConfig): HostExposurePolicy {
   const override = cfg.exposurePolicy ?? readExposurePolicyFile(cfg.dataDir);
-  return { ...COMPATIBLE_DEFAULT_EXPOSURE, ...(override ?? {}) };
+  return { ...policy.COMPATIBLE_DEFAULT_EXPOSURE, ...(override ?? {}) };
 }
 
 // ── Admin plane ───────────────────────────────────────────────────────────
@@ -357,14 +426,14 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
 
     if (parts[1] === 'projects') {
       if (req.method === 'GET' && parts.length === 2) return sendJson(res, 200, admin.listProjects(cfg, cred));
-      if (req.method === 'POST' && parts.length === 2) return sendJson(res, 201, admin.createProject(cfg, cred, body.id));
+      if (req.method === 'POST' && parts.length === 2) return sendJson(res, 201, admin.createProject(cfg, cred, body.id, String(body.unitId ?? '')));
       if (req.method === 'DELETE' && parts.length === 3) {
         admin.destroyProject(cfg, cred, parts[2]);
         return sendJson(res, 200, { ok: true });
       }
       if (req.method === 'POST' && parts.length === 4 && parts[3] === 'lock') return sendJson(res, 200, admin.lockProject(cfg, cred, parts[2]));
       if (req.method === 'POST' && parts.length === 4 && parts[3] === 'promote') return sendJson(res, 200, admin.promoteProject(cfg, cred, parts[2]));
-      if (req.method === 'POST' && parts.length === 4 && parts[3] === 'git') return sendJson(res, 201, admin.enableGit(cfg, cred, parts[2], body.remote, body.branch ?? 'main'));
+      if (req.method === 'POST' && parts.length === 4 && parts[3] === 'git') return sendJson(res, 201, admin.enableGit(cfg, cred, parts[2], body.remote, body.branch ?? 'main', body.pat));
       if (req.method === 'DELETE' && parts.length === 4 && parts[3] === 'git') {
         admin.disableGit(cfg, cred, parts[2]);
         return sendJson(res, 200, { ok: true });
@@ -425,7 +494,7 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
 
     if (parts[1] === 'keys') {
       if (req.method === 'GET' && parts.length === 2) return sendJson(res, 200, admin.listKeys(cfg, cred, url.searchParams.get('project') ?? '*'));
-      if (req.method === 'POST' && parts.length === 2) return sendJson(res, 201, { key: admin.mintKey(cfg, cred, body.project, (body.role ?? 'editor') as Role) });
+      if (req.method === 'POST' && parts.length === 2) return sendJson(res, 201, { key: admin.mintKey(cfg, cred, body.project, (body.role ?? 'editor') as DisplayRole) });
       if (req.method === 'DELETE' && parts.length === 3) {
         admin.revokeKey(cfg, cred, parts[2]);
         return sendJson(res, 200, { ok: true });
@@ -441,18 +510,19 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
     }
 
     // ── Approval decision surface (Phase 2) ────────────────────────────────
-    // The human decision surface for approval-backed self-service until the admin
-    // UI lands: iadmin_portal.listApprovals/decideApproval/executeApproval forward
-    // 1:1 to the self-service orchestrator (admin_portal_impl → listPendingRequests
-    // / decideRequest / executeApprovedRequest). Owns its own error → status mapping
-    // (401/403/404/400), mirroring the identity mount, so approval faults never fall
-    // through to the admin catch (which maps only AdminAuthError/LockValidationError).
+    // The human decision surface for the project-lifecycle approval exception until
+    // the admin UI lands: iadmin_portal.listApprovals/decideApproval/executeApproval
+    // forward 1:1 to the project lifecycle orchestrator (admin_portal_impl →
+    // listPendingRequests / decideRequest / executeApprovedRequest). Owns its own
+    // error → status mapping (401/403/404/400), mirroring the identity mount, so
+    // approval faults never fall through to the admin catch (which maps only
+    // AdminAuthError/LockValidationError).
     if (parts[1] === 'approvals') {
       try {
         // GET /admin/approvals?status=&project=
         if (req.method === 'GET' && parts.length === 2) {
           // L3 (iadmin_portal.listApprovals) advertises a `status` filter, but the
-          // self_service_orchestrator contract only lists PENDING requests this
+          // project_lifecycle_orchestrator contract only lists PENDING requests this
           // phase (admin_portal_impl → listPendingRequests). Accept status=pending
           // explicitly and pass `project` through; reject any other status until
           // broader listing lands rather than silently returning pending-only.
@@ -462,7 +532,7 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
               error: `unsupported status "${status}": only pending approvals can be listed in this phase`,
             });
           }
-          return sendJson(res, 200, selfservice.listPendingRequests(cfg, cred, url.searchParams.get('project') ?? undefined));
+          return sendJson(res, 200, projectlifecycle.listPendingRequests(cfg, cred, url.searchParams.get('project') ?? undefined));
         }
         // POST /admin/approvals/{id}/decision  { approved: boolean, reason?: string }
         if (req.method === 'POST' && parts.length === 4 && parts[3] === 'decision') {
@@ -479,11 +549,11 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
             decidedAt: '',
           };
           if (typeof body.reason === 'string') decision.reason = body.reason;
-          return sendJson(res, 200, selfservice.decideRequest(cfg, cred, decision));
+          return sendJson(res, 200, projectlifecycle.decideRequest(cfg, cred, decision));
         }
         // POST /admin/approvals/{id}/execute
         if (req.method === 'POST' && parts.length === 4 && parts[3] === 'execute') {
-          return sendJson(res, 200, { outcome: selfservice.executeApprovedRequest(cfg, cred, parts[2]) });
+          return sendJson(res, 200, { outcome: projectlifecycle.executeApprovedRequest(cfg, cred, parts[2]) });
         }
         return sendJson(res, 404, { error: 'not found' });
       } catch (err) {
@@ -514,6 +584,37 @@ export interface HostServerHandle {
   close(): void;
 }
 
+/** The stable id of the synthetic local development unit `wairon dev` boots
+ *  with, so dev projects can always be placed (unitId is required at creation). */
+export const DEV_UNIT_ID = 'local';
+
+/**
+ * One-time boot initialization — the sdd_host lifecycle init entrypoint, run
+ * BEFORE the listeners bind (idempotent):
+ *   1. Seed-or-load the persisted instance identity: the first boot generates
+ *      the boot-reserved built-in subject UUIDs into <dataDir>/instance.json;
+ *      every later boot loads them unchanged.
+ *   2. Under devMode, ensure the synthetic local development organization unit
+ *      exists so dev projects can always be placed.
+ */
+export function initHostInstance(cfg: HostConfig): void {
+  ensureInstanceIdentity(cfg.dataDir);
+  if (cfg.devMode && !getOrganizationUnit(cfg.dataDir, DEV_UNIT_ID)) {
+    const system: PrincipalSubject = { userId: 'system', kind: 'service', issuer: 'local' };
+    createUnit(cfg.dataDir, {
+      id: DEV_UNIT_ID,
+      name: 'Local Development',
+      kind: 'team',
+      slug: DEV_UNIT_ID, // a root unit's qualified id IS its slug
+      status: 'active',
+      createdAt: '',
+      createdBy: system,
+    });
+  }
+}
+// ihost_server.init — the lifecycle entrypoint's contract name.
+export { initHostInstance as init };
+
 /** Bind the data-plane and admin-plane listeners and begin accepting connections. */
 /** The literal placeholder shipped in .env.example — never a real credential. */
 export const PLACEHOLDER_ADMIN_TOKEN = 'replace-with-a-random-64-hex-character-token';
@@ -541,14 +642,48 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
       );
     }
   }
+  // Lifecycle init runs BEFORE the listeners bind: seed the persisted instance
+  // identity (and, under devMode, the synthetic local development unit).
+  initHostInstance(cfg);
+
   const dataServer = http.createServer((req, res) => routeData(cfg, req, res));
   const adminServer = http.createServer((req, res) => {
     void routeAdmin(cfg, req, res);
   });
+  // Realtime channel: the web app opens a session-authenticated WebSocket at
+  // /web/ws on the public data plane; the hub authenticates + authorizes each
+  // subscription and broadcasts bare change nudges.
+  dataServer.on('upgrade', (req, socket) => {
+    getRealtimeHub().handleUpgrade(cfg, req, socket);
+  });
   dataServer.listen(cfg.port, cfg.host);
   adminServer.listen(cfg.adminPort, cfg.adminHost);
+
+  // Periodic git-backup timer: each tick sweeps the git-bound projects (a
+  // .wai/-scoped commit+push per due project, skip-if-clean — a quiet project
+  // never commits noise) AND the container-level backup bindings whose interval
+  // has elapsed. Both sweeps are pre-authorized internals; per-item failures
+  // are recorded inside them and never abort a sweep. unref() so the timer
+  // never keeps a closing process alive.
+  const GIT_SYNC_TICK_MS = 60_000;
+  const gitSyncTimer = setInterval(() => {
+    try {
+      runPeriodicGitSync(cfg);
+    } catch (err) {
+      console.error('[git-sync] project sweep failed: ' + (err instanceof Error ? err.message : String(err)));
+    }
+    try {
+      runPeriodicBackingSync(cfg);
+    } catch (err) {
+      console.error('[git-backing] backing sweep failed: ' + (err instanceof Error ? err.message : String(err)));
+    }
+  }, GIT_SYNC_TICK_MS);
+  gitSyncTimer.unref();
+
   return {
     close() {
+      clearInterval(gitSyncTimer);
+      getRealtimeHub().closeAll();
       dataServer.close();
       adminServer.close();
     },

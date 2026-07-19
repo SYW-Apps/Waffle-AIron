@@ -1,0 +1,39 @@
+id: ishare_link_registry
+name: Share Link Registry Interface
+description: >-
+  Write path for share-link records: create, update, remove. No authorization — the share admin
+  orchestrator gates.
+component: share_link_registry
+methods:
+  - name: create
+    description: >-
+      Stamp id/createdAt, persist the record (its tokenHash only — never a raw token), and return
+      the stored record.
+    signature: 'create(link: ShareLink): ShareLink'
+    returns: ShareLink
+    params:
+      - name: link
+        type: ShareLink
+    guarantees:
+      - atomic
+  - name: update
+    description: >-
+      Replace an existing record in place by id (enabled / expiry / download permissions / embedding
+      allowlist / snapshot id).
+    signature: 'update(link: ShareLink): ShareLink'
+    returns: ShareLink
+    params:
+      - name: link
+        type: ShareLink
+    guarantees:
+      - atomic
+  - name: remove
+    description: Remove one record by id (absent = no-op).
+    signature: 'remove(id: string): void'
+    returns: void
+    params:
+      - name: id
+        type: string
+status: complete
+createdAt: '2026-07-17T22:29:13.333Z'
+updatedAt: '2026-07-18T10:10:39.670Z'
