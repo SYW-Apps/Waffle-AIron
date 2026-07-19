@@ -28,10 +28,23 @@ v4.1.0).
   ordering, region overlap, dangling entries); `updateSpec` relocates
   `branches[].step` on insert/delete and refuses to delete an arm entry
   target; language/platform packs gate both via `unsupportedFlow`
-  (`parallel:`, `detach:`). Renderers currently degrade to sequential
-  display — native arm rendering is the canvas engine's follow-up.
+  (`parallel:`, `detach:`).
   `UNCONDITIONAL_CALL_CYCLE` treats arms as alternatives for now
   (under-reports across parallel regions — conservative direction).
+- **Parallel/detach rendering across the diagram surfaces.** The canvas flow
+  modal renders a `parallel` header as a fan-out BAR spanning one lane per
+  arm, with the implicit join bar after `endStep` (all arms complete before
+  flow continues) — an arm's last step wires into the join, never into its
+  neighbor arm. A detached call hangs its callee OFF the flow as a ghost
+  node reached by a dashed open arrow annotated "detached", while the firing
+  step's own lane continues normally — failure visibly does not propagate.
+  Both survive the "Hide error paths" toggle (they are not error paths), and
+  the flow modal's draw.io/Excalidraw exports keep the bars and ghosts. The
+  Mermaid sequence exporter maps endStep-bounded parallel regions onto
+  `par`/`and` fragments (mirroring loop/critical) and renders detached
+  calls/dispatches as async open arrows (`-)`, annotated, no activation, no
+  return). The Steps list spells both out (`∥ parallel — arms …`,
+  `⇢ detached — fire & forget`).
 
 ### Extension packs: pack-provided AI skills + versioned pattern references (new)
 

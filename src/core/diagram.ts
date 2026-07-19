@@ -459,20 +459,34 @@ export function generateSequenceDiagram(
     nextStack.add(key);
     const selfId = ids.idFor(comp.id);
 
-    // Region blocks (loop / try) have an explicit endStep, so they map
-    // cleanly onto Mermaid `loop` / `critical` fragments; free-form jumps
-    // (branch / switch / jump / return / throw) become annotated markers —
+    // Region blocks (loop / try / parallel) have an explicit endStep, so they
+    // map cleanly onto Mermaid `loop` / `critical` / `par` fragments; free-form
+    // jumps (branch / switch / jump / return / throw) become annotated markers —
     // the canvas flowchart is where arbitrary branching renders faithfully.
     const pendingEnds: number[] = [];
+    // Open parallel regions: arms are contiguous, so each later arm entry
+    // emits its `and` separator when the walk reaches that step. Block
+    // reconstruction beyond endStep-bounded regions is deliberately not
+    // attempted (mirrors the loop/critical approach).
+    const parallelArms: { end: number; sepByStep: Map<number, string> }[] = [];
     const closeRegionsAfter = (stepNumber: number): void => {
       while (pendingEnds.length && pendingEnds[pendingEnds.length - 1] <= stepNumber) {
         pendingEnds.pop();
         lines.push('  end');
       }
+      while (parallelArms.length && parallelArms[parallelArms.length - 1].end <= stepNumber) {
+        parallelArms.pop();
+      }
     };
 
     const steps = [...methodImpl.narrative].sort((a, b) => a.stepNumber - b.stepNumber);
     for (const step of steps) {
+      // Reaching a later arm's entry inside an open `par` fragment starts its
+      // `and` block (arm entries never collide across nesting levels).
+      for (const par of parallelArms) {
+        const sep = par.sepByStep.get(step.stepNumber);
+        if (sep !== undefined) lines.push(`  and ${escapeLabel(sep)}`);
+      }
       switch (step.type) {
         case 'local':
           lines.push(`  Note over ${selfId}: ${escapeLabel(truncate(step.description, 70))}`);
@@ -500,6 +514,20 @@ export function generateSequenceDiagram(
             lines.push(`  Note over ${selfId}: ${escapeLabel(truncate(`⚠ on ${c.error} → step ${c.step}`, 70))}`);
           }
           break;
+        case 'parallel': {
+          const arms = step.branches ?? [];
+          if (step.endStep !== undefined && arms.length >= 2) {
+            const head = truncate(step.description, 60) + (arms[0].name ? ` — ${arms[0].name}` : '');
+            lines.push(`  par ${escapeLabel(head)}`);
+            const sepByStep = new Map<number, string>();
+            arms.slice(1).forEach((b, i) => sepByStep.set(b.step, b.name ?? `arm ${i + 2}`));
+            parallelArms.push({ end: step.endStep, sepByStep });
+            pendingEnds.push(step.endStep);
+          } else {
+            lines.push(`  Note over ${selfId}: ${escapeLabel(truncate(`∥ ${step.description}`, 70))}`);
+          }
+          break;
+        }
         case 'jump':
           lines.push(`  Note over ${selfId}: ${escapeLabel(`↷ → step ${step.toStep}`)}`);
           break;
@@ -517,7 +545,11 @@ export function generateSequenceDiagram(
             break;
           }
           const portalId = declare(portal);
-          lines.push(`  ${selfId}->>${portalId}: ${escapeLabel(`⟨${step.capability ?? '?'}⟩`)}`);
+          // A detached dispatch fires asynchronously (open arrow, no wait);
+          // the portal's own routing to the bound server stays synchronous.
+          lines.push(step.detach
+            ? `  ${selfId}-)${portalId}: ${escapeLabel(`⟨${step.capability ?? '?'}⟩`)} — detached`
+            : `  ${selfId}->>${portalId}: ${escapeLabel(`⟨${step.capability ?? '?'}⟩`)}`);
           // Follow the table binding so the diagram shows the real server —
           // and keep walking its narrative, exactly like a call step, so the
           // downstream flow doesn't silently truncate at the dispatch hop.
@@ -549,7 +581,13 @@ export function generateSequenceDiagram(
           const expandable = depth < maxDepth
             && !!findMethodImpl(target.id, step.targetMethod)
             && target.id !== comp.id;
-          if (expandable) {
+          if (step.detach) {
+            // Fire-and-forget: async open arrow, no activation, NO return —
+            // the caller continues immediately and the callee's failure does
+            // not propagate back into this flow.
+            lines.push(`  ${selfId}-)${targetId}: ${escapeLabel(step.targetMethod)}() — detached`);
+            if (expandable) walk(target, step.targetMethod, depth + 1, nextStack);
+          } else if (expandable) {
             lines.push(`  ${selfId}->>+${targetId}: ${escapeLabel(step.targetMethod)}()`);
             walk(target, step.targetMethod, depth + 1, nextStack);
             lines.push(`  ${targetId}-->>-${selfId}: return`);
