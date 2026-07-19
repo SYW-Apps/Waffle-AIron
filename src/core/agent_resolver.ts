@@ -338,15 +338,24 @@ export function resolveAgentTopology(): AgentRecord[] {
         // Find implementations of those contracts
         const compImpls = implementations.filter((impl) => compInterfaceIds.includes(impl.contract));
 
+        let hasExplicitSource = false;
         for (const impl of compImpls) {
-          if (impl.sourcePath && !ownedPaths.includes(impl.sourcePath)) {
-            ownedPaths.push(impl.sourcePath);
+          if (impl.sourcePath) {
+            hasExplicitSource = true;
+            if (!ownedPaths.includes(impl.sourcePath)) ownedPaths.push(impl.sourcePath);
           }
         }
 
-        const inferred = inferSourcePathForComponent(comp, subsystems);
-        if (inferred && !ownedPaths.includes(inferred)) {
-          ownedPaths.push(inferred);
+        // Inference is a FALLBACK for components whose implementations declare
+        // no sourcePath. Running it on implemented components lets a filename
+        // that matches the component TYPE claim a foreign file — e.g. a
+        // Repository facade realized in specs.ts inferring rules/repository.ts
+        // owned by another subsystem — tripping OVERLAPPING_OWNERSHIP.
+        if (!hasExplicitSource) {
+          const inferred = inferSourcePathForComponent(comp, subsystems);
+          if (inferred && !ownedPaths.includes(inferred)) {
+            ownedPaths.push(inferred);
+          }
         }
       }
     }
