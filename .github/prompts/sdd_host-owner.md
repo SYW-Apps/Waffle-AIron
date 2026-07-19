@@ -93,7 +93,6 @@ You own and decide on everything within:
 .wai/specs/components/share_access_repository.yaml
 .wai/specs/components/share_access_store.yaml
 .wai/specs/components/share_admin_orchestrator.yaml
-.wai/specs/components/share_admin_portal.yaml
 .wai/specs/components/share_link_index.yaml
 .wai/specs/components/share_link_registry.yaml
 .wai/specs/components/share_link_repository.yaml
@@ -150,7 +149,6 @@ src/utils/secrets.ts
 src/server/shareaccesslog.ts
 src/server/shareaccess.ts
 src/server/shareadmin.ts
-src/server/shareadminhttp.ts
 src/server/sharelinks.ts
 src/server/sharehttp.ts
 src/server/sharesnapshots.ts
