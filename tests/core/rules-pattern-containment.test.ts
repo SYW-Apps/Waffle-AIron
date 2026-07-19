@@ -56,6 +56,9 @@ function createTempProject() {
 const featureIssues = (res: { issues: { code: string; specId?: string }[] }) =>
   res.issues.filter(i => i.code === 'FEATURE_COMPONENT_CONTAINMENT');
 
+const byCode = (res: { issues: { code: string; specId?: string; message: string }[] }, code: string) =>
+  res.issues.filter(i => i.code === code);
+
 describe('FeatureComponent containment — 1 Orchestrator + 1..N Views', () => {
   it('accepts one Orchestrator + one View (the classic pair)', () => {
     const proj = createTempProject();
@@ -114,6 +117,90 @@ describe('FeatureComponent containment — 1 Orchestrator + 1..N Views', () => {
     proj.activate();
     try {
       expect(featureIssues(validateSddTree())).toHaveLength(1);
+    } finally { proj.cleanup(); }
+  });
+});
+
+describe('INVALID_OWNED_MEMBER — owns must name existing components', () => {
+  it('flags an owns entry that names no component', () => {
+    const proj = createTempProject();
+    proj.component('billing-repo', 'Repository', 'owns: [billing-store, ghost-store]');
+    proj.component('billing-store', 'Store', 'durability: ram-projection');
+    proj.activate();
+    try {
+      const found = byCode(validateSddTree(), 'INVALID_OWNED_MEMBER');
+      expect(found).toHaveLength(1);
+      expect(found[0].specId).toBe('billing-repo');
+      expect(found[0].message).toContain('ghost-store');
+    } finally { proj.cleanup(); }
+  });
+
+  it('stays silent when every owned member exists', () => {
+    const proj = createTempProject();
+    proj.component('billing-repo', 'Repository', 'owns: [billing-store, billing-registry]');
+    proj.component('billing-store', 'Store', 'durability: ram-projection');
+    proj.component('billing-registry', 'Registry');
+    proj.activate();
+    try {
+      expect(byCode(validateSddTree(), 'INVALID_OWNED_MEMBER')).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+});
+
+describe('SHARED_OWNED_MEMBER — a block has exactly one owner', () => {
+  it('flags a Store owned by two Repositories, naming both owners', () => {
+    const proj = createTempProject();
+    proj.component('repo-a', 'Repository', 'owns: [shared-store]');
+    proj.component('repo-b', 'Repository', 'owns: [shared-store]');
+    proj.component('shared-store', 'Store', 'durability: ram-projection');
+    proj.activate();
+    try {
+      const found = byCode(validateSddTree(), 'SHARED_OWNED_MEMBER');
+      expect(found).toHaveLength(1);
+      expect(found[0].message).toContain('repo-a');
+      expect(found[0].message).toContain('repo-b');
+      expect(found[0].message).toContain('shared-store');
+    } finally { proj.cleanup(); }
+  });
+
+  it('stays silent when each pattern owns its own members', () => {
+    const proj = createTempProject();
+    proj.component('repo-a', 'Repository', 'owns: [store-a]');
+    proj.component('repo-b', 'Repository', 'owns: [store-b]');
+    proj.component('store-a', 'Store', 'durability: ram-projection');
+    proj.component('store-b', 'Store', 'durability: ram-projection');
+    proj.activate();
+    try {
+      expect(byCode(validateSddTree(), 'SHARED_OWNED_MEMBER')).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+});
+
+describe('GATEWAY_CONTAINMENT — a Gateway owns only Portal/Orchestrator/Specialist members', () => {
+  it('flags a Gateway owning a Store (state belongs behind a Repository, not in the gateway)', () => {
+    const proj = createTempProject();
+    proj.component('edge-gateway', 'Gateway', 'owns: [edge-portal, edge-cache]');
+    proj.component('edge-portal', 'Portal', 'portalType: Custom');
+    proj.component('edge-cache', 'Store', 'durability: ram-projection');
+    proj.activate();
+    try {
+      const found = byCode(validateSddTree(), 'GATEWAY_CONTAINMENT');
+      expect(found).toHaveLength(1);
+      expect(found[0].specId).toBe('edge-gateway');
+      expect(found[0].message).toContain('edge-cache');
+      expect(found[0].message).toContain('type Store');
+    } finally { proj.cleanup(); }
+  });
+
+  it('stays silent for the sanctioned member set: Portal + Orchestrator + Specialist', () => {
+    const proj = createTempProject();
+    proj.component('edge-gateway', 'Gateway', 'owns: [edge-portal, edge-orch, edge-mapper]');
+    proj.component('edge-portal', 'Portal', 'portalType: Custom');
+    proj.component('edge-orch', 'Orchestrator');
+    proj.component('edge-mapper', 'Specialist');
+    proj.activate();
+    try {
+      expect(byCode(validateSddTree(), 'GATEWAY_CONTAINMENT')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 });

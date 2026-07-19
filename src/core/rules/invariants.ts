@@ -1,4 +1,4 @@
-import { ImplementationSpec, InterfaceSpec, TypeSpec } from '../../models/index.js';
+import { ComponentSpec, ImplementationSpec, InterfaceSpec, TypeSpec } from '../../models/index.js';
 import { RuleContext, SddRule } from './types.js';
 import { matchTypeRef } from './type-analysis.js';
 
@@ -47,15 +47,43 @@ export function resolveInvariantRef(ref: string, types: TypeSpec[]): { type: Typ
   return null;
 }
 
-function stepAsserts(impl: ImplementationSpec, methodName: string, type: TypeSpec, invariantId: string, ctx: RuleContext): boolean {
+/**
+ * Does this reference denote THIS type's invariant? Matched directly against
+ * the type under check (suffix-style over its qualified id) instead of through
+ * a global first-in-scan-order resolution: when two subsystems (or a parent
+ * and a chained subproject) declare same-named entities with same-named
+ * invariants, first-match attributed a bare ref to whichever type the scan
+ * happened to list first — crediting the wrong type's write path and flagging
+ * the right one. A qualified ref still only matches its own namespace.
+ */
+function refMatchesInvariant(ref: string, type: TypeSpec, invariantId: string): boolean {
+  const parts = splitInvariantRef(ref);
+  if (!parts || parts.invariantId !== invariantId) return false;
+  if (!(type.invariants ?? []).some(inv => inv.id === invariantId)) return false;
+  return matchTypeRef(parts.typeRef, qualifiedTypeId(type));
+}
+
+function stepAsserts(impl: ImplementationSpec, methodName: string, type: TypeSpec, invariantId: string): boolean {
   const method = impl.methods.find(m => m.name === methodName);
   if (!method) return false;
   return method.narrative.some(step =>
-    (step.assertsInvariants ?? []).some(ref => {
-      const resolved = resolveInvariantRef(ref, ctx.types);
-      return resolved !== null && resolved.type === type && resolved.invariantId === invariantId;
-    }),
+    (step.assertsInvariants ?? []).some(ref => refMatchesInvariant(ref, type, invariantId)),
   );
+}
+
+/**
+ * The entity's owning component. componentClass survives namespacing
+ * UNQUALIFIED (the loader qualifies type ids but not this link), so a chained
+ * subproject's entity names its owner in the child's own id space — resolve
+ * exact first, then inside the entity's mount namespace.
+ */
+function resolveComponentClass(t: TypeSpec, ctx: RuleContext): ComponentSpec | undefined {
+  if (!t.componentClass) return undefined;
+  const direct = ctx.componentMap.get(t.componentClass);
+  if (direct) return direct;
+  const at = t.id.lastIndexOf('::');
+  if (at === -1) return undefined;
+  return ctx.componentMap.get(`${t.id.slice(0, at)}::${t.componentClass}`);
 }
 
 export const invariantBackingRule: SddRule = {
@@ -87,7 +115,7 @@ export const invariantBackingRule: SddRule = {
         seen.add(inv.id);
       }
 
-      const comp = t.componentClass ? ctx.componentMap.get(t.componentClass) : undefined;
+      const comp = resolveComponentClass(t, ctx);
       if (!comp) {
         ctx.addIssue(
           'warning',
@@ -117,7 +145,7 @@ export const invariantBackingRule: SddRule = {
         for (const impl of ctx.implementationsByContract.get(intf.id) ?? []) {
           const isDraftCtx = ctx.isImplementationDraft(impl);
           for (const inv of invariants) {
-            if (stepAsserts(impl, method.name, t, inv.id, ctx)) continue;
+            if (stepAsserts(impl, method.name, t, inv.id)) continue;
             ctx.addIssue(
               'warning',
               'UNASSERTED_INVARIANT',

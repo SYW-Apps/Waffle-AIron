@@ -1988,6 +1988,27 @@ export class SpecWorkspace {
       return steps.sort((a, b) => a.stepNumber - b.stepNumber);
     };
 
+    /**
+     * Opaque `ext` maps key-merge at EVERY level. Spec-level ext already does
+     * (mergeDelta's object recursion); a METHOD-level ext delta went through
+     * the shallow method spread instead, clobbering the whole map. This mirrors
+     * mergeDelta's semantics for a plain data map — delta keys win, absent keys
+     * survive, nested objects merge, arrays replace, null/undefined skipped —
+     * without mergeDelta's named-key special cases (ext content is opaque; a
+     * pack key spelled "methods" must never trigger the methods merge).
+     */
+    const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+      typeof v === 'object' && v !== null && !Array.isArray(v);
+    const mergeExt = (existing: any, delta: any): any => {
+      if (!isPlainObject(existing) || !isPlainObject(delta)) return delta ?? existing;
+      const res: Record<string, unknown> = { ...existing };
+      for (const [key, value] of Object.entries(delta)) {
+        if (value === undefined || value === null) continue;
+        res[key] = isPlainObject(value) && isPlainObject(res[key]) ? mergeExt(res[key], value) : value;
+      }
+      return res;
+    };
+
     const mergeMethods = (existingMethods: any[], deltaMethods: any[]): any[] => {
       const merged = [...existingMethods];
       for (const deltaMethod of deltaMethods) {
@@ -2005,6 +2026,7 @@ export class SpecWorkspace {
             merged[idx] = {
               ...existingMethod,
               ...cleanMethod,
+              ...(deltaMethod.ext !== undefined ? { ext: mergeExt(existingMethod.ext, deltaMethod.ext) } : {}),
               narrative,
             };
           }
@@ -2028,6 +2050,7 @@ export class SpecWorkspace {
             merged[idx] = {
               ...merged[idx],
               ...deltaItem,
+              ...(deltaItem.ext !== undefined ? { ext: mergeExt(merged[idx].ext, deltaItem.ext) } : {}),
             };
           }
         } else {

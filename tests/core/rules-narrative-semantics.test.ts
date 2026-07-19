@@ -361,6 +361,62 @@ describe('CALL_STEP_UNREALIZED — the narrative call must exist in the realized
     } finally { proj.cleanup(); }
   });
 
+  it('accepts N:1 identity forwarding — the facade method\'s symbol IS the target function', () => {
+    const proj = createTempProject();
+    proj.component('facade-a', 'Orchestrator', 'dependsOn: [store-a]');
+    proj.contract('facade-a', ['save']);
+    proj.component('store-a', 'Store');
+    proj.contract('store-a', ['put']);
+    proj.impl('store-a', 'sourcePath: src/store.ts\nmethods:\n  - name: put\n    detail: intent\n    intent: Persists the entry into held state keyed by id; overwrites silently on collision.');
+    // Facade and target seated on the SAME function via the symbol map: the
+    // facade's `save` is realized by the code name `put` — pure 1:1 forwarding
+    // collapsed onto one function, exactly as Level 1's N:1 sharing blesses.
+    // `put` calls nothing, so the narrative call step is realized ONLY through
+    // the identity collapse (fnSymbol ∈ accepted), never through the callees.
+    proj.impl('facade-a', [
+      'sourcePath: src/store.ts',
+      'methods:',
+      '  - name: save',
+      '    symbol: put',
+      '    narrative:',
+      '      - { stepNumber: 1, description: Delegate to the store, type: call, targetComponent: store-a, targetMethod: put }',
+      '      - { stepNumber: 2, description: Done, type: return, outcome: done }',
+    ].join('\n'));
+    proj.source('src/store.ts', 'export function put(): void {}\n');
+    proj.activate();
+    try {
+      expect(byCode(validateSddTree(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('the identity collapse is load-bearing: the same shape WITHOUT the symbol identity flags the step', () => {
+    // Identical fixture minus the identity condition: the facade seats on its
+    // own name (`save` exists in the same file, callees defined and empty), so
+    // nothing collapses and the claimed call to `put` must actually appear.
+    const proj = createTempProject();
+    proj.component('facade-a', 'Orchestrator', 'dependsOn: [store-a]');
+    proj.contract('facade-a', ['save']);
+    proj.component('store-a', 'Store');
+    proj.contract('store-a', ['put']);
+    proj.impl('store-a', 'sourcePath: src/store.ts\nmethods:\n  - name: put\n    detail: intent\n    intent: Persists the entry into held state keyed by id; overwrites silently on collision.');
+    proj.impl('facade-a', [
+      'sourcePath: src/store.ts',
+      'methods:',
+      '  - name: save',
+      '    narrative:',
+      '      - { stepNumber: 1, description: Delegate to the store, type: call, targetComponent: store-a, targetMethod: put }',
+      '      - { stepNumber: 2, description: Done, type: return, outcome: done }',
+    ].join('\n'));
+    proj.source('src/store.ts', 'export function put(): void {}\nexport function save(): void { /* forwards nothing */ }\n');
+    proj.activate();
+    try {
+      const found = byCode(validateSddTree(), 'CALL_STEP_UNREALIZED');
+      expect(found).toHaveLength(1);
+      expect(found[0].message).toContain('store-a.put');
+      expect(found[0].message).toContain('"save"');
+    } finally { proj.cleanup(); }
+  });
+
   it('skips conformance: off methods and never fires below exact grade', () => {
     const offProj = createTempProject();
     offProj.component('orch-a', 'Orchestrator', 'dependsOn: [store-a]');
