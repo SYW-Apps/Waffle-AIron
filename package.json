@@ -1,5 +1,5 @@
 {
-  "name": "@syw-apps/wairon",
+  "name": "@wairon/cli",
   "version": "0.0.0-dev",
   "description": "SYW Waffle AIron — CLI for managing AI coding agent topology across projects",
   "keywords": [
