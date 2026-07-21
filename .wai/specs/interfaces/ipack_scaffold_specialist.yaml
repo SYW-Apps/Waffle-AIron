@@ -1,0 +1,19 @@
+id: ipack_scaffold_specialist
+name: Pack Scaffold Specialist Interface
+description: Pure template rendering for `wairon pack init` — produces an in-memory file map, writes nothing.
+component: pack_scaffold_specialist
+methods:
+  - name: render
+    description: >-
+      Render the scaffold file map for the requested pack (declarative or code variant) from
+      embedded templates, substituting the pack name/version and — for code packs — pinning the
+      @wairon/sdk dependency to the running SDK version. Includes a wairon-pack.yaml envelope stub,
+      the entry file, and (code) package.json/tsconfig/build script, plus an optional SKILL.md stub.
+    signature: 'render(request: PackScaffoldRequest): PackFile[]'
+    returns: PackFile[]
+    params:
+      - name: request
+        type: pack_scaffold_request
+status: complete
+createdAt: '2026-07-21T18:13:40.057Z'
+updatedAt: '2026-07-21T19:26:05.285Z'

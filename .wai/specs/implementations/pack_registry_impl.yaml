@@ -89,7 +89,30 @@ methods:
     intent: >-
       Vendors the pack content into the bound project's tree and registers the reference — no
       credential gate; the approval workflow or resolver has already authorized the caller.
+  - name: installGlobalPackArchive
+    narrative: []
+    detail: intent
+    intent: >-
+      Install a declarative pack from a .wpack archive into the MUTABLE instance packs directory
+      (the image tier is never written). Inspect the envelope via the host SDK adapter and reject a
+      code pack (kind: code) — the declarative-only surface policy — before any bytes touch disk.
+      Derive the pack name from the envelope (or the optional override) and sanitize it to the
+      pack-name charset, then extract the archive into <instance packs dir>/<name> via the SDK
+      adapter under hosted-strict limits (the SDK enforces zip-slip / entry-count / size /
+      compression-ratio / depth and verifies integrity). Re-check the extracted pack.yaml parses as
+      a declarative pack via the core adapter (defense in depth), removing the partial extraction on
+      failure. Probe and return the PackDescriptor (tier instance). Fails loudly on an unsafe
+      archive, a code pack, or a non-declarative payload.
+  - name: installProjectPackArchive
+    narrative: []
+    detail: intent
+    intent: >-
+      Bound-project counterpart of installGlobalPackArchive: reject code packs, safely extract the
+      declarative pack into the project's .wai/packs/<name>/ under hosted-strict limits (SDK
+      adapter), and register the '.wai/packs/<name>' directory ref in .wai/project.yaml (committed
+      with the project, so every clone and CI enforce it). Assumes the orchestrator has already
+      bound the project root. Fails loudly on unsafe / code / non-declarative input.
 detail: intent
 status: complete
 createdAt: '2026-07-04T18:42:57.340Z'
-updatedAt: '2026-07-19T08:57:37.902Z'
+updatedAt: '2026-07-21T18:42:59.465Z'

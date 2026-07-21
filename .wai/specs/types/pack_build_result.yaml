@@ -1,0 +1,24 @@
+kind: value-object
+id: pack_build_result
+name: PackBuildResult
+description: >-
+  The output of `wairon pack build`: the assembled `.wpack` archive bytes, a descriptor of what was
+  built, and a suggested file name. The CLI writes the bytes to disk; a programmatic embedder may
+  stream them directly to a hosted install.
+fields:
+  - name: archive
+    type: bytes
+    description: The assembled .wpack (ZIP) bytes
+    optional: false
+  - name: info
+    type: pack_archive_info
+    description: Descriptor of the built archive
+    optional: false
+  - name: suggestedFileName
+    type: string
+    description: e.g. "my-pack-1.0.0.wpack"
+    optional: false
+methods: []
+componentClass: sdk_orchestrator
+createdAt: '2026-07-21T18:12:54.245Z'
+updatedAt: '2026-07-21T18:14:53.573Z'

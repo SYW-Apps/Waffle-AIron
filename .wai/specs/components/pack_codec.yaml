@@ -1,0 +1,23 @@
+id: pack_codec
+name: Pack Codec
+description: >-
+  The pure format-and-safety brain of the pack archive — no I/O. Parses and serializes the
+  `wairon-pack.yaml` envelope (formatVersion, name, version, kind: declarative|code, entry,
+  min-wairon compat range, optional per-entry sha256 map + a manifest digest, generatedBy), and
+  checks format-version compatibility (a newer major fails loudly rather than silently mis-reading).
+  Given the raw archive entry metadata enumerated by the archive adapter (path, uncompressed size,
+  compressed size, kind: file|dir|symlink), it computes a SAFE EXTRACTION PLAN or rejects:
+  normalizes and confines every entry path under the destination (zip-slip guard), rejects absolute
+  paths, `..` traversal, backslashes/drive letters, symlinks, and non-regular entries, and enforces
+  the configurable caps — max entry count, max total uncompressed size, max per-entry size, max
+  compression ratio (zip-bomb guard), and max path depth. Also verifies archive identity (envelope
+  name/version match the inner pack manifest) and, when integrity data is present, that each entry's
+  digest matches. Provides the default limit profile and lets callers (hosted stricter, local
+  looser) override it.
+subsystem: sdd_sdk
+componentType: Specialist
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-07-21T17:22:15.864Z'
+updatedAt: '2026-07-21T18:26:55.348Z'

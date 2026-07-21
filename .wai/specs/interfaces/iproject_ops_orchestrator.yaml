@@ -318,6 +318,39 @@ methods:
         type: string
       - name: bindingId
         type: string
+  - name: installGlobalPackArchive
+    description: >-
+      Forward to pack_orchestrator.installGlobalPackArchive (declarative-only; instance-level
+      project:admin upstream). The session/bearer credential authenticates; the .wpack bytes carry
+      the pack (name from the envelope, optional override).
+    signature: 'installGlobalPackArchive(credential: string, archive: bytes, name?: string): PackDescriptor'
+    returns: PackDescriptor
+    params:
+      - name: credential
+        type: string
+      - name: archive
+        type: bytes
+      - name: name
+        type: string
+        optional: true
+  - name: installProjectPackArchive
+    description: >-
+      Forward to pack_orchestrator.installProjectPackArchive (declarative-only; project:admin over
+      the project upstream).
+    signature: >-
+      installProjectPackArchive(credential: string, project: string, archive: bytes, name?: string):
+      PackDescriptor
+    returns: PackDescriptor
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: archive
+        type: bytes
+      - name: name
+        type: string
+        optional: true
 status: complete
 createdAt: '2026-07-16T15:30:37.725Z'
-updatedAt: '2026-07-16T15:48:49.256Z'
+updatedAt: '2026-07-21T18:42:23.908Z'

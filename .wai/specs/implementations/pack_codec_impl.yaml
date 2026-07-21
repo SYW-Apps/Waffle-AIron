@@ -1,0 +1,226 @@
+id: pack_codec_impl
+name: Pack Codec Implementation
+description: >-
+  sdk/src/codec.ts — pure format + safety logic. planExtraction is the single safety chokepoint;
+  sealIntegrity/verifyIntegrity are the produce/verify pair; no I/O.
+contract: ipack_codec
+sourcePath: sdk/src/codec.ts
+methods:
+  - name: parseManifest
+    narrative:
+      - stepNumber: 1
+        description: Parse the envelope YAML text (throw on malformed YAML).
+        type: local
+      - stepNumber: 2
+        description: >-
+          Validate the required fields (formatVersion, name, version, kind, entry) are present and
+          well-typed; throw on any missing/invalid.
+        type: local
+      - stepNumber: 3
+        description: Is the format major newer than this wairon supports?
+        type: branch
+        condition: manifest.formatVersion major exceeds the supported version
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Fail loudly on a newer format rather than silently mis-read it.
+        type: throw
+        error: unsupported pack-archive formatVersion (newer than this wairon understands)
+      - stepNumber: 5
+        description: Return the parsed PackArchiveManifest.
+        type: return
+        outcome: success
+  - name: serializeManifest
+    narrative:
+      - stepNumber: 1
+        description: Drop undefined optional fields for a clean, canonical envelope.
+        type: local
+      - stepNumber: 2
+        description: Return the wairon-pack.yaml text.
+        type: return
+        outcome: success
+  - name: defaultLimits
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Return the default caps profile: 4096 entries, 32 MiB total inflated, 8 MiB per entry,
+          100:1 compression ratio, depth 16.
+        type: return
+        outcome: success
+  - name: planExtraction
+    narrative:
+      - stepNumber: 1
+        description: 'Resolve effective caps: each field of `limits` over the default profile.'
+        type: local
+      - stepNumber: 2
+        description: Initialize an empty approved-path list and a running total of 0.
+        type: local
+      - stepNumber: 3
+        description: Vet each enumerated entry.
+        type: loop
+        loopKind: forEach
+        over: entries
+        endStep: 8
+      - stepNumber: 4
+        description: >-
+          Reject symlinks, unknown non-file kinds, and structurally unsafe paths. (Directory entries
+          carry no bytes and are skipped — writeTree recreates directories from the written file
+          paths.)
+        type: branch
+        condition: >-
+          entry.kind is a symlink or an unknown non-file kind, or path is absolute / contains '..' /
+          uses a backslash or drive letter
+        onTrueStep: 10
+        onFalseStep: 5
+      - stepNumber: 5
+        description: Normalize the entry path to a destination-relative POSIX path.
+        type: local
+      - stepNumber: 6
+        description: Reject zip-slip and over-deep paths.
+        type: branch
+        condition: the normalized path escapes the destination (zip-slip) or its depth exceeds maxDepth
+        onTrueStep: 10
+        onFalseStep: 7
+      - stepNumber: 7
+        description: Reject oversized entries and zip bombs.
+        type: branch
+        condition: >-
+          uncompressedSize exceeds maxEntryBytes, or uncompressedSize/compressedSize exceeds
+          maxCompressionRatio
+        onTrueStep: 10
+        onFalseStep: 8
+      - stepNumber: 8
+        label: vetEnd
+        description: >-
+          Accept: append the normalized path of this regular file to approved; add its
+          uncompressedSize to the total.
+        type: local
+      - stepNumber: 9
+        description: Reject archives exceeding the aggregate caps.
+        type: branch
+        condition: approved length exceeds maxEntries, or total exceeds maxTotalUncompressedBytes
+        onTrueStep: 10
+        onFalseStep: 11
+      - stepNumber: 10
+        label: reject
+        description: Shared rejection for any failed safety check.
+        type: throw
+        error: 'reject: unsafe or oversized archive entry (zip-slip / size / ratio / depth guard)'
+      - stepNumber: 11
+        description: Return the PackExtractionPlan (approved paths + total).
+        type: return
+        outcome: success
+  - name: verifyIdentity
+    narrative:
+      - stepNumber: 1
+        description: Do envelope name/version differ from the inner pack manifest?
+        type: branch
+        condition: manifest.name != packName or manifest.version != packVersion
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Reject a tampered/mis-assembled archive.
+        type: throw
+        error: envelope identity mismatch (envelope name/version differ from the inner pack manifest)
+      - stepNumber: 3
+        description: Identity verified.
+        type: return
+        outcome: success
+  - name: verifyIntegrity
+    narrative:
+      - stepNumber: 1
+        description: Did the envelope carry no integrity data?
+        type: branch
+        condition: manifest has no entryDigests
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: No integrity data present — return false.
+        type: return
+        outcome: no integrity data
+      - stepNumber: 3
+        description: >-
+          Check each PAYLOAD file's digest (the wairon-pack.yaml envelope is skipped — it carries
+          the digests, so it can never digest itself).
+        type: loop
+        loopKind: forEach
+        over: files
+        endStep: 5
+      - stepNumber: 4
+        description: >-
+          Does the recomputed sha256 of this payload file differ from the recorded
+          entryDigests[file.path]?
+        type: branch
+        condition: sha256(file.contents) != entryDigests[file.path]
+        onTrueStep: 7
+        onFalseStep: 5
+      - stepNumber: 5
+        label: checkEnd
+        description: This file's digest matches.
+        type: local
+      - stepNumber: 6
+        description: All digests matched — return true.
+        type: return
+        outcome: verified
+      - stepNumber: 7
+        label: mismatch
+        description: A digest mismatch means tampering.
+        type: throw
+        error: integrity digest mismatch
+  - name: sealIntegrity
+    narrative:
+      - stepNumber: 1
+        description: Initialize an empty entryDigests map.
+        type: local
+      - stepNumber: 2
+        description: >-
+          Hash each PAYLOAD file (the wairon-pack.yaml envelope is excluded — it is the digest
+          carrier and is re-sealed after).
+        type: loop
+        loopKind: forEach
+        over: files
+        endStep: 3
+      - stepNumber: 3
+        label: hashEnd
+        description: >-
+          Compute sha256(file.contents) and record it under file.path (skipping the envelope
+          itself).
+        type: local
+      - stepNumber: 4
+        description: Compute an overall manifest digest over the sorted entryDigests.
+        type: local
+      - stepNumber: 5
+        description: >-
+          Set manifest.entryDigests, manifest.digest, manifest.generatedBy, and
+          manifest.generatedAt.
+        type: local
+      - stepNumber: 6
+        description: Return the sealed manifest.
+        type: return
+        outcome: success
+  - name: checkCompatibility
+    narrative:
+      - stepNumber: 1
+        description: Is the archive format unsupported?
+        type: branch
+        condition: manifest.formatVersion is unsupported
+        onTrueStep: 4
+        onFalseStep: 2
+      - stepNumber: 2
+        description: Is the running wairon below the pack's minimum?
+        type: branch
+        condition: minWaironVersion is set and the running wairon is below it
+        onTrueStep: 4
+        onFalseStep: 3
+      - stepNumber: 3
+        description: Compatible.
+        type: return
+        outcome: compatible
+      - stepNumber: 4
+        label: incompatible
+        description: Incompatible.
+        type: return
+        outcome: incompatible
+status: complete
+createdAt: '2026-07-21T18:25:00.265Z'
+updatedAt: '2026-07-21T20:43:26.036Z'

@@ -1,0 +1,102 @@
+id: ipack_codec
+name: Pack Codec Interface
+description: >-
+  Pure format + safety logic for pack archives — no I/O. Parses/serializes the envelope, provides
+  the default safety-limit profile, computes a safe extraction plan (or rejects), and verifies
+  archive identity, integrity, and version compatibility.
+component: pack_codec
+methods:
+  - name: parseManifest
+    description: >-
+      Parse and validate the wairon-pack.yaml envelope text into a PackArchiveManifest; throws on a
+      malformed envelope or an unsupported (newer-major) formatVersion.
+    signature: 'parseManifest(text: string): PackArchiveManifest'
+    returns: PackArchiveManifest
+    params:
+      - name: text
+        type: string
+  - name: serializeManifest
+    description: Serialize a PackArchiveManifest to canonical wairon-pack.yaml text (used by build).
+    signature: 'serializeManifest(manifest: PackArchiveManifest): string'
+    returns: string
+    params:
+      - name: manifest
+        type: pack_archive_manifest
+  - name: defaultLimits
+    description: >-
+      The default extraction-safety profile; callers override individual caps (hosted stricter,
+      local looser).
+    signature: 'defaultLimits(): PackExtractionLimits'
+    returns: PackExtractionLimits
+    params: []
+  - name: planExtraction
+    description: >-
+      Compute the safe extraction plan from enumerated entries under the given limits, or throw:
+      normalize + confine each path under the destination (zip-slip), reject absolute/`..`/backslash
+      paths, symlinks, and non-regular entries, and enforce entry-count / total-size / per-entry /
+      compression-ratio / depth caps.
+    signature: 'planExtraction(entries: ArchiveEntryMeta[], limits: PackExtractionLimits): PackExtractionPlan'
+    returns: PackExtractionPlan
+    params:
+      - name: entries
+        type: archive_entry_meta[]
+      - name: limits
+        type: pack_extraction_limits
+  - name: verifyIdentity
+    description: >-
+      Assert the envelope's name/version match the inner pack manifest's; throw on mismatch (a
+      tampered or mis-assembled archive).
+    signature: 'verifyIdentity(manifest: PackArchiveManifest, packName: string, packVersion: string): void'
+    returns: void
+    params:
+      - name: manifest
+        type: pack_archive_manifest
+      - name: packName
+        type: string
+      - name: packVersion
+        type: string
+  - name: verifyIntegrity
+    description: >-
+      When the envelope carries integrity data, verify every entry's sha256 against entryDigests;
+      returns true if integrity data was present and matched, false if the archive carried none.
+      Throws on a digest mismatch.
+    signature: 'verifyIntegrity(manifest: PackArchiveManifest, files: PackFile[]): boolean'
+    returns: boolean
+    params:
+      - name: manifest
+        type: pack_archive_manifest
+      - name: files
+        type: pack_file[]
+  - name: checkCompatibility
+    description: >-
+      Return whether the archive's formatVersion and minWaironVersion are compatible with the
+      running wairon version.
+    signature: 'checkCompatibility(manifest: PackArchiveManifest, waironVersion: string): boolean'
+    returns: boolean
+    params:
+      - name: manifest
+        type: pack_archive_manifest
+      - name: waironVersion
+        type: string
+  - name: sealIntegrity
+    description: >-
+      Produce-side partner of verifyIntegrity, used by build: compute a sha256 per file into
+      entryDigests plus an overall manifest digest, stamp generatedBy/generatedAt from the
+      caller-supplied values (time is passed in, keeping the codec pure), and return the sealed
+      PackArchiveManifest.
+    signature: >-
+      sealIntegrity(manifest: PackArchiveManifest, files: PackFile[], generatedBy: string,
+      generatedAt: string): PackArchiveManifest
+    returns: PackArchiveManifest
+    params:
+      - name: manifest
+        type: pack_archive_manifest
+      - name: files
+        type: pack_file[]
+      - name: generatedBy
+        type: string
+      - name: generatedAt
+        type: string
+status: complete
+createdAt: '2026-07-21T18:13:36.380Z'
+updatedAt: '2026-07-21T19:26:05.204Z'

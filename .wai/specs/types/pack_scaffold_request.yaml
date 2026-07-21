@@ -1,0 +1,33 @@
+kind: value-object
+id: pack_scaffold_request
+name: PackScaffoldRequest
+description: >-
+  Inputs to `wairon pack init`: the identity and variant of the pack project to scaffold, and where
+  to write it. A `code` kind scaffolds a `@wairon/sdk`-dependent TypeScript pack (with a build
+  script) so `pack build` can compile + bundle it; a `declarative` kind scaffolds a data-only pack
+  that needs no build step.
+fields:
+  - name: name
+    type: string
+    description: Pack name (also the default directory + archive stem)
+    optional: false
+  - name: version
+    type: string
+    description: Initial version (default 0.1.0)
+    optional: true
+  - name: kind
+    type: string
+    description: '"declarative" | "code"'
+    optional: false
+  - name: targetDir
+    type: string
+    description: Directory to scaffold the pack project into
+    optional: false
+  - name: withSkill
+    type: boolean
+    description: Include a skills/<id>/SKILL.md stub
+    optional: true
+methods: []
+componentClass: pack_scaffold_specialist
+createdAt: '2026-07-21T18:12:50.242Z'
+updatedAt: '2026-07-21T18:12:50.371Z'

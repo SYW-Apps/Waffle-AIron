@@ -1,0 +1,50 @@
+id: pack_scaffold_specialist_impl
+name: Pack Scaffold Specialist Implementation
+description: sdk/src/scaffold.ts — pure template rendering into a file map; writes nothing.
+contract: ipack_scaffold_specialist
+sourcePath: sdk/src/scaffold.ts
+methods:
+  - name: render
+    narrative:
+      - stepNumber: 1
+        description: Which variant?
+        type: branch
+        condition: request.kind == 'code'
+        onTrueStep: 2
+        onFalseStep: 4
+      - stepNumber: 2
+        description: >-
+          Render the code-pack file map: package.json depending on @wairon/sdk pinned to the running
+          SDK version, pack.ts importing defineRule from @wairon/sdk, tsconfig.json, a
+          wairon-pack.yaml stub (kind: code, entry pack.cjs, build script), and a README — with
+          name/version substituted.
+        type: local
+      - stepNumber: 3
+        description: Skip the declarative variant.
+        type: jump
+        toStep: 5
+      - stepNumber: 4
+        label: declVariant
+        description: >-
+          Render the declarative-pack file map: pack.yaml (example profile + language table +
+          pattern stub), a wairon-pack.yaml stub (kind: declarative, entry pack.yaml), and a README
+          — with name/version substituted.
+        type: local
+      - stepNumber: 5
+        label: skillGate
+        description: Include a skill stub?
+        type: branch
+        condition: request.withSkill is set
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Append a skills/<id>/SKILL.md stub to the file map.
+        type: local
+      - stepNumber: 7
+        label: done
+        description: Return the rendered file map.
+        type: return
+        outcome: success
+status: complete
+createdAt: '2026-07-21T18:25:06.219Z'
+updatedAt: '2026-07-21T19:26:05.804Z'

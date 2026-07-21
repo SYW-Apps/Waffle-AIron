@@ -1,0 +1,58 @@
+id: isdk_orchestrator
+name: SDK Orchestrator Interface
+description: >-
+  The four pack-authoring/archive workflows, delegating format decisions to the codec, template
+  rendering to the scaffold specialist, and all I/O to the archive adapter. Stateless.
+component: sdk_orchestrator
+methods:
+  - name: scaffoldPack
+    description: >-
+      Render the scaffold file map (specialist) and write it under the target directory (adapter);
+      return the created file paths.
+    signature: 'scaffoldPack(request: PackScaffoldRequest): string[]'
+    returns: string[]
+    params:
+      - name: request
+        type: pack_scaffold_request
+  - name: buildPack
+    description: >-
+      Read the source pack directory (adapter), derive + serialize the envelope and verify it
+      matches the inner pack manifest (codec), then assemble the files + envelope into a .wpack
+      (adapter). Returns the archive bytes + descriptor + suggested file name.
+    signature: 'buildPack(sourceDir: string): PackBuildResult'
+    returns: PackBuildResult
+    params:
+      - name: sourceDir
+        type: string
+  - name: inspectArchive
+    description: >-
+      Enumerate entries (adapter), parse + version-check the envelope (codec), and return a
+      PackArchiveInfo WITHOUT extracting anything. Identity is verified at BUILD time (where the
+      author's files are authoritative), not on inspect — inspect deliberately never inflates the
+      inner pack manifest.
+    signature: 'inspectArchive(archive: bytes): PackArchiveInfo'
+    returns: PackArchiveInfo
+    params:
+      - name: archive
+        type: bytes
+  - name: extractPack
+    description: >-
+      Enumerate entries (adapter), compute a safe extraction plan under `limits` (codec — rejecting
+      unsafe/oversized archives), inflate the approved entries and write the tree under destDir
+      (adapter), and return where it landed + the parsed manifest. Omitted limits fall back to the
+      codec default profile.
+    signature: >-
+      extractPack(archive: bytes, destDir: string, limits?: PackExtractionLimits):
+      PackExtractionResult
+    returns: PackExtractionResult
+    params:
+      - name: archive
+        type: bytes
+      - name: destDir
+        type: string
+      - name: limits
+        type: pack_extraction_limits
+        optional: true
+status: complete
+createdAt: '2026-07-21T18:13:51.375Z'
+updatedAt: '2026-07-21T20:43:27.575Z'

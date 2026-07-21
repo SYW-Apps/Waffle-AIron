@@ -1,0 +1,21 @@
+kind: value-object
+id: pack_extraction_plan
+name: PackExtractionPlan
+description: >-
+  The codec's approved, safe extraction plan: the normalized archive-relative paths that passed
+  every safety check (path confinement / zip-slip, no absolute/`..`/backslash/symlink/non-regular,
+  within all caps), plus the total inflated size. The archive adapter inflates and writes only these
+  paths, each under the destination directory — so no unsafe path ever reaches the filesystem.
+fields:
+  - name: paths
+    type: string[]
+    description: Approved, normalized relative paths to inflate + write under the destination
+    optional: false
+  - name: totalUncompressedBytes
+    type: number
+    description: Sum of approved entries' inflated sizes
+    optional: false
+methods: []
+componentClass: pack_codec
+createdAt: '2026-07-21T18:13:05.037Z'
+updatedAt: '2026-07-21T18:13:05.160Z'

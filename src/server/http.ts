@@ -78,7 +78,29 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
   }
 }
 
-export { MAX_BODY_BYTES, readBody };
+/** Read the raw request body as a Buffer (NO JSON parse), bounded by the same
+ *  MAX_BODY_BYTES cap as readBody. Used for binary uploads (e.g. .wpack pack
+ *  archives), where the whole in-memory buffer is the payload. Rejects with
+ *  PayloadTooLargeError (→ HTTP 413) on an oversize declared or streamed body. */
+async function readRawBody(req: IncomingMessage): Promise<Buffer> {
+  const declared = Number(req.headers['content-length']);
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+    throw new PayloadTooLargeError();
+  }
+  const chunks: Buffer[] = [];
+  let total = 0;
+  for await (const c of req) {
+    const chunk = c as Buffer;
+    total += chunk.length;
+    if (total > MAX_BODY_BYTES) {
+      throw new PayloadTooLargeError();
+    }
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
+export { MAX_BODY_BYTES, readBody, readRawBody };
 
 function diagramContentType(format: string): string {
   switch (format) {
@@ -137,6 +159,7 @@ const WEB_MUTATION_PATHS = new Set<string>([
   '/web/admin/permissions',
   '/web/admin/permissions/remove',
   '/web/admin/packs',
+  '/web/admin/packs/upload',
   '/web/admin/packs/remove',
   '/web/admin/policy',
   '/web/admin/exposure',
@@ -148,6 +171,7 @@ const WEB_MUTATION_PATHS = new Set<string>([
   '/web/admin/share/update',
   '/web/admin/share/remove',
   '/web/projects/packs',
+  '/web/projects/packs/upload',
   '/web/projects/packs/remove',
   '/web/projects/policy/reconcile',
   '/web/projects/producers',
@@ -313,7 +337,19 @@ export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResp
           for (const ch of channelsForWebMutation(url.pathname, body)) publishChange(ch);
         }
       });
-    (req.method === 'POST' ? readBody(req) : Promise.resolve(undefined))
+    // The .wpack upload routes carry a raw application/zip body — read it as a
+    // Buffer (bounded by the same cap) instead of JSON-parsing it. Every other
+    // POST route stays JSON.
+    const isPackUpload =
+      req.method === 'POST' &&
+      (url.pathname === '/web/admin/packs/upload' || url.pathname === '/web/projects/packs/upload');
+    const readInput: Promise<unknown> =
+      req.method !== 'POST'
+        ? Promise.resolve(undefined)
+        : isPackUpload
+          ? readRawBody(req)
+          : readBody(req);
+    readInput
       .then(proceed)
       .catch((err) => {
         if (res.headersSent) return;

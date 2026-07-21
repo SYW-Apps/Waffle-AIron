@@ -1,0 +1,88 @@
+name: Auto Tag (Dev)
+
+on:
+  push:
+    branches: [dev]
+
+# Only one auto-tag run at a time. If a second push lands while one is
+# already running, queue it rather than cancelling — we want every push
+# to eventually get a version bump.
+concurrency:
+  group: auto-tag-dev
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: Bump dev version and tag
+    runs-on: ubuntu-latest
+    if: "!startsWith(github.event.head_commit.message, 'chore: release v')"
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          # Use a PAT so the pushed tag triggers release.yml
+          # (pushes from GITHUB_TOKEN do not trigger other workflows)
+          token: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Pull latest dev
+        run: git pull --rebase origin dev
+
+      - name: Determine version bump
+        id: bump
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+        run: |
+          if echo "$MSG" | grep -q '\[major\]'; then
+            echo "bump=major" >> "$GITHUB_OUTPUT"
+          elif echo "$MSG" | grep -q '\[minor\]'; then
+            echo "bump=minor" >> "$GITHUB_OUTPUT"
+          else
+            echo "bump=patch" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Dev version is derived from git tags: continues X.Y.Z-dev.N while that
+      # base is ahead of the latest stable, else starts a fresh -dev.1 line.
+      - name: Compute next dev version
+        id: version
+        run: |
+          VERSION="$(bash scripts/next-version.sh dev ${{ steps.bump.outputs.bump }})"
+          echo "plain=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Next dev version: v${VERSION}"
+
+      - name: Skip if tag already exists
+        id: exists
+        run: |
+          if git rev-parse "refs/tags/${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
+            echo "Tag ${{ steps.version.outputs.tag }} already exists — skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update WAIRON_VERSION in defaults.ts
+        if: steps.exists.outputs.skip == 'false'
+        run: |
+          sed -i "s/export const WAIRON_VERSION = '[^']*'/export const WAIRON_VERSION = '${{ steps.version.outputs.plain }}'/" src/config/defaults.ts
+
+      - name: Commit and tag
+        if: steps.exists.outputs.skip == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add src/config/defaults.ts
+          git commit -m "chore: release ${{ steps.version.outputs.tag }}" || echo "defaults.ts already current"
+          git tag ${{ steps.version.outputs.tag }}
+          git push origin dev
+          git push origin ${{ steps.version.outputs.tag }}

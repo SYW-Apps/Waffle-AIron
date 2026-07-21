@@ -509,6 +509,79 @@ methods:
         description: Return after list
         type: return
         outcome: listed
+  - name: runPack
+    narrative:
+      - stepNumber: 1
+        description: Dispatch on the pack action.
+        type: switch
+        'on': action
+        cases:
+          - value: init
+            step: 2
+          - value: build
+            step: 4
+          - value: add
+            step: 6
+          - value: list
+            step: 8
+          - value: remove
+            step: 10
+        defaultStep: 12
+      - stepNumber: 2
+        label: doInit
+        description: Scaffold a new pack project.
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: initPack
+      - stepNumber: 3
+        description: Done.
+        type: return
+        outcome: init done
+      - stepNumber: 4
+        label: doBuild
+        description: Build a .wpack archive.
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: buildPack
+      - stepNumber: 5
+        description: Done.
+        type: return
+        outcome: build done
+      - stepNumber: 6
+        label: doAdd
+        description: Install a pack (ZIP-aware).
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: addPack
+      - stepNumber: 7
+        description: Done.
+        type: return
+        outcome: add done
+      - stepNumber: 8
+        label: doList
+        description: List packs.
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: listPacks
+      - stepNumber: 9
+        description: Done.
+        type: return
+        outcome: list done
+      - stepNumber: 10
+        label: doRemove
+        description: Remove a pack.
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: removePack
+      - stepNumber: 11
+        description: Done.
+        type: return
+        outcome: remove done
+      - stepNumber: 12
+        label: unknown
+        description: Unknown action.
+        type: throw
+        error: unknown pack action (expected init | build | add | list | remove)
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-15T12:25:27.118Z'
+updatedAt: '2026-07-21T18:45:25.104Z'

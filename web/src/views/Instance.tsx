@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { get, post } from '../api';
+import { get, post, postBinary } from '../api';
 import {
   AsyncButton,
   AsyncView,
@@ -36,15 +36,17 @@ function GlobalPacksTab() {
   const toast = useToast();
   const packs = useAsync<{ packs: PackDescriptor[] }>(() => get('/web/admin/packs'), []);
   const [adding, setAdding] = useState(false);
-  const [name, setName] = useState('');
-  const [content, setContent] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [nameOverride, setNameOverride] = useState('');
 
   async function install() {
-    await post('/web/admin/packs', { name, content });
-    toast.ok(`Installed “${name}”`);
+    if (!file) return;
+    const headers: Record<string, string> = nameOverride.trim() ? { 'X-Wairon-Pack-Name': nameOverride.trim() } : {};
+    const d = await postBinary<PackDescriptor>('/web/admin/packs/upload', file, headers);
+    toast.ok(`Installed “${d.name}”`);
     setAdding(false);
-    setName('');
-    setContent('');
+    setFile(null);
+    setNameOverride('');
     packs.reload();
   }
   async function remove(n: string) {
@@ -95,13 +97,19 @@ function GlobalPacksTab() {
           footer={
             <>
               <Button variant="ghost" onClick={() => setAdding(false)}>Cancel</Button>
-              <AsyncButton variant="primary" action={install} onError={toast.bad} disabled={!name || !content}>Install</AsyncButton>
+              <AsyncButton variant="primary" action={install} onError={toast.bad} disabled={!file}>Install</AsyncButton>
             </>
           }
         >
           <div className="stack-lg">
-            <Field label="Pack name"><TextInput value={name} onChange={setName} /></Field>
-            <Field label="Manifest (YAML/JSON)"><textarea className="input" rows={10} value={content} onChange={(e) => setContent(e.target.value)} /></Field>
+            <p className="hint">Upload a <code>.wpack</code> archive. Only declarative packs (profiles + language/platform tables) install here; code packs stay filesystem-only.</p>
+            <Field label="Pack archive (.wpack)">
+              <input className="input" type="file" accept=".wpack,.zip,application/zip"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+            </Field>
+            <Field label="Name override (optional)" hint="Defaults to the pack name in the archive's manifest.">
+              <TextInput value={nameOverride} onChange={setNameOverride} />
+            </Field>
           </div>
         </Modal>
       )}

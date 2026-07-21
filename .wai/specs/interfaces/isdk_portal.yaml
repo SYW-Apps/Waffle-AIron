@@ -1,0 +1,61 @@
+id: isdk_portal
+name: SDK Portal Interface
+description: >-
+  The published `@wairon/sdk` library API — four capabilities, each a 1:1 forward to the SDK
+  orchestrator with no logic of its own. This is the in-process facade cross-subsystem consumers
+  (sdd_cli, sdd_host) reach through their client Adapters, and the surface the package's index
+  re-exports (alongside the pure authoring + rule-authoring types).
+component: sdk_portal
+methods:
+  - name: scaffoldPack
+    description: >-
+      Scaffold a new pack project (declarative or code) into a directory; returns the created file
+      paths.
+    signature: 'scaffoldPack(request: PackScaffoldRequest): string[]'
+    returns: string[]
+    params:
+      - name: request
+        type: pack_scaffold_request
+    endpoint:
+      transport: Custom
+      address: '@wairon/sdk#scaffoldPack'
+  - name: buildPack
+    description: Build an installable .wpack archive from a pack directory.
+    signature: 'buildPack(sourceDir: string): PackBuildResult'
+    returns: PackBuildResult
+    params:
+      - name: sourceDir
+        type: string
+    endpoint:
+      transport: Custom
+      address: '@wairon/sdk#buildPack'
+  - name: inspectArchive
+    description: Inspect + verify a .wpack archive without extracting it.
+    signature: 'inspectArchive(archive: bytes): PackArchiveInfo'
+    returns: PackArchiveInfo
+    params:
+      - name: archive
+        type: bytes
+    endpoint:
+      transport: Custom
+      address: '@wairon/sdk#inspectArchive'
+  - name: extractPack
+    description: Safely extract a .wpack archive into a destination directory under enforced limits.
+    signature: >-
+      extractPack(archive: bytes, destDir: string, limits?: PackExtractionLimits):
+      PackExtractionResult
+    returns: PackExtractionResult
+    params:
+      - name: archive
+        type: bytes
+      - name: destDir
+        type: string
+      - name: limits
+        type: pack_extraction_limits
+        optional: true
+    endpoint:
+      transport: Custom
+      address: '@wairon/sdk#extractPack'
+status: complete
+createdAt: '2026-07-21T18:13:58.018Z'
+updatedAt: '2026-07-21T19:26:05.453Z'

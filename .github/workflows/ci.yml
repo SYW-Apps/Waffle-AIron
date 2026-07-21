@@ -23,14 +23,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Build FIRST: `npm run build` builds the @wairon/sdk workspace (via the
+      # prebuild script) before bundling, so the subsequent typecheck and tests can
+      # resolve the @wairon/sdk package (its dist must exist for tsc + vitest to
+      # import the workspace sibling).
+      - name: Build
+        run: npm run build
+
       - name: Typecheck
         run: npm run typecheck
 
       - name: Run tests
         run: npm test
-
-      - name: Build
-        run: npm run build
 
       # Dogfood: enforce wairon's own architecture-conformance gate on its spec tree.
       # --ci treats warnings as errors.

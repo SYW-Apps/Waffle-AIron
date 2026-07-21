@@ -1,0 +1,58 @@
+id: ipack_archive_adapter
+name: Pack Archive Adapter Interface
+description: >-
+  The ZIP + filesystem I/O surface for the SDK. Enumerates archive entries without inflating (so the
+  codec can enforce caps first), inflates a single entry on demand, assembles a file set into
+  archive bytes, reads a source pack directory into a file map, and writes an approved file map as a
+  directory tree. Acts only on already-validated inputs — it makes no path-safety or format
+  decisions.
+component: pack_archive_adapter
+methods:
+  - name: listEntries
+    description: >-
+      Enumerate every entry's metadata (path, compressed + uncompressed size, kind) WITHOUT
+      decompressing any bytes, so the codec can enforce zip-bomb / size caps before inflation.
+    signature: 'listEntries(archive: bytes): ArchiveEntryMeta[]'
+    returns: ArchiveEntryMeta[]
+    params:
+      - name: archive
+        type: bytes
+  - name: inflateEntry
+    description: Decompress and return the bytes of a single named entry.
+    signature: 'inflateEntry(archive: bytes, path: string): bytes'
+    returns: bytes
+    params:
+      - name: archive
+        type: bytes
+      - name: path
+        type: string
+  - name: assembleArchive
+    description: Deflate a set of files (the envelope + pack contents) into a single ZIP byte buffer.
+    signature: 'assembleArchive(files: PackFile[]): bytes'
+    returns: bytes
+    params:
+      - name: files
+        type: pack_file[]
+  - name: readPackDir
+    description: >-
+      Read a source pack directory recursively into a file map (archive-relative POSIX paths +
+      bytes) for building.
+    signature: 'readPackDir(dir: string): PackFile[]'
+    returns: PackFile[]
+    params:
+      - name: dir
+        type: string
+  - name: writeTree
+    description: >-
+      Write a file map as a directory tree under destDir, creating parent directories. Callers pass
+      only codec-approved files.
+    signature: 'writeTree(destDir: string, files: PackFile[]): void'
+    returns: void
+    params:
+      - name: destDir
+        type: string
+      - name: files
+        type: pack_file[]
+status: complete
+createdAt: '2026-07-21T18:13:23.876Z'
+updatedAt: '2026-07-21T19:26:05.126Z'

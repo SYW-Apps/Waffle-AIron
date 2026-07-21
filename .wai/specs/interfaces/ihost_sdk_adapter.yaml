@@ -1,0 +1,33 @@
+id: ihost_sdk_adapter
+name: Host SDK Adapter Interface
+description: 'Hosted client surface onto @wairon/sdk: inspect a pack archive''s envelope and safely extract one.'
+component: host_sdk_adapter
+methods:
+  - name: inspectArchive
+    description: >-
+      Forward to sdk_portal.inspectArchive — read + verify the envelope (kind, identity,
+      compatibility, counts) without extracting.
+    signature: 'inspectArchive(archive: bytes): PackArchiveInfo'
+    returns: PackArchiveInfo
+    params:
+      - name: archive
+        type: bytes
+  - name: extractArchive
+    description: >-
+      Forward to sdk_portal.extractPack — safely extract into destDir under the given
+      (hosted-strict) limits.
+    signature: >-
+      extractArchive(archive: bytes, destDir: string, limits?: PackExtractionLimits):
+      PackExtractionResult
+    returns: PackExtractionResult
+    params:
+      - name: archive
+        type: bytes
+      - name: destDir
+        type: string
+      - name: limits
+        type: pack_extraction_limits
+        optional: true
+status: complete
+createdAt: '2026-07-21T18:42:05.320Z'
+updatedAt: '2026-07-21T19:26:05.041Z'

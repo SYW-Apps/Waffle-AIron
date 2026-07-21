@@ -24,7 +24,7 @@ import { runDiagram } from '../commands/diagram.js';
 import { listRules } from '../commands/rules.js';
 import { listPatterns } from '../commands/patterns.js';
 import { listVariants } from '../commands/variants.js';
-import { addPack, listPacks, removePack } from '../commands/packs.js';
+import { addPack, listPacks, removePack, initPack, buildPack } from '../commands/packs.js';
 import {
   runServe,
   runDev,
@@ -188,6 +188,18 @@ async function runPacks(action: string, arg?: string, opts: { global?: boolean }
   else if (action === 'list') await listPacks();
   else if (action === 'remove') await removePack(arg!, opts);
 }
+async function runPack(
+  action: string,
+  arg?: string,
+  opts: { global?: boolean; kind?: string; dir?: string; skill?: boolean; out?: string } = {},
+): Promise<void> {
+  if (action === 'init') await initPack(arg!, { kind: opts.kind === 'code' ? 'code' : 'declarative', dir: opts.dir, skill: opts.skill });
+  else if (action === 'build') await buildPack(arg ?? '.', { out: opts.out });
+  else if (action === 'add') await addPack(arg!, { global: opts.global });
+  else if (action === 'list') await listPacks();
+  else if (action === 'remove') await removePack(arg!, { global: opts.global });
+  else throw new WaironError('unknown pack action (expected init | build | add | list | remove)');
+}
 
 const rulesCmd = program
   .command('rules')
@@ -202,18 +214,71 @@ rulesCmd
   });
 
 // ---------------------------------------------------------------------------
-// packs
+// pack — author, install, and manage extension packs (unified command family)
+// ---------------------------------------------------------------------------
+
+const packCmd = program
+  .command('pack')
+  .description('Author and install extension packs: init a pack project, build a .wpack, add/list/remove');
+
+packCmd
+  .command('init <name>')
+  .description('Scaffold a new pack project (declarative or code) via the SDK into a target directory')
+  .option('--kind <kind>', 'pack variant: declarative | code', 'declarative')
+  .option('--dir <path>', 'target directory (default ./<name>)')
+  .option('--skill', 'include a skills/<id>/SKILL.md stub')
+  .action(async (name: string, opts) => {
+    await runPack('init', name, { kind: opts.kind, dir: opts.dir, skill: opts.skill });
+  });
+
+packCmd
+  .command('build [source]')
+  .description('Build an installable .wpack archive from a pack directory (default .) via the SDK')
+  .option('--out <file>', 'output file path (default <name>-<version>.wpack)')
+  .action(async (source: string | undefined, opts) => {
+    await runPack('build', source, { out: opts.out });
+  });
+
+packCmd
+  .command('add <source>')
+  .description('Install a pack: a .wpack/.zip is extracted + registered, a plain file/dir is vendored; --global installs machine-wide')
+  .option('-g, --global', 'install into the global packs folder (WAIRON_PACKS_DIR or ~/.wairon/packs)')
+  .action(async (source: string, opts) => {
+    await runPack('add', source, { global: opts.global });
+  });
+
+packCmd
+  .command('list')
+  .alias('ls')
+  .description('List global and project extension packs with what they provide')
+  .action(async () => {
+    await runPack('list');
+  });
+
+packCmd
+  .command('remove <name>')
+  .alias('rm')
+  .description('Deregister a pack by name (deletes vendored files under .wai/packs); --global removes a machine-wide pack')
+  .option('-g, --global', 'remove from the global packs folder')
+  .action(async (name: string, opts) => {
+    await runPack('remove', name, { global: opts.global });
+  });
+
+// ---------------------------------------------------------------------------
+// packs — DEPRECATED alias of `wairon pack` (add | list | remove). Kept working;
+// each subcommand prints a one-line deprecation notice then delegates.
 // ---------------------------------------------------------------------------
 
 const packsCmd = program
   .command('packs')
-  .description('Extension packs: injected profiles, language tables, and conformance rules');
+  .description('[deprecated] alias of `wairon pack` — extension packs: profiles, language tables, and conformance rules');
 
 packsCmd
   .command('list')
   .alias('ls')
   .description('List global and project extension packs with what they provide')
   .action(async () => {
+    logger.warn('`wairon packs` is deprecated — use `wairon pack list`.');
     await runPacks('list');
   });
 
@@ -222,6 +287,7 @@ packsCmd
   .description('Vendor a pack into the project (.wai/packs/ + project.yaml), or install machine-wide with --global')
   .option('-g, --global', 'install into the global packs folder (WAIRON_PACKS_DIR or ~/.wairon/packs)')
   .action(async (source, opts) => {
+    logger.warn('`wairon packs` is deprecated — use `wairon pack add`.');
     await runPacks('add', source, { global: opts.global });
   });
 
@@ -231,6 +297,7 @@ packsCmd
   .description('Deregister a pack by name (deletes vendored files under .wai/packs); --global removes a machine-wide pack')
   .option('-g, --global', 'remove from the global packs folder')
   .action(async (name, opts) => {
+    logger.warn('`wairon packs` is deprecated — use `wairon pack remove`.');
     await runPacks('remove', name, { global: opts.global });
   });
 

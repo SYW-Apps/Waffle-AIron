@@ -1,0 +1,47 @@
+kind: value-object
+id: pack_archive_info
+name: PackArchiveInfo
+description: >-
+  The result of inspecting a `.wpack` archive without extracting it: its envelope identity plus
+  computed archive stats and a compatibility verdict. Lets a caller (CLI `pack build`/`add`, a
+  hosted upload handler) confirm what an archive is and whether this runtime can install it before
+  any files are written.
+fields:
+  - name: name
+    type: string
+    optional: false
+  - name: version
+    type: string
+    optional: false
+  - name: kind
+    type: string
+    description: '"declarative" | "code"'
+    optional: false
+  - name: entry
+    type: string
+    optional: false
+  - name: formatVersion
+    type: number
+    optional: false
+  - name: minWaironVersion
+    type: string
+    optional: true
+  - name: entryCount
+    type: number
+    description: Number of regular file entries in the archive
+    optional: false
+  - name: totalUncompressedBytes
+    type: number
+    optional: false
+  - name: compatible
+    type: boolean
+    description: Whether formatVersion + minWaironVersion are compatible with the running wairon
+    optional: false
+  - name: integrityVerified
+    type: boolean
+    description: 'Present when integrity data was carried: true if every entry digest matched'
+    optional: true
+methods: []
+componentClass: sdk_orchestrator
+createdAt: '2026-07-21T18:12:35.741Z'
+updatedAt: '2026-07-21T18:12:35.961Z'

@@ -203,7 +203,29 @@ methods:
         type: call
         targetComponent: git_backing_orchestrator
         targetMethod: syncBackingScope
+  - name: installGlobalPackArchive
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator's archive install (session/bearer as credential).
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: installGlobalPackArchive
+      - stepNumber: 2
+        description: Return the installed pack descriptor
+        type: return
+        outcome: installed pack descriptor
+  - name: installProjectPackArchive
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator's archive install (session/bearer as credential).
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: installProjectPackArchive
+      - stepNumber: 2
+        description: Return the installed pack descriptor
+        type: return
+        outcome: installed pack descriptor
 detail: calls-only
 status: complete
 createdAt: '2026-07-16T15:31:04.418Z'
-updatedAt: '2026-07-16T15:48:49.648Z'
+updatedAt: '2026-07-21T18:43:10.862Z'

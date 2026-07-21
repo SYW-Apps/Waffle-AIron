@@ -914,6 +914,35 @@ methods:
       transport: HTTP
       method: GET
       path: /web/admin/share/access
+  - name: adminInstallGlobalPackArchive
+    description: >-
+      Install a declarative pack server-wide from an uploaded .wpack archive (raw application/zip
+      body; pack name derived from the envelope, or overridden via the X-Wairon-Pack-Name header).
+      Forwards to project_ops_orchestrator.installGlobalPackArchive. The ZIP-primary counterpart of
+      adminInstallGlobalPack.
+    signature: 'adminInstallGlobalPackArchive(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/admin/packs/upload
+  - name: projectPackInstallArchive
+    description: >-
+      Install a declarative pack into a project from an uploaded .wpack archive (raw application/zip
+      body). Forwards to project_ops_orchestrator.installProjectPackArchive. The ZIP-primary
+      counterpart of projectPackInstall.
+    signature: 'projectPackInstallArchive(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/projects/packs/upload
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-07-18T13:22:16.983Z'
+updatedAt: '2026-07-21T18:48:13.364Z'

@@ -1,0 +1,24 @@
+id: sdk_orchestrator
+name: SDK Orchestrator
+description: >-
+  Owns the four pack-authoring/archive workflows and their control flow, delegating format decisions
+  to the codec, template rendering to the scaffold specialist, and all I/O to the archive adapter
+  (holds no state of its own). scaffoldPack: ask the scaffold specialist for the file map, then
+  write it to the target directory via the adapter. buildPack: read the source pack directory,
+  derive/validate the envelope and verify it matches the inner pack manifest (codec), then assemble
+  the files + envelope into archive bytes via the adapter. inspectArchive: enumerate entries via the
+  adapter, read + version-check the envelope and verify identity (codec), and return a descriptor
+  without extracting. extractPack: enumerate entries via the adapter, compute a safe extraction plan
+  under the caller's limit profile (codec, rejecting unsafe/oversized archives), inflate the
+  approved entries and write the tree under the destination via the adapter, returning the extracted
+  directory + parsed manifest. Stateless transforms — the SDK persists nothing.
+subsystem: sdd_sdk
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - pack_codec
+  - pack_scaffold_specialist
+  - pack_archive_adapter
+status: complete
+createdAt: '2026-07-21T17:22:34.996Z'
+updatedAt: '2026-07-21T19:26:04.871Z'

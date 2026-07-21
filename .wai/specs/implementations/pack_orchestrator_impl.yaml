@@ -206,8 +206,77 @@ methods:
         description: Return once removed
         type: return
         outcome: removed
+  - name: installGlobalPackArchive
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Resolve the caller's project:admin permission at instance scope
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the global archive install
+        type: throw
+        error: Forbidden — managing server-global packs requires instance-level project:admin
+      - stepNumber: 5
+        description: >-
+          Install the declarative pack from the .wpack archive server-wide (the registry inspects +
+          rejects code packs)
+        type: call
+        targetComponent: pack_registry
+        targetMethod: installGlobalPackArchive
+      - stepNumber: 6
+        description: Return the installed pack descriptor
+        type: return
+        outcome: installed pack descriptor
+  - name: installProjectPackArchive
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Resolve the caller's project:admin permission over the target project
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the project archive install
+        type: throw
+        error: Forbidden — installing a project pack requires project:admin over the project
+      - stepNumber: 5
+        description: Bind the project's isolated root
+        type: local
+      - stepNumber: 6
+        description: >-
+          Install the declarative pack from the .wpack archive into the project (the registry
+          inspects + rejects code packs)
+        type: call
+        targetComponent: pack_registry
+        targetMethod: installProjectPackArchive
+      - stepNumber: 7
+        description: Return the installed pack descriptor
+        type: return
+        outcome: installed pack descriptor
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T18:47:13.157Z'
-updatedAt: '2026-07-16T15:19:35.035Z'
+updatedAt: '2026-07-21T18:43:07.891Z'

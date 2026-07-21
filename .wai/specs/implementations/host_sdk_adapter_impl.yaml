@@ -1,0 +1,35 @@
+id: host_sdk_adapter_impl
+name: Host SDK Adapter Implementation
+description: >-
+  src/server/adapters.ts — thin client onto @wairon/sdk (sdk_portal): forwards inspect +
+  safe-extract for hosted ZIP pack handling.
+contract: ihost_sdk_adapter
+sourcePath: src/server/adapters.ts
+methods:
+  - name: inspectArchive
+    narrative:
+      - stepNumber: 1
+        description: Forward to the SDK portal to read + verify the envelope without extracting.
+        type: call
+        targetComponent: sdk_portal
+        targetMethod: inspectArchive
+  - name: extractArchive
+    narrative:
+      - stepNumber: 1
+        description: Forward to the SDK portal to safely extract under the given limits.
+        type: call
+        targetComponent: sdk_portal
+        targetMethod: extractPack
+lint:
+  allow:
+    - code: UNREALIZED_DEPENDENCY
+      reason: >-
+        host_sdk_adapter imports the published @wairon/sdk surface (`import * as sdkPortal from
+        '@wairon/sdk'`), but sdd_sdk is a SEPARATE npm workspace package (its sourcePaths are
+        sdk/src/*). The Level-2 dependency analyzer resolves only RELATIVE specifiers against the
+        mapped source files, so a legitimate cross-package import of the published portal reads as
+        unrealized. The edge is real and correct — an analyzer limitation at the workspace-package
+        boundary.
+status: complete
+createdAt: '2026-07-21T18:42:54.336Z'
+updatedAt: '2026-07-21T19:26:05.549Z'

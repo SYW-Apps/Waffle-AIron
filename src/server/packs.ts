@@ -4,12 +4,13 @@ import { runWithProjectRoot, getProjectRoot } from '../utils/fs.js';
 import { parseYaml, readYamlFile } from '../utils/yaml.js';
 import { loadProjectConfig, saveProjectConfig, AI_PATHS } from '../config/loader.js';
 import type { PackScope } from '../core/extensions.js';
-import { hostCore } from './adapters.js';
+import { hostCore, hostSdk } from './adapters.js';
 import { authenticateCredential } from './auth.js';
 import { authorize } from './authorization.js';
 import { AdminAuthError, UnauthenticatedError } from './errors.js';
 import { existingProjectRoot } from './projects.js';
 import type { HostConfig, PackDescriptor, ProjectPackReference, ProjectProfileSelection } from './types.js';
+import type { PackArchiveInfo, PackExtractionLimits } from '@wairon/sdk';
 
 // ---------------------------------------------------------------------------
 // Pack Registry (store I/O) + Pack Orchestrator (control-plane workflow) — sdd_host
@@ -57,6 +58,55 @@ function assertDeclarative(content: string): void {
   const err = hostCore.checkDeclarativePack(parsed);
   if (err) {
     throw new Error(`Not a valid declarative pack (${err}). ${guidance}`);
+  }
+}
+
+// ── Hosted ZIP (.wpack) archive install (declarative-only) ────────────────────
+//
+// The archive counterparts of the string-content installs above: inspect the
+// envelope via the host SDK adapter and reject a code pack BEFORE any bytes
+// touch disk, then safely extract under a HOSTED-STRICT limit profile and
+// re-verify the extracted entry is a declarative pack (defense in depth).
+
+/**
+ * Hosted extraction caps — deliberately TIGHTER than the SDK default profile
+ * (32 MiB total / 8 MiB per entry). Every field is pinned so the hosted
+ * zip-bomb guardrails never silently loosen if an SDK default is relaxed; the
+ * two tightened caps are the total- and per-entry inflated-size limits.
+ */
+const HOSTED_STRICT_LIMITS: PackExtractionLimits = {
+  maxEntries: 4096, // SDK default
+  maxTotalUncompressedBytes: 8 * 1024 * 1024, // 8 MiB (hosted; SDK default 32 MiB)
+  maxEntryBytes: 4 * 1024 * 1024, // 4 MiB (hosted; SDK default 8 MiB)
+  maxCompressionRatio: 100, // SDK default (zip-bomb guard)
+  maxDepth: 16, // SDK default
+};
+
+/** Reject a code pack from its inspected envelope — the declarative-only surface
+ *  policy — before any bytes touch disk. Code packs install via the trusted
+ *  filesystem (a baked image layer, a mounted packs volume, or `wairon packs add`). */
+function assertNotCodeArchive(info: PackArchiveInfo): void {
+  if (info.kind === 'code') {
+    throw new Error(
+      `Pack "${info.name}" is a code pack; only declarative packs (profiles + language/platform tables) ` +
+      'install over this surface. Install code/rule packs via the trusted filesystem ' +
+      '(a baked image layer, a mounted packs volume, or `wairon packs add`).',
+    );
+  }
+}
+
+/** Safely extract a declarative .wpack into a FRESH pack directory under
+ *  hosted-strict limits (the SDK enforces zip-slip / entry-count / size /
+ *  compression-ratio / depth and verifies integrity), then re-check the
+ *  extracted entry parses as a declarative pack, removing the partial
+ *  extraction on failure. */
+function extractDeclarativeArchive(archive: Uint8Array, destDir: string): void {
+  const result = hostSdk.extractArchive(archive, destDir, HOSTED_STRICT_LIMITS);
+  try {
+    assertDeclarative(fs.readFileSync(path.join(result.directory, result.entryPath), 'utf8'));
+  } catch (e) {
+    fs.rmSync(destDir, { recursive: true, force: true });
+    throw e;
   }
 }
 
@@ -146,6 +196,26 @@ function storeInstallGlobalPack(name: string, content: string): PackDescriptor {
   return descriptor;
 }
 
+/**
+ * Install a declarative pack from a .wpack archive into the MUTABLE instance
+ * packs directory (WAIRON_PACKS_DIR); the image tier is never written. Inspect
+ * + reject a code pack before disk, derive + sanitize the pack name (envelope,
+ * or the optional override), extract into <instance packs dir>/<name> under
+ * hosted-strict limits, re-verify it is declarative, and return its probe
+ * (tier 'instance').
+ */
+function storeInstallGlobalPackArchive(archive: Uint8Array, name?: string): PackDescriptor {
+  const info = hostSdk.inspectArchive(archive);
+  assertNotCodeArchive(info);
+  const packName = name ?? info.name;
+  assertName(packName);
+  const dir = path.join(hostCore.globalPacksDir(), packName);
+  extractDeclarativeArchive(archive, dir);
+  const descriptor = probe(dir, hostCore.globalPacksDir(), 'global', packName);
+  descriptor.tier = 'instance';
+  return descriptor;
+}
+
 function storeRemoveGlobalPack(name: string): void {
   assertName(name);
   // Removals touch the MUTABLE instance tier only; a pack that lives solely in
@@ -180,6 +250,32 @@ function storeInstallProjectPack(name: string, content: string): PackDescriptor 
   const root = getProjectRoot();
   const relRef = `.wai/packs/${name}.yaml`;
   writeFileAtomic(path.join(root, '.wai', 'packs', `${name}.yaml`), content);
+
+  const config = loadProjectConfig();
+  const packs = config.extensions?.packs ?? [];
+  if (!packs.includes(relRef)) {
+    config.extensions = { packs: [...packs, relRef], useGlobalPacks: config.extensions?.useGlobalPacks ?? true };
+    saveProjectConfig(config);
+  }
+  return probe(relRef, root, 'project', relRef);
+}
+
+/**
+ * Archive counterpart of storeInstallProjectPack for the bound project: inspect
+ * + reject a code pack before disk, safely extract the declarative pack into
+ * .wai/packs/<name>/ under hosted-strict limits, and register that
+ * project-relative DIRECTORY ref in .wai/project.yaml under extensions.packs
+ * (idempotent). Committed with the project, so every clone and CI enforce it.
+ * Assumes a project root is already bound in scope.
+ */
+function storeInstallProjectPackArchive(archive: Uint8Array, name?: string): PackDescriptor {
+  const info = hostSdk.inspectArchive(archive);
+  assertNotCodeArchive(info);
+  const packName = name ?? info.name;
+  assertName(packName);
+  const root = getProjectRoot();
+  const relRef = `.wai/packs/${packName}`;
+  extractDeclarativeArchive(archive, path.join(root, '.wai', 'packs', packName));
 
   const config = loadProjectConfig();
   const packs = config.extensions?.packs ?? [];
@@ -331,4 +427,22 @@ export function executeApprovedInstallProjectPack(cfg: HostConfig, project: stri
 export function removeProjectPack(cfg: HostConfig, credential: string | null, project: string, name: string): void {
   requireCap(cfg, credential, 'project:admin', 'project', project, 'Forbidden — removing a project pack requires project:admin over the project');
   runWithProjectRoot(boundProject(cfg, project), () => storeRemoveProjectPack(name));
+}
+
+// ── pack_orchestrator: ZIP (.wpack) archive installs (declarative-only) ────────
+//
+// The ZIP-primary counterparts of installGlobalPack/installProjectPack. Same
+// resolver gates (instance-level project:admin for the global tier; project:admin
+// over the project for its tier), same scope binding — the registry inspects the
+// envelope and rejects code packs, extracts under hosted-strict limits, and
+// re-checks the extracted pack is declarative.
+
+export function installGlobalPackArchive(cfg: HostConfig, credential: string | null, archive: Uint8Array, name?: string): PackDescriptor {
+  requireCap(cfg, credential, 'project:admin', 'instance', '', 'Forbidden — managing server-global packs requires instance-level project:admin');
+  return storeInstallGlobalPackArchive(archive, name);
+}
+
+export function installProjectPackArchive(cfg: HostConfig, credential: string | null, project: string, archive: Uint8Array, name?: string): PackDescriptor {
+  requireCap(cfg, credential, 'project:admin', 'project', project, 'Forbidden — installing a project pack requires project:admin over the project');
+  return runWithProjectRoot(boundProject(cfg, project), () => storeInstallProjectPackArchive(archive, name));
 }

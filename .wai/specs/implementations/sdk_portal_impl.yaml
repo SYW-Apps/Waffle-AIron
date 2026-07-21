@@ -1,0 +1,41 @@
+id: sdk_portal_impl
+name: SDK Portal Implementation
+description: >-
+  The @wairon/sdk package entry (sdk/src/index.ts): thin exported functions, each a 1:1 forward to
+  the SDK orchestrator, plus the re-exported pure authoring + rule-authoring types. Conformance
+  declared (plain function exports, no transport registrations).
+contract: isdk_portal
+sourcePath: sdk/src/index.ts
+methods:
+  - name: scaffoldPack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the SDK orchestrator.
+        type: call
+        targetComponent: sdk_orchestrator
+        targetMethod: scaffoldPack
+  - name: buildPack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the SDK orchestrator.
+        type: call
+        targetComponent: sdk_orchestrator
+        targetMethod: buildPack
+  - name: inspectArchive
+    narrative:
+      - stepNumber: 1
+        description: Forward to the SDK orchestrator.
+        type: call
+        targetComponent: sdk_orchestrator
+        targetMethod: inspectArchive
+  - name: extractPack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the SDK orchestrator.
+        type: call
+        targetComponent: sdk_orchestrator
+        targetMethod: extractPack
+conformance: declared
+status: complete
+createdAt: '2026-07-21T18:23:33.249Z'
+updatedAt: '2026-07-21T19:26:05.977Z'

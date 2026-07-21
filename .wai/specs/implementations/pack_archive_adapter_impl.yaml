@@ -1,0 +1,69 @@
+id: pack_archive_adapter_impl
+name: Pack Archive Adapter Implementation
+description: >-
+  sdk/src/archive.ts — the sole zip-library + filesystem I/O boundary. Binds the ZIP library
+  technology; acts only on codec-approved inputs.
+contract: ipack_archive_adapter
+sourcePath: sdk/src/archive.ts
+technologies:
+  - fflate
+methods:
+  - name: listEntries
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the zip central directory via the zip library and map each record to ArchiveEntryMeta
+          (path, compressed + uncompressed size, kind) WITHOUT inflating any data.
+        type: local
+      - stepNumber: 2
+        description: Return the entry metadata list.
+        type: return
+        outcome: success
+  - name: inflateEntry
+    narrative:
+      - stepNumber: 1
+        description: Locate the named entry and inflate only it.
+        type: local
+      - stepNumber: 2
+        description: Return the entry's decompressed bytes.
+        type: return
+        outcome: success
+  - name: assembleArchive
+    narrative:
+      - stepNumber: 1
+        description: Add each file to a zip container (deflating) and finalize the archive.
+        type: local
+      - stepNumber: 2
+        description: Return the archive bytes.
+        type: return
+        outcome: success
+  - name: readPackDir
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Walk the directory recursively, reading each file into { path: POSIX-relative, contents }
+          (skipping node_modules and VCS dirs).
+        type: local
+      - stepNumber: 2
+        description: Return the file map.
+        type: return
+        outcome: success
+  - name: writeTree
+    narrative:
+      - stepNumber: 1
+        description: Write each approved file.
+        type: loop
+        loopKind: forEach
+        over: files
+        endStep: 2
+      - stepNumber: 2
+        label: writeEnd
+        description: Create parent directories and write the file's bytes.
+        type: local
+      - stepNumber: 3
+        description: Done.
+        type: return
+        outcome: success
+status: complete
+createdAt: '2026-07-21T18:25:12.561Z'
+updatedAt: '2026-07-21T19:26:05.634Z'

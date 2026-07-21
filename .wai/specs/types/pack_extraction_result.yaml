@@ -1,0 +1,36 @@
+kind: value-object
+id: pack_extraction_result
+name: PackExtractionResult
+description: >-
+  The outcome of safely extracting a `.wpack` into a destination directory: where it landed, its
+  parsed envelope, and the archive-relative entry path — everything an install step needs to then
+  register the extracted directory pack (which the sdd_core loader already reads).
+fields:
+  - name: directory
+    type: string
+    description: Absolute path the pack was extracted into (e.g. .wai/packs/<name>)
+    optional: false
+  - name: entryPath
+    type: string
+    description: Path to the pack entry file within `directory`
+    optional: false
+  - name: manifest
+    type: pack_archive_manifest
+    description: The parsed envelope
+    optional: false
+  - name: name
+    type: string
+    description: Pack name (convenience mirror of manifest.name)
+    optional: false
+  - name: kind
+    type: string
+    description: '"declarative" | "code"'
+    optional: false
+  - name: entryCount
+    type: number
+    description: Number of files written
+    optional: false
+methods: []
+componentClass: sdk_orchestrator
+createdAt: '2026-07-21T18:12:40.241Z'
+updatedAt: '2026-07-21T18:12:40.373Z'

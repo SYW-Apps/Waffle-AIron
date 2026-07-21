@@ -36,6 +36,8 @@ jobs:
               TAGS="${TAGS},${IMAGE_NAME}:preview"
             elif [[ "${VERSION}" =~ -beta\.[0-9]+$ ]]; then
               TAGS="${TAGS},${IMAGE_NAME}:beta"
+            elif [[ "${VERSION}" =~ -dev\.[0-9]+$ ]]; then
+              TAGS="${TAGS},${IMAGE_NAME}:dev"
             elif [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
               TAGS="${TAGS},${IMAGE_NAME}:stable"
             else

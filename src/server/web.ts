@@ -2981,6 +2981,20 @@ function projectDestroy(cfg: HostConfig, sessionId: string, body: Body, res: Ser
 
 const q = (url: URL, name: string): string | undefined => url.searchParams.get(name) ?? undefined;
 
+/** The raw uploaded .wpack archive bytes (http.ts reads the raw body as a Buffer
+ *  for the upload routes); a non-buffer body is a 400-mapped client error. */
+function archiveBody(body: unknown): Uint8Array {
+  if (Buffer.isBuffer(body) || body instanceof Uint8Array) return body;
+  throw new Error('expected a raw application/zip request body');
+}
+
+/** Optional X-Wairon-Pack-Name override header; the envelope name is used when absent. */
+function packNameOverride(req: IncomingMessage): string | undefined {
+  const h = req.headers['x-wairon-pack-name'];
+  const v = Array.isArray(h) ? h[0] : h;
+  return v && v.trim() ? v.trim() : undefined;
+}
+
 function opsListGlobalPacks(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
   sendJson(res, 200, { packs: projectops.listGlobalPacks(cfg, sessionId) });
 }
@@ -3000,6 +3014,14 @@ function opsInstallProjectPack(cfg: HostConfig, sessionId: string, body: Body, r
 function opsRemoveProjectPack(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
   projectops.removeProjectPack(cfg, sessionId, String(body?.projectId ?? ''), String(body?.name ?? ''));
   sendJson(res, 200, { ok: true });
+}
+// ZIP (.wpack) archive installs: the raw application/zip body is the archive; the
+// name comes from the envelope, or the optional X-Wairon-Pack-Name override.
+function opsInstallGlobalPackArchive(cfg: HostConfig, sessionId: string, req: IncomingMessage, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, projectops.installGlobalPackArchive(cfg, sessionId, archiveBody(body), packNameOverride(req)));
+}
+function opsInstallProjectPackArchive(cfg: HostConfig, sessionId: string, req: IncomingMessage, url: URL, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, projectops.installProjectPackArchive(cfg, sessionId, q(url, 'projectId') ?? '', archiveBody(body), packNameOverride(req)));
 }
 function opsGetPackPolicy(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
   sendJson(res, 200, projectops.getPackPolicy(cfg, sessionId));
@@ -3326,6 +3348,12 @@ export async function handleWebRequest(
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'packs') {
         return opsInstallProjectPack(cfg, sessionId, body, res);
       }
+      // POST /web/projects/packs/upload?projectId= — raw .wpack archive install
+      // (project:admin). Body is the application/zip archive; name from the
+      // envelope or the X-Wairon-Pack-Name header.
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'upload') {
+        return opsInstallProjectPackArchive(cfg, sessionId, req, url, body, res);
+      }
       // POST /web/projects/packs/remove { projectId, name }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'remove') {
         return opsRemoveProjectPack(cfg, sessionId, body, res);
@@ -3491,6 +3519,12 @@ export async function handleWebRequest(
       // POST /web/admin/packs { name, content } — declarative install, instance tier.
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'packs') {
         return opsInstallGlobalPack(cfg, sessionId, body, res);
+      }
+      // POST /web/admin/packs/upload — raw .wpack archive install, instance tier
+      // (instance-level project:admin). Body is the application/zip archive; name
+      // from the envelope or the X-Wairon-Pack-Name header.
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'upload') {
+        return opsInstallGlobalPackArchive(cfg, sessionId, req, body, res);
       }
       // POST /web/admin/packs/remove { name }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'remove') {

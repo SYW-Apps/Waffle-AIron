@@ -1,0 +1,49 @@
+{
+  "name": "@wairon/sdk",
+  "version": "0.0.0-dev",
+  "description": "Wairon pack-archive (.wpack) format authority and authoring toolkit — scaffold, build, inspect, and safely extract wairon extension packs.",
+  "keywords": [
+    "wairon",
+    "sdd",
+    "pack",
+    "wpack",
+    "archive",
+    "developer-tools"
+  ],
+  "author": "SYW",
+  "license": "MIT",
+  "homepage": "https://github.com/SYW-Apps/Waffle-AIron",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SYW-Apps/Waffle-AIron.git"
+  },
+  "type": "commonjs",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "fflate": "^0.8.2",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.14.0",
+    "rimraf": "^5.0.7",
+    "tsup": "^8.1.0",
+    "typescript": "^5.5.2",
+    "vitest": "^4.1.9"
+  }
+}
