@@ -62,6 +62,39 @@ jobs:
             --compress GZip \
             --config package.json
 
+      # Authenticode-sign the Windows .exe. Dormant until a cert is configured:
+      # if WINDOWS_CERT_PFX_BASE64 is unset the binary ships unsigned (a notice,
+      # not a failure). Drop in a self-signed cert to test the pipeline, or a
+      # CA-issued cert for public trust — the step is identical either way.
+      - name: Sign Windows binary (Authenticode)
+        if: matrix.asset_ext == '.zip'
+        shell: pwsh
+        env:
+          CERT_B64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          CERT_PWD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:CERT_B64)) {
+            Write-Host "::notice::No signing cert (WINDOWS_CERT_PFX_BASE64 unset) — shipping the Windows binary unsigned."
+            exit 0
+          }
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $signtool) { throw "signtool.exe not found on runner" }
+          $pfx = Join-Path $env:RUNNER_TEMP "codesign.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CERT_B64))
+          try {
+            & $signtool.FullName sign /f $pfx /p $env:CERT_PWD /fd SHA256 `
+              /tr http://timestamp.digicert.com /td SHA256 wairon.exe
+            if ($LASTEXITCODE -ne 0) { throw "signtool sign failed ($LASTEXITCODE)" }
+          } finally {
+            Remove-Item $pfx -Force -ErrorAction SilentlyContinue
+          }
+          # Confirm a signature is present (works for self-signed too; a CA cert
+          # would additionally report Status=Valid on a trusting machine).
+          $sig = Get-AuthenticodeSignature wairon.exe
+          if (-not $sig.SignerCertificate) { throw "no signature present after signing" }
+          Write-Host "Signed wairon.exe by $($sig.SignerCertificate.Subject) (status: $($sig.Status))"
+
       - name: Get version from tag
         id: version
         shell: bash

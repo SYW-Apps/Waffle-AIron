@@ -28,6 +28,11 @@ wairon.exe
 *.zip
 *.sha256
 
+# Local code-signing certificates — NEVER commit private keys
+*.pfx
+*.cer
+*.p12
+
 # Rust
 .cargo
 target/
