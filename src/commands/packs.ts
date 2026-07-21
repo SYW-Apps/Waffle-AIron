@@ -1,6 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
+import { scaffoldPack, buildPack as sdkBuildPack, extractPack } from '@wairon/sdk';
+import type { PackScaffoldRequest, PackBuildResult, PackExtractionResult } from '@wairon/sdk';
 import { logger } from '../utils/logger.js';
 import { getProjectRoot } from '../utils/fs.js';
 import { isProjectInitialized, loadProjectConfig, saveProjectConfig } from '../config/loader.js';
@@ -13,16 +15,21 @@ import {
 } from '../core/extensions.js';
 
 // ---------------------------------------------------------------------------
-// packs command — install/inspect/remove extension packs.
+// pack command family — author, install, inspect, and remove extension packs.
 //
 // A pack is a plain file (or directory with a pack entry file) providing
 // profiles, language tables, and rules; wairon just reads and imports it.
-// `packs add` VENDORS a pack: project scope copies it into .wai/packs/ and
+// Authoring goes through the @wairon/sdk portal: `pack init` scaffolds a pack
+// project, `pack build` emits an installable `.wpack` archive.
+//
+// `pack add` INSTALLS a pack. A .wpack/.zip source is safely extracted (via the
+// SDK) into .wai/packs/<name>/ and the directory registered; a plain file/dir
+// source is VENDORED as before: project scope copies it into .wai/packs/ and
 // registers it in project.yaml (committed → CI and every clone enforce it);
 // --global copies it into ~/.wairon/packs (WAIRON_PACKS_DIR), which is
-// auto-loaded for every project on this machine. A wrapper product's
-// installer is just an unzip + one `wairon packs add` — these commands are
-// equally usable by hand.
+// auto-loaded for every project on this machine. A wrapper product's installer
+// is just one `wairon pack add <file.wpack>` — these commands are equally
+// usable by hand. `wairon packs` remains as a deprecated alias.
 // ---------------------------------------------------------------------------
 
 interface PackProbe {
@@ -69,7 +76,20 @@ function resolveSourceUnit(source: string): { abs: string; isDir: boolean } {
   return { abs, isDir };
 }
 
+/** A .wpack / .zip archive source is installed via the SDK, not vendored verbatim. */
+function isArchiveRef(source: string): boolean {
+  return /\.(wpack|zip)$/i.test(source);
+}
+
 export async function addPack(source: string, options: { global?: boolean } = {}): Promise<void> {
+  // ZIP-aware: a .wpack/.zip source is inspected + safely extracted via the SDK
+  // and its DIRECTORY registered; a plain file/dir source falls through to the
+  // unchanged vendoring path below.
+  if (isArchiveRef(source)) {
+    await addPackFromArchive(source, options);
+    return;
+  }
+
   const { abs } = resolveSourceUnit(source);
 
   // Verify the pack loads BEFORE vendoring it anywhere.
@@ -90,7 +110,7 @@ export async function addPack(source: string, options: { global?: boolean } = {}
     }
     logger.success(`Installed pack "${probe.name}" globally: ${dest}`);
     logger.info(`${describe(probe)} — auto-loaded for every project on this machine (WAIRON_PACKS_DIR / ~/.wairon/packs).`);
-    logger.info('Note: repo-defining doctrine belongs in project packs (committed); use `wairon packs add <source>` inside the project for that.');
+    logger.info('Note: repo-defining doctrine belongs in project packs (committed); use `wairon pack add <source>` inside the project for that.');
     return;
   }
 
@@ -119,6 +139,133 @@ export async function addPack(source: string, options: { global?: boolean } = {}
     logger.success(`Pack "${probe.name}" already registered — refreshed ${relRef} from the source.`);
   }
   logger.info(`${describe(probe)} — commit .wai/ so CI and every clone enforce it.`);
+}
+
+/**
+ * Install a `.wpack`/`.zip` archive: read its bytes, safely extract it via the
+ * SDK into .wai/packs/<name>/ (project) or <globalPacksDir>/<name>/ (--global)
+ * — the pack name comes from the extraction result's manifest — then register
+ * the resulting DIRECTORY ref exactly like vendoring does. The pack is probe-
+ * loaded before anything is registered, so a malformed/unsafe archive fails
+ * cleanly and leaves no partial registration.
+ */
+async function addPackFromArchive(source: string, options: { global?: boolean }): Promise<void> {
+  const abs = path.resolve(source);
+  if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
+    logger.error(`Pack archive "${source}" does not exist.`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const scope: PackScope = options.global ? 'global' : 'project';
+
+  // Resolve the base packs directory (project scope requires a project).
+  let baseDir: string;
+  if (options.global) {
+    baseDir = globalPacksDir();
+  } else {
+    if (!isProjectInitialized()) {
+      logger.error('Not inside a wairon project — run `wairon init` first, or use --global for a machine-wide install.');
+      process.exitCode = 1;
+      return;
+    }
+    baseDir = path.join(getProjectRoot(), '.wai', 'packs');
+  }
+
+  // Extract into a staging directory first; the pack's own name (and thus its
+  // final directory) is only known from the extraction result's manifest.
+  const bytes = fs.readFileSync(abs);
+  fs.mkdirSync(baseDir, { recursive: true });
+  const staging = fs.mkdtempSync(path.join(baseDir, '.wpack-staging-'));
+  let result: PackExtractionResult;
+  try {
+    result = extractPack(bytes, staging);
+  } catch (err) {
+    fs.rmSync(staging, { recursive: true, force: true });
+    logger.error(`Failed to extract pack archive "${path.basename(abs)}": ${err instanceof Error ? err.message : String(err)}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  // Relocate the extracted tree to <name>/ (replacing any prior copy).
+  const name = result.name;
+  const destDir = path.join(baseDir, name);
+  if (fs.existsSync(destDir)) fs.rmSync(destDir, { recursive: true, force: true });
+  fs.renameSync(staging, destDir);
+
+  // Probe-verify the extracted pack loads BEFORE registering anything.
+  const probe = probePack(destDir, path.dirname(destDir), scope);
+  if (probe.error) {
+    fs.rmSync(destDir, { recursive: true, force: true });
+    logger.error(probe.error);
+    process.exitCode = 1;
+    return;
+  }
+
+  if (options.global) {
+    logger.success(`Installed pack "${probe.name ?? name}" globally: ${destDir}`);
+    logger.info(`${describe(probe)} — auto-loaded for every project on this machine (WAIRON_PACKS_DIR / ~/.wairon/packs).`);
+    return;
+  }
+
+  // Register the DIRECTORY ref, exactly like vendoring registers a ref.
+  const relRef = `.wai/packs/${name}`;
+  const config = loadProjectConfig();
+  const packs = config.extensions?.packs ?? [];
+  if (!packs.includes(relRef)) {
+    config.extensions = { packs: [...packs, relRef], useGlobalPacks: config.extensions?.useGlobalPacks ?? true };
+    saveProjectConfig(config);
+    logger.success(`Installed pack "${probe.name ?? name}" into ${relRef} and registered it in .wai/project.yaml.`);
+  } else {
+    logger.success(`Pack "${probe.name ?? name}" already registered — refreshed ${relRef} from ${path.basename(abs)}.`);
+  }
+  logger.info(`${describe(probe)} — commit .wai/ so CI and every clone enforce it.`);
+}
+
+/**
+ * `wairon pack init <name>` — scaffold a new pack project (declarative or code
+ * variant, optional skill stub) via the SDK portal, then print the created
+ * files and next steps. A code pack's package.json pins @wairon/sdk to the
+ * running SDK version so it builds against a matching contract.
+ */
+export async function initPack(
+  name: string,
+  options: { kind?: 'declarative' | 'code'; dir?: string; skill?: boolean } = {},
+): Promise<void> {
+  const kind = options.kind === 'code' ? 'code' : 'declarative';
+  const targetDir = options.dir ?? `./${name}`;
+  const request: PackScaffoldRequest = { name, kind, targetDir };
+  if (options.skill) request.withSkill = true;
+
+  // Step 1: scaffold the pack project via the SDK portal.
+  const created = scaffoldPack(request);
+
+  // Step 2: print the created file paths and next-step guidance.
+  logger.success(`Scaffolded ${kind} pack "${name}" into ${targetDir}`);
+  for (const file of created) {
+    console.log(`  ${chalk.green('+')} ${chalk.dim(file)}`);
+  }
+  logger.blank();
+  logger.info(`Next: cd ${targetDir} && wairon pack build`);
+}
+
+/**
+ * `wairon pack build [source]` — build an installable `.wpack` archive from a
+ * pack directory via the SDK portal, write it to <name>-<version>.wpack (or
+ * --out), and report the path + size. The SDK seals integrity and validates the
+ * envelope against the inner pack manifest before emitting the archive.
+ */
+export async function buildPack(source: string, options: { out?: string } = {}): Promise<void> {
+  const sourceDir = source && source.length > 0 ? source : '.';
+
+  // Step 1: build the archive via the SDK portal.
+  const result: PackBuildResult = sdkBuildPack(sourceDir);
+
+  // Step 2: write the archive bytes to --out (or the suggested file name) and report.
+  const outPath = options.out ?? result.suggestedFileName;
+  fs.writeFileSync(outPath, result.archive);
+  logger.success(`Built pack "${result.info.name}" v${result.info.version} → ${outPath} (${result.archive.byteLength} bytes)`);
+  logger.info(`Install it with \`wairon pack add ${outPath}\`, or upload it to a hosted instance.`);
 }
 
 export async function listPacks(): Promise<void> {
@@ -152,7 +299,7 @@ export async function listPacks(): Promise<void> {
     else console.log(`  ${chalk.green('●')} ${chalk.bold(probe.name ?? ref)}  ${chalk.dim(ref)}  ${chalk.dim(describe(probe))}`);
   }
   console.log('');
-  logger.info('Rules from packs show up in `wairon rules list`; add packs with `wairon packs add <source> [--global]`.');
+  logger.info('Rules from packs show up in `wairon rules list`; add packs with `wairon pack add <source> [--global]`.');
 }
 
 export async function removePack(name: string, options: { global?: boolean } = {}): Promise<void> {

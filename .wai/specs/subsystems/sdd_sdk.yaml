@@ -1,0 +1,44 @@
+id: sdd_sdk
+name: SDK / Pack Authoring & Archive
+description: >-
+  The pack-archive format authority and authoring toolkit — published as the standalone
+  `@wairon/sdk` npm package (source under `sdk/`). Owns the portable, versioned `.wpack` archive
+  format: a ZIP whose root carries a `wairon-pack.yaml` envelope (formatVersion, name, version,
+  kind: declarative|code, entry, min-wairon compat, optional per-entry sha256 + digest, generatedBy)
+  wrapping ordinary directory-pack contents (pack.yaml or pack.cjs, skills/**/SKILL.md,
+  patterns/**). Provides four capabilities on its published surface: scaffold a new pack project
+  (`pack init`), build an installable archive from a pack directory (`pack build`), inspect/verify
+  an archive's envelope + identity, and SAFELY extract an archive into a destination directory
+  (zip-slip normalization; caps on entry count, total-uncompressed size, per-entry size, compression
+  ratio, and path depth; reject absolute/`..`/backslash paths, symlinks, and non-regular entries).
+
+
+  Deliberately STANDALONE and dependency-free so third-party pack authors can install only
+  `@wairon/sdk` (it does STRUCTURAL/envelope validation only; SEMANTIC declarative-pack content
+  validation — DeclarativePackSchema / checkDeclarativePack — stays in sdd_core and is applied by
+  the consumers AFTER extraction). It also re-exports the stable pack-authoring types
+  (profile/language/pattern/assertion definitions) and the rule-authoring contract (SddRule and a
+  stable RuleContext/Finding facade) that code packs are written against.
+
+
+  Extraction is an INSTALL-TIME concern, not a load-time one: a `.wpack` extracts into
+  `.wai/packs/<name>/`, which the existing sdd_core loader already reads as a directory pack — so
+  the runtime load path is unchanged and a raw `.wpack` is an installable artifact, never a loadable
+  ref. Consumed cross-subsystem by sdd_cli (`wairon pack init|build` and a ZIP-aware `add`) and
+  sdd_host (hosted ZIP upload → safe extract → declarative-check → install) via client Adapters onto
+  this subsystem's published Portal. Declarative-only hosted install is preserved: code ZIPs (a
+  pack.cjs entry or programmatic rules) install only via the trusted filesystem / baked image, never
+  over the hosted API.
+parentSystem: Waffle-AIron
+publicInterfaces:
+  - type: Custom
+    details: >-
+      The @wairon/sdk library API (in-process facade + published package surface): scaffoldPack,
+      buildPack, inspectArchive, and safe extractPack. Also the home of the re-exported
+      pack-authoring types and the SddRule/RuleContext/Finding rule-authoring contract that code
+      packs compile against. Audience: external (third-party pack authors).
+    component: sdk_portal
+trustedLinks: []
+status: complete
+createdAt: '2026-07-21T17:21:22.034Z'
+updatedAt: '2026-07-21T19:26:04.522Z'

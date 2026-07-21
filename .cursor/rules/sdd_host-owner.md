@@ -39,6 +39,7 @@ You own and decide on everything within:
 .wai/specs/components/host_mcp_adapter.yaml
 .wai/specs/components/host_producer_adapter.yaml
 .wai/specs/components/host_request_orchestrator.yaml
+.wai/specs/components/host_sdk_adapter.yaml
 .wai/specs/components/host_server.yaml
 .wai/specs/components/host_surfaces_adapter.yaml
 .wai/specs/components/host_validator_adapter.yaml

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { get, post } from '../api';
+import { get, post, postBinary } from '../api';
 import {
   AsyncButton,
   AsyncView,
@@ -26,15 +26,21 @@ function PacksTab({ projectId }: { projectId: string }) {
   const toast = useToast();
   const packs = useAsync<{ packs: PackDescriptor[] }>(() => get(`/web/projects/packs?projectId=${encodeURIComponent(projectId)}`), [projectId]);
   const [adding, setAdding] = useState(false);
-  const [name, setName] = useState('');
-  const [content, setContent] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [nameOverride, setNameOverride] = useState('');
 
   async function install() {
-    await post('/web/projects/packs', { projectId, name, content });
-    toast.ok(`Installed pack “${name}”`);
+    if (!file) return;
+    const headers: Record<string, string> = nameOverride.trim() ? { 'X-Wairon-Pack-Name': nameOverride.trim() } : {};
+    const d = await postBinary<PackDescriptor>(
+      `/web/projects/packs/upload?projectId=${encodeURIComponent(projectId)}`,
+      file,
+      headers,
+    );
+    toast.ok(`Installed pack “${d.name}”`);
     setAdding(false);
-    setName('');
-    setContent('');
+    setFile(null);
+    setNameOverride('');
     packs.reload();
   }
   async function remove(n: string) {
@@ -97,18 +103,19 @@ function PacksTab({ projectId }: { projectId: string }) {
               <Button variant="ghost" onClick={() => setAdding(false)}>
                 Cancel
               </Button>
-              <AsyncButton variant="primary" action={install} onError={toast.bad} disabled={!name || !content}>
+              <AsyncButton variant="primary" action={install} onError={toast.bad} disabled={!file}>
                 Install
               </AsyncButton>
             </>
           }
         >
           <div className="stack-lg">
-            <Field label="Pack name">
-              <TextInput value={name} onChange={setName} placeholder="my-org-conventions" />
+            <Field label="Pack archive (.wpack)" hint="Declarative packs only — code packs are installed via the filesystem tier.">
+              <input className="input" type="file" accept=".wpack,.zip,application/zip"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
             </Field>
-            <Field label="Pack manifest (YAML/JSON)" hint="Declarative packs only — code packs are installed via the filesystem tier.">
-              <textarea className="input" rows={10} value={content} onChange={(e) => setContent(e.target.value)} />
+            <Field label="Name override (optional)" hint="Defaults to the pack name in the archive's manifest.">
+              <TextInput value={nameOverride} onChange={setNameOverride} placeholder="my-org-conventions" />
             </Field>
           </div>
         </Modal>

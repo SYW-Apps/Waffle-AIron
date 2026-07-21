@@ -1,0 +1,19 @@
+id: pack_scaffold_specialist
+name: Pack Scaffold Specialist
+description: >-
+  Renders the `wairon pack init` scaffold as a pure in-memory file map (path → contents) from
+  embedded templates — no filesystem writes of its own (the orchestrator hands the map to the
+  archive adapter to write). Two variants: a DECLARATIVE pack (a `pack.yaml` with example profile +
+  language-table + pattern stubs, an optional `skills/<id>/SKILL.md`, a README) and a CODE pack (a
+  `package.json` depending on `@wairon/sdk`, a `pack.ts`/`pack.cjs` entry importing `defineRule`
+  from `@wairon/sdk`, a `tsconfig.json`, plus a `wairon-pack.yaml` envelope stub with kind: code and
+  a build script). Substitutes the requested pack name/version and, for code packs, pins the
+  `@wairon/sdk` dependency to the running SDK version so a scaffolded pack builds against a matching
+  contract.
+subsystem: sdd_sdk
+componentType: Specialist
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-07-21T17:22:21.759Z'
+updatedAt: '2026-07-21T19:26:04.795Z'

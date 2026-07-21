@@ -5,8 +5,10 @@ component: cli_packs_adapter
 methods:
   - name: addPack
     description: >-
-      Vendor a pack from the given source into .wai/packs (or the global packs dir) and register it
-      in project config.
+      Install a pack (`wairon pack add <source> [--global]`). ZIP-aware: a .wpack/.zip source is
+      safely extracted via the SDK into .wai/packs/<name>/ (or the global packs dir) and the
+      directory registered; a plain file/dir source is vendored + registered as before. Verifies the
+      pack loads before registering anything.
     signature: 'addPack(source: string, global: boolean): void'
     returns: void
     params:
@@ -30,6 +32,30 @@ methods:
       - name: global
         type: boolean
         optional: true
+  - name: initPack
+    description: >-
+      Scaffold a new pack project (`wairon pack init <name>`) via the SDK portal — declarative or
+      code variant (--kind), optional skill stub (--skill) — into a target directory.
+    signature: 'initPack(name: string, options: object): void'
+    returns: void
+    params:
+      - name: name
+        type: string
+      - name: options
+        type: object
+        description: '{ kind?: ''declarative''|''code''; dir?: string; skill?: boolean }'
+  - name: buildPack
+    description: >-
+      Build an installable .wpack archive from a pack directory (`wairon pack build [source]`) via
+      the SDK portal; write it to <name>-<version>.wpack (or --out) and report the path + size.
+    signature: 'buildPack(source: string, options: object): void'
+    returns: void
+    params:
+      - name: source
+        type: string
+      - name: options
+        type: object
+        description: '{ out?: string }'
 status: complete
 createdAt: '2026-07-14T20:09:24.660Z'
-updatedAt: '2026-07-14T20:23:49.052Z'
+updatedAt: '2026-07-21T18:44:51.949Z'

@@ -77,10 +77,11 @@ methods:
         type: local
     detail: intent
     intent: >-
-      Resolve the pack source (a path or module id), vendor it into the project's .wai/packs (or the
-      global packs dir when --global) and register it in project.yaml under extensions.packs. A
-      directory pack is copied with its entry file; a malformed or unreadable source fails with a
-      clear error and leaves no partial registration.
+      Install a pack. A .wpack/.zip source is inspected + safely extracted via the SDK portal into
+      .wai/packs/<name>/ (or the global packs dir under --global) and the directory registered in
+      extensions.packs; a plain file/dir source is vendored under its basename as before. The pack
+      is probe-loaded to verify it parses before anything is registered; a malformed/unsafe source
+      fails with a clear error and leaves no partial registration.
   - name: listPacks
     narrative:
       - stepNumber: 1
@@ -173,7 +174,48 @@ methods:
       Deregister the named pack from project.yaml (or the global packs registration when --global)
       and delete its vendored files under .wai/packs. Removing a pack that is not present is
       reported to the user, not treated as an error.
+  - name: initPack
+    narrative:
+      - stepNumber: 1
+        description: Scaffold the pack project via the SDK portal.
+        type: call
+        targetComponent: sdk_portal
+        targetMethod: scaffoldPack
+      - stepNumber: 2
+        description: Print the created file paths and next-step guidance.
+        type: local
+    detail: intent
+    intent: >-
+      Scaffold a new pack project via the SDK portal (declarative or code variant, optional skill
+      stub) into the target directory, then print the created files and next steps (cd, then `wairon
+      pack build`). A code pack's package.json pins @wairon/sdk to the running SDK version so it
+      builds against a matching contract.
+  - name: buildPack
+    narrative:
+      - stepNumber: 1
+        description: Build the archive via the SDK portal.
+        type: call
+        targetComponent: sdk_portal
+        targetMethod: buildPack
+      - stepNumber: 2
+        description: Write the archive bytes to the suggested file name (or --out) and print the path + size.
+        type: local
+    detail: intent
+    intent: >-
+      Build a .wpack archive from a pack directory via the SDK portal and write it to
+      <name>-<version>.wpack (or --out), reporting the path and size. The SDK seals integrity and
+      validates the envelope against the inner pack manifest before emitting the archive.
 detail: calls-only
+lint:
+  allow:
+    - code: UNREALIZED_DEPENDENCY
+      reason: >-
+        cli_packs_adapter imports the published @wairon/sdk surface (`import { scaffoldPack,
+        buildPack, extractPack } from '@wairon/sdk'`), but sdd_sdk is a SEPARATE npm workspace
+        package (its sourcePaths are sdk/src/*). The Level-2 dependency analyzer resolves only
+        RELATIVE specifiers against the mapped source files, so a legitimate cross-package import of
+        the published portal reads as unrealized. The edge is real and correct — an analyzer
+        limitation at the workspace-package boundary.
 status: complete
 createdAt: '2026-07-14T20:10:02.916Z'
-updatedAt: '2026-07-18T18:48:25.511Z'
+updatedAt: '2026-07-21T18:45:19.246Z'

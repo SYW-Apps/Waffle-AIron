@@ -28,6 +28,9 @@
     "dist",
     "README.md"
   ],
+  "workspaces": [
+    "sdk"
+  ],
   "engines": {
     "node": ">=18.0.0"
   },
@@ -55,6 +58,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@wairon/sdk": "*",
     "chalk": "^4.1.2",
     "commander": "^12.1.0",
     "inquirer": "^8.2.6",

@@ -37,6 +37,22 @@ export async function post<T = unknown>(path: string, body?: unknown): Promise<T
   return parse<T>(res, path);
 }
 
+/** POST raw bytes (a .wpack upload) → parsed JSON, same error handling. Sends
+ *  application/zip with the CSRF header; extra headers (e.g. X-Wairon-Pack-Name)
+ *  merge in. */
+export async function postBinary<T = unknown>(
+  path: string,
+  body: Blob | ArrayBuffer | Uint8Array,
+  headers: Record<string, string> = {},
+): Promise<T> {
+  const res = await request(path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/zip', ...headers },
+    body: body as BodyInit,
+  });
+  return parse<T>(res, path);
+}
+
 /** Raw GET (no parse) — for status probes where the caller inspects res.status. */
 export function raw(path: string): Promise<Response> {
   return request(path);

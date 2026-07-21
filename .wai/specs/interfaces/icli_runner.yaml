@@ -90,7 +90,9 @@ methods:
       source?: string; origin?: string }): Promise<void>
     returns: Promise<void>
   - name: runPacks
-    description: Handle `wairon packs <action>` (add | list | remove), dispatching to the packs adapter.
+    description: >-
+      Deprecated alias of `wairon pack` for the add | list | remove subset — forwards to the packs
+      adapter. Kept for back-compat; new usage should prefer `wairon pack`.
     signature: 'runPacks(action: string): void'
     returns: void
     params:
@@ -113,6 +115,16 @@ methods:
     signature: 'runVariants(): void'
     returns: void
     params: []
+  - name: runPack
+    description: >-
+      Handle the unified `wairon pack <action>` (init | build | add | list | remove), dispatching to
+      the packs adapter. The primary pack UX; `wairon packs` remains as a deprecated alias
+      (runPacks).
+    signature: 'runPack(action: string): void'
+    returns: void
+    params:
+      - name: action
+        type: string
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-15T12:25:26.914Z'
+updatedAt: '2026-07-21T18:44:54.255Z'

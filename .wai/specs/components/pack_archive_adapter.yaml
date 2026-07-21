@@ -1,0 +1,19 @@
+id: pack_archive_adapter
+name: Pack Archive Adapter
+description: >-
+  The sole ZIP + filesystem I/O boundary for the SDK — the only component binding the ZIP library
+  technology, so swapping the library touches this component alone. ZIP side: enumerate an archive's
+  entry metadata WITHOUT decompressing (path, uncompressed size, compressed size, entry kind) so the
+  codec can enforce zip-bomb/size caps before any bytes are inflated; inflate a single named entry
+  on demand; and assemble a set of files (plus the envelope) into archive bytes. Filesystem side:
+  read a source pack directory into a file map (for build), and write an approved file map as a
+  directory tree under a destination (for extract and scaffold), creating parent directories. Does
+  no path-safety or format decisions — it acts only on the codec's already-validated extraction plan
+  / entry list.
+subsystem: sdd_sdk
+componentType: Adapter
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-07-21T17:22:26.329Z'
+updatedAt: '2026-07-21T19:26:04.715Z'

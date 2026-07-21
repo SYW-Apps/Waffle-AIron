@@ -10,6 +10,8 @@ import { createMcpServer } from '../mcp/server.js';
 import * as gitPortal from '../git/index.js';
 import * as producerPortal from '../producers/index.js';
 import * as surfacePortal from '../core/surfaces.js';
+import * as sdkPortal from '@wairon/sdk';
+import type { PackArchiveInfo, PackExtractionLimits, PackExtractionResult } from '@wairon/sdk';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 // ---------------------------------------------------------------------------
@@ -86,4 +88,17 @@ export const hostProducer = {
 // runWithProjectRoot, exactly like hostCore reads).
 export const hostSurfaces = {
   exportBoundSurface: surfacePortal.exportSurface,
+};
+
+// host_sdk_adapter → sdd_sdk (sdk_portal): the hosted client edge onto the
+// published @wairon/sdk surface for ZIP (.wpack) pack handling. Thin forwarding
+// so the pack store never depends on the SDK's internals — inspect the envelope
+// (used to reject code packs BEFORE any bytes touch disk) and safely extract a
+// .wpack into a destination directory under caller-supplied hosted-strict limits.
+export const hostSdk = {
+  /** Forward to sdk_portal.inspectArchive — read + verify the envelope without extracting. */
+  inspectArchive: (archive: Uint8Array): PackArchiveInfo => sdkPortal.inspectArchive(archive),
+  /** Forward to sdk_portal.extractPack — safely extract into destDir under the given limits. */
+  extractArchive: (archive: Uint8Array, destDir: string, limits?: PackExtractionLimits): PackExtractionResult =>
+    sdkPortal.extractPack(archive, destDir, limits),
 };

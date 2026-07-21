@@ -81,6 +81,40 @@ methods:
         type: string
       - name: name
         type: string
+  - name: installGlobalPackArchive
+    description: >-
+      Authenticate, require instance-level project:admin, and install a declarative pack from a
+      .wpack archive server-wide (rejecting code packs). ZIP-primary counterpart of
+      installGlobalPack.
+    signature: 'installGlobalPackArchive(credential: string, archive: bytes, name?: string): PackDescriptor'
+    returns: PackDescriptor
+    params:
+      - name: credential
+        type: string
+      - name: archive
+        type: bytes
+      - name: name
+        type: string
+        optional: true
+  - name: installProjectPackArchive
+    description: >-
+      Authenticate, require project:admin over the project, bind its scope, and install a
+      declarative pack from a .wpack archive into it (rejecting code packs). ZIP-primary counterpart
+      of installProjectPack.
+    signature: >-
+      installProjectPackArchive(credential: string, project: string, archive: bytes, name?: string):
+      PackDescriptor
+    returns: PackDescriptor
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: archive
+        type: bytes
+      - name: name
+        type: string
+        optional: true
 status: complete
 createdAt: '2026-07-04T18:46:52.736Z'
-updatedAt: '2026-07-16T15:18:52.571Z'
+updatedAt: '2026-07-21T18:42:19.895Z'

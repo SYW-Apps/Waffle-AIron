@@ -1,0 +1,17 @@
+id: host_sdk_adapter
+name: Host SDK Adapter
+description: >-
+  The sdd_host client adapter onto the @wairon/sdk published surface (sdk_portal) — the
+  cross-subsystem hop for hosted ZIP pack handling. Forwards two capabilities: inspectArchive (read
+  + verify a .wpack envelope without extracting — used to reject code packs before any bytes touch
+  disk) and extractArchive (safely extract a .wpack into a destination directory under
+  caller-supplied hosted-strict limits). Abstracts how the SDK is reached (in-process today) so the
+  pack store never depends on the SDK's internals.
+subsystem: sdd_host
+componentType: Adapter
+owns: []
+dependsOn:
+  - sdk_portal
+status: complete
+createdAt: '2026-07-21T18:42:00.635Z'
+updatedAt: '2026-07-21T19:26:04.633Z'

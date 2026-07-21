@@ -1,0 +1,27 @@
+kind: value-object
+id: archive_entry_meta
+name: ArchiveEntryMeta
+description: >-
+  Metadata for one archive entry, enumerated by the archive adapter WITHOUT inflating it — so the
+  codec can enforce zip-bomb and size caps before any bytes are decompressed. `compressedSize` vs
+  `uncompressedSize` feeds the compression-ratio guard; `kind` lets the codec reject symlinks and
+  non-regular entries.
+fields:
+  - name: path
+    type: string
+    description: Raw archive entry path (as stored, pre-normalization)
+    optional: false
+  - name: uncompressedSize
+    type: number
+    optional: false
+  - name: compressedSize
+    type: number
+    optional: false
+  - name: kind
+    type: string
+    description: '"file" | "dir" | "symlink"'
+    optional: false
+methods: []
+componentClass: pack_archive_adapter
+createdAt: '2026-07-21T18:13:01.742Z'
+updatedAt: '2026-07-21T18:13:01.875Z'

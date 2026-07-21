@@ -1,0 +1,205 @@
+id: sdk_orchestrator_impl
+name: SDK Orchestrator Implementation
+description: >-
+  sdk/src/orchestrator.ts — the four pack workflows, delegating format/safety decisions to the
+  codec, template rendering to the scaffold specialist, and all zip+fs I/O to the archive adapter.
+  Holds no state.
+contract: isdk_orchestrator
+sourcePath: sdk/src/orchestrator.ts
+methods:
+  - name: scaffoldPack
+    narrative:
+      - stepNumber: 1
+        description: Render the scaffold file map for the requested pack.
+        type: call
+        targetComponent: pack_scaffold_specialist
+        targetMethod: render
+      - stepNumber: 2
+        description: Write the rendered files as a directory tree under the request's targetDir.
+        type: call
+        targetComponent: pack_archive_adapter
+        targetMethod: writeTree
+      - stepNumber: 3
+        description: Return the created file paths (targetDir-joined).
+        type: return
+        outcome: success
+  - name: buildPack
+    narrative:
+      - stepNumber: 1
+        description: Read the source pack directory into a file map.
+        type: call
+        targetComponent: pack_archive_adapter
+        targetMethod: readPackDir
+      - stepNumber: 2
+        description: 'Require an envelope: is there no wairon-pack.yaml among the files?'
+        type: branch
+        condition: files has no 'wairon-pack.yaml'
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject a pack directory with no envelope.
+        type: throw
+        error: pack build requires a wairon-pack.yaml envelope (run `wairon pack init` to scaffold one)
+      - stepNumber: 4
+        label: parse
+        description: Parse + validate the envelope text (also version-gates the format).
+        type: call
+        targetComponent: pack_codec
+        targetMethod: parseManifest
+      - stepNumber: 5
+        description: >-
+          Read the inner pack identity: name/version from the declarative pack.yaml, or from
+          package.json for a code pack.
+        type: local
+      - stepNumber: 6
+        description: Assert the envelope's name/version match the inner pack manifest.
+        type: call
+        targetComponent: pack_codec
+        targetMethod: verifyIdentity
+      - stepNumber: 7
+        description: >-
+          Seal integrity: fill entryDigests + digest and stamp generatedBy '@wairon/sdk@<version>'
+          and the current generatedAt ISO time.
+        type: call
+        targetComponent: pack_codec
+        targetMethod: sealIntegrity
+      - stepNumber: 8
+        description: Serialize the sealed manifest back to canonical envelope text.
+        type: call
+        targetComponent: pack_codec
+        targetMethod: serializeManifest
+      - stepNumber: 9
+        description: Upsert wairon-pack.yaml (sealed envelope text) into the file map.
+        type: local
+      - stepNumber: 10
+        description: Deflate the files + envelope into .wpack archive bytes.
+        type: call
+        targetComponent: pack_archive_adapter
+        targetMethod: assembleArchive
+      - stepNumber: 11
+        description: >-
+          Assemble PackArchiveInfo (identity + entryCount + totalUncompressedBytes +
+          compatible=true) and suggestedFileName `${name}-${version}.wpack`.
+        type: local
+      - stepNumber: 12
+        description: Return the PackBuildResult (archive bytes + info + suggested file name).
+        type: return
+        outcome: success
+  - name: inspectArchive
+    narrative:
+      - stepNumber: 1
+        description: Enumerate archive entries without inflating.
+        type: call
+        targetComponent: pack_archive_adapter
+        targetMethod: listEntries
+      - stepNumber: 2
+        description: Is there no wairon-pack.yaml entry?
+        type: branch
+        condition: entries has no 'wairon-pack.yaml'
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reject a non-.wpack archive.
+        type: throw
+        error: not a .wpack archive (missing wairon-pack.yaml envelope)
+      - stepNumber: 4
+        label: readEnv
+        description: Inflate just the envelope entry.
+        type: call
+        targetComponent: pack_archive_adapter
+        targetMethod: inflateEntry
+      - stepNumber: 5
+        description: Parse + version-check the envelope text.
+        type: call
+        targetComponent: pack_codec
+        targetMethod: parseManifest
+      - stepNumber: 6
+        description: Compute compatibility against the running wairon version.
+        type: call
+        targetComponent: pack_codec
+        targetMethod: checkCompatibility
+      - stepNumber: 7
+        description: >-
+          Assemble PackArchiveInfo from the manifest identity + entryCount + summed
+          totalUncompressedBytes + the compatibility verdict.
+        type: local
+      - stepNumber: 8
+        description: Return the PackArchiveInfo (no extraction performed).
+        type: return
+        outcome: success
+  - name: extractPack
+    narrative:
+      - stepNumber: 1
+        description: Did the caller omit limits?
+        type: branch
+        condition: limits argument omitted
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Fall back to the codec's default limit profile.
+        type: call
+        targetComponent: pack_codec
+        targetMethod: defaultLimits
+      - stepNumber: 3
+        label: list
+        description: Enumerate archive entries without inflating (so caps run pre-decompress).
+        type: call
+        targetComponent: pack_archive_adapter
+        targetMethod: listEntries
+      - stepNumber: 4
+        description: >-
+          Compute the safe extraction plan under the effective limits (throws on any zip-slip /
+          oversized / unsafe entry).
+        type: call
+        targetComponent: pack_codec
+        targetMethod: planExtraction
+      - stepNumber: 5
+        description: Initialize an empty file list.
+        type: local
+      - stepNumber: 6
+        description: Inflate each approved path from the plan.
+        type: loop
+        loopKind: forEach
+        over: plan.paths
+        endStep: 7
+      - stepNumber: 7
+        description: Inflate one approved entry.
+        type: call
+        targetComponent: pack_archive_adapter
+        targetMethod: inflateEntry
+      - stepNumber: 8
+        label: inflateEnd
+        description: Append { path, contents } to the file list.
+        type: local
+      - stepNumber: 9
+        description: Read the wairon-pack.yaml text from the inflated files.
+        type: local
+      - stepNumber: 10
+        description: Parse the envelope into the result manifest.
+        type: call
+        targetComponent: pack_codec
+        targetMethod: parseManifest
+      - stepNumber: 11
+        description: >-
+          Enforce integrity BEFORE writing: verify each inflated file against the envelope digests
+          (throws on mismatch; no-op when the pack carries none).
+        type: call
+        targetComponent: pack_codec
+        targetMethod: verifyIntegrity
+      - stepNumber: 12
+        description: Write the approved, integrity-checked files as a directory tree under destDir.
+        type: call
+        targetComponent: pack_archive_adapter
+        targetMethod: writeTree
+      - stepNumber: 13
+        description: >-
+          Assemble PackExtractionResult (directory=destDir, entryPath=manifest.entry, name, kind,
+          entryCount=files.length).
+        type: local
+      - stepNumber: 14
+        description: Return where the pack landed + its parsed manifest.
+        type: return
+        outcome: success
+status: complete
+createdAt: '2026-07-21T18:23:59.148Z'
+updatedAt: '2026-07-21T19:26:05.892Z'

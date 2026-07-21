@@ -60,6 +60,14 @@ export function removeProjectPack(cfg: HostConfig, credential: string | null, pr
   packs.removeProjectPack(cfg, credential, project, name);
 }
 
+export function installGlobalPackArchive(cfg: HostConfig, credential: string | null, archive: Uint8Array, name?: string): PackDescriptor {
+  return packs.installGlobalPackArchive(cfg, credential, archive, name);
+}
+
+export function installProjectPackArchive(cfg: HostConfig, credential: string | null, project: string, archive: Uint8Array, name?: string): PackDescriptor {
+  return packs.installProjectPackArchive(cfg, credential, project, archive, name);
+}
+
 // ── pack/profile policy ───────────────────────────────────────────────────────
 
 export function getPackPolicy(cfg: HostConfig, credential: string | null): InstancePackPolicy {

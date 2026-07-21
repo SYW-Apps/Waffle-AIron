@@ -14,7 +14,10 @@
 # (no native production deps), so musl is a non-issue.
 FROM node:24-alpine AS build
 WORKDIR /app
+# Copy the sdk workspace manifest before `npm ci` so the @wairon/sdk workspace
+# resolves and its deps (fflate) install with the rest.
 COPY package.json package-lock.json ./
+COPY sdk/package.json ./sdk/package.json
 RUN npm ci
 # Web UI deps (separate package under web/): copy manifests first so this layer
 # caches independently of the app source. The React bundle is built self-contained
@@ -22,13 +25,15 @@ RUN npm ci
 COPY web/package.json web/package-lock.json ./web/
 RUN npm --prefix web ci
 COPY tsconfig.json tsup.config.ts ./
+COPY sdk ./sdk
 COPY src ./src
 COPY scripts ./scripts
 COPY web ./web
-# Build the web bundle first (web/dist/index.html), then the backend + embed step
-# (npm run build) which copies it to dist/webapp.html. Deps are already installed,
-# so invoke the web build directly instead of build:all (which would reinstall).
-RUN npm --prefix web run build && npm run build
+# Build the @wairon/sdk workspace FIRST (sdk/dist) so the root build can bundle it
+# into dist (tsup noExternal), then the web bundle (web/dist/index.html), then the
+# backend + embed step (npm run build) which copies the web bundle to
+# dist/webapp.html. Deps are already installed.
+RUN npm --prefix sdk run build && npm --prefix web run build && npm run build
 
 # ---- runtime ----
 FROM node:24-alpine AS runtime

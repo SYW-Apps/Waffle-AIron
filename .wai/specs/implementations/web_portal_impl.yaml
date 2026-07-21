@@ -672,7 +672,29 @@ methods:
         targetComponent: share_admin_orchestrator
         targetMethod: getShareAccessLog
     detail: calls-only
+  - name: adminInstallGlobalPackArchive
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the raw application/zip body (name from the envelope or the X-Wairon-Pack-Name
+          header) and forward with the session as the credential.
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: installGlobalPackArchive
+    detail: calls-only
+    symbol: opsInstallGlobalPackArchive
+  - name: projectPackInstallArchive
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read projectId from the query and the raw application/zip body, and forward with the
+          session as the credential.
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: installProjectPackArchive
+    detail: calls-only
+    symbol: opsInstallProjectPackArchive
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-07-18T23:38:45.512Z'
+updatedAt: '2026-07-21T18:48:16.289Z'

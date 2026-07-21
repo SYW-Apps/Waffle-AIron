@@ -1,0 +1,20 @@
+kind: value-object
+id: pack_file
+name: PackFile
+description: >-
+  One file within a pack: an archive-relative path and its raw bytes. The common currency between
+  the scaffold specialist (renders a file map), the archive adapter (reads a pack directory / writes
+  an extracted tree / assembles a ZIP), and the codec (integrity verification over file bytes).
+fields:
+  - name: path
+    type: string
+    description: Archive-relative POSIX path (forward slashes)
+    optional: false
+  - name: contents
+    type: bytes
+    description: Raw file bytes
+    optional: false
+methods: []
+componentClass: pack_archive_adapter
+createdAt: '2026-07-21T18:12:57.742Z'
+updatedAt: '2026-07-21T18:14:52.480Z'

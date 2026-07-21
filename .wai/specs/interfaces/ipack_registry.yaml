@@ -108,6 +108,35 @@ methods:
       executeApprovedInstallProjectPack(project: string, name: string, content: string):
       PackDescriptor
     returns: PackDescriptor
+  - name: installGlobalPackArchive
+    description: >-
+      Install a declarative pack from a .wpack ARCHIVE into the mutable instance packs directory.
+      Inspects the envelope and rejects a code pack (declarative-only surface); derives the name
+      from the envelope (or the optional override), safely extracts under hosted-strict limits,
+      re-checks the extracted pack is declarative, and returns its probe (tier instance). The
+      primary hosted install path (the string-content installGlobalPack is retained but deprecated).
+    signature: 'installGlobalPackArchive(archive: bytes, name?: string): PackDescriptor'
+    returns: PackDescriptor
+    params:
+      - name: archive
+        type: bytes
+      - name: name
+        type: string
+        description: Optional name override; defaults to the envelope's pack name
+        optional: true
+  - name: installProjectPackArchive
+    description: >-
+      Archive counterpart of installProjectPack for the bound project: safely extract the
+      declarative pack into .wai/packs/<name>/ and register the directory ref in project.yaml;
+      rejects code and unsafe/non-declarative archives.
+    signature: 'installProjectPackArchive(archive: bytes, name?: string): PackDescriptor'
+    returns: PackDescriptor
+    params:
+      - name: archive
+        type: bytes
+      - name: name
+        type: string
+        optional: true
 status: complete
 createdAt: '2026-07-04T18:42:41.273Z'
-updatedAt: '2026-07-19T08:57:35.337Z'
+updatedAt: '2026-07-21T18:42:15.281Z'

@@ -1,0 +1,21 @@
+id: sdk_portal
+name: SDK Portal
+description: >-
+  The published front door of `@wairon/sdk` — the in-process library facade that the package's index
+  re-exports and that cross-subsystem consumers (sdd_cli, sdd_host) reach through their own client
+  Adapters. Exposes exactly the four capabilities (scaffoldPack, buildPack, inspectArchive,
+  extractPack), each a 1:1 forward to the SDK orchestrator with no logic of its own. Alongside these
+  callable methods, the `@wairon/sdk` package also re-exports the pure pack-authoring types (profile
+  / language / pattern / assertion definitions and the envelope/manifest schemas) and the
+  rule-authoring contract (SddRule plus a stable RuleContext/Finding facade) that code packs are
+  written against — those are compile-time types with no runtime surface, so they are not portal
+  methods.
+subsystem: sdd_sdk
+componentType: Portal
+owns: []
+dependsOn:
+  - sdk_orchestrator
+portalType: Custom
+status: complete
+createdAt: '2026-07-21T17:22:39.912Z'
+updatedAt: '2026-07-21T19:26:04.963Z'
