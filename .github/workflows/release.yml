@@ -206,3 +206,17 @@ jobs:
     uses: ./.github/workflows/publish-npm.yml
     secrets:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # @wairon/sdk (the pack-authoring library) publishes alongside @wairon/cli, in
+  # lockstep at the same tag version. Independent package, independent tarball —
+  # @wairon/cli bundles the sdk into its dist, while this ships the standalone
+  # library that `wairon pack init` scaffolds code packs against.
+  publish-sdk:
+    name: Publish SDK to npm
+    needs: build
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/publish-sdk.yml
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,0 +1,99 @@
+name: Publish SDK to npm
+
+# Reusable workflow: publishes @wairon/sdk (the pack-authoring library, source
+# under sdk/) to the public npm registry WITH provenance (a Sigstore attestation
+# tying the tarball to this exact commit + CI run). Called by release.yml on
+# version tags; can also be run manually via the Actions tab.
+#
+# @wairon/sdk versions in LOCKSTEP with @wairon/cli: the published version comes
+# from the git tag, same as the root package. It is set BEFORE the build so the
+# baked SDK_VERSION (require('../package.json'), inlined by tsup — stamped into
+# built .wpack archives and used for pack version-compat, and the version that
+# `wairon pack init` pins a code pack's @wairon/sdk dependency to) matches what
+# is actually published.
+#
+# Requirements:
+#   - Repo secret NPM_TOKEN with rights to CREATE @wairon/sdk on the FIRST publish
+#     (an Automation token, or a granular token scoped to create @wairon/*
+#     packages — a token scoped only to @wairon/cli cannot create @wairon/sdk).
+#   - The GitHub repository must be PUBLIC (provenance refuses private repos).
+
+on:
+  workflow_call:
+    secrets:
+      NPM_TOKEN:
+        required: true
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Exact version to publish (e.g. 5.0.1 or 5.0.1-dev.1)'
+        required: true
+        type: string
+      dist_tag:
+        description: 'npm dist-tag'
+        required: false
+        default: 'latest'
+        type: choice
+        options:
+          - latest
+          - beta
+          - preview
+          - dev
+
+permissions:
+  contents: read
+  id-token: write   # REQUIRED for --provenance (OIDC to Sigstore)
+
+jobs:
+  publish:
+    name: Publish @wairon/sdk (public, with provenance)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+
+      - name: Resolve version and dist-tag
+        id: v
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VER="${{ inputs.version }}"
+            TAG="${{ inputs.dist_tag }}"
+          else
+            # Tag trigger: GITHUB_REF_NAME is the tag, e.g. v5.0.1-dev.2
+            VER="${GITHUB_REF_NAME#v}"
+            case "$VER" in
+              *-dev.*)     TAG=dev ;;
+              *-beta.*)    TAG=beta ;;
+              *-preview.*) TAG=preview ;;
+              *)           TAG=latest ;;
+            esac
+          fi
+          echo "version=${VER}" >> "$GITHUB_OUTPUT"
+          echo "dist_tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Publishing @wairon/sdk ${VER} under dist-tag '${TAG}'"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Set the version BEFORE building so the baked SDK_VERSION matches the
+      # published version. Not committed — the tarball carries the right version,
+      # git stays clean.
+      - name: Set SDK version from tag
+        working-directory: sdk
+        run: npm pkg set version="${{ steps.v.outputs.version }}"
+
+      - name: Build SDK
+        run: npm --prefix sdk run build
+
+      - name: Publish @wairon/sdk to npm
+        working-directory: sdk
+        run: npm publish --provenance --access public --tag "${{ steps.v.outputs.dist_tag }}"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
