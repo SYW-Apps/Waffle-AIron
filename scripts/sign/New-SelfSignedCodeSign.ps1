@@ -17,12 +17,18 @@
   ./scripts/sign/New-SelfSignedCodeSign.ps1 -PfxPassword 'dev-only-pass'
 #>
 param(
-  [string]$Subject     = 'SYW Apps',
-  [string]$PfxPassword = 'wairon-dev',
-  [string]$OutDir      = $PSScriptRoot
+  [string]$Subject         = 'SYW Apps',
+  [SecureString]$PfxPassword,
+  [string]$OutDir          = $PSScriptRoot,
+  [switch]$EmitCiSecret
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Prompt securely if no password was supplied — never echoed, never logged.
+if (-not $PfxPassword) {
+  $PfxPassword = Read-Host -AsSecureString 'Enter a password to protect the PFX (save it in Bitwarden)'
+}
 
 $cert = New-SelfSignedCertificate `
   -Type CodeSigningCert `
@@ -34,11 +40,10 @@ $cert = New-SelfSignedCertificate `
   -HashAlgorithm SHA256 `
   -NotAfter (Get-Date).AddYears(3)
 
-$pwd     = ConvertTo-SecureString -String $PfxPassword -Force -AsPlainText
 $pfxPath = Join-Path $OutDir 'wairon-codesign.pfx'
 $cerPath = Join-Path $OutDir 'wairon-codesign.cer'
 
-Export-PfxCertificate -Cert $cert -FilePath $pfxPath -Password $pwd | Out-Null
+Export-PfxCertificate -Cert $cert -FilePath $pfxPath -Password $PfxPassword | Out-Null
 Export-Certificate    -Cert $cert -FilePath $cerPath | Out-Null
 
 Write-Host ""
@@ -58,7 +63,12 @@ Write-Host ""
 Write-Host "-- Verify (Status should be 'Valid' once trusted) --" -ForegroundColor Cyan
 Write-Host "  Get-AuthenticodeSignature .\wairon.exe | Format-List Status, SignerCertificate"
 Write-Host ""
-Write-Host "-- base64 for the WINDOWS_CERT_PFX_BASE64 GitHub secret --" -ForegroundColor Cyan
-[Convert]::ToBase64String([IO.File]::ReadAllBytes($pfxPath))
-Write-Host ""
-Write-Host "Do NOT commit the .pfx/.cer (already gitignored). Keep the PFX password private." -ForegroundColor Yellow
+if ($EmitCiSecret) {
+  Write-Host "-- base64 for the WINDOWS_CERT_PFX_BASE64 GitHub secret (SENSITIVE) --" -ForegroundColor Cyan
+  [Convert]::ToBase64String([IO.File]::ReadAllBytes($pfxPath))
+  Write-Host ""
+} else {
+  Write-Host "(Re-run with -EmitCiSecret to print the base64 PFX for the GitHub secret.)" -ForegroundColor DarkGray
+}
+Write-Host "Store the .pfx + its password + the .cer in Bitwarden, then delete the local .pfx." -ForegroundColor Yellow
+Write-Host "Do NOT commit the .pfx/.cer (already gitignored)." -ForegroundColor Yellow
