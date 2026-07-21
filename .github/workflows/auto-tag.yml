@@ -42,8 +42,9 @@ jobs:
 
       - name: Determine version bump
         id: bump
+        env:
+          MSG: ${{ github.event.head_commit.message }}
         run: |
-          MSG="${{ github.event.head_commit.message }}"
           if echo "$MSG" | grep -q '\[major\]'; then
             echo "bump=major" >> "$GITHUB_OUTPUT"
           elif echo "$MSG" | grep -q '\[minor\]'; then
