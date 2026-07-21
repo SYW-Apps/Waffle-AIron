@@ -24,6 +24,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          fetch-tags: true
           # Use a PAT so the pushed tag triggers release.yml
           # (pushes from GITHUB_TOKEN do not trigger other workflows)
           token: ${{ secrets.RELEASE_TOKEN }}
@@ -34,77 +35,53 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      # Pull the latest state of beta so we always start from the
-      # most recently committed package.json, not the version at the
-      # time the trigger fired (which may be stale if a concurrent run
-      # already bumped it).
       - name: Pull latest beta
         run: git pull --rebase origin beta
 
+      - name: Determine version bump
+        id: bump
+        run: |
+          MSG="${{ github.event.head_commit.message }}"
+          if echo "$MSG" | grep -q '\[major\]'; then
+            echo "bump=major" >> "$GITHUB_OUTPUT"
+          elif echo "$MSG" | grep -q '\[minor\]'; then
+            echo "bump=minor" >> "$GITHUB_OUTPUT"
+          else
+            echo "bump=patch" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Beta version is derived from git tags: continues X.Y.Z-beta.N while that
+      # base is ahead of the latest stable, else starts a fresh -beta.1 line.
       - name: Compute next beta version
         id: version
         run: |
-          CURRENT=$(node -p "require('./package.json').version")
-          echo "Current version: $CURRENT"
+          VERSION="$(bash scripts/next-version.sh beta ${{ steps.bump.outputs.bump }})"
+          echo "plain=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Next beta version: v${VERSION}"
 
-          # Strip any existing pre-release suffix to get the base semver
-          BASE=$(echo "$CURRENT" | sed 's/-.*$//')
-
-          # Check if current version already has a -beta.N suffix
-          if echo "$CURRENT" | grep -qE '\-beta\.[0-9]+$'; then
-            # Increment the beta counter
-            N=$(echo "$CURRENT" | sed 's/.*-beta\.//')
-            NEXT_N=$((N + 1))
-            NEW_VERSION="${BASE}-beta.${NEXT_N}"
+      - name: Skip if tag already exists
+        id: exists
+        run: |
+          if git rev-parse "refs/tags/${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
+            echo "Tag ${{ steps.version.outputs.tag }} already exists — skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
           else
-            # First beta from this base — check commit for bump hints
-            MSG="${{ github.event.head_commit.message }}"
-            IFS='.' read -r MAJ MIN PAT <<< "$BASE"
-            if echo "$MSG" | grep -q '\[major\]'; then
-              MAJ=$((MAJ + 1)); MIN=0; PAT=0
-            elif echo "$MSG" | grep -q '\[minor\]'; then
-              MIN=$((MIN + 1)); PAT=0
-            else
-              PAT=$((PAT + 1))
-            fi
-            NEW_VERSION="${MAJ}.${MIN}.${PAT}-beta.1"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
-          echo "new_version=v${NEW_VERSION}" >> $GITHUB_OUTPUT
-          echo "new_version_plain=${NEW_VERSION}" >> $GITHUB_OUTPUT
-          echo "Next version: v${NEW_VERSION}"
-
-      - name: Check tag does not already exist
+      - name: Update WAIRON_VERSION in defaults.ts
+        if: steps.exists.outputs.skip == 'false'
         run: |
-          TAG=${{ steps.version.outputs.new_version }}
-          if git tag -l "$TAG" | grep -q "$TAG"; then
-            echo "Tag $TAG already exists — skipping release."
-            echo "skip=true" >> $GITHUB_ENV
-          else
-            echo "skip=false" >> $GITHUB_ENV
-          fi
-
-      - name: Update package.json and defaults.ts
-        if: env.skip == 'false'
-        run: |
-          VERSION_PLAIN=${{ steps.version.outputs.new_version_plain }}
-          # Update package.json version field
-          node -e "
-            const fs = require('fs');
-            const pkg = JSON.parse(fs.readFileSync('package.json','utf-8'));
-            pkg.version = '${VERSION_PLAIN}';
-            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
-          "
-          # Update WAIRON_VERSION in defaults.ts
-          sed -i "s/export const WAIRON_VERSION = '[^']*'/export const WAIRON_VERSION = '${VERSION_PLAIN}'/" src/config/defaults.ts
+          sed -i "s/export const WAIRON_VERSION = '[^']*'/export const WAIRON_VERSION = '${{ steps.version.outputs.plain }}'/" src/config/defaults.ts
 
       - name: Commit and tag
-        if: env.skip == 'false'
+        if: steps.exists.outputs.skip == 'false'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package.json src/config/defaults.ts
-          git commit -m "chore: release ${{ steps.version.outputs.new_version }}"
-          git tag ${{ steps.version.outputs.new_version }}
+          git add src/config/defaults.ts
+          git commit -m "chore: release ${{ steps.version.outputs.tag }}" || echo "defaults.ts already current"
+          git tag ${{ steps.version.outputs.tag }}
           git push origin beta
-          git push origin ${{ steps.version.outputs.new_version }}
+          git push origin ${{ steps.version.outputs.tag }}

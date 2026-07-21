@@ -1,22 +1,20 @@
-name: Auto Tag
+name: Auto Tag (Dev)
 
 on:
   push:
-    branches:
-      - main
+    branches: [dev]
 
 # Only one auto-tag run at a time. If a second push lands while one is
 # already running, queue it rather than cancelling — we want every push
 # to eventually get a version bump.
 concurrency:
-  group: auto-tag-main
+  group: auto-tag-dev
   cancel-in-progress: false
 
 jobs:
   tag:
-    name: Bump version and tag
+    name: Bump dev version and tag
     runs-on: ubuntu-latest
-    # Skip the bot's own release commits (they only touch defaults.ts).
     if: "!startsWith(github.event.head_commit.message, 'chore: release v')"
 
     permissions:
@@ -37,8 +35,8 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Pull latest main
-        run: git pull --rebase origin main
+      - name: Pull latest dev
+        run: git pull --rebase origin dev
 
       - name: Determine version bump
         id: bump
@@ -52,15 +50,15 @@ jobs:
             echo "bump=patch" >> "$GITHUB_OUTPUT"
           fi
 
-      # Version is derived from git tags, NOT package.json (which is a
-      # placeholder). This is what makes stale branch versions harmless.
-      - name: Compute next version
+      # Dev version is derived from git tags: continues X.Y.Z-dev.N while that
+      # base is ahead of the latest stable, else starts a fresh -dev.1 line.
+      - name: Compute next dev version
         id: version
         run: |
-          VERSION="$(bash scripts/next-version.sh stable ${{ steps.bump.outputs.bump }})"
+          VERSION="$(bash scripts/next-version.sh dev ${{ steps.bump.outputs.bump }})"
           echo "plain=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Next stable version: v${VERSION}"
+          echo "Next dev version: v${VERSION}"
 
       - name: Skip if tag already exists
         id: exists
@@ -85,5 +83,5 @@ jobs:
           git add src/config/defaults.ts
           git commit -m "chore: release ${{ steps.version.outputs.tag }}" || echo "defaults.ts already current"
           git tag ${{ steps.version.outputs.tag }}
-          git push origin main
+          git push origin dev
           git push origin ${{ steps.version.outputs.tag }}

@@ -3,13 +3,23 @@ name: Publish to npm
 # Reusable workflow: publishes the package in this repo to the public npm
 # registry WITH provenance (a Sigstore attestation tying the tarball to this
 # exact commit + CI run). Called by release.yml on version tags; can also be
-# run manually via the Actions tab for a first publish or a re-run.
+# run manually via the Actions tab.
+#
+# Versioning: git tags are the source of truth. The published version is taken
+# from the tag and written into package.json at build time in the CI checkout
+# only — it is NEVER committed, so publishing cannot re-trigger a release.
+#
+#   tag vX.Y.Z            -> version X.Y.Z,           dist-tag `latest`
+#   tag vX.Y.Z-beta.N     -> version X.Y.Z-beta.N,    dist-tag `beta`
+#   tag vX.Y.Z-preview.N  -> version X.Y.Z-preview.N, dist-tag `preview`
+#   tag vX.Y.Z-dev.N      -> version X.Y.Z-dev.N,     dist-tag `dev`
 #
 # Requirements:
-#   - Repo secret NPM_TOKEN = an npm Granular Access Token (read+write, scoped
-#     to the publishing org) or a classic Automation token. Bypasses 2FA OTP.
+#   - Repo secret NPM_TOKEN = an npm Granular Access Token (read+write) or a
+#     classic Automation token. Bypasses 2FA OTP. The FIRST publish must use a
+#     token that can create the package (Automation, or granular "all packages")
+#     because a package-scoped token cannot create a package that doesn't exist.
 #   - The GitHub repository must be PUBLIC (provenance refuses private repos).
-#   - package.json "repository.url" must match this repo (it does).
 
 on:
   workflow_call:
@@ -18,14 +28,20 @@ on:
         required: true
   workflow_dispatch:
     inputs:
+      version:
+        description: 'Exact version to publish (e.g. 5.0.1 or 5.0.1-dev.1)'
+        required: true
+        type: string
       dist_tag:
-        description: 'npm dist-tag to publish under'
+        description: 'npm dist-tag'
         required: false
         default: 'latest'
         type: choice
         options:
           - latest
           - beta
+          - preview
+          - dev
 
 permissions:
   contents: read
@@ -45,27 +61,39 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
 
+      - name: Resolve version and dist-tag
+        id: v
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VER="${{ inputs.version }}"
+            TAG="${{ inputs.dist_tag }}"
+          else
+            # Tag trigger: GITHUB_REF_NAME is the tag, e.g. v5.0.1-dev.2
+            VER="${GITHUB_REF_NAME#v}"
+            case "$VER" in
+              *-dev.*)     TAG=dev ;;
+              *-beta.*)    TAG=beta ;;
+              *-preview.*) TAG=preview ;;
+              *)           TAG=latest ;;
+            esac
+          fi
+          echo "version=${VER}" >> "$GITHUB_OUTPUT"
+          echo "dist_tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Publishing ${VER} under dist-tag '${TAG}'"
+
       - name: Install dependencies
         run: npm ci
 
       - name: Build
         run: npm run build
 
-      # Prereleases (v1.2.3-beta.4 / -preview.4) go to the `beta` dist-tag so
-      # `npm i wairon` stays on stable and `npm i wairon@beta` opts into previews.
-      - name: Determine dist-tag
-        id: tag
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "dist_tag=${{ inputs.dist_tag }}" >> "$GITHUB_OUTPUT"
-          elif echo "${GITHUB_REF_NAME}" | grep -qE '\-(beta|preview)\.[0-9]+$'; then
-            echo "dist_tag=beta" >> "$GITHUB_OUTPUT"
-          else
-            echo "dist_tag=latest" >> "$GITHUB_OUTPUT"
-          fi
+      # Align package.json with the release version in the CI checkout only.
+      # Not committed — the tarball carries the right version, git stays clean.
+      - name: Set version from tag
+        run: npm pkg set version="${{ steps.v.outputs.version }}"
 
       - name: Publish to npm
-        run: npm publish --provenance --access public --tag "${{ steps.tag.outputs.dist_tag }}"
+        run: npm publish --provenance --access public --tag "${{ steps.v.outputs.dist_tag }}"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

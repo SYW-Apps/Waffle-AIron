@@ -71,7 +71,7 @@ jobs:
         id: prerelease
         shell: bash
         run: |
-          if echo "${GITHUB_REF_NAME}" | grep -qE '\-(beta|preview)\.[0-9]+$'; then
+          if echo "${GITHUB_REF_NAME}" | grep -qE '\-(beta|preview|dev)\.[0-9]+$'; then
             echo "is_prerelease=true" >> $GITHUB_OUTPUT
           else
             echo "is_prerelease=false" >> $GITHUB_OUTPUT
@@ -141,7 +141,7 @@ jobs:
       - name: Detect pre-release
         id: prerelease
         run: |
-          if echo "${GITHUB_REF_NAME}" | grep -qE '\-(beta|preview)\.[0-9]+$'; then
+          if echo "${GITHUB_REF_NAME}" | grep -qE '\-(beta|preview|dev)\.[0-9]+$'; then
             echo "is_prerelease=true" >> $GITHUB_OUTPUT
           else
             echo "is_prerelease=false" >> $GITHUB_OUTPUT
