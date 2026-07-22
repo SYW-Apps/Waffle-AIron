@@ -676,8 +676,40 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
 .stack { display: flex; flex-direction: column; gap: 8px; }
 .or { text-align: center; color: var(--ink-dim); font-size: 12px; }
 
+/* ── Realtime connection status pill (topbar) ────────────────────────────── */
+.rt-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  color: var(--ink-dim);
+  white-space: nowrap;
+  user-select: none;
+}
+.rt-status .rt-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: 0 0 auto;
+}
+.rt-connected { color: var(--ok); }
+.rt-connecting { color: var(--warn); }
+.rt-connecting .rt-dot { animation: rt-pulse 1.2s ease-in-out infinite; }
+.rt-offline {
+  color: var(--bad);
+  border-color: rgba(244, 63, 94, 0.4);
+  background: rgba(244, 63, 94, 0.08);
+}
+@keyframes rt-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 720px) {
   .view-pad { padding: 16px; }
   .hmenu-who { display: none; }
+  .rt-status .rt-label { display: none; }
 }

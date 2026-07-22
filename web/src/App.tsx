@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-do
 import { SessionProvider, useSession } from './session';
 import { SettingsProvider, useSettings } from './settings';
 import { RealtimeProvider } from './realtime';
+import { RealtimeStatus } from './RealtimeStatus';
 import { ToastProvider } from './ui';
 import { HeaderMenu } from './HeaderMenu';
 import { ThemeCog } from './ThemeControls';
@@ -116,6 +117,7 @@ function Shell() {
       <div className="main-col">
         <header className="topbar">
           <span className="spacer" />
+          <RealtimeStatus />
           {ctx && <HeaderMenu ctx={ctx} onSignOut={signOut} />}
         </header>
         <main className="view">
