@@ -14,6 +14,7 @@ import { Permissions } from './views/Permissions';
 import { Units } from './views/Units';
 import { Projects } from './views/Projects';
 import { ProjectOps } from './views/ProjectOps';
+import { CanvasRouter } from './views/CanvasRouter';
 import { Tokens } from './views/Tokens';
 import { Providers } from './views/Providers';
 import { Approvals } from './views/Approvals';
@@ -30,7 +31,7 @@ interface NavItem {
 }
 
 const MAIN_NAV: NavItem[] = [
-  { to: '/', label: 'Canvas', icon: '◈', end: true },
+  { to: '/canvas', label: 'Canvas', icon: '◈' },
   { to: '/projects', label: 'Projects', icon: '▦' },
   { to: '/agents', label: 'Agents', icon: '⌁' },
 ];
@@ -106,7 +107,11 @@ function Shell() {
     return (
       <main className="view-full">
         <ThemeCog />
-        <Home />
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/canvas/*" element={<CanvasRouter />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </main>
     );
   }
@@ -123,6 +128,7 @@ function Shell() {
         <main className="view">
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/canvas/*" element={<CanvasRouter />} />
             <Route path="/projects" element={<Projects />} />
             <Route path="/projects/:projectId" element={<ProjectOps />} />
             <Route path="/agents" element={<Tokens />} />
