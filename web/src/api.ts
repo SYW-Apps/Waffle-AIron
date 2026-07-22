@@ -58,6 +58,15 @@ export function raw(path: string): Promise<Response> {
   return request(path);
 }
 
+/** Normalize a list response that may arrive as a bare array OR wrapped as
+ *  `{ <key>: [...] }`. Some /web list endpoints wrap (e.g. `{ packs: [...] }`),
+ *  others return the array directly; this keeps callers robust to either shape. */
+export function asList<T>(data: unknown, key: string): T[] {
+  if (Array.isArray(data)) return data as T[];
+  const wrapped = (data as Record<string, unknown> | null | undefined)?.[key];
+  return Array.isArray(wrapped) ? (wrapped as T[]) : [];
+}
+
 async function parse<T>(res: Response, path: string): Promise<T> {
   if (res.ok) {
     const text = await res.text();

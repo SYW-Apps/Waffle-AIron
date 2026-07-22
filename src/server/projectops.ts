@@ -9,6 +9,7 @@ import type { ProducerConfig } from '../producers/index.js';
 import type {
   AuditEvent,
   AuditQuery,
+  AvailableProfile,
   GitBackingBinding,
   HostConfig,
   HostedProjectRecord,
@@ -66,6 +67,18 @@ export function installGlobalPackArchive(cfg: HostConfig, credential: string | n
 
 export function installProjectPackArchive(cfg: HostConfig, credential: string | null, project: string, archive: Uint8Array, name?: string): PackDescriptor {
   return packs.installProjectPackArchive(cfg, credential, project, archive, name);
+}
+
+export function listAvailableProfiles(cfg: HostConfig, credential: string | null): AvailableProfile[] {
+  return packs.listAvailableProfiles(cfg, credential);
+}
+
+export function listAdoptableProjectPacks(cfg: HostConfig, credential: string | null, project: string): PackDescriptor[] {
+  return packs.listAdoptableProjectPacks(cfg, credential, project);
+}
+
+export function adoptProjectPack(cfg: HostConfig, credential: string | null, project: string, name: string): PackDescriptor {
+  return packs.adoptProjectPack(cfg, credential, project, name);
 }
 
 // ── pack/profile policy ───────────────────────────────────────────────────────

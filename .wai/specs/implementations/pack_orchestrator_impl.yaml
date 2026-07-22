@@ -275,8 +275,110 @@ methods:
         description: Return the installed pack descriptor
         type: return
         outcome: installed pack descriptor
+  - name: listAvailableProfiles
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Authenticate the caller credential (any authenticated principal may read the profile
+          catalog)
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          List the selectable profiles (built-in + server-global pack profiles, each tagged with its
+          source) via the pre-authorized store read
+        type: call
+        targetComponent: pack_registry
+        targetMethod: storeListAvailableProfiles
+      - stepNumber: 3
+        description: Return the available profiles
+        type: return
+        outcome: the available profiles
+  - name: adoptProjectPack
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Resolve the caller's project:admin permission over the target project
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:admin value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the adoption
+        type: throw
+        error: Forbidden — adopting a project pack requires project:admin over the project
+      - stepNumber: 5
+        description: Bind and verify the target project's isolated root
+        type: local
+      - stepNumber: 6
+        description: >-
+          Resolve the requested pack name against the server-global set (both tiers, file- or
+          directory-form)
+        type: call
+        targetComponent: pack_registry
+        targetMethod: executeApprovedResolveGlobalPacks
+      - stepNumber: 7
+        description: If the instance carries no such pack, reject
+        type: branch
+        condition: the requested name did not resolve to any server-global pack
+        onTrueStep: 8
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Reject the adoption of an unavailable pack
+        type: throw
+        error: no such server-global pack — cannot adopt a pack the instance does not carry
+      - stepNumber: 9
+        description: Vendor and register the resolved pack into the project by its canonical name
+        type: call
+        targetComponent: pack_registry
+        targetMethod: executeApprovedInstallProjectPack
+      - stepNumber: 10
+        description: Return the installed pack descriptor
+        type: return
+        outcome: the installed pack descriptor
+  - name: listAdoptableProjectPacks
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Resolve the caller's project:read permission over the target project
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:read value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the adoptable-pack listing
+        type: throw
+        error: Forbidden — listing adoptable packs requires project:read over the project
+      - stepNumber: 5
+        description: List the server-global catalog (both tiers) the project may adopt from
+        type: call
+        targetComponent: pack_registry
+        targetMethod: storeListGlobalPacks
+      - stepNumber: 6
+        description: Return the adoptable pack descriptors
+        type: return
+        outcome: adoptable pack list
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T18:47:13.157Z'
-updatedAt: '2026-07-21T18:43:07.891Z'
+updatedAt: '2026-07-22T19:17:38.986Z'

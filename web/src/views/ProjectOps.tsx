@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { get, post, postBinary } from '../api';
+import { asList, get, post, postBinary } from '../api';
 import {
   AsyncButton,
   AsyncView,
@@ -22,47 +22,86 @@ import type { GitBackingStatus, PackDescriptor, PolicyEvaluationResult, Producer
 
 // ── Packs ────────────────────────────────────────────────────────────────────
 
+// Contents counts prefer the enriched id arrays, falling back to numeric counts.
+const packProfileCount = (p: PackDescriptor): number => p.profileIds?.length ?? p.profiles ?? 0;
+const packLanguageCount = (p: PackDescriptor): number => p.languageIds?.length ?? p.languages ?? 0;
+const packRuleCount = (p: PackDescriptor): number => p.ruleIds?.length ?? p.rules ?? 0;
+const packContentsHint = (p: PackDescriptor): string =>
+  `${packProfileCount(p)} profiles · ${packLanguageCount(p)} langs · ${packRuleCount(p)} rules`;
+
 function PacksTab({ projectId }: { projectId: string }) {
   const toast = useToast();
-  const packs = useAsync<{ packs: PackDescriptor[] }>(() => get(`/web/projects/packs?projectId=${encodeURIComponent(projectId)}`), [projectId]);
-  const [adding, setAdding] = useState(false);
+  const enc = encodeURIComponent(projectId);
+  const packs = useAsync<PackDescriptor[]>(
+    () => get(`/web/projects/packs?projectId=${enc}`).then((d) => asList<PackDescriptor>(d, 'packs')),
+    [projectId],
+  );
+  // The server-global catalog this project may adopt without an upload.
+  const adoptable = useAsync<PackDescriptor[]>(
+    () => get(`/web/projects/packs/adoptable?projectId=${enc}`).then((d) => asList<PackDescriptor>(d, 'packs')),
+    [projectId],
+  );
+  const [adoptOpen, setAdoptOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [nameOverride, setNameOverride] = useState('');
 
+  // Adoptable minus what's already installed here (match by name).
+  const installedNames = new Set((packs.data ?? []).map((p) => p.name));
+  const available = (adoptable.data ?? []).filter((p) => !installedNames.has(p.name));
+
+  async function adopt(name: string) {
+    await post('/web/projects/packs/adopt', { projectId, name });
+    toast.ok(`Added “${name}”`);
+    packs.reload();
+    adoptable.reload();
+  }
   async function install() {
     if (!file) return;
     const headers: Record<string, string> = nameOverride.trim() ? { 'X-Wairon-Pack-Name': nameOverride.trim() } : {};
     const d = await postBinary<PackDescriptor>(
-      `/web/projects/packs/upload?projectId=${encodeURIComponent(projectId)}`,
+      `/web/projects/packs/upload?projectId=${enc}`,
       file,
       headers,
     );
     toast.ok(`Installed pack “${d.name}”`);
-    setAdding(false);
+    setUploadOpen(false);
     setFile(null);
     setNameOverride('');
     packs.reload();
+    adoptable.reload();
   }
   async function remove(n: string) {
     await post('/web/projects/packs/remove', { projectId, name: n });
     toast.ok('Pack removed');
     packs.reload();
+    adoptable.reload();
   }
 
   return (
     <div className="stack-lg">
       <div className="view-head">
         <p className="hint">Declarative extension packs registered on this project.</p>
-        <Button variant="primary" onClick={() => setAdding(true)}>
-          + Install pack
-        </Button>
+        <div className="row-actions">
+          <Button variant="ghost" onClick={() => setUploadOpen(true)} title="Upload a .wpack archive">
+            Advanced: upload .wpack
+          </Button>
+          <Button variant="primary" onClick={() => setAdoptOpen(true)}>
+            + Add from available
+          </Button>
+        </div>
       </div>
       <AsyncView state={packs}>
         {(d) => (
           <DataTable<PackDescriptor>
             rowKey={(p) => p.name}
-            empty="No packs installed on this project."
-            rows={d.packs}
+            empty={
+              <div className="cell-stack">
+                <span>No packs installed on this project.</span>
+                <span className="hint">Use “Add from available” to adopt a server-global pack, or upload a .wpack.</span>
+              </div>
+            }
+            rows={d}
             columns={[
               {
                 key: 'name',
@@ -76,7 +115,7 @@ function PacksTab({ projectId }: { projectId: string }) {
                 ),
               },
               { key: 'scope', header: 'Scope', cell: (p) => <Badge tone={p.scope === 'global' ? 'accent' : 'neutral'}>{p.tier ?? p.scope}</Badge> },
-              { key: 'counts', header: 'Contents', cell: (p) => <span className="hint">{p.profiles} profiles · {p.languages} langs · {p.rules} rules</span> },
+              { key: 'counts', header: 'Contents', cell: (p) => <span className="hint">{packContentsHint(p)}</span> },
               {
                 key: 'act',
                 header: '',
@@ -94,13 +133,58 @@ function PacksTab({ projectId }: { projectId: string }) {
           />
         )}
       </AsyncView>
-      {adding && (
+      {adoptOpen && (
         <Modal
-          title="Install a declarative pack"
-          onClose={() => setAdding(false)}
+          title="Add a pack from the catalog"
+          wide
+          onClose={() => setAdoptOpen(false)}
+          footer={<Button variant="ghost" onClick={() => setAdoptOpen(false)}>Done</Button>}
+        >
+          <div className="stack-lg">
+            <p className="hint">Server-global packs this project can adopt directly — no upload needed.</p>
+            <AsyncView state={adoptable}>
+              {() => (
+                <DataTable<PackDescriptor>
+                  rowKey={(p) => p.name}
+                  empty="No more packs available to adopt."
+                  rows={available}
+                  columns={[
+                    {
+                      key: 'name',
+                      header: 'Pack',
+                      cell: (p) => (
+                        <div className="cell-stack">
+                          <strong>{p.name}</strong>
+                          <code className="subtle">{p.ref}</code>
+                        </div>
+                      ),
+                    },
+                    { key: 'tier', header: 'Tier', cell: (p) => <Badge tone={p.scope === 'global' ? 'accent' : 'neutral'}>{p.tier ?? p.scope}</Badge> },
+                    { key: 'counts', header: 'Contents', cell: (p) => <span className="hint">{packContentsHint(p)}</span> },
+                    {
+                      key: 'act',
+                      header: '',
+                      width: '1%',
+                      cell: (p) => (
+                        <AsyncButton size="sm" variant="primary" action={() => adopt(p.name)} onError={toast.bad}>
+                          Add
+                        </AsyncButton>
+                      ),
+                    },
+                  ]}
+                />
+              )}
+            </AsyncView>
+          </div>
+        </Modal>
+      )}
+      {uploadOpen && (
+        <Modal
+          title="Advanced: upload a .wpack"
+          onClose={() => setUploadOpen(false)}
           footer={
             <>
-              <Button variant="ghost" onClick={() => setAdding(false)}>
+              <Button variant="ghost" onClick={() => setUploadOpen(false)}>
                 Cancel
               </Button>
               <AsyncButton variant="primary" action={install} onError={toast.bad} disabled={!file}>
@@ -110,6 +194,7 @@ function PacksTab({ projectId }: { projectId: string }) {
           }
         >
           <div className="stack-lg">
+            <p className="hint">Prefer “Add from available” for catalog packs. Upload is for a pack not yet on this server.</p>
             <Field label="Pack archive (.wpack)" hint="Declarative packs only — code packs are installed via the filesystem tier.">
               <input className="input" type="file" accept=".wpack,.zip,application/zip"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)} />

@@ -158,6 +158,17 @@ methods:
         description: >-
           Policy-supplied pack names (file stems or manifest names) to resolve against the
           server-global set.
+  - name: storeListAvailableProfiles
+    description: >-
+      List the profiles available for selection straight from the store layer — the PRE-AUTHORIZED
+      read the pack orchestrator's catalog surface uses (no credential; the caller has already
+      authenticated): the built-in profiles (via the core adapter, source "builtin") unioned with
+      every profile contributed by the server-global packs across both tiers (source = the
+      contributing pack's name), deduped. Never throws for a bad pack — a pack that fails to load
+      simply contributes no profiles.
+    signature: 'storeListAvailableProfiles(): AvailableProfile[]'
+    returns: AvailableProfile[]
+    params: []
 status: complete
 createdAt: '2026-07-04T18:42:41.273Z'
-updatedAt: '2026-07-22T17:27:55.371Z'
+updatedAt: '2026-07-22T19:14:46.402Z'

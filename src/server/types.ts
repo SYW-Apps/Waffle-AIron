@@ -1095,6 +1095,16 @@ export interface PackDescriptor {
   /** True on an image-tier pack shadowed by a same-named instance pack
    *  (instance wins; shadowing is drift and surfaces in the health report). */
   shadowed?: boolean;
+  /** The ids of the architectural profiles this pack contributes (the same
+   *  profiles the `profiles` count summarizes) — lets a UI offer a pack's
+   *  profiles as structured choices instead of a bare count. Absent on a pack
+   *  that failed to load. */
+  profileIds?: string[];
+  /** The ids of the language/platform tables this pack contributes. Absent on a load failure. */
+  languageIds?: string[];
+  /** The ids/codes of the programmatic rules this pack contributes (empty for a
+   *  declarative pack). Absent on a load failure. */
+  ruleIds?: string[];
 }
 
 /** A project's declared pack/profile references — path-free, safe for
@@ -1103,4 +1113,20 @@ export interface ProjectPackReference {
   projectId: string;
   packNames: string[];
   profileIds?: string[];
+}
+
+/** An architectural profile a hosted project may select, tagged with where it
+ *  comes from so a UI can present the choices grouped by source (built-in vs a
+ *  specific extension pack). Aggregated from the built-in profile set and the
+ *  profiles contributed by the server-global packs. */
+export interface AvailableProfile {
+  /** The profile id (e.g. "backend", "frontend-reactive", or a pack-provided id). */
+  id: string;
+  /** Where the profile comes from: "builtin" for a wairon built-in profile,
+   *  otherwise the name of the server-global pack that contributes it. */
+  source: string;
+  /** The profile's doctrine family when known (backend-like | frontend-like | neutral). */
+  family?: string;
+  /** Optional human-readable summary of the profile for the picker. */
+  description?: string;
 }

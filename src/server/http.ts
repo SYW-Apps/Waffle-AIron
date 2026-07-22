@@ -173,6 +173,7 @@ const WEB_MUTATION_PATHS = new Set<string>([
   '/web/projects/packs',
   '/web/projects/packs/upload',
   '/web/projects/packs/remove',
+  '/web/projects/packs/adopt',
   '/web/projects/policy/reconcile',
   '/web/projects/producers',
   '/web/projects/producers/remove',

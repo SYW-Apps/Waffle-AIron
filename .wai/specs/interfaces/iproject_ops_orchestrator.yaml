@@ -351,6 +351,33 @@ methods:
       - name: name
         type: string
         optional: true
+  - name: listAvailableProfiles
+    description: Forward to pack_orchestrator.listAvailableProfiles with the caller's credential.
+    signature: 'listAvailableProfiles(credential: string): AvailableProfile[]'
+    returns: AvailableProfile[]
+    params:
+      - name: credential
+        type: string
+  - name: listAdoptableProjectPacks
+    description: Forward to pack_orchestrator.listAdoptableProjectPacks with the caller's credential.
+    signature: 'listAdoptableProjectPacks(credential: string, project: string): PackDescriptor[]'
+    returns: PackDescriptor[]
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+  - name: adoptProjectPack
+    description: Forward to pack_orchestrator.adoptProjectPack with the caller's credential.
+    signature: 'adoptProjectPack(credential: string, project: string, name: string): PackDescriptor'
+    returns: PackDescriptor
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: name
+        type: string
 status: complete
 createdAt: '2026-07-16T15:30:37.725Z'
-updatedAt: '2026-07-21T18:42:23.908Z'
+updatedAt: '2026-07-22T19:17:42.987Z'
