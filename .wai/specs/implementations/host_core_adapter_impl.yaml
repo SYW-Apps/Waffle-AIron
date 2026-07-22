@@ -93,6 +93,13 @@ methods:
       Validates the parsed manifest against the declarative-pack schema via the core loader,
       returning the first schema error message or null when valid — so the hosted store can reject
       non-declarative (rule/code) packs over the API.
+  - name: builtinProfileIds
+    narrative: []
+    detail: intent
+    intent: >-
+      Return the ids of wairon's built-in architectural profiles by reading the core rules
+      registry's built-in profile set (BUILTIN_PROFILES). A pure, side-effect-free read of a bundled
+      constant; never fails.
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-07-15T06:53:04.167Z'
+updatedAt: '2026-07-22T19:14:42.719Z'

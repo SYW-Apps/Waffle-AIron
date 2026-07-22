@@ -131,7 +131,18 @@ methods:
       throwing, so a bad or absent pack is REPORTED, never silently dropped. Returns a
       PackResolution partitioning the input into resolved packs and unresolved names. Never writes
       to any packs directory.
+  - name: storeListAvailableProfiles
+    narrative: []
+    detail: intent
+    intent: >-
+      Aggregate the selectable profiles with no authentication (a pre-authorized internal read).
+      Read the built-in profile ids via the core adapter and emit each as an AvailableProfile with
+      source "builtin". Then probe the server-global packs across both tiers (reusing the two-tier
+      listing) and, for each successfully loaded pack, emit each profile id it contributes with
+      source set to the pack's canonical name and family carried through from the pack's ProfileDef
+      when present. Dedupe by (id, source). A pack that fails to load contributes nothing (its error
+      rides on its descriptor elsewhere); this read never throws. Never mutates any tier.
 detail: intent
 status: complete
 createdAt: '2026-07-04T18:42:57.340Z'
-updatedAt: '2026-07-22T17:35:25.419Z'
+updatedAt: '2026-07-22T19:14:49.724Z'
