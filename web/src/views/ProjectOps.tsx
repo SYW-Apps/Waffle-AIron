@@ -18,6 +18,7 @@ import {
 } from '../ui';
 import { GitCredentialCard, GitPatSummary } from '../components/GitCredentialCard';
 import { SharingTab } from './Sharing';
+import { SpecsTab } from './SpecsEditor';
 import type { GitBackingStatus, PackDescriptor, PolicyEvaluationResult, ProducerConfig } from '../types';
 
 // ── Packs ────────────────────────────────────────────────────────────────────
@@ -448,6 +449,7 @@ function GitTab({ projectId }: { projectId: string }) {
 // ── Ops shell ────────────────────────────────────────────────────────────────
 
 const OPS_TABS = [
+  { id: 'specs', label: 'Specs' },
   { id: 'packs', label: 'Packs' },
   { id: 'policy', label: 'Policy' },
   { id: 'producers', label: 'Producers' },
@@ -458,7 +460,7 @@ const OPS_TABS = [
 export function ProjectOps() {
   const { projectId = '' } = useParams();
   const nav = useNavigate();
-  const [tab, setTab] = useState('packs');
+  const [tab, setTab] = useState('specs');
 
   return (
     <div className="view-pad">
@@ -475,6 +477,7 @@ export function ProjectOps() {
       </div>
       <Tabs tabs={OPS_TABS} active={tab} onSelect={setTab} />
       <div className="tab-panel">
+        {tab === 'specs' && <SpecsTab projectId={projectId} />}
         {tab === 'packs' && <PacksTab projectId={projectId} />}
         {tab === 'policy' && <PolicyTab projectId={projectId} />}
         {tab === 'producers' && <ProducersTab projectId={projectId} />}
