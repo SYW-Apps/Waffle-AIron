@@ -31,7 +31,7 @@ interface NavItem {
 }
 
 const MAIN_NAV: NavItem[] = [
-  { to: '/', label: 'Canvas', icon: '◈', end: true },
+  { to: '/canvas', label: 'Canvas', icon: '◈' },
   { to: '/projects', label: 'Projects', icon: '▦' },
   { to: '/agents', label: 'Agents', icon: '⌁' },
 ];
