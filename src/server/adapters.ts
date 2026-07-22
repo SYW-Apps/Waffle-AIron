@@ -6,6 +6,7 @@ import { validateAsComplete } from '../core/validation.js';
 import { renderDiagram, buildCanvasDataModel } from '../core/diagram.js';
 import { loadProjectConfig } from '../config/loader.js';
 import { globalPacksDir, discoverPacks, loadExtensionPacks, DeclarativePackSchema } from '../core/extensions.js';
+import { BUILTIN_PROFILES } from '../core/rules/types.js';
 import { createMcpServer } from '../mcp/server.js';
 import * as gitPortal from '../git/index.js';
 import * as producerPortal from '../producers/index.js';
@@ -49,6 +50,10 @@ export const hostCore = {
     const result = DeclarativePackSchema.safeParse(raw);
     return result.success ? null : (result.error.issues[0]?.message ?? 'shape mismatch');
   },
+  /** The ids of wairon's built-in architectural profiles, read from the core rules
+   *  registry's built-in profile set (BUILTIN_PROFILES) — a pure, side-effect-free
+   *  read of a bundled constant. */
+  builtinProfileIds: (): string[] => [...BUILTIN_PROFILES],
 };
 
 // host_validator_adapter → sdd_validator (validator_portal)

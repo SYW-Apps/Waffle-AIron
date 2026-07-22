@@ -3023,6 +3023,16 @@ function opsInstallGlobalPackArchive(cfg: HostConfig, sessionId: string, req: In
 function opsInstallProjectPackArchive(cfg: HostConfig, sessionId: string, req: IncomingMessage, url: URL, body: Body, res: ServerResponse): void {
   sendJson(res, 200, projectops.installProjectPackArchive(cfg, sessionId, q(url, 'projectId') ?? '', archiveBody(body), packNameOverride(req)));
 }
+// Stage B+C: the selectable-profile catalog and server-global pack adoption.
+function opsListAvailableProfiles(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
+  sendJson(res, 200, { profiles: projectops.listAvailableProfiles(cfg, sessionId) });
+}
+function opsListAdoptableProjectPacks(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  sendJson(res, 200, { packs: projectops.listAdoptableProjectPacks(cfg, sessionId, q(url, 'projectId') ?? '') });
+}
+function opsAdoptProjectPack(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, projectops.adoptProjectPack(cfg, sessionId, String(body?.projectId ?? ''), String(body?.name ?? '')));
+}
 function opsGetPackPolicy(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
   sendJson(res, 200, projectops.getPackPolicy(cfg, sessionId));
 }
@@ -3358,6 +3368,16 @@ export async function handleWebRequest(
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'remove') {
         return opsRemoveProjectPack(cfg, sessionId, body, res);
       }
+      // GET /web/projects/packs/adoptable?projectId= — the server-global catalog
+      // the project may adopt from (project:read).
+      if (req.method === 'GET' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'adoptable') {
+        return opsListAdoptableProjectPacks(cfg, sessionId, url, res);
+      }
+      // POST /web/projects/packs/adopt { projectId, name } — vendor a server-global
+      // pack into the project by name (project:admin).
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'adopt') {
+        return opsAdoptProjectPack(cfg, sessionId, body, res);
+      }
       // GET /web/projects/policy?projectId= — pack/profile compliance (project:write).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'policy') {
         return opsPolicyEvaluate(cfg, sessionId, url, res);
@@ -3529,6 +3549,12 @@ export async function handleWebRequest(
       // POST /web/admin/packs/remove { name }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'remove') {
         return opsRemoveGlobalPack(cfg, sessionId, body, res);
+      }
+      // GET /web/admin/profiles — the selectable architectural-profile catalog
+      // (built-in + server-global pack profiles, each tagged with its source).
+      // Any authenticated read.
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'profiles') {
+        return opsListAvailableProfiles(cfg, sessionId, res);
       }
       // GET /web/admin/policy — the instance pack/profile policy (any authenticated read).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'policy') {

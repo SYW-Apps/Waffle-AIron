@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -218,6 +219,173 @@ export function Select<T extends string>(props: {
         </option>
       ))}
     </select>
+  );
+}
+
+export interface MultiSelectOption {
+  value: string;
+  label: string;
+  /** Small secondary text shown after the label (e.g. a tier or "3 profiles"). */
+  hint?: string;
+  /** Optional group label; options sharing a group render under one header, in
+   *  first-seen order (so the caller controls group ordering). */
+  group?: string;
+}
+
+/** An accessible multi-select: a chip-trigger that opens a filterable, optionally
+ *  grouped checkbox list. Mirrors UnitSelect's open/close (outside-click + capture
+ *  Escape) and the kit's tokens so it reads as part of the same family. Selected
+ *  values with no matching option still render as removable chips, so a stored
+ *  value the catalog no longer lists is never silently dropped. */
+export function MultiSelect(props: {
+  options: MultiSelectOption[];
+  selected: string[];
+  onChange: (values: string[]) => void;
+  placeholder?: string;
+  emptyLabel?: ReactNode;
+  disabled?: boolean;
+}) {
+  const {
+    options,
+    selected,
+    onChange,
+    placeholder = 'Select…',
+    emptyLabel = 'No options available.',
+    disabled,
+  } = props;
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setOpen(false);
+        e.stopPropagation();
+      }
+    }
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey, true);
+    };
+  }, [open]);
+
+  const selectedSet = new Set(selected);
+  const byValue = useMemo(() => new Map(options.map((o) => [o.value, o])), [options]);
+
+  function toggle(v: string) {
+    if (selectedSet.has(v)) onChange(selected.filter((x) => x !== v));
+    else onChange([...selected, v]);
+  }
+
+  // Group preserving first-seen order; ungrouped options render first (no header).
+  const groups = useMemo(() => {
+    const order: string[] = [];
+    const map = new Map<string, MultiSelectOption[]>();
+    for (const o of options) {
+      const g = o.group ?? '';
+      if (!map.has(g)) {
+        map.set(g, []);
+        order.push(g);
+      }
+      map.get(g)!.push(o);
+    }
+    return order.map((g) => ({ group: g, options: map.get(g)! }));
+  }, [options]);
+
+  const q = query.trim().toLowerCase();
+  const matches = (o: MultiSelectOption) =>
+    !q ||
+    o.label.toLowerCase().includes(q) ||
+    o.value.toLowerCase().includes(q) ||
+    (o.group ?? '').toLowerCase().includes(q);
+
+  return (
+    <div className="msel" ref={rootRef}>
+      <button
+        type="button"
+        className="input msel-trigger"
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        {selected.length === 0 ? (
+          <span className="msel-ph">{placeholder}</span>
+        ) : (
+          <span className="msel-chips">
+            {selected.map((v) => (
+              <span key={v} className="msel-chip">
+                {byValue.get(v)?.label ?? v}
+                {!disabled && (
+                  <span
+                    className="msel-chip-x"
+                    role="button"
+                    aria-label={`Remove ${byValue.get(v)?.label ?? v}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggle(v);
+                    }}
+                  >
+                    ×
+                  </span>
+                )}
+              </span>
+            ))}
+          </span>
+        )}
+        <span className="msel-caret" aria-hidden>
+          ▾
+        </span>
+      </button>
+      {open && !disabled && (
+        <div className="msel-pop" role="listbox" aria-multiselectable="true">
+          {options.length > 8 && (
+            <input
+              className="input msel-search"
+              autoFocus
+              placeholder="Filter…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          )}
+          <div className="msel-list">
+            {options.length === 0 ? (
+              <div className="msel-empty">{emptyLabel}</div>
+            ) : (
+              groups.map(({ group, options: opts }) => {
+                const visible = opts.filter(matches);
+                if (visible.length === 0) return null;
+                return (
+                  <div key={group || '_ungrouped'} className="msel-group">
+                    {group && <div className="msel-group-head">{group}</div>}
+                    {visible.map((o) => (
+                      <label key={o.value} className={`msel-opt ${selectedSet.has(o.value) ? 'sel' : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={selectedSet.has(o.value)}
+                          onChange={() => toggle(o.value)}
+                        />
+                        <span className="msel-opt-body">
+                          <span className="msel-opt-label">{o.label}</span>
+                          {o.hint && <span className="msel-opt-hint">{o.hint}</span>}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -9,7 +9,7 @@ import { authenticateCredential } from './auth.js';
 import { authorize } from './authorization.js';
 import { AdminAuthError, UnauthenticatedError } from './errors.js';
 import { existingProjectRoot } from './projects.js';
-import type { HostConfig, PackDescriptor, PackResolution, ProjectPackReference, ProjectProfileSelection, ResolvedGlobalPack } from './types.js';
+import type { AvailableProfile, HostConfig, PackDescriptor, PackResolution, ProjectPackReference, ProjectProfileSelection, ResolvedGlobalPack } from './types.js';
 import type { PackArchiveInfo, PackExtractionLimits } from '@wairon/sdk';
 
 // ---------------------------------------------------------------------------
@@ -124,6 +124,11 @@ function probe(loadRef: string, baseRoot: string, scope: PackScope, displayRef: 
     profiles: Object.keys(loaded.profiles).length,
     languages: Object.keys(loaded.languages).length,
     rules: loaded.rules.length,
+    // Structured id lists paralleling the counts above — a UI can present a
+    // pack's profiles/languages/rules as choices instead of a bare number.
+    profileIds: Object.keys(loaded.profiles),
+    languageIds: Object.keys(loaded.languages),
+    ruleIds: loaded.rules.map((r) => r.name),
   };
 }
 
@@ -182,6 +187,46 @@ export function storeListGlobalPacks(): PackDescriptor[] {
     instanceNames.has(d.name) ? { ...d, shadowed: true } : d,
   );
   return [...instance, ...image];
+}
+
+/**
+ * Aggregate the profiles a hosted project may select — a pre-authorized internal
+ * read (no credential gate). Emits every built-in profile id (via the core
+ * adapter) tagged source 'builtin', then probes the server-global packs across
+ * BOTH tiers (mutable instance dir first, then the immutable image layer) and,
+ * for each pack that loads cleanly, emits each profile id it contributes tagged
+ * with the pack's canonical name and its ProfileDef family. Deduped by
+ * (id, source) so the instance tier wins a same-name collision. A pack that
+ * fails to load contributes nothing (its error rides on its descriptor
+ * elsewhere); this read never throws and never mutates any tier.
+ */
+export function storeListAvailableProfiles(): AvailableProfile[] {
+  const out: AvailableProfile[] = [];
+  const seen = new Set<string>();
+  const emit = (id: string, source: string, family?: string): void => {
+    const key = JSON.stringify([id, source]); // dedup by (id, source), collision-safe
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(family ? { id, source, family } : { id, source });
+  };
+
+  for (const id of hostCore.builtinProfileIds()) emit(id, 'builtin');
+
+  const scanTier = (dir: string): void => {
+    for (const full of hostCore.discoverPacks(dir)) {
+      try {
+        const loaded = hostCore.loadExtensionPacks([{ ref: full, scope: 'global' }], path.dirname(full));
+        if (loaded.errors.length) continue; // a bad pack contributes nothing
+        const source = loaded.packNames[0] ?? path.basename(full);
+        for (const [id, def] of Object.entries(loaded.profiles)) emit(id, source, def.family);
+      } catch {
+        /* never throw for a bad pack — skip it */
+      }
+    }
+  };
+  scanTier(hostCore.globalPacksDir());
+  scanTier(imagePacksDir());
+  return out;
 }
 
 /** Read a discovered pack's declarative content: the file itself for a file-form
@@ -472,6 +517,45 @@ export function listProjectPacks(cfg: HostConfig, credential: string | null, pro
 export function installProjectPack(cfg: HostConfig, credential: string | null, project: string, name: string, content: string): PackDescriptor {
   requireCap(cfg, credential, 'project:admin', 'project', project, 'Forbidden — installing a project pack requires project:admin over the project');
   return executeApprovedInstallProjectPack(cfg, project, name, content);
+}
+
+// ── pack_orchestrator: profile catalog + server-global pack adoption ───────────
+//
+// The selectable-profile catalog is instance-wide, non-sensitive configuration —
+// any authenticated principal may read it (no scope authorization). Adopting a
+// server-global pack into a project is a per-project install (project:admin);
+// listing what may be adopted mirrors the per-project pack listing (project:read).
+
+/** List the selectable architectural profiles (built-in + server-global pack
+ *  profiles, each tagged with its source). Authenticate the caller — any
+ *  authenticated principal may read the catalog — then return the pre-authorized
+ *  store aggregation. No scope authorization: the catalog is instance-wide,
+ *  non-sensitive configuration. */
+export function listAvailableProfiles(cfg: HostConfig, credential: string | null): AvailableProfile[] {
+  requirePrincipal(cfg, credential);
+  return storeListAvailableProfiles();
+}
+
+/** List the server-global pack catalog a project may adopt from. Requires
+ *  project:read over the project (mirrors listProjectPacks), then returns the
+ *  server-global listing. */
+export function listAdoptableProjectPacks(cfg: HostConfig, credential: string | null, project: string): PackDescriptor[] {
+  requireCap(cfg, credential, 'project:read', 'project', project, 'Forbidden — listing adoptable packs requires project:read over the project');
+  return storeListGlobalPacks();
+}
+
+/** Adopt a server-global pack into a project by name: require project:admin over
+ *  the project, resolve the name against the server-global set (both tiers), and
+ *  vendor the resolved pack in by its CANONICAL name. A name the instance does not
+ *  carry is rejected — never a silent no-op. */
+export function adoptProjectPack(cfg: HostConfig, credential: string | null, project: string, name: string): PackDescriptor {
+  requireCap(cfg, credential, 'project:admin', 'project', project, 'Forbidden — adopting a project pack requires project:admin over the project');
+  const resolution = executeApprovedResolveGlobalPacks([name]);
+  if (resolution.resolved.length === 0) {
+    throw new Error(`no such server-global pack "${name}" — cannot adopt a pack the instance does not carry`);
+  }
+  const resolved = resolution.resolved[0];
+  return executeApprovedInstallProjectPack(cfg, project, resolved.name, resolved.content);
 }
 
 /** Pre-authorized entries for the policy plane's init/reconcile workflows: same work as the

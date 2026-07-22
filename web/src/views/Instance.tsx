@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { get, post, postBinary } from '../api';
+import { asList, get, post, postBinary } from '../api';
 import {
   AsyncButton,
   AsyncView,
@@ -10,16 +10,19 @@ import {
   DataTable,
   Field,
   Modal,
+  MultiSelect,
   Select,
   Tabs,
   TextInput,
   useAsync,
   useToast,
+  type MultiSelectOption,
 } from '../ui';
 import { GitCredentialCard, GitPatSummary } from '../components/GitCredentialCard';
 import { InfoTip } from '../components/InfoTip';
 import { UnitSelect } from '../components/UnitSelect';
 import type {
+  AvailableProfile,
   GitBackingBinding,
   HostExposurePolicy,
   InstancePackPolicy,
@@ -27,14 +30,58 @@ import type {
   PackDescriptor,
 } from '../types';
 
-const csvToList = (s: string): string[] => s.split(',').map((x) => x.trim()).filter(Boolean);
-const listToCsv = (l?: string[]): string => (l ?? []).join(', ');
+// Contents counts prefer the enriched id arrays, falling back to the numeric
+// counts when the server sends only those.
+const profileCount = (p: PackDescriptor): number => p.profileIds?.length ?? p.profiles ?? 0;
+const languageCount = (p: PackDescriptor): number => p.languageIds?.length ?? p.languages ?? 0;
+const ruleCount = (p: PackDescriptor): number => p.ruleIds?.length ?? p.rules ?? 0;
 
 // ── Global packs ─────────────────────────────────────────────────────────────
 
+/** A pack's contents cell: the compact `Np · Nl · Nr` summary, expandable to the
+ *  concrete profile/language/rule ids when the server enriched them. */
+function PackContents({ pack }: { pack: PackDescriptor }) {
+  const [open, setOpen] = useState(false);
+  const profileIds = pack.profileIds ?? [];
+  const languageIds = pack.languageIds ?? [];
+  const ruleIds = pack.ruleIds ?? [];
+  const summary = `${profileCount(pack)}p · ${languageCount(pack)}l · ${ruleCount(pack)}r`;
+  const hasDetail = profileIds.length + languageIds.length + ruleIds.length > 0;
+  if (!hasDetail) return <span className="hint">{summary}</span>;
+  return (
+    <div className="cell-stack">
+      <button type="button" className="pack-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <span aria-hidden>{open ? '▾' : '▸'}</span> {summary}
+      </button>
+      {open && (
+        <div className="pack-contents">
+          {profileIds.length > 0 && (
+            <div className="pack-contents-row">
+              <span className="pack-contents-k">Profiles</span>
+              <div className="chip-row">{profileIds.map((id) => <Badge key={id} tone="accent">{id}</Badge>)}</div>
+            </div>
+          )}
+          {languageIds.length > 0 && (
+            <div className="pack-contents-row">
+              <span className="pack-contents-k">Languages</span>
+              <div className="chip-row">{languageIds.map((id) => <Badge key={id} tone="neutral">{id}</Badge>)}</div>
+            </div>
+          )}
+          {ruleIds.length > 0 && (
+            <div className="pack-contents-row">
+              <span className="pack-contents-k">Rules</span>
+              <div className="chip-row">{ruleIds.map((id) => <Badge key={id} tone="neutral">{id}</Badge>)}</div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function GlobalPacksTab() {
   const toast = useToast();
-  const packs = useAsync<{ packs: PackDescriptor[] }>(() => get('/web/admin/packs'), []);
+  const packs = useAsync<PackDescriptor[]>(() => get('/web/admin/packs').then((d) => asList<PackDescriptor>(d, 'packs')), []);
   const [adding, setAdding] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [nameOverride, setNameOverride] = useState('');
@@ -68,11 +115,11 @@ function GlobalPacksTab() {
           <DataTable<PackDescriptor>
             rowKey={(p) => p.name}
             empty="No instance packs installed."
-            rows={d.packs}
+            rows={d}
             columns={[
               { key: 'name', header: 'Pack', cell: (p) => <div className="cell-stack"><strong>{p.name}</strong><code className="subtle">{p.ref}</code></div> },
               { key: 'tier', header: 'Tier', cell: (p) => <Badge tone={p.tier === 'image' ? 'accent' : 'neutral'}>{p.tier ?? 'instance'}</Badge> },
-              { key: 'counts', header: 'Contents', cell: (p) => <span className="hint">{p.profiles}p · {p.languages}l · {p.rules}r</span> },
+              { key: 'counts', header: 'Contents', cell: (p) => <PackContents pack={p} /> },
               {
                 key: 'act',
                 header: '',
@@ -129,19 +176,60 @@ function PolicyTab() {
   );
 }
 
+/** Ensure any currently-selected value still appears as a togglable option even
+ *  when the live catalog no longer lists it (a stale policy entry), so it renders
+ *  and can be removed rather than vanishing. */
+function withSelected(options: MultiSelectOption[], selected: string[], noteHint: string): MultiSelectOption[] {
+  const known = new Set(options.map((o) => o.value));
+  const extra = selected.filter((v) => !known.has(v)).map((v) => ({ value: v, label: v, hint: noteHint }));
+  return extra.length ? [...options, ...extra] : options;
+}
+
 function PolicyForm(props: { policy: InstancePackPolicy; onSaved: () => void; onError: (m: string) => void; onOk: (m: string) => void }) {
-  const [required, setRequired] = useState(listToCsv(props.policy.requiredGlobalPacks));
-  const [defaults, setDefaults] = useState(listToCsv(props.policy.defaultProjectPacks));
-  const [blocked, setBlocked] = useState(listToCsv(props.policy.blockedPackNames));
+  const packs = useAsync<PackDescriptor[]>(() => get('/web/admin/packs').then((d) => asList<PackDescriptor>(d, 'packs')), []);
+  const profiles = useAsync<AvailableProfile[]>(() => get('/web/admin/profiles').then((d) => asList<AvailableProfile>(d, 'profiles')), []);
+
+  const [required, setRequired] = useState<string[]>(props.policy.requiredGlobalPacks ?? []);
+  const [defaults, setDefaults] = useState<string[]>(props.policy.defaultProjectPacks ?? []);
+  const [blocked, setBlocked] = useState<string[]>(props.policy.blockedPackNames ?? []);
+  const [allowedProfiles, setAllowedProfiles] = useState<string[]>(props.policy.allowedProfileIds ?? []);
+  const [requiredProfiles, setRequiredProfiles] = useState<string[]>(props.policy.requiredProfileIds ?? []);
   const [mode, setMode] = useState(props.policy.enforcementMode || 'warn');
   const [requireProfile, setRequireProfile] = useState(props.policy.requireProfileSelection);
+
+  // Pack options (label = name; hint = tier + a small contents count).
+  const packOptions: MultiSelectOption[] = (packs.data ?? []).map((p) => ({
+    value: p.name,
+    label: p.name,
+    hint: `${p.tier ? p.tier + ' · ' : ''}${profileCount(p)} profiles`,
+  }));
+  const packsEmpty: string = packs.loading ? 'Loading packs…' : packs.error ? 'Could not load packs.' : 'No packs installed.';
+
+  // Profile options grouped by source, built-in first, then each pack.
+  const profileOptions: MultiSelectOption[] = [...(profiles.data ?? [])]
+    .sort((a, b) => {
+      const ab = a.source === 'builtin' ? 0 : 1;
+      const bb = b.source === 'builtin' ? 0 : 1;
+      if (ab !== bb) return ab - bb;
+      if (a.source !== b.source) return a.source.localeCompare(b.source);
+      return a.id.localeCompare(b.id);
+    })
+    .map((p) => ({
+      value: p.id,
+      label: p.id,
+      hint: p.family,
+      group: p.source === 'builtin' ? 'Built-in' : p.source,
+    }));
+  const profilesEmpty: string = profiles.loading ? 'Loading profiles…' : profiles.error ? 'Could not load profiles.' : 'No profiles available.';
 
   async function save() {
     const next: InstancePackPolicy = {
       ...props.policy,
-      requiredGlobalPacks: csvToList(required),
-      defaultProjectPacks: csvToList(defaults),
-      blockedPackNames: csvToList(blocked),
+      requiredGlobalPacks: required,
+      defaultProjectPacks: defaults,
+      blockedPackNames: blocked,
+      allowedProfileIds: allowedProfiles,
+      requiredProfileIds: requiredProfiles,
       enforcementMode: mode,
       requireProfileSelection: requireProfile,
     };
@@ -152,9 +240,60 @@ function PolicyForm(props: { policy: InstancePackPolicy; onSaved: () => void; on
 
   return (
     <div className="panel stack-lg">
-      <Field label="Required packs (every project)" hint="Comma-separated pack names."><TextInput value={required} onChange={setRequired} /></Field>
-      <Field label="Default packs (new projects)" hint="Comma-separated."><TextInput value={defaults} onChange={setDefaults} /></Field>
-      <Field label="Blocked packs" hint="Comma-separated pack names that projects may not install."><TextInput value={blocked} onChange={setBlocked} /></Field>
+      <Field
+        label="Every project must carry"
+        hint="Packs required on every project. Enforced per the mode below."
+      >
+        <MultiSelect
+          options={withSelected(packOptions, required, 'not installed')}
+          selected={required}
+          onChange={setRequired}
+          placeholder="Choose packs…"
+          emptyLabel={packsEmpty}
+        />
+      </Field>
+      <Field label="New projects start with" hint="Packs installed by default when a project is created.">
+        <MultiSelect
+          options={withSelected(packOptions, defaults, 'not installed')}
+          selected={defaults}
+          onChange={setDefaults}
+          placeholder="Choose packs…"
+          emptyLabel={packsEmpty}
+        />
+      </Field>
+      <Field label="Never allowed" hint="Packs projects may not install.">
+        <MultiSelect
+          options={withSelected(packOptions, blocked, 'not installed')}
+          selected={blocked}
+          onChange={setBlocked}
+          placeholder="Choose packs…"
+          emptyLabel={packsEmpty}
+        />
+      </Field>
+      <Field
+        label="Profiles — selectable"
+        hint="Profiles projects may choose from. Leave empty to allow all."
+      >
+        <MultiSelect
+          options={withSelected(profileOptions, allowedProfiles, 'unknown source')}
+          selected={allowedProfiles}
+          onChange={setAllowedProfiles}
+          placeholder="Choose profiles…"
+          emptyLabel={profilesEmpty}
+        />
+      </Field>
+      <Field
+        label="Profiles — always applied"
+        hint="Profiles enforced on every project regardless of the project's own selection."
+      >
+        <MultiSelect
+          options={withSelected(profileOptions, requiredProfiles, 'unknown source')}
+          selected={requiredProfiles}
+          onChange={setRequiredProfiles}
+          placeholder="Choose profiles…"
+          emptyLabel={profilesEmpty}
+        />
+      </Field>
       <div className="row-form">
         <Field label="Enforcement">
           <Select value={mode} onChange={setMode} options={[
