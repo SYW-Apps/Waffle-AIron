@@ -125,7 +125,7 @@ function landscapeToCanvasModel(g: Graph): unknown {
  * layout) via a landscape→CanvasModel adapter. Data is the permission-filtered
  * landscape graph.
  */
-export function Environment() {
+export function Environment({ initialUnitRoute = '' }: { initialUnitRoute?: string }) {
   const state = useAsync<Graph>(() => get('/web/graph?tier=landscape&level=1'), [], ['landscape']);
   const { themeId, appearance } = useSettings();
   const nav = useNavigate();
@@ -136,23 +136,87 @@ export function Environment() {
   const handleRef = useRef<CanvasHandle | null>(null);
   const g = state.data;
 
+  // The UNIT namespace lives in the URL under /canvas/<unit>/<subunit>… (the CLEAN
+  // dot-path flattened to '/'). The engine addresses the same frames as subsystem
+  // routes with a leading 'unit' segment (a unit node id 'unit:a.b' → engine route
+  // 'unit/a/b'), so we translate between the two spaces here. Mirrors CanvasView's
+  // Stage-J URL↔engine wiring, one namespace level up.
+  // Inverse of the onViewChange serialization below, so unit paths AND the two
+  // non-unit frames (the synthetic '(unassigned)' bucket, and the empty Types/
+  // Databases mode tabs) round-trip on reload/deep-link — not just real units.
+  const toEngineRoute = (clean: string) => {
+    if (!clean) return '';
+    if (clean === 'unassigned') return '__unassigned__';
+    const head = clean.split('/')[0];
+    if (head === 'types' || head === 'databases') return clean; // engine mode routes pass through
+    return 'unit/' + clean;
+  };
+  // The engine route we last synced with the canvas (seeded at mount, pushed from
+  // an in-canvas drill, or applied from the URL) — skips redundant openRoute calls
+  // and history pushes, exactly like CanvasView.lastRouteRef.
+  const lastUnitRouteRef = useRef<string>(toEngineRoute(initialUnitRoute));
+  // Freshest initialUnitRoute reachable from the mount-only engine callback without
+  // remounting the graph on every unit-route change.
+  const initialUnitRouteRef = useRef<string>(initialUnitRoute);
+  initialUnitRouteRef.current = initialUnitRoute;
+
   useEffect(() => {
     const host = hostRef.current;
     if (!host || !g || g.nodes.length === 0) return;
+    lastUnitRouteRef.current = toEngineRoute(initialUnitRouteRef.current);
+    const kindOf = new Map(g.nodes.map((n) => [n.id, n.kind]));
+    const realProjectId = (n: GNode) => n.projectId ?? n.id.replace(/^project:/, '');
+    // Every real project id (used to tell a unit route from a project drill).
+    const projectIds = new Set(g.nodes.filter((n) => n.kind === 'project').map(realProjectId));
+    // Project node id → its owning unit node id (prefer the owner placement).
+    const unitOfProjectNode = new Map<string, string>();
+    for (const e of g.edges) {
+      if (kindOf.get(e.from) === 'unit' && kindOf.get(e.to) === 'project') {
+        if (!unitOfProjectNode.has(e.to) || e.edgeKind === 'owns') unitOfProjectNode.set(e.to, e.from);
+      }
+    }
+    // Real project id → owning unit DOT-path ('unit:a.b.c' → 'a.b.c'), for stamping
+    // the unit ancestry into a project's URL when it is opened.
+    const unitDotOfProject = new Map<string, string>();
+    for (const n of g.nodes) {
+      if (n.kind !== 'project') continue;
+      const owner = unitOfProjectNode.get(n.id);
+      if (owner) unitDotOfProject.set(realProjectId(n), owner.replace(/^unit:/, ''));
+    }
     // Double-clicking a project node (a "component" in the adapted model) opens
     // that project's canvas.
     // Only actionable projects navigate into their spec canvas (the server only
     // ships actionable projects today — belt and braces should that change).
     const openable = new Set(
-      g.nodes.filter((n) => n.kind === 'project' && n.actionable !== false).map((n) => n.projectId ?? n.id.replace(/^project:/, '')),
+      g.nodes.filter((n) => n.kind === 'project' && n.actionable !== false).map(realProjectId),
     );
     const handle = mountCanvas(host, landscapeToCanvasModel(g), {
       shadow: true,
       theme: canvasTheme,
       vars: canvasVars,
       embed: true,
+      // Seed the initial view from the URL unit path so a deep link renders its
+      // scope immediately (no root-first flash).
+      initialRoute: toEngineRoute(initialUnitRouteRef.current),
+      // Push in-canvas unit navigation into the URL path. A project drill is NOT a
+      // unit route — it is handled by onNodeOpen — so ignore an engine route that
+      // starts with a known project id.
+      onViewChange: (r: string) => {
+        if (projectIds.has(r.split('/')[0])) return;
+        let clean = r;
+        if (clean === 'unit') clean = '';
+        else if (clean.startsWith('unit/')) clean = clean.slice('unit/'.length);
+        // The synthetic unplaced frame serializes as '__unassigned__'.
+        if (clean === '__unassigned__') clean = 'unassigned';
+        const target = '/canvas' + (clean ? '/' + clean : '');
+        lastUnitRouteRef.current = r;
+        if (target !== window.location.pathname) nav(target);
+      },
       onNodeOpen: (_kind: string, id: string) => {
-        if (openable.has(id)) nav('/canvas/' + encodeURIComponent(id));
+        if (!openable.has(id)) return;
+        const dot = unitDotOfProject.get(id);
+        const prefix = dot ? dot.split('.').map(encodeURIComponent).join('/') + '/' : '';
+        nav('/canvas/' + prefix + encodeURIComponent(id));
       },
     });
     handleRef.current = handle;
@@ -162,6 +226,18 @@ export function Environment() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [g]);
+
+  // When the unit route changes from OUTSIDE the engine (browser back/forward, an
+  // external link), drive the mounted engine to it. Skipped when it already matches
+  // what the engine reported (guarded by lastUnitRouteRef, like CanvasView) so the
+  // mount seed and the onViewChange echo do not double-fire.
+  useEffect(() => {
+    const engineRoute = toEngineRoute(initialUnitRoute);
+    if (engineRoute === lastUnitRouteRef.current) return;
+    lastUnitRouteRef.current = engineRoute;
+    handleRef.current?.openRoute(engineRoute);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialUnitRoute]);
 
   useEffect(() => {
     handleRef.current?.setTheme(canvasTheme, canvasVars);

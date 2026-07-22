@@ -12,7 +12,20 @@ import { mountCanvas, type CanvasHandle } from '../canvas/engine';
  * runs inside a shadow root so its classic CSS is isolated from the app shell,
  * and follows the app's light/dark appearance. Data comes from /web/canvas-model.
  */
-export function CanvasView({ projectId, route = '' }: { projectId: string; route?: string }) {
+export function CanvasView({
+  projectId,
+  route = '',
+  unitPrefix = '',
+}: {
+  projectId: string;
+  route?: string;
+  /**
+   * The owning org-unit path ('/'-joined, e.g. 'acme/finance', '' when unplaced),
+   * prepended to every per-project URL this canvas pushes so the unit ancestry is
+   * preserved across in-canvas drills. Passed verbatim (already `/`-joined).
+   */
+  unitPrefix?: string;
+}) {
   const state = useAsync<unknown>(
     () => get('/web/canvas-model?projectId=' + encodeURIComponent(projectId)),
     [projectId],
@@ -38,8 +51,10 @@ export function CanvasView({ projectId, route = '' }: { projectId: string; route
   // without re-mounting on every route/nav change.
   const routeRef = useRef<string>(route);
   const projectIdRef = useRef<string>(projectId);
+  const unitPrefixRef = useRef<string>(unitPrefix);
   routeRef.current = route;
   projectIdRef.current = projectId;
+  unitPrefixRef.current = unitPrefix;
 
   // Mount (or remount) whenever a fresh model arrives; tear down on unmount.
   // NOTE: `route` is intentionally NOT a dependency — drill-down must not remount
@@ -61,7 +76,9 @@ export function CanvasView({ projectId, route = '' }: { projectId: string; route
       // Stage J: push in-canvas navigation into the URL path. Only navigate when
       // the target differs from the current location (avoid redundant history).
       onViewChange: (r: string) => {
-        const target = '/canvas/' + encodeURIComponent(projectIdRef.current) + (r ? '/' + r : '');
+        const up = unitPrefixRef.current;
+        const target =
+          '/canvas/' + (up ? up + '/' : '') + encodeURIComponent(projectIdRef.current) + (r ? '/' + r : '');
         lastRouteRef.current = r;
         if (target !== window.location.pathname) navigate(target);
       },

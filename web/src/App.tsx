@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, NavLink, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import { SessionProvider, useSession } from './session';
 import { SettingsProvider, useSettings } from './settings';
 import { RealtimeProvider } from './realtime';
@@ -14,7 +14,7 @@ import { Permissions } from './views/Permissions';
 import { Units } from './views/Units';
 import { Projects } from './views/Projects';
 import { ProjectOps } from './views/ProjectOps';
-import { CanvasView } from './views/CanvasView';
+import { CanvasRouter } from './views/CanvasRouter';
 import { Tokens } from './views/Tokens';
 import { Providers } from './views/Providers';
 import { Approvals } from './views/Approvals';
@@ -87,32 +87,6 @@ function Sidebar(props: { adminVisible: boolean; collapsed: boolean; onToggle: (
   );
 }
 
-/**
- * The per-project architecture canvas at /canvas/:projectId/*. The trailing
- * splat is the engine route (namespace drill-down / types / databases), so a
- * refresh or shared link renders the exact same scope. `key={projectId}` remounts
- * on a project switch but NOT on drill-down — a route change drives the engine via
- * CanvasView's openRoute wiring instead of a remount.
- */
-function CanvasPage() {
-  const params = useParams();
-  const projectId = params.projectId ?? '';
-  const route = params['*'] ?? '';
-  const navigate = useNavigate();
-  return (
-    <div className="canvas-view">
-      <div className="canvas-bar">
-        <button className="btn btn-ghost btn-sm" onClick={() => navigate('/')} title="Back to the environment">
-          ← Environment
-        </button>
-        <span className="crumb-sep">/</span>
-        <strong>{projectId}</strong>
-      </div>
-      <CanvasView key={projectId} projectId={projectId} route={route} />
-    </div>
-  );
-}
-
 function Shell() {
   const { ctx, adminVisible } = useSession();
   const { sidebarCollapsed, toggleSidebar } = useSettings();
@@ -135,7 +109,7 @@ function Shell() {
         <ThemeCog />
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/canvas/:projectId/*" element={<CanvasPage />} />
+          <Route path="/canvas/*" element={<CanvasRouter />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
@@ -154,7 +128,7 @@ function Shell() {
         <main className="view">
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/canvas/:projectId/*" element={<CanvasPage />} />
+            <Route path="/canvas/*" element={<CanvasRouter />} />
             <Route path="/projects" element={<Projects />} />
             <Route path="/projects/:projectId" element={<ProjectOps />} />
             <Route path="/agents" element={<Tokens />} />
