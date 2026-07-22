@@ -141,15 +141,19 @@ export function Environment({ initialUnitRoute = '' }: { initialUnitRoute?: stri
   // routes with a leading 'unit' segment (a unit node id 'unit:a.b' → engine route
   // 'unit/a/b'), so we translate between the two spaces here. Mirrors CanvasView's
   // Stage-J URL↔engine wiring, one namespace level up.
-  // Inverse of the onViewChange serialization below, so unit paths AND the two
-  // non-unit frames (the synthetic '(unassigned)' bucket, and the empty Types/
-  // Databases mode tabs) round-trip on reload/deep-link — not just real units.
+  // CLEAN url slugs → engine route. A unit's engine subsystem id is the prefixed,
+  // dot→'::' id 'unit:syw-apps::it'; routeOf serializes that to url-encoded
+  // '/'-segments 'unit%3Asyw-apps/it'. So we re-prefix the FIRST slug with 'unit:'
+  // and url-encode each segment. Special frames: '' = root, 'unassigned' = the
+  // synthetic unplaced bucket, 'types'/'databases' = engine view-mode routes.
+  // Inverse of the onViewChange serialization below, so every frame round-trips.
   const toEngineRoute = (clean: string) => {
     if (!clean) return '';
     if (clean === 'unassigned') return '__unassigned__';
-    const head = clean.split('/')[0];
-    if (head === 'types' || head === 'databases') return clean; // engine mode routes pass through
-    return 'unit/' + clean;
+    const parts = clean.split('/');
+    if (parts[0] === 'types' || parts[0] === 'databases') return clean;
+    parts[0] = 'unit:' + parts[0];
+    return parts.map(encodeURIComponent).join('/');
   };
   // The engine route we last synced with the canvas (seeded at mount, pushed from
   // an in-canvas drill, or applied from the URL) — skips redundant openRoute calls
@@ -202,12 +206,18 @@ export function Environment({ initialUnitRoute = '' }: { initialUnitRoute?: stri
       // unit route — it is handled by onNodeOpen — so ignore an engine route that
       // starts with a known project id.
       onViewChange: (r: string) => {
-        if (projectIds.has(r.split('/')[0])) return;
-        let clean = r;
-        if (clean === 'unit') clean = '';
-        else if (clean.startsWith('unit/')) clean = clean.slice('unit/'.length);
-        // The synthetic unplaced frame serializes as '__unassigned__'.
-        if (clean === '__unassigned__') clean = 'unassigned';
+        // r = engine route (url-encoded '/'-segments). Decode, strip the synthetic
+        // 'unit:' prefix off the first segment, re-emit clean slugs. A project drill
+        // is NOT a unit route (onNodeOpen owns it), and the '__unassigned__' frame
+        // maps to the 'unassigned' slug.
+        const parts = r.split('/').map(decodeURIComponent);
+        if (parts[0] && projectIds.has(parts[0])) return;
+        let clean = '';
+        if (parts[0] === '__unassigned__') clean = 'unassigned';
+        else if (parts[0]) {
+          if (parts[0].startsWith('unit:')) parts[0] = parts[0].slice('unit:'.length);
+          clean = parts.map(encodeURIComponent).join('/');
+        }
         const target = '/canvas' + (clean ? '/' + clean : '');
         lastUnitRouteRef.current = r;
         if (target !== window.location.pathname) nav(target);
