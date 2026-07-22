@@ -357,6 +357,19 @@ describe('project policy orchestrator (sdd_host)', () => {
     expect(packNames('stem-proj').filter((n) => n === 'appender-make')).toHaveLength(1);
   });
 
+  it('reconcile applies a DIRECTORY-form global pack end-to-end (the .wpack shape the old isFile guard rejected)', () => {
+    const dir = path.join(packsDir, 'dirpack');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'pack.yaml'), 'name: dirpack\nprofiles: {}\nlanguages: {}\n');
+    createPlacedProject(cfg, MASTER, 'dir-proj');
+    setPackPolicy(cfg, MASTER, samplePolicy({ requiredGlobalPacks: ['dirpack'] }));
+
+    const after = reconcileProjectPolicy(cfg, MASTER, 'dir-proj');
+    expect(after.compliant).toBe(true);
+    expect(after.unresolvedPacks).toEqual([]);
+    expect(packNames('dir-proj')).toContain('dirpack');
+  });
+
   it('setPackPolicy rejects an unrecognized enforcementMode (no silently-disabled enforcement)', () => {
     expect(() =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
