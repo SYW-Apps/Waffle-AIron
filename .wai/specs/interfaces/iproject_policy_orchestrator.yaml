@@ -45,12 +45,15 @@ methods:
   - name: reconcileProjectPolicy
     description: >-
       Authenticate the caller credential and resolve the caller's project:write permission over the
-      target project through the authorization seam (must be yes; an instance-admin bypasses),
-      evaluate the project against the active instance pack policy, and — when the policy mode
-      permits auto-reconciliation — apply the allowed steps for missing required/default declarative
-      packs, auditing the reconciliation. Reconciliation only ever applies the INSTANCE POLICY's own
-      required/default packs, never discretionary changes, which is why project:write (not
-      project:admin) suffices.
+      target project through the authorization seam (must be yes; an instance-admin bypasses), then
+      — as an EXPLICIT, authorized reconciliation — evaluate the project against the active instance
+      pack policy and apply the missing required/default declarative packs that the server-global
+      set can resolve, REGARDLESS of enforcementMode. This action only ever applies the INSTANCE
+      POLICY's own required/default packs, never discretionary changes, which is why project:write
+      (not project:admin) suffices. Required/default packs the server-global set cannot resolve are
+      reported as unresolvedPacks (never silently skipped); enforcementMode governs init-time
+      blocking and automatic reconciliation, not this explicit action. Audit the reconciliation and
+      return the post-reconciliation PolicyEvaluationResult.
     signature: 'reconcileProjectPolicy(credential: string, projectId: string): PolicyEvaluationResult'
     returns: PolicyEvaluationResult
     params:
@@ -116,4 +119,4 @@ methods:
         type: ProjectInitRequest
 status: complete
 createdAt: '2026-07-08T21:59:46.667Z'
-updatedAt: '2026-07-16T15:20:12.632Z'
+updatedAt: '2026-07-22T17:27:59.086Z'
