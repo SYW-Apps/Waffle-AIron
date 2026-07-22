@@ -343,6 +343,47 @@ Two equivalent paths to the same control-plane logic:
 - **Tools:** the full `sdd_*` surface. No privileged tools on the public plane —
   lock/promote are control-plane only.
 
+### 5.4a Reverse proxy & the realtime WebSocket (`/web/ws`)
+
+The web UI opens **one** WebSocket to `/web/ws` for live updates (open canvases and
+admin grids refresh when data changes). It is *not* required for the app to work —
+every view still loads over REST — but if the socket cannot connect, the UI shows a
+red **"Offline"** pill in the top bar and stops auto-refreshing until you reload.
+
+A reverse proxy in front of the container **must forward the WebSocket upgrade**, or
+`/web/ws` never connects (the reported "realtime offline behind NGINX in a private
+VPC" symptom). Two things are required:
+
+1. **Forward the `Upgrade`/`Connection` headers** on `/web/ws` (simplest: the whole
+   app). Default NGINX strips them, which silently breaks the upgrade.
+2. **Raise the proxy read timeout** past the 30s server heartbeat so idle upgraded
+   connections aren't culled mid-session.
+
+Minimal NGINX:
+
+```nginx
+# http{} block — the standard upgrade map
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+# server{} that fronts the container
+location / {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade $http_upgrade;              # WebSocket upgrade …
+    proxy_set_header Connection $connection_upgrade;     # … required for /web/ws
+    proxy_read_timeout 3600s;
+}
+```
+
+Caddy and GCP HTTPS load balancers proxy WebSockets automatically — no extra config.
+The client auto-reconnects with backoff and runs a ping/pong heartbeat, so once the
+proxy forwards upgrades the pill returns to **"Live"** on its own.
+
 ### 5.5 GCP
 
 - **GCE VM (durable FS):** run the container with `/data` on a **separate
