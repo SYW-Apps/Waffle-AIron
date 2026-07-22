@@ -30,6 +30,16 @@ fields:
     type: string[]
     description: Human-readable warnings or blocking reasons.
     optional: false
+  - name: unresolvedPacks
+    type: string[]
+    description: >-
+      Required/default packs the active instance pack set cannot resolve at all — absent from BOTH
+      server-global tiers (or a directory/name-mismatch the resolver cannot map). Distinct from
+      missingPackNames (resolvable, just not yet installed into the project): an unresolved pack
+      cannot be remedied by reconciliation and signals an instance-side gap (a policy naming a pack
+      that was never installed globally). Surfaced so evaluate and reconcile report honestly instead
+      of silently skipping.
+    optional: false
 methods: []
 createdAt: '2026-07-08T21:58:56.094Z'
-updatedAt: '2026-07-08T21:58:56.121Z'
+updatedAt: '2026-07-22T17:27:44.890Z'

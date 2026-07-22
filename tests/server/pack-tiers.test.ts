@@ -7,6 +7,7 @@ import {
   installGlobalPack,
   removeGlobalPack,
   readProjectReferences,
+  executeApprovedResolveGlobalPacks,
 } from '../../src/server/packs.js';
 import type { HostConfig, PackDescriptor } from '../../src/server/types.js';
 
@@ -126,6 +127,68 @@ describe('pack registry — two-tier server-global store (sdd_host)', () => {
     expect(list[0].name).toBe('inst-pack');
     expect(list[0].tier).toBe('instance');
     expect(list[0].shadowed).toBeFalsy();
+  });
+
+  // ── executeApprovedResolveGlobalPacks: the policy applier's resolution seam ──
+  // This is the single fix for "packs never applied": resolve required/default
+  // names across BOTH tiers and BOTH pack forms, on the canonical manifest name.
+
+  const seedInstanceAs = (fileStem: string, manifestName: string): void =>
+    fs.writeFileSync(path.join(instanceDir, `${fileStem}.yaml`), packYaml(manifestName));
+  const seedInstanceDir = (name: string, manifestName = name): void => {
+    const d = path.join(instanceDir, name);
+    fs.mkdirSync(d, { recursive: true });
+    fs.writeFileSync(path.join(d, 'pack.yaml'), packYaml(manifestName));
+  };
+
+  it('resolve: a file-form instance pack yields canonical name, content, and tier', () => {
+    seedInstance('foo');
+    const res = executeApprovedResolveGlobalPacks(['foo']);
+    expect(res.unresolved).toEqual([]);
+    expect(res.resolved).toHaveLength(1);
+    expect(res.resolved[0]).toMatchObject({ requestedName: 'foo', name: 'foo', tier: 'instance' });
+    expect(res.resolved[0].content).toContain('name: foo');
+  });
+
+  it('resolve: an IMAGE-tier pack resolves (the two-tier fix — the applier used to miss it)', () => {
+    seedImage('imgpack');
+    const res = executeApprovedResolveGlobalPacks(['imgpack']);
+    expect(res.resolved).toHaveLength(1);
+    expect(res.resolved[0]).toMatchObject({ name: 'imgpack', tier: 'image' });
+  });
+
+  it('resolve: a DIRECTORY-form pack resolves (the shape a .wpack install extracts)', () => {
+    seedInstanceDir('dirpack');
+    const res = executeApprovedResolveGlobalPacks(['dirpack']);
+    expect(res.unresolved).toEqual([]);
+    expect(res.resolved).toHaveLength(1);
+    expect(res.resolved[0]).toMatchObject({ name: 'dirpack', tier: 'instance' });
+    expect(res.resolved[0].content).toContain('name: dirpack');
+  });
+
+  it('resolve: the instance tier wins a name collision', () => {
+    seedImage('shared');
+    seedInstance('shared');
+    const res = executeApprovedResolveGlobalPacks(['shared']);
+    expect(res.resolved).toHaveLength(1);
+    expect(res.resolved[0].tier).toBe('instance');
+  });
+
+  it('resolve: names with no match are reported unresolved (never silently dropped)', () => {
+    seedInstance('present');
+    const res = executeApprovedResolveGlobalPacks(['present', 'absent']);
+    expect(res.resolved.map((r) => r.name)).toEqual(['present']);
+    expect(res.unresolved).toEqual(['absent']);
+  });
+
+  it('resolve: matches by file stem OR manifest name, keys on the canonical name, and dedups aliases', () => {
+    // The file is appender.yaml but its manifest name is appender-make — the exact
+    // stem-vs-manifest mismatch that made reconcile re-install forever.
+    seedInstanceAs('appender', 'appender-make');
+    const res = executeApprovedResolveGlobalPacks(['appender', 'appender-make']);
+    expect(res.unresolved).toEqual([]);
+    expect(res.resolved).toHaveLength(1); // both aliases collapse to one canonical pack
+    expect(res.resolved[0].name).toBe('appender-make');
   });
 });
 

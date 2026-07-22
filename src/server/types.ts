@@ -430,8 +430,36 @@ export interface PolicyEvaluationResult {
   missingPackNames: string[];
   blockedPackNames: string[];
   missingProfileIds: string[];
+  /** Required/default packs the server-global set cannot resolve at all — absent
+   *  from both tiers, or a directory/name-mismatch the resolver cannot map. Distinct
+   *  from missingPackNames (resolvable, just not installed): an unresolved pack
+   *  signals an instance-side gap that reconciliation cannot remedy. */
+  unresolvedPacks: string[];
   /** Human-readable findings for summaries and UI. */
   messages: string[];
+}
+
+/** A server-global declarative pack resolved to its content for vendoring into a
+ *  project, carrying its canonical identity so a project's compliance is checked
+ *  and reported on the same key it is installed under. */
+export interface ResolvedGlobalPack {
+  /** The policy-supplied name that resolved to this pack (a file stem or manifest name). */
+  requestedName: string;
+  /** The pack's canonical manifest name — the identity it is vendored under. */
+  name: string;
+  /** The pack's serialized declarative content, ready to vendor. */
+  content: string;
+  /** The server-global tier it resolved from. */
+  tier: 'instance' | 'image';
+}
+
+/** The outcome of resolving policy-supplied pack names against the server-global
+ *  set: the packs that resolved (canonical name + content) and the names with no
+ *  match in either tier — the unresolved list that lets init/reconcile report
+ *  honestly instead of silently skipping. */
+export interface PackResolution {
+  resolved: ResolvedGlobalPack[];
+  unresolved: string[];
 }
 
 /** A node in the hosted organization hierarchy (department, team, domain, …). */

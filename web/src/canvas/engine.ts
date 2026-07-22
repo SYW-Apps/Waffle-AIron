@@ -1998,18 +1998,20 @@ export function mountCanvas(host, model, opts = {}) {
       return markers[id];
     }
     var collapsed = [];
-    // True content overflow in px, measured with FRACTIONAL rect precision:
-    // scrollWidth/clientWidth are rounded integers and scrollWidth never reads
-    // below clientWidth, so a sub-pixel overflow that still paints a scrollbar
-    // is invisible to them. Positive = overflowing; negative = headroom.
+    // Signed fit measure in px: positive = overflowing, negative = headroom.
+    // The header is a flex row whose ONLY flex:1 child is the .spacer, so the
+    // spacer's rendered width IS the free space -- it grows to absorb all slack
+    // and collapses to 0 the instant the row is full. That makes a right-edge
+    // measurement useless (the spacer keeps the trailing controls pinned to the
+    // right padding at every width, so their edge always reads as a bare fit),
+    // and scrollWidth clamps at clientWidth so it can't report headroom either.
+    // So take headroom from the spacer's own (fractional) width, and true
+    // overflow from scrollWidth - clientWidth (only ever > 0 once the spacer has
+    // already collapsed to 0). The two terms are mutually exclusive.
     function overflowPx() {
-      var box = hdr.getBoundingClientRect();
-      var edge = box.left;
-      for (var c = hdr.firstElementChild; c; c = c.nextElementSibling) {
-        var cr = c.getBoundingClientRect();
-        if (cr.width > 0 && cr.right > edge) edge = cr.right;
-      }
-      return edge - (box.right - 14); // 14 = the header's right padding
+      var spacer = hdr.querySelector('.spacer');
+      var slack = spacer ? spacer.getBoundingClientRect().width : 0;
+      return (hdr.scrollWidth - hdr.clientWidth) - slack;
     }
     function reflow() {
       // Not laid out (hidden tab, non-browser DOM) — measuring would misfire.

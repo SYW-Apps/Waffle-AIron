@@ -293,15 +293,88 @@ describe('project policy orchestrator (sdd_host)', () => {
     expect(queryAuditEvents(dataDir, { action: 'policy.reconcile' }).length).toBeGreaterThanOrEqual(1);
   });
 
-  it('reconcileProjectPolicy: leaves gaps in place when the policy mode does not permit auto-reconciliation', () => {
+  it('reconcileProjectPolicy: an EXPLICIT reconcile applies required packs regardless of enforcementMode', () => {
     seedGlobalPack('foo');
     createPlacedProject(cfg, MASTER, 'warn-proj');
     setPackPolicy(cfg, MASTER, samplePolicy({ requiredGlobalPacks: ['foo'], enforcementMode: 'warn' }));
 
+    // Option A: clicking Reconcile is an explicit, authorized action — it applies
+    // the instance policy's own required/default packs even under 'warn'.
     const res = reconcileProjectPolicy(cfg, MASTER, 'warn-proj');
-    expect(res.compliant).toBe(false);
-    expect(res.missingPackNames).toContain('foo');
-    expect(packNames('warn-proj')).not.toContain('foo'); // nothing installed under 'warn'
+    expect(res.compliant).toBe(true);
+    expect(res.missingPackNames).not.toContain('foo');
+    expect(packNames('warn-proj')).toContain('foo');
+  });
+
+  it('reconcile resolves a required pack that lives ONLY in the immutable image tier', () => {
+    // Regression: the policy applier used to read only the instance tier, so
+    // image-baked packs (the common hosted case) never applied.
+    const imageDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-policy-image-'));
+    fs.writeFileSync(path.join(imageDir, 'imgpack.yaml'), 'name: imgpack\nprofiles: {}\nlanguages: {}\n');
+    process.env.WAIRON_IMAGE_PACKS_DIR = imageDir;
+
+    createPlacedProject(cfg, MASTER, 'img-proj');
+    setPackPolicy(cfg, MASTER, samplePolicy({ requiredGlobalPacks: ['imgpack'] }));
+
+    const after = reconcileProjectPolicy(cfg, MASTER, 'img-proj');
+    expect(after.compliant).toBe(true);
+    expect(after.unresolvedPacks).toEqual([]);
+    expect(packNames('img-proj')).toContain('imgpack');
+  });
+
+  it('evaluate/reconcile REPORT a required pack the instance cannot resolve, instead of silently skipping it', () => {
+    createPlacedProject(cfg, MASTER, 'gap-proj');
+    setPackPolicy(cfg, MASTER, samplePolicy({ requiredGlobalPacks: ['nonexistent'] }));
+
+    const ev = evaluateProjectPolicy(cfg, MASTER, 'gap-proj');
+    expect(ev.compliant).toBe(false);
+    expect(ev.unresolvedPacks).toContain('nonexistent');
+    expect(ev.missingPackNames).not.toContain('nonexistent'); // unresolved, not merely missing
+    expect(ev.messages.some((m) => m.includes('not available on the instance'))).toBe(true);
+
+    // Reconcile can't remedy an instance-side gap — it stays reported, never a silent success.
+    const rec = reconcileProjectPolicy(cfg, MASTER, 'gap-proj');
+    expect(rec.compliant).toBe(false);
+    expect(rec.unresolvedPacks).toContain('nonexistent');
+    expect(packNames('gap-proj')).not.toContain('nonexistent');
+  });
+
+  it('matches a required name by file stem even when the manifest name differs, and converges (no re-install loop)', () => {
+    // The file is appender.yaml but its manifest name is appender-make. The policy
+    // requires "appender"; compliance must key on the canonical manifest name.
+    fs.writeFileSync(path.join(packsDir, 'appender.yaml'), 'name: appender-make\nprofiles: {}\nlanguages: {}\n');
+    createPlacedProject(cfg, MASTER, 'stem-proj');
+    setPackPolicy(cfg, MASTER, samplePolicy({ requiredGlobalPacks: ['appender'] }));
+
+    const first = reconcileProjectPolicy(cfg, MASTER, 'stem-proj');
+    expect(first.compliant).toBe(true);
+    expect(packNames('stem-proj')).toContain('appender-make'); // vendored under canonical name
+
+    // A second reconcile is a no-op: it must not see it as missing and re-install forever.
+    const second = reconcileProjectPolicy(cfg, MASTER, 'stem-proj');
+    expect(second.compliant).toBe(true);
+    expect(second.missingPackNames).toEqual([]);
+    expect(packNames('stem-proj').filter((n) => n === 'appender-make')).toHaveLength(1);
+  });
+
+  it('reconcile applies a DIRECTORY-form global pack end-to-end (the .wpack shape the old isFile guard rejected)', () => {
+    const dir = path.join(packsDir, 'dirpack');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'pack.yaml'), 'name: dirpack\nprofiles: {}\nlanguages: {}\n');
+    createPlacedProject(cfg, MASTER, 'dir-proj');
+    setPackPolicy(cfg, MASTER, samplePolicy({ requiredGlobalPacks: ['dirpack'] }));
+
+    const after = reconcileProjectPolicy(cfg, MASTER, 'dir-proj');
+    expect(after.compliant).toBe(true);
+    expect(after.unresolvedPacks).toEqual([]);
+    expect(packNames('dir-proj')).toContain('dirpack');
+  });
+
+  it('setPackPolicy rejects an unrecognized enforcementMode (no silently-disabled enforcement)', () => {
+    expect(() =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setPackPolicy(cfg, MASTER, samplePolicy({ enforcementMode: 'auto-reconcile' as any })),
+    ).toThrow(/enforcementMode/);
   });
 
   it('evaluateProjectPolicy: an unknown project is a not-found error', () => {

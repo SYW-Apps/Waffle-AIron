@@ -4,7 +4,6 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { runWithProjectRoot } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { AI_PATHS } from '../config/loader.js';
-import { hostCore } from './adapters.js';
 import { authenticateCredential } from './auth.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { executeApprovedCreate } from './admin.js';
@@ -21,6 +20,7 @@ import type {
   HostExposurePolicy,
   IdentityProviderConfig,
   InstancePackPolicy,
+  PackResolution,
   PolicyEvaluationResult,
   Principal,
   PrincipalSubject,
@@ -387,36 +387,27 @@ function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
 // the caller was already authorized for the initialization/reconciliation, so
 // no credential is re-presented (same idiom as admin.ts executeApproved*).
 
-/** The name stem of a pack ref (basename without a pack extension). */
-function packStem(ref: string): string {
-  return path.basename(ref).replace(/\.(ya?ml|cjs|js)$/i, '');
+/** The recognized enforcement postures; setPackPolicy rejects anything else so a
+ *  typo can never silently disable enforcement or reconciliation. */
+const PACK_ENFORCEMENT_MODES = ['warn', 'block', 'auto_reconcile'];
+
+/** The policy's required ∪ default declarative pack names. */
+function requiredDefaultNames(policy: InstancePackPolicy): string[] {
+  return [...new Set([...policy.requiredGlobalPacks, ...policy.defaultProjectPacks])];
 }
 
-/** Resolve one named pack's declarative content from the server-global pack set,
- *  or null when the global set carries no such pack. */
-function readGlobalPackContent(name: string): string | null {
-  const dir = hostCore.globalPacksDir();
-  for (const candidate of [path.join(dir, `${name}.yaml`), path.join(dir, `${name}.yml`)]) {
-    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
-      return fs.readFileSync(candidate, 'utf8');
-    }
-  }
-  const match = hostCore.discoverPacks(dir).find((ref) => packStem(ref) === name || path.basename(ref) === name);
-  if (match && fs.statSync(match).isFile()) return fs.readFileSync(match, 'utf8');
-  return null;
-}
-
-/** The active declarative pack names installed in a bound project. */
+/** The active declarative pack names installed in a bound project — canonical
+ *  manifest names, so they compare directly against a resolved pack's identity. */
 function installedPackNames(cfg: HostConfig, projectId: string): string[] {
   return packs.executeApprovedListProjectPacks(cfg, projectId).map((d) => d.name);
 }
 
-/** Vendor and register each named declarative pack into the bound project,
- *  skipping any name the server-global set cannot resolve. */
-function installPacks(cfg: HostConfig, projectId: string, names: Iterable<string>): void {
-  for (const name of new Set(names)) {
-    const content = readGlobalPackContent(name);
-    if (content) packs.executeApprovedInstallProjectPack(cfg, projectId, name, content);
+/** Vendor each resolved declarative pack into the bound project by its canonical
+ *  name. Resolution (across both server-global tiers, both pack forms) and the
+ *  unresolved report are the pack registry's job — see executeApprovedResolveGlobalPacks. */
+function installResolvedPacks(cfg: HostConfig, projectId: string, resolution: PackResolution): void {
+  for (const pack of resolution.resolved) {
+    packs.executeApprovedInstallProjectPack(cfg, projectId, pack.name, pack.content);
   }
 }
 
@@ -483,18 +474,43 @@ interface EvalInput {
   /** Whether missing required/default packs count as a compliance violation.
    *  True for an existing project; false for an init request (init applies them). */
   countMissingPacksAsViolation: boolean;
+  /** Resolution of the policy's required/default names against the server-global
+   *  set. When present, missingPackNames is computed by CANONICAL name and
+   *  unresolvedPacks carries names the instance cannot resolve at all. Omitted at
+   *  request-time (no instance probe): then missing = required/default not present,
+   *  and unresolvedPacks is empty. */
+  requiredDefaultResolution?: PackResolution;
 }
 
 /** Build a PolicyEvaluationResult from present packs / selected profiles against
  *  the effective policy: missing required/default packs, blocked packs present,
  *  missing required profiles, disallowed profiles, and requireProfileSelection. */
 function buildEvaluation(input: EvalInput): PolicyEvaluationResult {
-  const { policy, presentPackNames, selectedProfileIds, hasSelection, countMissingPacksAsViolation } =
-    input;
+  const {
+    policy,
+    presentPackNames,
+    selectedProfileIds,
+    hasSelection,
+    countMissingPacksAsViolation,
+    requiredDefaultResolution,
+  } = input;
 
   const present = new Set(presentPackNames);
-  const requiredDefault = [...new Set([...policy.requiredGlobalPacks, ...policy.defaultProjectPacks])];
-  const missingPackNames = requiredDefault.filter((n) => !present.has(n));
+
+  // With a resolution, compare by CANONICAL name and split "unresolved" (no
+  // server-global pack at all — an instance gap reconciliation can't fix) from
+  // "missing" (resolvable, just not installed yet). Without one (request-time),
+  // fall back to the raw required/default names and report nothing unresolved.
+  let missingPackNames: string[];
+  let unresolvedPacks: string[];
+  if (requiredDefaultResolution) {
+    unresolvedPacks = requiredDefaultResolution.unresolved;
+    const canonical = [...new Set(requiredDefaultResolution.resolved.map((r) => r.name))];
+    missingPackNames = canonical.filter((n) => !present.has(n));
+  } else {
+    missingPackNames = requiredDefaultNames(policy).filter((n) => !present.has(n));
+    unresolvedPacks = [];
+  }
 
   const blocked = new Set(policy.blockedPackNames ?? []);
   const blockedPackNames = presentPackNames.filter((n) => blocked.has(n));
@@ -514,6 +530,9 @@ function buildEvaluation(input: EvalInput): PolicyEvaluationResult {
     messages.push('Profile selection is required by policy but none was provided.');
   }
   for (const n of missingPackNames) messages.push(`Required pack "${n}" is not installed.`);
+  for (const n of unresolvedPacks) {
+    messages.push(`Required pack "${n}" is not available on the instance (no matching server-global pack).`);
+  }
   for (const n of blockedPackNames) messages.push(`Pack "${n}" is blocked by policy.`);
   for (const id of missingProfileIds) messages.push(`Required profile "${id}" is not selected.`);
   for (const id of disallowedProfileIds) messages.push(`Profile "${id}" is not permitted by policy.`);
@@ -523,7 +542,7 @@ function buildEvaluation(input: EvalInput): PolicyEvaluationResult {
     blockedPackNames.length > 0 ||
     missingProfileIds.length > 0 ||
     disallowedProfileIds.length > 0 ||
-    (countMissingPacksAsViolation && missingPackNames.length > 0);
+    (countMissingPacksAsViolation && (missingPackNames.length > 0 || unresolvedPacks.length > 0));
 
   return {
     compliant: !violation,
@@ -531,6 +550,7 @@ function buildEvaluation(input: EvalInput): PolicyEvaluationResult {
     missingPackNames,
     blockedPackNames,
     missingProfileIds,
+    unresolvedPacks,
     messages,
   };
 }
@@ -572,11 +592,15 @@ function performInit(
     principal ? principalSubject(principal) : undefined,
   );
 
-  installPacks(cfg, record.id, [
-    ...policy.requiredGlobalPacks,
-    ...policy.defaultProjectPacks,
-    ...requestPackNames(request),
-  ]);
+  installResolvedPacks(
+    cfg,
+    record.id,
+    packs.executeApprovedResolveGlobalPacks([
+      ...policy.requiredGlobalPacks,
+      ...policy.defaultProjectPacks,
+      ...requestPackNames(request),
+    ]),
+  );
 
   const selectedBy = principal ? principalSubject(principal) : undefined;
   recordProjectProfileSelection(record.rootPath, resolvedSelection(request, policy, selectedBy));
@@ -679,6 +703,7 @@ export function evaluateProjectPolicy(
     selectedProfileIds: selection?.profileIds ?? [],
     hasSelection: !!selection,
     countMissingPacksAsViolation: true,
+    requiredDefaultResolution: packs.executeApprovedResolveGlobalPacks(requiredDefaultNames(policy)),
   });
 }
 
@@ -686,9 +711,10 @@ export function evaluateProjectPolicy(
  * Authenticate the caller and authorize by the RESOLVED, org-unit-aware mcp:write
  * scope covering the project (a grant on the project itself, a unit-scoped grant
  * whose subtree contains it, or a genuine instance-wide wildcard — scope.all),
- * evaluate the project against the effective policy, and — when the policy mode
- * permits auto-reconciliation ('auto_reconcile') — apply the missing
- * required/default declarative packs, auditing 'policy.reconcile'. Returns the
+ * then apply the resolvable missing required/default declarative packs REGARDLESS
+ * of enforcementMode (an explicit, authorized reconciliation applies only the
+ * instance policy's own packs), surfacing names the server-global set cannot
+ * resolve as unresolvedPacks and auditing 'policy.reconcile'. Returns the
  * post-reconciliation evaluation.
  */
 export function reconcileProjectPolicy(
@@ -708,11 +734,17 @@ export function reconcileProjectPolicy(
   const policy = effectivePolicy(cfg.dataDir);
   const selection = readProjectProfileSelection(root);
 
+  // Explicit reconciliation: apply the resolvable required/default packs not yet
+  // installed, REGARDLESS of enforcementMode — this only ever applies the instance
+  // policy's own required/default packs (never discretionary changes), which is why
+  // project:write (not project:admin) suffices. Names the server-global set cannot
+  // resolve are surfaced as unresolvedPacks by the evaluation, never silently skipped.
+  const resolution = packs.executeApprovedResolveGlobalPacks(requiredDefaultNames(policy));
   let installed = installedPackNames(cfg, projectId);
-  const requiredDefault = [...new Set([...policy.requiredGlobalPacks, ...policy.defaultProjectPacks])];
-  const missing = requiredDefault.filter((n) => !installed.includes(n));
-  if (policy.enforcementMode === 'auto_reconcile' && missing.length > 0) {
-    installPacks(cfg, projectId, missing);
+  const installedSet = new Set(installed);
+  const toApply = resolution.resolved.filter((p) => !installedSet.has(p.name));
+  if (toApply.length > 0) {
+    installResolvedPacks(cfg, projectId, { resolved: toApply, unresolved: [] });
     installed = installedPackNames(cfg, projectId);
   }
 
@@ -722,6 +754,7 @@ export function reconcileProjectPolicy(
     selectedProfileIds: selection?.profileIds ?? [],
     hasSelection: !!selection,
     countMissingPacksAsViolation: true,
+    requiredDefaultResolution: resolution,
   });
 
   tryAppendAudit(
@@ -763,6 +796,11 @@ export function setPackPolicy(
   const principal = requirePrincipal(cfg, credential);
   if (!carriesInstancePermission(cfg, principal, POLICY_MANAGE_CAPABILITY)) {
     throw new ForbiddenError('policy administration requires instance-level project:admin');
+  }
+  if (!PACK_ENFORCEMENT_MODES.includes(policy.enforcementMode)) {
+    throw new Error(
+      `invalid enforcementMode "${policy.enforcementMode}" — must be one of ${PACK_ENFORCEMENT_MODES.join(', ')}`,
+    );
   }
 
   const stamped: InstancePackPolicy = { ...policy, updatedBy: principalSubject(principal) };

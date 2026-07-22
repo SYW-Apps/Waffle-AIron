@@ -112,7 +112,26 @@ methods:
       adapter), and register the '.wai/packs/<name>' directory ref in .wai/project.yaml (committed
       with the project, so every clone and CI enforce it). Assumes the orchestrator has already
       bound the project root. Fails loudly on unsafe / code / non-declarative input.
+  - name: executeApprovedResolveGlobalPacks
+    narrative: []
+    detail: intent
+    intent: >-
+      Resolve a set of policy-supplied pack names against the server-global pack set, with no
+      authentication (a pre-authorized internal entry) and no mutation of any tier. For each
+      requested name, search BOTH tiers — the mutable instance directory (WAIRON_PACKS_DIR) first,
+      then the immutable image-layer directory (WAIRON_IMAGE_PACKS_DIR) — accepting both a file-form
+      pack (<name>.yaml/.yml) and a directory-form pack (a <name>/ directory holding a pack entry
+      file), and matching the requested name against EITHER the file stem OR the loaded pack's
+      manifest name. On a match, load and serialize the pack's declarative content to a single
+      declarative document suitable for vendoring, and emit a ResolvedGlobalPack carrying the
+      requested name, the pack's CANONICAL manifest name, the serialized content, and the
+      originating tier ('instance' or 'image'); the instance tier wins on a same-name collision. A
+      requested name with no match in either tier — or one whose only candidate is
+      unreadable/corrupt and fails to probe — is collected into the unresolved list rather than
+      throwing, so a bad or absent pack is REPORTED, never silently dropped. Returns a
+      PackResolution partitioning the input into resolved packs and unresolved names. Never writes
+      to any packs directory.
 detail: intent
 status: complete
 createdAt: '2026-07-04T18:42:57.340Z'
-updatedAt: '2026-07-21T18:42:59.465Z'
+updatedAt: '2026-07-22T17:35:25.419Z'

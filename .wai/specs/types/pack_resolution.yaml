@@ -1,0 +1,24 @@
+kind: value-object
+id: pack_resolution
+name: PackResolution
+description: >-
+  The outcome of resolving a set of policy-supplied pack names against the server-global pack set:
+  the packs that resolved (with canonical identity + content) and the names that could not be
+  resolved at all. The unresolved list is what lets project initialization and reconciliation report
+  honestly instead of silently skipping names the instance cannot satisfy.
+fields:
+  - name: resolved
+    type: resolved_global_pack[]
+    description: >-
+      The packs that resolved, each with its canonical name, serialized content, and originating
+      tier.
+    optional: false
+  - name: unresolved
+    type: string[]
+    description: >-
+      Requested names with no matching server-global pack in either tier — nothing was installed for
+      these; they signal an instance-side gap, not a per-project drift.
+    optional: false
+methods: []
+createdAt: '2026-07-22T17:27:39.078Z'
+updatedAt: '2026-07-22T17:27:39.173Z'
