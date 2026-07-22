@@ -9,7 +9,7 @@ import { authenticateCredential } from './auth.js';
 import { authorize } from './authorization.js';
 import { AdminAuthError, UnauthenticatedError } from './errors.js';
 import { existingProjectRoot } from './projects.js';
-import type { HostConfig, PackDescriptor, ProjectPackReference, ProjectProfileSelection } from './types.js';
+import type { HostConfig, PackDescriptor, PackResolution, ProjectPackReference, ProjectProfileSelection, ResolvedGlobalPack } from './types.js';
 import type { PackArchiveInfo, PackExtractionLimits } from '@wairon/sdk';
 
 // ---------------------------------------------------------------------------
@@ -182,6 +182,67 @@ export function storeListGlobalPacks(): PackDescriptor[] {
     instanceNames.has(d.name) ? { ...d, shadowed: true } : d,
   );
   return [...instance, ...image];
+}
+
+/** Read a discovered pack's declarative content: the file itself for a file-form
+ *  pack, or its pack.yaml/pack.yml entry for a directory-form pack (what a .wpack
+ *  install extracts). Null when a directory carries no declarative entry (e.g. a
+ *  code-only pack) — the caller treats that as unresolved rather than vendoring it. */
+function readPackContent(full: string): string | null {
+  const st = fs.statSync(full);
+  if (st.isFile()) return fs.readFileSync(full, 'utf8');
+  if (st.isDirectory()) {
+    for (const entry of ['pack.yaml', 'pack.yml']) {
+      const p = path.join(full, entry);
+      if (fs.existsSync(p) && fs.statSync(p).isFile()) return fs.readFileSync(p, 'utf8');
+    }
+  }
+  return null;
+}
+
+/**
+ * Resolve a set of policy-supplied pack names against the server-global pack set,
+ * across BOTH tiers (the mutable instance directory first so it wins on a name
+ * collision, then the immutable image layer) and BOTH file- and directory-form
+ * packs, matching each requested name against a pack's file stem, basename, OR its
+ * loaded manifest name. Returns a PackResolution partitioning the input into
+ * resolved packs — each carrying its CANONICAL manifest name, serialized
+ * declarative content, and originating tier (deduplicated by canonical name) — and
+ * unresolved names with no readable match in either tier. Never mutates any tier;
+ * a name that cannot be resolved is REPORTED (never silently dropped).
+ */
+export function storeResolveGlobalPacks(names: string[]): PackResolution {
+  type Candidate = { full: string; manifestName: string; tier: 'instance' | 'image' };
+  const index = new Map<string, Candidate>();
+  const indexTier = (dir: string, tier: 'instance' | 'image'): void => {
+    for (const full of hostCore.discoverPacks(dir)) {
+      const manifestName = probe(full, path.dirname(full), 'global', path.basename(full)).name;
+      const candidate: Candidate = { full, manifestName, tier };
+      // Key by every alias the policy might name it under; the instance tier is
+      // indexed first, so its entry wins a collision (never overwritten).
+      for (const key of [manifestName, stem(full), path.basename(full)]) {
+        if (!index.has(key)) index.set(key, candidate);
+      }
+    }
+  };
+  indexTier(hostCore.globalPacksDir(), 'instance');
+  indexTier(imagePacksDir(), 'image');
+
+  const resolved: ResolvedGlobalPack[] = [];
+  const resolvedCanonical = new Set<string>();
+  const unresolved: string[] = [];
+  for (const requested of new Set(names)) {
+    const candidate = index.get(requested);
+    const content = candidate ? readPackContent(candidate.full) : null;
+    if (!candidate || content == null) {
+      unresolved.push(requested);
+      continue;
+    }
+    if (resolvedCanonical.has(candidate.manifestName)) continue; // dedup by canonical identity
+    resolvedCanonical.add(candidate.manifestName);
+    resolved.push({ requestedName: requested, name: candidate.manifestName, content, tier: candidate.tier });
+  }
+  return { resolved, unresolved };
 }
 
 function storeInstallGlobalPack(name: string, content: string): PackDescriptor {
@@ -422,6 +483,15 @@ export function executeApprovedListProjectPacks(cfg: HostConfig, project: string
 
 export function executeApprovedInstallProjectPack(cfg: HostConfig, project: string, name: string, content: string): PackDescriptor {
   return runWithProjectRoot(boundProject(cfg, project), () => storeInstallProjectPack(name, content));
+}
+
+/** Pre-authorized entry for internal policy/health flows: resolve server-global
+ *  pack names to their declarative content across both tiers WITHOUT credential
+ *  authentication — the caller (project_policy_orchestrator) has already enforced
+ *  grant-based authorization. No project binding (the server-global set is
+ *  instance-wide). Never exposed on any portal. */
+export function executeApprovedResolveGlobalPacks(names: string[]): PackResolution {
+  return storeResolveGlobalPacks(names);
 }
 
 export function removeProjectPack(cfg: HostConfig, credential: string | null, project: string, name: string): void {
