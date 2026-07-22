@@ -469,7 +469,7 @@ export function ProjectOps() {
           </button>
           <h2>{projectId} · operations</h2>
         </div>
-        <Button variant="ghost" onClick={() => nav(`/?project=${encodeURIComponent(projectId)}`)}>
+        <Button variant="ghost" onClick={() => nav(`/canvas/${encodeURIComponent(projectId)}`)}>
           Open canvas
         </Button>
       </div>

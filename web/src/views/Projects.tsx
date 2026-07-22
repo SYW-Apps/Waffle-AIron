@@ -134,7 +134,7 @@ export function Projects() {
                 header: '',
                 cell: (p) => (
                   <div className="row-actions">
-                    <Button size="sm" variant="primary" onClick={() => nav(`/?project=${encodeURIComponent(p.id)}`)}>
+                    <Button size="sm" variant="primary" onClick={() => nav(`/canvas/${encodeURIComponent(p.id)}`)}>
                       Open canvas
                     </Button>
                     <Button size="sm" onClick={() => nav(`/projects/${encodeURIComponent(p.id)}`)}>

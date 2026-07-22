@@ -98,6 +98,9 @@ import { CANVAS_SKELETON } from './skeleton';
 export interface CanvasHandle {
   destroy(): void;
   setTheme(theme: string, vars?: Record<string, string>): void;
+  /** Apply a URL route (Stage J) to the engine WITHOUT echoing onViewChange —
+   *  used by the shell for browser back/forward that changed the URL. */
+  openRoute(route: string): void;
 }
 
 /** Mount the classic canvas into \`host\`. shadow (default true) isolates its CSS
@@ -156,6 +159,12 @@ ${eng}
         if (typeof renderLegend === 'function') renderLegend();
         if (typeof persist === 'function') persist();
       } catch (e) { /* ignore */ }
+    },
+    // Drive the engine to a URL route (Stage J). The engine's own openRoute sets
+    // an applyingRoute guard so this does NOT echo back through onViewChange —
+    // letting the shell honour browser back/forward without a mount/unmount.
+    openRoute(route) {
+      try { if (typeof openRoute === 'function') openRoute(route); } catch (e) { /* ignore */ }
     },
   };
 }

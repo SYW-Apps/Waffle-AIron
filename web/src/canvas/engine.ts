@@ -11,6 +11,9 @@ import { CANVAS_SKELETON } from './skeleton';
 export interface CanvasHandle {
   destroy(): void;
   setTheme(theme: string, vars?: Record<string, string>): void;
+  /** Apply a URL route (Stage J) to the engine WITHOUT echoing onViewChange —
+   *  used by the shell for browser back/forward that changed the URL. */
+  openRoute(route: string): void;
 }
 
 /** Mount the classic canvas into `host`. shadow (default true) isolates its CSS
@@ -163,8 +166,17 @@ export function mountCanvas(host, model, opts = {}) {
   var configuredLineStyle = ['bezier', 'straight', 'taxi'].indexOf(diagramConfig.lineStyle) >= 0 ? diagramConfig.lineStyle : 'bezier';
   var defaultViewKind = diagramConfig.defaultView === 'types' ? 'types' : (diagramConfig.defaultView === 'databases' && showDatabaseTab ? 'databases' : 'system');
 
+  // Stage J: a deep link (opts.initialRoute) seeds the initial view directly so a
+  // refresh / shared URL renders the right scope with NO root-first flash. Parsed
+  // by the same resolver as openRoute (hoisted below). No onViewChange fires for
+  // this initial seed.
+  var initialView = { kind: defaultViewKind, id: null };
+  if (typeof opts !== 'undefined' && opts && typeof opts.initialRoute === 'string' && opts.initialRoute.length) {
+    initialView = resolveRoute(opts.initialRoute);
+  }
+
   var state = {
-    view: { kind: defaultViewKind, id: null },
+    view: initialView,
     internals: typeof saved.internals === 'boolean' ? saved.internals : false,
     externals: typeof saved.externals === 'boolean' ? saved.externals : true,
     dataCoupling: typeof saved.dataCoupling === 'boolean' ? saved.dataCoupling : false,
@@ -183,6 +195,9 @@ export function mountCanvas(host, model, opts = {}) {
   // Set by buildTypeElements when the ERD is degraded for performance (huge
   // scopes); consumed by renderTypesNotice to explain the level-of-detail.
   var typesNotice = '';
+  // Stage J: true while openRoute is applying a URL-driven view change, so the
+  // onViewChange callback is suppressed and we do not loop URL -> engine -> URL.
+  var applyingRoute = false;
 
   function viewKey() {
     // 'types2' + detail level: table sizes differ per detail, and the prefix
@@ -1612,6 +1627,78 @@ export function mountCanvas(host, model, opts = {}) {
     state.typesRenderAll = false; // a fresh scope re-evaluates the LOD budget
     rebuild(true);
     renderPanel();
+    notifyViewChange();
+  }
+
+  // ---- Stage J: URL <-> view routing ----------------------------------------
+  // The canvas navigation lives in the URL path (refresh-safe + shareable). A
+  // route is the string AFTER /canvas/<project>: '' = system root; a '/'-joined
+  // NAMESPACE (e.g. 'a/b') that resolves against the model to a subsystem or a
+  // component; or the 'types'/'databases' view modes with an optional scope.
+  // A segment is the '::' namespace with '/' as separator, each part encoded.
+  function encSeg(s) { return encodeURIComponent(String(s)); }
+  function routeOf(view) {
+    if (!view) return '';
+    var k = view.kind;
+    if (k === 'system') return '';
+    if (k === 'types' || k === 'databases') {
+      return view.id ? k + '/' + view.id.split('::').map(encSeg).join('/') : k;
+    }
+    if (k === 'subsystem') {
+      return view.id ? view.id.split('::').map(encSeg).join('/') : '';
+    }
+    if (k === 'component') {
+      // A component's full namespace path IS its id: a chained subproject carries
+      // the subsystem prefix in the id (a::b::comp), a flat project uses the bare
+      // id (comp). Serializing comp.id split on '::' round-trips exactly via the
+      // compById lookup in resolveRoute. Owner-pattern nesting is deliberately NOT
+      // encoded (ownership is a separate axis; comp.id does not embed the owner).
+      var c = compById[view.id];
+      var full = c ? c.id : view.id;
+      return full.split('::').map(encSeg).join('/');
+    }
+    return '';
+  }
+  function resolveRoute(routeStr) {
+    var parts = String(routeStr || '').split('/').filter(function (s) { return s.length > 0; }).map(decodeURIComponent);
+    if (!parts.length) return { kind: 'system', id: null };
+    // NOTE: a subsystem literally named 'types'/'databases' is SHADOWED by these
+    // view-mode routes (acceptable — the modes own those first segments).
+    if (parts[0] === 'types') {
+      return { kind: 'types', id: parts.length > 1 ? parts.slice(1).join('::') : null };
+    }
+    if (parts[0] === 'databases') {
+      if (!showDatabaseTab) return { kind: 'system', id: null };
+      return { kind: 'databases', id: parts.length > 1 ? parts.slice(1).join('::') : null };
+    }
+    var joined = parts.join('::');
+    if (subById[joined]) return { kind: 'subsystem', id: joined };
+    if (compById[joined]) return { kind: 'component', id: joined };
+    return { kind: 'system', id: null }; // unknown id -> fall back to the root
+  }
+  // Apply a route (URL -> engine) WITHOUT echoing back through onViewChange.
+  function openRoute(routeStr) {
+    var v = resolveRoute(routeStr);
+    if (state.view.kind === v.kind && state.view.id === v.id) return;
+    applyingRoute = true;
+    try {
+      state.view = { kind: v.kind, id: v.id };
+      state.selected = null;
+      state.selectedKind = null;
+      state.typesRenderAll = false;
+      rebuild(true);
+      renderPanel();
+    } finally {
+      applyingRoute = false;
+    }
+  }
+  // Notify the embedder (engine -> URL) of the current view; suppressed while a
+  // route is being applied so the URL is not driven in a loop.
+  function notifyViewChange() {
+    if (applyingRoute) return;
+    if (typeof opts !== 'undefined' && opts && typeof opts.onViewChange === 'function') {
+      try { opts.onViewChange(routeOf(state.view)); } catch (e) { /* ignore */ }
+    }
   }
   // Explain (and offer to override) a performance-degraded ERD.
   function renderTypesNotice() {
@@ -1762,6 +1849,7 @@ export function mountCanvas(host, model, opts = {}) {
     if (t.ghost) {
       state.view = parentViewOf(t.kind, t.id);
       rebuild(true);
+      notifyViewChange();
       select(t.kind, t.id, true);
       return;
     }
@@ -2782,10 +2870,12 @@ export function mountCanvas(host, model, opts = {}) {
     if (kind === 'type' && state.view.kind !== 'types' && state.view.kind !== 'databases') {
       state.view = { kind: 'types', id: typesScopeFromView() };
       rebuild(true);
+      notifyViewChange();
     } else if (kind === 'component' && (state.view.kind === 'types' || state.view.kind === 'databases')) {
       var c = compById[id];
       state.view = { kind: 'subsystem', id: c ? c.subsystem : null };
       rebuild(true);
+      notifyViewChange();
     }
     state.selectedKind = kind;
     state.selected = id;
@@ -3118,6 +3208,12 @@ export function mountCanvas(host, model, opts = {}) {
         if (typeof renderLegend === 'function') renderLegend();
         if (typeof persist === 'function') persist();
       } catch (e) { /* ignore */ }
+    },
+    // Drive the engine to a URL route (Stage J). The engine's own openRoute sets
+    // an applyingRoute guard so this does NOT echo back through onViewChange —
+    // letting the shell honour browser back/forward without a mount/unmount.
+    openRoute(route) {
+      try { if (typeof openRoute === 'function') openRoute(route); } catch (e) { /* ignore */ }
     },
   };
 }

@@ -152,7 +152,7 @@ export function Environment() {
       vars: canvasVars,
       embed: true,
       onNodeOpen: (_kind: string, id: string) => {
-        if (openable.has(id)) nav('/?project=' + encodeURIComponent(id));
+        if (openable.has(id)) nav('/canvas/' + encodeURIComponent(id));
       },
     });
     handleRef.current = handle;
