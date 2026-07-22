@@ -165,10 +165,10 @@ export function mountCanvas(host, model, opts = {}) {
 
   var state = {
     view: { kind: defaultViewKind, id: null },
-    internals: false,
-    externals: true,
-    dataCoupling: false,
-    showIssues: false,
+    internals: typeof saved.internals === 'boolean' ? saved.internals : false,
+    externals: typeof saved.externals === 'boolean' ? saved.externals : true,
+    dataCoupling: typeof saved.dataCoupling === 'boolean' ? saved.dataCoupling : false,
+    showIssues: typeof saved.showIssues === 'boolean' ? saved.showIssues : false,
     query: '',
     selected: null,
     selectedKind: null,
@@ -202,6 +202,10 @@ export function mountCanvas(host, model, opts = {}) {
         lineStyle: state.lineStyle,
         panelOpen: state.panelOpen,
         panelWidth: state.panelWidth,
+        internals: state.internals,
+        externals: state.externals,
+        dataCoupling: state.dataCoupling,
+        showIssues: state.showIssues,
       }));
     } catch (e) { /* non-fatal */ }
   }
@@ -1779,10 +1783,16 @@ export function mountCanvas(host, model, opts = {}) {
   }
 
   ROOT.getElementById('search').addEventListener('input', function (ev) { state.query = ev.target.value.trim(); rebuild(false); });
-  ROOT.getElementById('internalsToggle').addEventListener('change', function (ev) { state.internals = ev.target.checked; rebuild(true); });
-  ROOT.getElementById('externalsToggle').addEventListener('change', function (ev) { state.externals = ev.target.checked; rebuild(true); });
-  ROOT.getElementById('dataCouplingToggle').addEventListener('change', function (ev) { state.dataCoupling = ev.target.checked; renderLegend(); rebuild(true); });
-  ROOT.getElementById('issuesToggle').addEventListener('change', function (ev) { state.showIssues = ev.target.checked; rebuild(false); renderPanel(); });
+  // Sync each View toggle's checkbox from the (possibly persisted) state, then
+  // persist on change so the choices survive a refresh (see persist()/saved).
+  ROOT.getElementById('internalsToggle').checked = state.internals;
+  ROOT.getElementById('internalsToggle').addEventListener('change', function (ev) { state.internals = ev.target.checked; persist(); rebuild(true); });
+  ROOT.getElementById('externalsToggle').checked = state.externals;
+  ROOT.getElementById('externalsToggle').addEventListener('change', function (ev) { state.externals = ev.target.checked; persist(); rebuild(true); });
+  ROOT.getElementById('dataCouplingToggle').checked = state.dataCoupling;
+  ROOT.getElementById('dataCouplingToggle').addEventListener('change', function (ev) { state.dataCoupling = ev.target.checked; persist(); renderLegend(); rebuild(true); });
+  ROOT.getElementById('issuesToggle').checked = state.showIssues;
+  ROOT.getElementById('issuesToggle').addEventListener('change', function (ev) { state.showIssues = ev.target.checked; persist(); rebuild(false); renderPanel(); });
   ROOT.getElementById('dragToggle').addEventListener('change', function (ev) { cy.autolock(!ev.target.checked); });
   // Mode seg: Components ⇄ Types. Entering Types keeps the current subsystem
   // scope, so a subsystem's own types (plus shared ones) show scoped.
