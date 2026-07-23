@@ -596,10 +596,14 @@ export const NarrativeStepSchema = z.object({
   capability: z.string().optional(),      // Required if type is 'dispatch': the capability routed through the target Portal's dispatch table
   /**
    * call/dispatch only: the credential this step presents to an authed callee
-   * Portal, and WHERE it is loaded from (`from` — a secret-store component id,
-   * `env:API_KEY`, a config key, a vault ref, …). A declared DESIGN NOTE — wairon
-   * never fetches it — but its absence on a call into a Portal whose `auth ≠ none`
-   * warns (PORTAL_AUTH_UNMET), so credential loading is never overlooked.
+   * Portal, and WHERE it is loaded from (`from`). Two forms: an OPAQUE source
+   * (`env:API_KEY`, a config key, `vault:path`, a free note) — a design note
+   * wairon never resolves; or a MODELED reference `component:<id>` pointing at
+   * the Adapter/Store that provides the secret — validated to resolve, be an
+   * Adapter/Store, and be wired to the presenter (a checked graph edge). The
+   * actual secret is never stored here. Absence on a call into a Portal whose
+   * `auth ≠ none` warns (PORTAL_AUTH_UNMET), so credential loading is never
+   * overlooked.
    */
   auth: z.object({ from: z.string(), note: z.string().optional() }).optional(),
   assertsGuarantees: z.array(GuaranteeSchema).optional(),
