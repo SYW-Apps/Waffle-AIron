@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { get } from '../api';
 import { AsyncView, useAsync } from '../ui';
 import { useSettings } from '../settings';
+import { useSession } from '../session';
 import { engineTheme, engineVars } from '../theme/canvasBridge';
 import { mountCanvas, type CanvasHandle } from '../canvas/engine';
 
@@ -32,6 +33,10 @@ export function CanvasView({
     [`project:${projectId}`, 'projects'],
   );
   const { themeId, appearance } = useSettings();
+  // Hosted app has a /projects/<id>/specs editor to deep-link into; the local-dev
+  // canvas (ctx.local) does not, so the "Open in Specs" affordance stays hidden there.
+  const { ctx } = useSession();
+  const isLocal = !!ctx?.local;
   // The classic engine ships a dark ('syw') and a 'light' theme for its
   // semantic content colors; the SELECTED app palette is overlaid on the
   // chrome via CSS-variable overrides.
@@ -55,6 +60,21 @@ export function CanvasView({
   routeRef.current = route;
   projectIdRef.current = projectId;
   unitPrefixRef.current = unitPrefix;
+
+  // Stage G — Specs editor deep links (both name the component in the hash so they
+  // work from the parent view too): #focus=<comp> highlights the component;
+  // #flow=<comp>~<method> also opens that method's narrative modal.
+  const location = useLocation();
+  const hashCmd = useMemo(() => {
+    const h = location.hash || '';
+    let m = /^#flow=(.+?)~(.+)$/.exec(h);
+    if (m) return { flow: { comp: m[1], method: m[2], mode: 'flow' as const } };
+    m = /^#focus=(.+)$/.exec(h);
+    if (m) return { select: { comp: m[1] } };
+    return {} as { flow?: { comp: string; method: string; mode: 'flow' }; select?: { comp: string } };
+  }, [location.hash]);
+  const hashCmdRef = useRef(hashCmd);
+  hashCmdRef.current = hashCmd;
 
   // Mount (or remount) whenever a fresh model arrives; tear down on unmount.
   // NOTE: `route` is intentionally NOT a dependency — drill-down must not remount
@@ -92,6 +112,21 @@ export function CanvasView({
           '_blank',
           'noopener',
         ),
+      // Stage G: deep-link the focused spec into the hosted Specs value editor.
+      // Encodes the qualified id as path segments (`::` → `/`, no %3A) so the
+      // editor URL mirrors the same hierarchy the canvas uses. Undefined in
+      // local-dev (no /projects route) so the engine hides the button.
+      onOpenSpec: isLocal
+        ? undefined
+        : (kind: string, id: string) => {
+            const idPath = id ? id.split('::').map(encodeURIComponent).join('/') : '';
+            navigate(
+              '/projects/' + encodeURIComponent(projectIdRef.current) + '/specs/' + kind + (idPath ? '/' + idPath : ''),
+            );
+          },
+      // Stage G: focus a component / open a method's narrative modal when the URL hash asks.
+      initialFlow: hashCmdRef.current.flow,
+      initialSelect: hashCmdRef.current.select,
     });
     handleRef.current = handle;
     return () => {

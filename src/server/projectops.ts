@@ -17,6 +17,7 @@ import type {
   InstancePackPolicy,
   PackDescriptor,
   PolicyEvaluationResult,
+  ProjectConfigView,
 } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -97,6 +98,14 @@ export function evaluateProjectPolicy(cfg: HostConfig, credential: string | null
 
 export function reconcileProjectPolicy(cfg: HostConfig, credential: string | null, projectId: string): PolicyEvaluationResult {
   return policy.reconcileProjectPolicy(cfg, credential, projectId);
+}
+
+export function getProjectConfig(cfg: HostConfig, credential: string | null, projectId: string): ProjectConfigView {
+  return policy.getProjectConfig(cfg, credential, projectId);
+}
+
+export function setProjectType(cfg: HostConfig, credential: string | null, projectId: string, projectType: string): ProjectConfigView {
+  return policy.setProjectType(cfg, credential, projectId, projectType);
 }
 
 // ── producers ─────────────────────────────────────────────────────────────────

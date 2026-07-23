@@ -130,7 +130,7 @@ function Shell() {
             <Route path="/" element={<Home />} />
             <Route path="/canvas/*" element={<CanvasRouter />} />
             <Route path="/projects" element={<Projects />} />
-            <Route path="/projects/:projectId" element={<ProjectOps />} />
+            <Route path="/projects/:projectId/*" element={<ProjectOps />} />
             <Route path="/agents" element={<Tokens />} />
             <Route path="/admin/users" element={<Users />} />
             <Route path="/admin/roles" element={<Roles />} />

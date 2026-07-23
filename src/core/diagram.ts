@@ -131,6 +131,36 @@ export function buildGraphModel(level: number): WebGraphModel {
     });
   }
 
+  // L4 — implementations (parent = the component whose contract interface they
+  // realize). Implementations are not on the CanvasModel, so map each back to its
+  // component through contract → interface → component, with an ownership edge.
+  const componentByInterface = new Map<string, string>();
+  for (const c of model.components) {
+    for (const intf of c.interfaces) componentByInterface.set(intf.id, c.id);
+  }
+  for (const impl of loadImplementationSpecs()) {
+    const componentId = componentByInterface.get(impl.contract);
+    if (!componentId) continue; // orphan impl — its contract is not on a known component
+    nodes.push({
+      id: impl.id,
+      label: impl.name,
+      kind: 'implementation',
+      level: 4,
+      parentId: componentId,
+      ...(impl.status ? { status: impl.status } : {}),
+    });
+    candidates.push({ from: componentId, to: impl.id, edgeKind: 'owns' });
+  }
+
+  // Component → owned member-block ownership edges (e.g. a Repository over its
+  // Store/Registry/Index) — the narrative's "ownership edges from a component to
+  // its owned member blocks". c.owns is already filtered to real component ids.
+  for (const c of model.components) {
+    for (const memberId of c.owns) {
+      candidates.push({ from: c.id, to: memberId, edgeKind: 'owns' });
+    }
+  }
+
   // Component → collaborator dependency edges.
   for (const e of model.edges) {
     candidates.push({ from: e.from, to: e.to, edgeKind: 'depends_on' });

@@ -246,7 +246,21 @@ methods:
         type: call
         targetComponent: pack_orchestrator
         targetMethod: adoptProjectPack
+  - name: getProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project policy orchestrator with the caller's credential
+        type: call
+        targetComponent: project_policy_orchestrator
+        targetMethod: getProjectConfig
+  - name: setProjectType
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project policy orchestrator with the caller's credential
+        type: call
+        targetComponent: project_policy_orchestrator
+        targetMethod: setProjectType
 detail: calls-only
 status: complete
 createdAt: '2026-07-16T15:31:04.418Z'
-updatedAt: '2026-07-22T19:17:46.045Z'
+updatedAt: '2026-07-23T11:24:18.120Z'

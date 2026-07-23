@@ -1,0 +1,21 @@
+kind: value-object
+id: project_config_view
+name: ProjectConfigView
+description: >-
+  The project-level architectural configuration surfaced to the web UI for a single hosted project:
+  its projectType (the project-level architectural profile recorded in project.yaml) and whether the
+  project currently holds a lock. Read via getProjectConfig and returned by setProjectType.
+fields:
+  - name: projectType
+    type: string
+    description: >-
+      The project's projectType from its project.yaml (the project-level architectural profile).
+      'backend' by default when the config omits it.
+    optional: false
+  - name: locked
+    type: boolean
+    description: True when the project currently has a lock record (a current lock exists).
+    optional: false
+methods: []
+createdAt: '2026-07-23T11:23:30.795Z'
+updatedAt: '2026-07-23T11:23:30.813Z'

@@ -378,6 +378,30 @@ methods:
         type: string
       - name: name
         type: string
+  - name: getProjectConfig
+    description: >-
+      Forward to project_policy_orchestrator.getProjectConfig (project:read over the project
+      upstream).
+    signature: 'getProjectConfig(credential: string, projectId: string): ProjectConfigView'
+    returns: ProjectConfigView
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+  - name: setProjectType
+    description: >-
+      Forward to project_policy_orchestrator.setProjectType (project:write over the project
+      upstream).
+    signature: 'setProjectType(credential: string, projectId: string, projectType: string): ProjectConfigView'
+    returns: ProjectConfigView
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+      - name: projectType
+        type: string
 status: complete
 createdAt: '2026-07-16T15:30:37.725Z'
-updatedAt: '2026-07-22T19:17:42.987Z'
+updatedAt: '2026-07-23T11:23:55.927Z'

@@ -2934,6 +2934,14 @@ export function mountCanvas(host, model, opts = {}) {
     if (!exposes || !openApiAllowed()) return '';
     return '<div class="openbtn"><button class="tbtn" data-openapi-tag="' + esc(tag || '') + '">\u25A4 View OpenAPI \u2197</button></div>';
   }
+  // "Open in Specs" — deep-links the focused spec into the hosted Specs value
+  // editor via a host hook (opts.onOpenSpec). Hidden when no host provides it
+  // (standalone file, shared page): those have no editor to open. kind is the
+  // spec layer, id its qualified spec id.
+  function openSpecButton(kind, id) {
+    if (typeof opts === 'undefined' || !opts || typeof opts.onOpenSpec !== 'function') return '';
+    return '<div class="openbtn"><button class="tbtn" data-openspec-kind="' + kind + '" data-openspec-id="' + esc(id) + '">\u270E Open in Specs \u2197</button></div>';
+  }
 
   function renderPanel() {
     var head = '', body = '';
@@ -2956,7 +2964,8 @@ export function mountCanvas(host, model, opts = {}) {
         + (scopeFocus ? staticChip('current view') : '')
         + chip(c.subsystem, 'subsystem', c.subsystem)
         + (scopeFocus ? '' : openViewButton('component', c.id, c.owns.length > 0))
-        + openApiButton(componentExposesApi(c), c.apiTag);
+        + openApiButton(componentExposesApi(c), c.apiTag)
+        + openSpecButton('component', c.id);
       
       var linkedTypes = MODEL.types.filter(function (t) { return t.componentClass === c.id; });
       if (linkedTypes.length) {
@@ -3040,7 +3049,8 @@ export function mountCanvas(host, model, opts = {}) {
       MODEL.types.forEach(function (t2) { if (t2.id === focusId) ty = t2; });
       if (ty) {
         head = '<h2>' + esc(ty.name) + '</h2>' + staticChip('\u00AB' + ty.kind + '\u00BB')
-          + (ty.subsystem ? chip(ty.subsystem, 'subsystem', ty.subsystem) : staticChip('system-level shared'));
+          + (ty.subsystem ? chip(ty.subsystem, 'subsystem', ty.subsystem) : staticChip('system-level shared'))
+          + openSpecButton('type', ty.id);
         
         if (ty.componentClass) {
           head += '<div style="margin-top:6px"><b style="font-size:11px">Class Component:</b> ' + chip(ty.componentClass, 'component', ty.componentClass) + '</div>';
@@ -3116,7 +3126,8 @@ export function mountCanvas(host, model, opts = {}) {
         + (s.status ? staticChip(s.status) : '')
         + (scopeFocus ? staticChip('current view') : '')
         + (scopeFocus ? '' : openViewButton('subsystem', s.id, subKids > 0))
-        + openApiButton(subsystemExposesApi(s.id), '');
+        + openApiButton(subsystemExposesApi(s.id), '')
+        + openSpecButton('subsystem', s.id);
       body += '<p class="desc">' + esc(s.description) + '</p>';
       if (s.trustedLinks.length) {
         body += section('Trusted links (fast lanes)', s.trustedLinks.length, s.trustedLinks.map(function (t2) {
@@ -3174,6 +3185,16 @@ export function mountCanvas(host, model, opts = {}) {
         });
       })(oapis[oi]);
     }
+    var ospecs = panel.querySelectorAll('[data-openspec-kind]');
+    for (var si = 0; si < ospecs.length; si++) {
+      (function (b) {
+        b.addEventListener('click', function () {
+          if (typeof opts !== 'undefined' && opts && typeof opts.onOpenSpec === 'function') {
+            opts.onOpenSpec(b.getAttribute('data-openspec-kind'), b.getAttribute('data-openspec-id') || '');
+          }
+        });
+      })(ospecs[si]);
+    }
     var flows = panel.querySelectorAll('[data-flow-comp]');
     for (var j = 0; j < flows.length; j++) {
       (function (b) {
@@ -3186,6 +3207,23 @@ export function mountCanvas(host, model, opts = {}) {
   }
 
   renderPanel();
+  // Stage G: a deep link may focus a component and/or open a method's narrative
+  // modal once the seeded view + DOM + cy graph exist. The host parses the URL hash
+  // into opts.initialSelect / opts.initialFlow — both carry the component id, so this
+  // works whether the seeded view is the component itself or its parent subsystem
+  // (a leaf component has no meaningful "inside", so Specs deep-links open the parent
+  // and focus the component here).
+  (function () {
+    if (typeof opts === 'undefined' || !opts) return;
+    var f = opts.initialFlow, s = opts.initialSelect;
+    var focusComp = (f && f.comp) || (s && s.comp);
+    if (focusComp && compById[focusComp]) {
+      try { select('component', focusComp, true); } catch (e) { /* ignore */ }
+    }
+    if (f && f.comp && f.method && compById[f.comp]) {
+      try { openFlow(f.comp, f.method, f.mode === 'steps' ? 'steps' : 'flow'); } catch (e) { /* ignore */ }
+    }
+  })();
 
   return {
     destroy() {

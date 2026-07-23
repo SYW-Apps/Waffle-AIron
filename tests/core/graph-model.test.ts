@@ -8,6 +8,7 @@ import {
   saveSubsystemSpec,
   saveComponentSpec,
   saveInterfaceSpec,
+  saveImplementationSpec,
   saveTypeSpec,
   invalidateSpecCache,
 } from '../../src/core/specs.js';
@@ -66,6 +67,9 @@ describe('buildGraphModel — level-of-detail project graph', () => {
 
     saveComponentSpec(comp({ id: 'billing-portal', name: 'Billing Portal', componentType: 'Portal', portalType: 'HTTP_API', dependsOn: ['billing-orchestrator'] }) as any);
     saveComponentSpec(comp({ id: 'billing-orchestrator', name: 'Billing Orchestrator', componentType: 'Orchestrator' }) as any);
+    // A Repository over a Store — exercises the component→member `owns` nesting.
+    saveComponentSpec(comp({ id: 'billing-repository', name: 'Billing Repository', componentType: 'Repository', owns: ['billing-store'] }) as any);
+    saveComponentSpec(comp({ id: 'billing-store', name: 'Billing Store', componentType: 'Store' }) as any);
 
     saveInterfaceSpec({
       id: 'ibilling-portal',
@@ -76,6 +80,18 @@ describe('buildGraphModel — level-of-detail project graph', () => {
       createdAt: now,
       updatedAt: now,
     });
+
+    // billing-portal's L4 implementation — surfaces only at level 4 (parent = the
+    // component realizing its contract interface).
+    saveImplementationSpec({
+      id: 'billing_portal_impl',
+      name: 'Billing Portal Impl',
+      description: 'impl',
+      contract: 'ibilling-portal',
+      methods: [],
+      createdAt: now,
+      updatedAt: now,
+    } as any);
 
     saveTypeSpec({
       kind: 'entity', id: 'invoice', name: 'Invoice', description: 'a bill',
@@ -124,7 +140,7 @@ describe('buildGraphModel — level-of-detail project graph', () => {
 
     expect(model.level).toBe(2);
     const components = model.nodes.filter(n => n.kind === 'component');
-    expect(components.map(n => n.id).sort()).toEqual(['billing-orchestrator', 'billing-portal']);
+    expect(components.map(n => n.id).sort()).toEqual(['billing-orchestrator', 'billing-portal', 'billing-repository', 'billing-store']);
     expect(components.every(n => n.level === 2 && n.parentId === 'billing')).toBe(true);
     // No interface/type nodes have surfaced yet.
     expect(model.nodes.some(n => n.kind === 'interface' || n.kind === 'type')).toBe(false);
@@ -134,8 +150,11 @@ describe('buildGraphModel — level-of-detail project graph', () => {
     expect(model.edges).toContainEqual({ from: 'billing', to: 'billing-orchestrator', edgeKind: 'contains' });
     // Dependency: both endpoints are present at level 2, so the edge appears.
     expect(model.edges).toContainEqual({ from: 'billing-portal', to: 'billing-orchestrator', edgeKind: 'depends_on' });
-    // The owns edge to the (still-hidden) interface must NOT leak through.
-    expect(model.edges.some(e => e.edgeKind === 'owns')).toBe(false);
+    // The member-block owns edge (Repository → Store) IS a level-2 edge — both are
+    // components — while the owns edges to the still-hidden interface and
+    // implementation must NOT leak through.
+    expect(model.edges).toContainEqual({ from: 'billing-repository', to: 'billing-store', edgeKind: 'owns' });
+    expect(model.edges.some(e => e.to === 'ibilling-portal' || e.to === 'billing_portal_impl')).toBe(false);
     assertNoDangling(model);
   });
 
@@ -154,6 +173,30 @@ describe('buildGraphModel — level-of-detail project graph', () => {
     expect(model.edges).toContainEqual({ from: 'billing', to: 'billing-portal', edgeKind: 'contains' });
     expect(model.edges).toContainEqual({ from: 'billing-portal', to: 'billing-orchestrator', edgeKind: 'depends_on' });
     assertNoDangling(model);
+  });
+
+  it('level 4 adds implementations (parent = their component) with component→implementation owns edges', () => {
+    buildFixture();
+    const model = buildGraphModel(4);
+    expect(model.level).toBe(4);
+
+    const impl = model.nodes.find(n => n.kind === 'implementation');
+    expect(impl).toMatchObject({ id: 'billing_portal_impl', level: 4, parentId: 'billing-portal' });
+
+    // The implementation is owned by the component whose contract interface it realizes.
+    expect(model.edges).toContainEqual({ from: 'billing-portal', to: 'billing_portal_impl', edgeKind: 'owns' });
+    // The full ownership hierarchy stands at the deepest level: interface-owns and
+    // the Repository→Store member-owns alongside the implementation.
+    expect(model.edges).toContainEqual({ from: 'billing-portal', to: 'ibilling-portal', edgeKind: 'owns' });
+    expect(model.edges).toContainEqual({ from: 'billing-repository', to: 'billing-store', edgeKind: 'owns' });
+    assertNoDangling(model);
+  });
+
+  it('level 3 does NOT surface implementations (they are level 4)', () => {
+    buildFixture();
+    const model = buildGraphModel(3);
+    expect(model.nodes.some(n => n.kind === 'implementation')).toBe(false);
+    expect(model.edges.some(e => e.to === 'billing_portal_impl')).toBe(false);
   });
 
   it('drops a depends_on edge until BOTH endpoints are included', () => {

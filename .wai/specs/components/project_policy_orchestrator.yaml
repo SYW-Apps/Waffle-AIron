@@ -18,6 +18,7 @@ dependsOn:
   - policy_repository
   - admin_orchestrator
   - audit_repository
+  - host_core_adapter
 status: complete
 createdAt: '2026-07-08T21:59:23.605Z'
-updatedAt: '2026-07-16T00:15:01.495Z'
+updatedAt: '2026-07-23T11:23:41.498Z'

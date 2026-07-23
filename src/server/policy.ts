@@ -12,6 +12,7 @@ import { authorize } from './authorization.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import { sendJson } from './httpio.js';
 import * as packs from './packs.js';
+import { hostCore } from './adapters.js';
 import type {
   AuditEvent,
   AuditRetentionPolicy,
@@ -24,6 +25,7 @@ import type {
   PolicyEvaluationResult,
   Principal,
   PrincipalSubject,
+  ProjectConfigView,
   ProjectInitRequest,
   ProjectProfileSelection,
 } from './types.js';
@@ -312,6 +314,7 @@ export function removeIdentityProviderRecord(dataDir: string, id: string): void 
 const PROJECT_CREATE_CAPABILITY = 'project:create';
 /** The legacy `mcp:write` permission maps onto project:write. */
 const PROJECT_WRITE_CAPABILITY = 'project:write';
+const PROJECT_READ_CAPABILITY = 'project:read';
 /** The legacy `policy:manage` permission maps onto project:admin. */
 const POLICY_MANAGE_CAPABILITY = 'project:admin';
 
@@ -430,6 +433,25 @@ function recordProjectProfileSelection(root: string, selection: ProjectProfileSe
   runWithProjectRoot(root, () => {
     const raw = (readYamlFile(AI_PATHS.projectConfig()) ?? {}) as Record<string, unknown>;
     raw['profileSelection'] = selection;
+    writeYamlFile(AI_PATHS.projectConfig(), raw);
+  });
+}
+
+/** Read the project's projectType (project-level architectural profile) from its
+ *  project.yaml at the bound root, defaulting to 'backend' when the config omits it. */
+function readProjectType(root: string): string {
+  return runWithProjectRoot(root, () => {
+    const raw = readYamlFile(AI_PATHS.projectConfig()) as { projectType?: string } | null;
+    return raw?.projectType ?? 'backend';
+  });
+}
+
+/** Write projectType into the project's project.yaml at the bound root, preserving
+ *  every other config key (raw read/merge/write, like the profileSelection path). */
+function writeProjectType(root: string, projectType: string): void {
+  runWithProjectRoot(root, () => {
+    const raw = (readYamlFile(AI_PATHS.projectConfig()) ?? {}) as Record<string, unknown>;
+    raw['projectType'] = projectType;
     writeYamlFile(AI_PATHS.projectConfig(), raw);
   });
 }
@@ -770,6 +792,56 @@ export function reconcileProjectPolicy(
   );
 
   return result;
+}
+
+/**
+ * Authenticate the caller, authorize project:read over the target project, bind
+ * its isolated root, and return the project's editable configuration view: the
+ * project.yaml projectType (project-level architectural profile, 'backend'
+ * default) and whether the project currently holds a lock record.
+ */
+export function getProjectConfig(
+  cfg: HostConfig,
+  credential: string | null,
+  projectId: string,
+): ProjectConfigView {
+  const principal = requirePrincipal(cfg, credential);
+  if (authorize(cfg.dataDir, principal, PROJECT_READ_CAPABILITY, 'project', projectId).value !== 'yes') {
+    throw new ForbiddenError(
+      "reading a project's configuration requires project:read over the project",
+    );
+  }
+  const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
+  if (!root) throw new Error(`Unknown project "${projectId}".`);
+
+  const projectType = readProjectType(root);
+  const locked = runWithProjectRoot(root, () => hostCore.readLockRecord() !== null);
+  return { projectType, locked };
+}
+
+/**
+ * Authenticate the caller, authorize project:write over the target project, bind
+ * its isolated root, write the supplied projectType (the project-level
+ * architectural profile) into the project's config, and return the updated view.
+ */
+export function setProjectType(
+  cfg: HostConfig,
+  credential: string | null,
+  projectId: string,
+  projectType: string,
+): ProjectConfigView {
+  const principal = requirePrincipal(cfg, credential);
+  if (authorize(cfg.dataDir, principal, PROJECT_WRITE_CAPABILITY, 'project', projectId).value !== 'yes') {
+    throw new ForbiddenError(
+      "changing a project's configuration requires project:write over the project",
+    );
+  }
+  const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
+  if (!root) throw new Error(`Unknown project "${projectId}".`);
+
+  writeProjectType(root, projectType);
+  const locked = runWithProjectRoot(root, () => hostCore.readLockRecord() !== null);
+  return { projectType, locked };
 }
 
 /**
