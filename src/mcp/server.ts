@@ -783,6 +783,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     type: z.enum(['local', 'call', 'dispatch', 'branch', 'switch', 'loop', 'try', 'parallel', 'jump', 'return', 'throw']),
     targetComponent: z.string().optional().describe('call/dispatch: L2 component id (for dispatch, the Portal routed through)'),
     targetMethod: z.string().optional().describe('call: method name on the target'),
+    auth: z.object({ from: z.string(), note: z.string().optional() }).optional().describe('call/dispatch: the credential this step presents to an AUTHED callee Portal and WHERE it loads from (`from` = a secret-store component id, env:API_KEY, a config key, a vault ref). A design note — wairon never fetches it. Its absence on a call into a Portal whose auth ≠ none warns (PORTAL_AUTH_UNMET), so credential loading is never overlooked.'),
     detach: z.boolean().optional().describe('call/dispatch: fire-and-forget — issue the call and continue without awaiting the result (no later step consumes it)'),
     capability: z.string().optional().describe('dispatch: the capability routed through the target Portal\'s dispatch table (validated against it — UNSERVED_CAPABILITY)'),
     assertsGuarantees: z.array(z.string().min(1)).optional().describe('Semantic guarantees this step relies on — each must be declared in the called method\'s L3 guarantees (NARRATIVE_SEMANTIC_UNBACKED otherwise). Builtin tokens: idempotent | atomic | transactional | exactly-once; extension packs may declare more (any other token is UNKNOWN_GUARANTEE)'),
