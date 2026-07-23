@@ -721,7 +721,25 @@ methods:
         targetMethod: adoptProjectPack
     detail: calls-only
     symbol: opsAdoptProjectPack
+  - name: webGetProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: Read projectId from the query and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: getProjectConfig
+    detail: calls-only
+    symbol: opsGetProjectConfig
+  - name: webSetProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: Parse { projectId, projectType } and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: setProjectType
+    detail: calls-only
+    symbol: opsSetProjectConfig
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-07-22T19:18:06.911Z'
+updatedAt: '2026-07-23T11:24:20.895Z'

@@ -4,7 +4,6 @@ import {
   AsyncButton,
   AsyncView,
   Badge,
-  Button,
   Checkbox,
   EmptyState,
   Field,
@@ -95,17 +94,23 @@ const OPTIONAL_ENUM_FIELDS = new Set(['profile', 'designDepth', 'portalType', 'd
 interface GraphNode {
   id: string;
   label: string;
-  kind: string; // 'project' | 'subsystem' | 'component' | 'interface' | 'type'
+  kind: string; // 'project' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type'
   level: number;
   parentId?: string;
 }
+interface GraphEdge {
+  from: string;
+  to: string;
+  edgeKind: string; // 'contains' | 'owns' | 'depends_on'
+}
 interface Graph {
   nodes: GraphNode[];
+  edges?: GraphEdge[];
 }
 
 interface ProjectConfigResp {
   projectType: string;
-  lock?: { status: string };
+  locked?: boolean;
 }
 
 const byLabel = (a: GraphNode, b: GraphNode) => a.label.localeCompare(b.label);
@@ -852,16 +857,39 @@ function SpecEditor(props: {
 
 // ── Left picker ─────────────────────────────────────────────────────────────────
 
-function Picker(props: { graph: Graph; selected: Selected | null; onSelect: (s: Selected) => void }) {
-  const { graph, selected, onSelect } = props;
+/** The left tree lists COMPONENTS only, nesting each owned member block under its
+ *  owner (a Repository over its Store/Registry/Index). Interfaces and implementations
+ *  are NOT tree rows — they are tabs of the selected component (ComponentUnitEditor).
+ *  Selecting a component opens its primary interface (interface-first); the active
+ *  component (resolved from an interface/impl selection) is what highlights. */
+function Picker(props: {
+  graph: Graph;
+  activeComponentId: string | null;
+  selected: Selected | null;
+  onSelect: (s: Selected) => void;
+}) {
+  const { graph, activeComponentId, selected, onSelect } = props;
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [implId, setImplId] = useState('');
 
   const nodes = graph.nodes ?? [];
   const sys = nodes.find((n) => n.kind === 'project');
   const subs = nodes.filter((n) => n.kind === 'subsystem').sort(byLabel);
   const types = nodes.filter((n) => n.kind === 'type').sort(byLabel);
-  const compsOf = (subId: string) => nodes.filter((n) => n.kind === 'component' && n.parentId === subId).sort(byLabel);
+  const componentNodes = nodes.filter((n) => n.kind === 'component');
+  const compIds = new Set(componentNodes.map((n) => n.id));
+
+  // owns edges between two components drive the nesting (Repository ▸ members).
+  const ownedBy = new Map<string, string>();
+  const childrenOf = new Map<string, GraphNode[]>();
+  for (const e of graph.edges ?? []) {
+    if (e.edgeKind !== 'owns' || !compIds.has(e.from) || !compIds.has(e.to)) continue;
+    ownedBy.set(e.to, e.from);
+    const child = componentNodes.find((n) => n.id === e.to);
+    if (child) childrenOf.set(e.from, [...(childrenOf.get(e.from) ?? []), child]);
+  }
+  const topComps = (subId: string) =>
+    componentNodes.filter((n) => n.parentId === subId && !ownedBy.has(n.id)).sort(byLabel);
+  const owned = (compId: string) => (childrenOf.get(compId) ?? []).slice().sort(byLabel);
   const intfsOf = (compId: string) => nodes.filter((n) => n.kind === 'interface' && n.parentId === compId).sort(byLabel);
 
   const toggle = (id: string) =>
@@ -872,8 +900,15 @@ function Picker(props: { graph: Graph; selected: Selected | null; onSelect: (s: 
       return next;
     });
 
-  const isSel = (kind: SpecKind, id: string) => selected?.kind === kind && selected?.id === id;
-  const Row = (p: { kind: SpecKind; id: string; label: string; depth: number; hasKids?: boolean }) => (
+  // Interface-first: a component opens its primary interface; one with no
+  // interface opens the component spec itself.
+  const openComponent = (c: GraphNode) => {
+    const intfs = intfsOf(c.id);
+    if (intfs.length) onSelect({ kind: 'interface', id: intfs[0].id, label: intfs[0].label });
+    else onSelect({ kind: 'component', id: c.id, label: c.label });
+  };
+
+  const SimpleRow = (p: { kind: SpecKind; id: string; label: string; depth: number; hasKids?: boolean }) => (
     <div className="tree-row" style={{ paddingLeft: 6 + p.depth * 14 }}>
       {p.hasKids ? (
         <button className="tree-caret" aria-label="expand" onClick={() => toggle(p.id)}>{collapsed.has(p.id) ? '▸' : '▾'}</button>
@@ -881,7 +916,7 @@ function Picker(props: { graph: Graph; selected: Selected | null; onSelect: (s: 
         <span className="tree-caret-spacer" />
       )}
       <button
-        className={`tree-label ${isSel(p.kind, p.id) ? 'sel' : ''}`}
+        className={`tree-label ${selected?.kind === p.kind && selected?.id === p.id ? 'sel' : ''}`}
         onClick={() => onSelect({ kind: p.kind, id: p.id, label: p.label })}
         title={p.id}
       >
@@ -891,46 +926,122 @@ function Picker(props: { graph: Graph; selected: Selected | null; onSelect: (s: 
     </div>
   );
 
+  const renderComponent = (c: GraphNode, depth: number): JSX.Element => {
+    const kids = owned(c.id);
+    const expanded = !collapsed.has(c.id);
+    return (
+      <div key={c.id}>
+        <div className="tree-row" style={{ paddingLeft: 6 + depth * 14 }}>
+          {kids.length ? (
+            <button className="tree-caret" aria-label="expand" onClick={() => toggle(c.id)}>{expanded ? '▾' : '▸'}</button>
+          ) : (
+            <span className="tree-caret-spacer" />
+          )}
+          <button
+            className={`tree-label ${activeComponentId === c.id ? 'sel' : ''}`}
+            onClick={() => openComponent(c)}
+            title={c.id}
+          >
+            <span className="tree-kind k-component">C</span>
+            <span className="tree-name">{c.label}</span>
+          </button>
+        </div>
+        {expanded && kids.map((k) => renderComponent(k, depth + 1))}
+      </div>
+    );
+  };
+
   return (
     <div className="spec-picker">
       <div className="spec-tree">
-        {sys && <Row kind="system" id={sys.id} label={sys.label} depth={0} />}
+        {sys && <SimpleRow kind="system" id={sys.id} label={sys.label} depth={0} />}
         {subs.map((s) => {
-          const comps = compsOf(s.id);
+          const comps = topComps(s.id);
           return (
             <div key={s.id}>
-              <Row kind="subsystem" id={s.id} label={s.label} depth={0} hasKids={comps.length > 0} />
-              {!collapsed.has(s.id) &&
-                comps.map((c) => {
-                  const intfs = intfsOf(c.id);
-                  return (
-                    <div key={c.id}>
-                      <Row kind="component" id={c.id} label={c.label} depth={1} hasKids={intfs.length > 0} />
-                      {!collapsed.has(c.id) && intfs.map((it) => <Row key={it.id} kind="interface" id={it.id} label={it.label} depth={2} />)}
-                    </div>
-                  );
-                })}
+              <SimpleRow kind="subsystem" id={s.id} label={s.label} depth={0} hasKids={comps.length > 0} />
+              {!collapsed.has(s.id) && comps.map((c) => renderComponent(c, 1))}
             </div>
           );
         })}
         {types.length > 0 && (
           <div className="tree-section">
             <span className="tree-section-head">Types</span>
-            {types.map((t) => <Row key={t.id} kind="type" id={t.id} label={t.label} depth={0} />)}
+            {types.map((t) => <SimpleRow key={t.id} kind="type" id={t.id} label={t.label} depth={0} />)}
           </div>
         )}
       </div>
-      <div className="spec-impl-open">
-        <span className="hint">Open an implementation (L4) by id — the spec graph does not enumerate them.</span>
-        <div className="row-form">
-          <Field label="Implementation id">
-            <TextInput value={implId} onChange={setImplId} placeholder="e.g. vfs_storage_impl" />
-          </Field>
-          <div className="row-form-action">
-            <Button variant="ghost" disabled={!implId.trim()} onClick={() => onSelect({ kind: 'implementation', id: implId.trim(), label: implId.trim() })}>Open</Button>
-          </div>
-        </div>
+    </div>
+  );
+}
+
+/** A component's Component/Interface/Implementation specs as tabs — the selected
+ *  tab is URL-tracked (onSelectSpec), so switching tabs is shareable and the
+ *  canvas can deep-link to any of them. Multiple interfaces/impls each get a tab;
+ *  a component with no implementation shows a disabled "Implementation" tab. */
+function ComponentUnitEditor(props: {
+  projectId: string;
+  componentId: string;
+  selection: Selected;
+  nodes: GraphNode[];
+  typeSuggestions: string[];
+  profiles: AvailableProfile[];
+  onSelectSpec: (sel: { kind: string; id: string }) => void;
+  onGraphChange: () => void;
+}) {
+  const { componentId, selection, nodes } = props;
+  const compNode = nodes.find((n) => n.id === componentId);
+  const interfaces = nodes.filter((n) => n.kind === 'interface' && n.parentId === componentId).sort(byLabel);
+  const implementations = nodes.filter((n) => n.kind === 'implementation' && n.parentId === componentId).sort(byLabel);
+
+  type UnitTab = { key: string; label: string; sel?: { kind: SpecKind; id: string }; disabled?: boolean };
+  const tabs: UnitTab[] = [
+    { key: 'component', label: 'Component', sel: { kind: 'component', id: componentId } },
+    ...interfaces.map((i) => ({ key: `i:${i.id}`, label: interfaces.length > 1 ? i.label : 'Interface', sel: { kind: 'interface' as SpecKind, id: i.id } })),
+    ...(implementations.length
+      ? implementations.map((m) => ({ key: `m:${m.id}`, label: implementations.length > 1 ? m.label : 'Implementation', sel: { kind: 'implementation' as SpecKind, id: m.id } }))
+      : [{ key: 'no-impl', label: 'Implementation', disabled: true }]),
+  ];
+
+  const activeKey =
+    selection.kind === 'interface' ? `i:${selection.id}`
+    : selection.kind === 'implementation' ? `m:${selection.id}`
+    : 'component';
+  const activeDisabled = tabs.find((t) => t.key === activeKey)?.disabled;
+
+  return (
+    <div className="stack-lg">
+      <div className="unit-head">
+        <Badge tone="accent">component</Badge> <strong>{compNode?.label ?? componentId}</strong>
+        <code className="subtle">{componentId}</code>
       </div>
+      <div className="tabstrip" role="tablist">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            role="tab"
+            aria-selected={t.key === activeKey}
+            className={`tab ${t.key === activeKey ? 'tab-active' : ''}`}
+            disabled={t.disabled}
+            title={t.disabled ? 'No implementation defined yet' : undefined}
+            onClick={() => t.sel && props.onSelectSpec(t.sel)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {activeDisabled ? (
+        <EmptyState>No implementation is defined for this component yet.</EmptyState>
+      ) : (
+        <SpecEditor
+          key={`${selection.kind}:${selection.id}`}
+          projectId={props.projectId}
+          sel={selection}
+          typeSuggestions={props.typeSuggestions}
+          profiles={props.profiles}
+          onGraphChange={props.onGraphChange}
+        />
+      )}
     </div>
   );
 }
@@ -945,7 +1056,7 @@ function ProjectConfigPanel(props: { projectId: string; config: Async<ProjectCon
 
   if (!cfg) return null; // route not deployed / not readable — hide, keep the rest working
 
-  const locked = !!cfg.lock && /lock/i.test(cfg.lock.status ?? '');
+  const locked = !!cfg.locked;
   const groups = withCurrent(
     [...profileGroups(props.profiles), { label: 'Project kinds', options: PROJECT_KINDS.map((k) => ({ value: k, label: k })) }],
     projectType,
@@ -997,7 +1108,9 @@ export function SpecsTab({
   // The picker tree stays live on the project channel (a spec write elsewhere
   // refetches it); the selected spec is loaded WITHOUT a channel so an in-flight
   // edit is never clobbered — it refetches explicitly after its own save.
-  const graph = useAsync<Graph>(() => get(`/web/graph?tier=project&projectId=${enc}&level=3`), [projectId], [`project:${projectId}`]);
+  // level=4 so the graph carries implementation nodes (and the component→member
+  // owns edges) the tree/tab editor needs.
+  const graph = useAsync<Graph>(() => get(`/web/graph?tier=project&projectId=${enc}&level=4`), [projectId], [`project:${projectId}`]);
   // Degrade gracefully when the /web/projects/config route is absent (404 — not
   // yet deployed) or unreadable: null hides the projectType control + lock banner
   // while every spec editor keeps working.
@@ -1026,6 +1139,17 @@ export function SpecsTab({
     return { kind: selection.kind as SpecKind, id: selection.id, label: node?.label ?? selection.id };
   }, [selection, graph.data]);
 
+  // The component a component/interface/implementation selection belongs to —
+  // drives the tabbed editor and which tree row highlights.
+  const activeComponentId = useMemo(() => {
+    if (!selection) return null;
+    if (selection.kind === 'component') return selection.id;
+    if (selection.kind === 'interface' || selection.kind === 'implementation') {
+      return (graph.data?.nodes ?? []).find((n) => n.id === selection.id)?.parentId ?? null;
+    }
+    return null;
+  }, [selection, graph.data]);
+
   async function runValidate() {
     const res = await mcpCall<{ errors?: any[]; warnings?: any[] }>(projectId, 'sdd_validate_tree', {});
     setValidation({ errors: res.errors ?? [], warnings: res.warnings ?? [] });
@@ -1037,23 +1161,44 @@ export function SpecsTab({
       <AsyncView state={graph}>
         {(g) => (
           <div className="spec-layout">
-            <Picker graph={g} selected={selected} onSelect={(s) => onSelectSpec({ kind: s.kind, id: s.id })} />
+            <Picker
+              graph={g}
+              activeComponentId={activeComponentId}
+              selected={selected}
+              onSelect={(s) => onSelectSpec({ kind: s.kind, id: s.id })}
+            />
             <div className="spec-detail">
               {selected ? (
-                <SpecEditor
-                  projectId={projectId}
-                  sel={selected}
-                  typeSuggestions={typeSuggestions}
-                  profiles={profiles.data ?? []}
-                  onGraphChange={() => {
-                    graph.reload();
-                    // A spec write can change what validates — drop stale results.
-                    setValidation(null);
-                  }}
-                />
+                ['component', 'interface', 'implementation'].includes(selected.kind) && activeComponentId ? (
+                  <ComponentUnitEditor
+                    projectId={projectId}
+                    componentId={activeComponentId}
+                    selection={selected}
+                    nodes={g.nodes ?? []}
+                    typeSuggestions={typeSuggestions}
+                    profiles={profiles.data ?? []}
+                    onSelectSpec={onSelectSpec}
+                    onGraphChange={() => {
+                      graph.reload();
+                      setValidation(null);
+                    }}
+                  />
+                ) : (
+                  <SpecEditor
+                    projectId={projectId}
+                    sel={selected}
+                    typeSuggestions={typeSuggestions}
+                    profiles={profiles.data ?? []}
+                    onGraphChange={() => {
+                      graph.reload();
+                      // A spec write can change what validates — drop stale results.
+                      setValidation(null);
+                    }}
+                  />
+                )
               ) : (
                 <EmptyState>
-                  {profiles.loading ? <Spinner /> : 'Select a spec on the left to view and edit its field values.'}
+                  {profiles.loading ? <Spinner /> : 'Select a component on the left to view and edit its specs.'}
                 </EmptyState>
               )}
             </div>

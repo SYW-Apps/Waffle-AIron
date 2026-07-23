@@ -773,6 +773,10 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
 .spec-validation .finding-list { padding-left: 0; list-style: none; gap: 0; }
 .spec-validation .finding { padding: 6px 0; border-top: 1px solid var(--border-soft); line-height: 1.5; word-break: break-word; }
 .spec-validation .finding:first-child { border-top: none; }
+/* ComponentUnitEditor — the Component/Interface/Implementation tab header. */
+.unit-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.unit-head > code { margin-left: auto; }
+.tabstrip .tab:disabled { opacity: 0.45; cursor: default; }
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 980px) {

@@ -117,6 +117,37 @@ methods:
     params:
       - name: request
         type: ProjectInitRequest
+  - name: getProjectConfig
+    description: >-
+      Authenticate the caller credential and resolve the caller's project:read permission over the
+      target project through the authorization seam (must be yes; an instance-admin bypasses),
+      resolve and bind the project's isolated root, then read the project's project-level
+      configuration: the projectType from its project.yaml (defaulting to 'backend' when the config
+      omits it) and whether the project currently holds a lock (via the core adapter's lock record).
+      Returns the assembled ProjectConfigView. No side effects.
+    signature: 'getProjectConfig(credential: string, projectId: string): ProjectConfigView'
+    returns: ProjectConfigView
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+  - name: setProjectType
+    description: >-
+      Authenticate the caller credential and resolve the caller's project:write permission over the
+      target project through the authorization seam (must be yes; an instance-admin bypasses),
+      resolve and bind the project's isolated root, write the supplied projectType (the
+      project-level architectural profile) into the project's project.yaml config, and return the
+      updated ProjectConfigView (projectType plus the current lock status).
+    signature: 'setProjectType(credential: string, projectId: string, projectType: string): ProjectConfigView'
+    returns: ProjectConfigView
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+      - name: projectType
+        type: string
 status: complete
 createdAt: '2026-07-08T21:59:46.667Z'
-updatedAt: '2026-07-22T17:27:59.086Z'
+updatedAt: '2026-07-23T11:23:52.835Z'

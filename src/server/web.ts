@@ -3045,6 +3045,12 @@ function opsPolicyEvaluate(cfg: HostConfig, sessionId: string, url: URL, res: Se
 function opsPolicyReconcile(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
   sendJson(res, 200, projectops.reconcileProjectPolicy(cfg, sessionId, String(body?.projectId ?? '')));
 }
+function opsGetProjectConfig(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  sendJson(res, 200, projectops.getProjectConfig(cfg, sessionId, q(url, 'projectId') ?? ''));
+}
+function opsSetProjectConfig(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, projectops.setProjectType(cfg, sessionId, String(body?.projectId ?? ''), String(body?.projectType ?? '')));
+}
 function opsListProducers(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
   sendJson(res, 200, { producers: projectops.listProducers(cfg, sessionId, q(url, 'projectId') ?? '') });
 }
@@ -3377,6 +3383,14 @@ export async function handleWebRequest(
       // pack into the project by name (project:admin).
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'adopt') {
         return opsAdoptProjectPack(cfg, sessionId, body, res);
+      }
+      // GET /web/projects/config?projectId= — the project's editable config (projectType + lock) (project:read).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'config') {
+        return opsGetProjectConfig(cfg, sessionId, url, res);
+      }
+      // POST /web/projects/config { projectId, projectType } — set the project-level type (project:write).
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'config') {
+        return opsSetProjectConfig(cfg, sessionId, body, res);
       }
       // GET /web/projects/policy?projectId= — pack/profile compliance (project:write).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'policy') {

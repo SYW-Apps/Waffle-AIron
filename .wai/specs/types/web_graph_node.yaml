@@ -19,14 +19,16 @@ fields:
     optional: false
   - name: kind
     type: string
-    description: 'Node kind: "unit" | "project" | "subsystem" | "component" | "interface" | "type".'
+    description: >-
+      Node kind: "unit" | "project" | "subsystem" | "component" | "interface" | "implementation" |
+      "type".
     optional: false
   - name: level
     type: number
     description: >-
       Level-of-detail depth of this node: 0 = landscape/organization tier (units, projects), 1 =
-      subsystem, 2 = component (L2), 3 = interface/type (L3). The client shows nodes whose level is
-      at or below the requested detail level.
+      subsystem, 2 = component (L2), 3 = interface/type (L3), 4 = implementation (L4). The client
+      shows nodes whose level is at or below the requested detail level.
     optional: false
   - name: parentId
     type: string
@@ -60,4 +62,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-07-11T11:31:08.145Z'
-updatedAt: '2026-07-15T23:27:40.132Z'
+updatedAt: '2026-07-23T11:12:11.096Z'

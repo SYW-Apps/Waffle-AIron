@@ -983,6 +983,33 @@ methods:
       transport: HTTP
       method: POST
       path: /web/projects/packs/adopt
+  - name: webGetProjectConfig
+    description: >-
+      Read a project's architectural config — its projectType (project-level architectural profile)
+      and lock status; forwards to project_ops_orchestrator.getProjectConfig with the session as the
+      credential.
+    signature: 'webGetProjectConfig(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/projects/config
+  - name: webSetProjectConfig
+    description: >-
+      Set a project's projectType (project-level architectural profile); forwards to
+      project_ops_orchestrator.setProjectType with the session as the credential.
+    signature: 'webSetProjectConfig(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/projects/config
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-07-22T19:18:15.150Z'
+updatedAt: '2026-07-23T11:23:59.568Z'

@@ -545,7 +545,107 @@ methods:
         description: Return the stored policy
         type: return
         outcome: the stored policy
+  - name: getProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          Resolve the caller's project:read permission over the target project (an instance-admin
+          bypasses to yes)
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the caller's project:read is not yes, deny
+        type: branch
+        condition: the effective project:read value is not yes
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the read
+        type: throw
+        error: Forbidden — reading a project's configuration requires project:read over the project
+      - stepNumber: 5
+        description: >-
+          Resolve and bind the target project's isolated root within the principal's authorized set
+          (rejects cross-project access)
+        type: call
+        targetComponent: project_registry
+        targetMethod: resolveRoot
+      - stepNumber: 6
+        description: >-
+          Read the project's projectType from its project.yaml config (the project-level
+          architectural profile), substituting the default 'backend' when the config omits it
+        type: local
+      - stepNumber: 7
+        description: Read the project's current lock record (or null when the project has never been locked)
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: readLockRecord
+      - stepNumber: 8
+        description: >-
+          Assemble the ProjectConfigView from the resolved projectType and the locked flag (true
+          when the lock record is non-null)
+        type: local
+      - stepNumber: 9
+        description: Return the project configuration view
+        type: return
+        outcome: the project configuration view
+    detail: full
+  - name: setProjectType
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          Resolve the caller's project:write permission over the target project (an instance-admin
+          bypasses to yes)
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the caller's project:write is not yes, deny
+        type: branch
+        condition: the effective project:write value is not yes
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the change
+        type: throw
+        error: Forbidden — changing a project's configuration requires project:write over the project
+      - stepNumber: 5
+        description: >-
+          Resolve and bind the target project's isolated root within the principal's authorized set
+          (rejects cross-project access)
+        type: call
+        targetComponent: project_registry
+        targetMethod: resolveRoot
+      - stepNumber: 6
+        description: >-
+          Write the supplied projectType (the project-level architectural profile) into the
+          project's project.yaml config
+        type: local
+      - stepNumber: 7
+        description: Read the project's current lock record (or null when the project has never been locked)
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: readLockRecord
+      - stepNumber: 8
+        description: >-
+          Assemble the updated ProjectConfigView from the written projectType and the locked flag
+          (true when the lock record is non-null)
+        type: local
+      - stepNumber: 9
+        description: Return the updated project configuration view
+        type: return
+        outcome: the updated project configuration view
+    detail: full
 detail: full
 status: complete
 createdAt: '2026-07-09T20:50:11.443Z'
-updatedAt: '2026-07-22T17:34:16.067Z'
+updatedAt: '2026-07-23T11:24:16.127Z'

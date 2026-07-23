@@ -16,6 +16,8 @@ import {
   initializeProjectWithProfile,
   evaluateProjectPolicy,
   reconcileProjectPolicy,
+  getProjectConfig,
+  setProjectType,
 } from '../../src/server/policy.js';
 import { routeAdmin } from '../../src/server/http.js';
 import { createProject } from '../../src/server/admin.js';
@@ -260,6 +262,49 @@ describe('project policy orchestrator (sdd_host)', () => {
     const rec = initializeProjectWithProfile(cfg, creator, { id: 'creator-proj', ownerUnitId: unit.id });
     expect(existingProjectRoot(dataDir, 'creator-proj')).toBeTruthy();
     expect(readRawConfig(rec.rootPath).profileSelection.selectedBy.userId).toBe('u-cr');
+  });
+
+  // ── project config (projectType + lock) ──────────────────────────────────
+
+  it('getProjectConfig: a fresh project defaults to backend and reports unlocked', () => {
+    createPlacedProject(cfg, MASTER, 'cfg-proj');
+    expect(getProjectConfig(cfg, MASTER, 'cfg-proj')).toEqual({ projectType: 'backend', locked: false });
+  });
+
+  it('setProjectType: persists projectType into project.yaml and round-trips through getProjectConfig', () => {
+    createPlacedProject(cfg, MASTER, 'cfg-proj');
+    const updated = setProjectType(cfg, MASTER, 'cfg-proj', 'frontend-reactive');
+    expect(updated.projectType).toBe('frontend-reactive');
+
+    const root = existingProjectRoot(dataDir, 'cfg-proj')!;
+    expect(readRawConfig(root).projectType).toBe('frontend-reactive'); // persisted to disk
+    expect(getProjectConfig(cfg, MASTER, 'cfg-proj').projectType).toBe('frontend-reactive'); // read back
+  });
+
+  it('setProjectType preserves other project.yaml keys (raw read-merge-write)', () => {
+    createPlacedProject(cfg, MASTER, 'cfg-proj');
+    const root = existingProjectRoot(dataDir, 'cfg-proj')!;
+    const before = readRawConfig(root);
+    setProjectType(cfg, MASTER, 'cfg-proj', 'game-ecs');
+    const after = readRawConfig(root);
+    // Every pre-existing key survives; only projectType is (re)written.
+    for (const key of Object.keys(before)) {
+      if (key === 'projectType') continue;
+      expect(after[key]).toEqual(before[key]);
+    }
+    expect(after.projectType).toBe('game-ecs');
+  });
+
+  it('getProjectConfig requires project:read; setProjectType requires project:write', () => {
+    createPlacedProject(cfg, MASTER, 'cfg-guard');
+    // No grant at all → cannot even read.
+    const stranger = mintUserToken(dataDir, { id: 'st', userId: 'u-st' });
+    expect(() => getProjectConfig(cfg, stranger, 'cfg-guard')).toThrow(ForbiddenError);
+    // project:read alone → may read, but NOT set the type.
+    allow(dataDir, 'u-rd', 'project:read', 'project', 'cfg-guard');
+    const reader = mintUserToken(dataDir, { id: 'rd', userId: 'u-rd' });
+    expect(getProjectConfig(cfg, reader, 'cfg-guard').projectType).toBe('backend');
+    expect(() => setProjectType(cfg, reader, 'cfg-guard', 'lowlevel-os')).toThrow(ForbiddenError);
   });
 
   // ── evaluate + reconcile on an existing project ──────────────────────────

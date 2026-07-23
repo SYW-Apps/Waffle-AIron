@@ -119,16 +119,19 @@ methods:
         description: >-
           Build the WebGraphNode set from the loaded specs, tagging each with its level-of-detail
           depth: subsystems at level 1 (parent = the project/system), components at level 2 (parent
-          = their subsystem), interfaces and types at level 3 (parent = their component), each
-          carrying kind, label, projectId context, and status. Keep only nodes whose level is at or
-          below the requested detail level (level 0 yields just the project/system root).
+          = their subsystem), interfaces and types at level 3 (parent = their component), and
+          implementations at level 4 (parent = the component realizing the implementation's contract
+          interface), each carrying kind, label, projectId context, and status. Keep only nodes
+          whose level is at or below the requested detail level (level 0 yields just the
+          project/system root).
         type: local
       - stepNumber: 7
         description: >-
           Build the LandscapeEdge-shaped edges between the INCLUDED nodes only: containment edges
           from a subsystem to its components (and project to subsystems), ownership edges from a
-          component to its owned member blocks, and depends_on edges from a component to its
-          collaborators; drop any edge whose endpoint was filtered out above the requested level.
+          component to its owned member blocks, its interfaces, and its implementations, and
+          depends_on edges from a component to its collaborators; drop any edge whose endpoint was
+          filtered out above the requested level.
         type: local
       - stepNumber: 8
         description: >-
@@ -154,4 +157,4 @@ lint:
         Reconcile with the canvas engine epic's renderer extraction.
 status: complete
 createdAt: '2026-07-04T15:59:34.318Z'
-updatedAt: '2026-07-18T18:47:54.530Z'
+updatedAt: '2026-07-23T11:12:19.081Z'

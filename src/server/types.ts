@@ -895,9 +895,10 @@ export interface WebSession {
 export interface WebGraphNode {
   id: string;
   label: string;
-  /** 'unit' | 'project' | 'subsystem' | 'component' | 'interface' | 'type' */
+  /** 'unit' | 'project' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type' */
   kind: string;
-  /** Detail level: lower = higher-level (landscape/subsystem), deeper = L2/L3. */
+  /** Detail level: lower = higher-level (landscape/subsystem), deeper = L2/L3/L4
+   *  (0 unit/project, 1 subsystem, 2 component, 3 interface/type, 4 implementation). */
   level: number;
   /** Id of the containing node, for hierarchical expand/collapse. Spans the full
    *  environment tree: unit→unit (nested org hierarchy over the qualified unit
@@ -926,6 +927,14 @@ export interface WebGraphModel {
   level: number;
   generatedAt: string;
   scope?: string;
+}
+
+/** A project's editable configuration view for the web UI: the project-level
+ *  architectural profile (project.yaml `projectType`, 'backend' default) and
+ *  whether the project currently holds a lock record. */
+export interface ProjectConfigView {
+  projectType: string;
+  locked: boolean;
 }
 
 /** The pre-auth login-options projection the login screen renders from: which
