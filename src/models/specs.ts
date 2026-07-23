@@ -594,6 +594,14 @@ export const NarrativeStepSchema = z.object({
   targetComponent: z.string().optional(), // Required if type is 'call' or 'dispatch', references L2 Component id
   targetMethod: z.string().optional(),    // Required if type is 'call', references Method name on target interface
   capability: z.string().optional(),      // Required if type is 'dispatch': the capability routed through the target Portal's dispatch table
+  /**
+   * call/dispatch only: the credential this step presents to an authed callee
+   * Portal, and WHERE it is loaded from (`from` — a secret-store component id,
+   * `env:API_KEY`, a config key, a vault ref, …). A declared DESIGN NOTE — wairon
+   * never fetches it — but its absence on a call into a Portal whose `auth ≠ none`
+   * warns (PORTAL_AUTH_UNMET), so credential loading is never overlooked.
+   */
+  auth: z.object({ from: z.string(), note: z.string().optional() }).optional(),
   assertsGuarantees: z.array(GuaranteeSchema).optional(),
   /**
    * Declared entity invariants this step upholds, as "<type-id>.<invariant-id>"

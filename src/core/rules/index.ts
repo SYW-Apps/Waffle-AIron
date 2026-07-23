@@ -45,6 +45,7 @@ import { integrationConformanceRule } from './integration-conformance.js';
 import { hiddenStateRule } from './hidden-state.js';
 import { dependencyConformanceRule } from './dependency-conformance.js';
 import { lintAllowsRule } from './lint-allows.js';
+import { portalCallAuthRule } from './portal-call-auth.js';
 import { emptyCodeModel, CodeModel } from '../source-analysis.js';
 
 export * from './types.js';
@@ -73,6 +74,9 @@ export const SDD_RULES: SddRule[] = [
   narrativeAntipatternsRule,
   narrativeDetailRule,
   portalsRule,
+  // Cross-call auth: a narrative call into an authed Portal must name its
+  // credential source (rides with the portal family).
+  portalCallAuthRule,
   stereotypeDepsRule,
   patternsRule,
   // Facade shape rides with pattern ownership: same §7 doctrine, narrative side.
@@ -159,6 +163,7 @@ const DEPTH_GATED_CODES: Record<string, DesignDepth> = {
   // L4 expectations: implementations and their code linkage.
   MISSING_IMPLEMENTATION_METHOD: 'implementations',
   MISSING_SOURCE_PATH: 'implementations',
+  PORTAL_AUTH_UNMET: 'implementations',
   MISSING_SOURCE_FILE: 'implementations',
   SOURCE_PATH_ESCAPES_ROOT: 'implementations',
   UNREALIZED_METHOD: 'implementations',
