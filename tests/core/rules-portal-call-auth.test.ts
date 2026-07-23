@@ -26,8 +26,8 @@ describe('PORTAL_AUTH_UNMET — cross-call auth conformance', () => {
     if (proj) fs.rmSync(proj, { recursive: true, force: true });
   });
 
-  function build(opts: { stepAuth?: { from: string }; portalScheme?: string } = {}): void {
-    const { stepAuth, portalScheme = 'bearer' } = opts;
+  function build(opts: { stepAuth?: { from: string }; portalScheme?: string; stepType?: 'call' | 'dispatch' } = {}): void {
+    const { stepAuth, portalScheme = 'bearer', stepType = 'call' } = opts;
     proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-pca-'));
     fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
     setProjectRoot(proj);
@@ -57,12 +57,40 @@ describe('PORTAL_AUTH_UNMET — cross-call auth conformance', () => {
       methods: [{ name: 'run', description: 'run', signature: 'run(): void', returns: 'void' }],
       createdAt: now, updatedAt: now,
     });
+    const step = stepType === 'dispatch'
+      ? { stepNumber: 1, description: 'route inbound through the portal', type: 'dispatch', targetComponent: 'ext-portal', capability: 'fetch' }
+      : { stepNumber: 1, description: 'reach the external authed portal', type: 'call', targetComponent: 'ext-portal', targetMethod: 'fetch', ...(stepAuth ? { auth: stepAuth } : {}) };
     saveImplementationSpec({
       id: 'caller_impl', name: 'CallerImpl', description: 'd', contract: 'icaller',
+      methods: [{ name: 'run', detail: 'calls-only', narrative: [step] }],
+      createdAt: now, updatedAt: now,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+    invalidateSpecCache();
+  }
+
+  // A gateway service whose narrative forwards to N internal authed portals — the
+  // realistic microservice shape (one public gateway → internal service portals).
+  function buildGateway(sources: (string | undefined)[]): void {
+    proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-pca-gw-'));
+    fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
+    setProjectRoot(proj);
+    saveSystemSpec({ schemaVersion: '1.0.0', name: 'Sys', vision: 't', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    saveSubsystemSpec({ id: 'sub', name: 'Sub', description: 'd', parentSystem: 'Sys', publicInterfaces: [], trustedLinks: [], createdAt: now, updatedAt: now } as any);
+    sources.forEach((_, i) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      saveComponentSpec({ id: `svc${i}-portal`, name: `Svc${i}`, description: 'd', subsystem: 'sub', componentType: 'Portal', portalType: 'HTTP_API', auth: { scheme: 'apiKey', in: 'header', name: 'X-Svc-Key' }, owns: [], dependsOn: [], createdAt: now, updatedAt: now } as any);
+      saveInterfaceSpec({ id: `isvc${i}-portal`, name: `ISvc${i}`, description: 'd', component: `svc${i}-portal`, methods: [{ name: 'op', description: 'op', signature: 'op(): void', returns: 'void' }], createdAt: now, updatedAt: now });
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    saveComponentSpec({ id: 'gateway', name: 'Gateway', subsystem: 'sub', description: 'd', componentType: 'Gateway', owns: [], dependsOn: [], createdAt: now, updatedAt: now } as any);
+    saveInterfaceSpec({ id: 'igateway', name: 'IGateway', description: 'd', component: 'gateway', methods: [{ name: 'route', description: 'route', signature: 'route(): void', returns: 'void' }], createdAt: now, updatedAt: now });
+    saveImplementationSpec({
+      id: 'gateway_impl', name: 'GatewayImpl', description: 'd', contract: 'igateway',
       methods: [{
-        name: 'run', detail: 'calls-only', narrative: [
-          { stepNumber: 1, description: 'reach the external authed portal', type: 'call', targetComponent: 'ext-portal', targetMethod: 'fetch', ...(stepAuth ? { auth: stepAuth } : {}) },
-        ],
+        name: 'route', detail: 'calls-only',
+        narrative: sources.map((src, i) => ({ stepNumber: i + 1, description: `forward to svc${i}`, type: 'call', targetComponent: `svc${i}-portal`, targetMethod: 'op', ...(src ? { auth: { from: src } } : {}) })),
       }],
       createdAt: now, updatedAt: now,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -88,6 +116,21 @@ describe('PORTAL_AUTH_UNMET — cross-call auth conformance', () => {
 
   it('does not fire when the callee portal needs no auth', () => {
     build({ portalScheme: 'none' });
+    expect(authIssues(validateSddTree())).toHaveLength(0);
+  });
+
+  it('does not fire on a dispatch step (a portal\'s own inbound routing, not an outbound call)', () => {
+    build({ stepType: 'dispatch' });
+    expect(authIssues(validateSddTree())).toHaveLength(0);
+  });
+
+  it('a gateway forwarding to internal authed portals warns PER undeclared call', () => {
+    buildGateway([undefined, undefined]);
+    expect(authIssues(validateSddTree())).toHaveLength(2);
+  });
+
+  it('a gateway clears once every forward names where its credential loads from', () => {
+    buildGateway(['config:svc0_key', 'config:svc1_key']);
     expect(authIssues(validateSddTree())).toHaveLength(0);
   });
 });

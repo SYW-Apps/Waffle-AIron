@@ -14,17 +14,21 @@ import { SddRule } from './types.js';
 export const portalCallAuthRule: SddRule = {
   name: 'portal-call-auth',
   description:
-    "A narrative call/dispatch into a Portal whose auth is not `none` must declare the credential source it presents — the step's `auth.from`, a design note naming where the secret loads from (a secret-store component, env var, config key, vault ref). Its absence warns (PORTAL_AUTH_UNMET) so credential loading is never overlooked; the actual secret is never stored in the spec.",
+    "An OUTBOUND narrative `call` into ANOTHER component's Portal whose auth is not `none` must declare the credential source it presents — the step's `auth.from`, a design note naming where the secret loads from (a secret-store component, env var, config key, vault ref). Its absence warns (PORTAL_AUTH_UNMET) so credential loading is never overlooked; the actual secret is never stored in the spec. Dispatch steps (a portal's OWN inbound routing) and self-calls are not cross-service calls and are excluded.",
   codes: [
-    { code: 'PORTAL_AUTH_UNMET', defaultSeverity: 'warning', summary: 'A narrative call into an authed Portal does not declare where its credential loads from' },
+    { code: 'PORTAL_AUTH_UNMET', defaultSeverity: 'warning', summary: 'A narrative call into another component\'s authed Portal does not declare where its credential loads from' },
   ],
   check(ctx) {
     for (const impl of ctx.implementations) {
+      const ownComponent = ctx.interfaceMap.get(impl.contract)?.component;
       const draft = ctx.isImplementationDraft(impl);
       for (const method of impl.methods ?? []) {
         for (const step of method.narrative ?? []) {
-          if (step.type !== 'call' && step.type !== 'dispatch') continue;
-          if (!step.targetComponent) continue;
+          // Only OUTBOUND calls into ANOTHER component's portal. A `dispatch` is a
+          // portal's own INBOUND routing (not a cross-service call), and a component
+          // never calls its own portal — both are excluded.
+          if (step.type !== 'call') continue;
+          if (!step.targetComponent || step.targetComponent === ownComponent) continue;
           const target = ctx.componentMap.get(step.targetComponent);
           if (!target || target.componentType !== 'Portal') continue;
           if (!target.auth || target.auth.scheme === 'none') continue;
