@@ -717,7 +717,7 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
   position: sticky;
   top: 8px;
 }
-.spec-tree { max-height: 62vh; overflow-y: auto; padding: 8px 6px; }
+.spec-tree { max-height: calc(100vh - 220px); overflow-y: auto; padding: 8px 6px; }
 .tree-row { display: flex; align-items: center; gap: 2px; }
 .tree-caret {
   flex: 0 0 auto; width: 16px; height: 22px; border: none; background: none;

@@ -79,7 +79,15 @@ export function raw(path: string): Promise<Response> {
 export async function mcpCall<T = unknown>(projectId: string, name: string, args: object): Promise<T> {
   const res = await request('/mcp', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'X-Wairon-Project': projectId },
+    headers: {
+      'content-type': 'application/json',
+      // The MCP StreamableHTTPServerTransport rejects the request (406 "must accept
+      // both application/json and text/event-stream") unless the client advertises
+      // BOTH — it may answer with JSON or an SSE stream. The host runs it with
+      // enableJsonResponse, so we get JSON back, but the Accept header is required.
+      accept: 'application/json, text/event-stream',
+      'X-Wairon-Project': projectId,
+    },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }),
   });
 
