@@ -2975,6 +2975,14 @@ export function mountCanvas(host, model, opts = {}) {
       }
       body += '<p class="desc">' + esc(c.description) + '</p>';
 
+      if (c.externalLinks && c.externalLinks.length) {
+        body += section('External links', c.externalLinks.length, c.externalLinks.map(function (l) {
+          var label = l.label || l.url;
+          var tag = l.type === 'implementation' ? staticChip('source') : '';
+          return '<div class="method">' + tag + '<a href="' + esc(l.url) + '" target="_blank" rel="noopener" style="color:var(--accent);word-break:break-all">' + esc(label) + ' \u2197</a></div>';
+        }).join(''), true);
+      }
+
       var depInner = (c.dependsOn.length ? c.dependsOn.map(function (d) { return chip(d, 'component', d); }).join('') : '<span class="desc">none</span>')
         + (c.owns.length ? '<div style="margin-top:8px"><b style="font-size:11px">Owns:</b><br>' + c.owns.map(function (d) { return chip(d, 'component', d); }).join('') + '</div>' : '');
       body += section('Dependencies', c.dependsOn.length + c.owns.length, depInner, true);

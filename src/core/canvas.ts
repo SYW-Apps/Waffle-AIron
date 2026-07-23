@@ -111,6 +111,9 @@ export interface CanvasModel {
         err?: string;
       }[];
     }[];
+    /** Opaque external references surfaced on the canvas element (see ExternalLinkSchema).
+     *  wairon never fetches them; an `implementation` link is the external source-of-record. */
+    externalLinks?: { url: string; type: string; label?: string }[];
     /** Methods specified as intent prose instead of a narrative (the detail dial). */
     intents: { method: string; text: string }[];
   }[];
@@ -225,6 +228,7 @@ export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
       ...(ownerOf.has(comp.id) ? { owner: ownerOf.get(comp.id) } : {}),
       owns: comp.owns.filter(o => componentIds.has(o)),
       dependsOn: comp.dependsOn,
+      ...(comp.externalLinks && comp.externalLinks.length ? { externalLinks: comp.externalLinks } : {}),
       interfaces: compInterfaces.map(i => ({
         id: i.id,
         name: i.name,
@@ -3703,6 +3707,14 @@ var MODEL = __MODEL_JSON__;
           + '</div>';
       }
       body += '<p class="desc">' + esc(c.description) + '</p>';
+
+      if (c.externalLinks && c.externalLinks.length) {
+        body += section('External links', c.externalLinks.length, c.externalLinks.map(function (l) {
+          var label = l.label || l.url;
+          var tag = l.type === 'implementation' ? staticChip('source') : '';
+          return '<div class="method">' + tag + '<a href="' + esc(l.url) + '" target="_blank" rel="noopener" style="color:var(--accent);word-break:break-all">' + esc(label) + ' \\u2197</a></div>';
+        }).join(''), true);
+      }
 
       var depInner = (c.dependsOn.length ? c.dependsOn.map(function (d) { return chip(d, 'component', d); }).join('') : '<span class="desc">none</span>')
         + (c.owns.length ? '<div style="margin-top:8px"><b style="font-size:11px">Owns:</b><br>' + c.owns.map(function (d) { return chip(d, 'component', d); }).join('') + '</div>' : '');

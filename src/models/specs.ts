@@ -337,6 +337,23 @@ export const EventBindingSchema = z.object({
 });
 export type EventBinding = z.infer<typeof EventBindingSchema>;
 
+/**
+ * An opaque external reference on a component — a documented URL wairon does NOT
+ * fetch, resolve, or validate. `implementation` marks the external source-of-record
+ * (a cloud console, a Make.com scenario, a GitHub file) and stands in for a local
+ * sourcePath; `informative` is context only (docs, dashboards).
+ */
+export const ExternalLinkTypeSchema = z.enum(['implementation', 'informative']);
+export type ExternalLinkType = z.infer<typeof ExternalLinkTypeSchema>;
+
+export const ExternalLinkSchema = z.object({
+  url: z.string(),
+  /** Defaults to 'informative' so an untyped link never silently satisfies the source requirement. */
+  type: ExternalLinkTypeSchema.default('informative'),
+  label: z.string().optional(),
+});
+export type ExternalLink = z.infer<typeof ExternalLinkSchema>;
+
 export const ComponentSpecSchema = z.object({
   id: SpecIdSchema,
   name: z.string(),
@@ -361,6 +378,11 @@ export const ComponentSpecSchema = z.object({
   patterns: z.array(PatternRefSchema).optional(),
   /** Optional component variant — a declared, base-anchored specialization of this component's stereotype (resolved against the variant registry; UNKNOWN_VARIANT / VARIANT_BASE_MISMATCH). */
   variant: z.string().optional(),
+  /** Opaque external references (see ExternalLinkSchema) — documented URLs wairon does
+   *  not fetch or validate. An `implementation` link is the external source-of-record and
+   *  satisfies the source requirement for a source-less implementation (suppresses
+   *  MISSING_SOURCE_PATH); `informative` links are context only. */
+  externalLinks: z.array(ExternalLinkSchema).optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
   /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */

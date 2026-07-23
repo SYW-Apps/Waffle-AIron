@@ -133,6 +133,29 @@ describe('structural conformance — file level', () => {
     } finally { proj.cleanup(); }
   });
 
+  it('an `implementation` external link on the component satisfies the source requirement (no MISSING_SOURCE_PATH)', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator', 'externalLinks:\n  - url: "https://make.com/scenarios/42"\n    type: implementation\n    label: "Make scenario"');
+    proj.contract('orch-a', ['runFlow']);
+    proj.impl('orch-a', `methods:\n${INTENT('runFlow')}`);
+    proj.activate();
+    try {
+      // The external source-of-record stands in for a local sourcePath — nothing to check.
+      expect(conformanceIssues(validateSddTree())).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('an `informative` external link does NOT satisfy the source requirement (still MISSING_SOURCE_PATH)', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator', 'externalLinks:\n  - url: "https://docs.example.com"\n    type: informative');
+    proj.contract('orch-a', ['runFlow']);
+    proj.impl('orch-a', `methods:\n${INTENT('runFlow')}`);
+    proj.activate();
+    try {
+      expect(conformanceIssues(validateSddTree()).map(i => i.code)).toEqual(['MISSING_SOURCE_PATH']);
+    } finally { proj.cleanup(); }
+  });
+
   it('waives conformance findings to draft context on draft implementations', () => {
     const proj = createTempProject();
     proj.component('orch-a', 'Orchestrator');
