@@ -17,23 +17,31 @@ methods:
         description: OpenAPI rendering requested
         type: branch
         condition: format is openapi
-        onFalseStep: 4
+        onFalseStep: 5
       - stepNumber: 3
-        description: Render the snapshot as an OpenAPI 3.1 document
+        description: >-
+          Render the snapshot's HTTP entries as one OpenAPI 3.1 document per backing portal into
+          renderedSet
         type: call
         targetComponent: openapi_codec
-        targetMethod: toOpenApi
+        targetMethod: toOpenApiSet
       - stepNumber: 4
+        description: >-
+          Populate the result's renderedSet with the per-portal documents; set `rendered` to that
+          single document only when there is exactly one portal (one entry in the set), leaving
+          `rendered` unset when multiple portals produced multiple documents.
+        type: local
+      - stepNumber: 5
         description: An output path was given
         type: branch
         condition: outPath provided
-        onFalseStep: 6
-      - stepNumber: 5
+        onFalseStep: 7
+      - stepNumber: 6
         description: Write the snapshot (or rendered document) to the output path
         type: call
         targetComponent: surface_transfer_adapter
         targetMethod: writeSnapshotTo
-      - stepNumber: 6
+      - stepNumber: 7
         description: Return the projected snapshot
         type: return
         outcome: SurfaceSnapshot
@@ -127,4 +135,4 @@ lint:
         naming when the surfaces subsystem takes its final lock.
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-07-18T18:47:54.701Z'
+updatedAt: '2026-07-23T15:54:35.644Z'

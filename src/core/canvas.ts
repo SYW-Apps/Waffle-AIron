@@ -3697,7 +3697,7 @@ var MODEL = __MODEL_JSON__;
         + (scopeFocus ? staticChip('current view') : '')
         + chip(c.subsystem, 'subsystem', c.subsystem)
         + (scopeFocus ? '' : openViewButton('component', c.id, c.owns.length > 0))
-        + openApiButton(componentExposesApi(c), c.apiTag)
+        + openApiButton(componentExposesApi(c), c.id)
         + openSpecButton('component', c.id);
       
       var linkedTypes = MODEL.types.filter(function (t) { return t.componentClass === c.id; });

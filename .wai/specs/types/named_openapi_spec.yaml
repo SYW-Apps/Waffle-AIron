@@ -1,0 +1,24 @@
+kind: value-object
+id: named_openapi_spec
+name: NamedOpenApiSpec
+description: >-
+  One rendered per-portal OpenAPI 3.1 document. A snapshot's HTTP entries are partitioned by their
+  backing public Portal and each portal is rendered into its own named document (with its own
+  servers, securitySchemes and security). Distinct portals are never merged into a combined
+  document.
+fields:
+  - name: portalId
+    type: string
+    description: The backing Portal id (a surface entry's component) this document renders.
+    optional: false
+  - name: name
+    type: string
+    description: Human-readable spec name — the portal's surface name.
+    optional: false
+  - name: document
+    type: string
+    description: The serialized OpenAPI 3.1 document body for this portal.
+    optional: false
+methods: []
+createdAt: '2026-07-23T15:53:50.174Z'
+updatedAt: '2026-07-23T15:53:50.388Z'

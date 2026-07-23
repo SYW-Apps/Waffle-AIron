@@ -8,6 +8,14 @@ subsystem: sdd_surfaces
 componentType: Specialist
 owns: []
 dependsOn: []
+lint:
+  allow:
+    - code: UNUSED_METHOD
+      reason: >-
+        toOpenApi is retained as the single-document codec entry point consumed by sdd_host
+        share/download portals (a sibling subsystem, out of sdd_surfaces scope). Within this
+        subsystem the orchestrator now renders via the per-portal toOpenApiSet; toOpenApi stays live
+        through its cross-subsystem callers.
 status: complete
 createdAt: '2026-07-10T23:12:27.905Z'
-updatedAt: '2026-07-11T09:04:02.004Z'
+updatedAt: '2026-07-23T15:55:48.505Z'

@@ -40,12 +40,19 @@ methods:
           with params, returns, guarantees, effect, endpoints, plus the portal's dispatch table
         type: local
       - stepNumber: 8
-        description: Compute the transitive type closure of every exported signature and embed the definitions
+        description: >-
+          Copy the backing Portal's authentication requirement and basePath onto each surface
+          contract entry: set the entry's `auth` to the portal's projected PortalAuth (its security
+          scheme, or none) and the entry's `basePath` to the portal's basePath, so the codec can
+          emit per-portal OpenAPI servers and securitySchemes.
         type: local
       - stepNumber: 9
-        description: Stamp identity, origin generated, the current StateId, and generatedAt
+        description: Compute the transitive type closure of every exported signature and embed the definitions
         type: local
       - stepNumber: 10
+        description: Stamp identity, origin generated, the current StateId, and generatedAt
+        type: local
+      - stepNumber: 11
         description: Return the self-contained snapshot
         type: return
         outcome: SurfaceSnapshot
@@ -70,4 +77,4 @@ methods:
         outcome: SurfaceSnapshot
 status: complete
 createdAt: '2026-07-10T23:15:11.894Z'
-updatedAt: '2026-07-11T18:45:03.920Z'
+updatedAt: '2026-07-23T15:54:48.418Z'

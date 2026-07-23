@@ -1,0 +1,64 @@
+kind: value-object
+id: portal_auth
+name: PortalAuth
+description: >-
+  OpenAPI-securityScheme-shaped description of a public Portal's authentication requirement,
+  projected onto each surface contract entry. The `scheme` field is the discriminant: 'none' (or an
+  omitted PortalAuth) means the surface requires no security and the codec emits neither a
+  securityScheme nor an operation-level security requirement. All other fields are scheme-specific
+  and optional.
+fields:
+  - name: scheme
+    type: string
+    description: >-
+      Discriminant selecting the security scheme kind: none | apiKey | bearer | basic | oauth2 |
+      openIdConnect | custom. 'none' (or an omitted PortalAuth) means no security is required and
+      none is emitted.
+    optional: false
+  - name: in
+    type: string
+    description: 'apiKey only: where the key travels — header | query | cookie.'
+    optional: true
+  - name: name
+    type: string
+    description: 'apiKey only: the header/query/cookie parameter name carrying the key.'
+    optional: true
+  - name: bearerFormat
+    type: string
+    description: 'bearer only: format hint for the token, e.g. JWT.'
+    optional: true
+  - name: authorizationUrl
+    type: string
+    description: 'oauth2 only: the authorization endpoint URL.'
+    optional: true
+  - name: tokenUrl
+    type: string
+    description: 'oauth2 only: the token endpoint URL.'
+    optional: true
+  - name: refreshUrl
+    type: string
+    description: 'oauth2 only: the refresh endpoint URL.'
+    optional: true
+  - name: scopes
+    type: object[]
+    description: 'oauth2 only: the offered scopes; each element is { name: string, description: string }.'
+    optional: true
+  - name: flow
+    type: string
+    description: 'oauth2 only: the flow kind — authorizationCode | clientCredentials | implicit | password.'
+    optional: true
+  - name: openIdConnectUrl
+    type: string
+    description: 'openIdConnect only: the OpenID Connect discovery document URL.'
+    optional: true
+  - name: description
+    type: string
+    description: 'Any scheme: human-readable note about the auth requirement.'
+    optional: true
+  - name: example
+    type: string
+    description: 'Any scheme: an illustrative format example of a valid credential/token.'
+    optional: true
+methods: []
+createdAt: '2026-07-23T15:53:47.353Z'
+updatedAt: '2026-07-23T15:53:47.392Z'

@@ -23,6 +23,18 @@ methods:
         type: string
       - name: projectName
         type: string
+  - name: toOpenApiSet
+    description: >-
+      Render a snapshot's HTTP-transport entries as ONE OpenAPI 3.1 document per backing public
+      Portal: partition the entries by backing portal, render each portal over just its own entries
+      (its own servers from basePath, its own securitySchemes and per-operation security), and
+      return the named set. One portal yields one spec; distinct portals are never merged into a
+      combined document.
+    signature: 'toOpenApiSet(snapshot: SurfaceSnapshot): NamedOpenApiSpec[]'
+    returns: NamedOpenApiSpec[]
+    params:
+      - name: snapshot
+        type: SurfaceSnapshot
 status: complete
 createdAt: '2026-07-10T23:13:57.188Z'
-updatedAt: '2026-07-11T09:04:02.417Z'
+updatedAt: '2026-07-23T15:54:01.774Z'

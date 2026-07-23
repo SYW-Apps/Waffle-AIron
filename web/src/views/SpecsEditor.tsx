@@ -63,6 +63,9 @@ const AUDIENCE = ['project', 'department', 'instance', 'partner', 'external'];
 const NARRATIVE_DETAIL = ['full', 'calls-only', 'intent'];
 const CONFORMANCE = ['declared', 'anchored', 'off'];
 const EXTERNAL_LINK_TYPE = ['implementation', 'informative'];
+const AUTH_SCHEME = ['none', 'apiKey', 'bearer', 'basic', 'oauth2', 'openIdConnect', 'custom'];
+const AUTH_IN = ['header', 'query', 'cookie'];
+const OAUTH_FLOW = ['authorizationCode', 'clientCredentials', 'implicit', 'password'];
 const TYPE_KIND = ['entity', 'value-object'];
 const TYPE_FIELD_KEY = ['primary', 'unique', 'foreign'];
 const BUILTIN_GUARANTEES = ['idempotent', 'atomic', 'transactional', 'exactly-once'];
@@ -292,6 +295,66 @@ function ExternalLinksEditor(props: { links: any[]; onChange: (links: any[]) => 
   );
 }
 
+/** Editor for a Portal's auth (PortalAuth) — projected into the OpenAPI
+ *  securitySchemes/security. 'none' means no security. Per-scheme fields appear
+ *  as the scheme changes. (Switching schemes may leave harmless stale fields the
+ *  codec ignores — it dispatches on `scheme`.) */
+function PortalAuthEditor(props: { auth: any; onChange: (auth: any) => void }) {
+  const a = props.auth ?? { scheme: 'none' };
+  const scheme = a.scheme ?? 'none';
+  const set = (patch: Record<string, unknown>) => props.onChange({ ...a, ...patch });
+  const scopes: any[] = a.scopes ?? [];
+  const setScopes = (v: any[]) => set({ scopes: v });
+  return (
+    <div className="stack-sm">
+      <Field label="Auth scheme" hint="Default 'none' → no security. Portals with different auth must be separate components.">
+        <EnumSelect value={scheme} onChange={(s) => props.onChange(s === 'none' ? { scheme: 'none' } : { ...a, scheme: s })} options={AUTH_SCHEME} />
+      </Field>
+      {scheme === 'apiKey' && (
+        <div className="row-form">
+          <Field label="In"><EnumSelect value={a.in ?? 'header'} onChange={(v) => set({ in: v })} options={AUTH_IN} /></Field>
+          <Field label="Name"><TextInput value={a.name ?? ''} onChange={(v) => set({ name: v })} placeholder="X-API-Key" /></Field>
+        </div>
+      )}
+      {scheme === 'bearer' && (
+        <Field label="Bearer format"><TextInput value={a.bearerFormat ?? ''} onChange={(v) => set({ bearerFormat: v })} placeholder="JWT" /></Field>
+      )}
+      {scheme === 'oauth2' && (
+        <>
+          <Field label="Flow"><EnumSelect value={a.flow ?? 'authorizationCode'} onChange={(v) => set({ flow: v })} options={OAUTH_FLOW} /></Field>
+          <Field label="Authorization URL"><TextInput value={a.authorizationUrl ?? ''} onChange={(v) => set({ authorizationUrl: v })} placeholder="https://…/authorize" /></Field>
+          <Field label="Token URL"><TextInput value={a.tokenUrl ?? ''} onChange={(v) => set({ tokenUrl: v })} placeholder="https://…/token" /></Field>
+          <Field label="Refresh URL"><TextInput value={a.refreshUrl ?? ''} onChange={(v) => set({ refreshUrl: v })} placeholder="(optional)" /></Field>
+          <span className="field-label">Scopes</span>
+          {scopes.map((s, i) => (
+            <div key={i} className="row-form">
+              <Field label="Scope"><TextInput value={s.name ?? ''} onChange={(v) => setScopes(scopes.map((x, j) => (j === i ? { ...x, name: v } : x)))} /></Field>
+              <Field label="Description"><TextInput value={s.description ?? ''} onChange={(v) => setScopes(scopes.map((x, j) => (j === i ? { ...x, description: v } : x)))} /></Field>
+              <div className="row-form-action"><button type="button" className="icon-btn" aria-label="Remove scope" onClick={() => setScopes(scopes.filter((_, j) => j !== i))}>×</button></div>
+            </div>
+          ))}
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setScopes([...scopes, { name: '', description: '' }])}>+ scope</button>
+        </>
+      )}
+      {scheme === 'openIdConnect' && (
+        <Field label="OpenID Connect URL"><TextInput value={a.openIdConnectUrl ?? ''} onChange={(v) => set({ openIdConnectUrl: v })} placeholder="https://…/.well-known/openid-configuration" /></Field>
+      )}
+      {scheme === 'custom' && (
+        <div className="row-form">
+          <Field label="In"><EnumSelect value={a.in ?? 'header'} onChange={(v) => set({ in: v })} options={AUTH_IN} /></Field>
+          <Field label="Name"><TextInput value={a.name ?? ''} onChange={(v) => set({ name: v })} placeholder="Authorization" /></Field>
+        </div>
+      )}
+      {scheme !== 'none' && (
+        <div className="row-form">
+          <Field label="Description"><TextInput value={a.description ?? ''} onChange={(v) => set({ description: v })} placeholder="(optional)" /></Field>
+          <Field label="Format example"><TextInput value={a.example ?? ''} onChange={(v) => set({ example: v })} placeholder="e.g. Bearer <token>" /></Field>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** The tree-wide validation results rail (the whitespace to the right of the
  *  editor). Validation is a WHOLE-TREE concern, so it lives at the tab level —
  *  running it here (not per-spec) keeps results visible as you move between
@@ -494,6 +557,9 @@ function buildDelta(kind: SpecKind, orig: any, draft: any): Record<string, unkno
   const delta = scalarDelta(kind, orig, draft);
   if (kind === 'component' && !jeq(draft.externalLinks ?? [], orig.externalLinks ?? [])) {
     delta.externalLinks = draft.externalLinks ?? [];
+  }
+  if (kind === 'component' && !jeq(draft.auth ?? null, orig.auth ?? null)) {
+    delta.auth = draft.auth ?? { scheme: 'none' };
   }
   if (kind === 'implementation' && !jeq(draft.technologies ?? [], orig.technologies ?? [])) {
     delta.technologies = draft.technologies ?? [];
@@ -743,7 +809,12 @@ function SpecForm(props: {
             )}
           </div>
           {draft.componentType === 'Portal' && (
-            <Field label="Base path" hint="Prefix all this portal's endpoints mount under."><TextInput value={draft.basePath ?? ''} onChange={(v) => set('basePath', v)} placeholder="/v1" /></Field>
+            <Field label="Base path" hint="Prefix all this portal's endpoints mount under (the OpenAPI server url)."><TextInput value={draft.basePath ?? ''} onChange={(v) => set('basePath', v)} placeholder="/v1" /></Field>
+          )}
+          {draft.componentType === 'Portal' && (
+            <Field label="Authentication" hint="This portal's API auth — projected into its OpenAPI securitySchemes/security. Each public portal becomes its own named OpenAPI spec.">
+              <PortalAuthEditor auth={draft.auth} onChange={(v) => set('auth', v)} />
+            </Field>
           )}
           <Field label="External links" hint="Opaque URLs wairon does not fetch. An 'implementation' link is the external source-of-record (a Make scenario, cloud console, GitHub file) and satisfies the source requirement — no MISSING_SOURCE_PATH.">
             <ExternalLinksEditor links={draft.externalLinks ?? []} onChange={(v) => set('externalLinks', v)} />

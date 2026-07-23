@@ -18,9 +18,18 @@ methods:
         description: Render the embedded type closure as JSON-Schema component schemas
         type: local
       - stepNumber: 4
-        description: Emit the info block with project identity, version or StateId, and generatedAt
+        description: >-
+          Derive security from the entries' projected auth: for each entry whose auth.scheme is a
+          real scheme (apiKey | bearer | basic | oauth2 | openIdConnect | custom), add a
+          components.securitySchemes entry — deduplicating structurally identical schemes under a
+          shared scheme name — and attach the matching security requirement (including oauth2 scopes
+          when present) to that entry's operations; entries with no auth or scheme 'none' emit
+          neither a scheme nor operation-level security.
         type: local
       - stepNumber: 5
+        description: Emit the info block with project identity, version or StateId, and generatedAt
+        type: local
+      - stepNumber: 6
         description: Return the serialized OpenAPI 3.1 document
         type: return
         outcome: OpenAPI document
@@ -48,13 +57,55 @@ methods:
         type: local
       - stepNumber: 6
         description: >-
+          Read components.securitySchemes back into the entry's auth, symmetric with the x-wairon-*
+          handling: map the document's declared security scheme to a PortalAuth on the entry (scheme
+          kind, in/name, bearerFormat, oauth2 authorizationUrl/tokenUrl/refreshUrl/scopes/flow,
+          openIdConnectUrl) so an OpenAPI-format exchange round-trips auth; a document with no
+          security yields no auth.
+        type: local
+      - stepNumber: 7
+        description: >-
           Assemble the snapshot with origin authored, external audience, and version from the info
           block
         type: local
-      - stepNumber: 7
+      - stepNumber: 8
         description: Return the authored snapshot
         type: return
         outcome: SurfaceSnapshot
+  - name: toOpenApiSet
+    narrative:
+      - stepNumber: 1
+        description: Select the snapshot's HTTP-transport entries (same selection rule as toOpenApi).
+        type: local
+      - stepNumber: 2
+        description: >-
+          Partition the HTTP entries by backing portal — group them by each entry's `component` (the
+          backing Portal id).
+        type: local
+      - stepNumber: 3
+        description: For each portal partition
+        type: loop
+        loopKind: forEach
+        over: portal partitions
+        endStep: 5
+      - stepNumber: 4
+        description: >-
+          Render this partition as a standalone OpenAPI 3.1 document: reuse the operation-mapping
+          and JSON-Schema type-closure logic over only this partition's entries, set `servers` from
+          the partition's basePath, and emit only this partition's components.securitySchemes with
+          the matching per-operation security.
+        type: local
+      - stepNumber: 5
+        description: >-
+          Wrap the rendered document as a NamedOpenApiSpec { portalId = the backing Portal id, name
+          = the portal's surface name, document }.
+        type: local
+      - stepNumber: 6
+        description: >-
+          Return the named set — one spec per portal; distinct portals are never merged into a
+          combined document.
+        type: return
+        outcome: NamedOpenApiSpec[]
 status: complete
 createdAt: '2026-07-10T23:15:26.486Z'
-updatedAt: '2026-07-11T18:45:10.835Z'
+updatedAt: '2026-07-23T15:54:26.016Z'

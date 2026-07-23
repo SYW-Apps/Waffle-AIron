@@ -625,7 +625,7 @@ export function getWebProjectCanvasModel(cfg: HostConfig, sessionId: string, pro
  * (audience 'project' ceiling — every gateway entry), unlike a public share link,
  * which projects only the external surface.
  */
-export function getWebProjectOpenApi(cfg: HostConfig, sessionId: string, projectId: string): string {
+export function getWebProjectOpenApi(cfg: HostConfig, sessionId: string, projectId: string, portalId?: string): string {
   const principal = authenticateSession(cfg.dataDir, sessionId);
   if (!principal.authenticated) throw new UnauthenticatedError();
   if (!webproject.listProjects(cfg, sessionId).some((r) => r.id === projectId)) {
@@ -635,8 +635,33 @@ export function getWebProjectOpenApi(cfg: HostConfig, sessionId: string, project
   if (!root) throw new ForbiddenError('project not authorized or unknown');
   const result = runWithProjectRoot(root, () => hostSurfaces.exportBoundSurface('project', 'openapi')) as {
     rendered?: string;
+    renderedSet?: { portalId: string; name: string; document: string }[];
   };
-  return swaggerUiPage(result.rendered ?? '{}', projectId);
+  // One named spec per public portal. Fall back to the single `rendered` doc.
+  const specs = result.renderedSet ?? (result.rendered ? [{ portalId: '', name: projectId, document: result.rendered }] : []);
+  if (specs.length === 0) return swaggerUiPage('{}', projectId);
+  if (portalId) {
+    const sel = specs.find((s) => s.portalId === portalId) ?? specs[0];
+    return swaggerUiPage(sel.document, sel.name);
+  }
+  if (specs.length === 1) return swaggerUiPage(specs[0].document, specs[0].name);
+  // Multiple public portals ⇒ separate APIs. List them rather than merge.
+  return openApiIndexPage(projectId, specs);
+}
+
+/** A landing page listing a multi-portal project's per-portal OpenAPI specs — each
+ *  a separate API (own document + auth), opened via ?spec=<portalId>. */
+function openApiIndexPage(projectId: string, specs: { portalId: string; name: string }[]): string {
+  const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
+  const items = specs
+    .map((s) => `<li><a href="/web/openapi?projectId=${encodeURIComponent(projectId)}&spec=${encodeURIComponent(s.portalId)}">${esc(s.name)}</a> <code>${esc(s.portalId)}</code></li>`)
+    .join('');
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(projectId)} — API specs</title>`
+    + `<style>body{font-family:system-ui,sans-serif;max-width:680px;margin:48px auto;padding:0 20px;color:#e6e6e6;background:#161616}`
+    + `h1{font-size:20px}a{color:#6ea8fe;text-decoration:none}a:hover{text-decoration:underline}li{margin:10px 0}code{color:#8a94a6;font-size:12px;margin-left:8px}</style></head>`
+    + `<body><h1>${esc(projectId)} — API specs</h1>`
+    + `<p>This project exposes ${specs.length} separate public APIs, each with its own OpenAPI document and auth:</p>`
+    + `<ul>${items}</ul></body></html>`;
 }
 
 /**
@@ -3301,7 +3326,8 @@ export async function handleWebRequest(
     // interactive Swagger UI page (owner view — all audiences). Cross-project → 403.
     if (req.method === 'GET' && parts.length === 2 && parts[1] === 'openapi') {
       const projectId = url.searchParams.get('projectId') ?? '';
-      const html = getWebProjectOpenApi(cfg, sessionId, projectId);
+      const spec = url.searchParams.get('spec') ?? undefined;
+      const html = getWebProjectOpenApi(cfg, sessionId, projectId, spec);
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       res.end(html);
       return;
