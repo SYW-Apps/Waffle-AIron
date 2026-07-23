@@ -392,12 +392,16 @@ methods:
             step: 8
         defaultStep: 10
       - stepNumber: 2
-        description: Export the own surface (audience/format/out from options)
+        description: Export the own surface (audience/format/out/portal from options)
         type: call
         targetComponent: cli_surfaces_client_adapter
         targetMethod: exportSurface
       - stepNumber: 3
-        description: Print the export result
+        description: >-
+          Report the export result: every written path — with several portals and no --portal, one
+          file per portal is written and each path is listed. Without an out path, print the single
+          document when one portal remains, else list the available portals (portalId + name) so the
+          caller can pick with --portal, rather than printing nothing.
         type: return
         outcome: exported
       - stepNumber: 4
@@ -584,4 +588,4 @@ methods:
         error: unknown pack action (expected init | build | add | list | remove)
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-21T18:45:25.104Z'
+updatedAt: '2026-07-23T22:35:47.199Z'

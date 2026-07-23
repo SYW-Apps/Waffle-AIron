@@ -259,15 +259,21 @@ methods:
       - stepNumber: 6
         description: >-
           Generate the audience-filtered surface artifact for the bound project (native snapshot or
-          rendered OpenAPI)
+          rendered OpenAPI). For openapi: serve the per-portal document named by portalId; with
+          several portals and no portalId, produce an INDEX listing them (portalId + name) rather
+          than merging them or emitting an empty document; with exactly one portal, produce that
+          document.
         type: call
         targetComponent: host_surfaces_adapter
         targetMethod: exportBoundSurface
       - stepNumber: 7
-        description: Return the typed downloadable artifact (body, content type, filename)
+        description: >-
+          Return the typed downloadable artifact (body, content type, filename — the filename
+          carrying the selected portalId when one portal was chosen, so several downloads never
+          collide)
         type: return
         outcome: SurfaceArtifact
     detail: full
 status: complete
 createdAt: '2026-07-11T12:03:31.491Z'
-updatedAt: '2026-07-19T11:31:02.548Z'
+updatedAt: '2026-07-23T22:33:57.769Z'

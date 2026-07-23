@@ -21,9 +21,13 @@ methods:
   - name: downloadArtifact
     description: >-
       Resolve the token as above, then serve a captured artifact (html | openapi) ONLY when the link
-      enables that download; record the access with its outcome. Refuses when the link, artifact, or
-      permission is absent.
-    signature: 'downloadArtifact(token: string, kind: string, meta: ShareRequestMeta): ShareArtifactResult'
+      enables that download; record the access with its outcome. For openapi, portalId selects ONE
+      captured per-portal document; omitted with several captured specs serves an index listing them
+      (portalId + name) rather than merging or silently picking one; omitted with exactly one serves
+      that document. Refuses when the link, artifact, permission, or a named portalId is absent.
+    signature: >-
+      downloadArtifact(token: string, kind: string, meta: ShareRequestMeta, portalId?: string):
+      ShareArtifactResult
     returns: ShareArtifactResult
     params:
       - name: token
@@ -32,6 +36,9 @@ methods:
         type: string
       - name: meta
         type: ShareRequestMeta
+      - name: portalId
+        type: string
+        optional: true
 status: complete
 createdAt: '2026-07-17T22:30:27.895Z'
-updatedAt: '2026-07-18T10:10:39.256Z'
+updatedAt: '2026-07-23T22:15:43.278Z'

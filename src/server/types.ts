@@ -1,5 +1,6 @@
 import type { StateId } from '../core/statehash.js';
 import type { LockRecord } from '../core/lockfile.js';
+import type { NamedOpenApiSpec } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
 // Hosting value types (sdd_host)
@@ -602,10 +603,19 @@ export interface ShareSnapshot {
   capturedAt: string;
   /** Serialized CanvasModel JSON for the view. */
   canvasModel?: string;
-  /** Serialized OpenAPI document, when captured. */
+  /** Serialized OpenAPI document — captured when the shared surface has exactly
+   *  ONE portal. Retained so share links created before per-portal capture keep
+   *  serving their document unchanged; multi-portal shares populate openapiSet
+   *  instead. */
   openapi?: string;
   /** Standalone HTML export, when captured. */
   html?: string;
+  /** Every per-portal OpenAPI document in the shared surface, one per published
+   *  Portal, so a multi-portal project shares each API separately — distinct
+   *  portals are never merged into a combined document. Serving selects one by
+   *  portalId; when more than one is present and none is selected, an index
+   *  lists them. */
+  openapiSet?: NamedOpenApiSpec[];
 }
 
 /** One recorded access to a share link on the public surface. */

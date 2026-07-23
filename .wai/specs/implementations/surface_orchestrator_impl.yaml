@@ -29,7 +29,9 @@ methods:
         description: >-
           Populate the result's renderedSet with the per-portal documents; set `rendered` to that
           single document only when there is exactly one portal (one entry in the set), leaving
-          `rendered` unset when multiple portals produced multiple documents.
+          `rendered` unset when multiple portals produced multiple documents. When portalId names a
+          portal, narrow the set to that one document; a portalId naming no portal is rejected
+          rather than silently ignored.
         type: local
       - stepNumber: 5
         description: An output path was given
@@ -37,7 +39,11 @@ methods:
         condition: outPath provided
         onFalseStep: 7
       - stepNumber: 6
-        description: Write the snapshot (or rendered document) to the output path
+        description: >-
+          Write the output path: the snapshot for native format; for openapi, the single document
+          when one portal remains (either the project has one, or portalId selected one), and
+          otherwise ONE FILE PER PORTAL — the out path's stem suffixed with each portalId — never
+          only the first document.
         type: call
         targetComponent: surface_transfer_adapter
         targetMethod: writeSnapshotTo
@@ -135,4 +141,4 @@ lint:
         naming when the surfaces subsystem takes its final lock.
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-07-23T15:54:35.644Z'
+updatedAt: '2026-07-23T22:34:00.648Z'

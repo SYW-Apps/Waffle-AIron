@@ -6,6 +6,7 @@ import { resolveProjectRoot } from './projects.js';
 import { hostCore, hostSurfaces } from './adapters.js';
 import { ForbiddenError } from './errors.js';
 import type { Principal, ShareSnapshot } from './types.js';
+import type { NamedOpenApiSpec } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
 // Share Snapshot Repository + Specialist (sdd_host).
@@ -69,6 +70,47 @@ class ShareSnapshotRegistry {
   }
 }
 
+/**
+ * The payload served for an openapi request that names no portal when SEVERAL
+ * per-portal documents were captured: a machine-readable listing of the shared
+ * APIs (portalId + name) so a consumer picks one. Distinct portals are never
+ * merged into a combined document, and no empty document ever stands in for
+ * them. The share portal renders this into a link list; a download receives it
+ * verbatim. (Shape mirrored — as a parse — by the portal, which depends only on
+ * the access orchestrator.)
+ */
+function openApiIndexDocument(specs: NamedOpenApiSpec[]): string {
+  return JSON.stringify(
+    { openapiIndex: true, specs: specs.map((s) => ({ portalId: s.portalId, name: s.name })) },
+    null,
+    2,
+  );
+}
+
+/**
+ * Which captured OpenAPI payload answers a request: portalId selects exactly ONE
+ * per-portal document; several captured specs with no selection yield the INDEX
+ * of them; exactly one yields that document. A portalId naming no captured spec
+ * is REFUSED (null) — never silently substituted with another portal's API.
+ *
+ * Back-compat: a snapshot captured before per-portal capture holds only the
+ * single `openapi` field and no portal ids, so it keeps answering an unqualified
+ * request with exactly the document it always served.
+ */
+function selectCapturedOpenApi(snap: ShareSnapshot, portalId?: string): string | null {
+  const specs = snap.openapiSet;
+  if (!specs || specs.length === 0) {
+    if (portalId) return null; // nothing captured under that name
+    return snap.openapi ?? null;
+  }
+  if (portalId) {
+    const hit = specs.find((s) => s.portalId === portalId);
+    return hit ? hit.document : null;
+  }
+  if (specs.length === 1) return specs[0].document;
+  return openApiIndexDocument(specs);
+}
+
 class ShareSnapshotIndex {
   constructor(private readonly store: ShareSnapshotStore) {}
 
@@ -76,12 +118,12 @@ class ShareSnapshotIndex {
     return this.store.read(snapshotId);
   }
 
-  getArtifact(snapshotId: string, kind: string): string | null {
+  getArtifact(snapshotId: string, kind: string, portalId?: string): string | null {
     const snap = this.store.read(snapshotId);
     if (!snap) return null;
     if (kind === 'canvas') return snap.canvasModel ?? null;
     if (kind === 'html') return snap.html ?? null;
-    if (kind === 'openapi') return snap.openapi ?? null;
+    if (kind === 'openapi') return selectCapturedOpenApi(snap, portalId);
     return null;
   }
 }
@@ -96,8 +138,13 @@ export function getSnapshot(dataDir: string, snapshotId: string): ShareSnapshot 
   return new ShareSnapshotIndex(new ShareSnapshotStore(dataDir)).get(snapshotId);
 }
 
-export function getSnapshotArtifact(dataDir: string, snapshotId: string, kind: string): string | null {
-  return new ShareSnapshotIndex(new ShareSnapshotStore(dataDir)).getArtifact(snapshotId, kind);
+export function getSnapshotArtifact(
+  dataDir: string,
+  snapshotId: string,
+  kind: string,
+  portalId?: string,
+): string | null {
+  return new ShareSnapshotIndex(new ShareSnapshotStore(dataDir)).getArtifact(snapshotId, kind, portalId);
 }
 
 // ── share_snapshot_specialist ─────────────────────────────────────────────────
@@ -144,8 +191,20 @@ export function captureSnapshot(
       // API reveals nothing the diagram doesn't. (A future "API-only" link for
       // external 3rd parties, who never see the diagram, is the place to filter to
       // the external-only surface instead.)
-      const result = hostSurfaces.exportBoundSurface('project', 'openapi') as { rendered?: string };
-      snapshot.openapi = result.rendered ?? '{}';
+      //
+      // A project publishes ONE OpenAPI document PER PORTAL — distinct portals
+      // are separate APIs with their own servers and auth, never merged. Capture
+      // the WHOLE set, so a multi-portal share can serve each API (and index
+      // them); the single-document field is filled only when exactly one portal
+      // exists, which is also what pre-existing links carry. Capturing nothing is
+      // honest when the project publishes no portal; an empty `{}` placeholder
+      // standing in for real APIs is not.
+      const result = hostSurfaces.exportBoundSurface('project', 'openapi');
+      const specs = result.renderedSet ?? [];
+      if (specs.length) {
+        snapshot.openapiSet = specs;
+        if (specs.length === 1) snapshot.openapi = specs[0].document;
+      }
     }
     return snapshot;
   });

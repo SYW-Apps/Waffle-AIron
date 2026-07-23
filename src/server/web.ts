@@ -639,10 +639,13 @@ export function getWebProjectOpenApi(cfg: HostConfig, sessionId: string, project
   };
   // One named spec per public portal. Fall back to the single `rendered` doc.
   const specs = result.renderedSet ?? (result.rendered ? [{ portalId: '', name: projectId, document: result.rendered }] : []);
-  if (specs.length === 0) return swaggerUiPage('{}', projectId);
+  // Never serve an EMPTY explorer, and never substitute a DIFFERENT API for the
+  // one that was asked for — both misrepresent what this project publishes. An
+  // unknown spec lands on the index of the APIs that actually exist.
+  if (specs.length === 0) return openApiIndexPage(projectId, []);
   if (portalId) {
-    const sel = specs.find((s) => s.portalId === portalId) ?? specs[0];
-    return swaggerUiPage(sel.document, sel.name);
+    const sel = specs.find((s) => s.portalId === portalId);
+    return sel ? swaggerUiPage(sel.document, sel.name) : openApiIndexPage(projectId, specs);
   }
   if (specs.length === 1) return swaggerUiPage(specs[0].document, specs[0].name);
   // Multiple public portals ⇒ separate APIs. List them rather than merge.
@@ -660,8 +663,10 @@ function openApiIndexPage(projectId: string, specs: { portalId: string; name: st
     + `<style>body{font-family:system-ui,sans-serif;max-width:680px;margin:48px auto;padding:0 20px;color:#e6e6e6;background:#161616}`
     + `h1{font-size:20px}a{color:#6ea8fe;text-decoration:none}a:hover{text-decoration:underline}li{margin:10px 0}code{color:#8a94a6;font-size:12px;margin-left:8px}</style></head>`
     + `<body><h1>${esc(projectId)} — API specs</h1>`
-    + `<p>This project exposes ${specs.length} separate public APIs, each with its own OpenAPI document and auth:</p>`
-    + `<ul>${items}</ul></body></html>`;
+    + (specs.length
+      ? `<p>This project exposes ${specs.length} separate public APIs, each with its own OpenAPI document and auth:</p><ul>${items}</ul>`
+      : `<p>This project publishes no HTTP API — no public portal exposes one.</p>`)
+    + `</body></html>`;
 }
 
 /**

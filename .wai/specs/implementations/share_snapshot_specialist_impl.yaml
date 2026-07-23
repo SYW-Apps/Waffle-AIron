@@ -30,7 +30,11 @@ methods:
         condition: artifacts includes 'openapi'
         onFalseStep: 7
       - stepNumber: 6
-        description: Project the OpenAPI document payload at the shared audience ceiling.
+        description: >-
+          Project EVERY per-portal OpenAPI document at the shared audience ceiling (the project
+          ceiling — all published portals, so the captured APIs match the shared canvas) and store
+          the whole set on the snapshot; the single-document field is filled only when exactly one
+          portal exists. Never collapse several portals to one document or to an empty placeholder.
         type: call
         targetComponent: host_surfaces_adapter
         targetMethod: exportBoundSurface
@@ -40,4 +44,4 @@ methods:
         outcome: snapshot
 status: complete
 createdAt: '2026-07-18T09:30:49.067Z'
-updatedAt: '2026-07-18T10:10:41.032Z'
+updatedAt: '2026-07-23T22:30:33.083Z'
