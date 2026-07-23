@@ -62,6 +62,7 @@ const PUBLIC_INTERFACE_TYPE = ['REST', 'GraphQL', 'MessageBus', 'RPC', 'Custom']
 const AUDIENCE = ['project', 'department', 'instance', 'partner', 'external'];
 const NARRATIVE_DETAIL = ['full', 'calls-only', 'intent'];
 const CONFORMANCE = ['declared', 'anchored', 'off'];
+const EXTERNAL_LINK_TYPE = ['implementation', 'informative'];
 const TYPE_KIND = ['entity', 'value-object'];
 const TYPE_FIELD_KEY = ['primary', 'unique', 'foreign'];
 const BUILTIN_GUARANTEES = ['idempotent', 'atomic', 'transactional', 'exactly-once'];
@@ -256,6 +257,37 @@ function TextListEditor(props: {
           + {props.addLabel ?? 'Add'}
         </button>
       )}
+    </div>
+  );
+}
+
+/** Editor for a component's opaque external links — each a { url, type, label? }.
+ *  An `implementation` link is the external source-of-record (satisfies the source
+ *  requirement); `informative` links are context. wairon never fetches these. */
+function ExternalLinksEditor(props: { links: any[]; onChange: (links: any[]) => void }) {
+  const links = props.links ?? [];
+  const update = (i: number, patch: Record<string, unknown>) =>
+    props.onChange(links.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+  const remove = (i: number) => props.onChange(links.filter((_, j) => j !== i));
+  return (
+    <div className="stack-sm">
+      {links.map((l, i) => (
+        <div key={i} className="sub-card">
+          <div className="row-form">
+            <Field label="URL"><TextInput value={l.url ?? ''} onChange={(v) => update(i, { url: v })} placeholder="https://…" /></Field>
+            <Field label="Type" info="An 'implementation' link is the external source-of-record (it satisfies the source requirement); 'informative' is context only.">
+              <EnumSelect value={l.type ?? 'informative'} onChange={(v) => update(i, { type: v })} options={EXTERNAL_LINK_TYPE} />
+            </Field>
+            <Field label="Label"><TextInput value={l.label ?? ''} onChange={(v) => update(i, { label: v })} placeholder="(optional)" /></Field>
+            <div className="row-form-action">
+              <button type="button" className="icon-btn" aria-label="Remove link" title="Remove" onClick={() => remove(i)}>×</button>
+            </div>
+          </div>
+        </div>
+      ))}
+      <button type="button" className="btn btn-ghost btn-sm" onClick={() => props.onChange([...links, { url: '', type: 'informative' }])}>
+        + external link
+      </button>
     </div>
   );
 }
@@ -460,6 +492,9 @@ function lifecycleDelta(orig: any, draft: any): any[] {
 
 function buildDelta(kind: SpecKind, orig: any, draft: any): Record<string, unknown> {
   const delta = scalarDelta(kind, orig, draft);
+  if (kind === 'component' && !jeq(draft.externalLinks ?? [], orig.externalLinks ?? [])) {
+    delta.externalLinks = draft.externalLinks ?? [];
+  }
   if (kind === 'implementation' && !jeq(draft.technologies ?? [], orig.technologies ?? [])) {
     delta.technologies = draft.technologies ?? [];
   }
@@ -710,6 +745,9 @@ function SpecForm(props: {
           {draft.componentType === 'Portal' && (
             <Field label="Base path" hint="Prefix all this portal's endpoints mount under."><TextInput value={draft.basePath ?? ''} onChange={(v) => set('basePath', v)} placeholder="/v1" /></Field>
           )}
+          <Field label="External links" hint="Opaque URLs wairon does not fetch. An 'implementation' link is the external source-of-record (a Make scenario, cloud console, GitHub file) and satisfies the source requirement — no MISSING_SOURCE_PATH.">
+            <ExternalLinksEditor links={draft.externalLinks ?? []} onChange={(v) => set('externalLinks', v)} />
+          </Field>
         </div>
       )}
 
