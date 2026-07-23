@@ -26,8 +26,19 @@ describe('PORTAL_AUTH_UNMET — cross-call auth conformance', () => {
     if (proj) fs.rmSync(proj, { recursive: true, force: true });
   });
 
-  function build(opts: { stepAuth?: { from: string }; portalScheme?: string; stepType?: 'call' | 'dispatch' } = {}): void {
-    const { stepAuth, portalScheme = 'bearer', stepType = 'call' } = opts;
+  function build(opts: {
+    stepAuth?: { from: string };
+    portalScheme?: string;
+    stepType?: 'call' | 'dispatch';
+    callerType?: string;
+    callerDependsOn?: string[];
+    callerAuth?: Record<string, unknown>;
+    providers?: { id: string; type: string }[];
+  } = {}): void {
+    const {
+      stepAuth, portalScheme = 'bearer', stepType = 'call',
+      callerType = 'Orchestrator', callerDependsOn = [], callerAuth, providers = [],
+    } = opts;
     proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-pca-'));
     fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
     setProjectRoot(proj);
@@ -49,9 +60,15 @@ describe('PORTAL_AUTH_UNMET — cross-call auth conformance', () => {
       createdAt: now, updatedAt: now,
     });
 
+    // Optional secret-provider components an `auth.from: component:<id>` may point at.
+    for (const p of providers) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      saveComponentSpec({ id: p.id, name: p.id, description: 'd', subsystem: 'sub', componentType: p.type, owns: [], dependsOn: [], createdAt: now, updatedAt: now } as any);
+    }
+
     // The caller whose narrative reaches into the authed portal.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    saveComponentSpec({ id: 'caller', name: 'Caller', description: 'd', subsystem: 'sub', componentType: 'Orchestrator', owns: [], dependsOn: [], createdAt: now, updatedAt: now } as any);
+    saveComponentSpec({ id: 'caller', name: 'Caller', description: 'd', subsystem: 'sub', componentType: callerType, owns: [], dependsOn: callerDependsOn, ...(callerAuth ? { auth: callerAuth } : {}), createdAt: now, updatedAt: now } as any);
     saveInterfaceSpec({
       id: 'icaller', name: 'ICaller', description: 'd', component: 'caller',
       methods: [{ name: 'run', description: 'run', signature: 'run(): void', returns: 'void' }],
@@ -100,6 +117,8 @@ describe('PORTAL_AUTH_UNMET — cross-call auth conformance', () => {
 
   const authIssues = (res: { issues: { code: string; severity: string; specId?: string }[] }) =>
     res.issues.filter(i => i.code === 'PORTAL_AUTH_UNMET');
+  const issuesOf = (res: { issues: { code: string }[] }, code: string) =>
+    res.issues.filter(i => i.code === code);
 
   it('warns when a narrative calls an authed portal without a credential source', () => {
     build();
@@ -132,5 +151,57 @@ describe('PORTAL_AUTH_UNMET — cross-call auth conformance', () => {
   it('a gateway clears once every forward names where its credential loads from', () => {
     buildGateway(['config:svc0_key', 'config:svc1_key']);
     expect(authIssues(validateSddTree())).toHaveLength(0);
+  });
+
+  // --- (1a) auth belongs on a Portal, nowhere else -------------------------
+  it('warns AUTH_ON_NON_PORTAL when a non-Portal component declares auth', () => {
+    build({ callerType: 'Store', callerAuth: { scheme: 'apiKey', in: 'header', name: 'X-Svc-Token' } });
+    expect(issuesOf(validateSddTree(), 'AUTH_ON_NON_PORTAL')).toHaveLength(1);
+  });
+
+  // --- (1b) the credential presenter must be an Adapter --------------------
+  it('warns AUTH_PRESENTER_NOT_ADAPTER when a non-Adapter authenticates the outbound call', () => {
+    build(); // caller is an Orchestrator
+    expect(issuesOf(validateSddTree(), 'AUTH_PRESENTER_NOT_ADAPTER')).toHaveLength(1);
+  });
+
+  it('is silent on the presenter check when the caller is an Adapter', () => {
+    build({ callerType: 'Adapter' });
+    expect(issuesOf(validateSddTree(), 'AUTH_PRESENTER_NOT_ADAPTER')).toHaveLength(0);
+  });
+
+  // --- (2a) a component: credential source is a checked graph edge ---------
+  it('flags a component: source that does not resolve (UNKNOWN_AUTH_SOURCE)', () => {
+    build({ callerType: 'Adapter', stepAuth: { from: 'component:ghost' } });
+    expect(issuesOf(validateSddTree(), 'UNKNOWN_AUTH_SOURCE')).toHaveLength(1);
+  });
+
+  it('flags a resolved source that is neither Adapter nor Store (AUTH_SOURCE_NOT_PROVIDER)', () => {
+    build({ callerType: 'Adapter', callerDependsOn: ['aux'], providers: [{ id: 'aux', type: 'Orchestrator' }], stepAuth: { from: 'component:aux' } });
+    const res = validateSddTree();
+    expect(issuesOf(res, 'AUTH_SOURCE_NOT_PROVIDER')).toHaveLength(1);
+    expect(issuesOf(res, 'AUTH_SOURCE_UNWIRED')).toHaveLength(0); // it IS wired
+  });
+
+  it('flags a valid provider the presenter is not wired to (AUTH_SOURCE_UNWIRED)', () => {
+    build({ callerType: 'Adapter', providers: [{ id: 'vault', type: 'Adapter' }], stepAuth: { from: 'component:vault' } });
+    const res = validateSddTree();
+    expect(issuesOf(res, 'AUTH_SOURCE_UNWIRED')).toHaveLength(1);
+    expect(issuesOf(res, 'AUTH_SOURCE_NOT_PROVIDER')).toHaveLength(0); // an Adapter is a valid provider
+  });
+
+  it('is fully satisfied when auth.from names a wired Adapter provider', () => {
+    build({ callerType: 'Adapter', callerDependsOn: ['vault'], providers: [{ id: 'vault', type: 'Adapter' }], stepAuth: { from: 'component:vault' } });
+    const res = validateSddTree();
+    for (const code of ['PORTAL_AUTH_UNMET', 'AUTH_PRESENTER_NOT_ADAPTER', 'UNKNOWN_AUTH_SOURCE', 'AUTH_SOURCE_NOT_PROVIDER', 'AUTH_SOURCE_UNWIRED']) {
+      expect(issuesOf(res, code)).toHaveLength(0);
+    }
+  });
+
+  it('treats an opaque (non-component:) source as a design note, no resolution', () => {
+    build({ callerType: 'Adapter', stepAuth: { from: 'config:svc_key' } });
+    const res = validateSddTree();
+    expect(issuesOf(res, 'UNKNOWN_AUTH_SOURCE')).toHaveLength(0);
+    expect(issuesOf(res, 'PORTAL_AUTH_UNMET')).toHaveLength(0);
   });
 });

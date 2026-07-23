@@ -15,13 +15,14 @@ export const PORTAL_TRANSPORT: Record<string, string | undefined> = {
 export const portalsRule: SddRule = {
   name: 'portal-endpoints',
   description:
-    'A Portal declares its portalType and binds every interface method to a concrete endpoint of the matching transport. Non-Portal components carry no portalType, basePath, or endpoints.',
+    'A Portal declares its portalType and binds every interface method to a concrete endpoint of the matching transport. Non-Portal components carry no portalType, basePath, endpoints, or auth (auth is inbound transport auth — a Gateway carries it on the Portal it owns).',
   codes: [
     { code: 'MISSING_PORTAL_TYPE', defaultSeverity: 'error', summary: 'Portal without a portalType' },
     { code: 'MISSING_ENDPOINT', defaultSeverity: 'error', summary: 'Portal method without a wire endpoint binding' },
     { code: 'ENDPOINT_TRANSPORT_MISMATCH', defaultSeverity: 'error', summary: 'Endpoint transport does not match the Portal portalType' },
     { code: 'UNEXPECTED_PORTAL_FIELD', defaultSeverity: 'error', summary: 'Non-Portal component with portalType/basePath' },
     { code: 'ARCHITECTURE_VIOLATION_NON_PORTAL_ENDPOINT', defaultSeverity: 'error', summary: 'Non-Portal component method declaring an endpoint' },
+    { code: 'AUTH_ON_NON_PORTAL', defaultSeverity: 'warning', summary: 'Non-Portal component declaring auth (auth is inbound transport auth, only meaningful on a Portal)' },
   ],
   check(ctx) {
     for (const comp of ctx.components) {
@@ -75,6 +76,20 @@ export const portalsRule: SddRule = {
             'error',
             'UNEXPECTED_PORTAL_FIELD',
             `Component "${comp.id}" does not have type "Portal" but has "portalType" or "basePath" configured.`,
+            comp.id,
+            isDraftCtx,
+          );
+        }
+
+        // Auth is inbound transport auth — it only means something on a
+        // component that exposes a surface (a Portal). On anything else it is
+        // ignored by the OpenAPI projection, so its presence is a modeling
+        // mistake: a Gateway carries auth on the Portal it owns, not on itself.
+        if (comp.auth !== undefined) {
+          ctx.addIssue(
+            'warning',
+            'AUTH_ON_NON_PORTAL',
+            `Component "${comp.id}" is a ${comp.componentType}, not a Portal, but declares "auth". Auth is inbound transport auth and is only meaningful on a Portal (a Gateway carries it on the Portal it owns). Move it to the exposed Portal, or remove it.`,
             comp.id,
             isDraftCtx,
           );
