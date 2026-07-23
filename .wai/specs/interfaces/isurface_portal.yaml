@@ -9,7 +9,9 @@ methods:
     description: >-
       Project the own tree's L0 gateway surface (entries at or below the audience ceiling) into a
       contract-grade snapshot; optionally render it through a codec format (native | openapi) and
-      write it to an output path.
+      write it to an output path. OpenAPI rendering produces one document per backing public portal
+      (renderedSet); a project with a single gateway portal yields a single document (also surfaced
+      as `rendered`).
     signature: 'exportSurface(maxAudience: string, format: string, outPath?: string): SurfaceSnapshot'
     returns: SurfaceSnapshot
     params:
@@ -62,4 +64,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-10T23:13:16.280Z'
-updatedAt: '2026-07-11T09:04:02.587Z'
+updatedAt: '2026-07-23T15:54:59.110Z'

@@ -20,7 +20,7 @@ import {
   listSnapshots,
   generateChildSnapshots,
 } from '../../src/core/surfaces.js';
-import { toOpenApi, fromOpenApi, isOpenApiDocument } from '../../src/core/openapi.js';
+import { toOpenApi, toOpenApiSet, fromOpenApi, isOpenApiDocument } from '../../src/core/openapi.js';
 import { validateSddTree } from '../../src/core/validation.js';
 import { createChainedSubsystem } from '../../src/core/provision.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
@@ -136,13 +136,68 @@ describe('surface projection (audience ceilings + type closure)', () => {
     buildParent(rootDir);
 
     const { rendered } = exportSurface('external', 'openapi');
-    expect(rendered).toBeDefined();
+    expect(rendered).toBeDefined(); // single public portal → the convenience single doc
     const doc = JSON.parse(rendered!);
     expect(doc.openapi).toBe('3.1.0');
-    expect(doc.info.title).toBe('root-system');
+    // Per-portal specs are titled by the portal (each is one API), not the project.
+    expect(doc.info.title).toBe('Gateway API');
     expect(doc.paths['/records/{id}'].get.operationId).toBe('fetchRecord');
     expect(doc.paths['/records/{id}'].get['x-wairon-guarantees']).toEqual(['idempotent']);
     expect(doc.components.schemas['invoice-record'].properties.owner.$ref).toBe('#/components/schemas/customer-ref');
+  });
+});
+
+describe('OpenAPI codec — portal auth + honest multi-spec', () => {
+  const httpMethod = (name: string, endpointPath: string) => ({
+    name, description: `${name} does a thing`, signature: `${name}(): void`, returns: 'void',
+    params: [], endpoint: { transport: 'HTTP' as const, method: 'GET' as const, path: endpointPath },
+  });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const snap = (entries: any[]): any => ({ projectName: 'multi', origin: 'generated', generatedAt: now, interfaces: entries, types: [] });
+
+  it('emits securitySchemes + per-operation security from a portal auth', () => {
+    const doc = JSON.parse(toOpenApi(snap([
+      { id: 'ext', name: 'Ext API', audience: 'external', type: 'REST', component: 'ext-portal',
+        auth: { scheme: 'bearer', bearerFormat: 'JWT' }, methods: [httpMethod('a', '/a')] },
+    ])));
+    expect(doc.components.securitySchemes.BearerAuth).toEqual({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' });
+    expect(doc.paths['/a'].get.security).toEqual([{ BearerAuth: [] }]);
+  });
+
+  it('a none/absent auth emits no security', () => {
+    const doc = JSON.parse(toOpenApi(snap([
+      { id: 'ext', name: 'Ext', audience: 'external', type: 'REST', component: 'ext', methods: [httpMethod('a', '/a')] },
+    ])));
+    expect(doc.components?.securitySchemes).toBeUndefined();
+    expect(doc.paths['/a'].get.security).toBeUndefined();
+  });
+
+  it('toOpenApiSet emits ONE named spec per portal — never merged, each with its own servers + auth', () => {
+    const specs = toOpenApiSet(snap([
+      { id: 'ext', name: 'External API', audience: 'external', type: 'REST', component: 'ext-portal',
+        basePath: '/ext', auth: { scheme: 'apiKey', in: 'header', name: 'X-Key' }, methods: [httpMethod('pub', '/pub')] },
+      { id: 'int', name: 'Internal API', audience: 'external', type: 'REST', component: 'int-portal',
+        basePath: '/int', auth: { scheme: 'bearer' }, methods: [httpMethod('priv', '/priv')] },
+    ]));
+    expect(specs.map(s => s.portalId)).toEqual(['ext-portal', 'int-portal']);
+    expect(specs.map(s => s.name)).toEqual(['External API', 'Internal API']);
+    const ext = JSON.parse(specs[0].document);
+    const int = JSON.parse(specs[1].document);
+    // Each spec is scoped to its own portal — no cross-contamination of paths.
+    expect(Object.keys(ext.paths)).toEqual(['/pub']);
+    expect(Object.keys(int.paths)).toEqual(['/priv']);
+    expect(ext.servers).toEqual([{ url: '/ext' }]);
+    expect(int.servers).toEqual([{ url: '/int' }]);
+    expect(ext.components.securitySchemes.ApiKeyAuth).toEqual({ type: 'apiKey', in: 'header', name: 'X-Key' });
+    expect(int.components.securitySchemes.BearerAuth).toEqual({ type: 'http', scheme: 'bearer' });
+  });
+
+  it('round-trips a bearer auth through fromOpenApi', () => {
+    const doc = toOpenApi(snap([
+      { id: 'ext', name: 'Ext', audience: 'external', type: 'REST', component: 'ext',
+        auth: { scheme: 'bearer', bearerFormat: 'JWT' }, methods: [httpMethod('a', '/a')] },
+    ]));
+    expect(fromOpenApi(doc, 'ext').interfaces[0].auth).toMatchObject({ scheme: 'bearer', bearerFormat: 'JWT' });
   });
 });
 

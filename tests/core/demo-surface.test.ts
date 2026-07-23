@@ -36,12 +36,18 @@ describe('demo OpenAPI surface projections', () => {
     }
   });
 
+  // Union of paths across the per-portal specs (multi-spec: one doc per portal).
   function surfacePaths(maxAudience: string): Record<string, unknown> {
     return runWithProjectRoot(base, () => {
       seedDemoTree();
       invalidateSpecCache();
-      const doc = JSON.parse(exportSurface(maxAudience, 'openapi').rendered ?? '{}') as { paths?: Record<string, unknown> };
-      return doc.paths ?? {};
+      const result = exportSurface(maxAudience, 'openapi');
+      const specs = result.renderedSet ?? (result.rendered ? [{ document: result.rendered }] : []);
+      const paths: Record<string, unknown> = {};
+      for (const s of specs) {
+        Object.assign(paths, (JSON.parse(s.document) as { paths?: Record<string, unknown> }).paths ?? {});
+      }
+      return paths;
     });
   }
 

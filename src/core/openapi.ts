@@ -1,6 +1,8 @@
 import * as yaml from 'js-yaml';
 import {
   MethodSignature,
+  NamedOpenApiSpec,
+  PortalAuth,
   SurfaceContractEntry,
   SurfaceSnapshot,
   SurfaceSnapshotSchema,
@@ -105,13 +107,84 @@ function operationFor(method: MethodSignature, closureIds: Set<string>): Record<
   return op;
 }
 
-export function toOpenApi(snapshot: SurfaceSnapshot): string {
-  const closureIds = new Set(snapshot.types.map(t => t.id));
-  const httpEntries = snapshot.interfaces.filter(e =>
+// ── Security: a Portal's auth → OpenAPI securitySchemes/security ─────────────
+
+/** Map a Portal's auth to an OpenAPI securityScheme object (null for 'none'). */
+function securitySchemeObject(auth: PortalAuth): Record<string, unknown> | null {
+  if (auth.scheme === 'none') return null;
+  const desc = auth.description ? { description: auth.description } : {};
+  switch (auth.scheme) {
+    case 'apiKey':
+      return { type: 'apiKey', in: auth.in ?? 'header', name: auth.name ?? 'X-API-Key', ...desc };
+    case 'bearer':
+      return { type: 'http', scheme: 'bearer', ...(auth.bearerFormat ? { bearerFormat: auth.bearerFormat } : {}), ...desc };
+    case 'basic':
+      return { type: 'http', scheme: 'basic', ...desc };
+    case 'oauth2': {
+      const flow: Record<string, unknown> = { scopes: Object.fromEntries((auth.scopes ?? []).map(s => [s.name, s.description])) };
+      if (auth.authorizationUrl) flow.authorizationUrl = auth.authorizationUrl;
+      if (auth.tokenUrl) flow.tokenUrl = auth.tokenUrl;
+      if (auth.refreshUrl) flow.refreshUrl = auth.refreshUrl;
+      return { type: 'oauth2', flows: { [auth.flow ?? 'authorizationCode']: flow }, ...desc };
+    }
+    case 'openIdConnect':
+      return { type: 'openIdConnect', openIdConnectUrl: auth.openIdConnectUrl ?? '', ...desc };
+    case 'custom':
+      return { type: 'apiKey', in: auth.in ?? 'header', name: auth.name ?? 'Authorization', description: auth.description ?? auth.example ?? 'Custom authentication scheme.' };
+    default:
+      return null;
+  }
+}
+
+function schemeBaseName(scheme: string): string {
+  return ({ apiKey: 'ApiKeyAuth', bearer: 'BearerAuth', basic: 'BasicAuth', oauth2: 'OAuth2', openIdConnect: 'OpenIdConnect', custom: 'CustomAuth' } as Record<string, string>)[scheme] ?? 'Auth';
+}
+
+/** securitySchemes for a set of entries (deduping identical schemes by content) +
+ *  the per-entry `security` requirement (scheme name → scope names) to attach. */
+function buildSecurity(entries: SurfaceContractEntry[]): {
+  schemes: Record<string, unknown>;
+  securityByEntry: Map<string, Record<string, string[]>>;
+} {
+  const schemes: Record<string, unknown> = {};
+  const nameByContent = new Map<string, string>();
+  const securityByEntry = new Map<string, Record<string, string[]>>();
+  for (const entry of entries) {
+    if (!entry.auth) continue;
+    const obj = securitySchemeObject(entry.auth);
+    if (!obj) continue;
+    const content = JSON.stringify(obj);
+    let name = nameByContent.get(content);
+    if (!name) {
+      name = schemeBaseName(entry.auth.scheme);
+      for (let n = 2; schemes[name]; n++) name = schemeBaseName(entry.auth.scheme) + n;
+      schemes[name] = obj;
+      nameByContent.set(content, name);
+    }
+    const scopeNames = entry.auth.scheme === 'oauth2' ? (entry.auth.scopes ?? []).map(s => s.name) : [];
+    securityByEntry.set(entry.id, { [name]: scopeNames });
+  }
+  return { schemes, securityByEntry };
+}
+
+function httpEntriesOf(snapshot: SurfaceSnapshot): SurfaceContractEntry[] {
+  return snapshot.interfaces.filter(e =>
     e.type === 'REST' || e.methods.some(m => m.endpoint?.transport === 'HTTP'));
+}
+
+/** Render ONE OpenAPI document from a chosen subset of entries — all of them for
+ *  toOpenApi, one portal's for toOpenApiSet (the latter also emits `servers`). */
+function renderDoc(
+  snapshot: SurfaceSnapshot,
+  entries: SurfaceContractEntry[],
+  closureIds: Set<string>,
+  opts: { title?: string; servers?: boolean } = {},
+): Record<string, unknown> {
+  const { schemes, securityByEntry } = buildSecurity(entries);
 
   const paths: Record<string, Record<string, unknown>> = {};
-  for (const entry of httpEntries) {
+  for (const entry of entries) {
+    const security = securityByEntry.get(entry.id);
     for (const method of entry.methods) {
       const endpoint = method.endpoint;
       if (!endpoint || endpoint.transport !== 'HTTP') continue;
@@ -120,6 +193,7 @@ export function toOpenApi(snapshot: SurfaceSnapshot): string {
       paths[p][endpoint.method.toLowerCase()] = {
         tags: [entry.id],
         ...operationFor(method, closureIds),
+        ...(security ? { security: [security] } : {}),
       };
     }
   }
@@ -134,19 +208,53 @@ export function toOpenApi(snapshot: SurfaceSnapshot): string {
     };
   }
 
-  const doc = {
+  const components: Record<string, unknown> = {};
+  if (Object.keys(schemas).length) components.schemas = schemas;
+  if (Object.keys(schemes).length) components.securitySchemes = schemes;
+
+  // Per-portal specs carry a single `servers` entry from the portal's basePath.
+  const basePaths = [...new Set(entries.map(e => e.basePath).filter((b): b is string => !!b))];
+  const servers = opts.servers && basePaths.length === 1 ? [{ url: basePaths[0] }] : undefined;
+
+  return {
     openapi: '3.1.0',
     info: {
-      title: snapshot.projectName,
+      title: opts.title ?? snapshot.projectName,
       version: snapshot.version ?? '0.0.0',
       ...(snapshot.stateId ? { 'x-wairon-state-id': snapshot.stateId } : {}),
       'x-wairon-origin': snapshot.origin,
       'x-wairon-generated-at': snapshot.generatedAt,
     },
+    ...(servers ? { servers } : {}),
     paths,
-    ...(Object.keys(schemas).length ? { components: { schemas } } : {}),
+    ...(Object.keys(components).length ? { components } : {}),
   };
-  return JSON.stringify(doc, null, 2);
+}
+
+export function toOpenApi(snapshot: SurfaceSnapshot): string {
+  const closureIds = new Set(snapshot.types.map(t => t.id));
+  return JSON.stringify(renderDoc(snapshot, httpEntriesOf(snapshot), closureIds), null, 2);
+}
+
+/**
+ * One named OpenAPI document PER PUBLIC PORTAL, partitioned by the backing portal
+ * component. A project that models a single gateway portal yields one spec; three
+ * separate portals yield three — never merged. Each carries its own `servers`
+ * (from the portal's basePath) and its own securitySchemes/security.
+ */
+export function toOpenApiSet(snapshot: SurfaceSnapshot): NamedOpenApiSpec[] {
+  const closureIds = new Set(snapshot.types.map(t => t.id));
+  const byPortal = new Map<string, SurfaceContractEntry[]>();
+  const order: string[] = [];
+  for (const entry of httpEntriesOf(snapshot)) {
+    if (!byPortal.has(entry.component)) { byPortal.set(entry.component, []); order.push(entry.component); }
+    byPortal.get(entry.component)!.push(entry);
+  }
+  return order.map(portalId => {
+    const entries = byPortal.get(portalId)!;
+    const name = entries[0]?.name ?? portalId;
+    return { portalId, name, document: JSON.stringify(renderDoc(snapshot, entries, closureIds, { title: name, servers: true }), null, 2) };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -173,6 +281,41 @@ function typeRefFromSchema(schema: Record<string, unknown> | undefined): string 
   if (t === 'integer') return 'int';
   if (typeof t === 'string' && t !== 'object') return t;
   return 'json';
+}
+
+/** Reconstruct a PortalAuth from an OpenAPI securityScheme (round-trips toOpenApi). */
+function authFromSecurityScheme(scheme: Record<string, unknown>): PortalAuth | undefined {
+  const desc = typeof scheme.description === 'string' ? { description: scheme.description } : {};
+  if (scheme.type === 'apiKey') {
+    return {
+      scheme: 'apiKey',
+      ...(scheme.in === 'header' || scheme.in === 'query' || scheme.in === 'cookie' ? { in: scheme.in } : {}),
+      ...(typeof scheme.name === 'string' ? { name: scheme.name } : {}),
+      ...desc,
+    };
+  }
+  if (scheme.type === 'http') {
+    if (scheme.scheme === 'bearer') return { scheme: 'bearer', ...(typeof scheme.bearerFormat === 'string' ? { bearerFormat: scheme.bearerFormat } : {}), ...desc };
+    if (scheme.scheme === 'basic') return { scheme: 'basic', ...desc };
+  }
+  if (scheme.type === 'oauth2') {
+    const flows = (scheme.flows ?? {}) as Record<string, Record<string, unknown>>;
+    const flowKey = Object.keys(flows)[0];
+    const f = flows[flowKey] ?? {};
+    return {
+      scheme: 'oauth2',
+      ...(flowKey === 'authorizationCode' || flowKey === 'clientCredentials' || flowKey === 'implicit' || flowKey === 'password' ? { flow: flowKey } : {}),
+      ...(typeof f.authorizationUrl === 'string' ? { authorizationUrl: f.authorizationUrl } : {}),
+      ...(typeof f.tokenUrl === 'string' ? { tokenUrl: f.tokenUrl } : {}),
+      ...(typeof f.refreshUrl === 'string' ? { refreshUrl: f.refreshUrl } : {}),
+      scopes: Object.entries((f.scopes ?? {}) as Record<string, string>).map(([name, description]) => ({ name, description })),
+      ...desc,
+    };
+  }
+  if (scheme.type === 'openIdConnect') {
+    return { scheme: 'openIdConnect', openIdConnectUrl: typeof scheme.openIdConnectUrl === 'string' ? scheme.openIdConnectUrl : '', ...desc };
+  }
+  return undefined;
 }
 
 export function fromOpenApi(document: string, projectName: string): SurfaceSnapshot {
@@ -271,6 +414,11 @@ export function fromOpenApi(document: string, projectName: string): SurfaceSnaps
     });
   }
 
+  // Read the first securityScheme back into the entry's auth (round-trips toOpenApi).
+  const securitySchemes = ((parsed.components as Record<string, unknown>)?.securitySchemes ?? {}) as Record<string, Record<string, unknown>>;
+  const firstScheme = Object.values(securitySchemes)[0];
+  const importedAuth = firstScheme ? authFromSecurityScheme(firstScheme) : undefined;
+
   const entry: SurfaceContractEntry = {
     id: `${projectName}-api`,
     name: typeof info.title === 'string' ? info.title : projectName,
@@ -280,6 +428,7 @@ export function fromOpenApi(document: string, projectName: string): SurfaceSnaps
     methods,
     details: typeof info.description === 'string' ? info.description : `Imported OpenAPI surface of ${projectName}.`,
     ...(typeof info.version === 'string' ? { version: info.version } : {}),
+    ...(importedAuth ? { auth: importedAuth } : {}),
   };
 
   return SurfaceSnapshotSchema.parse({

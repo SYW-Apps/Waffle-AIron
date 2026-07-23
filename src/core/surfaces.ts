@@ -10,6 +10,7 @@ import {
   SurfaceOrigin,
   SURFACE_AUDIENCES,
   SystemPublicInterface,
+  NamedOpenApiSpec,
   TypeSpec,
 } from '../models/index.js';
 import {
@@ -21,7 +22,7 @@ import {
 } from './specs.js';
 import { computeStateId } from './statehash.js';
 import { extractTypeIdentifiers, matchTypeRef, methodTypeRefs, BUILTIN_TYPES } from './rules/type-analysis.js';
-import { fromOpenApi, isOpenApiDocument, toOpenApi } from './openapi.js';
+import { fromOpenApi, isOpenApiDocument, toOpenApiSet } from './openapi.js';
 import type { ValidationIssue } from './validation.js';
 
 // ---------------------------------------------------------------------------
@@ -147,6 +148,10 @@ export function projectOwnSurface(maxAudience: string): SurfaceSnapshot {
       component: comp.id,
       methods,
       ...(comp.dispatch && comp.dispatch.length ? { dispatch: comp.dispatch } : {}),
+      // Project the backing Portal's auth + basePath so the codec can emit
+      // OpenAPI security + per-portal servers self-contained from the snapshot.
+      ...(comp.auth && comp.auth.scheme !== 'none' ? { auth: comp.auth } : {}),
+      ...(comp.basePath ? { basePath: comp.basePath } : {}),
       details: raw.details ?? '',
       ...(raw.version ? { version: raw.version } : {}),
       ...(raw.stability ? { stability: raw.stability } : {}),
@@ -217,26 +222,44 @@ export function loadSurfaceSnapshots(): SurfaceSnapshot[] {
 
 export interface SurfaceExportResult {
   snapshot: SurfaceSnapshot;
-  /** Rendered document body when format was openapi. */
+  /** Rendered document body when format was openapi AND there is exactly one portal. */
   rendered?: string;
+  /** One named OpenAPI document per public portal (openapi format) — the honest
+   *  multi-spec result; never a single combined doc across distinct portals. */
+  renderedSet?: NamedOpenApiSpec[];
   /** Written output path when one was requested. */
   writtenTo?: string;
 }
 
+/** Render the openapi form of a snapshot: one named spec per portal, plus the
+ *  convenience single doc when the project has exactly one portal/gateway. */
+function renderOpenApiForms(snapshot: SurfaceSnapshot): { rendered?: string; renderedSet: NamedOpenApiSpec[] } {
+  const renderedSet = toOpenApiSet(snapshot);
+  return { renderedSet, ...(renderedSet.length === 1 ? { rendered: renderedSet[0].document } : {}) };
+}
+
+/** Write an export to disk: the openapi body when one was rendered, else the
+ *  snapshot YAML. (Deferred: a multi-portal openapi export writes the first spec
+ *  for now — the share/CLI multi-file download is a fast-follow.) */
+function writeSurfaceFile(outPath: string, body: string | undefined, snapshot: SurfaceSnapshot): string {
+  const resolved = path.resolve(outPath);
+  fs.mkdirSync(path.dirname(resolved), { recursive: true });
+  if (body !== undefined) fs.writeFileSync(resolved, body);
+  else writeYamlFile(resolved, snapshot);
+  return resolved;
+}
+
 export function exportSurface(maxAudience: string, format: string, outPath?: string): SurfaceExportResult {
   const snapshot = projectOwnSurface(maxAudience);
-  const rendered = format === 'openapi' ? toOpenApi(snapshot) : undefined;
-  let writtenTo: string | undefined;
-  if (outPath) {
-    fs.mkdirSync(path.dirname(path.resolve(outPath)), { recursive: true });
-    if (rendered !== undefined) {
-      fs.writeFileSync(path.resolve(outPath), rendered);
-    } else {
-      writeYamlFile(path.resolve(outPath), snapshot);
-    }
-    writtenTo = path.resolve(outPath);
-  }
-  return { snapshot, ...(rendered !== undefined ? { rendered } : {}), ...(writtenTo ? { writtenTo } : {}) };
+  const openapi = format === 'openapi' ? renderOpenApiForms(snapshot) : undefined;
+  const body = openapi?.rendered ?? openapi?.renderedSet[0]?.document;
+  const writtenTo = outPath ? writeSurfaceFile(outPath, body, snapshot) : undefined;
+  return {
+    snapshot,
+    ...(openapi?.rendered !== undefined ? { rendered: openapi.rendered } : {}),
+    ...(openapi ? { renderedSet: openapi.renderedSet } : {}),
+    ...(writtenTo ? { writtenTo } : {}),
+  };
 }
 
 export function importSurface(sourcePath: string, origin: SurfaceOrigin): SurfaceSnapshot {

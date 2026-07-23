@@ -106,9 +106,12 @@ export function CanvasView({
       // (combined) surface as an interactive Swagger UI page. When the affordance
       // carries a tag (a specific portal's L0 gateway entry id) we deep-link to
       // that section; a subsystem/project passes '' and opens the whole document.
+      // A portal opens its OWN named spec (?spec=<portalId>); a subsystem/project
+      // passes '' → the landing page listing every per-portal spec (multi-portal)
+      // or the single doc (one portal).
       onOpenApi: (tag?: string) =>
         window.open(
-          `/web/openapi?projectId=${encodeURIComponent(projectIdRef.current)}` + (tag ? `#/${tag}` : ''),
+          `/web/openapi?projectId=${encodeURIComponent(projectIdRef.current)}` + (tag ? `&spec=${encodeURIComponent(tag)}` : ''),
           '_blank',
           'noopener',
         ),
