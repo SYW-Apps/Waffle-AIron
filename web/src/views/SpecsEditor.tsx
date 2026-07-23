@@ -213,6 +213,89 @@ function TagInput(props: {
   );
 }
 
+/** A vertical list of free-text lines with add/remove — for open PROSE lists
+ *  (L0 boundaries, global requirements) whose items may be a bare string OR a
+ *  shaped object. getText/setText read+write the right sub-field so an item's
+ *  existing shape (and any fields we don't surface) survives the round-trip. */
+function TextListEditor(props: {
+  items: any[];
+  onChange: (items: any[]) => void;
+  getText: (it: any) => string;
+  setText: (it: any, text: string) => any;
+  placeholder?: string;
+  addLabel?: string;
+  disabled?: boolean;
+}) {
+  const items = props.items ?? [];
+  const update = (i: number, text: string) => props.onChange(items.map((it, j) => (j === i ? props.setText(it, text) : it)));
+  const remove = (i: number) => props.onChange(items.filter((_, j) => j !== i));
+  return (
+    <div className="stack-sm">
+      {items.map((it, i) => (
+        <div key={i} className="list-line">
+          <input
+            className="input"
+            value={props.getText(it)}
+            placeholder={props.placeholder}
+            disabled={props.disabled}
+            onChange={(e) => update(i, e.target.value)}
+          />
+          {!props.disabled && (
+            <button type="button" className="icon-btn" aria-label="Remove" title="Remove" onClick={() => remove(i)}>×</button>
+          )}
+        </div>
+      ))}
+      {!props.disabled && (
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => props.onChange([...items, ''])}>
+          + {props.addLabel ?? 'Add'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** The tree-wide validation results rail (the whitespace to the right of the
+ *  editor). Validation is a WHOLE-TREE concern, so it lives at the tab level —
+ *  running it here (not per-spec) keeps results visible as you move between
+ *  specs, and renders them beside the form instead of pushing it down. */
+function ValidationRail(props: {
+  validation: { errors: any[]; warnings: any[] } | null;
+  onValidate: () => Promise<void>;
+}) {
+  const toast = useToast();
+  const v = props.validation;
+  const total = v ? v.errors.length + v.warnings.length : 0;
+  const Finding = (i: any, kindLabel: 'error' | 'warn', key: string) => (
+    <li key={key} className={`finding f-${kindLabel}`}>
+      <span className={kindLabel === 'error' ? 'err' : 'badge-warn'} style={kindLabel === 'warn' ? { padding: 0 } : undefined}>{kindLabel}</span>{' '}
+      {i.code ? <code className="subtle">{i.code}</code> : null} {i.message}
+      {i.specId ? <span className="hint"> ({i.specId})</span> : null}
+    </li>
+  );
+  return (
+    <aside className="spec-validation">
+      <div className="spec-validation-head">
+        <span className="field-label">Validation</span>
+        <AsyncButton variant="ghost" action={props.onValidate} onError={toast.bad}>Validate tree</AsyncButton>
+      </div>
+      {!v && <p className="hint">Run a tree validation to list this project's errors and warnings here.</p>}
+      {v && total === 0 && <Badge tone="ok">clean — no errors or warnings</Badge>}
+      {v && total > 0 && (
+        <>
+          <div className="spec-validation-counts">
+            {v.errors.length > 0 && <Badge tone="bad">{v.errors.length} errors</Badge>}{' '}
+            {v.warnings.length > 0 && <Badge tone="warn">{v.warnings.length} warnings</Badge>}
+          </div>
+          <ul className="finding-list">
+            {v.errors.map((i, n) => Finding(i, 'error', `e${n}`))}
+            {v.warnings.map((i, n) => Finding(i, 'warn', `w${n}`))}
+          </ul>
+        </>
+      )}
+    </aside>
+  );
+}
+
 /** A grouped <select> (native optgroups) — used where options come from the
  *  profile catalog grouped by source. */
 function GroupedSelect(props: {
@@ -390,6 +473,12 @@ function buildDelta(kind: SpecKind, orig: any, draft: any): Record<string, unkno
     const pd = piDelta(orig, draft, kind);
     if (pd.length) delta.publicInterfaces = pd;
   }
+  if (kind === 'system') {
+    // boundaries/globalRequirements are non-special-cased top-level arrays, so
+    // the merge replaces them wholesale — send the full list on any change.
+    if (!jeq(draft.boundaries ?? [], orig.boundaries ?? [])) delta.boundaries = draft.boundaries ?? [];
+    if (!jeq(draft.globalRequirements ?? [], orig.globalRequirements ?? [])) delta.globalRequirements = draft.globalRequirements ?? [];
+  }
   if (kind === 'subsystem') {
     const ld = lifecycleDelta(orig, draft);
     if (ld.length) delta.lifecycle = ld;
@@ -456,12 +545,10 @@ function SpecForm(props: {
   const { projectId, sel, spec, typeSuggestions } = props;
   const toast = useToast();
   const [draft, setDraft] = useState<any>(() => clone(spec));
-  const [validation, setValidation] = useState<{ errors: any[]; warnings: any[] } | null>(null);
 
   // Re-sync when a fresh load arrives (useAsync mints a new object on reload).
   useEffect(() => {
     setDraft(clone(spec));
-    setValidation(null);
   }, [spec]);
 
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(spec), [draft, spec]);
@@ -487,11 +574,6 @@ function SpecForm(props: {
     props.onSaved();
   }
 
-  async function validate() {
-    const res = await mcpCall<{ errors?: any[]; warnings?: any[] }>(projectId, 'sdd_validate_tree', {});
-    setValidation({ errors: res.errors ?? [], warnings: res.warnings ?? [] });
-  }
-
   const profGroups = useMemo(() => withCurrent(profileGroups(props.profiles), draft.profile ?? ''), [props.profiles, draft.profile]);
   const paramSuggestions = useMemo(() => [...PRIMITIVES, ...typeSuggestions], [typeSuggestions]);
 
@@ -505,36 +587,35 @@ function SpecForm(props: {
           <code className="subtle">{sel.id}</code>
         </div>
         <div className="row-actions">
-          <AsyncButton action={validate} onError={toast.bad}>Validate tree</AsyncButton>
           <AsyncButton variant="primary" action={save} onError={toast.bad} disabled={!dirty}>Save changes</AsyncButton>
         </div>
       </div>
-
-      {validation && (
-        <div className="panel">
-          <h4>
-            Validation{' '}
-            {validation.errors.length === 0 && validation.warnings.length === 0
-              ? <Badge tone="ok">clean</Badge>
-              : <>
-                  {validation.errors.length > 0 && <Badge tone="bad">{validation.errors.length} errors</Badge>}{' '}
-                  {validation.warnings.length > 0 && <Badge tone="warn">{validation.warnings.length} warnings</Badge>}
-                </>}
-          </h4>
-          {(validation.errors.length > 0 || validation.warnings.length > 0) && (
-            <ul className="finding-list">
-              {validation.errors.map((i, n) => <li key={`e${n}`}><span className="err">error</span> {i.code ? `${i.code}: ` : ''}{i.message}{i.specId ? ` (${i.specId})` : ''}</li>)}
-              {validation.warnings.map((i, n) => <li key={`w${n}`}><span className="badge-warn" style={{ padding: 0 }}>warn</span> {i.code ? `${i.code}: ` : ''}{i.message}{i.specId ? ` (${i.specId})` : ''}</li>)}
-            </ul>
-          )}
-        </div>
-      )}
 
       {/* ── System (L0) ── */}
       {sel.kind === 'system' && (
         <div className="panel stack-lg">
           <Field label="Vision" hint="The system's vision, mission, and core goals.">
             <textarea className="input" rows={4} value={draft.vision ?? ''} onChange={(e) => set('vision', e.target.value)} />
+          </Field>
+          <Field label="Boundaries" hint="In / out-of-scope statements that bound the system.">
+            <TextListEditor
+              items={draft.boundaries ?? []}
+              onChange={(v) => set('boundaries', v)}
+              getText={(it) => (typeof it === 'string' ? it : it?.name ?? '')}
+              setText={(it, t) => (typeof it === 'string' ? t : { ...it, name: t })}
+              placeholder="e.g. Out of scope: billing & invoicing"
+              addLabel="boundary"
+            />
+          </Field>
+          <Field label="Global requirements" hint="System-wide requirements every subsystem must honor.">
+            <TextListEditor
+              items={draft.globalRequirements ?? []}
+              onChange={(v) => set('globalRequirements', v)}
+              getText={(it) => (typeof it === 'string' ? it : it?.description ?? '')}
+              setText={(it, t) => (typeof it === 'string' ? t : { ...it, description: t })}
+              placeholder="e.g. All PII encrypted at rest"
+              addLabel="requirement"
+            />
           </Field>
           {(draft.publicInterfaces ?? []).length > 0 && (
             <div className="stack-lg">
@@ -900,6 +981,9 @@ function ProjectConfigPanel(props: { projectId: string; config: Async<ProjectCon
 export function SpecsTab({ projectId }: { projectId: string }) {
   const enc = encodeURIComponent(projectId);
   const [selected, setSelected] = useState<Selected | null>(null);
+  // Tree-wide validation lives at the tab level so results persist across spec
+  // selection and render in the right rail (not inline, pushing the form down).
+  const [validation, setValidation] = useState<{ errors: any[]; warnings: any[] } | null>(null);
 
   // The picker tree stays live on the project channel (a spec write elsewhere
   // refetches it); the selected spec is loaded WITHOUT a channel so an in-flight
@@ -924,6 +1008,11 @@ export function SpecsTab({ projectId }: { projectId: string }) {
     [graph.data],
   );
 
+  async function runValidate() {
+    const res = await mcpCall<{ errors?: any[]; warnings?: any[] }>(projectId, 'sdd_validate_tree', {});
+    setValidation({ errors: res.errors ?? [], warnings: res.warnings ?? [] });
+  }
+
   return (
     <div className="stack-lg">
       <ProjectConfigPanel projectId={projectId} config={config} profiles={profiles.data ?? []} />
@@ -938,7 +1027,11 @@ export function SpecsTab({ projectId }: { projectId: string }) {
                   sel={selected}
                   typeSuggestions={typeSuggestions}
                   profiles={profiles.data ?? []}
-                  onGraphChange={graph.reload}
+                  onGraphChange={() => {
+                    graph.reload();
+                    // A spec write can change what validates — drop stale results.
+                    setValidation(null);
+                  }}
                 />
               ) : (
                 <EmptyState>
@@ -946,6 +1039,7 @@ export function SpecsTab({ projectId }: { projectId: string }) {
                 </EmptyState>
               )}
             </div>
+            <ValidationRail validation={validation} onValidate={runValidate} />
           </div>
         )}
       </AsyncView>
