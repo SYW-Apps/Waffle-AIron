@@ -275,7 +275,7 @@ function ExternalLinksEditor(props: { links: any[]; onChange: (links: any[]) => 
         <div key={i} className="sub-card">
           <div className="row-form">
             <Field label="URL"><TextInput value={l.url ?? ''} onChange={(v) => update(i, { url: v })} placeholder="https://…" /></Field>
-            <Field label="Type" hint="'implementation' = the external source-of-record.">
+            <Field label="Type" info="An 'implementation' link is the external source-of-record (it satisfies the source requirement); 'informative' is context only.">
               <EnumSelect value={l.type ?? 'informative'} onChange={(v) => update(i, { type: v })} options={EXTERNAL_LINK_TYPE} />
             </Field>
             <Field label="Label"><TextInput value={l.label ?? ''} onChange={(v) => update(i, { label: v })} placeholder="(optional)" /></Field>
