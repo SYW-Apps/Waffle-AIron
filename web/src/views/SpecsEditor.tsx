@@ -978,9 +978,18 @@ function ProjectConfigPanel(props: { projectId: string; config: Async<ProjectCon
 
 // ── Tab entry ────────────────────────────────────────────────────────────────────
 
-export function SpecsTab({ projectId }: { projectId: string }) {
+export function SpecsTab({
+  projectId,
+  selection,
+  onSelectSpec,
+}: {
+  projectId: string;
+  /** The open spec, from the URL path (ProjectOps owns the routing). */
+  selection: { kind: string; id: string } | null;
+  /** Push a new selection into the URL; null clears it. */
+  onSelectSpec: (sel: { kind: string; id: string } | null) => void;
+}) {
   const enc = encodeURIComponent(projectId);
-  const [selected, setSelected] = useState<Selected | null>(null);
   // Tree-wide validation lives at the tab level so results persist across spec
   // selection and render in the right rail (not inline, pushing the form down).
   const [validation, setValidation] = useState<{ errors: any[]; warnings: any[] } | null>(null);
@@ -1008,6 +1017,15 @@ export function SpecsTab({ projectId }: { projectId: string }) {
     [graph.data],
   );
 
+  // The URL carries (kind, id); recover the display label from the graph (a
+  // canvas deep-link or a shared URL has no label). Implementations aren't in
+  // the graph, so they fall back to the id.
+  const selected: Selected | null = useMemo(() => {
+    if (!selection) return null;
+    const node = (graph.data?.nodes ?? []).find((n) => n.id === selection.id);
+    return { kind: selection.kind as SpecKind, id: selection.id, label: node?.label ?? selection.id };
+  }, [selection, graph.data]);
+
   async function runValidate() {
     const res = await mcpCall<{ errors?: any[]; warnings?: any[] }>(projectId, 'sdd_validate_tree', {});
     setValidation({ errors: res.errors ?? [], warnings: res.warnings ?? [] });
@@ -1019,7 +1037,7 @@ export function SpecsTab({ projectId }: { projectId: string }) {
       <AsyncView state={graph}>
         {(g) => (
           <div className="spec-layout">
-            <Picker graph={g} selected={selected} onSelect={setSelected} />
+            <Picker graph={g} selected={selected} onSelect={(s) => onSelectSpec({ kind: s.kind, id: s.id })} />
             <div className="spec-detail">
               {selected ? (
                 <SpecEditor

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { get } from '../api';
 import { AsyncView, useAsync } from '../ui';
 import { useSettings } from '../settings';
+import { useSession } from '../session';
 import { engineTheme, engineVars } from '../theme/canvasBridge';
 import { mountCanvas, type CanvasHandle } from '../canvas/engine';
 
@@ -32,6 +33,10 @@ export function CanvasView({
     [`project:${projectId}`, 'projects'],
   );
   const { themeId, appearance } = useSettings();
+  // Hosted app has a /projects/<id>/specs editor to deep-link into; the local-dev
+  // canvas (ctx.local) does not, so the "Open in Specs" affordance stays hidden there.
+  const { ctx } = useSession();
+  const isLocal = !!ctx?.local;
   // The classic engine ships a dark ('syw') and a 'light' theme for its
   // semantic content colors; the SELECTED app palette is overlaid on the
   // chrome via CSS-variable overrides.
@@ -92,6 +97,18 @@ export function CanvasView({
           '_blank',
           'noopener',
         ),
+      // Stage G: deep-link the focused spec into the hosted Specs value editor.
+      // Encodes the qualified id as path segments (`::` → `/`, no %3A) so the
+      // editor URL mirrors the same hierarchy the canvas uses. Undefined in
+      // local-dev (no /projects route) so the engine hides the button.
+      onOpenSpec: isLocal
+        ? undefined
+        : (kind: string, id: string) => {
+            const idPath = id ? id.split('::').map(encodeURIComponent).join('/') : '';
+            navigate(
+              '/projects/' + encodeURIComponent(projectIdRef.current) + '/specs/' + kind + (idPath ? '/' + idPath : ''),
+            );
+          },
     });
     handleRef.current = handle;
     return () => {

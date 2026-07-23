@@ -708,7 +708,10 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
 @keyframes rt-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
 /* ── Specs value-editor (ProjectOps → Specs tab) ──────────────────────────── */
-.spec-layout { display: grid; grid-template-columns: minmax(200px, 260px) minmax(0, 1fr) minmax(0, 320px); gap: 16px; align-items: start; }
+.spec-layout { display: grid; grid-template-columns: minmax(200px, 240px) minmax(0, 1.4fr) minmax(340px, 1fr); gap: 16px; align-items: start; }
+/* The Specs tab earns a wider canvas than the other ops forms so the 3-column
+   editor+rail layout can breathe on wide screens (the rail is fractional above). */
+.view-pad.view-pad-wide { max-width: 1520px; }
 .spec-picker {
   border: 1px solid var(--border);
   border-radius: var(--radius);

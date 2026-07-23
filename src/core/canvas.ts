@@ -3663,6 +3663,14 @@ var MODEL = __MODEL_JSON__;
     if (!exposes || !openApiAllowed()) return '';
     return '<div class="openbtn"><button class="tbtn" data-openapi-tag="' + esc(tag || '') + '">\\u25A4 View OpenAPI \\u2197</button></div>';
   }
+  // "Open in Specs" — deep-links the focused spec into the hosted Specs value
+  // editor via a host hook (opts.onOpenSpec). Hidden when no host provides it
+  // (standalone file, shared page): those have no editor to open. kind is the
+  // spec layer, id its qualified spec id.
+  function openSpecButton(kind, id) {
+    if (typeof opts === 'undefined' || !opts || typeof opts.onOpenSpec !== 'function') return '';
+    return '<div class="openbtn"><button class="tbtn" data-openspec-kind="' + kind + '" data-openspec-id="' + esc(id) + '">\\u270E Open in Specs \\u2197</button></div>';
+  }
 
   function renderPanel() {
     var head = '', body = '';
@@ -3685,7 +3693,8 @@ var MODEL = __MODEL_JSON__;
         + (scopeFocus ? staticChip('current view') : '')
         + chip(c.subsystem, 'subsystem', c.subsystem)
         + (scopeFocus ? '' : openViewButton('component', c.id, c.owns.length > 0))
-        + openApiButton(componentExposesApi(c), c.apiTag);
+        + openApiButton(componentExposesApi(c), c.apiTag)
+        + openSpecButton('component', c.id);
       
       var linkedTypes = MODEL.types.filter(function (t) { return t.componentClass === c.id; });
       if (linkedTypes.length) {
@@ -3769,7 +3778,8 @@ var MODEL = __MODEL_JSON__;
       MODEL.types.forEach(function (t2) { if (t2.id === focusId) ty = t2; });
       if (ty) {
         head = '<h2>' + esc(ty.name) + '</h2>' + staticChip('\\u00AB' + ty.kind + '\\u00BB')
-          + (ty.subsystem ? chip(ty.subsystem, 'subsystem', ty.subsystem) : staticChip('system-level shared'));
+          + (ty.subsystem ? chip(ty.subsystem, 'subsystem', ty.subsystem) : staticChip('system-level shared'))
+          + openSpecButton('type', ty.id);
         
         if (ty.componentClass) {
           head += '<div style="margin-top:6px"><b style="font-size:11px">Class Component:</b> ' + chip(ty.componentClass, 'component', ty.componentClass) + '</div>';
@@ -3845,7 +3855,8 @@ var MODEL = __MODEL_JSON__;
         + (s.status ? staticChip(s.status) : '')
         + (scopeFocus ? staticChip('current view') : '')
         + (scopeFocus ? '' : openViewButton('subsystem', s.id, subKids > 0))
-        + openApiButton(subsystemExposesApi(s.id), '');
+        + openApiButton(subsystemExposesApi(s.id), '')
+        + openSpecButton('subsystem', s.id);
       body += '<p class="desc">' + esc(s.description) + '</p>';
       if (s.trustedLinks.length) {
         body += section('Trusted links (fast lanes)', s.trustedLinks.length, s.trustedLinks.map(function (t2) {
@@ -3902,6 +3913,16 @@ var MODEL = __MODEL_JSON__;
           if (href) window.open(href + (tag ? '#/' + tag : ''), '_blank', 'noopener');
         });
       })(oapis[oi]);
+    }
+    var ospecs = panel.querySelectorAll('[data-openspec-kind]');
+    for (var si = 0; si < ospecs.length; si++) {
+      (function (b) {
+        b.addEventListener('click', function () {
+          if (typeof opts !== 'undefined' && opts && typeof opts.onOpenSpec === 'function') {
+            opts.onOpenSpec(b.getAttribute('data-openspec-kind'), b.getAttribute('data-openspec-id') || '');
+          }
+        });
+      })(ospecs[si]);
     }
     var flows = panel.querySelectorAll('[data-flow-comp]');
     for (var j = 0; j < flows.length; j++) {

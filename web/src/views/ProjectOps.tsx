@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { asList, get, post, postBinary } from '../api';
 import {
@@ -458,12 +458,33 @@ const OPS_TABS = [
 ];
 
 export function ProjectOps() {
-  const { projectId = '' } = useParams();
+  const params = useParams();
+  const projectId = params.projectId ?? '';
+  const splat = params['*'] ?? '';
   const nav = useNavigate();
-  const [tab, setTab] = useState('specs');
+  const base = `/projects/${encodeURIComponent(projectId)}`;
+
+  // The tab (and, on Specs, the open spec) live in the URL path so a view is
+  // shareable and the canvas can deep-link into it. `/projects/<id>` → Specs;
+  // `/projects/<id>/<tab>`; `/projects/<id>/specs/<kind>/<id…>` opens a spec,
+  // the qualified id's `::` mapped to `/` path segments (so no %3A).
+  const segs = splat.split('/').filter(Boolean);
+  const tab = segs[0] && OPS_TABS.some((t) => t.id === segs[0]) ? segs[0] : 'specs';
+  const selection = useMemo(() => {
+    if (tab !== 'specs' || segs.length < 3) return null;
+    return { kind: segs[1], id: segs.slice(2).map(decodeURIComponent).join('::') };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [splat]);
+
+  const selectTab = (id: string) => nav(id === 'specs' ? `${base}/specs` : `${base}/${id}`);
+  const selectSpec = (sel: { kind: string; id: string } | null) => {
+    if (!sel) return nav(`${base}/specs`);
+    const idPath = sel.id.split('::').map(encodeURIComponent).join('/');
+    nav(`${base}/specs/${sel.kind}/${idPath}`);
+  };
 
   return (
-    <div className="view-pad">
+    <div className={`view-pad ${tab === 'specs' ? 'view-pad-wide' : ''}`}>
       <div className="view-head">
         <div className="cell-stack">
           <button className="btn btn-ghost btn-sm back-link" onClick={() => nav('/projects')}>
@@ -475,9 +496,9 @@ export function ProjectOps() {
           Open canvas
         </Button>
       </div>
-      <Tabs tabs={OPS_TABS} active={tab} onSelect={setTab} />
+      <Tabs tabs={OPS_TABS} active={tab} onSelect={selectTab} />
       <div className="tab-panel">
-        {tab === 'specs' && <SpecsTab projectId={projectId} />}
+        {tab === 'specs' && <SpecsTab projectId={projectId} selection={selection} onSelectSpec={selectSpec} />}
         {tab === 'packs' && <PacksTab projectId={projectId} />}
         {tab === 'policy' && <PolicyTab projectId={projectId} />}
         {tab === 'producers' && <ProducersTab projectId={projectId} />}
