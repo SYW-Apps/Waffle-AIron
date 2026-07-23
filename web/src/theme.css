@@ -775,7 +775,9 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
 .spec-validation .finding:first-child { border-top: none; }
 /* ComponentUnitEditor — the Component/Interface/Implementation tab header. */
 .unit-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.unit-head > code { margin-left: auto; }
+.unit-head .btn { margin-left: auto; }
+.method-head { display: flex; align-items: center; gap: 8px; }
+.method-head .btn { margin-left: auto; }
 .tabstrip .tab:disabled { opacity: 0.45; cursor: default; }
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */

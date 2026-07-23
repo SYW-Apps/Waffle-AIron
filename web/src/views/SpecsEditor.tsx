@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { asList, get, mcpCall, post } from '../api';
 import {
   AsyncButton,
@@ -546,6 +547,8 @@ function SpecForm(props: {
   typeSuggestions: string[];
   profiles: AvailableProfile[];
   onSaved: () => void;
+  /** When present (implementation tab), each method offers a "view flow" deep-link. */
+  onViewFlow?: (method: string) => void;
 }) {
   const { projectId, sel, spec, typeSuggestions } = props;
   const toast = useToast();
@@ -776,7 +779,21 @@ function SpecForm(props: {
               <span className="field-label">Methods</span>
               {draft.methods.map((m: any, i: number) => (
                 <div key={m.name} className="sub-card">
-                  <code className="subtle">{m.name}</code>
+                  <div className="method-head">
+                    <code className="subtle">{m.name}</code>
+                    {/* Only narrated methods have a flow to show — an intent-only
+                        method has no narrative (mirrors the canvas hiding flow/steps). */}
+                    {props.onViewFlow && (m.narrative?.length ?? 0) > 0 && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => props.onViewFlow!(m.name)}
+                        title="Open this method's narrative flow in the canvas"
+                      >
+                        flow ↗
+                      </button>
+                    )}
+                  </div>
                   <div className="row-form">
                     <Field label="Detail"><EnumSelect value={m.detail} onChange={(v) => setArrItem('methods', i, { detail: v })} options={NARRATIVE_DETAIL} allowNone noneLabel="(spec default)" /></Field>
                     <Field label="Conformance"><EnumSelect value={m.conformance} onChange={(v) => setArrItem('methods', i, { conformance: v })} options={CONFORMANCE} allowNone noneLabel="(spec default)" /></Field>
@@ -832,6 +849,7 @@ function SpecEditor(props: {
   typeSuggestions: string[];
   profiles: AvailableProfile[];
   onGraphChange: () => void;
+  onViewFlow?: (method: string) => void;
 }) {
   const { projectId, sel } = props;
   const spec = useAsync<any>(() => mcpCall(projectId, 'sdd_get_spec', { kind: sel.kind, id: sel.id }), [projectId, sel.kind, sel.id]);
@@ -845,6 +863,7 @@ function SpecEditor(props: {
           spec={data}
           typeSuggestions={props.typeSuggestions}
           profiles={props.profiles}
+          onViewFlow={props.onViewFlow}
           onSaved={() => {
             spec.reload();
             props.onGraphChange();
@@ -890,7 +909,6 @@ function Picker(props: {
   const topComps = (subId: string) =>
     componentNodes.filter((n) => n.parentId === subId && !ownedBy.has(n.id)).sort(byLabel);
   const owned = (compId: string) => (childrenOf.get(compId) ?? []).slice().sort(byLabel);
-  const intfsOf = (compId: string) => nodes.filter((n) => n.kind === 'interface' && n.parentId === compId).sort(byLabel);
 
   const toggle = (id: string) =>
     setCollapsed((c) => {
@@ -900,13 +918,9 @@ function Picker(props: {
       return next;
     });
 
-  // Interface-first: a component opens its primary interface; one with no
-  // interface opens the component spec itself.
-  const openComponent = (c: GraphNode) => {
-    const intfs = intfsOf(c.id);
-    if (intfs.length) onSelect({ kind: 'interface', id: intfs[0].id, label: intfs[0].label });
-    else onSelect({ kind: 'component', id: c.id, label: c.label });
-  };
+  // Selecting a component opens its Component tab (identity/type/description);
+  // its Interface and Implementation are one tab-click away.
+  const openComponent = (c: GraphNode) => onSelect({ kind: 'component', id: c.id, label: c.label });
 
   const SimpleRow = (p: { kind: SpecKind; id: string; label: string; depth: number; hasKids?: boolean }) => (
     <div className="tree-row" style={{ paddingLeft: 6 + p.depth * 14 }}>
@@ -990,7 +1004,14 @@ function ComponentUnitEditor(props: {
   onGraphChange: () => void;
 }) {
   const { componentId, selection, nodes } = props;
+  const navigate = useNavigate();
   const compNode = nodes.find((n) => n.id === componentId);
+  // "Open in canvas" opens the component's PARENT (subsystem) view and focuses the
+  // component — a leaf (Specialist/Store/Actor/…) has no meaningful "inside" to drill
+  // into. Subsystem route = its id with '::' → '/' segments; the component to focus
+  // (and, for a method, the narrative flow) rides in the URL hash. No unit prefix.
+  const parentRoute = compNode?.parentId ? compNode.parentId.split('::').map(encodeURIComponent).join('/') : '';
+  const canvasBase = `/canvas/${encodeURIComponent(props.projectId)}${parentRoute ? '/' + parentRoute : ''}`;
   const interfaces = nodes.filter((n) => n.kind === 'interface' && n.parentId === componentId).sort(byLabel);
   const implementations = nodes.filter((n) => n.kind === 'implementation' && n.parentId === componentId).sort(byLabel);
 
@@ -1014,6 +1035,14 @@ function ComponentUnitEditor(props: {
       <div className="unit-head">
         <Badge tone="accent">component</Badge> <strong>{compNode?.label ?? componentId}</strong>
         <code className="subtle">{componentId}</code>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          onClick={() => navigate(`${canvasBase}#focus=${componentId}`)}
+          title="View this component in the canvas (in its subsystem)"
+        >
+          Open in canvas ↗
+        </button>
       </div>
       <div className="tabstrip" role="tablist">
         {tabs.map((t) => (
@@ -1039,6 +1068,7 @@ function ComponentUnitEditor(props: {
           sel={selection}
           typeSuggestions={props.typeSuggestions}
           profiles={props.profiles}
+          onViewFlow={(method) => navigate(`${canvasBase}#flow=${componentId}~${method}`)}
           onGraphChange={props.onGraphChange}
         />
       )}

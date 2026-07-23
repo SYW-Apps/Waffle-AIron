@@ -3936,6 +3936,23 @@ var MODEL = __MODEL_JSON__;
   }
 
   renderPanel();
+  // Stage G: a deep link may focus a component and/or open a method's narrative
+  // modal once the seeded view + DOM + cy graph exist. The host parses the URL hash
+  // into opts.initialSelect / opts.initialFlow — both carry the component id, so this
+  // works whether the seeded view is the component itself or its parent subsystem
+  // (a leaf component has no meaningful "inside", so Specs deep-links open the parent
+  // and focus the component here).
+  (function () {
+    if (typeof opts === 'undefined' || !opts) return;
+    var f = opts.initialFlow, s = opts.initialSelect;
+    var focusComp = (f && f.comp) || (s && s.comp);
+    if (focusComp && compById[focusComp]) {
+      try { select('component', focusComp, true); } catch (e) { /* ignore */ }
+    }
+    if (f && f.comp && f.method && compById[f.comp]) {
+      try { openFlow(f.comp, f.method, f.mode === 'steps' ? 'steps' : 'flow'); } catch (e) { /* ignore */ }
+    }
+  })();
 })();
 </script>
 </body>
