@@ -360,6 +360,10 @@ describe('interactive canvas generation', () => {
     expect(engine).toContain('host.shadowRoot || host.attachShadow');
     expect(engine.match(/rootEl\.innerHTML = '';/g)?.length).toBeGreaterThanOrEqual(2); // mount clear + destroy clear
     expect(engine).not.toContain("host.innerHTML = '';");
+    // Selection survives the remount: destroy stashes it on the host node, the
+    // next mount restores it only when the target still exists in the fresh model.
+    expect(engine).toContain('host.__waironLastSel = { kind: state.selectedKind, id: state.selected }');
+    expect(engine).toContain("prevSel.kind === 'component' && typeof compById !== 'undefined' && compById[prevSel.id]");
   });
 
   it('flow modal lays branches out in lanes with orthogonal long edges (not a single column)', () => {

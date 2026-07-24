@@ -3827,8 +3827,33 @@ export function mountCanvas(host, model, opts = {}) {
     }
   })();
 
+  // A realtime refetch destroys + remounts this canvas on the SAME host (see the
+  // shadow-root reuse above) — restore the previous selection so the details
+  // sidebar survives a live update instead of reverting to the default panel.
+  // Only selections whose target still exists in the FRESH model are restored
+  // (the very change that triggered the refetch may have deleted it); type and
+  // external-port selections are view-local artifacts and stay cleared.
+  try {
+    var prevSel = host.__waironLastSel;
+    if (prevSel && typeof select === 'function') {
+      var selExists =
+        (prevSel.kind === 'component' && typeof compById !== 'undefined' && compById[prevSel.id]) ||
+        (prevSel.kind === 'subsystem' && typeof subById !== 'undefined' && subById[prevSel.id]);
+      if (selExists) select(prevSel.kind, prevSel.id, false);
+    }
+  } catch (e) { /* ignore */ }
+
   return {
     destroy() {
+      try {
+        // Stash the live selection on the host node so the NEXT mount on this
+        // host (the realtime-remount path) can restore it.
+        if (typeof state !== 'undefined' && state && state.selectedKind && state.selected) {
+          host.__waironLastSel = { kind: state.selectedKind, id: state.selected };
+        } else {
+          delete host.__waironLastSel;
+        }
+      } catch (e) { /* ignore */ }
       try { if (typeof cy !== 'undefined' && cy) cy.destroy(); } catch (e) { /* ignore */ }
       // The content lives in rootEl — the SHADOW tree when mounted with shadow;
       // host.innerHTML there would only touch the (empty) light DOM.
