@@ -41,9 +41,13 @@ methods:
           Reshape the returned LandscapeGraphModel into a WebGraphModel: tier 'landscape', map each
           LandscapeNode to a WebGraphNode (orgUnit->kind 'unit' at level 0, project->kind 'project'
           at level 0, publicInterface->kind 'interface' at level 2; carry id, label, projectId, the
-          unit's parent as parentId, and status), reuse the LandscapeEdges as-is, keep only nodes
-          within the requested detail level, set level = the requested level, generatedAt = now,
-          scope = 'instance'
+          unit's parent as parentId, and status), keep only nodes within the requested detail level,
+          and carry the LandscapeEdges over: a relation edge (relationId set) whose
+          publishedInterface endpoint was dropped by the detail cutoff is RETARGETED to that
+          interface's owning project node — one edge per relation, keeping edgeKind, relationId, and
+          label — so cross-project relations stay visible at the project level of detail; any other
+          edge touching a dropped node is dropped. Set level = the requested level, generatedAt =
+          now, scope = 'instance'
         type: local
       - stepNumber: 5
         description: Return the landscape-tier web graph model
@@ -124,4 +128,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-11T11:36:12.720Z'
-updatedAt: '2026-07-11T16:37:13.355Z'
+updatedAt: '2026-07-24T10:35:03.381Z'

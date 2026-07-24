@@ -673,9 +673,12 @@ function openApiIndexPage(projectId: string, specs: { portalId: string; name: st
  * Reshape an already-scoped LandscapeGraphModel into a level-of-detail
  * WebGraphModel: orgUnit → kind 'unit' at level 0 (carrying its parent unit as
  * parentId, derived from the hierarchy edges), project → kind 'project' at level 0,
- * publicInterface → kind 'interface' at level 2. Reuse the landscape edges as-is,
- * keep only nodes at or below the requested detail level, drop any edge whose
- * endpoint was filtered out, and stamp tier 'landscape', scope 'instance'.
+ * publicInterface → kind 'interface' at level 2. Keep only nodes at or below the
+ * requested detail level and carry the landscape edges over: a relation edge
+ * (relationId set) whose publishedInterface endpoint was dropped by the cutoff is
+ * retargeted to that interface's owning project node — one edge per relation — so
+ * cross-project relations stay visible at the project level of detail; any other
+ * edge touching a dropped node is dropped. Stamp tier 'landscape', scope 'instance'.
  */
 function reshapeLandscapeGraph(model: LandscapeGraphModel, level: number): WebGraphModel {
   const unitNodeIds = new Set(model.nodes.filter((n) => n.nodeKind === 'orgUnit').map((n) => n.id));
@@ -714,7 +717,33 @@ function reshapeLandscapeGraph(model: LandscapeGraphModel, level: number): WebGr
 
   const kept = nodes.filter((n) => n.level <= level);
   const keptIds = new Set(kept.map((n) => n.id));
-  const edges = model.edges.filter((e) => keptIds.has(e.from) && keptIds.has(e.to));
+  const projectNodeIdByProject = new Map<string, string>();
+  const interfaceOwnerProject = new Map<string, string>();
+  for (const n of model.nodes) {
+    if (n.projectId === undefined) continue;
+    if (n.nodeKind === 'project') projectNodeIdByProject.set(n.projectId, n.id);
+    else if (n.nodeKind === 'publicInterface') interfaceOwnerProject.set(n.id, n.projectId);
+  }
+  // A dropped endpoint retargets to its owning project node only for relation
+  // edges — publishes/hierarchy edges to filtered nodes stay dropped.
+  const retarget = (endpoint: string): string | undefined => {
+    if (keptIds.has(endpoint)) return endpoint;
+    const owner = interfaceOwnerProject.get(endpoint);
+    const projectNode = owner === undefined ? undefined : projectNodeIdByProject.get(owner);
+    return projectNode !== undefined && keptIds.has(projectNode) ? projectNode : undefined;
+  };
+  const edges: WebGraphModel['edges'] = [];
+  for (const e of model.edges) {
+    if (keptIds.has(e.from) && keptIds.has(e.to)) {
+      edges.push(e);
+      continue;
+    }
+    if (e.relationId === undefined) continue;
+    const from = retarget(e.from);
+    const to = retarget(e.to);
+    if (from === undefined || to === undefined || from === to) continue;
+    edges.push({ ...e, from, to });
+  }
 
   return {
     tier: 'landscape',

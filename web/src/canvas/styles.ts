@@ -97,6 +97,16 @@ header input[type="search"]::placeholder { color:var(--dim); }
 #moreMenu .dropdown { display:block; width:100%; }
 #moreMenu .dropdown > .tbtn, #moreMenu > .tbtn { display:block; width:100%; text-align:left; border:none; background:transparent; margin:2px 0; }
 #moreMenu .dropdown > .tbtn:hover, #moreMenu > .tbtn:hover { background:var(--hover-bg); }
+/* Staged header compaction (responsive only, never persisted): compact
+   stand-ins for the search input, the mode tabs, and the ancestor crumbs.
+   All hidden at full width, so a roomy header renders exactly as before. */
+#searchBtn { position:relative; }
+#searchBtn.hasq::after { content:''; position:absolute; top:3px; right:3px; width:7px; height:7px; border-radius:50%; background:var(--accent); }
+.search-menu { min-width:210px; padding:8px; }
+.search-menu input[type="search"] { width:100%; }
+#modeMenu button.active { background:var(--accent); color:#fff; font-weight:700; }
+#crumbs .dropdown { display:inline-flex; }
+#crumbs .crumbmore { font-weight:700; }
 
 /* Settings panel — toggle switches */
 .settings-menu { min-width:266px; }
