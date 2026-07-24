@@ -23,8 +23,9 @@ fields:
   - name: projects
     type: string[]
     description: >-
-      Coarse compatibility projection of the token's project narrowing; "*" denotes no narrowing
-      (the resolver still gates per project). Not an authorization source on its own.
+      Coarse compatibility projection of the token's project narrowing; "*" denotes no narrowing.
+      Entries may be subproject-qualified ('projectId::subsystemId') — carried through verbatim so
+      root resolution can bind the mounted child root.
     optional: false
   - name: subject
     type: PrincipalSubject
@@ -45,4 +46,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-07-04T12:44:18.529Z'
-updatedAt: '2026-07-16T00:26:22.158Z'
+updatedAt: '2026-07-24T18:20:42.782Z'
