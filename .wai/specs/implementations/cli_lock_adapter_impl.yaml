@@ -1,0 +1,33 @@
+id: cli_lock_adapter_impl
+name: CLI Lock Adapter Implementation
+description: >-
+  Forwards the core-side lock mechanics (status freeze + commit-scoped record write) to the core
+  subsystem's published portal. Realized by the existing runLock command module.
+contract: icli_lock_adapter
+sourcePath: src/commands/lock.ts
+methods:
+  - name: lockTree
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Assemble the lock scope (optional subsystem narrowing) and the record identity from the
+          tree's current StateId
+        type: local
+      - stepNumber: 2
+        description: Promote every in-scope spec to status complete (the lock status write)
+        type: call
+        targetComponent: core_portal
+        targetMethod: promoteAllComplete
+      - stepNumber: 3
+        description: Persist the commit-scoped lock record
+        type: call
+        targetComponent: core_portal
+        targetMethod: writeLockRecord
+      - stepNumber: 4
+        description: Return the written lock record
+        type: return
+        outcome: LockRecord
+    symbol: runLock
+status: draft
+createdAt: '2026-07-24T18:05:34.695Z'
+updatedAt: '2026-07-24T18:05:34.697Z'

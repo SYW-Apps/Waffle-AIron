@@ -215,6 +215,20 @@ methods:
         type: return
         outcome: success
     detail: calls-only
+  - name: resolveChainingParent
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator's chaining detection
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: resolveChainingParent
+  - name: computeStateIdAt
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator's read-only cross-root hash computation
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: computeStateIdAt
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-14T19:03:04.672Z'
+updatedAt: '2026-07-24T18:02:15.398Z'

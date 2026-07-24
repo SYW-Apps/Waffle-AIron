@@ -1,0 +1,16 @@
+id: cli_lock_adapter
+name: CLI Lock Adapter
+description: >-
+  CLI-side forwarding of the local `wairon lock` mechanics to the core subsystem's published portal:
+  freezes the tree's statuses to complete and persists the commit-scoped lock record. The
+  as-complete dry-run gate runs BEFORE this adapter (through the validator adapter) and
+  child-surface regeneration AFTER it (through the surfaces client adapter) — the runner owns that
+  workflow; this adapter owns only the core-side lock hop.
+subsystem: sdd_cli
+componentType: Adapter
+owns: []
+dependsOn:
+  - core_portal
+status: draft
+createdAt: '2026-07-24T18:05:06.885Z'
+updatedAt: '2026-07-24T18:05:06.888Z'

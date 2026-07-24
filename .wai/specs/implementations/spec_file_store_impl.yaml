@@ -28,6 +28,43 @@ methods:
       Recursively lists YAML spec files under the given directory tree; returns an empty list when
       the root is absent rather than failing.
     symbol: listFilesRecursive
+  - name: findChainingParent
+    narrative:
+      - stepNumber: 1
+        description: Resolve the bound project root and set the bounded ancestor hop budget
+        type: local
+      - stepNumber: 2
+        description: Walk upward while no mount is found and ancestors remain within the hop budget
+        type: loop
+        condition: no mounting subsystem recorded and an ancestor remains within the hop budget
+        loopKind: while
+        endStep: 4
+      - stepNumber: 3
+        description: >-
+          Ascend one directory level (reaching the filesystem root ends the walk); unreadable
+          directories are skipped soft, never thrown
+        type: local
+      - stepNumber: 4
+        description: >-
+          Scan the ancestor's spec directory (when present) for a subsystem spec whose projectPath
+          resolves EXACTLY to the bound root, skipping malformed specs soft; record the first match
+          (parent root + subsystem id)
+        type: local
+      - stepNumber: 5
+        description: A mounting subsystem was recorded
+        type: branch
+        condition: a mounting subsystem was recorded
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Return the chaining-parent reference
+        type: return
+        outcome: ChainingParentRef
+      - stepNumber: 7
+        description: Return null — the tree is a genuine top root
+        type: return
+        outcome: 'null'
+    detail: full
+    intent: ''
 status: complete
 createdAt: '2026-07-18T22:57:53.471Z'
-updatedAt: '2026-07-18T22:59:16.876Z'
+updatedAt: '2026-07-24T18:06:44.579Z'

@@ -1,20 +1,26 @@
-schemaVersion: "1.0.0"
-id: "icli_validator_adapter"
-name: "CLI Validator Adapter Interface"
-description: "Adapter contract for the CLI to run validations."
-component: "cli_validator_adapter"
+id: icli_validator_adapter
+name: CLI Validator Adapter Interface
+description: Adapter contract for the CLI to run validations.
+component: cli_validator_adapter
 methods:
-  - name: "validateSddTree"
-    description: "Calls validateSddTree on the validator portal"
-    signature: "validateSddTree(): ValidationResult"
-    returns: "ValidationResult"
-  - name: "validateRegistry"
-    description: "Calls validateRegistry on the validator portal"
-    signature: "validateRegistry(registry: Registry, rules: RulesConfig): ValidationResult"
-    returns: "ValidationResult"
-  - name: "validateProjectConfig"
-    description: "Calls validateProjectConfig on the validator portal"
-    signature: "validateProjectConfig(config: ProjectConfig): ValidationResult"
-    returns: "ValidationResult"
-createdAt: "2026-06-19T12:00:00Z"
-updatedAt: "2026-06-19T12:00:00Z"
+  - name: validateSddTree
+    description: Calls validateSddTree on the validator portal
+    signature: 'validateSddTree(): ValidationResult'
+    returns: ValidationResult
+  - name: validateRegistry
+    description: Calls validateRegistry on the validator portal
+    signature: 'validateRegistry(registry: Registry, rules: RulesConfig): ValidationResult'
+    returns: ValidationResult
+  - name: validateProjectConfig
+    description: Calls validateProjectConfig on the validator portal
+    signature: 'validateProjectConfig(config: ProjectConfig): ValidationResult'
+    returns: ValidationResult
+  - name: validateAsComplete
+    description: >-
+      Forward the as-complete conformance gate to the validator portal: validate the tree as if
+      every spec were already complete — the dry-run `wairon lock` refuses to freeze on.
+    signature: 'validateAsComplete(): ValidationResult'
+    returns: ValidationResult
+status: complete
+createdAt: '2026-06-19T12:00:00Z'
+updatedAt: '2026-07-24T18:05:15.918Z'

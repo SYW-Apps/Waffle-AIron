@@ -118,8 +118,15 @@ methods:
         type: call
         targetComponent: spec_registry
         targetMethod: dryRunSerializeSpecs
+  - name: findChainingParent
+    narrative:
+      - stepNumber: 1
+        description: Forward chaining-parent detection to the file store's bounded upward walk
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: findChainingParent
 lint:
   allow: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-18T22:57:53.720Z'
+updatedAt: '2026-07-24T18:02:05.760Z'

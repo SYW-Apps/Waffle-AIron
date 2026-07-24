@@ -145,6 +145,24 @@ methods:
     params:
       - name: level
         type: number
+  - name: resolveChainingParent
+    description: >-
+      Report whether the currently bound project root is a chained subproject of a parent project
+      (parent root + mounting subsystem id), or null for a genuine top root. Read-only detection
+      through the spec loader.
+    signature: 'resolveChainingParent(): ChainingParentRef | null'
+    returns: ChainingParentRef | null
+  - name: computeStateIdAt
+    description: >-
+      Compute the CURRENT spec-tree state hash of the project at the given root, binding that root
+      strictly read-only for the duration and restoring the previous binding afterwards. Serves
+      freshness comparisons of vendored surface snapshots against what the (parent) tree looks like
+      now; returns null when the root holds no loadable spec tree.
+    signature: 'computeStateIdAt(root: string): string | null'
+    returns: string | null
+    params:
+      - name: root
+        type: string
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-12T11:09:40.948Z'
+updatedAt: '2026-07-24T18:01:48.922Z'

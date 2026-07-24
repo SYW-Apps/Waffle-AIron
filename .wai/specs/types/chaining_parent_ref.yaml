@@ -1,0 +1,24 @@
+kind: value-object
+id: chaining_parent_ref
+name: ChainingParentRef
+description: >-
+  The detected chaining-mount context of the current project root: which parent project mounts this
+  tree as a chained subsystem. Produced by a filesystem walk-up (never configured), so it reflects
+  where the tree ACTUALLY sits.
+subsystem: sdd_core
+fields:
+  - name: parentRoot
+    type: string
+    description: >-
+      Absolute root directory of the parent project whose subsystem projectPath resolves to this
+      project's root.
+    optional: false
+  - name: subsystemId
+    type: string
+    description: >-
+      Id of the parent-tree subsystem that mounts this project (the mount point whose namespace this
+      tree occupies when loaded from the parent).
+    optional: false
+methods: []
+createdAt: '2026-07-24T17:53:35.762Z'
+updatedAt: '2026-07-24T18:01:36.648Z'

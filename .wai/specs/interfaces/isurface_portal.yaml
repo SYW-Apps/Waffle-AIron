@@ -51,8 +51,9 @@ methods:
         type: string
   - name: generateChildSnapshots
     description: >-
-      Write a family-scoped parent-surface snapshot into every chained child project's
-      .wai/surfaces/, so children can validate cross-tree references standalone.
+      Write the family-scoped parent surface AND each sibling subsystem's published surface into
+      every chained child project's .wai/surfaces/, so children can validate and consume cross-tree
+      references standalone against contract-grade snapshots.
     signature: 'generateChildSnapshots(): string[]'
     returns: string[]
   - name: removeSnapshot
@@ -62,6 +63,12 @@ methods:
     params:
       - name: projectName
         type: string
+  - name: listExternalInterfaces
+    description: >-
+      List this project's consumable external surfaces (parent family, siblings, foreign imports) as
+      catalog entries with origin, provenance, and freshness. Pure 1:1 forward to the orchestrator.
+    signature: 'listExternalInterfaces(): ExternalSurfaceEntry[]'
+    returns: ExternalSurfaceEntry[]
 status: complete
 createdAt: '2026-07-10T23:13:16.280Z'
-updatedAt: '2026-07-23T15:54:59.110Z'
+updatedAt: '2026-07-24T17:53:59.538Z'

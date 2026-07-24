@@ -586,6 +586,45 @@ methods:
         description: Unknown action.
         type: throw
         error: unknown pack action (expected init | build | add | list | remove)
+  - name: runLock
+    narrative:
+      - stepNumber: 1
+        description: Run the as-complete dry-run gate over the tree
+        type: call
+        targetComponent: cli_validator_adapter
+        targetMethod: validateAsComplete
+      - stepNumber: 2
+        description: The gate found errors (an invalid tree is never frozen)
+        type: branch
+        condition: as-complete validation reported errors
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Refuse the lock, printing the blocking findings
+        type: return
+        outcome: refused
+      - stepNumber: 4
+        description: >-
+          Confirm with the human (skipped under --yes), then freeze the tree through the lock
+          adapter
+        type: call
+        targetComponent: cli_lock_adapter
+        targetMethod: lockTree
+      - stepNumber: 5
+        description: The tree mounts chained children
+        type: branch
+        condition: at least one subsystem carries a projectPath
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Regenerate the family and sibling surface snapshots into every chained child — a locked
+          parent ships fresh surfaces
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: generateChildSnapshots
+      - stepNumber: 7
+        description: Print the lock record and return
+        type: return
+        outcome: locked
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-23T22:35:47.199Z'
+updatedAt: '2026-07-24T18:05:49.701Z'

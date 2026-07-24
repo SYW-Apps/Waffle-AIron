@@ -1,0 +1,22 @@
+id: icli_lock_adapter
+name: CLI Lock Adapter Interface
+description: >-
+  Contract for the core-side half of `wairon lock`: status promotion plus the commit-scoped lock
+  record write. Callers gate on an as-complete validation FIRST — this adapter never locks an
+  invalid tree on its own authority.
+component: cli_lock_adapter
+methods:
+  - name: lockTree
+    description: >-
+      Freeze the (scope-filtered) tree: promote every in-scope spec to status complete and persist
+      the commit-scoped lock record carrying the tree's current StateId. Returns the written record.
+    signature: 'lockTree(subsystem?: string): LockRecord'
+    returns: LockRecord
+    params:
+      - name: subsystem
+        type: string
+        description: Optional subsystem id narrowing the lock scope (matches the CLI --subsystem flag).
+        optional: true
+status: draft
+createdAt: '2026-07-24T18:05:14.406Z'
+updatedAt: '2026-07-24T18:05:14.411Z'

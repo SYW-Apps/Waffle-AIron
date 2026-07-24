@@ -15,6 +15,19 @@ dependsOn:
   - cli_rules_adapter
   - cli_patterns_adapter
   - cli_variants_adapter
+  - cli_lock_adapter
+lint:
+  allow:
+    - code: GOD_COMPONENT
+      reason: >-
+        The runner IS the terminal dispatch hub by design: every dependency is a thin per-concern
+        CLI adapter (one per subsystem/command family) with no domain logic of its own. Splitting
+        the dispatcher or hiding adapters behind a synthetic facade would add a hop without
+        separating any real responsibility.
+    - code: EXCESSIVE_DEPENDENCIES
+      reason: >-
+        Same deliberate hub shape as the GOD_COMPONENT allow: 11 thin command adapters fanned out
+        from the one CLI entry orchestrator.
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-07-15T12:25:23.003Z'
+updatedAt: '2026-07-24T18:06:47.461Z'
