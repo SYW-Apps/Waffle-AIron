@@ -1,6 +1,12 @@
-import { describe, it, expect } from 'vitest';
-import { isCiDraftWaivable } from '../../src/commands/validate.js';
+import { describe, it, expect, afterEach } from 'vitest';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { isCiDraftWaivable, validateAsComplete } from '../../src/commands/validate.js';
+import { validateSddTree } from '../../src/core/validation.js';
 import type { ValidationIssue } from '../../src/core/validation.js';
+import { setProjectRoot } from '../../src/utils/fs.js';
+import { invalidateSpecCache } from '../../src/core/specs.js';
 
 // ---------------------------------------------------------------------------
 // --ci draft-tolerance policy (validate command)
@@ -40,5 +46,81 @@ describe('isCiDraftWaivable (--ci draft tolerance)', () => {
   it('never waives an error, regardless of code or draft context', () => {
     expect(isCiDraftWaivable({ severity: 'error', code: 'UNUSED_COMPONENT', message: 'x', draftContext: true })).toBe(false);
     expect(isCiDraftWaivable({ severity: 'error', code: 'DRAFT_COMPONENT_WARNING', message: 'x', draftContext: true })).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// cli_validator_adapter.validateAsComplete — the forwarder `wairon lock` gates
+// on. A draft tree can hide completeness errors (they downgrade to warnings
+// while draft); the as-complete gate must surface them as errors WITHOUT
+// touching anything on disk.
+// ---------------------------------------------------------------------------
+
+const META = `createdAt: '2026-06-10T22:00:00Z'\nupdatedAt: '2026-06-10T22:00:00Z'`;
+
+/** Draft HTTP portal whose interface method has NO endpoint — a warning while
+ *  draft, a hard error once treated as complete. */
+function createDraftPortalProject(): { tempDir: string; specsDir: string } {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-va-complete-'));
+  const waiDir = path.join(tempDir, '.wai');
+  fs.mkdirSync(waiDir);
+  fs.writeFileSync(path.join(waiDir, 'project.yaml'), JSON.stringify({
+    schemaVersion: '1.0.0',
+    name: 'va-complete',
+    targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+    rules: {},
+  }));
+  const specsDir = path.join(waiDir, 'specs');
+  for (const d of ['subsystems', 'components', 'interfaces']) {
+    fs.mkdirSync(path.join(specsDir, d), { recursive: true });
+  }
+  fs.writeFileSync(path.join(specsDir, '.index.yaml'),
+    `schemaVersion: 1.0.0\nname: VaSystem\nvision: A system for the gate\n${META}\n`);
+  fs.writeFileSync(path.join(specsDir, 'subsystems', 'sub-a.yaml'),
+    `schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: Subsystem A\nparentSystem: VaSystem\nstatus: draft\n${META}\n`);
+  fs.writeFileSync(path.join(specsDir, 'components', 'comp-a.yaml'),
+    `schemaVersion: 1.0.0\nid: comp-a\nname: CompA\ndescription: HTTP portal\nsubsystem: sub-a\ncomponentType: Portal\nportalType: HTTP_API\ndependsOn: []\nstatus: draft\n${META}\n`);
+  fs.writeFileSync(path.join(specsDir, 'interfaces', 'icomp-a.yaml'),
+    `schemaVersion: 1.0.0\nid: icomp-a\nname: ICompA\ndescription: Interface A\ncomponent: comp-a\nstatus: draft\nmethods:\n  - name: callApi\n    description: Api method\n    signature: "callApi(): Promise<void>"\n    returns: "Promise<void>"\n${META}\n`);
+  setProjectRoot(tempDir);
+  invalidateSpecCache();
+  return { tempDir, specsDir };
+}
+
+describe('validateAsComplete (the lock gate forwarder)', () => {
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+  });
+
+  it('surfaces draft-hidden completeness errors that a normal validate does not', () => {
+    const proj = createDraftPortalProject();
+    try {
+      const asDraft = validateSddTree();
+      expect(asDraft.issues.some((i) => i.code === 'MISSING_ENDPOINT' && i.severity === 'error')).toBe(false);
+
+      const asComplete = validateAsComplete();
+      expect(asComplete.issues.some((i) => i.code === 'MISSING_ENDPOINT' && i.severity === 'error')).toBe(true);
+      expect(asComplete.valid).toBe(false);
+    } finally {
+      fs.rmSync(proj.tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('leaves every spec file byte-for-byte unchanged (the flip is in-memory only)', () => {
+    const proj = createDraftPortalProject();
+    try {
+      const before = fs.readFileSync(path.join(proj.specsDir, 'components', 'comp-a.yaml'), 'utf8');
+      validateAsComplete();
+      const after = fs.readFileSync(path.join(proj.specsDir, 'components', 'comp-a.yaml'), 'utf8');
+      expect(after).toBe(before);
+      expect(after).toContain('status: draft');
+
+      // Later reads still see the tree at its real statuses.
+      invalidateSpecCache();
+      expect(validateSddTree().issues.some((i) => i.code === 'MISSING_ENDPOINT' && i.severity === 'error')).toBe(false);
+    } finally {
+      fs.rmSync(proj.tempDir, { recursive: true, force: true });
+    }
   });
 });

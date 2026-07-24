@@ -172,7 +172,9 @@ export interface Principal {
   /** Coarse display projection — NOT an authorization source. */
   role: DisplayRole;
   /** Coarse projection of the token's project narrowing; '*' denotes no
-   *  narrowing (the resolver still gates per project). */
+   *  narrowing (the resolver still gates per project). Entries may be
+   *  subproject-qualified ('projectId::subsystemId') — carried through verbatim
+   *  so root resolution can bind the mounted child root. */
   projects: string[];
   authenticated: boolean;
   /** Resolved human, service, or bootstrap identity behind the action. */
@@ -199,8 +201,14 @@ export interface ApiKeyRecord {
    *  source. Set by the legacy master-only mintKey path; unset by the
    *  user-bound mint flows. */
   role?: DisplayRole;
-  /** The project ids this token may act on, or ['*'] for the owner's full
-   *  accessible set — the token's narrowing, not a grant. */
+  /** The token's project narrowing: the project ids this token may act on, or
+   *  ['*'] for the owner's full accessible set. An entry MAY be
+   *  subproject-qualified — 'projectId::subsystemId' (nested mounts compose,
+   *  e.g. 'proj::a::b') — scoping the token INTO that chained subproject:
+   *  data-plane requests then bind the mounted child root instead of the
+   *  project root. Never a grant — within this narrowing the token acts as the
+   *  owner's LIVE permission (the resolver gates per project; a subproject
+   *  qualifier narrows reach, it never widens or refines grants). */
   projects: string[];
   createdAt: string;
   /** Human or service identity that owns this token — the identity it acts as. */

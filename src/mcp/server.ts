@@ -22,6 +22,11 @@ import {
   readResource as coreReadSkillResource,
   type SkillResourceDescriptor,
 } from '../core/skills.js';
+import { resolveChainingParent } from '../core/specs.js';
+import {
+  listExternalInterfaces as coreListExternalInterfaces,
+  type ExternalSurfaceEntry,
+} from '../core/surfaces.js';
 
 // ---------------------------------------------------------------------------
 // wairon MCP Server
@@ -52,6 +57,14 @@ function requireSpecs() {
 function requireProvision() {
   /* eslint-disable @typescript-eslint/no-require-imports */
   return require('../core/provision.js') as typeof import('../core/provision.js');
+}
+
+// mcp_surfaces_adapter — thin forwarder across the boundary into the surface
+// portal. Statically imported (like the skills adapter below, not lazily
+// required): the portal function reads the request-scoped project root at
+// call time, so a static binding stays correct per bound project.
+function listExternalInterfaces(): ExternalSurfaceEntry[] {
+  return coreListExternalInterfaces();
 }
 
 
@@ -1096,8 +1109,45 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
+  reg<Record<string, never>>(server,
+    'sdd_list_external_interfaces',
+    {
+      description: 'List the bound project\'s consumable external surfaces (parent family, siblings, foreign imports) as discovery entries with origin, provenance, and freshness — the tool an agent inside a subproject uses to SEE its outward world instead of discovering it by failed reference resolution. Full contracts stay in the vendored snapshots (.wai/surfaces/); each entry summarizes the interface ids it exposes.',
+    },
+    () => {
+      try {
+        return json(listExternalInterfaces());
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
   // ── Built-in SDD skills as read-only MCP resources ────────────────────────
   registerSkillResources(server);
+
+  // ── Chained-subproject bind-time announcement ─────────────────────────────
+  // When the bound root is a chained subproject, announce it on the startup
+  // log (stderr — stdout is the JSON-RPC channel): the parent project root,
+  // the mounting subsystem id, and how many vendored external surfaces are
+  // discoverable. An agent bound inside a subproject KNOWS its world is a
+  // subtree from the first line, instead of learning it incidentally from
+  // validate warnings. Detection or discovery failures are swallowed — the
+  // announcement must never break server startup.
+  try {
+    const chainingParent = resolveChainingParent();
+    if (chainingParent) {
+      let externalSurfaceCount = 0;
+      try {
+        externalSurfaceCount = listExternalInterfaces().length;
+      } catch { /* count stays 0 — the announcement itself still fires */ }
+      process.stderr.write(
+        `[wairon mcp] chained subproject: this root is mounted as subsystem "${chainingParent.subsystemId}" ` +
+        `of the parent project at ${chainingParent.parentRoot} — ${externalSurfaceCount} vendored external ` +
+        `surface(s) discoverable via sdd_list_external_interfaces\n`,
+      );
+    }
+  } catch { /* chaining detection must never break server startup */ }
 
   // ── Hosted data-plane tool ADVERTISEMENT (discovery only) ─────────────────
   // Execution is intercepted upstream by the hosting request orchestrator;

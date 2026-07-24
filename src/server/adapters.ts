@@ -1,6 +1,6 @@
 import { computeStateId } from '../core/statehash.js';
 import { readLockRecord, writeLockRecord } from '../core/lockfile.js';
-import { loadSystemSpec, loadSubsystemSpecs, buildProjectGraph } from '../core/specs.js';
+import { loadSystemSpec, loadSubsystemSpecs, buildProjectGraph, assertContainedProjectPath } from '../core/specs.js';
 import { provisionProject, promoteAllComplete } from '../core/provision.js';
 import { validateAsComplete } from '../core/validation.js';
 import { renderDiagram, buildCanvasDataModel } from '../core/diagram.js';
@@ -55,6 +55,14 @@ export const hostCore = {
    *  read of a bundled constant. */
   builtinProfileIds: (): string[] => [...BUILTIN_PROFILES],
 };
+
+/** host_core_adapter.resolveContainedProjectPath — resolve a subsystem's
+ *  projectPath WITHIN the given root through the core containment guard
+ *  (absolute and `../`-escaping paths rejected). The hosted mount-resolution
+ *  seam: the project registry never touches core modules directly. */
+export function resolveContainedProjectPath(projectRoot: string, projectPath: string): string {
+  return assertContainedProjectPath(projectRoot, projectPath);
+}
 
 // host_validator_adapter → sdd_validator (validator_portal)
 export function validateProjectAsComplete() {

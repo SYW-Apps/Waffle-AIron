@@ -1,4 +1,6 @@
 import * as crypto from 'node:crypto';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
 import { setAssignment } from '../../src/server/permissions.js';
 import { createUnit } from '../../src/server/organization.js';
@@ -81,6 +83,37 @@ export function seedUnit(dataDir: string, name: string, over: Partial<Organizati
     createdBy: subjectOf('u-seeder'),
     ...over,
   });
+}
+
+/** Seed a subsystem spec into the spec tree at `root` — a CHAINED mount when
+ *  projectPath is given (the shape `wairon subsystem add` produces), an
+ *  ordinary in-tree subsystem otherwise. */
+export function seedSubsystem(root: string, subsystemId: string, projectPath?: string): void {
+  const dir = path.join(root, '.wai', 'specs', 'subsystems');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, `${subsystemId}.yaml`),
+    [
+      `id: ${subsystemId}`,
+      `name: ${subsystemId}`,
+      `description: subsystem ${subsystemId}`,
+      'parentSystem: root-system',
+      ...(projectPath ? [`projectPath: ${projectPath}`] : []),
+      "createdAt: '2026-01-01T00:00:00.000Z'",
+      "updatedAt: '2026-01-01T00:00:00.000Z'",
+      '',
+    ].join('\n'),
+  );
+}
+
+/** Seed a chained-subproject fixture: the subsystem spec carrying projectPath
+ *  in the tree at `root`, plus the real child dir (with its own .wai/specs)
+ *  inside the root. Returns the resolved child dir. */
+export function seedChainedMount(root: string, subsystemId: string, projectPath: string): string {
+  seedSubsystem(root, subsystemId, projectPath);
+  const childDir = path.resolve(root, projectPath);
+  fs.mkdirSync(path.join(childDir, '.wai', 'specs'), { recursive: true });
+  return childDir;
 }
 
 /** Create a project through the admin plane (master credential) placed into a

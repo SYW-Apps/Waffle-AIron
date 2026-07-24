@@ -68,7 +68,7 @@ describe('MCP stdio server integration (sdd_* pipeline)', () => {
       'sdd_initialize_system', 'sdd_add_subsystem', 'sdd_add_component',
       'sdd_define_interface', 'sdd_set_endpoints', 'sdd_write_narrative',
       'sdd_add_type', 'sdd_update_spec', 'sdd_delete_spec', 'sdd_get_spec',
-      'sdd_validate_tree', 'sdd_get_status',
+      'sdd_validate_tree', 'sdd_get_status', 'sdd_list_external_interfaces',
       'sdd_move_subsystem_project', 'sdd_externalize_subsystem', 'sdd_internalize_subsystem',
     ]) {
       expect(names).toContain(expected);

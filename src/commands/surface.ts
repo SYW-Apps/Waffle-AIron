@@ -7,6 +7,7 @@ import {
   importSurface,
   listSnapshots,
   generateChildSnapshots,
+  listExternalInterfaces,
 } from '../core/surfaces.js';
 import { SURFACE_AUDIENCES, SurfaceOrigin } from '../models/index.js';
 
@@ -17,7 +18,14 @@ import { SURFACE_AUDIENCES, SurfaceOrigin } from '../models/index.js';
 // import           — store a foreign surface (native snapshot or OpenAPI)
 // list             — stored snapshots available to this project
 // generate-children — write the family surface into every chained child
+// externals        — the project's consumable external surfaces (parent
+//                    family, siblings, foreign imports) with freshness
 // ---------------------------------------------------------------------------
+
+// cli_surfaces_client_adapter.generateChildSnapshots — also consumed by the
+// runner's lock workflow (`wairon lock`: a locked parent ships fresh
+// surfaces), so the adapter republishes the surface portal's function here.
+export { generateChildSnapshots };
 
 export interface SurfaceOptions {
   audience?: string;
@@ -117,7 +125,25 @@ export async function runSurface(action: string, options: SurfaceOptions = {}): 
       return;
     }
 
+    case 'externals': {
+      const entries = listExternalInterfaces();
+      if (!entries.length) {
+        logger.info('No external surfaces available (.wai/surfaces/ holds no snapshots).');
+        return;
+      }
+      // One row per entry: sourceKind, key, origin, freshness, interface ids.
+      const freshness = (f: string): string =>
+        f === 'fresh' ? chalk.green(f) : f === 'stale' ? chalk.yellow(f) : chalk.gray(f);
+      for (const e of entries) {
+        logger.info(
+          `${e.sourceKind.padEnd(8)} ${chalk.cyan(e.projectName)} [${e.origin}] ${freshness(e.freshness)} — ` +
+            `${e.interfaceIds.length ? e.interfaceIds.join(', ') : '(no interfaces)'}`,
+        );
+      }
+      return;
+    }
+
     default:
-      throw new WaironError(`Unknown surface action "${action}" (supported: export, import, list, generate-children).`);
+      throw new WaironError(`Unknown surface action "${action}" (supported: export, import, list, generate-children, externals).`);
   }
 }

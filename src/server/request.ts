@@ -1,11 +1,10 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import * as path from 'path';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { runWithProjectRoot } from '../utils/fs.js';
 import { authenticate, authenticateSession, verifyViewToken } from './auth.js';
 import { authorize } from './authorization.js';
 import { WEB_SESSION_PREFIX } from './types.js';
-import { resolveProjectRoot, existingProjectRoot } from './projects.js';
+import { resolveProjectBinding, existingProjectRoot } from './projects.js';
 import { createScopedServer, hostCore } from './adapters.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import {
@@ -37,7 +36,12 @@ import type {
 // and bind the authorized project's isolated root, then dispatch the sdd_* tool
 // call into a fresh, reused MCP server within that scope. Because the whole
 // dispatch runs inside runWithProjectRoot, every sdd_* handler resolves to the
-// bound project's .wai/ tree with no other changes.
+// bound project's .wai/ tree with no other changes. A subproject-qualified
+// narrowing/selector ('projectId::subsystemId') binds the mounted CHILD root —
+// every scoped tool then operates on the subtree — while permission
+// capabilities keep resolving over the TOP project (a qualifier narrows reach,
+// never refines grants) and audit events keep the TOP project id for
+// provenance, additionally recording the bound qualifier.
 // ---------------------------------------------------------------------------
 
 import { bearerToken, sendJson } from './httpio.js';
@@ -95,6 +99,11 @@ export function deriveMcpOutcome(response: unknown): 'success' | 'failed' {
  * failure is recorded as a server diagnostic and never propagates — auditing must
  * never fail the request. A legacy principal with no resolved subject gets a
  * synthesized service actor so the (required) actor is always present.
+ *
+ * `projectId` is always the TOP project id (provenance); when the request bound
+ * a chained subproject, the qualifier's mount chain is additionally recorded in
+ * the event's redacted metadata ({"subproject":"a::b"}), the same way similar
+ * diagnostic details are recorded — old events without it stay readable.
  */
 export function auditToolCall(
   dataDir: string,
@@ -102,6 +111,7 @@ export function auditToolCall(
   projectId: string,
   body: unknown,
   outcome: string,
+  subproject?: string,
 ): void {
   const target = mcpToolTarget(body);
   if (!target) return; // no dispatchable tool/method → nothing to audit
@@ -121,6 +131,7 @@ export function auditToolCall(
     tokenId: principal.tokenId,
     projectId,
     target,
+    ...(subproject ? { metadata: JSON.stringify({ subproject }) } : {}),
   };
   try {
     appendAuditEvent(dataDir, event, DEFAULT_AUDIT_POLICY);
@@ -476,8 +487,12 @@ export async function handleMcpRequest(
     };
   }
 
-  const root = resolveProjectRoot(cfg.dataDir, principal, projectSelector(req));
-  if (!root) {
+  // Resolve the authorized binding. A subproject-qualified narrowing/selector
+  // resolves to the mounted CHILD root (rejected — never widened to the project
+  // root — when the mount is unknown or non-chained); the binding keeps the TOP
+  // project id for permission resolution and audit provenance.
+  const binding = resolveProjectBinding(cfg.dataDir, principal, projectSelector(req));
+  if (!binding) {
     sendJson(res, 403, { error: 'project not authorized, unknown, or not specified' });
     return;
   }
@@ -500,18 +515,22 @@ export async function handleMcpRequest(
     return;
   }
 
-  await runWithProjectRoot(root, async () => {
-    // The project id is the basename of its isolated root (<dataDir>/projects/<id>).
-    const projectId = path.basename(root);
+  await runWithProjectRoot(binding.rootPath, async () => {
+    // The TOP project id from the resolved binding — permission capabilities and
+    // audit provenance always anchor here, even when the bound root is a chained
+    // subproject's child tree (binding.subproject carries the qualifier).
+    const projectId = binding.projectId;
+    const subproject = binding.subproject;
 
     // Steps 10–24: the five execute-primary project-lifecycle tools and the hosted
     // landscape discovery tools are handled here, bypassing the scoped sdd_* MCP
-    // server. The response still flows through the SAME best-effort audit path
+    // server. They operate on the hosted project RECORD, so they receive the TOP
+    // project id. The response still flows through the SAME best-effort audit path
     // (auditToolCall) the scoped dispatch uses.
     const dispatchedResponse = await dispatchProjectLifecycleTool(cfg, cred, projectId, body);
     if (dispatchedResponse !== undefined) {
       sendJson(res, 200, dispatchedResponse);
-      auditToolCall(cfg.dataDir, principal, projectId, body, deriveMcpOutcome(dispatchedResponse));
+      auditToolCall(cfg.dataDir, principal, projectId, body, deriveMcpOutcome(dispatchedResponse), subproject);
       // Realtime: nudge the channels a successful lifecycle mutation touched.
       for (const ch of mcpChangeChannels(body, projectId, dispatchedResponse)) publishChange(ch);
       return;
@@ -520,7 +539,8 @@ export async function handleMcpRequest(
     // Steps 25–27: enforce the granular data-plane permission BEFORE dispatching
     // an ordinary sdd_* tool. A read tool needs project:read, every other tool
     // project:write (fail closed), resolved LIVE through the hierarchical
-    // permission resolver over the BOUND project. Capabilities match EXACTLY —
+    // permission resolver over the TOP project (a subproject qualifier narrows
+    // which tree is bound, never which grants apply). Capabilities match EXACTLY —
     // there is no wildcard capability, and the '*'@instance instance-admin
     // marker is reserved (setAssignment rejects it); only the env-anchored
     // instance-admin subjects bypass the walk. A refusal is an isError tool
@@ -529,7 +549,7 @@ export async function handleMcpRequest(
     const permissionError = dataPlanePermissionError(cfg, principal, projectId, body);
     if (permissionError !== undefined) {
       sendJson(res, 200, permissionError);
-      auditToolCall(cfg.dataDir, principal, projectId, body, deriveMcpOutcome(permissionError));
+      auditToolCall(cfg.dataDir, principal, projectId, body, deriveMcpOutcome(permissionError), subproject);
       return;
     }
 
@@ -558,7 +578,7 @@ export async function handleMcpRequest(
     await transport.handleRequest(req, res, body);
 
     // Steps 23–27: audit the handled data-plane tool call (best-effort).
-    auditToolCall(cfg.dataDir, principal, projectId, body, deriveMcpOutcome(response));
+    auditToolCall(cfg.dataDir, principal, projectId, body, deriveMcpOutcome(response), subproject);
     // Realtime: a successful sdd_* WRITE changed the spec tree — nudge the
     // project channel so open canvases/views refetch (spec-tree change → live).
     for (const ch of mcpChangeChannels(body, projectId, response)) publishChange(ch);

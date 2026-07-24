@@ -11,6 +11,7 @@ import {
   invalidateSpecCache,
 } from '../../src/core/specs.js';
 import { runSurface } from '../../src/commands/surface.js';
+import { createChainedSubsystem } from '../../src/core/provision.js';
 import type { ComponentSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -192,5 +193,65 @@ describe('wairon surface export — multi-portal OpenAPI', () => {
     expect(output).toContain('gateway');
     expect(output).toContain('admin');
     expect(output).toContain('method(s)');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// `wairon surface externals` — the external-surface discovery table: one row
+// per vendored snapshot with sourceKind, key, origin, freshness, and the
+// interface ids it exposes.
+// ---------------------------------------------------------------------------
+
+describe('wairon surface externals — external-surface discovery', () => {
+  let rootDir: string;
+  let childDir: string;
+  let logged: string[];
+
+  beforeEach(async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-ext-'));
+    buildTwoPortalProject(rootDir);
+    createChainedSubsystem(subsystem('kid', { projectPath: 'packages/kid', status: 'draft' }), 'kid');
+    invalidateSpecCache();
+    setProjectRoot(rootDir);
+    await runSurface('generate-children', {});
+    childDir = path.join(rootDir, 'packages', 'kid');
+    logged = [];
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => { logged.push(args.join(' ')); });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    setProjectRoot(null);
+    invalidateSpecCache();
+    try { fs.rmSync(rootDir, { recursive: true, force: true }); } catch { /* win file locks */ }
+  });
+
+  it('prints one row per entry: sourceKind, key, origin, freshness, interface ids', async () => {
+    setProjectRoot(childDir);
+    await runSurface('externals', {});
+
+    const output = logged.join('\n');
+    // The family surface delivered by the chaining parent...
+    expect(output).toMatch(/parent\s+.*multi-portal-system/);
+    // ...and the core-sub sibling surface, both generated and fresh.
+    expect(output).toMatch(/sibling\s+.*multi-portal-system::core-sub/);
+    expect(output).toContain('[generated]');
+    expect(output).toContain('fresh');
+    expect(output).not.toContain('stale');
+    // The discovery summary names the exposed interface ids.
+    expect(output).toContain('gateway');
+    expect(output).toContain('admin');
+  });
+
+  it('says so when no external surfaces are stored', async () => {
+    // The PARENT holds no vendored snapshots — generation writes into children.
+    setProjectRoot(rootDir);
+    await runSurface('externals', {});
+    expect(logged.join('\n')).toContain('No external surfaces available');
+  });
+
+  it('an unknown action names externals among the supported ones', async () => {
+    setProjectRoot(childDir);
+    await expect(runSurface('bogus', {})).rejects.toThrow(/externals/);
   });
 });
