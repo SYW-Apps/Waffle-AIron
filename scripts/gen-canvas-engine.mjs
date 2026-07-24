@@ -110,7 +110,13 @@ export interface CanvasHandle {
  *  so the whole chrome follows the host app's selected theme. */
 export function mountCanvas(host, model, opts = {}) {
   const useShadow = opts.shadow !== false;
-  const rootEl = useShadow ? host.attachShadow({ mode: 'open' }) : host;
+  // attachShadow is once-per-element and a shadow root can never be detached, so
+  // a REMOUNT onto the same host (e.g. a realtime refetch re-running a React
+  // mount effect) must REUSE the existing root — a second attachShadow throws
+  // NotSupportedError and the refreshed canvas never renders. Clearing rootEl
+  // makes the mount idempotent for shadow and light-DOM hosts alike.
+  const rootEl = useShadow ? (host.shadowRoot || host.attachShadow({ mode: 'open' })) : host;
+  rootEl.innerHTML = '';
   const styleEl = document.createElement('style');
   styleEl.textContent = CANVAS_CSS;
   rootEl.appendChild(styleEl);
@@ -141,7 +147,9 @@ ${eng}
   return {
     destroy() {
       try { if (typeof cy !== 'undefined' && cy) cy.destroy(); } catch (e) { /* ignore */ }
-      host.innerHTML = '';
+      // The content lives in rootEl — the SHADOW tree when mounted with shadow;
+      // host.innerHTML there would only touch the (empty) light DOM.
+      rootEl.innerHTML = '';
     },
     // Drive the engine's OWN theme state (not just the CSS attribute) so the
     // cytoscape node fills recolor too, and a later view switch keeps the theme

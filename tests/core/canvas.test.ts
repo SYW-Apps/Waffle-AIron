@@ -348,6 +348,18 @@ describe('interactive canvas generation', () => {
     expect(html.split('var MODEL = ')[1].split('\n')[0]).toContain('"deepInternals":true');
   });
 
+  it('mountCanvas remounts idempotently — shadow-root reuse contract (realtime refetch)', () => {
+    // attachShadow throws on a host that already has a shadow root and a shadow
+    // root can never be detached, so a realtime-refetch REMOUNT must reuse and
+    // clear the existing root; destroy must clear the SHADOW tree (rootEl), not
+    // the host's empty light DOM. Locks the generated wrapper's contract — the
+    // drift test guarantees this file matches the generator.
+    const engine = fs.readFileSync(path.join(REPO_ROOT, 'web', 'src', 'canvas', 'engine.ts'), 'utf8');
+    expect(engine).toContain('host.shadowRoot || host.attachShadow');
+    expect(engine.match(/rootEl\.innerHTML = '';/g)?.length).toBeGreaterThanOrEqual(2); // mount clear + destroy clear
+    expect(engine).not.toContain("host.innerHTML = '';");
+  });
+
   it('flow modal lays branches out in lanes with orthogonal long edges (not a single column)', () => {
     buildFixture();
     const html = renderCanvasHtml(buildCanvasModel());
