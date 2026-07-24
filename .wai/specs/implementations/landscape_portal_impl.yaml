@@ -65,11 +65,13 @@ methods:
   - name: exportProjectSurface
     narrative:
       - stepNumber: 1
-        description: Forward exportProjectSurface to the surface exchange orchestrator
+        description: >-
+          Forward exportProjectSurface to the surface exchange orchestrator, passing the `spec`
+          query parameter through as portalId
         type: call
         targetComponent: surface_exchange_orchestrator
         targetMethod: exportProjectSurface
 detail: calls-only
 status: complete
 createdAt: '2026-07-09T22:08:59.746Z'
-updatedAt: '2026-07-11T12:04:38.141Z'
+updatedAt: '2026-07-23T22:35:43.512Z'

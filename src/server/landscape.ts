@@ -37,6 +37,7 @@ import {
 import { resolveVisibility, isVisible, audienceDistance, audienceCovers } from './visibility.js';
 import { hostSurfaces } from './adapters.js';
 import * as yamlLib from 'js-yaml';
+import { safeFilenamePart } from '../utils/filenames.js';
 import type {
   AuditEvent,
   AuditRetentionPolicy,
@@ -975,6 +976,12 @@ export function getProjectSurfaceForMcp(
  * scope; this only renders the document). Requires landscape:manage scope
  * over the project (the contract grade exposes full method contracts).
  * format: 'native' (snapshot YAML) | 'openapi' (OpenAPI 3.1 JSON).
+ *
+ * A project publishes one OpenAPI document PER PORTAL, so for openapi
+ * `portalId` selects ONE of them (its id lands in the filename); omitted with
+ * several portals returns an INDEX listing them (portalId + name); omitted with
+ * exactly one returns that document. Distinct portals are never merged, and a
+ * portalId naming no published portal is refused rather than substituted.
  */
 export function exportProjectSurface(
   cfg: HostConfig,
@@ -982,6 +989,7 @@ export function exportProjectSurface(
   projectId: string,
   format: string,
   maxAudience: string,
+  portalId?: string,
 ): SurfaceArtifact {
   const principal = requirePrincipal(cfg, credential);
   if (!permitsCap(cfg, principal, PROJECT_ADMIN_CAPABILITY, 'project', projectId)) {
@@ -998,16 +1006,46 @@ export function exportProjectSurface(
 
   const result = runWithProjectRoot(root, () => hostSurfaces.exportBoundSurface(maxAudience, format));
   if (format === 'openapi') {
+    const specs = result.renderedSet ?? [];
+    if (portalId) {
+      const hit = specs.find((s) => s.portalId === portalId);
+      if (!hit) {
+        throw new Error(
+          `Unknown portal "${portalId}" in project "${projectId}" ` +
+            `(published: ${specs.map((s) => s.portalId).join(', ') || 'none'}).`,
+        );
+      }
+      return {
+        body: hit.document,
+        contentType: 'application/json',
+        filename: `${safeFilenamePart(projectId)}-${safeFilenamePart(portalId)}-surface.openapi.json`,
+      };
+    }
+    if (specs.length === 1) {
+      return {
+        body: specs[0].document,
+        contentType: 'application/json',
+        filename: `${safeFilenamePart(projectId)}-surface.openapi.json`,
+      };
+    }
+    // Several published portals are several APIs: hand back the INDEX so the
+    // caller picks one, never a merge of distinct APIs and never an empty
+    // document standing in for them (with no portal at all the index is empty,
+    // which is the honest answer).
     return {
-      body: result.rendered ?? '{}',
+      body: JSON.stringify(
+        { openapiIndex: true, specs: specs.map((s) => ({ portalId: s.portalId, name: s.name })) },
+        null,
+        2,
+      ),
       contentType: 'application/json',
-      filename: `${projectId}-surface.openapi.json`,
+      filename: `${safeFilenamePart(projectId)}-surface.openapi.index.json`,
     };
   }
   return {
     body: yamlLib.dump(result.snapshot),
     contentType: 'application/yaml',
-    filename: `${projectId}-surface.yaml`,
+    filename: `${safeFilenamePart(projectId)}-surface.yaml`,
   };
 }
 
@@ -1078,8 +1116,9 @@ export function handleLandscapeRequest(
       if (req.method === 'GET' && parts.length === 4 && parts[3] === 'visible-surfaces') {
         return sendJson(res, 200, listVisibleSurfaces(cfg, credential, parts[2]));
       }
-      // GET /landscape/projects/{id}/surface?format=native|openapi&audience=<level>
-      // Generate-and-download (the diagram pattern) — never a served UI.
+      // GET /landscape/projects/{id}/surface?format=native|openapi&audience=<level>&spec=<portalId>
+      // Generate-and-download (the diagram pattern) — never a served UI. `spec`
+      // picks ONE of a multi-portal project's per-portal OpenAPI documents.
       if (req.method === 'GET' && parts.length === 4 && parts[3] === 'surface') {
         const artifact = exportProjectSurface(
           cfg,
@@ -1087,6 +1126,7 @@ export function handleLandscapeRequest(
           parts[2],
           url.searchParams.get('format') ?? 'native',
           url.searchParams.get('audience') ?? 'instance',
+          url.searchParams.get('spec') ?? undefined,
         );
         res.writeHead(200, {
           'content-type': artifact.contentType,

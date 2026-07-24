@@ -118,10 +118,13 @@ methods:
   - name: exportProjectSurface
     description: >-
       Generate-and-download one project's surface artifact (native snapshot YAML or OpenAPI 3.1
-      JSON) as an attachment — generation on request, never a served UI.
+      JSON) as an attachment — generation on request, never a served UI. For openapi the `spec`
+      query parameter (a portalId) selects one per-portal document; omitted with several portals
+      returns an index listing them (portalId + name) rather than merging or silently picking one;
+      omitted with exactly one returns that document.
     signature: >-
       exportProjectSurface(credential: string, projectId: string, format: string, maxAudience:
-      string): SurfaceArtifact
+      string, portalId?: string): SurfaceArtifact
     returns: SurfaceArtifact
     params:
       - name: credential
@@ -132,10 +135,13 @@ methods:
         type: string
       - name: maxAudience
         type: string
+      - name: portalId
+        type: string
+        optional: true
     endpoint:
       transport: HTTP
       method: GET
       path: /landscape/projects/{id}/surface
 status: complete
 createdAt: '2026-07-08T21:13:58.131Z'
-updatedAt: '2026-07-11T12:04:19.905Z'
+updatedAt: '2026-07-23T22:15:46.971Z'

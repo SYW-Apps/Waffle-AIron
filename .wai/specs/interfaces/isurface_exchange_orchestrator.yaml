@@ -81,10 +81,12 @@ methods:
       UI SERVING is out of scope; this only renders the document). Requires landscape:manage scope
       over the project (contract grade exposes full method contracts). Resolve and bind the target
       root, generate the audience-filtered artifact (native snapshot YAML or OpenAPI 3.1 JSON), and
-      return the typed downloadable artifact.
+      return the typed downloadable artifact. For openapi, portalId selects one per-portal document;
+      omitted with several portals returns an index listing them (portalId + name); omitted with
+      exactly one returns that document. Distinct portals are never merged.
     signature: >-
       exportProjectSurface(credential: string, projectId: string, format: string, maxAudience:
-      string): SurfaceArtifact
+      string, portalId?: string): SurfaceArtifact
     returns: SurfaceArtifact
     params:
       - name: credential
@@ -93,9 +95,11 @@ methods:
         type: string
       - name: format
         type: string
-        description: native | openapi
       - name: maxAudience
         type: string
+      - name: portalId
+        type: string
+        optional: true
 status: complete
 createdAt: '2026-07-11T12:02:52.785Z'
-updatedAt: '2026-07-11T12:09:30.091Z'
+updatedAt: '2026-07-23T22:15:48.081Z'

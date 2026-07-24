@@ -7,8 +7,14 @@ methods:
     description: >-
       Own-surface projection workflow with optional codec rendering and file output. When format is
       openapi the result carries renderedSet — one OpenAPI 3.1 document per backing portal — and
-      `rendered` is set to the single document only when exactly one portal is present.
-    signature: 'exportSurface(maxAudience: string, format: string, outPath?: string): SurfaceSnapshot'
+      `rendered` is set to the single document only when exactly one portal is present. portalId
+      selects a single portal's document (rejected when it names no portal). With several portals
+      and no portalId, an outPath writes ONE FILE PER PORTAL — the out path's stem suffixed with
+      each portalId — rather than silently writing only the first; distinct portals are never merged
+      into a combined document.
+    signature: >-
+      exportSurface(maxAudience: string, format: string, outPath?: string, portalId?: string):
+      SurfaceSnapshot
     returns: SurfaceSnapshot
     params:
       - name: maxAudience
@@ -16,6 +22,9 @@ methods:
       - name: format
         type: string
       - name: outPath
+        type: string
+        optional: true
+      - name: portalId
         type: string
         optional: true
   - name: importSurface
@@ -51,4 +60,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-07-23T15:54:57.004Z'
+updatedAt: '2026-07-23T22:15:23.130Z'

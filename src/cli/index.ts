@@ -471,6 +471,7 @@ program
   .option('--audience <level>', 'export ceiling: project | department | instance | partner | external (default instance)')
   .option('--format <fmt>', 'export format: native | openapi (default native)')
   .option('--out <path>', 'export output path (else print)')
+  .option('--portal <id>', 'export: select one portal\'s OpenAPI spec (a multi-portal project renders one document per portal)')
   .option('--source <path>', 'import: the surface document (native snapshot YAML or OpenAPI)')
   .option('--origin <origin>', 'import provenance: exchanged | authored (default authored)')
   .action(async (action: string, opts) => {
@@ -480,6 +481,7 @@ program
       out: opts.out,
       source: opts.source,
       origin: opts.origin,
+      portal: opts.portal,
     });
   });
 

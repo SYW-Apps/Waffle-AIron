@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getProjectRoot } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
+import { safeFilenamePart } from '../utils/filenames.js';
 import {
   SurfaceSnapshot,
   SurfaceSnapshotSchema,
@@ -222,44 +223,88 @@ export function loadSurfaceSnapshots(): SurfaceSnapshot[] {
 
 export interface SurfaceExportResult {
   snapshot: SurfaceSnapshot;
-  /** Rendered document body when format was openapi AND there is exactly one portal. */
+  /** Rendered document body when format was openapi AND exactly one portal
+   *  remains — either the project has one, or portalId selected one. */
   rendered?: string;
   /** One named OpenAPI document per public portal (openapi format) — the honest
-   *  multi-spec result; never a single combined doc across distinct portals. */
+   *  multi-spec result; never a single combined doc across distinct portals.
+   *  Narrowed to a single entry when portalId selected one. */
   renderedSet?: NamedOpenApiSpec[];
-  /** Written output path when one was requested. */
+  /** Written output path when exactly one file was written. */
   writtenTo?: string;
+  /** EVERY written path. A multi-portal openapi export with no portal selection
+   *  writes one file per portal, so callers can report all of them. */
+  writtenPaths?: string[];
 }
 
-/** Render the openapi form of a snapshot: one named spec per portal, plus the
- *  convenience single doc when the project has exactly one portal/gateway. */
-function renderOpenApiForms(snapshot: SurfaceSnapshot): { rendered?: string; renderedSet: NamedOpenApiSpec[] } {
-  const renderedSet = toOpenApiSet(snapshot);
-  return { renderedSet, ...(renderedSet.length === 1 ? { rendered: renderedSet[0].document } : {}) };
+/** Narrow a rendered set to the named portal. An unknown portalId is REFUSED —
+ *  never silently substituted with some other portal's document. */
+function selectPortalSpec(renderedSet: NamedOpenApiSpec[], portalId: string): NamedOpenApiSpec[] {
+  const hit = renderedSet.find(spec => spec.portalId === portalId);
+  if (!hit) {
+    const known = renderedSet.map(s => s.portalId).join(', ');
+    throw new Error(`Unknown portal "${portalId}" — this surface renders: ${known || '(no portals)'}.`);
+  }
+  return [hit];
 }
 
-/** Write an export to disk: the openapi body when one was rendered, else the
- *  snapshot YAML. (Deferred: a multi-portal openapi export writes the first spec
- *  for now — the share/CLI multi-file download is a fast-follow.) */
-function writeSurfaceFile(outPath: string, body: string | undefined, snapshot: SurfaceSnapshot): string {
+/** The per-portal output path: the out path's stem suffixed with the portal id
+ *  (surface.json + "gateway" -> surface.gateway.json). The portal id is a
+ *  SpecIdSchema component id (`[a-z0-9-_]`), but it is sanitized before it joins
+ *  the path so no future caller feeding an imported/unvalidated id can escape
+ *  the output directory. */
+function perPortalPath(resolvedOut: string, portalId: string): string {
+  const ext = path.extname(resolvedOut);
+  const stem = ext ? resolvedOut.slice(0, -ext.length) : resolvedOut;
+  return `${stem}.${safeFilenamePart(portalId)}${ext}`;
+}
+
+/** Write an export to disk, returning EVERY path written: the snapshot YAML for
+ *  native format (and for an openapi export that renders no portals at all), the
+ *  single document when one portal remains, else ONE FILE PER PORTAL — never just
+ *  the first, which would silently drop the other APIs. */
+function writeSurfaceFile(outPath: string, snapshot: SurfaceSnapshot, renderedSet?: NamedOpenApiSpec[]): string[] {
   const resolved = path.resolve(outPath);
   fs.mkdirSync(path.dirname(resolved), { recursive: true });
-  if (body !== undefined) fs.writeFileSync(resolved, body);
-  else writeYamlFile(resolved, snapshot);
-  return resolved;
+  if (!renderedSet || renderedSet.length === 0) {
+    writeYamlFile(resolved, snapshot);
+    return [resolved];
+  }
+  if (renderedSet.length === 1) {
+    fs.writeFileSync(resolved, renderedSet[0].document);
+    return [resolved];
+  }
+  return renderedSet.map(spec => {
+    const target = perPortalPath(resolved, spec.portalId);
+    fs.writeFileSync(target, spec.document);
+    return target;
+  });
 }
 
-export function exportSurface(maxAudience: string, format: string, outPath?: string): SurfaceExportResult {
-  const snapshot = projectOwnSurface(maxAudience);
-  const openapi = format === 'openapi' ? renderOpenApiForms(snapshot) : undefined;
-  const body = openapi?.rendered ?? openapi?.renderedSet[0]?.document;
-  const writtenTo = outPath ? writeSurfaceFile(outPath, body, snapshot) : undefined;
+/** Assemble the export result. The single-document (`rendered`) and single-path
+ *  (`writtenTo`) conveniences exist ONLY when exactly one of each does — with
+ *  several portals they stay unset rather than standing for an arbitrary one. */
+function exportResult(
+  snapshot: SurfaceSnapshot,
+  renderedSet: NamedOpenApiSpec[] | undefined,
+  writtenPaths: string[],
+): SurfaceExportResult {
+  const rendered = renderedSet?.length === 1 ? renderedSet[0].document : undefined;
   return {
     snapshot,
-    ...(openapi?.rendered !== undefined ? { rendered: openapi.rendered } : {}),
-    ...(openapi ? { renderedSet: openapi.renderedSet } : {}),
-    ...(writtenTo ? { writtenTo } : {}),
+    ...(rendered !== undefined ? { rendered } : {}),
+    ...(renderedSet ? { renderedSet } : {}),
+    ...(writtenPaths.length === 1 ? { writtenTo: writtenPaths[0] } : {}),
+    ...(writtenPaths.length ? { writtenPaths } : {}),
   };
+}
+
+export function exportSurface(maxAudience: string, format: string, outPath?: string, portalId?: string): SurfaceExportResult {
+  const snapshot = projectOwnSurface(maxAudience);
+  let renderedSet = format === 'openapi' ? toOpenApiSet(snapshot) : undefined;
+  if (renderedSet && portalId) renderedSet = selectPortalSpec(renderedSet, portalId);
+  const writtenPaths = outPath ? writeSurfaceFile(outPath, snapshot, renderedSet) : [];
+  return exportResult(snapshot, renderedSet, writtenPaths);
 }
 
 export function importSurface(sourcePath: string, origin: SurfaceOrigin): SurfaceSnapshot {

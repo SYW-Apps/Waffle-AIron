@@ -80,12 +80,19 @@ const CONTENT_TYPE: Record<string, string> = {
  * the token as above, refuses when the requested download is not enabled on the
  * link, and otherwise returns the captured artifact payload — recording the
  * access with its outcome throughout.
+ *
+ * For openapi, `portalId` selects ONE captured per-portal document; omitted with
+ * several captured specs serves an index listing them (portalId + name) rather
+ * than merging them or silently picking one; omitted with exactly one serves that
+ * document. A portalId naming no captured spec is refused (not-found), never
+ * substituted with another portal's API.
  */
 export function downloadArtifact(
   cfg: HostConfig,
   token: string,
   kind: string,
   meta: ShareRequestMeta,
+  portalId?: string,
 ): ShareArtifactResult {
   const link = linkByTokenHash(cfg.dataDir, hashToken(token));
   const check = usable(link);
@@ -100,7 +107,7 @@ export function downloadArtifact(
     record(cfg.dataDir, check.link.id, meta, 'denied-download');
     return { found: false, outcome: 'denied-download' };
   }
-  const content = getSnapshotArtifact(cfg.dataDir, check.link.snapshotId, kind);
+  const content = getSnapshotArtifact(cfg.dataDir, check.link.snapshotId, kind, portalId);
   if (content === null) {
     record(cfg.dataDir, check.link.id, meta, 'not-found');
     return { found: false, outcome: 'not-found' };

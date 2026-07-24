@@ -37,15 +37,21 @@ methods:
       path: /share/:token/model
   - name: getSharedOpenApi
     description: >-
-      Serve a bundled, self-contained OpenAPI viewer (Swagger/Redoc) page for a link whose snapshot
-      captured an openapi artifact.
-    signature: 'getSharedOpenApi(token: string, meta: ShareRequestMeta): string'
+      Serve a bundled, self-contained OpenAPI viewer (Swagger UI) page for a link whose snapshot
+      captured an openapi artifact. The `spec` query parameter (a portalId) selects WHICH captured
+      per-portal API to view; omitted with several captured specs serves an index page listing every
+      shared API, each linking to its own viewer; omitted with exactly one opens that API directly.
+      Distinct portals are never merged into one viewer.
+    signature: 'getSharedOpenApi(token: string, meta: ShareRequestMeta, portalId?: string): string'
     returns: string
     params:
       - name: token
         type: string
       - name: meta
         type: ShareRequestMeta
+      - name: portalId
+        type: string
+        optional: true
     endpoint:
       transport: HTTP
       method: GET
@@ -53,10 +59,11 @@ methods:
   - name: downloadSharedArtifact
     description: >-
       Serve a permitted downloadable artifact (html | openapi) for a token, or 404/403 when absent
-      or not permitted.
+      or not permitted. For openapi the `spec` query parameter (a portalId) selects one captured
+      per-portal document; omitted with several serves an index listing them.
     signature: >-
-      downloadSharedArtifact(token: string, kind: string, meta: ShareRequestMeta):
-      ShareArtifactResult
+      downloadSharedArtifact(token: string, kind: string, meta: ShareRequestMeta, portalId?:
+      string): ShareArtifactResult
     returns: ShareArtifactResult
     params:
       - name: token
@@ -65,10 +72,13 @@ methods:
         type: string
       - name: meta
         type: ShareRequestMeta
+      - name: portalId
+        type: string
+        optional: true
     endpoint:
       transport: HTTP
       method: GET
       path: /share/:token/download/:kind
 status: complete
 createdAt: '2026-07-17T22:30:37.401Z'
-updatedAt: '2026-07-18T10:10:39.843Z'
+updatedAt: '2026-07-23T22:15:45.098Z'
