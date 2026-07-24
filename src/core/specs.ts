@@ -2,7 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { z } from 'zod';
 import { aiPathsAt, WaiPaths } from '../config/loader.js';
-import { ensureDir, listFiles, listFilesRecursive, pathExists, getProjectRoot } from '../utils/fs.js';
+import { ensureDir, listFiles, listFilesRecursive, pathExists, getProjectRoot, runWithProjectRoot } from '../utils/fs.js';
+import { computeStateId } from './statehash.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import {
   SystemSpec,
@@ -219,6 +220,18 @@ export function assertContainedProjectPath(projectRoot: string, projectPath: str
 }
 
 /**
+ * The detected chaining-mount context of a project root: which parent project
+ * mounts this tree as a chained subsystem. Produced by a filesystem walk-up
+ * (never configured), so it reflects where the tree ACTUALLY sits.
+ */
+export interface ChainingParentRef {
+  /** Absolute root directory of the parent project whose subsystem projectPath resolves to this project's root. */
+  parentRoot: string;
+  /** Id of the parent-tree subsystem that mounts this project. */
+  subsystemId: string;
+}
+
+/**
  * Walk UP from a project root to find a PARENT wairon project that chains to it
  * — a subsystem (anywhere in the parent's spec tree) whose `projectPath` resolves
  * to this exact root. Returns the parent root + the subsystem id it mounts as, or
@@ -230,7 +243,7 @@ export function assertContainedProjectPath(projectRoot: string, projectPath: str
  * cannot be resolved standalone, so they are honest cross-tree edges to warn on,
  * not spec defects to error on. Pure filesystem read; no cache mutation.
  */
-export function findChainingParent(childRoot: string): { parentRoot: string; subsystemId: string } | null {
+export function findChainingParent(childRoot: string): ChainingParentRef | null {
   let childResolved: string;
   try {
     childResolved = path.resolve(childRoot);
@@ -2419,6 +2432,38 @@ export function dryRunSerializeSpecs(include?: (specId: string) => boolean): Val
  *  → diagram_specialist). */
 export function buildProjectGraph(level: number): WebGraphModel {
   return buildGraphModel(level);
+}
+
+/**
+ * Report whether the CURRENTLY BOUND project root is a chained subproject of a
+ * parent project (parent root + mounting subsystem id), or null for a genuine
+ * top root (icore_orchestrator/icore_portal.resolveChainingParent). Read-only
+ * detection through the spec loader's chaining walk — never rebinds, never
+ * mutates.
+ */
+export function resolveChainingParent(): ChainingParentRef | null {
+  return findChainingParent(getProjectRoot());
+}
+
+/**
+ * Compute the CURRENT spec-tree state hash of the project at the given root
+ * (icore_orchestrator/icore_portal.computeStateIdAt). The root is bound
+ * strictly READ-ONLY for the duration of the computation via the async-scoped
+ * project-root binding, which restores the previous binding unconditionally —
+ * also on failure paths. Serves freshness comparisons of vendored surface
+ * snapshots against what the (parent) tree looks like NOW; returns null when
+ * the root holds no loadable spec tree.
+ */
+export function computeStateIdAt(root: string): string | null {
+  const resolved = path.resolve(root);
+  return runWithProjectRoot(resolved, () => {
+    // Fresh read of THAT root's tree: never serve a stale cache as "current".
+    workspaceFor(resolved).invalidate();
+    const system = loadSystemSpec();
+    if (!system) return null;
+    const s = computeStateId();
+    return `${s.algorithm}:${s.digest}`;
+  });
 }
 
 export function deleteTypeSpec(id: string): boolean {

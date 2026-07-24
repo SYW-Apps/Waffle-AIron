@@ -39,6 +39,22 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: loadTypeSpecs
+  - name: resolveChainingParent
+    narrative:
+      - stepNumber: 1
+        description: Forward chaining detection to the core subsystem's published portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: resolveChainingParent
+  - name: computeParentStateId
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the read-only cross-root state-hash computation to the core subsystem's published
+          portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: computeStateIdAt
 status: complete
 createdAt: '2026-07-10T23:15:53.589Z'
-updatedAt: '2026-07-11T18:45:04.872Z'
+updatedAt: '2026-07-24T18:02:21.009Z'

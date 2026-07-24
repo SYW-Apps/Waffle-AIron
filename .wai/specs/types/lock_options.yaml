@@ -1,0 +1,21 @@
+kind: value-object
+id: lock_options
+name: LockOptions
+description: Flags of the local `wairon lock` command.
+subsystem: sdd_cli
+fields:
+  - name: 'yes'
+    type: boolean
+    description: Skip the interactive confirmation (scripts / CI).
+    optional: true
+  - name: subsystem
+    type: string
+    description: Narrow the lock scope to one subsystem (and its nested children).
+    optional: true
+  - name: recursive
+    type: boolean
+    description: Whether to recursively lock chained subprojects.
+    optional: true
+methods: []
+createdAt: '2026-07-24T18:06:34.277Z'
+updatedAt: '2026-07-24T18:06:34.297Z'

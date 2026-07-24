@@ -16,7 +16,7 @@ import { createWebSession, getWebSessionById } from '../../src/server/websession
 import { createProjectRecord } from '../../src/server/projects.js';
 import { upsertUser as repoUpsertUser } from '../../src/server/users.js';
 import { createUnit, placeProject } from '../../src/server/organization.js';
-import { mintUserToken, allow } from './helpers.js';
+import { mintUserToken, allow, seedSubsystem, seedChainedMount } from './helpers.js';
 import { ensureInstanceIdentity } from '../../src/server/instance.js';
 import { appendAuditEvent, queryAuditEvents as auditQuery, DEFAULT_AUDIT_POLICY } from '../../src/server/audit.js';
 import type {
@@ -225,6 +225,73 @@ describe('identity orchestrator (sdd_host)', () => {
         identity.mintToken(cfg, MASTER, { ownerUserId, label: 't', projects: ['proj-a'] }),
       ).toThrow(/deactivated user/i);
     }
+  });
+
+  // ── subproject-qualified narrowing (validated at MINT time) ────────────────
+  //
+  // A narrowing entry / mintSelfToken projectId MAY be subproject-qualified
+  // ('projectId::subsystemId', nested mounts composing): the named subsystem
+  // must exist on that project and carry a projectPath, validated at MINT time
+  // so a broken mount is never stored; permission keeps resolving over the TOP
+  // project (the qualifier narrows reach, never grants).
+
+  describe('subproject-qualified narrowing', () => {
+    beforeEach(() => {
+      const projRoot = createProjectRecord(dataDir, 'proj-a').rootPath;
+      const billingDir = seedChainedMount(projRoot, 'billing', 'packages/billing');
+      seedChainedMount(billingDir, 'payments', 'sub/payments'); // nested chain
+      seedSubsystem(projRoot, 'plain'); // exists, but NOT chained (no projectPath)
+    });
+
+    it('mintToken accepts valid qualified entries (nested included) and stores them verbatim', () => {
+      const token = identity.mintToken(cfg, MASTER, {
+        ownerUserId: 'u-owner',
+        label: 'sub token',
+        projects: ['proj-a::billing', 'proj-a::billing::payments'],
+      });
+      const rec = persistedByHash(hashToken(token));
+      expect(rec!.projects).toEqual(['proj-a::billing', 'proj-a::billing::payments']);
+    });
+
+    it('mintToken rejects an UNKNOWN mount with an actionable error — never stored broken', () => {
+      expect(() =>
+        identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 't', projects: ['proj-a::ghost'] }),
+      ).toThrow(/unknown subproject mount "ghost" on "proj-a"/);
+      // The failed mint persisted nothing.
+      expect(listCredentials(dataDir, '*').some((r) => r.projects.includes('proj-a::ghost'))).toBe(false);
+    });
+
+    it('mintToken rejects a NON-CHAINED subsystem (exists, but carries no projectPath)', () => {
+      expect(() =>
+        identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 't', projects: ['proj-a::plain'] }),
+      ).toThrow(/not a chained subproject/);
+    });
+
+    it('mintSelfToken mints a qualified token: permission anchors on the TOP project, entry stored verbatim', () => {
+      // The caller holds read over the TOP project only — that is what the
+      // qualifier narrows, so the mint is authorized.
+      const caller = tokenWith('project:read', 'project', 'proj-a');
+      const token = identity.mintSelfToken(cfg, caller, 'proj-a::billing', false);
+      const rec = persistedByHash(hashToken(token));
+      expect(rec!.projects).toEqual(['proj-a::billing']);
+      expect(rec!.label).toContain('proj-a::billing');
+      expect(auditQuery(dataDir, { action: 'token.mint.self' })).toHaveLength(1);
+    });
+
+    it('mintSelfToken rejects an unknown or non-chained mount with guidance (self-mint variant)', () => {
+      const caller = tokenWith('project:read', 'project', 'proj-a');
+      expect(() => identity.mintSelfToken(cfg, caller, 'proj-a::ghost', false)).toThrow(
+        /unknown subproject mount "ghost" on "proj-a"/,
+      );
+      expect(() => identity.mintSelfToken(cfg, caller, 'proj-a::plain', false)).toThrow(
+        /not a chained subproject/,
+      );
+    });
+
+    it('mintSelfToken authorization anchors on the TOP project: no proj-a read → 403 even for a valid mount', () => {
+      const caller = plainToken(); // owner with NO assignments at all
+      expect(() => identity.mintSelfToken(cfg, caller, 'proj-a::billing', false)).toThrow(ForbiddenError);
+    });
   });
 
   // ── revokeToken ──────────────────────────────────────────────────────────

@@ -48,7 +48,11 @@ methods:
       - name: projectName
         type: string
   - name: generateChildSnapshots
-    description: Project and deliver the family-scoped parent surface into each chained child.
+    description: >-
+      Project and deliver the outward world into each chained child's .wai/surfaces/: the
+      family-scoped parent surface AND each SIBLING subsystem's published surface (every subsystem
+      except the child's own mount), all stamped with the parent tree's StateId provenance. Returns
+      the written file paths.
     signature: 'generateChildSnapshots(): string[]'
     returns: string[]
   - name: removeSnapshot
@@ -58,6 +62,17 @@ methods:
     params:
       - name: projectName
         type: string
+  - name: listExternalInterfaces
+    description: >-
+      Scope-aware discovery of this project's outward world: enumerate every vendored surface
+      snapshot as an ExternalSurfaceEntry — origin, family role (parent | sibling | foreign),
+      provenance, exposed interface ids — with a per-entry freshness verdict. Freshness compares the
+      vendored StateId against the chaining parent's CURRENT state hash when a chaining parent is
+      reachable (resolveChainingParent + computeParentStateId); entries are 'unverifiable' when
+      standalone or foreign. The read behind the sdd_list_external_interfaces MCP tool and the
+      surface externals CLI.
+    signature: 'listExternalInterfaces(): ExternalSurfaceEntry[]'
+    returns: ExternalSurfaceEntry[]
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-07-23T22:15:23.130Z'
+updatedAt: '2026-07-24T17:53:56.767Z'

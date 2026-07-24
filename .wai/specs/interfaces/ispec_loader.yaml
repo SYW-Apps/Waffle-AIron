@@ -78,6 +78,14 @@ methods:
     returns: ValidationIssue[]
     guarantees:
       - idempotent
+  - name: findChainingParent
+    description: >-
+      Detect whether the CURRENTLY BOUND project root is a chained subproject: walk the filesystem
+      upward (bounded) for an ancestor project holding a subsystem spec whose projectPath resolves
+      exactly to this root. Returns the parent root and the mounting subsystem id, or null for a
+      genuine top root. Pure detection — never rebinds, never mutates.
+    signature: 'findChainingParent(): ChainingParentRef | null'
+    returns: ChainingParentRef | null
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-10T22:14:10.086Z'
+updatedAt: '2026-07-24T18:01:35.994Z'

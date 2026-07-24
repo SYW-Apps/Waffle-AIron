@@ -10,6 +10,7 @@ import {
   Field,
   Modal,
   Select,
+  TextInput,
   useAsync,
   useToast,
 } from '../ui';
@@ -111,9 +112,18 @@ function MintModal(props: { projects: ProjectRecord[]; onClose: () => void; onMi
   const toast = useToast();
   const [projectId, setProjectId] = useState(props.projects[0]?.id ?? '');
   const [write, setWrite] = useState(false);
+  // Optional chained-subproject qualifier (a subsystem id, or a nested chain
+  // like 'billing::payments'). Free text on purpose: no endpoint currently
+  // marks which subsystems are chained, so instead of offering a dropdown that
+  // would list non-chained subsystems too, the server's mint-time validation
+  // is the single source of truth — an unknown or non-chained subsystem is
+  // rejected there with a clear error.
+  const [subproject, setSubproject] = useState('');
 
   async function mint() {
-    const res = await post<{ token: string }>('/web/tokens', { projectId, write });
+    const qualifier = subproject.trim();
+    const target = qualifier ? `${projectId}::${qualifier}` : projectId;
+    const res = await post<{ token: string }>('/web/tokens', { projectId: target, write });
     props.onMinted(res.token);
   }
 
@@ -139,6 +149,17 @@ function MintModal(props: { projects: ProjectRecord[]; onClose: () => void; onMi
           ) : (
             <Select value={projectId} onChange={setProjectId} options={props.projects.map((p) => ({ value: p.id, label: p.id }))} />
           )}
+        </Field>
+        <Field
+          label="Subproject (optional)"
+          hint="Scope the token into a chained subproject: the subsystem id mounting it (e.g. billing, or nested billing::payments). Leave empty for the whole project. Validated on mint — an unknown or non-chained subsystem is rejected."
+        >
+          <TextInput
+            value={subproject}
+            onChange={setSubproject}
+            placeholder="subsystem id, e.g. billing or billing::payments"
+            disabled={!projectId}
+          />
         </Field>
         <Field label="Access">
           <Select

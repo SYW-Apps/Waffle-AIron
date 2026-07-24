@@ -19,9 +19,11 @@ methods:
       which could exceed a non-super-admin minter's own authority (confused deputy), so only the
       env-anchored instance-admin — who dominates every owner — may mint on another user's behalf (a
       user mints their own single-project tokens via mintSelfToken). Mint a token narrowed to
-      request.projects; it carries no grants and the resolver gates per project at use time. Persist
-      only the hashed credential record, append a redacted token.mint audit event, and return the
-      plaintext exactly once.
+      request.projects; a subproject-qualified entry ('projectId::subsystemId') is validated at mint
+      time — the named subsystem must exist on that project and carry a projectPath (an unknown or
+      non-chained mount is rejected with guidance, never stored broken). The token carries no grants
+      and the resolver gates per project at use time. Persist only the hashed credential record,
+      append a redacted token.mint audit event, and return the plaintext exactly once.
     signature: 'mintToken(credential: string, request: TokenMintRequest): string'
     returns: string
     params:
@@ -218,11 +220,13 @@ methods:
     description: >-
       Self-service single-project MCP token mint. Authenticate the caller (a ws_ session or token)
       and mint a token OWNED BY the caller (ownerSubject = createdBySubject = the caller's subject,
-      so deactivating the caller revokes it via revokeAllForOwner) narrowed to exactly one project;
-      the token carries no grants — it acts as the caller's OWN live permission on that project (the
-      resolver gates read vs write at use time; the write flag is advisory for the token label).
-      Persist only the hashed record, append a token.mint.self audit event, and return the plaintext
-      once. Separate from the caller's login session.
+      so deactivating the caller revokes it via revokeAllForOwner) narrowed to exactly one project —
+      optionally subproject-qualified ('projectId::subsystemId', validated at mint time: the named
+      subsystem must exist and carry a projectPath), scoping the caller's own token into a chained
+      subproject; the token carries no grants — it acts as the caller's OWN live permission on that
+      project (the resolver gates read vs write at use time; the write flag is advisory for the
+      token label). Persist only the hashed record, append a token.mint.self audit event, and return
+      the plaintext once. Separate from the caller's login session.
     signature: 'mintSelfToken(credential: string, projectId: string, write: boolean): string'
     returns: string
     params:
@@ -273,4 +277,4 @@ methods:
     returns: void
 status: complete
 createdAt: '2026-07-08T20:17:23.976Z'
-updatedAt: '2026-07-18T23:46:03.739Z'
+updatedAt: '2026-07-24T18:21:05.649Z'

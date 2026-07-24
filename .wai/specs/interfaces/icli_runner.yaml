@@ -127,6 +127,18 @@ methods:
     params:
       - name: action
         type: string
+  - name: runLock
+    description: >-
+      The local `wairon lock` workflow: gate on the as-complete dry-run validation (refusing to
+      freeze an invalid tree), lock the tree through the lock adapter, and — when the tree mounts
+      chained children — regenerate the family and sibling surface snapshots into every child so a
+      locked parent ships fresh surfaces.
+    signature: 'runLock(options: LockOptions): void'
+    returns: void
+    params:
+      - name: options
+        type: LockOptions
+        description: 'CLI flags: --yes (skip confirmation), --subsystem (scope narrowing), --recursive.'
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-23T22:17:04.314Z'
+updatedAt: '2026-07-24T18:06:35.332Z'

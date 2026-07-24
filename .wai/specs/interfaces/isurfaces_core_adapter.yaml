@@ -23,6 +23,25 @@ methods:
     description: Loads type specs (closure source).
     signature: 'loadTypeSpecs(): TypeSpec[]'
     returns: TypeSpec[]
+  - name: resolveChainingParent
+    description: >-
+      Detect whether the CURRENT project root is a chained subproject: walk the filesystem upward
+      for an ancestor project whose subsystem projectPath resolves exactly to this root. Returns the
+      parent root and mounting subsystem id, or null when the tree is a genuine top root. Forwarded
+      from the core portal's chaining detection — the surfaces plane never walks the filesystem
+      itself.
+    signature: 'resolveChainingParent(): ChainingParentRef | null'
+    returns: ChainingParentRef | null
+  - name: computeParentStateId
+    description: >-
+      Bind the given parent project root READ-ONLY and compute its current spec-tree state hash
+      through the core portal — the comparison source for freshness-checking vendored parent/sibling
+      snapshots against what the parent tree looks like NOW. Never mutates either root's binding.
+    signature: 'computeParentStateId(parentRoot: string): string | null'
+    returns: string | null
+    params:
+      - name: parentRoot
+        type: string
 status: complete
 createdAt: '2026-07-10T23:14:05.167Z'
-updatedAt: '2026-07-11T09:04:02.449Z'
+updatedAt: '2026-07-24T17:53:48.508Z'

@@ -458,6 +458,12 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     // Declarative assertions bring their own namespaced codes — lint.allow
     // and severity overrides treat them exactly like builtins.
     ...extensions.assertions.map(a => a.fullCode),
+    // Entry-point emitted codes: validateSddTree's chained-subproject pass
+    // raises these AFTER the rule run (it post-processes the aggregated issue
+    // list), so no registered rule declares them — but lint.allow validation
+    // must still recognize them as real codes.
+    'CHAINED_SUBPROJECT_CONTEXT',
+    'UNVERIFIED_EXTERNAL_REF',
   ]);
 
   const addIssue = (
@@ -466,6 +472,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     message: string,
     specId?: string,
     isDraftContext?: boolean,
+    surfaceResolved?: boolean,
   ): void => {
     if (scopeSubsystem && specId && !isSpecInScope(specId)) {
       return;
@@ -490,7 +497,17 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     // Carry the draft/design provenance onto the issue (only when true, to keep
     // issues clean) so command-level policy can classify draft-related warnings
     // without re-deriving spec status. The rule stays fully emitted/visible.
-    issues.push({ severity, code, message, specId, ...(isDraftContext ? { draftContext: true } : {}) });
+    // surfaceResolved provenance rides along the same way: it tells the
+    // chained-subproject pass this finding was verified against a vendored
+    // snapshot and must keep full strength.
+    issues.push({
+      severity,
+      code,
+      message,
+      specId,
+      ...(isDraftContext ? { draftContext: true } : {}),
+      ...(surfaceResolved ? { surfaceResolved: true } : {}),
+    });
   };
 
   return {

@@ -176,7 +176,10 @@ describe('git-backed projects (sdd_git)', () => {
     expect(fs.existsSync(path.join(root, '.wai', 'specs', '.index.yaml'))).toBe(true);
   });
 
-  it('lock commits + pushes the working branch and records the commit + compare URL', () => {
+  // Real git subprocess work (commit + push + log) sits at the default 5s
+  // timeout boundary under full-suite worker contention — a timing flake, not
+  // a logic risk; the generous ceiling keeps the verdict about correctness.
+  it('lock commits + pushes the working branch and records the commit + compare URL', { timeout: 30_000 }, () => {
     admin.enableGit(cfg, ADMIN, 'demo', remote, 'main');
     const root = projectRoot();
 

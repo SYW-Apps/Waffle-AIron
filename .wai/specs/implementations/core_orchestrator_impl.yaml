@@ -426,6 +426,32 @@ methods:
         targetComponent: diagram_specialist
         targetMethod: buildGraphModel
     detail: calls-only
+  - name: resolveChainingParent
+    narrative:
+      - stepNumber: 1
+        description: Detect the chaining-mount context through the spec loader's read face
+        type: call
+        targetComponent: spec_loader
+        targetMethod: findChainingParent
+  - name: computeStateIdAt
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Bind the given root READ-ONLY for the duration of this computation, remembering the
+          previous binding; a root with no loadable spec tree short-circuits to null
+        type: local
+      - stepNumber: 2
+        description: Digest the bound tree into its deterministic StateId
+        type: call
+        targetComponent: state_hash_specialist
+        targetMethod: hashSpecTree
+      - stepNumber: 3
+        description: Restore the previous root binding unconditionally (also on failure paths)
+        type: local
+      - stepNumber: 4
+        description: Return the computed state hash
+        type: return
+        outcome: StateId or null
 lint:
   allow:
     - code: UNREALIZED_DEPENDENCY
@@ -435,4 +461,4 @@ lint:
         documented on the structural-conformance per-method offs.
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-12T11:26:02.173Z'
+updatedAt: '2026-07-24T18:02:13.266Z'

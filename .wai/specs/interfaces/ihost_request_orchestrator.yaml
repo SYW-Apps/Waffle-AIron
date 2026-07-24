@@ -8,17 +8,23 @@ methods:
   - name: handleRequest
     description: >-
       Authenticate the bearer token, resolve the authorized project root (rejecting cross-project
-      access), bind the request-scoped root, then dispatch the sdd_* tool call within that scope.
-      For an ordinary scoped sdd_* tool the tool is classified as a read (sdd_get_*/sdd_validate_*)
-      or a write (every other name — the explicit write prefixes AND any unrecognized or newly added
-      name, failing closed) and the caller's resolved permission for the matching capability
-      (project:read for reads, project:write for writes) over the bound project MUST be yes,
-      resolved through the authorization specialist; a missing permission is rejected with a clear
-      MCP error before dispatch. The execute-primary project-lifecycle MCP tools and the hosted
-      landscape discovery MCP tools are dispatched to their orchestrators (already gated) instead of
-      the scoped MCP tool surface and bypass this data-plane permission gate. Appends a redacted
-      audit event for every handled data-plane tool call; append failures are recorded as server
-      diagnostics and never fail the request.
+      access), bind the request-scoped root, then dispatch the sdd_* tool call within that scope. A
+      subproject-qualified narrowing binds the mounted CHILD root: every scoped tool — validation
+      included — then operates on the subtree, where the chained-subproject reference model applies
+      (covered refs verified against vendored surfaces, uncovered refs reported
+      UNVERIFIED_EXTERNAL_REF). Permission capabilities keep resolving over the TOP project (a
+      subproject qualifier narrows reach, never refines grants). For an ordinary scoped sdd_* tool
+      the tool is classified as a read (sdd_get_*/sdd_validate_*) or a write (every other name — the
+      explicit write prefixes AND any unrecognized or newly added name, failing closed) and the
+      caller's resolved permission for the matching capability (project:read for reads,
+      project:write for writes) over the bound project MUST be yes, resolved through the
+      authorization specialist; a missing permission is rejected with a clear MCP error before
+      dispatch. The execute-primary project-lifecycle MCP tools and the hosted landscape discovery
+      MCP tools are dispatched to their orchestrators (already gated) instead of the scoped MCP tool
+      surface and bypass this data-plane permission gate. Appends a redacted audit event for every
+      handled data-plane tool call — stamped with the TOP project id for provenance plus the bound
+      subproject qualifier when one applied; append failures are recorded as server diagnostics and
+      never fail the request.
     signature: 'handleRequest(request: HttpRequest): HttpResponse'
     returns: HttpResponse
     params:
@@ -32,4 +38,4 @@ methods:
     returns: HttpResponse
 status: complete
 createdAt: '2026-07-04T12:49:34.974Z'
-updatedAt: '2026-07-16T00:14:58.247Z'
+updatedAt: '2026-07-24T18:20:56.326Z'

@@ -40,8 +40,18 @@ methods:
           resource reads dispatch through the MCP portal to the resource workflow.
         type: local
       - stepNumber: 7
+        description: >-
+          Resolve the bound root's chaining context through the core adapter; when the root is a
+          chained subproject, announce the parent project, the mounting subsystem id, and the
+          vendored external-surface count on the startup log — an agent bound inside a subproject
+          KNOWS its world is a subtree from the first line, instead of learning it incidentally from
+          validate warnings
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: resolveChainingParent
+      - stepNumber: 8
         description: Return configured McpServer instance
         type: local
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-10T12:22:32.973Z'
+updatedAt: '2026-07-24T18:14:47.036Z'

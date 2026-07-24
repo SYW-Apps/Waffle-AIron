@@ -85,6 +85,12 @@ methods:
       parent tree.
     signature: 'internalizeSubsystem(subsystemId: string): void'
     returns: void
+  - name: resolveChainingParent
+    description: >-
+      Forward chaining-parent detection to the core portal: is the bound root a chained subproject,
+      and of which parent/mount? Used by server startup to announce the context.
+    signature: 'resolveChainingParent(): ChainingParentRef | null'
+    returns: ChainingParentRef | null
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-05T18:44:49.569Z'
+updatedAt: '2026-07-24T18:14:14.801Z'

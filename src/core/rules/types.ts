@@ -132,6 +132,11 @@ export interface RuleContext {
    * Report an issue. Applies scope filtering, user severity overrides
    * (rules.sddRuleSeverity), and draft-context downgrades for completeness
    * rules. 'off' suppresses the issue entirely.
+   *
+   * `surfaceResolved` marks a finding whose reference DID resolve against a
+   * vendored surface snapshot — a genuine contract/boundary verdict rather
+   * than a resolution failure, so the chained-subproject pass never replaces
+   * it with UNVERIFIED_EXTERNAL_REF.
    */
   addIssue(
     defaultSeverity: Severity,
@@ -139,6 +144,7 @@ export interface RuleContext {
     message: string,
     specId?: string,
     isDraftContext?: boolean,
+    surfaceResolved?: boolean,
   ): void;
 }
 

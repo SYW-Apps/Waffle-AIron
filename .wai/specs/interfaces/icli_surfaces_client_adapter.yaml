@@ -39,6 +39,12 @@ methods:
     description: Forward child-snapshot generation to the surface portal.
     signature: 'generateChildSnapshots(): string[]'
     returns: string[]
+  - name: listExternalInterfaces
+    description: >-
+      Forward the external-surface discovery (origin, provenance, freshness per vendored snapshot)
+      to the surface portal.
+    signature: 'listExternalInterfaces(): ExternalSurfaceEntry[]'
+    returns: ExternalSurfaceEntry[]
 status: complete
 createdAt: '2026-07-10T23:14:13.266Z'
-updatedAt: '2026-07-23T22:15:27.238Z'
+updatedAt: '2026-07-24T18:14:48.565Z'

@@ -10,8 +10,11 @@ import { WaironError } from '../utils/errors.js';
 import { runAliasesList, runAliasesEnable, runAliasesDisable } from '../commands/aliases.js';
 import { runInit } from '../commands/init.js';
 import { runGenerate } from '../commands/generate.js';
-import { runLock } from '../commands/lock.js';
-import { runValidate } from '../commands/validate.js';
+import { runLock as lockTree } from '../commands/lock.js';
+import type { LockOptions } from '../commands/lock.js';
+import { runValidate, validateAsComplete } from '../commands/validate.js';
+import { assertProjectInitialized, loadProjectConfig, AI_PATHS } from '../config/loader.js';
+import { pathExists } from '../utils/fs.js';
 import { runList } from '../commands/list.js';
 import { runShow } from '../commands/show.js';
 import { runMcpServe, runMcpInstall, runMcpStatus } from '../commands/mcp.js';
@@ -42,7 +45,7 @@ import {
   runHostPacks,
 } from '../commands/host.js';
 import { runProduce } from '../commands/produce.js';
-import { runSurface } from '../commands/surface.js';
+import { runSurface, generateChildSnapshots } from '../commands/surface.js';
 import {
   runSubsystemAdd,
   runSubsystemMove,
@@ -117,6 +120,87 @@ program
 // ---------------------------------------------------------------------------
 // lock
 // ---------------------------------------------------------------------------
+
+// cli_runner.runLock — the local `wairon lock` workflow: gate on the
+// as-complete dry-run validation (an invalid tree is never frozen), freeze the
+// tree through the lock adapter, and — when the tree mounts chained children —
+// regenerate the family and sibling surface snapshots into every child so a
+// locked parent ships fresh surfaces.
+//
+// Why validate-as-complete: the conformance gate downgrades completeness
+// errors to warnings while a spec is `draft`, so a draft tree can "pass" yet
+// break the moment it's locked. The gate validates the tree AS IF everything
+// were complete (the status flip happens in-memory inside the validator and is
+// restored) and the lock is refused unless it is clean at full strictness. A
+// failed or cancelled lock leaves every file byte-for-byte unchanged.
+async function runLock(options: LockOptions): Promise<void> {
+  assertProjectInitialized();
+
+  if (!pathExists(AI_PATHS.specsSystem())) {
+    logger.error('No SDD spec tree found (.wai/specs). Nothing to lock.');
+    process.exit(1);
+  }
+
+  const projectConfig = loadProjectConfig();
+
+  logger.info('Analyzing and validating specifications in-memory...');
+  const dry = validateAsComplete({
+    rules: projectConfig.rules,
+    projectType: projectConfig.projectType,
+    scopeSubsystem: options.subsystem,
+    recursive: options.recursive ?? true,
+  });
+
+  const errors = dry.issues.filter((i) => i.severity === 'error');
+  if (errors.length > 0) {
+    logger.header('Cannot lock — the spec tree does not validate as complete');
+    let errorCount = 0;
+    const MAX_PRINT = 100;
+    let skippedErrors = 0;
+    for (const i of errors) {
+      if (errorCount < MAX_PRINT) {
+        logger.error(`${i.specId ? `[${i.specId}] ` : ''}[${i.code}] ${i.message}`);
+        errorCount++;
+      } else {
+        skippedErrors++;
+      }
+    }
+    if (skippedErrors > 0) {
+      logger.error(`... and ${skippedErrors} more error(s) omitted.`);
+    }
+    logger.blank();
+    logger.info('Fix the errors above, then run `wairon lock` again. Nothing was changed.');
+    process.exit(1);
+  }
+
+  // --- Freeze through the lock adapter (summary + confirmation live there) ---
+  logger.header('Lock SDD specs');
+  const record = await lockTree(options, dry);
+  if (!record) {
+    logger.info('Cancelled. Nothing was changed.');
+    return;
+  }
+
+  // --- A locked parent ships fresh surfaces: regenerate the family and
+  // sibling snapshots into every chained child (no-op when none are mounted).
+  const childPaths = generateChildSnapshots();
+  if (childPaths.length > 0) {
+    logger.blank();
+    logger.success(`Regenerated the family/sibling surfaces into ${childPaths.length} chained child snapshot(s):`);
+    for (const p of childPaths) logger.info(`  ${p}`);
+  }
+
+  logger.blank();
+  await runGenerate({ domain: options.subsystem });
+
+  logger.blank();
+  logger.success('Specs locked and agent topology generated.');
+  logger.info(`Lock record written (.wai/lock.json): stateId ${record.stateId.algorithm}:${record.stateId.digest} — status ${record.status}.`);
+  logger.warn(
+    'Restart any running AI agent sessions (Claude Code / Antigravity / Codex) so the newly ' +
+      'generated implementer agents load — they are not picked up mid-session.',
+  );
+}
 
 program
   .command('lock')
@@ -467,7 +551,7 @@ program
 
 program
   .command('surface <action>')
-  .description('public surface exchange: export | import | list | generate-children')
+  .description('public surface exchange: export | import | list | generate-children | externals')
   .option('--audience <level>', 'export ceiling: project | department | instance | partner | external (default instance)')
   .option('--format <fmt>', 'export format: native | openapi (default native)')
   .option('--out <path>', 'export output path (else print)')

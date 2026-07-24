@@ -20,6 +20,8 @@ import {
   loadComponentSpecs,
   loadInterfaceSpecs,
   loadTypeSpecs,
+  resolveChainingParent,
+  computeStateIdAt,
 } from './specs.js';
 import { computeStateId } from './statehash.js';
 import { extractTypeIdentifiers, matchTypeRef, methodTypeRefs, BUILTIN_TYPES } from './rules/type-analysis.js';
@@ -174,6 +176,80 @@ export function projectChildSurface(): SurfaceSnapshot {
   return projectOwnSurface('project');
 }
 
+/** The local (namespace-stripped) name of a possibly-qualified spec id. */
+function localName(id: string): string {
+  return id.split('::').pop()!;
+}
+
+/**
+ * Project ONE subsystem's published surface — its L1 publicInterfaces realized
+ * by its inbound Portal, with full L3 contracts, dispatch tables, and the
+ * transitive type closure — into a self-contained contract-grade snapshot at
+ * the family ('project') audience ceiling. This is the SIBLING view a chained
+ * child receives: siblings expose exactly what they publish (their Portal),
+ * nothing wider. The snapshot is keyed '<systemName>::<subsystemId>' so
+ * sibling surfaces never collide with the parent family surface or foreign
+ * imports, and carries the parent tree's StateId provenance.
+ */
+export function projectSubsystemSurface(subsystemId: string): SurfaceSnapshot {
+  const system = loadSystemSpec();
+  if (!system) {
+    throw new Error('Cannot project a subsystem surface: the L0 system spec is missing.');
+  }
+  const subsystems = loadSubsystemSpecs();
+  const target = subsystems.find(s => s.id === subsystemId);
+  if (!target) {
+    throw new Error(`Cannot project a subsystem surface: subsystem "${subsystemId}" does not exist.`);
+  }
+  const components = loadComponentSpecs();
+  const interfaces = loadInterfaceSpecs();
+  const types = loadTypeSpecs();
+
+  const entries: SurfaceContractEntry[] = [];
+  for (const pub of target.publicInterfaces ?? []) {
+    if (!pub.component) continue; // unbound published entries cannot be exported
+    // An external (chained) sibling's members load namespace-qualified; match both forms.
+    const comp = components.find(c =>
+      c.id === pub.component || c.id === `${subsystemId}::${pub.component}`);
+    if (!comp) continue;
+    // Siblings expose exactly what they publish through their inbound Portal —
+    // a published non-Portal never joins the sibling surface.
+    if (comp.componentType !== 'Portal') continue;
+
+    const compInterfaces = interfaces.filter(i =>
+      i.component === comp.id
+      && (!pub.interface || i.id === pub.interface || i.id === `${subsystemId}::${pub.interface}`));
+    const methods = compInterfaces.flatMap(i => i.methods);
+
+    entries.push({
+      id: localName(pub.interface ?? comp.id),
+      name: comp.name,
+      // Family ceiling: a sibling surface is consumable by the system family only.
+      audience: 'project',
+      type: pub.type ?? 'Custom',
+      // The snapshot carries the LOCAL portal name — consumers resolve cross-tree
+      // refs by their final segment.
+      component: localName(comp.id),
+      methods,
+      ...(comp.dispatch && comp.dispatch.length ? { dispatch: comp.dispatch } : {}),
+      // Project the backing Portal's auth + basePath so the codec can emit
+      // OpenAPI security + per-portal servers self-contained from the snapshot.
+      ...(comp.auth && comp.auth.scheme !== 'none' ? { auth: comp.auth } : {}),
+      ...(comp.basePath ? { basePath: comp.basePath } : {}),
+      details: pub.details ?? '',
+    });
+  }
+
+  return SurfaceSnapshotSchema.parse({
+    projectName: `${system.name}::${subsystemId}`,
+    origin: 'generated',
+    stateId: stateIdString(),
+    generatedAt: new Date().toISOString(),
+    interfaces: entries,
+    types: computeTypeClosure(entries, types),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Stored snapshots (surface_repository over .wai/surfaces/)
 // ---------------------------------------------------------------------------
@@ -197,19 +273,46 @@ export function getSnapshot(projectName: string, rootDir: string = getProjectRoo
   return listSnapshots(rootDir).find(s => s.projectName === projectName) ?? null;
 }
 
+/** Snapshot filename for a storage key. The key itself (projectName, possibly
+ *  '<systemName>::<subsystemId>' for sibling surfaces) lives IN the document —
+ *  the filename is sanitized so keys with '::' (or any other unsafe character)
+ *  stay writable on every platform (':' is not a legal Windows filename char). */
+function snapshotFilename(projectName: string): string {
+  return `${safeFilenamePart(projectName)}.yaml`;
+}
+
 export function saveSnapshot(snapshot: SurfaceSnapshot, rootDir: string = getProjectRoot()): string {
   const dir = surfacesDir(rootDir);
   fs.mkdirSync(dir, { recursive: true });
-  const p = path.join(dir, `${snapshot.projectName}.yaml`);
+  const p = path.join(dir, snapshotFilename(snapshot.projectName));
   writeYamlFile(p, SurfaceSnapshotSchema.parse(snapshot));
   return p;
 }
 
 export function removeSnapshot(projectName: string, rootDir: string = getProjectRoot()): boolean {
-  const p = path.join(surfacesDir(rootDir), `${projectName}.yaml`);
-  if (!fs.existsSync(p)) return false;
-  fs.unlinkSync(p);
-  return true;
+  const dir = surfacesDir(rootDir);
+  const direct = path.join(dir, snapshotFilename(projectName));
+  if (fs.existsSync(direct)) {
+    fs.unlinkSync(direct);
+    return true;
+  }
+  // Legacy files written before filename sanitization (raw project names):
+  // locate by the snapshot's stored key, not the filename.
+  if (!fs.existsSync(dir)) return false;
+  for (const file of fs.readdirSync(dir)) {
+    if (!file.endsWith('.yaml') && !file.endsWith('.yml')) continue;
+    const p = path.join(dir, file);
+    try {
+      const snap = SurfaceSnapshotSchema.parse(readYamlFile(p));
+      if (snap.projectName === projectName) {
+        fs.unlinkSync(p);
+        return true;
+      }
+    } catch {
+      // A malformed snapshot is not the one we were asked to remove.
+    }
+  }
+  return false;
 }
 
 /** Validator-facing load (validator_surfaces_adapter realization). */
@@ -328,20 +431,118 @@ export function importSurface(sourcePath: string, origin: SurfaceOrigin): Surfac
 }
 
 /**
- * Write the family-scoped parent surface into every chained child project's
- * .wai/surfaces/, so children can validate cross-tree references standalone.
+ * Project and deliver the outward world into every chained child project's
+ * .wai/surfaces/: the family-scoped parent surface AND each SIBLING
+ * subsystem's published surface (every subsystem except the child's own
+ * mount), so children can validate and consume cross-tree references
+ * standalone against contract-grade snapshots. Returns all written paths.
  */
 export function generateChildSnapshots(rootDir: string = getProjectRoot()): string[] {
-  const children = loadSubsystemSpecs().filter(s => s.projectPath && !s.id.includes('::'));
+  const topLevel = loadSubsystemSpecs().filter(s => !s.id.includes('::'));
+  const children = topLevel.filter(s => s.projectPath);
   if (!children.length) return [];
-  const snapshot = projectChildSurface();
+  const familySnapshot = projectChildSurface();
+  // Each sibling surface is identical for every receiving child — project once.
+  const siblingSnapshots = new Map<string, SurfaceSnapshot>();
+  const siblingSurface = (subsystemId: string): SurfaceSnapshot => {
+    let snap = siblingSnapshots.get(subsystemId);
+    if (!snap) {
+      snap = projectSubsystemSurface(subsystemId);
+      siblingSnapshots.set(subsystemId, snap);
+    }
+    return snap;
+  };
   const written: string[] = [];
   for (const child of children) {
     const childDir = path.resolve(rootDir, child.projectPath!);
     if (!fs.existsSync(childDir)) continue;
-    written.push(saveSnapshot(snapshot, childDir));
+    written.push(saveSnapshot(familySnapshot, childDir));
+    // Per-sibling delivery: every OTHER subsystem's published surface (the
+    // child's own mount excluded — it does not consume itself).
+    for (const sibling of topLevel) {
+      if (sibling.id === child.id) continue;
+      written.push(saveSnapshot(siblingSurface(sibling.id), childDir));
+    }
   }
   return written;
+}
+
+// ---------------------------------------------------------------------------
+// External-surface discovery (listExternalInterfaces) — the scope-aware
+// catalog of this project's outward world: parent family surface, sibling
+// surfaces, and foreign imports, each with a freshness verdict.
+// ---------------------------------------------------------------------------
+
+/**
+ * One row of the external-interface discovery listing: a vendored surface
+ * snapshot this project can consume, summarized with its origin, family role,
+ * provenance, and a freshness verdict. The full contracts stay in the
+ * referenced SurfaceSnapshot — this is the catalog view served to agents
+ * (sdd_list_external_interfaces) and the CLI (`wairon surface externals`).
+ */
+export interface ExternalSurfaceEntry {
+  /** The snapshot's storage key: the producing project's name, or '<systemName>::<subsystemId>' for a sibling surface. */
+  projectName: string;
+  /** Snapshot origin: 'generated' | 'exchanged' | 'authored'. */
+  origin: SurfaceOrigin;
+  /** Family role from THIS project's standpoint. */
+  sourceKind: 'parent' | 'sibling' | 'foreign';
+  /** ISO-8601 timestamp the snapshot was produced. */
+  generatedAt: string;
+  /** Producing tree's state hash at generation time, when stamped. */
+  stateId?: string;
+  /** Producer-declared version, for authored/exchanged snapshots carrying one. */
+  version?: string;
+  /** 'fresh' | 'stale' (parent tree changed since generation) | 'unverifiable'. */
+  freshness: 'fresh' | 'stale' | 'unverifiable';
+  /** Ids of the interfaces the snapshot exposes — the discovery summary. */
+  interfaceIds: string[];
+}
+
+/**
+ * surfaces_core_adapter.computeParentStateId: bind the given parent project
+ * root READ-ONLY and compute its current spec-tree state hash through the core
+ * subsystem's published portal — the comparison source for freshness-checking
+ * vendored parent/sibling snapshots against what the parent tree looks like
+ * NOW. Never mutates either root's binding.
+ */
+export function computeParentStateId(parentRoot: string): string | null {
+  return computeStateIdAt(parentRoot);
+}
+
+/**
+ * Scope-aware discovery of this project's outward world: every vendored
+ * surface snapshot as an ExternalSurfaceEntry. sourceKind classification:
+ * 'parent' is the generated family surface keyed by the parent system name;
+ * 'sibling' is a generated '<systemName>::<subsystemId>' key; 'foreign' is an
+ * exchanged/authored import. Freshness compares the vendored StateId against
+ * the chaining parent's CURRENT state hash when a chaining parent is
+ * reachable; entries are 'unverifiable' when standalone or foreign.
+ */
+export function listExternalInterfaces(): ExternalSurfaceEntry[] {
+  const snapshots = listSnapshots();
+  const chainingParent = resolveChainingParent();
+  const parentStateId = chainingParent ? computeParentStateId(chainingParent.parentRoot) : null;
+
+  return snapshots.map(snapshot => {
+    const generated = snapshot.origin === 'generated';
+    const sourceKind: ExternalSurfaceEntry['sourceKind'] = !generated
+      ? 'foreign'
+      : snapshot.projectName.includes('::') ? 'sibling' : 'parent';
+    const freshness: ExternalSurfaceEntry['freshness'] = generated && parentStateId
+      ? (snapshot.stateId === parentStateId ? 'fresh' : 'stale')
+      : 'unverifiable';
+    return {
+      projectName: snapshot.projectName,
+      origin: snapshot.origin,
+      sourceKind,
+      generatedAt: snapshot.generatedAt,
+      ...(snapshot.stateId ? { stateId: snapshot.stateId } : {}),
+      ...(snapshot.version ? { version: snapshot.version } : {}),
+      freshness,
+      interfaceIds: snapshot.interfaces.map(e => e.id),
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------
