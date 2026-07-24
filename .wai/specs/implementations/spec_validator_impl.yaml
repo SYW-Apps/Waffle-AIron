@@ -175,13 +175,21 @@ methods:
         type: local
       - stepNumber: 19
         description: >-
-          Chained-subproject leniency: when this root is a chained subproject of a discoverable
-          parent (detected via the loader's findChainingParent), downgrade the root-dependent
-          cross-tree and code↔spec resolution errors (undefined-type, invalid
-          dependency/subsystem/target-component references, missing-source-file, unrealized-method,
-          undeclared-dependency, and cross-tree refs) to warnings, mark them crossTreeContext, and
-          prepend one CHAINED_SUBPROJECT_CONTEXT notice — full cross-tree verification runs from the
-          parent root
+          Chained-subproject reference honesty: when this root is a chained subproject of a
+          discoverable parent (detected via the loader's findChainingParent), cross-tree references
+          COVERED by a vendored surface snapshot validate at FULL strength — contract mismatches and
+          boundary violations stay errors, because a snapshot IS the verifiable contract — while
+          each cross-tree reference NO snapshot covers is reported as ONE precise
+          UNVERIFIED_EXTERNAL_REF warning replacing the former blanket downgrade of the
+          reference-resolution family (undefined-type, invalid dependency/subsystem/target-component
+          references, undeclared-dependency-call, unresolved cross-tree refs), marked
+          crossTreeContext (--ci waives it) and naming the unverifiable reference plus the remedy
+          (re-lock the parent so fresh family/sibling snapshots ship, or inspect via
+          list-external-interfaces). The code↔spec conformance family (missing-source-file,
+          unrealized-method, undeclared-dependency and kin) KEEPS the crossTreeContext downgrade —
+          source paths stored relative to the parent root genuinely cannot resolve standalone. One
+          CHAINED_SUBPROJECT_CONTEXT notice is prepended, counting the unverified references — full
+          cross-tree verification runs from the parent root
         type: local
       - stepNumber: 20
         description: Return the aggregated validation result
@@ -311,4 +319,4 @@ lint:
         when Level 3 models call indirection.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-18T23:14:48.139Z'
+updatedAt: '2026-07-24T18:08:10.060Z'
