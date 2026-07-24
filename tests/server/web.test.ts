@@ -38,6 +38,7 @@ import { queryAuditEvents as auditQuery } from '../../src/server/audit.js';
 import { createUnit as createOrgUnit, placeProject, listProjectPlacements } from '../../src/server/organization.js';
 import * as webadmin from '../../src/server/webadmin.js';
 import { replacePublicSurfaceSnapshot } from '../../src/server/surfaces.js';
+import { upsertProjectRelation } from '../../src/server/relations.js';
 import { validateProjectAsComplete } from '../../src/server/adapters.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { provisionProject } from '../../src/core/provision.js';
@@ -584,6 +585,50 @@ describe('web graph orchestrator (sdd_host)', () => {
     expect(g0.nodes.some((n) => n.kind === 'interface')).toBe(false);
     expect(g0.nodes.some((n) => n.id === 'unit:unit-1')).toBe(true);
     expect(g0.edges.every((e) => e.to !== 'iface:proj-a:iface-1')).toBe(true);
+  });
+
+  it('landscape tier: a relation targeting a published interface survives level 1 as a project→project edge', () => {
+    createOrgUnit(dataDir, { id: '', slug: 'unit-1', name: 'Team One', kind: 'team', status: 'active', createdAt: now, createdBy });
+    createProjectRecord(dataDir, 'proj-a');
+    createProjectRecord(dataDir, 'proj-b');
+    placeProject(dataDir, { id: 'pl-1', projectId: 'proj-a', unitId: 'unit-1', role: 'owner', createdAt: now, createdBy });
+    placeProject(dataDir, { id: 'pl-2', projectId: 'proj-b', unitId: 'unit-1', role: 'owner', createdAt: now, createdBy });
+    // proj-b HAS a snapshot, so the landscape builder targets the relation edge
+    // at the interface node — the case the level cutoff used to swallow.
+    replacePublicSurfaceSnapshot(dataDir, {
+      projectId: 'proj-b',
+      stateId: 'sha256:abc',
+      systemName: 'ProjB',
+      interfaces: [{ id: 'b-api', name: 'B API', type: 'REST', audience: 'public', methods: ['ping'], details: '' }],
+      exportedAt: '',
+    });
+    upsertProjectRelation(dataDir, {
+      id: 'rel-1',
+      sourceProjectId: 'proj-a',
+      targetProjectId: 'proj-b',
+      kind: 'consumes',
+      sourceAdapter: 'a-client',
+      targetPublicInterface: { projectId: 'proj-b', systemInterfaceId: 'b-api', reason: 'r' },
+      reason: 'r',
+      status: 'active',
+      createdAt: now,
+      createdBy,
+    });
+    const admin = adminGraphSession();
+
+    // Level 2 keeps the interface node, so the relation edge ends on it untouched.
+    const g2 = getGraph(cfg, admin.id, 'landscape', '', 2);
+    expect(g2.edges.some((e) => e.relationId === 'rel-1' && e.to === 'iface:proj-b:b-api')).toBe(true);
+
+    // Level 1 (the environment canvas fetch) drops the interface node — the
+    // relation edge retargets to the owning project instead of vanishing.
+    const g1 = getGraph(cfg, admin.id, 'landscape', '', 1);
+    expect(g1.nodes.some((n) => n.kind === 'interface')).toBe(false);
+    const rel = g1.edges.filter((e) => e.relationId === 'rel-1');
+    expect(rel).toHaveLength(1);
+    expect(rel[0]).toMatchObject({ from: 'project:proj-a', to: 'project:proj-b', edgeKind: 'consumes' });
+    // Non-relation edges to the dropped interface stay dropped.
+    expect(g1.edges.some((e) => e.edgeKind === 'publishes')).toBe(false);
   });
 
   it('rejects an unknown graph tier', () => {
