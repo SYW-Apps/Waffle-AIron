@@ -1,0 +1,36 @@
+kind: value-object
+id: openapi_spec_index
+name: OpenApiSpecIndex
+description: >-
+  The payload served in place of an OpenAPI document when a project publishes SEVERAL public portals
+  and none is selected: a machine-readable listing of the available per-portal APIs so a consumer
+  can pick one. It is a LIST of the APIs (each an openapi_spec_ref), never a merge of their
+  documents and never an empty document standing in for them. Carried inside the existing string
+  artifact body (share_artifact_result.content, or the surface artifact body), discriminated by
+  openapiIndex=true; distinct from any single OpenAPI document.
+subsystem: sdd_host
+fields:
+  - name: openapiIndex
+    type: boolean
+    description: >-
+      Discriminator — always true; marks the string body as an index of APIs rather than a single
+      OpenAPI document.
+    optional: false
+  - name: specs
+    type: OpenApiSpecRef[]
+    description: >-
+      The available per-portal API references, one per published portal (empty when the project
+      publishes no portal).
+    optional: false
+methods: []
+lint:
+  allow:
+    - code: UNUSED_TYPE
+      reason: >-
+        Pure wire shape carried inside the existing string artifact body:
+        share_artifact_result.content and the surface artifact body stay `string`, which may hold an
+        OpenAPI document OR this index (discriminated by openapiIndex=true). By design it is
+        referenced in the producing narratives/prose rather than as a field or method-signature
+        type, so the used-by-signature check cannot see it.
+createdAt: '2026-07-24T09:45:00.858Z'
+updatedAt: '2026-07-24T09:45:05.790Z'

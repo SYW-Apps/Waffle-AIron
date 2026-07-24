@@ -22,14 +22,20 @@ methods:
       - name: snapshotId
         type: string
   - name: getArtifact
-    description: 'Facade: one captured artifact of a snapshot through the index.'
-    signature: 'getArtifact(snapshotId: string, kind: string): string | null'
+    description: >-
+      Facade: one captured artifact of a snapshot through the index. For openapi, an optional
+      portalId selects one per-portal document; with several captured specs and none selected the
+      payload is an openapi_spec_index listing them, and with exactly one it is that document.
+    signature: 'getArtifact(snapshotId: string, kind: string, portalId?: string): string | null'
     returns: string | null
     params:
       - name: snapshotId
         type: string
       - name: kind
         type: string
+      - name: portalId
+        type: string
+        optional: true
 status: complete
 createdAt: '2026-07-17T22:29:54.324Z'
-updatedAt: '2026-07-18T10:10:40.015Z'
+updatedAt: '2026-07-24T09:45:19.881Z'

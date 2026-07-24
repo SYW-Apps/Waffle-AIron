@@ -1,0 +1,20 @@
+kind: value-object
+id: openapi_spec_ref
+name: OpenApiSpecRef
+description: >-
+  One entry in an OpenAPI spec index: a reference to a single per-portal API by its portal id and
+  display name — a pointer used to fetch that one API's document (e.g. via ?spec=<portalId>), never
+  the document itself.
+subsystem: sdd_host
+fields:
+  - name: portalId
+    type: string
+    description: The published portal's id; selects this one API's OpenAPI document.
+    optional: false
+  - name: name
+    type: string
+    description: Human-readable name of the API/portal, shown when listing the available APIs.
+    optional: false
+methods: []
+createdAt: '2026-07-24T09:44:54.242Z'
+updatedAt: '2026-07-24T09:44:54.257Z'

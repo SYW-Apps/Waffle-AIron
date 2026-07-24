@@ -258,22 +258,75 @@ methods:
         targetMethod: resolveRoot
       - stepNumber: 6
         description: >-
-          Generate the audience-filtered surface artifact for the bound project (native snapshot or
-          rendered OpenAPI). For openapi: serve the per-portal document named by portalId; with
-          several portals and no portalId, produce an INDEX listing them (portalId + name) rather
-          than merging them or emitting an empty document; with exactly one portal, produce that
-          document.
+          Render the bound project's surface at the audience ceiling. This adapter call is a pure
+          pass-through (maxAudience, format) and performs NO portal selection: native yields the
+          snapshot; openapi renders EVERY published per-portal document, so the result carries the
+          whole rendered set. All portal selection below is the orchestrator's own logic over that
+          set.
         type: call
         targetComponent: host_surfaces_adapter
         targetMethod: exportBoundSurface
       - stepNumber: 7
         description: >-
-          Return the typed downloadable artifact (body, content type, filename — the filename
-          carrying the selected portalId when one portal was chosen, so several downloads never
-          collide)
-        type: return
+          The requested format is openapi — the orchestrator selects among the rendered per-portal
+          documents; otherwise fall through to the native snapshot
+        type: branch
+        condition: the requested format is openapi
+        onTrueStep: 8
+        onFalseStep: 16
         outcome: SurfaceArtifact
+      - stepNumber: 8
+        description: >-
+          Take the rendered per-portal document set from the export result (empty when the project
+          publishes no public portal)
+        type: local
+      - stepNumber: 9
+        description: A specific portalId was supplied
+        type: branch
+        condition: a portalId was supplied
+        onTrueStep: 10
+        onFalseStep: 13
+      - stepNumber: 10
+        description: The supplied portalId names one of the rendered per-portal documents
+        type: branch
+        condition: the supplied portalId names one of the rendered per-portal documents
+        onTrueStep: 12
+        onFalseStep: 11
+      - stepNumber: 11
+        description: >-
+          Reject an unknown portal — the portalId names no published portal; refuse rather than
+          substitute another portal's API
+        type: throw
+        error: Unknown portal — the portalId names no published portal in this project
+      - stepNumber: 12
+        description: >-
+          Return the single selected per-portal OpenAPI document as the downloadable artifact body —
+          its filename carries the portalId so several downloads never collide
+        type: return
+        outcome: SurfaceArtifact (the selected per-portal document)
+      - stepNumber: 13
+        description: Exactly one per-portal document was rendered, so there is no ambiguity
+        type: branch
+        condition: exactly one per-portal document was rendered
+        onTrueStep: 14
+        onFalseStep: 15
+      - stepNumber: 14
+        description: Return that single OpenAPI document as the downloadable artifact body
+        type: return
+        outcome: SurfaceArtifact (the sole per-portal document)
+      - stepNumber: 15
+        description: >-
+          Return an openapi_spec_index listing the rendered per-portal APIs (portalId + name) as the
+          artifact body — never a merge of the distinct APIs and never an empty document standing in
+          for them (with no portal at all the index is empty, the honest answer); the filename marks
+          it an index
+        type: return
+        outcome: SurfaceArtifact (openapi_spec_index)
+      - stepNumber: 16
+        description: Return the native surface snapshot serialized as the downloadable artifact body
+        type: return
+        outcome: SurfaceArtifact (native snapshot)
     detail: full
 status: complete
 createdAt: '2026-07-11T12:03:31.491Z'
-updatedAt: '2026-07-23T22:33:57.769Z'
+updatedAt: '2026-07-24T09:47:12.744Z'

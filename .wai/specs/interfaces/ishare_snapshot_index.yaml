@@ -13,14 +13,20 @@ methods:
   - name: getArtifact
     description: >-
       One captured artifact (canvas | html | openapi) of a snapshot as a serialized payload, or null
-      when the snapshot or artifact is absent.
-    signature: 'getArtifact(snapshotId: string, kind: string): string | null'
+      when the snapshot or artifact is absent. For openapi, an optional portalId selects one
+      per-portal document; with several captured specs and none selected the payload is an
+      openapi_spec_index listing them (portalId + name), and with exactly one it is that document. A
+      portalId naming no captured spec yields null rather than another portal's document.
+    signature: 'getArtifact(snapshotId: string, kind: string, portalId?: string): string | null'
     returns: string | null
     params:
       - name: snapshotId
         type: string
       - name: kind
         type: string
+      - name: portalId
+        type: string
+        optional: true
 status: complete
 createdAt: '2026-07-17T22:29:28.352Z'
-updatedAt: '2026-07-18T10:10:39.899Z'
+updatedAt: '2026-07-24T09:45:14.199Z'

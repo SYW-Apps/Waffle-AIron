@@ -6,7 +6,7 @@ import { resolveProjectRoot } from './projects.js';
 import { hostCore, hostSurfaces } from './adapters.js';
 import { ForbiddenError } from './errors.js';
 import type { Principal, ShareSnapshot } from './types.js';
-import type { NamedOpenApiSpec } from '../models/index.js';
+import { openApiIndexDocument } from './openapiindex.js';
 
 // ---------------------------------------------------------------------------
 // Share Snapshot Repository + Specialist (sdd_host).
@@ -68,23 +68,6 @@ class ShareSnapshotRegistry {
     this.store.write(stored);
     return stored;
   }
-}
-
-/**
- * The payload served for an openapi request that names no portal when SEVERAL
- * per-portal documents were captured: a machine-readable listing of the shared
- * APIs (portalId + name) so a consumer picks one. Distinct portals are never
- * merged into a combined document, and no empty document ever stands in for
- * them. The share portal renders this into a link list; a download receives it
- * verbatim. (Shape mirrored — as a parse — by the portal, which depends only on
- * the access orchestrator.)
- */
-function openApiIndexDocument(specs: NamedOpenApiSpec[]): string {
-  return JSON.stringify(
-    { openapiIndex: true, specs: specs.map((s) => ({ portalId: s.portalId, name: s.name })) },
-    null,
-    2,
-  );
 }
 
 /**

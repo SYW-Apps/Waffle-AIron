@@ -38,6 +38,7 @@ import { resolveVisibility, isVisible, audienceDistance, audienceCovers } from '
 import { hostSurfaces } from './adapters.js';
 import * as yamlLib from 'js-yaml';
 import { safeFilenamePart } from '../utils/filenames.js';
+import { openApiIndexDocument } from './openapiindex.js';
 import type {
   AuditEvent,
   AuditRetentionPolicy,
@@ -1028,16 +1029,12 @@ export function exportProjectSurface(
         filename: `${safeFilenamePart(projectId)}-surface.openapi.json`,
       };
     }
-    // Several published portals are several APIs: hand back the INDEX so the
-    // caller picks one, never a merge of distinct APIs and never an empty
+    // Several published portals are several APIs: hand back the openapi_spec_index
+    // so the caller picks one, never a merge of distinct APIs and never an empty
     // document standing in for them (with no portal at all the index is empty,
-    // which is the honest answer).
+    // which is the honest answer). Built by the one shared index builder.
     return {
-      body: JSON.stringify(
-        { openapiIndex: true, specs: specs.map((s) => ({ portalId: s.portalId, name: s.name })) },
-        null,
-        2,
-      ),
+      body: openApiIndexDocument(specs),
       contentType: 'application/json',
       filename: `${safeFilenamePart(projectId)}-surface.openapi.index.json`,
     };
