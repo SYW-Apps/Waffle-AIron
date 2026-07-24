@@ -546,6 +546,16 @@ header input[type="search"]::placeholder { color:var(--dim); }
 #moreMenu .dropdown { display:block; width:100%; }
 #moreMenu .dropdown > .tbtn, #moreMenu > .tbtn { display:block; width:100%; text-align:left; border:none; background:transparent; margin:2px 0; }
 #moreMenu .dropdown > .tbtn:hover, #moreMenu > .tbtn:hover { background:var(--hover-bg); }
+/* Staged header compaction (responsive only, never persisted): compact
+   stand-ins for the search input, the mode tabs, and the ancestor crumbs.
+   All hidden at full width, so a roomy header renders exactly as before. */
+#searchBtn { position:relative; }
+#searchBtn.hasq::after { content:''; position:absolute; top:3px; right:3px; width:7px; height:7px; border-radius:50%; background:var(--accent); }
+.search-menu { min-width:210px; padding:8px; }
+.search-menu input[type="search"] { width:100%; }
+#modeMenu button.active { background:var(--accent); color:#fff; font-weight:700; }
+#crumbs .dropdown { display:inline-flex; }
+#crumbs .crumbmore { font-weight:700; }
 
 /* Settings panel — toggle switches */
 .settings-menu { min-width:266px; }
@@ -669,9 +679,17 @@ body.presentation #exitPresent, body.presentation #presentDetails { display:bloc
     <button data-vm="types">Types</button>
     <button data-vm="databases">Databases</button>
   </div>
+  <div class="dropdown" id="modeDd" style="display:none">
+    <button class="tbtn" id="modeBtn" title="Switch between the component architecture, the type ERD, or the database schemas">Components ▾</button>
+    <div class="menu" id="modeMenu"></div>
+  </div>
   <nav id="crumbs"></nav>
   <span class="divider"></span>
   <input id="search" type="search" placeholder="Search this view…">
+  <div class="dropdown" id="searchDd" style="display:none">
+    <button class="tbtn" id="searchBtn" title="Search this view">🔍</button>
+    <div class="menu search-menu" id="searchMenu"></div>
+  </div>
   <div class="seg" id="typesDetailSeg" style="display:none" title="ERD detail level">
     <button data-td="full">Full</button>
     <button data-td="fields">Fields</button>
@@ -2671,22 +2689,58 @@ var MODEL = __MODEL_JSON__;
     }
     return path;
   }
+  // Crumb compaction (compaction stage 5) is a RENDER MODE, not marker-based
+  // reparenting: renderCrumbs rebuilds #crumbs' innerHTML on every navigation,
+  // so nodes physically moved elsewhere would be destroyed by the next render.
+  // The header-compaction stage toggles crumbsCompact and re-renders; compact
+  // keeps the CURRENT scope visible and folds the ancestors into an ordered
+  // "\\u2026" dropdown (document order, root first) whose entries navigate
+  // exactly like the crumbs they replace.
+  var crumbsCompact = false;
+  var lastCrumbsHtml; // no initializer: the boot render at cy-init time precedes this line
+  // Set by the header-compaction IIFE: crumb re-renders change the header's
+  // CONTENT width without resizing #hdr itself (it is edge-anchored), so the
+  // ResizeObserver never fires for them — renderCrumbs nudges a reflow here.
+  var headerReflowHook = null;
+  function crumbBtnHtml(p, cur) {
+    return '<button class="crumb' + (cur ? ' cur' : '') + '" data-ck="' + p.kind + '" data-ci="' + (p.id || '') + '">' + p.label + '</button>';
+  }
   function renderCrumbs() {
     var el = document.getElementById('crumbs');
     var path = crumbPath();
-    el.innerHTML = path.map(function (p, i) {
-      var cur = i === path.length - 1;
-      return '<button class="crumb' + (cur ? ' cur' : '') + '" data-ck="' + p.kind + '" data-ci="' + (p.id || '') + '">' + p.label + '</button>'
-        + (cur ? '' : '<span class="sep">\\u203A</span>');
-    }).join('');
+    var html;
+    if (crumbsCompact && path.length > 1) {
+      html = '<span class="dropdown" id="crumbDd">'
+        + '<button class="crumb crumbmore" id="crumbMoreBtn" title="Show the collapsed ancestor path">\\u2026</button>'
+        + '<span class="menu" id="crumbMenu">'
+        + path.slice(0, path.length - 1).map(function (p) {
+          return '<button data-ck="' + p.kind + '" data-ci="' + (p.id || '') + '">' + p.label + '</button>';
+        }).join('')
+        + '</span></span>'
+        + '<span class="sep">\\u203A</span>'
+        + crumbBtnHtml(path[path.length - 1], true);
+    } else {
+      html = path.map(function (p, i) {
+        var cur = i === path.length - 1;
+        return crumbBtnHtml(p, cur) + (cur ? '' : '<span class="sep">\\u203A</span>');
+      }).join('');
+    }
+    // No-op renders keep the already-wired nodes (and an open "\\u2026" menu)
+    // intact — and don't churn the reflow scheduler while a search query types.
+    if (html === lastCrumbsHtml) return;
+    lastCrumbsHtml = html;
+    el.innerHTML = html;
     var btns = el.querySelectorAll('button');
     for (var i = 0; i < btns.length; i++) {
       (function (b) {
+        if (!b.getAttribute('data-ck')) return; // the "\\u2026" trigger toggles, never navigates
         b.addEventListener('click', function () {
           navigateTo(b.getAttribute('data-ck'), b.getAttribute('data-ci') || null);
         });
       })(btns[i]);
     }
+    if (crumbsCompact && path.length > 1) wireDropdown('crumbDd', 'crumbMoreBtn');
+    if (headerReflowHook) headerReflowHook();
   }
   function renderViewHint() {
     if (state.view.kind === 'types' || state.view.kind === 'databases') {
@@ -2953,7 +3007,16 @@ var MODEL = __MODEL_JSON__;
     return c ? { kind: 'subsystem', id: c.subsystem } : { kind: 'system', id: null };
   }
 
-  document.getElementById('search').addEventListener('input', function (ev) { state.query = ev.target.value.trim(); rebuild(false); });
+  // While the search input is compacted behind the magnifier icon (compaction
+  // stage 3), a non-empty query must stay discoverable — mark the icon with an
+  // accent dot. The class is kept in sync on every query edit; the dot is only
+  // ever visible while the compact icon itself is.
+  function updateSearchBadge() {
+    var b = document.getElementById('searchBtn');
+    if (b && b.classList) b.classList[state.query ? 'add' : 'remove']('hasq');
+  }
+  document.getElementById('search').addEventListener('input', function (ev) { state.query = ev.target.value.trim(); updateSearchBadge(); rebuild(false); });
+  updateSearchBadge();
   // Sync each View toggle's checkbox from the (possibly persisted) state, then
   // persist on change so the choices survive a refresh (see persist()/saved).
   document.getElementById('internalsToggle').checked = state.internals;
@@ -3007,9 +3070,24 @@ var MODEL = __MODEL_JSON__;
       })(btns[i]);
     }
   })();
+  // Compaction stage 4 replaces the mode tabs with one dropdown trigger; its
+  // label must follow the CURRENT mode. updateHeaderSegs runs on every rebuild,
+  // so a mode change made while compact re-labels the trigger immediately.
+  function updateModeBtn() {
+    var b = document.getElementById('modeBtn');
+    if (!b) return;
+    var lbl = state.view.kind === 'types' ? 'Types' : state.view.kind === 'databases' ? 'Databases' : 'Components';
+    b.textContent = lbl + ' \\u25BE';
+  }
   function updateHeaderSegs() {
     var seg = document.getElementById('modeSeg');
     var btns = seg.querySelectorAll('button');
+    if (!btns.length) {
+      // Compaction stage 4 moved the real tab buttons into the mode dropdown —
+      // keep driving THEIR active classes there (they move back node-identical).
+      var mm = document.getElementById('modeMenu');
+      if (mm && mm.querySelectorAll) btns = mm.querySelectorAll('button');
+    }
     for (var i = 0; i < btns.length; i++) {
       var vm = btns[i].getAttribute('data-vm');
       var active = vm === 'components'
@@ -3017,6 +3095,7 @@ var MODEL = __MODEL_JSON__;
         : vm === state.view.kind;
       if (btns[i].classList) btns[i].classList[active ? 'add' : 'remove']('active');
     }
+    updateModeBtn();
     var td = document.getElementById('typesDetailSeg');
     td.style.display = (state.view.kind === 'types' || state.view.kind === 'databases') ? '' : 'none';
     var tbs = td.querySelectorAll('button');
@@ -3080,7 +3159,13 @@ var MODEL = __MODEL_JSON__;
     var r = btn.getBoundingClientRect();
     menu.style.top = (r.bottom + 6) + 'px';
     menu.style.left = 'auto';
-    menu.style.right = Math.max(6, window.innerWidth - r.right) + 'px';
+    // Right-aligned to the trigger, but never pushed off the LEFT edge — the
+    // compact search / crumb triggers (header compaction) sit on the header's
+    // left side, where a 200px menu right-aligned to a narrow button would clip.
+    var right = Math.max(6, window.innerWidth - r.right);
+    var mw = menu.getBoundingClientRect ? menu.getBoundingClientRect().width : 0;
+    if (mw && window.innerWidth - right - mw < 6) right = Math.max(6, window.innerWidth - mw - 6);
+    menu.style.right = right + 'px';
   }
   function wireDropdown(ddId, btnId) {
     var dd = document.getElementById(ddId);
@@ -3099,11 +3184,29 @@ var MODEL = __MODEL_JSON__;
   var ldd = wireDropdown('layoutDd', 'layoutBtn');
   var sdd = wireDropdown('settingsDd', 'settingsBtn');
   var mdd = wireDropdown('moreDd', 'moreBtn');
+  // Compact stand-ins (header compaction stages 3-4): the search panel and the
+  // mode-tab dropdown are ordinary dropdowns; their triggers stay hidden until
+  // their compaction stage shows them, so wiring them here is inert at full width.
+  var qdd = wireDropdown('searchDd', 'searchBtn');
+  var vdd = wireDropdown('modeDd', 'modeBtn');
+  // Opening the compact search panel focuses the REAL input (stage 3 moves the
+  // node, never clones it, so its input listener keeps driving state.query).
+  // Registered after wireDropdown's toggle, so 'open' reflects the new state.
+  document.getElementById('searchBtn').addEventListener('click', function () {
+    if (String(qdd.className || '').indexOf('open') >= 0) {
+      var inp = document.getElementById('search');
+      if (inp && inp.focus) inp.focus();
+    }
+  });
   // Keep the settings panel open while flipping switches (clicks inside it don't
   // bubble to the document-level close handler).
   (function () {
     var m = document.getElementById('settingsMenu');
     if (m && m.addEventListener) m.addEventListener('click', function (ev) { if (ev && ev.stopPropagation) ev.stopPropagation(); });
+    // Same for the floating search panel: clicking into the input must not
+    // bubble to the document-level close handler and shut the panel mid-typing.
+    var sm = document.getElementById('searchMenu');
+    if (sm && sm.addEventListener) sm.addEventListener('click', function (ev) { if (ev && ev.stopPropagation) ev.stopPropagation(); });
   })();
 
   // Layout picker: choose the auto-layout algorithm. Components use cytoscape's
@@ -3127,6 +3230,12 @@ var MODEL = __MODEL_JSON__;
   });
   updateLayoutBtn();
 
+  // The compact crumb dropdown (compaction stage 5) is re-created by every
+  // compact crumb render, so it is looked up per close instead of captured.
+  function closeCrumbDd() {
+    var cdd = document.getElementById('crumbDd');
+    if (cdd && cdd.classList) cdd.classList.remove('open');
+  }
   if (document.addEventListener) {
     document.addEventListener('click', function () {
       if (dd.classList) dd.classList.remove('open');
@@ -3134,6 +3243,9 @@ var MODEL = __MODEL_JSON__;
       if (ldd.classList) ldd.classList.remove('open');
       if (sdd.classList) sdd.classList.remove('open');
       if (mdd && mdd.classList) mdd.classList.remove('open');
+      if (qdd && qdd.classList) qdd.classList.remove('open');
+      if (vdd && vdd.classList) vdd.classList.remove('open');
+      closeCrumbDd();
     });
     document.addEventListener('keydown', function (ev) {
       if (ev.key === 'Escape') {
@@ -3141,16 +3253,27 @@ var MODEL = __MODEL_JSON__;
         if (modal.classList && String(modal.className).indexOf('open') >= 0) { closeFlow(); return; }
         setPresentation(false);
         if (dd.classList) dd.classList.remove('open');
+        if (qdd && qdd.classList) qdd.classList.remove('open');
+        if (vdd && vdd.classList) vdd.classList.remove('open');
+        closeCrumbDd();
       }
     });
   }
 
-  // ── Responsive header overflow → "⋯" dropdown ─────────────────────────────
-  // When the floating header no longer fits its controls, trailing items
-  // COLLAPSE into the More menu instead of relying on horizontal scroll —
-  // every control stays one click away. Whole items move (listeners survive
-  // reparenting); a hidden placeholder pins each item's original position so
-  // restoring keeps the exact order. Collapse order = least-used first.
+  // ── Responsive header compaction → ordered stages ─────────────────────────
+  // When the floating header no longer fits its controls, standard reusable
+  // COMPACTION BEHAVIORS apply progressively — each stage only while the row
+  // still overflows — and restore in REVERSE order when space returns:
+  //   1. trailing buttons fold into the "⋯" menu (least-used first, one by one)
+  //   2. the View dropdown folds in after them
+  //   3. the search input compacts to a 🔍 icon + floating panel
+  //   4. the mode tabs compact to one current-mode dropdown
+  //   5. ancestor crumbs compact into an ordered "…" dropdown
+  // Stages 1-2 move whole items (listeners survive reparenting) with a hidden
+  // placeholder pinning each item's original spot for restore; stage 5 is a
+  // render mode (renderCrumbs rebuilds its innerHTML, so reparenting would not
+  // survive navigation). Nothing here is persisted — compaction is purely
+  // responsive to the available width.
   (function () {
     if (typeof window === 'undefined') return;
     var hdr = document.getElementById('hdr');
@@ -3178,7 +3301,122 @@ var MODEL = __MODEL_JSON__;
       }
       return markers[id];
     }
-    var collapsed = [];
+    // Fold stage (the classic behavior): move items into the "⋯" menu ONE per
+    // apply() call — the reflow loop keeps a stage active until it reports no
+    // further progress, preserving the original per-button granularity.
+    function foldStage(ids) {
+      var folded = [];
+      return {
+        apply: function () {
+          while (folded.length < ids.length) {
+            var id = ids[folded.length];
+            var el = movableFor(id);
+            if (!el || el === moreDd || el.parentNode === moreMenu) { folded.push({ el: null, marker: null }); continue; }
+            var m = markerFor(id, el);
+            // A dropdown moved while open would strand its fixed-positioned menu.
+            if (el.classList) el.classList.remove('open');
+            moreDd.style.display = '';
+            moreMenu.appendChild(el);
+            folded.push({ el: el, marker: m });
+            return true;
+          }
+          return false;
+        },
+        restore: function () {
+          for (var i = folded.length - 1; i >= 0; i--) {
+            var it = folded[i];
+            if (it.el && it.marker && it.marker.parentNode) it.marker.parentNode.insertBefore(it.el, it.marker);
+          }
+          folded = [];
+        },
+      };
+    }
+    // Stage 3: the search input compacts behind a 🔍 icon; the REAL input node
+    // MOVES into the floating panel (fixed-positioned by the same helper as
+    // every dropdown menu), so its input listener keeps driving state.query.
+    function searchStage() {
+      var on = false;
+      return {
+        apply: function () {
+          if (on) return false;
+          var inp = document.getElementById('search');
+          var ddw = document.getElementById('searchDd');
+          var menu = document.getElementById('searchMenu');
+          if (!inp || !ddw || !menu) return false;
+          menu.appendChild(inp);
+          ddw.style.display = '';
+          on = true;
+          return true;
+        },
+        restore: function () {
+          if (!on) return;
+          on = false;
+          var inp = document.getElementById('search');
+          var ddw = document.getElementById('searchDd');
+          if (inp && ddw && ddw.parentNode) ddw.parentNode.insertBefore(inp, ddw);
+          if (ddw) { ddw.style.display = 'none'; if (ddw.classList) ddw.classList.remove('open'); }
+        },
+      };
+    }
+    // Stage 4: the mode tabs collapse into ONE dropdown labelled with the
+    // current mode. The REAL tab buttons move into its menu (listeners and
+    // active styling survive); updateHeaderSegs keeps the trigger label in
+    // sync when the mode changes while compact.
+    function modeStage() {
+      var moved = [];
+      return {
+        apply: function () {
+          if (moved.length) return false;
+          var seg = document.getElementById('modeSeg');
+          var ddw = document.getElementById('modeDd');
+          var menu = document.getElementById('modeMenu');
+          if (!seg || !ddw || !menu) return false;
+          var btns = seg.querySelectorAll('button');
+          if (!btns.length) return false;
+          for (var i = 0; i < btns.length; i++) moved.push(btns[i]);
+          for (var j = 0; j < moved.length; j++) menu.appendChild(moved[j]);
+          seg.style.display = 'none';
+          ddw.style.display = '';
+          updateModeBtn();
+          return true;
+        },
+        restore: function () {
+          if (!moved.length) return;
+          var seg = document.getElementById('modeSeg');
+          var ddw = document.getElementById('modeDd');
+          for (var i = 0; i < moved.length; i++) seg.appendChild(moved[i]);
+          moved = [];
+          seg.style.display = '';
+          if (ddw) { ddw.style.display = 'none'; if (ddw.classList) ddw.classList.remove('open'); }
+        },
+      };
+    }
+    // Stage 5: crumb compaction is a render-mode toggle consulted by
+    // renderCrumbs itself — see crumbsCompact there. Never reparenting.
+    function crumbStage() {
+      return {
+        apply: function () {
+          if (crumbsCompact) return false;
+          crumbsCompact = true;
+          renderCrumbs();
+          return true;
+        },
+        restore: function () {
+          if (!crumbsCompact) return;
+          crumbsCompact = false;
+          renderCrumbs();
+        },
+      };
+    }
+    // Ordered compaction stages: applied first-to-last only while the header
+    // overflows, restored last-to-first when space returns.
+    var STAGES = [
+      foldStage(COLLAPSE),        // 1: trailing buttons → "⋯" menu
+      foldStage(['settingsBtn']), // 2: the View dropdown folds in too
+      searchStage(),              // 3: search input → 🔍 + floating panel
+      modeStage(),                // 4: mode tabs → current-mode dropdown
+      crumbStage(),               // 5: ancestor crumbs → "…" dropdown
+    ];
     // Signed fit measure in px: positive = overflowing, negative = headroom.
     // The header is a flex row whose ONLY flex:1 child is the .spacer, so the
     // spacer's rendered width IS the free space -- it grows to absorb all slack
@@ -3194,33 +3432,54 @@ var MODEL = __MODEL_JSON__;
       var slack = spacer ? spacer.getBoundingClientRect().width : 0;
       return (hdr.scrollWidth - hdr.clientWidth) - slack;
     }
+    var inReflow = false;
     function reflow() {
       // Not laid out (hidden tab, non-browser DOM) — measuring would misfire.
       var box = hdr.getBoundingClientRect();
       if (!box || box.width <= 0) return;
-      // Restore everything, then collapse until the row fits (idempotent).
-      for (var i = collapsed.length - 1; i >= 0; i--) {
-        var it = collapsed[i];
-        if (it.el && it.marker && it.marker.parentNode) it.marker.parentNode.insertBefore(it.el, it.marker);
+      inReflow = true;
+      try {
+        // The floating search panel must survive a reflow cycle: restore-all
+        // would close it (and reparenting blurs the input), so capture its
+        // open/focus state up front and reinstate it after the stage walk.
+        var ddw = document.getElementById('searchDd');
+        var inp = document.getElementById('search');
+        var searchOpen = !!(ddw && String(ddw.className || '').indexOf('open') >= 0);
+        var searchFocus = false;
+        try {
+          var ae = (typeof ROOT !== 'undefined' && ROOT ? ROOT : document).activeElement;
+          searchFocus = !!(ae && inp && ae === inp);
+        } catch (e) { /* stubbed DOM */ }
+        // Restore every stage in REVERSE order, then re-apply progressively
+        // while the row still overflows (idempotent).
+        for (var i = STAGES.length - 1; i >= 0; i--) STAGES[i].restore();
+        moreDd.style.display = 'none';
+        hdr.scrollLeft = 0;
+        // Demand a few px of headroom, not a bare fit — the marginal-fit widths
+        // are exactly where the phantom scrollbar appeared. Every apply()
+        // changes the very widths being measured, but restore-all + a strictly
+        // forward stage walk make the outcome a pure function of the current
+        // width, and reflow never reschedules itself (renderCrumbs' nudge is
+        // suppressed via inReflow, and #hdr's own box never changes here), so
+        // boundary widths settle in ONE pass instead of oscillating.
+        var si = 0;
+        var guard = 0;
+        var bound = COLLAPSE.length + STAGES.length + 8;
+        while (overflowPx() > -8 && si < STAGES.length && guard < bound) {
+          guard++;
+          if (!STAGES[si].apply()) si++;
+        }
+        if (searchOpen || searchFocus) {
+          var compactNow = ddw && ddw.style && ddw.style.display !== 'none';
+          if (compactNow && searchOpen) {
+            if (ddw.classList) ddw.classList.add('open');
+            positionDropdownMenu(ddw, document.getElementById('searchBtn'));
+          }
+          if (searchFocus && inp && inp.focus) inp.focus();
+        }
+      } finally {
+        inReflow = false;
       }
-      collapsed = [];
-      moreDd.style.display = 'none';
-      hdr.scrollLeft = 0;
-      var guard = 0;
-      // Demand a few px of headroom, not a bare fit — the marginal-fit widths
-      // are exactly where the phantom scrollbar appeared.
-      while (overflowPx() > -8 && guard < COLLAPSE.length) {
-        var id = COLLAPSE[guard++];
-        var el = movableFor(id);
-        if (!el || el === moreDd || el.parentNode === moreMenu) continue;
-        var m = markerFor(id, el);
-        // A dropdown moved while open would strand its fixed-positioned menu.
-        if (el.classList) el.classList.remove('open');
-        moreDd.style.display = '';
-        moreMenu.appendChild(el);
-        collapsed.push({ el: el, marker: m });
-      }
-      if (collapsed.length === 0) moreDd.style.display = 'none';
     }
     var raf = null;
     var defer = window.requestAnimationFrame
@@ -3230,6 +3489,9 @@ var MODEL = __MODEL_JSON__;
       if (raf !== null) return;
       raf = defer(function () { raf = null; reflow(); });
     }
+    // Crumb re-renders change the header's content width without resizing #hdr
+    // itself — renderCrumbs nudges a reflow through this hook (no-op mid-reflow).
+    headerReflowHook = function () { if (!inReflow) schedule(); };
     if (typeof ResizeObserver !== 'undefined') {
       new ResizeObserver(schedule).observe(hdr);
     } else if (window.addEventListener) {

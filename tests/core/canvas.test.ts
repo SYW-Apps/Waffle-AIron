@@ -51,7 +51,7 @@ interface CyEle {
   classes?: string;
   position?: { x: number; y: number };
 }
-function runEngine(model: unknown, opts: { internals?: boolean } = {}): CyEle[] {
+function runEngine(model: unknown, opts: { internals?: boolean; dom?: Map<string, any> } = {}): CyEle[] {
   const makeElement = () => ({
     addEventListener() {}, removeEventListener() {},
     querySelectorAll() { return []; }, querySelector() { return null; },
@@ -62,7 +62,9 @@ function runEngine(model: unknown, opts: { internals?: boolean } = {}): CyEle[] 
     getBoundingClientRect() { return { width: 0, height: 0 }; },
     innerHTML: '', textContent: '', checked: false, value: '', title: '', className: '',
   });
-  const els = new Map<string, ReturnType<typeof makeElement>>();
+  // opts.dom lets a test hand in the element map to inspect what the engine
+  // wrote into specific stub elements (e.g. #crumbs innerHTML) after the run.
+  const els: Map<string, ReturnType<typeof makeElement>> = opts.dom ?? new Map();
   const documentStub = {
     getElementById(id: string) { if (!els.has(id)) els.set(id, makeElement()); return els.get(id); },
     createElement() { return makeElement(); },
@@ -372,6 +374,63 @@ describe('interactive canvas generation', () => {
     // cutting straight through the nodes stacked between source and target.
     expect(html).toContain("'taxi-direction': 'downward'");
   });
+
+  // The compaction machinery only runs under a real browser layout (the
+  // overflow IIFE bails without `window`), so — like the deep-expansion suite
+  // above — these assert over the SHIPPED ENGINE SOURCE: the staged structure,
+  // its order, and the render-mode crumb hook are contract, not decoration.
+  it('header compaction: ordered stages (buttons → View → search → tabs → crumbs) with reverse restore', () => {
+    buildFixture();
+    const html = renderCanvasHtml(buildCanvasModel());
+
+    // The reflow loop walks an ordered STAGES array; the order is load-bearing.
+    // Stage definitions precede the array, so searching FROM the array start
+    // finds the usage sites in declaration order.
+    const stagesAt = html.indexOf('var STAGES = [');
+    expect(stagesAt).toBeGreaterThan(-1);
+    const order = [
+      'foldStage(COLLAPSE)',        // 1: trailing buttons
+      "foldStage(['settingsBtn'])", // 2: the View dropdown
+      'searchStage()',              // 3: search → icon + floating panel
+      'modeStage()',                // 4: mode tabs → one dropdown
+      'crumbStage()',               // 5: ancestor crumbs → "…" dropdown
+    ].map(marker => html.indexOf(marker, stagesAt));
+    expect(order.every(i => i > stagesAt)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+
+    // Reverse-order restore, the -8 hysteresis, and a bounded stage walk.
+    expect(html).toContain('for (var i = STAGES.length - 1; i >= 0; i--) STAGES[i].restore();');
+    expect(html).toContain('overflowPx() > -8');
+    expect(html).toContain('guard < bound');
+    // Marker-restore mechanics still back stages 1-2.
+    expect(html).toContain('function movableFor(id)');
+    expect(html).toContain('function markerFor(id, el)');
+  });
+
+  it('header compaction: crumbs compact as a render mode; search/mode stand-ins move the REAL nodes', () => {
+    buildFixture();
+    const html = renderCanvasHtml(buildCanvasModel());
+
+    // Stage 5 = a flag consulted by renderCrumbs itself (marker reparenting
+    // would not survive its innerHTML rebuilds on navigation), and every real
+    // crumb re-render nudges a reflow (crumb width can't resize #hdr).
+    expect(html).toContain('var crumbsCompact = false;');
+    expect(html).toContain('if (crumbsCompact && path.length > 1)');
+    expect(html).toContain("wireDropdown('crumbDd', 'crumbMoreBtn');");
+    expect(html).toContain('if (headerReflowHook) headerReflowHook();');
+
+    // Stage 3: hidden dropdown skeleton, the REAL input MOVED (not cloned)
+    // into the floating panel, and the active-query badge on the icon.
+    expect(html).toContain('id="searchDd" style="display:none"');
+    expect(html).toContain('menu.appendChild(inp);');
+    expect(html).toContain("classList[state.query ? 'add' : 'remove']('hasq')");
+
+    // Stage 4: hidden mode dropdown; updateHeaderSegs follows the tab buttons
+    // into the menu and re-labels the compact trigger with the current mode.
+    expect(html).toContain('id="modeDd" style="display:none"');
+    expect(html).toContain('function updateModeBtn()');
+    expect(html).toContain("var mm = document.getElementById('modeMenu');");
+  });
 });
 
 describe('unit deep-expansion (executed engine)', () => {
@@ -448,5 +507,23 @@ describe('unit deep-expansion (executed engine)', () => {
     const org = eles.find(e => e.data.id === 's~unit:org');
     expect(org!.position).toBeDefined();
     expect(org!.data.label).toContain('Org');
+  });
+});
+
+describe('staged header compaction (executed engine)', () => {
+  // What executes here: the WHOLE new load path (compact-dropdown wiring, the
+  // search badge init, the reworked renderCrumbs) runs under the stubbed DOM
+  // without throwing, and the boot render takes the FULL-trail branch — the
+  // compaction stages themselves need real layout measurement (`window` +
+  // ResizeObserver), which the harness deliberately does not provide, so
+  // apply()/restore() are covered by the source-level assertions above.
+  it('boots with compaction OFF: renderCrumbs writes the full trail, no "…" trigger', () => {
+    const dom = new Map<string, any>();
+    runEngine(deepModel(), { dom });
+    const crumbs = dom.get('crumbs');
+    expect(crumbs).toBeDefined();
+    expect(String(crumbs.innerHTML)).toContain('data-ck="system"');
+    expect(String(crumbs.innerHTML)).toContain('DeepSys');
+    expect(String(crumbs.innerHTML)).not.toContain('crumbMoreBtn');
   });
 });
