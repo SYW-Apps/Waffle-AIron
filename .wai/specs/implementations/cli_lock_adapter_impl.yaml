@@ -28,6 +28,6 @@ methods:
         type: return
         outcome: LockRecord
     symbol: runLock
-status: draft
+status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-07-24T18:05:34.697Z'
+updatedAt: '2026-07-24T20:48:49.481Z'

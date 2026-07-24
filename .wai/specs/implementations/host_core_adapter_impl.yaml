@@ -100,6 +100,14 @@ methods:
       Return the ids of wairon's built-in architectural profiles by reading the core rules
       registry's built-in profile set (BUILTIN_PROFILES). A pure, side-effect-free read of a bundled
       constant; never fails.
+  - name: resolveContainedProjectPath
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve and assert the projectPath within the root via the core containment guard
+          (assertContainedProjectPath — a pure path utility of the core module, not a portal
+          workflow), returning the contained absolute child root
+        type: local
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-07-22T19:14:42.719Z'
+updatedAt: '2026-07-24T20:50:42.698Z'

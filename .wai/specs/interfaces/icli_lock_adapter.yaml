@@ -17,6 +17,6 @@ methods:
         type: string
         description: Optional subsystem id narrowing the lock scope (matches the CLI --subsystem flag).
         optional: true
-status: draft
+status: complete
 createdAt: '2026-07-24T18:05:14.406Z'
-updatedAt: '2026-07-24T18:05:14.411Z'
+updatedAt: '2026-07-24T20:48:49.319Z'

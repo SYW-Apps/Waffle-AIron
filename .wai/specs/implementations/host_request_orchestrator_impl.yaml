@@ -65,11 +65,12 @@ methods:
         type: local
       - stepNumber: 6
         description: >-
-          Resolve the authorized project's isolated root (honoring the selector only within the
-          token's projects narrowing)
+          Resolve the full authorized binding through the project repository — the root to bind (the
+          mounted chained-child root for a subproject-qualified narrowing/selector), the TOP project
+          id (permission + audit anchor), and the bound mount chain; cross-project access rejected
         type: call
         targetComponent: project_registry
-        targetMethod: resolveRoot
+        targetMethod: resolveBinding
       - stepNumber: 7
         description: If no authorized root resolved, reject cross-project access
         type: branch
@@ -368,4 +369,4 @@ methods:
     symbol: handleMcpRequest
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-07-16T15:36:07.839Z'
+updatedAt: '2026-07-24T20:50:48.936Z'

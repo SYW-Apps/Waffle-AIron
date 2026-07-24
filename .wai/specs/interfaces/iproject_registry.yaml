@@ -7,14 +7,13 @@ component: project_registry
 methods:
   - name: resolveRoot
     description: >-
-      Resolve the isolated root path of the authorized project, honoring the optional selector only
-      within the principal's authorized set; reject cross-project access. A subproject-qualified
-      selector or narrowing entry ('projectId::subsystemId', nested mounts composing) resolves to
-      the CHAINED CHILD's root INSIDE the project's isolated tree — the mount is looked up on the
-      project's subsystem specs (an unknown or non-chained subsystem id is rejected, never silently
-      widened to the project root) and the child path is containment-checked against the project
-      root. A principal narrowed to a subproject can never bind wider than its qualifier; the
-      selector can never widen scope.
+      Resolve the isolated root path of the authorized project (or mounted chained subproject) — the
+      rootPath projection of resolveBinding, kept for read-plane callers that need only the root.
+      Honors the optional selector only within the principal's authorized set; a
+      subproject-qualified selector or narrowing entry ('projectId::subsystemId', nested mounts
+      composing) resolves to the CHAINED CHILD's root INSIDE the project's isolated tree; unknown or
+      non-chained mounts are rejected, never silently widened to the project root; a qualified
+      principal can never bind wider than its qualifier; the selector can never widen scope.
     signature: 'resolveRoot(principal: Principal, selector: string): string'
     returns: string
   - name: create
@@ -29,6 +28,12 @@ methods:
     description: Deregister a project and remove its isolated tree.
     signature: 'remove(id: string): void'
     returns: void
+  - name: resolveBinding
+    description: >-
+      Resolve the full authorized binding (root to bind + TOP project id + bound subproject chain) —
+      the data-plane request seam; see the index's authorization matrix. Pure 1:1 forward.
+    signature: 'resolveBinding(principal: Principal, selector: string): ProjectBinding | null'
+    returns: ProjectBinding | null
 status: complete
 createdAt: '2026-07-04T12:49:59.044Z'
-updatedAt: '2026-07-24T18:20:50.259Z'
+updatedAt: '2026-07-24T20:50:25.515Z'

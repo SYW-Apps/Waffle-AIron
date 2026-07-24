@@ -12,6 +12,7 @@ You own and decide on everything within:
 .wai/specs/subsystems/sdd_cli.yaml
 .wai/specs/components/cli_core_adapter.yaml
 .wai/specs/components/cli_host_adapter.yaml
+.wai/specs/components/cli_lock_adapter.yaml
 .wai/specs/components/cli_packs_adapter.yaml
 .wai/specs/components/cli_patterns_adapter.yaml
 .wai/specs/components/cli_producer_adapter.yaml
@@ -23,6 +24,7 @@ You own and decide on everything within:
 .wai/specs/components/cli_variants_adapter.yaml
 src/commands/subsystem.ts
 src/commands/host.ts
+src/commands/lock.ts
 src/commands/packs.ts
 src/commands/patterns.ts
 src/commands/produce.ts

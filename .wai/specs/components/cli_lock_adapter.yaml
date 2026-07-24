@@ -11,6 +11,6 @@ componentType: Adapter
 owns: []
 dependsOn:
   - core_portal
-status: draft
+status: complete
 createdAt: '2026-07-24T18:05:06.885Z'
-updatedAt: '2026-07-24T18:05:06.888Z'
+updatedAt: '2026-07-24T20:48:49.146Z'
