@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { resolveSharedView, downloadArtifact } from './shareaccess.js';
 import { swaggerUiPage } from './swagger.js';
+import { safeFilenamePart } from '../utils/filenames.js';
 import type { HostConfig, ShareLink, ShareRequestMeta } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -69,12 +70,6 @@ function sharedOpenApiIndexPage(index: SharedOpenApiIndex): string {
 }
 
 /** Neither a portalId nor a request's artifact kind is filename-safe by
- *  construction — keep only safe characters so nothing can escape the attachment
- *  name into the header. */
-function safeFilenamePart(value: string): string {
-  return value.replace(/[^a-zA-Z0-9._-]/g, '-');
-}
-
 /** The attachment name for a served artifact. A SELECTED per-portal API carries
  *  its portal id so several downloads never collide, and the multi-API index is
  *  named for what it is rather than posing as one of the documents. */

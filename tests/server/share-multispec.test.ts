@@ -202,7 +202,11 @@ describe('multi-portal OpenAPI across the hosted share + artifact path (sdd_host
     // empty-object placeholder is gone: a share must never render Swagger UI
     // over an empty spec.
     expect(snapshot.openapi).toBeUndefined();
-    expect(JSON.stringify(snapshot)).not.toContain('"openapi": "{}"');
+    // The old placeholder was the literal string '{}' — assert on the actual
+    // serialized form (no space after the colon) so this catches a regression.
+    expect(JSON.stringify(snapshot)).not.toContain('"openapi":"{}"');
+    // ...and directly: neither field may hold the empty-object placeholder.
+    expect(snapshot.openapiSet?.some((s) => s.document === '{}')).toBeFalsy();
   });
 
   it('a project with no requested openapi artifact captures neither field', () => {

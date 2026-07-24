@@ -37,6 +37,7 @@ import {
 import { resolveVisibility, isVisible, audienceDistance, audienceCovers } from './visibility.js';
 import { hostSurfaces } from './adapters.js';
 import * as yamlLib from 'js-yaml';
+import { safeFilenamePart } from '../utils/filenames.js';
 import type {
   AuditEvent,
   AuditRetentionPolicy,
@@ -1017,14 +1018,14 @@ export function exportProjectSurface(
       return {
         body: hit.document,
         contentType: 'application/json',
-        filename: `${projectId}-${portalId}-surface.openapi.json`,
+        filename: `${safeFilenamePart(projectId)}-${safeFilenamePart(portalId)}-surface.openapi.json`,
       };
     }
     if (specs.length === 1) {
       return {
         body: specs[0].document,
         contentType: 'application/json',
-        filename: `${projectId}-surface.openapi.json`,
+        filename: `${safeFilenamePart(projectId)}-surface.openapi.json`,
       };
     }
     // Several published portals are several APIs: hand back the INDEX so the
@@ -1038,13 +1039,13 @@ export function exportProjectSurface(
         2,
       ),
       contentType: 'application/json',
-      filename: `${projectId}-surface.openapi.index.json`,
+      filename: `${safeFilenamePart(projectId)}-surface.openapi.index.json`,
     };
   }
   return {
     body: yamlLib.dump(result.snapshot),
     contentType: 'application/yaml',
-    filename: `${projectId}-surface.yaml`,
+    filename: `${safeFilenamePart(projectId)}-surface.yaml`,
   };
 }
 

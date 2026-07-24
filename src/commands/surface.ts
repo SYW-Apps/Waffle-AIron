@@ -43,6 +43,9 @@ export async function runSurface(action: string, options: SurfaceOptions = {}): 
       if (format !== 'native' && format !== 'openapi') {
         throw new WaironError(`Unknown format "${format}" (supported: native, openapi).`);
       }
+      if (options.portal && format !== 'openapi') {
+        throw new WaironError('`--portal` selects one OpenAPI document and only applies to `--format openapi`.');
+      }
       const result = exportSurface(audience, format, options.out, options.portal);
       logger.success(
         `Projected surface of "${result.snapshot.projectName}": ${result.snapshot.interfaces.length} interface(s), ${result.snapshot.types.length} type(s) at audience ≥ ${audience}.`,

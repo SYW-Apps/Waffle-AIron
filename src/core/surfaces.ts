@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getProjectRoot } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
+import { safeFilenamePart } from '../utils/filenames.js';
 import {
   SurfaceSnapshot,
   SurfaceSnapshotSchema,
@@ -248,11 +249,14 @@ function selectPortalSpec(renderedSet: NamedOpenApiSpec[], portalId: string): Na
 }
 
 /** The per-portal output path: the out path's stem suffixed with the portal id
- *  (surface.json + "gateway" -> surface.gateway.json). */
+ *  (surface.json + "gateway" -> surface.gateway.json). The portal id is a
+ *  SpecIdSchema component id (`[a-z0-9-_]`), but it is sanitized before it joins
+ *  the path so no future caller feeding an imported/unvalidated id can escape
+ *  the output directory. */
 function perPortalPath(resolvedOut: string, portalId: string): string {
   const ext = path.extname(resolvedOut);
   const stem = ext ? resolvedOut.slice(0, -ext.length) : resolvedOut;
-  return `${stem}.${portalId}${ext}`;
+  return `${stem}.${safeFilenamePart(portalId)}${ext}`;
 }
 
 /** Write an export to disk, returning EVERY path written: the snapshot YAML for

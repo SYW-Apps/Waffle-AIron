@@ -179,6 +179,11 @@ describe('wairon surface export — multi-portal OpenAPI', () => {
       .rejects.toThrow(/gateway-portal.*admin-portal/s);
   });
 
+  it('refuses --portal on a non-openapi export instead of silently ignoring it', async () => {
+    await expect(runSurface('export', { format: 'native', portal: 'gateway-portal' }))
+      .rejects.toThrow(/--portal.*openapi/s);
+  });
+
   it('the native format still prints the interface listing', async () => {
     await runSurface('export', {});
 
