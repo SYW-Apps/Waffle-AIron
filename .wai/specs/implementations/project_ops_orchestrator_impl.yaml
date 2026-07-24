@@ -260,7 +260,14 @@ methods:
         type: call
         targetComponent: project_policy_orchestrator
         targetMethod: setProjectType
+  - name: listProjectProfiles
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator with the caller's credential
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: listProjectProfiles
 detail: calls-only
 status: complete
 createdAt: '2026-07-16T15:31:04.418Z'
-updatedAt: '2026-07-23T11:24:18.120Z'
+updatedAt: '2026-07-24T23:39:18.636Z'

@@ -40,6 +40,24 @@ fields:
       that was never installed globally). Surfaced so evaluate and reconcile report honestly instead
       of silently skipping.
     optional: false
+  - name: governingProfileId
+    type: string
+    description: >-
+      The project's effective projectType at evaluation time — the architectural profile actually
+      governing its components. Absent for an init-request evaluation (no project exists yet).
+      Reported so a selection recorded but never applied is visible: profile compliance is about the
+      recorded selection, while this is what the validator really enforces.
+    optional: true
+  - name: unappliedProfileIds
+    type: string[]
+    description: >-
+      Profile ids present in the project's recorded profileSelection that are not the governing
+      projectType. Empty for an init-request evaluation. A non-empty list is the honest report of
+      selection-versus-reality drift: reconciliation applies the first resolvable one when instance
+      policy requires a profile that is not governing, or when the recorded projectType resolves to
+      no loaded profile — a deliberate, resolvable, policy-compliant choice is reported here and
+      left alone.
+    optional: false
 methods: []
 createdAt: '2026-07-08T21:58:56.094Z'
-updatedAt: '2026-07-22T17:27:44.890Z'
+updatedAt: '2026-07-24T23:30:21.280Z'

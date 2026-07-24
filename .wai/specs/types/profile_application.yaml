@@ -1,0 +1,33 @@
+kind: value-object
+id: profile_application
+name: ProfileApplication
+description: >-
+  The outcome of making an architectural profile actually able to GOVERN a hosted project: the
+  profile id, where it comes from, and the pack that had to be adopted into the project (if any) for
+  the profile to resolve at validation time. Returned by the pack registry's
+  ensure-profile-installed seam, which throws rather than returning a result for a profile id the
+  instance cannot resolve at all — a projectType naming an unresolvable profile silently disables
+  its whole doctrine, so it is never written.
+fields:
+  - name: profileId
+    type: string
+    description: >-
+      The profile id that is now resolvable for the project — a built-in profile, a project kind, or
+      a pack-contributed profile id.
+    optional: false
+  - name: source
+    type: string
+    description: >-
+      Where the profile comes from: "builtin" for a wairon built-in profile or project kind,
+      otherwise the canonical name of the pack contributing it.
+    optional: false
+  - name: adoptedPackName
+    type: string
+    description: >-
+      Set only when the ensure step had to vendor a server-global pack into the project (registering
+      it in extensions.packs) to make the profile resolvable — the name of that adopted pack, so
+      callers can report the side effect instead of hiding it.
+    optional: true
+methods: []
+createdAt: '2026-07-24T23:29:57.106Z'
+updatedAt: '2026-07-24T23:29:57.123Z'

@@ -3,8 +3,11 @@ id: project_config_view
 name: ProjectConfigView
 description: >-
   The project-level architectural configuration surfaced to the web UI for a single hosted project:
-  its projectType (the project-level architectural profile recorded in project.yaml) and whether the
-  project currently holds a lock. Read via getProjectConfig and returned by setProjectType.
+  the projectType GOVERNING the project (the project-level architectural profile recorded in
+  project.yaml), whether the project currently holds a lock, and — so the UI can tell whether that
+  profile is actually in force — where the profile comes from, whether it resolves at all, any pack
+  adopted to make it resolve, and the parts of the project it does not govern. Read via
+  getProjectConfig and returned by setProjectType.
 fields:
   - name: projectType
     type: string
@@ -16,6 +19,45 @@ fields:
     type: boolean
     description: True when the project currently has a lock record (a current lock exists).
     optional: false
+  - name: profileSource
+    type: string
+    description: >-
+      Where the governing projectType comes from: "builtin" for a built-in profile or project kind,
+      otherwise the canonical name of the registered pack contributing it. Absent when the value
+      resolves to no loaded profile.
+    optional: true
+  - name: profileResolvable
+    type: boolean
+    description: >-
+      Whether the recorded projectType actually resolves to a governing profile (a built-in, a
+      project kind, or a profile contributed by a pack registered in this project). False means the
+      project's doctrine — stereotype fencing and the profile's rules block — is NOT being applied
+      even though a profile name is recorded, which the UI surfaces instead of leaving it silent. A
+      write through setProjectType always leaves this true; false is reachable via a hand-edited or
+      legacy project.yaml, or a pack that was removed afterwards.
+    optional: false
+  - name: adoptedPackName
+    type: string
+    description: >-
+      Set only on the view returned by a setProjectType call that had to vendor a server-global pack
+      into the project to make the selected profile resolvable — the name of that adopted pack.
+    optional: true
+  - name: unappliedProfileIds
+    type: string[]
+    description: >-
+      Profile ids recorded in the project's profileSelection that are NOT the governing projectType.
+      projectType takes exactly one profile, so a multi-id selection leaves a remainder: it is
+      reported here rather than silently dropped, and belongs on individual subsystems
+      (subsystem.profile) if it is meant to apply at all.
+    optional: true
+  - name: overridingSubsystemIds
+    type: string[]
+    description: >-
+      Ids of the project's subsystems that declare a profile of their own, which therefore takes
+      precedence over the project-level profile for their components. Reported so "the project
+      profile governs the whole project" is a claim the UI can qualify honestly rather than an
+      assumption.
+    optional: true
 methods: []
 createdAt: '2026-07-23T11:23:30.795Z'
-updatedAt: '2026-07-23T11:23:30.813Z'
+updatedAt: '2026-07-24T23:30:17.264Z'
