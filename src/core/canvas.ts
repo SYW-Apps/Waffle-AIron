@@ -53,6 +53,12 @@ export interface CanvasModel {
     targetLanguage?: string;
     status?: string;
     trustedLinks: { subsystem: string; reason: string }[];
+    /** Opt-in deep expansion: with Internals on, this subsystem's box renders
+     *  its WHOLE subtree (nested boundary boxes + leaf tiles + direct relation
+     *  lines) instead of one layer. Never set by buildCanvasModel — the hosted
+     *  environment adapter stamps it on unit-derived frames. Absent ⇒ the
+     *  engine behaves exactly as before. */
+    deepInternals?: boolean;
   }[];
   components: {
     id: string;
@@ -1182,13 +1188,300 @@ var MODEL = __MODEL_JSON__;
   var BOX_W = 200, BOX_H = 56, SUBBOX_W = 230, SUBBOX_H = 84, GAP_X = 110, GAP_Y = 34;
   var INNER_W = 130, INNER_H = 36, INNER_GAPX = 26, INNER_GAPY = 12, HEAD_H = 34, PADI = 14;
 
+  // ---- deep expansion (opt-in via subsystem.deepInternals) -------------------
+  // When Internals is on and a subsystem record carries deepInternals:true, its
+  // box renders its WHOLE subtree instead of one layer: deep-flagged child
+  // subsystems become NESTED boundary boxes (recursing, defensively capped),
+  // every other child renders as a fixed leaf tile that is never expanded
+  // further. Sizes are computed bottom-up (a nested container tile takes its
+  // recursive {w,h}); positions are emitted top-down by accumulating parent
+  // top-left offsets. Relations between concrete visible endpoints are drawn
+  // as ONE direct line each by buildDeepContext — crossing nested boundaries
+  // on purpose (the full org overview of project relations); only relations
+  // that cannot resolve to two concrete endpoints keep today's port machinery,
+  // and ONLY at the outermost box. Without the flag this whole path is inert
+  // and the classic one-layer innerLayout runs unchanged.
+  var DEEP_MAX_DEPTH = 6;
+  function isDeepId(subId) {
+    var s = subById[subId];
+    return !!(s && s.deepInternals);
+  }
+  // The DEEPEST visible tile representing compId inside the deep-expanded box
+  // rooted at rootSubId: descend deep-flagged containers (the same expansion
+  // rule as deepContainerLayout) until the containing child is a leaf tile.
+  // Returns the child entry { kind, id } (its node id is IN(kind, id)).
+  function deepLeafFor(compId, rootSubId) {
+    var subId = rootSubId, depth = 1;
+    for (;;) {
+      var child = childOfScopeContaining(compId, { kind: 'subsystem', id: subId });
+      if (!child) return null;
+      if (child.kind === 'subsystem' && isDeepId(child.id) && depth < DEEP_MAX_DEPTH) {
+        subId = child.id; depth += 1;
+        continue;
+      }
+      return child;
+    }
+  }
+  // One deep container's DIRECT children, placed with PER-TILE sizes (nested
+  // containers take their recursive size; leaves stay INNER_W x INNER_H). The
+  // placement mirrors innerLayout's strategy switch, generalised to variable
+  // tile sizes. Tiles are centres relative to THIS container's top-left corner
+  // (content sits right of PADI, below the HEAD_H label band); nested tiles
+  // are relative to their own container, so emission accumulates offsets.
+  function deepContainerLayout(subId, depth) {
+    var kids = childrenOf({ kind: 'subsystem', id: subId });
+    if (!kids.length) {
+      // An EMPTY deep subsystem still shows as a (min-size) boundary box.
+      return { tiles: [], w: INNER_W + 2 * PADI, h: HEAD_H + PADI };
+    }
+    var scope = { kind: 'subsystem', id: subId };
+    var kidKey = function (k) { return k.kind + ':' + k.id; };
+    var size = {};
+    kids.forEach(function (k) {
+      if (k.kind === 'subsystem' && isDeepId(k.id) && depth < DEEP_MAX_DEPTH) {
+        var nested = deepContainerLayout(k.id, depth + 1);
+        size[kidKey(k)] = { w: nested.w, h: nested.h, sub: nested };
+      } else {
+        size[kidKey(k)] = { w: INNER_W, h: INNER_H, sub: null };
+      }
+    });
+    // Intra-container edges lifted to DIRECT children — for LAYOUT ONLY (the
+    // drawn lines come from buildDeepContext's direct pass, never per level).
+    var intra = {};
+    MODEL.edges.forEach(function (edge) {
+      var a = childOfScopeContaining(edge.from, scope);
+      var b = childOfScopeContaining(edge.to, scope);
+      if (!a || !b) return;
+      var ak = a.kind + ':' + a.id, bk = b.kind + ':' + b.id;
+      if (!size[ak] || !size[bk] || ak === bk) return;
+      intra[ak + '=>' + bk] = 1;
+    });
+    var layer = {};
+    function calc(k, stack) {
+      var key = kidKey(k);
+      if (layer[key] !== undefined) return layer[key];
+      if (stack[key]) return 0;
+      stack[key] = 1;
+      var l = 0;
+      if (k.kind === 'component') {
+        var c = compById[k.id];
+        if (c && (c.componentType === 'Portal' || c.componentType === 'Observer')) { layer[key] = 0; delete stack[key]; return 0; }
+      }
+      Object.keys(intra).forEach(function (ek) {
+        var cut = ek.indexOf('=>');
+        if (ek.slice(cut + 2) !== key) return;
+        var srcKid = kids.filter(function (x) { return kidKey(x) === ek.slice(0, cut); })[0];
+        if (srcKid) l = Math.max(l, calc(srcKid, stack) + 1);
+      });
+      delete stack[key];
+      layer[key] = l;
+      return l;
+    }
+    kids.forEach(function (k) { calc(k, {}); });
+    var tiles = [], contentW = 0, contentH = 0;
+    if (state.layout === 'grid') {
+      // Row packing by ACTUAL tile size (the fixed per-column grid assumed
+      // uniform tiles); the target row width follows the tile count, widened
+      // to at least the widest single tile.
+      var gsorted = kids.slice().sort(function (a, b) { return a.id < b.id ? -1 : 1; });
+      var target = Math.max(1, Math.ceil(Math.sqrt(kids.length))) * (INNER_W + INNER_GAPX);
+      kids.forEach(function (k) { var s0 = size[kidKey(k)]; if (s0.w > target) target = s0.w; });
+      var gx = 0, gy = 0, rowH = 0;
+      gsorted.forEach(function (k) {
+        var s = size[kidKey(k)];
+        if (gx > 0 && gx + s.w > target) { gx = 0; gy += rowH + INNER_GAPY; rowH = 0; }
+        tiles.push({ kid: k, x: gx + s.w / 2, y: gy + s.h / 2, w: s.w, h: s.h, sub: s.sub });
+        gx += s.w + INNER_GAPX;
+        if (s.h > rowH) rowH = s.h;
+        if (gx - INNER_GAPX > contentW) contentW = gx - INNER_GAPX;
+        if (gy + rowH > contentH) contentH = gy + rowH;
+      });
+    } else if (state.layout === 'concentric' || state.layout === 'force') {
+      var ideg = {};
+      kids.forEach(function (k) { ideg[kidKey(k)] = 0; });
+      Object.keys(intra).forEach(function (ek) {
+        var cut2 = ek.indexOf('=>');
+        var sk = ek.slice(0, cut2), tk = ek.slice(cut2 + 2);
+        if (ideg[sk] !== undefined) ideg[sk]++;
+        if (ideg[tk] !== undefined) ideg[tk]++;
+      });
+      var rel = concentricPositions(
+        kids.map(kidKey),
+        function (key) { return ideg[key] || 0; },
+        function (key) { return { w: size[key].w, h: size[key].h }; }
+      );
+      // Normalise by the tiles' BOUNDING BOX (not just the centres) so a wide
+      // nested container on the rim still clears the container's left/top pad.
+      var minL = Infinity, minT = Infinity;
+      kids.forEach(function (k) {
+        var s1 = size[kidKey(k)], p1 = rel[kidKey(k)] || { x: 0, y: 0 };
+        if (p1.x - s1.w / 2 < minL) minL = p1.x - s1.w / 2;
+        if (p1.y - s1.h / 2 < minT) minT = p1.y - s1.h / 2;
+      });
+      if (minL === Infinity) { minL = 0; minT = 0; }
+      kids.forEach(function (k) {
+        var s2 = size[kidKey(k)], p2 = rel[kidKey(k)] || { x: 0, y: 0 };
+        var cx = p2.x - minL, cyy = p2.y - minT;
+        tiles.push({ kid: k, x: cx, y: cyy, w: s2.w, h: s2.h, sub: s2.sub });
+        if (cx + s2.w / 2 > contentW) contentW = cx + s2.w / 2;
+        if (cyy + s2.h / 2 > contentH) contentH = cyy + s2.h / 2;
+      });
+    } else {
+      // Layered dependency columns: the column is as wide as its widest tile,
+      // and each tile advances by ITS OWN height.
+      var cols = {};
+      kids.forEach(function (k) { var l = layer[kidKey(k)] || 0; (cols[l] = cols[l] || []).push(k); });
+      var colKeys = Object.keys(cols).map(Number).sort(function (a, b) { return a - b; });
+      var x = 0;
+      colKeys.forEach(function (ck) {
+        var col = cols[ck].sort(function (a, b) { return a.id < b.id ? -1 : 1; });
+        var colW = 0, y = 0;
+        col.forEach(function (k) { var s3 = size[kidKey(k)]; if (s3.w > colW) colW = s3.w; });
+        col.forEach(function (k) {
+          var s = size[kidKey(k)];
+          tiles.push({ kid: k, x: x + colW / 2, y: y + s.h / 2, w: s.w, h: s.h, sub: s.sub });
+          y += s.h + INNER_GAPY;
+        });
+        if (y - INNER_GAPY > contentH) contentH = y - INNER_GAPY;
+        x += colW + INNER_GAPX;
+      });
+      contentW = x - INNER_GAPX;
+    }
+    tiles.forEach(function (t) { t.x += PADI; t.y += HEAD_H; });
+    return { tiles: tiles, w: contentW + 2 * PADI, h: HEAD_H + contentH + PADI };
+  }
+  // Top-level deep box: the recursive interior plus today's port machinery at
+  // the OUTERMOST box only (buildDeepContext supplies which relations still
+  // need ports; stubs run port <-> the DEEPEST visible leaf tile). Returns the
+  // same shape as innerLayout, plus deep:true so emission recurses.
+  function deepLayout(entry, portRec) {
+    var box = deepContainerLayout(entry.id, 1);
+    var parentId = anchorNodeId(entry);
+    var pBaseIn = 'p~in~' + parentId + '~', pBaseOut = 'p~out~' + parentId + '~';
+    var extIn = portRec ? portRec.extIn : {}, extOut = portRec ? portRec.extOut : {};
+    var inIds = Object.keys(extIn).sort(), outIds = Object.keys(extOut).sort();
+    var hasIn = inIds.length > 0, hasOut = outIds.length > 0;
+    var PROXY_W = 22, PROXY_H = 22, PROXY_GAP = 8;
+    var shift = hasIn ? PROXY_W + INNER_GAPX : 0;
+    var tiles = box.tiles;
+    if (shift) tiles.forEach(function (t) { t.x += shift; });
+    var w = box.w + shift + (hasOut ? PROXY_W + INNER_GAPX : 0);
+    if (w < SUBBOX_W) w = SUBBOX_W;
+    var stackMax = Math.max(inIds.length, outIds.length);
+    var h = Math.max(box.h, HEAD_H + stackMax * PROXY_H + Math.max(0, stackMax - 1) * PROXY_GAP + PADI);
+    var midY = HEAD_H + Math.max(0, (h - HEAD_H - PADI) / 2);
+    function stackPorts(ids, recs, base, cx, dir) {
+      var total = ids.length * PROXY_H + Math.max(0, ids.length - 1) * PROXY_GAP;
+      var y0 = Math.max(HEAD_H + PROXY_H / 2, midY - total / 2 + PROXY_H / 2);
+      return ids.map(function (eid, i) {
+        var km = recs[eid].kids, klist = [];
+        Object.keys(km).forEach(function (key) { klist.push(km[key]); });
+        return { id: base + eid, extId: eid, dir: dir, kids: klist, raws: Object.keys(recs[eid].raws), x: cx, y: y0 + i * (PROXY_H + PROXY_GAP), w: PROXY_W, h: PROXY_H };
+      });
+    }
+    return {
+      deep: true,
+      tiles: tiles,
+      edges: portRec ? Object.keys(portRec.stubs).map(function (k) { return portRec.stubs[k]; }) : [],
+      proxies: stackPorts(inIds, extIn, pBaseIn, PADI + PROXY_W / 2, 'in')
+        .concat(stackPorts(outIds, extOut, pBaseOut, w - PADI - PROXY_W / 2, 'out')),
+      w: w,
+      h: h,
+    };
+  }
+  // View-level deep context (null unless Internals is on AND at least one
+  // in-view entry is deep-flagged — the classic path never sees it): which
+  // top-level entries are deep-expanded; every relation drawn as a DIRECT
+  // concrete line (deduped per src=>tgt pair); the per-top-pair count used to
+  // suppress aggregated edges whose constituents are ALL drawn directly; and
+  // the port records for relations that keep today's port semantics.
+  function buildDeepContext(scope, entries) {
+    if (!state.internals) return null;
+    var deepByAnchor = {}, any = false;
+    entries.forEach(function (e) {
+      if (e.kind === 'subsystem' && isDeepId(e.id)) { deepByAnchor[anchorNodeId(e)] = e; any = true; }
+    });
+    if (!any) return null;
+    var entryByAnchor = {};
+    entries.forEach(function (e) { entryByAnchor[e.kind + ':' + e.id] = e; });
+    // A relation endpoint's DIRECT-line node in this view: the deepest leaf
+    // tile inside a deep-expanded entry, or a top-level component box ITSELF.
+    // null = this endpoint keeps aggregated/port semantics (interiors of
+    // non-deep entries, out-of-scope counterparts).
+    function directEnd(compId) {
+      var child = childOfScopeContaining(compId, scope);
+      var entry = child && entryByAnchor[child.kind + ':' + child.id];
+      if (!entry) return null;
+      var aid = anchorNodeId(entry);
+      if (deepByAnchor[aid]) {
+        var leaf = deepLeafFor(compId, entry.id);
+        return leaf ? { node: IN(leaf.kind, leaf.id), top: aid, deep: true } : null;
+      }
+      if (entry.kind === 'component' && entry.id === compId) return { node: aid, top: aid, deep: false };
+      return null;
+    }
+    var direct = {}, directTopCount = {}, ports = {};
+    function portRec(aid) { return ports[aid] = ports[aid] || { extIn: {}, extOut: {}, stubs: {} }; }
+    MODEL.edges.forEach(function (edge) {
+      var a = directEnd(edge.from), b = directEnd(edge.to);
+      if (a && b && (a.deep || b.deep) && a.node !== b.node) {
+        // Drawn as ONE direct line — never ALSO as ports/stubs (dedupe rule).
+        var key = a.node + '=>' + b.node;
+        if (!direct[key]) direct[key] = { src: a.node, tgt: b.node, cross: false, aTop: a.top, bTop: b.top };
+        if (edge.cross) direct[key].cross = true;
+        if (a.top !== b.top) {
+          var tk = a.top + '=>' + b.top;
+          directTopCount[tk] = (directTopCount[tk] || 0) + 1;
+        }
+        return;
+      }
+      // Not a direct line: keep today's port semantics on any deep box with
+      // exactly one endpoint inside its subtree, stubbed to the deepest leaf.
+      var ac = childOfScopeContaining(edge.from, scope);
+      var bc = childOfScopeContaining(edge.to, scope);
+      var aEnt = ac && entryByAnchor[ac.kind + ':' + ac.id];
+      var bEnt = bc && entryByAnchor[bc.kind + ':' + bc.id];
+      var aAid = aEnt ? anchorNodeId(aEnt) : null;
+      var bAid = bEnt ? anchorNodeId(bEnt) : null;
+      if (aAid === bAid) return; // internal to one entry, or neither in scope
+      if (aAid && deepByAnchor[aAid]) {
+        var leafA = deepLeafFor(edge.from, aEnt.id);
+        if (leafA) {
+          var recA = portRec(aAid);
+          var ro = recA.extOut[edge.to] = recA.extOut[edge.to] || { kids: {}, raws: {} };
+          ro.kids[leafA.kind + ':' + leafA.id] = leafA;
+          ro.raws[edge.from] = 1;
+          var poId = 'p~out~' + aAid + '~' + edge.to;
+          recA.stubs[IN(leafA.kind, leafA.id) + '=>' + poId] = { src: IN(leafA.kind, leafA.id), tgt: poId, stub: true };
+        }
+      }
+      if (bAid && deepByAnchor[bAid]) {
+        var leafB = deepLeafFor(edge.to, bEnt.id);
+        if (leafB) {
+          var recB = portRec(bAid);
+          var ri = recB.extIn[edge.from] = recB.extIn[edge.from] || { kids: {}, raws: {} };
+          ri.kids[leafB.kind + ':' + leafB.id] = leafB;
+          ri.raws[edge.to] = 1;
+          var piId = 'p~in~' + bAid + '~' + edge.from;
+          recB.stubs[piId + '=>' + IN(leafB.kind, leafB.id)] = { src: piId, tgt: IN(leafB.kind, leafB.id), stub: true };
+        }
+      }
+    });
+    return { deepByAnchor: deepByAnchor, direct: direct, directTopCount: directTopCount, ports: ports };
+  }
+
   // Micro-layout for a container's direct children when Internals is on:
   // layered mini columns + intra-container edges. Each external relation gets
   // its own small PORT node INSIDE the container (one per external
   // counterpart; incoming left, outgoing right). Children connect to ports
   // with short edges that never leave the box — the real cross-boundary line
   // is only revealed on hover, or pinned while the port is selected.
-  function innerLayout(entry) {
+  function innerLayout(entry, deepCtx) {
+    // Deep-flagged subsystems take the recursive path (deepCtx exists only
+    // when Internals is on and the view has deep entries — see buildElements).
+    if (deepCtx && entry.kind === 'subsystem' && deepCtx.deepByAnchor[anchorNodeId(entry)]) {
+      return deepLayout(entry, deepCtx.ports[anchorNodeId(entry)]);
+    }
     var kids = state.internals && entry.hasKids ? childrenOf({ kind: entry.kind, id: entry.id }) : [];
     if (!kids.length) return null;
     var scope = { kind: entry.kind, id: entry.id };
@@ -1760,12 +2053,42 @@ var MODEL = __MODEL_JSON__;
     if (scope.kind === 'types' || scope.kind === 'databases') return buildTypeElements();
     var entries = childrenOf(scope);
     var eles = [];
+    var deepCtx = buildDeepContext(scope, entries);
     var ve = viewEdges(scope, entries);
     // Data-coupling overlay: same scoping pipeline, a different edge source.
     var vd = state.dataCoupling ? viewEdges(scope, entries, MODEL.dataEdges) : { agg: {}, ghosts: {} };
     Object.keys(vd.ghosts).forEach(function (g) { if (!ve.ghosts[g]) ve.ghosts[g] = vd.ghosts[g]; });
     var inners = {};
-    entries.forEach(function (e) { inners[anchorNodeId(e)] = innerLayout(e); });
+    entries.forEach(function (e) { inners[anchorNodeId(e)] = innerLayout(e, deepCtx); });
+
+    // Deep-mode recursive tile emission: a nested container becomes a cytoscape
+    // compound parent (no explicit position — a compound derives its bounds
+    // from its children); leaves and EMPTY containers are plain positioned
+    // nodes. ox/oy = the emitting container's absolute top-left; tile.x/y are
+    // centres relative to it, so offsets accumulate top-down. Search dimming
+    // propagates the TOP entry's dim to the whole subtree.
+    function emitDeepTiles(tiles, parentNodeId, ox, oy, dimCls) {
+      tiles.forEach(function (tile) {
+        var ax = ox + tile.x, ay = oy + tile.y;
+        if (tile.sub) {
+          var nid = SN(tile.kid.id);
+          var selCls = state.selectedKind === 'subsystem' && state.selected === tile.kid.id ? ' sel' : '';
+          var nested = {
+            data: { id: nid, parent: parentNodeId, label: nameOf(tile.kid), w: tile.w, h: tile.h, tw: tile.w - 16 },
+            classes: 'subsysBox' + (tile.sub.tiles.length ? ' drillable' : '') + dimCls + selCls,
+          };
+          if (!tile.sub.tiles.length) nested.position = { x: ax, y: ay };
+          eles.push(nested);
+          emitDeepTiles(tile.sub.tiles, nid, ax - tile.w / 2, ay - tile.h / 2, dimCls);
+        } else {
+          eles.push({
+            data: { id: IN(tile.kid.kind, tile.kid.id), parent: parentNodeId, label: nameOf(tile.kid), w: INNER_W, h: INNER_H, tw: INNER_W - 10 },
+            position: { x: ax, y: ay },
+            classes: 'inner' + dimCls,
+          });
+        }
+      });
+    }
 
     // Resolve a port's reveal target(s) in THIS view. Preference order: the
     // MATCHING PORT inside the counterpart's container (a port-to-port line
@@ -1897,17 +2220,25 @@ var MODEL = __MODEL_JSON__;
         + (state.showIssues && issuesBySpec[e.id] ? ' hasIssue' : '')
         + (state.selectedKind === e.kind && state.selected === e.id ? ' sel' : '');
       if (inner) {
-        eles.push({ data: { id: aid, label: e.kind === 'subsystem' ? nameOf(e) : nameOf(e), w: p.w, h: p.h, tw: p.w - 16 }, classes: classes });
-        inner.tiles.forEach(function (tile) {
-          eles.push({
-            data: {
-              id: IN(tile.kid.kind, tile.kid.id), parent: aid,
-              label: nameOf(tile.kid), w: INNER_W, h: INNER_H, tw: INNER_W - 10,
-            },
-            position: { x: p.x - p.w / 2 + tile.x, y: p.y - p.h / 2 + tile.y },
-            classes: 'inner' + (dim ? ' dimmed' : ''),
+        var boxNode = { data: { id: aid, label: e.kind === 'subsystem' ? nameOf(e) : nameOf(e), w: p.w, h: p.h, tw: p.w - 16 }, classes: classes };
+        // An EMPTY deep boundary box has no children, so it is NOT a compound
+        // parent — it needs (and honours) an explicit position and size.
+        if (inner.deep && !inner.tiles.length && !(inner.proxies && inner.proxies.length)) boxNode.position = { x: p.x, y: p.y };
+        eles.push(boxNode);
+        if (inner.deep) {
+          emitDeepTiles(inner.tiles, aid, p.x - p.w / 2, p.y - p.h / 2, dim ? ' dimmed' : '');
+        } else {
+          inner.tiles.forEach(function (tile) {
+            eles.push({
+              data: {
+                id: IN(tile.kid.kind, tile.kid.id), parent: aid,
+                label: nameOf(tile.kid), w: INNER_W, h: INNER_H, tw: INNER_W - 10,
+              },
+              position: { x: p.x - p.w / 2 + tile.x, y: p.y - p.h / 2 + tile.y },
+              classes: 'inner' + (dim ? ' dimmed' : ''),
+            });
           });
-        });
+        }
         (inner.proxies || []).forEach(function (px) {
           eles.push({
             data: {
@@ -2060,9 +2391,28 @@ var MODEL = __MODEL_JSON__;
 
     var dimmedAnchors = {};
     entries.forEach(function (e) { if (state.query && !matches(e)) dimmedAnchors[anchorNodeId(e)] = true; });
+
+    // Deep mode: ONE direct line per related pair of concrete visible nodes —
+    // leaf tiles at any depth and/or top-level component boxes (deduped by
+    // buildDeepContext). These lines cross nested boundaries on purpose.
+    if (deepCtx) {
+      var ddi = 0;
+      Object.keys(deepCtx.direct).sort().forEach(function (key) {
+        var d = deepCtx.direct[key];
+        var ddim = state.query && (dimmedAnchors[d.aTop] || dimmedAnchors[d.bTop]);
+        eles.push({
+          data: { id: 'dd' + (ddi++), source: d.src, target: d.tgt, lbl: '' },
+          classes: 'inneredge' + (d.cross ? ' cross' : '') + (ddim ? ' dimmed' : ''),
+        });
+      });
+    }
+
     var i = 0;
     Object.keys(ve.agg).forEach(function (key) {
       var e = ve.agg[key];
+      // Prefer the leaf lines: drop an aggregated container edge whose
+      // constituent relations were ALL drawn as direct deep lines above.
+      if (deepCtx && deepCtx.directTopCount[key] >= e.n) return;
       var bundle = e.n > 1;
       var dim = state.query && (dimmedAnchors[e.src] || dimmedAnchors[e.tgt]);
       var route = routeData(e.src, e.tgt, key);

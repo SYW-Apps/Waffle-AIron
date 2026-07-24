@@ -63,6 +63,10 @@ function landscapeToCanvasModel(g: Graph): unknown {
 
   // A breadcrumb ancestor (actionable === false) is included only so the
   // hierarchy stays navigable — label and describe it as browse-only.
+  // Every unit frame opts into the engine's DEEP internals mode: with the
+  // Internals toggle on, a unit box expands its whole subtree (nested unit
+  // boundary boxes + project leaf tiles) with direct project-to-project
+  // relation lines — the full org overview.
   const subsystems = units.map((u) => ({
     id: toColons(u.id),
     name: u.actionable === false ? u.label + ' ◇' : u.label,
@@ -71,10 +75,19 @@ function landscapeToCanvasModel(g: Graph): unknown {
         ? 'Organization unit (browse-only — shown as the path to a scope you can act on)'
         : 'Organization unit',
     trustedLinks: [] as { subsystem: string; reason: string }[],
+    deepInternals: true,
   }));
   const unplaced = projects.some((p) => !unitOfProject.has(p.id));
   if (unplaced) {
-    subsystems.push({ id: '__unassigned__', name: '(unassigned)', description: 'Projects not placed in a unit', trustedLinks: [] });
+    subsystems.push({
+      id: '__unassigned__',
+      name: '(unassigned)',
+      description: 'Projects not placed in a unit',
+      trustedLinks: [],
+      // Harmless here — its children are all leaves — but keeps the frame's
+      // behavior identical to real unit frames.
+      deepInternals: true,
+    });
   }
 
   // Relations = project→project edges (any edgeKind). Map to real project ids.
