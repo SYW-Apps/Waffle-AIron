@@ -32,6 +32,13 @@ methods:
         type: call
         targetComponent: surface_portal
         targetMethod: generateChildSnapshots
+  - name: listExternalInterfaces
+    narrative:
+      - stepNumber: 1
+        description: Forward the discovery read to the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: listExternalInterfaces
 status: complete
 createdAt: '2026-07-10T23:16:03.846Z'
-updatedAt: '2026-07-23T22:35:44.925Z'
+updatedAt: '2026-07-24T18:14:58.210Z'

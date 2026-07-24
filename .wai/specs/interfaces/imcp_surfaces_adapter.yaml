@@ -1,0 +1,14 @@
+id: imcp_surfaces_adapter
+name: MCP Surfaces Adapter Interface
+description: Contract for the MCP server's surface-exchange reads.
+component: mcp_surfaces_adapter
+methods:
+  - name: listExternalInterfaces
+    description: >-
+      Forward the scope-aware external-surface discovery (parent family, siblings, foreign imports —
+      with origin, provenance, freshness) to the surface portal.
+    signature: 'listExternalInterfaces(): ExternalSurfaceEntry[]'
+    returns: ExternalSurfaceEntry[]
+status: draft
+createdAt: '2026-07-24T18:14:20.548Z'
+updatedAt: '2026-07-24T18:14:20.552Z'

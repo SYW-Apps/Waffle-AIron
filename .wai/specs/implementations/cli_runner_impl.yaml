@@ -390,7 +390,9 @@ methods:
             step: 6
           - value: generate-children
             step: 8
-        defaultStep: 10
+          - value: externals
+            step: 10
+        defaultStep: 12
       - stepNumber: 2
         description: Export the own surface (audience/format/out/portal from options)
         type: call
@@ -432,6 +434,19 @@ methods:
         type: return
         outcome: generated
       - stepNumber: 10
+        description: >-
+          List the project's external surfaces (parent family, siblings, foreign imports) with
+          origin and freshness
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: listExternalInterfaces
+      - stepNumber: 11
+        description: >-
+          Print the externals table: one row per entry — sourceKind, key, origin, freshness,
+          interface ids
+        type: return
+        outcome: externals listed
+      - stepNumber: 12
         description: Unknown surface action
         type: throw
         error: UnknownSurfaceActionError
@@ -627,4 +642,4 @@ methods:
         outcome: locked
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-24T18:05:49.701Z'
+updatedAt: '2026-07-24T18:15:12.186Z'

@@ -176,7 +176,16 @@ methods:
         targetComponent: mcp_skills_adapter
         targetMethod: readResource
     symbol: registerSkillResources
+  - name: listExternalInterfaces
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the external-surface discovery entries through the surfaces adapter and shape the
+          tool response
+        type: call
+        targetComponent: mcp_surfaces_adapter
+        targetMethod: listExternalInterfaces
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-07-18T22:08:09.820Z'
+updatedAt: '2026-07-24T18:14:35.011Z'

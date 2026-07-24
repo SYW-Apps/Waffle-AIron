@@ -105,6 +105,14 @@ methods:
     endpoint:
       transport: Custom
       address: mcp resources/read (built-in SDD skill)
+  - name: sdd_list_external_interfaces
+    description: >-
+      List the bound project's consumable external surfaces (parent family, siblings, foreign
+      imports) as discovery entries with origin, provenance, and freshness — the tool an agent
+      inside a subproject uses to SEE its outward world instead of discovering it by failed
+      reference resolution.
+    signature: 'sdd_list_external_interfaces(): ExternalSurfaceEntry[]'
+    returns: ExternalSurfaceEntry[]
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-10T12:22:19.775Z'
+updatedAt: '2026-07-24T18:14:27.410Z'

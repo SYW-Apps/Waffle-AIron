@@ -10,6 +10,7 @@ dependsOn:
   - mcp_core_adapter
   - mcp_validator_adapter
   - mcp_skills_adapter
+  - mcp_surfaces_adapter
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-07-10T12:22:00.516Z'
+updatedAt: '2026-07-24T18:14:28.310Z'
