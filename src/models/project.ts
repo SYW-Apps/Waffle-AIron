@@ -165,6 +165,41 @@ export const PathsConfigSchema = z.object({
 });
 export type PathsConfig = z.infer<typeof PathsConfigSchema>;
 
+/**
+ * The identity a profile selection was made by — structurally the hosting
+ * layer's PrincipalSubject, modeled here because project.yaml is core's file.
+ */
+export const ProfileSelectionSubjectSchema = z.object({
+  userId: z.string(),
+  kind: z.string(),
+  issuer: z.string(),
+  externalSubject: z.string().optional(),
+  displayName: z.string().optional(),
+  email: z.string().optional(),
+});
+
+/**
+ * The profile/pack selection applied to a project by a hosted policy workflow
+ * (initialization, an explicit profile write, or reconciliation).
+ *
+ * Modeled here rather than left as an un-schema'd key because the config is
+ * parsed and written back through this schema: an unmodeled key is STRIPPED on
+ * the round trip, so a later pack install or removal silently erased the
+ * recorded selection. `projectType` is what actually governs validation; this is
+ * the record of what was chosen for the project.
+ */
+export const ProjectProfileSelectionSchema = z.object({
+  /** Selected architectural profile ids. The first resolvable one is applied as projectType. */
+  profileIds: z.array(z.string()).default([]),
+  /** Pack names the governing policy requires for this project. */
+  requiredPackNames: z.array(z.string()).default([]),
+  /** Pack names applied by default unless explicitly overridden. */
+  defaultPackNames: z.array(z.string()).optional(),
+  selectedBy: ProfileSelectionSubjectSchema.optional(),
+  selectedAt: z.string(),
+});
+export type ProjectProfileSelection = z.infer<typeof ProjectProfileSelectionSchema>;
+
 export const ProjectConfigSchema = z.object({
   /**
    * Schema version — used to detect incompatible config formats in future
@@ -212,6 +247,14 @@ export const ProjectConfigSchema = z.object({
   }).optional(),
 
   paths: PathsConfigSchema.default({}),
+
+  /**
+   * The profile/pack selection a hosted policy workflow applied to this project.
+   * The RECORD of what was chosen; `projectType` above is what actually governs
+   * validation. Modeled so the parse/write round trip preserves it (see
+   * ProjectProfileSelectionSchema).
+   */
+  profileSelection: ProjectProfileSelectionSchema.optional(),
 
   /**
    * Path to a directory containing org/user-level default templates.

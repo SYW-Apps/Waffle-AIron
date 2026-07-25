@@ -142,7 +142,37 @@ methods:
       source set to the pack's canonical name and family carried through from the pack's ProfileDef
       when present. Dedupe by (id, source). A pack that fails to load contributes nothing (its error
       rides on its descriptor elsewhere); this read never throws. Never mutates any tier.
+  - name: executeApprovedListProjectProfiles
+    narrative: []
+    detail: intent
+    intent: >-
+      Aggregates the profiles selectable for ONE project with no authentication (a pre-authorized
+      internal read), binding that project's isolated root. Emits every built-in profile id via the
+      core adapter with source "builtin" and installed true. Then loads the packs registered in the
+      project's OWN config (extensions.packs) through the core extension loader and emits each
+      profile they contribute with source set to the pack's canonical name and installed true — the
+      tier the instance-wide catalog cannot see, so a pack uploaded straight into a project no
+      longer hides its profiles. Finally probes the server-global packs across both tiers and emits
+      each profile they contribute with installed false: adoptable, and vendored by the write path
+      when selected. Carries family through from each ProfileDef when present, dedupes by (id,
+      source) with the project tier winning, and never throws — a pack that fails to load simply
+      contributes nothing. Mutates no tier.
+  - name: executeApprovedEnsureProfileInstalled
+    narrative: []
+    detail: intent
+    intent: >-
+      Makes one profile id able to actually govern a project, with no authentication (a
+      pre-authorized internal call). A known project kind or built-in profile id resolves
+      immediately with source "builtin" and nothing adopted. Otherwise the project-scoped catalog
+      decides: a profile already contributed by a pack registered in the project returns with that
+      pack as its source and nothing adopted; a profile contributed only by a server-global pack has
+      that pack resolved through the two-tier resolution seam and vendored into the project by its
+      canonical name (registering it in extensions.packs), returned with adoptedPackName set so the
+      side effect is reported rather than hidden. A profile id no tier contributes RAISES an error
+      naming the id and the tiers searched — writing it as the project's projectType would leave the
+      whole profile doctrine silently unenforced, so it is refused instead of applied. Idempotent: a
+      profile already resolvable is returned untouched, and a second call adopts nothing further.
 detail: intent
 status: complete
 createdAt: '2026-07-04T18:42:57.340Z'
-updatedAt: '2026-07-22T19:14:49.724Z'
+updatedAt: '2026-07-24T23:39:10.012Z'

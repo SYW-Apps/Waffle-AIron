@@ -3110,6 +3110,13 @@ function opsGetProjectConfig(cfg: HostConfig, sessionId: string, url: URL, res: 
 function opsSetProjectConfig(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
   sendJson(res, 200, projectops.setProjectType(cfg, sessionId, String(body?.projectId ?? ''), String(body?.projectType ?? '')));
 }
+// The project-scoped profile catalog (built-ins + the project's own packs +
+// server-global packs still needing adoption). Same envelope key as
+// opsListAvailableProfiles (/web/admin/profiles) — the client's list-unwrapping
+// helper reads both routes through the same 'profiles' key.
+function opsListProjectProfiles(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  sendJson(res, 200, { profiles: projectops.listProjectProfiles(cfg, sessionId, q(url, 'projectId') ?? '') });
+}
 function opsListProducers(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
   sendJson(res, 200, { producers: projectops.listProducers(cfg, sessionId, q(url, 'projectId') ?? '') });
 }
@@ -3451,6 +3458,13 @@ export async function handleWebRequest(
       // POST /web/projects/config { projectId, projectType } — set the project-level type (project:write).
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'config') {
         return opsSetProjectConfig(cfg, sessionId, body, res);
+      }
+      // GET /web/projects/profiles?projectId= — the profiles selectable FOR ONE
+      // PROJECT (built-ins + the project's own registered packs + server-global
+      // packs still adoptable on selection) (project:read). The project-type
+      // picker reads this instead of the instance-wide /web/admin/profiles catalog.
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'profiles') {
+        return opsListProjectProfiles(cfg, sessionId, url, res);
       }
       // GET /web/projects/policy?projectId= — pack/profile compliance (project:write).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'policy') {

@@ -377,8 +377,42 @@ methods:
         description: Return the adoptable pack descriptors
         type: return
         outcome: adoptable pack list
+  - name: listProjectProfiles
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Resolve the caller's project:read permission over the target project
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:read value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the project-scoped profile listing
+        type: throw
+        error: Forbidden — listing a project's selectable profiles requires project:read over the project
+      - stepNumber: 5
+        description: >-
+          List the profiles selectable for this project through the pre-authorized store read:
+          built-ins, the profiles contributed by the project's own registered packs (installed), and
+          those contributed by the server-global packs (adoptable on selection)
+        type: call
+        targetComponent: pack_registry
+        targetMethod: executeApprovedListProjectProfiles
+      - stepNumber: 6
+        description: Return the project-scoped profile catalog
+        type: return
+        outcome: project-scoped profile catalog
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T18:47:13.157Z'
-updatedAt: '2026-07-22T19:17:38.986Z'
+updatedAt: '2026-07-24T23:39:17.658Z'

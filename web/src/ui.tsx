@@ -145,9 +145,20 @@ export function Field(props: {
   hint?: string;
   /** Optional "ⓘ" hover explanation rendered next to the label. */
   info?: ReactNode;
+  /** Validation-rail integration (SpecsEditor's ValidationRail): marks this
+   *  field as the target of an open, in-scope validation issue with a subtle
+   *  outline (error/warning toned). Unused by every other caller. */
+  highlight?: 'error' | 'warning';
+  /** A stable `data-field` anchor a caller can scrollIntoView() by (paired
+   *  with `highlight` — SpecsEditor uses both together, but either works
+   *  alone). */
+  fieldKey?: string;
 }) {
   return (
-    <label className="field">
+    <label
+      className={`field${props.highlight ? ` field-flag field-flag-${props.highlight}` : ''}`}
+      data-field={props.fieldKey}
+    >
       <span className="field-label">
         {props.label}
         {props.info != null && <InfoTip>{props.info}</InfoTip>}

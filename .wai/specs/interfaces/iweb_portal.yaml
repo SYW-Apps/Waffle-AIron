@@ -1010,6 +1010,23 @@ methods:
       transport: HTTP
       method: POST
       path: /web/projects/config
+  - name: projectProfilesList
+    description: >-
+      List the architectural profiles selectable FOR ONE PROJECT — built-ins plus the profiles
+      contributed by the project's own registered packs (installed) plus those contributed by the
+      server-global packs (adoptable on selection, vendored by the write path); forwards to
+      project_ops_orchestrator.listProjectProfiles with the session as the credential. The
+      project-type picker reads this instead of the instance-wide /web/admin/profiles catalog, which
+      cannot see a project's own packs and cannot say which profiles still need adopting.
+    signature: 'projectProfilesList(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/projects/profiles
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-07-23T11:23:59.568Z'
+updatedAt: '2026-07-24T23:31:05.797Z'

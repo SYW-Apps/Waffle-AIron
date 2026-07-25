@@ -22,12 +22,12 @@ import {
 import { routeAdmin } from '../../src/server/http.js';
 import { createProject } from '../../src/server/admin.js';
 import { mintUserToken, allow, seedUnit, createPlacedProject } from './helpers.js';
-import { listProjectPacks } from '../../src/server/packs.js';
+import { adoptProjectPack, listProjectPacks } from '../../src/server/packs.js';
 import { ForbiddenError } from '../../src/server/identity.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
 import { existingProjectRoot } from '../../src/server/projects.js';
 import { queryAuditEvents } from '../../src/server/audit.js';
-import { readYamlFile } from '../../src/utils/yaml.js';
+import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 import type {
   ApiKeyRecord,
   HostConfig,
@@ -104,14 +104,38 @@ describe('project policy orchestrator (sdd_host)', () => {
     fs.writeFileSync(path.join(packsDir, `${name}.yaml`), `name: ${name}\nprofiles: {}\nlanguages: {}\n`);
   }
 
-  /** Read a project's raw .wai/project.yaml (including the un-schema'd profileSelection). */
+  /** Seed a server-global declarative pack CONTRIBUTING one architectural profile —
+   *  the only way a profile id outside the built-in set can ever govern a project.
+   *  The file stem deliberately differs from the canonical manifest name. */
+  function seedProfilePack(stem: string, packName: string, profileId: string): void {
+    fs.writeFileSync(
+      path.join(packsDir, `${stem}.yaml`),
+      [`name: ${packName}`, 'profiles:', `  ${profileId}:`, '    family: backend-like', 'languages: {}', ''].join('\n'),
+    );
+  }
+
+  /** Read a project's raw .wai/project.yaml (projectType + the recorded profileSelection). */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function readRawConfig(root: string): any {
     return readYamlFile(path.join(root, '.wai', 'project.yaml'));
   }
 
+  /** Overwrite a project's raw .wai/project.yaml — the hand-edited/legacy shape the
+   *  honest-reporting paths must cope with. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function writeRawConfig(root: string, raw: any): void {
+    writeYamlFile(path.join(root, '.wai', 'project.yaml'), raw);
+  }
+
   function packNames(project: string): string[] {
     return listProjectPacks(cfg, MASTER, project).map((d) => d.name);
+  }
+
+  /** The metadata payloads of a project's audit events for one action. Order-free:
+   *  same-millisecond appends make timestamp ordering unreliable. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function auditMetadata(action: string, projectId: string): any[] {
+    return queryAuditEvents(dataDir, { action, projectId }).map((e) => JSON.parse(e.metadata ?? '{}'));
   }
 
   // ── storage facade + permissive default ──────────────────────────────────
@@ -266,9 +290,17 @@ describe('project policy orchestrator (sdd_host)', () => {
 
   // ── project config (projectType + lock) ──────────────────────────────────
 
-  it('getProjectConfig: a fresh project defaults to backend and reports unlocked', () => {
+  it('getProjectConfig: a fresh project defaults to backend, reports unlocked, and reports the profile genuinely in force', () => {
     createPlacedProject(cfg, MASTER, 'cfg-proj');
-    expect(getProjectConfig(cfg, MASTER, 'cfg-proj')).toEqual({ projectType: 'backend', locked: false });
+    expect(getProjectConfig(cfg, MASTER, 'cfg-proj')).toEqual({
+      projectType: 'backend',
+      locked: false,
+      // A built-in profile really governs — reported, not merely echoed back.
+      profileSource: 'builtin',
+      profileResolvable: true,
+      unappliedProfileIds: [],
+      overridingSubsystemIds: [],
+    });
   });
 
   it('setProjectType: persists projectType into project.yaml and round-trips through getProjectConfig', () => {
@@ -305,6 +337,258 @@ describe('project policy orchestrator (sdd_host)', () => {
     const reader = mintUserToken(dataDir, { id: 'rd', userId: 'u-rd' });
     expect(getProjectConfig(cfg, reader, 'cfg-guard').projectType).toBe('backend');
     expect(() => setProjectType(cfg, reader, 'cfg-guard', 'lowlevel-os')).toThrow(ForbiddenError);
+  });
+
+  // ── the governing profile: APPLIED, not merely recorded ──────────────────
+  //
+  // projectType is what the validator enforces; profileSelection is only the
+  // record of what was chosen. The two used to drift freely — a policy could
+  // require a profile, init could record it, and nothing would ever apply it — so
+  // these cover the whole loop: init applies, setProjectType ensures-then-writes
+  // and keeps the record honest, getProjectConfig/evaluate REPORT reality, and
+  // reconcile repairs only what is actually broken.
+
+  it('init APPLIES a policy-required profile as the governing projectType, vendoring its pack', () => {
+    seedProfilePack('acme', 'acme-doctrine', 'ddd');
+    setPackPolicy(cfg, MASTER, samplePolicy({ requiredProfileIds: ['ddd'] }));
+
+    const unit = seedUnit(dataDir, 'apply-unit');
+    const rec = executeApprovedInit(cfg, { id: 'apply-proj', ownerUnitId: unit.id });
+
+    // The headline bug: the required profile now GOVERNS instead of being a name
+    // recorded in profileSelection that nothing enforces.
+    expect(readRawConfig(rec.rootPath).projectType).toBe('ddd');
+    expect(readRawConfig(rec.rootPath).profileSelection.profileIds).toContain('ddd');
+    // ...and it genuinely resolves: the contributing pack was vendored in.
+    expect(packNames('apply-proj')).toContain('acme-doctrine');
+    expect(getProjectConfig(cfg, MASTER, 'apply-proj')).toMatchObject({
+      projectType: 'ddd',
+      profileSource: 'acme-doctrine',
+      profileResolvable: true,
+      unappliedProfileIds: [],
+    });
+    expect(auditMetadata('project.init.policy', 'apply-proj')[0]).toMatchObject({
+      appliedProfileId: 'ddd',
+      profileSource: 'acme-doctrine',
+    });
+  });
+
+  it('init with a selection the instance cannot resolve leaves the default projectType and still creates the project', () => {
+    setPackPolicy(cfg, MASTER, samplePolicy({ requiredProfileIds: ['ghost-profile'] }));
+
+    const unit = seedUnit(dataDir, 'ghost-unit');
+    executeApprovedInit(cfg, { id: 'ghost-proj', ownerUnitId: unit.id });
+
+    // Policy bookkeeping must never be able to fail project creation.
+    expect(existingProjectRoot(dataDir, 'ghost-proj')).toBeTruthy();
+    expect(getProjectConfig(cfg, MASTER, 'ghost-proj').projectType).toBe('backend');
+
+    // The reason rides on the audit instead of an exception...
+    expect(auditMetadata('project.init.policy', 'ghost-proj')[0]).toMatchObject({
+      appliedProfileId: null,
+      profileNotApplied: expect.stringMatching(/no selected profile is resolvable/i),
+      unappliedProfileIds: ['ghost-profile'],
+    });
+    // ...and the drift is visible in the evaluation rather than invisible.
+    const ev = evaluateProjectPolicy(cfg, MASTER, 'ghost-proj');
+    expect(ev.governingProfileId).toBe('backend');
+    expect(ev.unappliedProfileIds).toEqual(['ghost-profile']);
+    expect(ev.messages.some((m) => /recorded but does not govern/.test(m))).toBe(true);
+  });
+
+  it('init with TWO selected profiles applies the FIRST and reports the second as the unapplied remainder', () => {
+    seedProfilePack('acme', 'acme-doctrine', 'ddd');
+    seedProfilePack('hex', 'hex-doctrine', 'hexagonal');
+
+    const unit = seedUnit(dataDir, 'two-unit');
+    const rec = executeApprovedInit(cfg, {
+      id: 'two-proj',
+      ownerUnitId: unit.id,
+      profileSelection: selection({ profileIds: ['ddd', 'hexagonal'] }),
+    });
+
+    // projectType takes exactly one profile: the first, with the rest still recorded.
+    const raw = readRawConfig(rec.rootPath);
+    expect(raw.projectType).toBe('ddd');
+    expect(raw.profileSelection.profileIds).toEqual(['ddd', 'hexagonal']);
+    expect(getProjectConfig(cfg, MASTER, 'two-proj').unappliedProfileIds).toEqual(['hexagonal']);
+    expect(evaluateProjectPolicy(cfg, MASTER, 'two-proj').unappliedProfileIds).toEqual(['hexagonal']);
+    expect(auditMetadata('project.init.policy', 'two-proj')[0]).toMatchObject({
+      appliedProfileId: 'ddd',
+      unappliedProfileIds: ['hexagonal'],
+    });
+  });
+
+  it('setProjectType ADOPTS the contributing server-global pack, reports it, and leaves the profile genuinely resolvable', () => {
+    seedProfilePack('acme', 'acme-doctrine', 'ddd');
+    createPlacedProject(cfg, MASTER, 'adopt-proj');
+
+    const view = setProjectType(cfg, MASTER, 'adopt-proj', 'ddd');
+    expect(view).toMatchObject({
+      projectType: 'ddd',
+      profileSource: 'acme-doctrine',
+      profileResolvable: true,
+      adoptedPackName: 'acme-doctrine',
+    });
+    expect(packNames('adopt-proj')).toContain('acme-doctrine');
+
+    // Genuinely in force afterwards — and a second write adopts nothing further.
+    expect(getProjectConfig(cfg, MASTER, 'adopt-proj')).toMatchObject({
+      projectType: 'ddd',
+      profileSource: 'acme-doctrine',
+      profileResolvable: true,
+    });
+    expect(setProjectType(cfg, MASTER, 'adopt-proj', 'ddd').adoptedPackName).toBeUndefined();
+  });
+
+  it('setProjectType REFUSES a profile id no tier contributes and leaves project.yaml byte-for-byte intact', () => {
+    createPlacedProject(cfg, MASTER, 'refuse-proj');
+    const root = existingProjectRoot(dataDir, 'refuse-proj')!;
+    setProjectType(cfg, MASTER, 'refuse-proj', 'game-ecs');
+    const before = fs.readFileSync(path.join(root, '.wai', 'project.yaml'), 'utf8');
+
+    // Writing an unresolvable id would silently disable the whole profile
+    // doctrine, so it is refused BEFORE anything is written.
+    expect(() => setProjectType(cfg, MASTER, 'refuse-proj', 'ghost-profile')).toThrow(/ghost-profile/);
+    expect(fs.readFileSync(path.join(root, '.wai', 'project.yaml'), 'utf8')).toBe(before);
+    expect(getProjectConfig(cfg, MASTER, 'refuse-proj').projectType).toBe('game-ecs');
+  });
+
+  it('setProjectType folds the applied id to the FRONT of profileSelection without losing the other recorded ids', () => {
+    seedProfilePack('acme', 'acme-doctrine', 'ddd');
+    const unit = seedUnit(dataDir, 'fold-unit');
+    executeApprovedInit(cfg, {
+      id: 'fold-proj',
+      ownerUnitId: unit.id,
+      profileSelection: selection({ profileIds: ['ddd', 'hexagonal'] }),
+    });
+
+    // 'ddd' governs after init; switching to a built-in must not drop the record.
+    const view = setProjectType(cfg, MASTER, 'fold-proj', 'frontend-reactive');
+    expect(view.unappliedProfileIds).toEqual(['ddd', 'hexagonal']);
+
+    const raw = readRawConfig(existingProjectRoot(dataDir, 'fold-proj')!);
+    expect(raw.projectType).toBe('frontend-reactive');
+    expect(raw.profileSelection.profileIds).toEqual(['frontend-reactive', 'ddd', 'hexagonal']);
+    expect(raw.profileSelection.selectedBy.userId).toBe('bootstrap'); // the authenticated caller
+    expect(Date.parse(raw.profileSelection.selectedAt)).toBeGreaterThan(0);
+  });
+
+  it('getProjectConfig REPORTS an unresolvable projectType (profileResolvable false) and repairs nothing', () => {
+    createPlacedProject(cfg, MASTER, 'stale-proj');
+    const root = existingProjectRoot(dataDir, 'stale-proj')!;
+    writeRawConfig(root, { ...readRawConfig(root), projectType: 'ghost-profile' });
+
+    const view = getProjectConfig(cfg, MASTER, 'stale-proj');
+    expect(view.projectType).toBe('ghost-profile');
+    expect(view.profileResolvable).toBe(false);
+    expect(view.profileSource).toBeUndefined();
+    expect(readRawConfig(root).projectType).toBe('ghost-profile'); // report-only: nothing repaired
+
+    // A profile only a server-global pack contributes is likewise NOT governing
+    // until its pack is adopted into the project.
+    seedProfilePack('acme', 'acme-doctrine', 'ddd');
+    writeRawConfig(root, { ...readRawConfig(root), projectType: 'ddd' });
+    expect(getProjectConfig(cfg, MASTER, 'stale-proj').profileResolvable).toBe(false);
+  });
+
+  it('reconcileProjectPolicy REPAIRS a policy-required profile that is not governing, and leaves a compliant one alone', () => {
+    seedProfilePack('acme', 'acme-doctrine', 'ddd');
+    createPlacedProject(cfg, MASTER, 'rec-proj'); // projectType 'backend'
+    setPackPolicy(cfg, MASTER, samplePolicy({ requiredProfileIds: ['ddd'] }));
+
+    const res = reconcileProjectPolicy(cfg, MASTER, 'rec-proj');
+    expect(res.governingProfileId).toBe('ddd');
+    expect(readRawConfig(existingProjectRoot(dataDir, 'rec-proj')!).projectType).toBe('ddd');
+    expect(packNames('rec-proj')).toContain('acme-doctrine'); // the pack was vendored to make it resolve
+
+    // A second reconcile repairs nothing: the profile is resolvable AND compliant.
+    reconcileProjectPolicy(cfg, MASTER, 'rec-proj');
+    const repairs = auditMetadata('policy.reconcile', 'rec-proj').filter((m) => m.repairedProfileId);
+    expect(repairs).toHaveLength(1);
+    expect(repairs[0]).toMatchObject({ repairedProfileId: 'ddd', previousProfileId: 'backend' });
+
+    // A deliberate, resolvable, POLICY-COMPLIANT projectType survives reconciliation.
+    createPlacedProject(cfg, MASTER, 'keep-proj');
+    setProjectType(cfg, MASTER, 'keep-proj', 'game-ecs');
+    setPackPolicy(cfg, MASTER, samplePolicy({ requiredProfileIds: ['game-ecs', 'ddd'] }));
+    expect(reconcileProjectPolicy(cfg, MASTER, 'keep-proj').governingProfileId).toBe('game-ecs');
+    expect(readRawConfig(existingProjectRoot(dataDir, 'keep-proj')!).projectType).toBe('game-ecs');
+    expect(auditMetadata('policy.reconcile', 'keep-proj').filter((m) => m.repairedProfileId)).toEqual([]);
+  });
+
+  it('reconcileProjectPolicy CONVERGES: a repair folds into the recorded selection, so compliance is satisfied', () => {
+    // The non-convergence trap: compliance reads the RECORDED SELECTION, while a
+    // repair writes projectType. A project created BEFORE the policy required a
+    // profile has that id in neither place, so a repair that only wrote
+    // projectType would leave "Required profile is not selected" reported
+    // forever — the operator told to reconcile a project reconciliation just
+    // fixed (the same loop the pack-name canonicalization fix removed).
+    seedProfilePack('acme', 'acme-doctrine', 'ddd');
+    createPlacedProject(cfg, MASTER, 'conv-proj'); // created under a policy with NO profile requirement
+    const root = existingProjectRoot(dataDir, 'conv-proj')!;
+    expect(readRawConfig(root).profileSelection?.profileIds ?? []).not.toContain('ddd');
+
+    // The policy CHANGES afterwards to require the profile.
+    setPackPolicy(cfg, MASTER, samplePolicy({ requiredProfileIds: ['ddd'] }));
+    expect(evaluateProjectPolicy(cfg, MASTER, 'conv-proj').compliant).toBe(false);
+
+    // One reconcile both repairs the governing profile AND records it.
+    const res = reconcileProjectPolicy(cfg, MASTER, 'conv-proj');
+    expect(res.governingProfileId).toBe('ddd');
+    expect(readRawConfig(root).profileSelection.profileIds[0]).toBe('ddd'); // folded to the FRONT
+    expect(res.missingProfileIds).toEqual([]);
+    expect(res.compliant).toBe(true); // converged in ONE pass
+
+    // And it STAYS converged: a plain evaluation afterwards agrees, and a second
+    // reconcile finds nothing left to repair.
+    expect(evaluateProjectPolicy(cfg, MASTER, 'conv-proj').compliant).toBe(true);
+    reconcileProjectPolicy(cfg, MASTER, 'conv-proj');
+    expect(auditMetadata('policy.reconcile', 'conv-proj').filter((m) => m.repairedProfileId)).toHaveLength(1);
+  });
+
+  it('reconcileProjectPolicy repairs a projectType that resolves to nothing, from the recorded selection', () => {
+    // The pack-removed recovery: the name is recorded on both projectType and the
+    // selection, but no loaded profile carries it until its pack is re-vendored.
+    seedProfilePack('acme', 'acme-doctrine', 'ddd');
+    createPlacedProject(cfg, MASTER, 'broken-proj');
+    const root = existingProjectRoot(dataDir, 'broken-proj')!;
+    writeRawConfig(root, {
+      ...readRawConfig(root),
+      projectType: 'ddd',
+      profileSelection: { profileIds: ['ddd'], requiredPackNames: [], selectedAt: '' },
+    });
+    expect(getProjectConfig(cfg, MASTER, 'broken-proj').profileResolvable).toBe(false);
+
+    // No policy profile requirement at all — condition (b) alone drives the repair.
+    const res = reconcileProjectPolicy(cfg, MASTER, 'broken-proj');
+    expect(res.governingProfileId).toBe('ddd');
+    expect(packNames('broken-proj')).toContain('acme-doctrine');
+    expect(getProjectConfig(cfg, MASTER, 'broken-proj')).toMatchObject({
+      projectType: 'ddd',
+      profileSource: 'acme-doctrine',
+      profileResolvable: true,
+    });
+    expect(auditMetadata('policy.reconcile', 'broken-proj')[0]).toMatchObject({ repairedProfileId: 'ddd' });
+  });
+
+  it('a pack adopted AFTER init no longer erases the recorded profileSelection (schema round-trip regression)', () => {
+    seedGlobalPack('foo');
+    const unit = seedUnit(dataDir, 'rt-unit');
+    const rec = executeApprovedInit(cfg, {
+      id: 'rt-proj',
+      ownerUnitId: unit.id,
+      profileSelection: selection({ profileIds: ['frontend-reactive'] }),
+    });
+    expect(readRawConfig(rec.rootPath).profileSelection.profileIds).toEqual(['frontend-reactive']);
+
+    // adoptProjectPack writes project.yaml back through the ProjectConfig schema.
+    // profileSelection used to be un-schema'd, so the round trip STRIPPED it.
+    adoptProjectPack(cfg, MASTER, 'rt-proj', 'foo');
+
+    const raw = readRawConfig(rec.rootPath);
+    expect(raw.profileSelection.profileIds).toEqual(['frontend-reactive']);
+    expect(raw.projectType).toBe('frontend-reactive'); // and the applied profile still governs
   });
 
   // ── evaluate + reconcile on an existing project ──────────────────────────

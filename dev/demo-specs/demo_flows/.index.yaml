@@ -1,0 +1,13 @@
+# Seed L1 for the local dev demo project — see dev/packs/README.md.
+#
+# parentSystem MUST match the hosted project's L0 name, which is the project id
+# you created it with (`wairon host project create --id packdemo` -> "packdemo").
+schemaVersion: 1.0.0
+id: demo_flows
+name: Demo Flows
+description: Seeded subsystem for exercising profile doctrine.
+parentSystem: packdemo
+publicInterfaces: []
+status: draft
+createdAt: '2026-07-25T00:00:00.000Z'
+updatedAt: '2026-07-25T00:00:00.000Z'

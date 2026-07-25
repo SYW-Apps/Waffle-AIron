@@ -9,7 +9,7 @@ import { authenticateCredential } from './auth.js';
 import { authorize } from './authorization.js';
 import { AdminAuthError, UnauthenticatedError } from './errors.js';
 import { existingProjectRoot } from './projects.js';
-import type { AvailableProfile, HostConfig, PackDescriptor, PackResolution, ProjectPackReference, ProjectProfileSelection, ResolvedGlobalPack } from './types.js';
+import type { AvailableProfile, HostConfig, PackDescriptor, PackResolution, ProfileApplication, ProjectPackReference, ProjectProfileSelection, ResolvedGlobalPack } from './types.js';
 import type { PackArchiveInfo, PackExtractionLimits } from '@wairon/sdk';
 
 // ---------------------------------------------------------------------------
@@ -189,16 +189,75 @@ export function storeListGlobalPacks(): PackDescriptor[] {
   return [...instance, ...image];
 }
 
+/** One profile a pack contributes: its id, the pack's CANONICAL name (the value
+ *  an AvailableProfile.source carries), and its ProfileDef family. */
+type ProfileContribution = { id: string; source: string; family?: string };
+
 /**
- * Aggregate the profiles a hosted project may select — a pre-authorized internal
- * read (no credential gate). Emits every built-in profile id (via the core
- * adapter) tagged source 'builtin', then probes the server-global packs across
- * BOTH tiers (mutable instance dir first, then the immutable image layer) and,
- * for each pack that loads cleanly, emits each profile id it contributes tagged
- * with the pack's canonical name and its ProfileDef family. Deduped by
- * (id, source) so the instance tier wins a same-name collision. A pack that
+ * Collect every profile contributed by the SERVER-GLOBAL packs across BOTH tiers
+ * — the mutable instance directory first (so it wins a same-name collision), then
+ * the immutable image layer — loading each pack in isolation and tagging its
+ * contributions with the pack's canonical name and ProfileDef family. A pack that
  * fails to load contributes nothing (its error rides on its descriptor
- * elsewhere); this read never throws and never mutates any tier.
+ * elsewhere); never throws and never mutates any tier.
+ *
+ * The single two-tier scan behind BOTH profile catalogs: the instance-wide
+ * `storeListAvailableProfiles` and the project-scoped `storeListProjectProfiles`,
+ * which differ only in what they layer over it and how they mark it.
+ */
+function scanGlobalPackProfiles(): ProfileContribution[] {
+  const out: ProfileContribution[] = [];
+  for (const dir of [hostCore.globalPacksDir(), imagePacksDir()]) {
+    for (const full of hostCore.discoverPacks(dir)) {
+      try {
+        const loaded = hostCore.loadExtensionPacks([{ ref: full, scope: 'global' }], path.dirname(full));
+        if (loaded.errors.length) continue; // a bad pack contributes nothing
+        const source = loaded.packNames[0] ?? path.basename(full);
+        for (const [id, def] of Object.entries(loaded.profiles)) out.push({ id, source, family: def.family });
+      } catch {
+        /* never throw for a bad pack — skip it */
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Collect every profile contributed by the packs registered in the BOUND
+ * project's own config (.wai/project.yaml -> extensions.packs) — the tier the
+ * instance-wide catalog cannot see, so a pack uploaded straight into a project no
+ * longer has invisible profiles. Loads each registered ref in isolation against
+ * the project root; a pack that fails to load contributes nothing. Assumes a
+ * project root is already bound in scope; mutates nothing.
+ */
+function scanProjectPackProfiles(): ProfileContribution[] {
+  const root = getProjectRoot();
+  const out: ProfileContribution[] = [];
+  for (const ref of loadProjectConfig().extensions?.packs ?? []) {
+    try {
+      const loaded = hostCore.loadExtensionPacks([{ ref, scope: 'project' }], root);
+      if (loaded.errors.length) continue; // a bad pack contributes nothing
+      const source = loaded.packNames[0] ?? stem(ref);
+      for (const [id, def] of Object.entries(loaded.profiles)) out.push({ id, source, family: def.family });
+    } catch {
+      /* never throw for a bad pack — skip it */
+    }
+  }
+  return out;
+}
+
+/**
+ * Aggregate the profiles selectable INSTANCE-WIDE — a pre-authorized internal
+ * read (no credential gate). Emits every built-in profile id (via the core
+ * adapter) tagged source 'builtin', then every profile contributed by the
+ * server-global packs across BOTH tiers, tagged with the contributing pack's
+ * canonical name and its ProfileDef family. Deduped by (id, source) so the
+ * instance tier wins a same-name collision. A pack that fails to load contributes
+ * nothing; this read never throws and never mutates any tier.
+ *
+ * Deliberately carries NO `installed` flag: project installation is not a
+ * meaningful question for an instance-wide catalog, and this catalog cannot see a
+ * project's own packs at all — that is what `storeListProjectProfiles` is for.
  */
 export function storeListAvailableProfiles(): AvailableProfile[] {
   const out: AvailableProfile[] = [];
@@ -211,21 +270,41 @@ export function storeListAvailableProfiles(): AvailableProfile[] {
   };
 
   for (const id of hostCore.builtinProfileIds()) emit(id, 'builtin');
+  for (const c of scanGlobalPackProfiles()) emit(c.id, c.source, c.family);
+  return out;
+}
 
-  const scanTier = (dir: string): void => {
-    for (const full of hostCore.discoverPacks(dir)) {
-      try {
-        const loaded = hostCore.loadExtensionPacks([{ ref: full, scope: 'global' }], path.dirname(full));
-        if (loaded.errors.length) continue; // a bad pack contributes nothing
-        const source = loaded.packNames[0] ?? path.basename(full);
-        for (const [id, def] of Object.entries(loaded.profiles)) emit(id, source, def.family);
-      } catch {
-        /* never throw for a bad pack — skip it */
-      }
-    }
+/**
+ * Aggregate the profiles selectable for ONE project — the catalog a project-type
+ * picker must use, and a pre-authorized internal read (no credential gate).
+ * Assumes the project's root is already bound in scope. Three contributions, in
+ * this order:
+ *
+ *   1. the built-in profile ids (source 'builtin', installed) — they always govern;
+ *   2. the profiles contributed by the packs registered in THIS project's own
+ *      config (source = the pack's canonical name, installed) — the tier the
+ *      instance-wide catalog cannot see;
+ *   3. the profiles contributed by the server-global packs across both tiers
+ *      (NOT installed) — adoptable, and vendored by the write path on selection.
+ *
+ * Deduped by (id, source) keeping the FIRST emission, so for the same pack name
+ * the PROJECT tier wins over the server-global tier and its profile is reported
+ * installed rather than adoptable. Carries `family` through from each ProfileDef.
+ * A pack that fails to load contributes nothing; never throws, mutates no tier.
+ */
+function storeListProjectProfiles(): AvailableProfile[] {
+  const out: AvailableProfile[] = [];
+  const seen = new Set<string>();
+  const emit = (id: string, source: string, installed: boolean, family?: string): void => {
+    const key = JSON.stringify([id, source]); // dedup by (id, source), collision-safe
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ id, source, ...(family ? { family } : {}), installed });
   };
-  scanTier(hostCore.globalPacksDir());
-  scanTier(imagePacksDir());
+
+  for (const id of hostCore.builtinProfileIds()) emit(id, 'builtin', true);
+  for (const c of scanProjectPackProfiles()) emit(c.id, c.source, true, c.family);
+  for (const c of scanGlobalPackProfiles()) emit(c.id, c.source, false, c.family);
   return out;
 }
 
@@ -521,10 +600,12 @@ export function installProjectPack(cfg: HostConfig, credential: string | null, p
 
 // ── pack_orchestrator: profile catalog + server-global pack adoption ───────────
 //
-// The selectable-profile catalog is instance-wide, non-sensitive configuration —
-// any authenticated principal may read it (no scope authorization). Adopting a
-// server-global pack into a project is a per-project install (project:admin);
-// listing what may be adopted mirrors the per-project pack listing (project:read).
+// The INSTANCE-WIDE selectable-profile catalog is non-sensitive configuration —
+// any authenticated principal may read it (no scope authorization). The
+// PROJECT-SCOPED catalog names one project, so it mirrors the per-project pack
+// listing (project:read over that project). Adopting a server-global pack into a
+// project is a per-project install (project:admin); listing what may be adopted
+// mirrors the per-project pack listing (project:read).
 
 /** List the selectable architectural profiles (built-in + server-global pack
  *  profiles, each tagged with its source). Authenticate the caller — any
@@ -534,6 +615,17 @@ export function installProjectPack(cfg: HostConfig, credential: string | null, p
 export function listAvailableProfiles(cfg: HostConfig, credential: string | null): AvailableProfile[] {
   requirePrincipal(cfg, credential);
   return storeListAvailableProfiles();
+}
+
+/** List the profiles selectable for ONE project, each tagged with its source and
+ *  whether it can already govern that project. Requires project:read over the
+ *  project (mirrors listProjectPacks / listAdoptableProjectPacks), then returns
+ *  the pre-authorized project-scoped store read. This is the catalog a
+ *  project-type picker must use: the instance-wide listAvailableProfiles cannot
+ *  see a project's own packs and cannot say which profiles would need adopting. */
+export function listProjectProfiles(cfg: HostConfig, credential: string | null, project: string): AvailableProfile[] {
+  requireCap(cfg, credential, 'project:read', 'project', project, 'Forbidden — listing a project\'s selectable profiles requires project:read over the project');
+  return executeApprovedListProjectProfiles(cfg, project);
 }
 
 /** List the server-global pack catalog a project may adopt from. Requires
@@ -576,6 +668,66 @@ export function executeApprovedInstallProjectPack(cfg: HostConfig, project: stri
  *  instance-wide). Never exposed on any portal. */
 export function executeApprovedResolveGlobalPacks(names: string[]): PackResolution {
   return storeResolveGlobalPacks(names);
+}
+
+/** Pre-authorized entry for the policy plane and the project-scoped catalog
+ *  surface: the profiles selectable for one project (built-ins + the project's own
+ *  registered packs, installed; + the server-global packs, adoptable) WITHOUT
+ *  credential authentication — the caller has already enforced authorization.
+ *  Binds the project's isolated root for the project-tier half of the listing.
+ *  Never exposed on any portal. */
+export function executeApprovedListProjectProfiles(cfg: HostConfig, project: string): AvailableProfile[] {
+  return runWithProjectRoot(boundProject(cfg, project), () => storeListProjectProfiles());
+}
+
+/**
+ * Pre-authorized entry for the policy plane: make one profile id able to actually
+ * GOVERN a project, and report what that took. No credential authentication — the
+ * caller has already enforced authorization; never exposed on any portal.
+ *
+ * A known composite project kind or built-in profile id resolves immediately
+ * (source 'builtin', nothing adopted). Otherwise the project-scoped catalog
+ * decides: a profile already contributed by a pack registered in the project is
+ * returned with that pack as its source and nothing adopted; a profile contributed
+ * only by a server-global pack has that pack resolved through the two-tier
+ * resolution seam and vendored into the project by its CANONICAL name (registering
+ * it in extensions.packs), returned with adoptedPackName set so the side effect is
+ * reported rather than hidden.
+ *
+ * A profile id no tier contributes THROWS naming the id and the tiers searched:
+ * writing it as the project's projectType would leave the whole profile doctrine
+ * silently unenforced (UNKNOWN_PROFILE), so it is refused instead of applied.
+ *
+ * Idempotent: an already-resolvable profile is returned untouched, and a second
+ * call adopts nothing further (the first call's vendoring put the contributing
+ * pack in the project tier, where the catalog reports it installed).
+ */
+export function executeApprovedEnsureProfileInstalled(cfg: HostConfig, project: string, profileId: string): ProfileApplication {
+  // A composite project kind or a built-in profile governs as-is — no
+  // contributing pack exists to adopt.
+  if (hostCore.builtinProjectKinds().includes(profileId) || hostCore.builtinProfileIds().includes(profileId)) {
+    return { profileId, source: 'builtin' };
+  }
+
+  const contributors = executeApprovedListProjectProfiles(cfg, project).filter((p) => p.id === profileId);
+
+  // Already resolvable: a pack registered in the project contributes it.
+  const installed = contributors.find((p) => p.installed);
+  if (installed) return { profileId, source: installed.source };
+
+  // Adoptable: only a server-global pack contributes it — vendor that pack in.
+  const adoptable = contributors[0];
+  const resolved = adoptable ? executeApprovedResolveGlobalPacks([adoptable.source]).resolved[0] : undefined;
+  if (!resolved) {
+    throw new Error(
+      `Unknown profile "${profileId}" — no built-in profile or project kind carries it, no pack registered in ` +
+      `project "${project}" contributes it, and no server-global pack (mutable instance tier or immutable ` +
+      'image tier) contributes it. Writing an unresolvable id as the projectType would silently disable the ' +
+      'whole profile doctrine (UNKNOWN_PROFILE), so it is refused instead of applied.',
+    );
+  }
+  executeApprovedInstallProjectPack(cfg, project, resolved.name, resolved.content);
+  return { profileId, source: resolved.name, adoptedPackName: resolved.name };
 }
 
 export function removeProjectPack(cfg: HostConfig, credential: string | null, project: string, name: string): void {

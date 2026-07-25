@@ -402,6 +402,17 @@ methods:
         type: string
       - name: projectType
         type: string
+  - name: listProjectProfiles
+    description: >-
+      Forward to pack_orchestrator.listProjectProfiles with the caller's credential (project:read
+      over the project upstream).
+    signature: 'listProjectProfiles(credential: string, project: string): AvailableProfile[]'
+    returns: AvailableProfile[]
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
 status: complete
 createdAt: '2026-07-16T15:30:37.725Z'
-updatedAt: '2026-07-23T11:23:55.927Z'
+updatedAt: '2026-07-24T23:30:48.615Z'

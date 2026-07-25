@@ -108,6 +108,10 @@ export function setProjectType(cfg: HostConfig, credential: string | null, proje
   return policy.setProjectType(cfg, credential, projectId, projectType);
 }
 
+export function listProjectProfiles(cfg: HostConfig, credential: string | null, project: string): AvailableProfile[] {
+  return packs.listProjectProfiles(cfg, credential, project);
+}
+
 // ── producers ─────────────────────────────────────────────────────────────────
 
 export function listProducers(cfg: HostConfig, credential: string | null, project: string): ProducerConfig[] {

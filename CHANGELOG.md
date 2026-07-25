@@ -1,6 +1,17 @@
 # Changelog
 
-## Unreleased (major — from v4.3.0)
+## Unreleased (from v5.0.1)
+
+> **Release-line note (2026-07-25).** The `[major]` → v5.0.0 instruction below is
+> SPENT: v5.0.0 and then v5.0.1 were cut from this section (main is at v5.0.1,
+> `WAIRON_VERSION = '5.0.1'`), but the bullets were never rolled into version
+> headings — so most of what follows has ALREADY SHIPPED. Treat the sections
+> below as the accumulated 4.x→5.x record, not as pending work, and note that
+> splitting them into `## v5.0.0` / `## v5.0.1` / genuinely-unreleased is
+> outstanding housekeeping. For the next stable release from main = v5.0.1, the
+> newest section (hosted profile application) is **additive features + fixes**, so
+> merge dev → main with `[minor]` in the merge commit message → **v5.1.0**
+> (`[major]` would now wrongly jump to v6).
 
 Accumulated capabilities since v4.0.0 around extension packs, the hosted
 server, chained subprojects, agent-topology scale, the RBAC permission model,
@@ -11,6 +22,61 @@ dev's stale version fields are bumped by the auto-tag workflow at release
 time, never by hand. **Merge dev → main with `[major]` in the merge commit
 message → v5.0.0** (the RBAC permission model changes hosted authorization
 behavior, and the stereotype matrix gained newly enforced edges).
+
+### Hosted profile application: a selected profile now actually governs (new, `feat/profile-apply-into-spec`)
+
+Picking an architectural profile for a hosted project used to record a name.
+If the profile came from an extension pack that was not installed **in that
+project**, it resolved to nothing: `UNKNOWN_PROFILE`, doctrine family silently
+`neutral`, and the profile's whole `rules` block (designDepth, rule severities,
+naming, complexity) never applied. A project's own pack profiles were also
+invisible to the picker, and any later pack write erased the recorded selection.
+
+- **Project-scoped profile catalog** — `GET /web/projects/profiles` lists
+  built-ins ∪ the profiles contributed by that project's **own** registered
+  packs (`installed`) ∪ those from the server-global tiers (adoptable), each
+  source-tagged. The instance-wide `/web/admin/profiles` catalog is unchanged
+  but cannot see a project's own packs, which is why the picker switched.
+- **Writing a profile makes it resolve** — `setProjectType` ensures the profile
+  is resolvable *before* writing: a built-in or project kind passes through, a
+  profile contributed only by a server-global pack has that pack **vendored
+  into the project** (reported as `adoptedPackName`), and an id no tier carries
+  is **refused** rather than written as a name nothing enforces. The applied id
+  is folded to the front of the recorded `profileSelection`.
+- **Initialization applies the selection** — a project created under a policy
+  that requires a profile comes up governed by it (first resolvable id;
+  remaining ids are reported as an unapplied remainder, since a project has
+  exactly one governing profile). An unresolvable selection leaves the default
+  and is audited, never failing project creation.
+- **Honest reporting** — `getProjectConfig` returns `profileSource`,
+  `profileResolvable`, the unapplied remainder, and the subsystems whose own
+  `profile` overrides the project-level one; `evaluateProjectPolicy` reports
+  `governingProfileId` + `unappliedProfileIds`. The web UI surfaces an
+  unresolvable recorded project type instead of leaving it silent.
+- **Reconciliation repairs, and converges** — `reconcileProjectPolicy` repairs
+  the governing profile only when it is broken or policy-noncompliant (a
+  deliberate, resolvable, compliant choice survives), and folds the repair into
+  the recorded selection so compliance is satisfied in **one** pass. Without
+  that fold it reported the required profile as "not selected" forever.
+- **Fixes silent data loss** — `profileSelection` is now modeled in
+  `ProjectConfigSchema`; previously any `saveProjectConfig` round trip (a pack
+  install, adopt, or removal) stripped the unmodeled key.
+- New `ihost_core_adapter.builtinProjectKinds`, with `PROJECT_KINDS` exported
+  once from the core rules registry so the profiles rule and the hosted apply
+  path cannot disagree about which composite kinds are legal `projectType`s.
+
+**Validation rail (web UI)**: scoped to the focused spec by default — a
+component scopes to its whole unit (component + interface + implementation) —
+with an honest `N on this component · M elsewhere` count and a show-all toggle.
+Each finding carries a clickable chip naming the affected spec, and issues whose
+code maps to a concrete field (description, componentType, durability, profile,
+publicInterfaces) scroll to and highlight it.
+
+*Known gap*: a **subsystem**-level `profile` chosen from a not-yet-installed
+pack still resolves to nothing (no adopt step on that path) — the project-level
+write is the one that adopts. Tracked as the next step, together with the
+subproject-vs-internal-subsystem inheritance model (a subproject is its own
+project and may carry its own `projectType`; internal subsystems inherit).
 
 ### Level-3 semantic conformance + model-review program (new, `feat/level3-conformance`)
 

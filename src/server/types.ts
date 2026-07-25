@@ -444,6 +444,19 @@ export interface PolicyEvaluationResult {
    *  from missingPackNames (resolvable, just not installed): an unresolved pack
    *  signals an instance-side gap that reconciliation cannot remedy. */
   unresolvedPacks: string[];
+  /** The project's effective projectType at evaluation time — the architectural
+   *  profile actually governing its components. Absent for an init-request
+   *  evaluation (no project exists yet). Reported so a selection that was
+   *  recorded but never applied is visible: profile compliance is about the
+   *  recorded selection, while this is what the validator really enforces. */
+  governingProfileId?: string;
+  /** Recorded profileSelection ids that are not the governing projectType. Empty
+   *  for an init-request evaluation. Non-empty is the honest report of
+   *  selection-versus-reality drift: reconciliation applies the first resolvable
+   *  one when policy requires a profile that is not governing, or when the
+   *  recorded projectType resolves to no loaded profile — a deliberate,
+   *  resolvable, policy-compliant choice is reported here and left alone. */
+  unappliedProfileIds: string[];
   /** Human-readable findings for summaries and UI. */
   messages: string[];
 }
@@ -948,11 +961,35 @@ export interface WebGraphModel {
 }
 
 /** A project's editable configuration view for the web UI: the project-level
- *  architectural profile (project.yaml `projectType`, 'backend' default) and
- *  whether the project currently holds a lock record. */
+ *  architectural profile GOVERNING the project (project.yaml `projectType`,
+ *  'backend' default), whether the project currently holds a lock record, and —
+ *  so the UI can tell whether that profile is actually in force — where it comes
+ *  from, whether it resolves at all, any pack adopted to make it resolve, and the
+ *  parts of the project it does not govern. */
 export interface ProjectConfigView {
   projectType: string;
   locked: boolean;
+  /** "builtin" for a built-in profile or project kind, otherwise the canonical
+   *  name of the registered pack contributing it. Absent when the recorded value
+   *  resolves to no loaded profile. */
+  profileSource?: string;
+  /** Whether the recorded projectType actually resolves to a governing profile.
+   *  False means the project's doctrine — stereotype fencing and the profile's
+   *  rules block — is NOT being applied even though a name is recorded. A write
+   *  through setProjectType always leaves this true; false is reachable via a
+   *  hand-edited/legacy project.yaml, or a pack removed afterwards. */
+  profileResolvable: boolean;
+  /** Set only on the view returned by a setProjectType call that had to vendor a
+   *  server-global pack into the project to make the selected profile resolve. */
+  adoptedPackName?: string;
+  /** Recorded profileSelection ids that are NOT the governing projectType.
+   *  projectType takes exactly one profile, so a multi-id selection leaves a
+   *  remainder: reported rather than silently dropped, and belonging on
+   *  individual subsystems (subsystem.profile) if it should apply at all. */
+  unappliedProfileIds?: string[];
+  /** Ids of subsystems declaring a profile of their own, which therefore takes
+   *  precedence over the project-level profile for their components. */
+  overridingSubsystemIds?: string[];
 }
 
 /** The pre-auth login-options projection the login screen renders from: which
@@ -1144,8 +1181,10 @@ export interface ProjectPackReference {
 
 /** An architectural profile a hosted project may select, tagged with where it
  *  comes from so a UI can present the choices grouped by source (built-in vs a
- *  specific extension pack). Aggregated from the built-in profile set and the
- *  profiles contributed by the server-global packs. */
+ *  specific extension pack). Two catalogs project this type: the instance-wide
+ *  one (built-ins plus the server-global packs' profiles) and the PROJECT-SCOPED
+ *  one, which also carries the profiles contributed by the project's OWN
+ *  registered packs and marks each entry installed or adoptable-on-selection. */
 export interface AvailableProfile {
   /** The profile id (e.g. "backend", "frontend-reactive", or a pack-provided id). */
   id: string;
@@ -1156,4 +1195,28 @@ export interface AvailableProfile {
   family?: string;
   /** Optional human-readable summary of the profile for the picker. */
   description?: string;
+  /** Whether this profile can already govern the project it was listed for:
+   *  true for a built-in, and for a profile contributed by a pack registered in
+   *  that project's own extensions.packs; false for a server-global pack profile
+   *  the project has not adopted yet (selecting it adopts the contributing pack
+   *  first). Omitted by the instance-wide catalog, where project installation is
+   *  not a meaningful question. */
+  installed?: boolean;
+}
+
+/** The outcome of making an architectural profile actually able to GOVERN a
+ *  hosted project: the profile id, where it comes from, and the pack that had to
+ *  be adopted into the project (if any) for the profile to resolve at validation
+ *  time. The ensure seam THROWS for a profile id no tier contributes rather than
+ *  returning one of these — a projectType naming an unresolvable profile
+ *  silently disables its whole doctrine, so it is never written. */
+export interface ProfileApplication {
+  /** The profile id that is now resolvable for the project. */
+  profileId: string;
+  /** "builtin" for a built-in profile or project kind, otherwise the canonical
+   *  name of the pack contributing it. */
+  source: string;
+  /** Set only when the ensure step had to vendor a server-global pack into the
+   *  project (registering it in extensions.packs) to make the profile resolve. */
+  adoptedPackName?: string;
 }

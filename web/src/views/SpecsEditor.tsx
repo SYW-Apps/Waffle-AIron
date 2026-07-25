@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { asList, get, mcpCall, post } from '../api';
+import { ApiError, asList, get, mcpCall, post } from '../api';
 import {
   AsyncButton,
   AsyncView,
@@ -94,6 +94,44 @@ const SCALAR_FIELDS: Record<SpecKind, string[]> = {
  *  clearing a previously-set value is a no-op (documented). */
 const OPTIONAL_ENUM_FIELDS = new Set(['profile', 'designDepth', 'portalType', 'durability', 'detail', 'conformance']);
 
+/**
+ * Validation-rail field map — `sdd_validate_tree` issue code → the editable
+ * field (as used with `Field`'s `fieldKey`/`highlight` props below) it points
+ * at. ONLY curated codes with a VERIFIED real field in one of the panels
+ * below belong here — this is deliberately partial, not exhaustive: codes
+ * like EXCESSIVE_DEPENDENCIES/GOD_COMPONENT (dependsOn), UNKNOWN_PATTERN_REF
+ * (patterns), and MISSING_SOURCE_PATH/MISSING_SOURCE_FILE/
+ * SOURCE_PATH_ESCAPES_ROOT (sourcePath) were considered and DROPPED — this is
+ * a values-only editor (see the module doc comment), and none of those
+ * fields have an editable control anywhere in this file. Add an entry only
+ * after confirming the target field really renders for that spec kind.
+ */
+const CODE_FIELD_MAP: Record<string, string> = {
+  DESCRIPTION_TOO_SHORT: 'description',
+  MISSING_DESCRIPTION: 'description',
+  PROFILE_FORBIDDEN_STEREOTYPE: 'componentType',
+  PROFILE_DISCOURAGED_STEREOTYPE: 'componentType',
+  FRONTEND_STEREOTYPE_IN_BACKEND: 'componentType',
+  BACKEND_STEREOTYPE_IN_FRONTEND: 'componentType',
+  PLC_CYCLIC_CONCURRENCY_VIOLATION: 'componentType',
+  MISSING_DURABILITY: 'durability',
+  UNKNOWN_PROFILE: 'profile',
+  // public-surface.ts always attaches these to the declaring subsystem, whose
+  // editor renders one "Public interfaces" group (not addressable per-entry —
+  // the issue doesn't say which entry, so the whole group is flagged).
+  PUBLIC_INTERFACE_UNBOUND: 'publicInterfaces',
+  PUBLIC_INTERFACE_INVALID_COMPONENT: 'publicInterfaces',
+  PUBLIC_INTERFACE_FOREIGN_COMPONENT: 'publicInterfaces',
+  PUBLIC_INTERFACE_TYPE_MISMATCH: 'publicInterfaces',
+  PUBLIC_INTERFACE_INVALID_INTERFACE: 'publicInterfaces',
+  PUBLIC_INTERFACE_EVENT_MISTYPED: 'publicInterfaces',
+};
+
+/** Highest-severity flag per field, scoped to ONE spec's issues (the caller
+ *  pre-filters by specId — see SpecsTab's openSpecFieldFlags). */
+type FieldFlags = Map<string, 'error' | 'warning'>;
+const EMPTY_FIELD_FLAGS: FieldFlags = new Map();
+
 // ── Graph (picker source) ──────────────────────────────────────────────────────
 
 interface GraphNode {
@@ -116,6 +154,20 @@ interface Graph {
 interface ProjectConfigResp {
   projectType: string;
   locked?: boolean;
+  /** "builtin" or the contributing pack's name — where the recorded projectType
+   *  currently resolves from. */
+  profileSource?: string;
+  /** False means the recorded projectType resolves to nothing, so its doctrine
+   *  is NOT being applied. */
+  profileResolvable?: boolean;
+  /** Set on a save that had to vendor a pack to make the profile resolvable. */
+  adoptedPackName?: string;
+  /** Recorded selection ids that aren't the governing project type — they
+   *  belong on individual subsystems instead. */
+  unappliedProfileIds?: string[];
+  /** Subsystems declaring their own profile, which the project-level one does
+   *  not govern. */
+  overridingSubsystemIds?: string[];
 }
 
 const byLabel = (a: GraphNode, b: GraphNode) => a.label.localeCompare(b.label);
@@ -355,24 +407,143 @@ function PortalAuthEditor(props: { auth: any; onChange: (auth: any) => void }) {
   );
 }
 
+/** The focused spec's scope for the validation rail — either the open
+ *  component's whole unit (component + its interface(s) + implementation(s),
+ *  the same unit ComponentUnitEditor tabs between) or, for a subsystem/type/
+ *  system selection, just that one id. Null means nothing is selected, so
+ *  the rail shows everything (unchanged from before this feature). */
+interface RailScope {
+  ids: Set<string>;
+  /** For the "N on this <noun>" header line. */
+  noun: 'component' | 'subsystem' | 'type' | 'system';
+}
+
+/** True when `specId` belongs to `scope` — either it names a scoped spec
+ *  directly, or it is a synthetic "<parentId>.<memberName>" id a few rule
+ *  codes use to point at an interface method / type field / type method
+ *  (complexity.ts) whose PARENT is in scope. Plain ids never otherwise
+ *  contain '.' (subproject namespacing uses '::'), so this split is safe. */
+function issueInScope(specId: string | undefined, scope: RailScope): boolean {
+  if (!specId) return false;
+  if (scope.ids.has(specId)) return true;
+  const dot = specId.lastIndexOf('.');
+  return dot > 0 && scope.ids.has(specId.slice(0, dot));
+}
+
+/** Resolve a raw specId to a graph node for chip display: exact id match
+ *  first, then (for the same "<parentId>.<memberName>" composite ids
+ *  issueInScope() understands) fall back to the parent node, surfacing the
+ *  member name as a suffix. Returns null when neither resolves — some issues
+ *  (e.g. a project-level UNKNOWN_PROFILE) carry no specId at all, and a few
+ *  reference ids the currently loaded graph doesn't carry. */
+function resolveSpecRef(
+  specId: string,
+  nodes: GraphNode[],
+): { kind: SpecKind; id: string; label: string; suffix?: string } | null {
+  const normKind = (k: string): SpecKind => (k === 'project' ? 'system' : (k as SpecKind));
+  const exact = nodes.find((n) => n.id === specId);
+  if (exact) return { kind: normKind(exact.kind), id: exact.id, label: exact.label };
+  const dot = specId.lastIndexOf('.');
+  if (dot > 0) {
+    const parent = nodes.find((n) => n.id === specId.slice(0, dot));
+    if (parent) return { kind: normKind(parent.kind), id: parent.id, label: parent.label, suffix: specId.slice(dot + 1) };
+  }
+  return null;
+}
+
+/** The affected-spec affordance on a finding row: a clickable chip naming the
+ *  spec's kind + human label when the graph resolves it, else a plain,
+ *  non-interactive "id · <raw id>" fallback (never guess a kind to navigate
+ *  to). Reuses the exact URL-tracked selection mechanism the tree picker
+ *  uses (onSelectSpec), including its '::' → '/' qualified-id mapping. */
+function IssueSpecChip(props: { specId: string; nodes: GraphNode[]; onSelectSpec: (sel: { kind: string; id: string }) => void }) {
+  const ref = resolveSpecRef(props.specId, props.nodes);
+  if (!ref) {
+    return <span className="badge badge-neutral finding-chip-unresolved" title={props.specId}>id · {props.specId}</span>;
+  }
+  return (
+    <button
+      type="button"
+      className="badge badge-accent finding-chip"
+      title={props.specId}
+      onClick={() => props.onSelectSpec({ kind: ref.kind, id: ref.id })}
+    >
+      {ref.kind} · {ref.label}{ref.suffix ? ` · ${ref.suffix}` : ''}
+    </button>
+  );
+}
+
+const SCOPE_NOUN_LABEL: Record<RailScope['noun'], string> = {
+  component: 'component',
+  subsystem: 'subsystem',
+  type: 'type',
+  system: 'system',
+};
+
 /** The tree-wide validation results rail (the whitespace to the right of the
  *  editor). Validation is a WHOLE-TREE concern, so it lives at the tab level —
  *  running it here (not per-spec) keeps results visible as you move between
- *  specs, and renders them beside the form instead of pushing it down. */
+ *  specs, and renders them beside the form instead of pushing it down.
+ *
+ *  Scoped to the focused spec by default (with an honest "N elsewhere" count
+ *  and a show-all escape hatch) — see SpecsTab's `scope`/`showAll`. Each
+ *  finding names its affected spec via a clickable chip, and — when the
+ *  issue's code maps to a real field on whatever spec is CURRENTLY open
+ *  (CODE_FIELD_MAP, cross-checked against `openSpecId`) — the message itself
+ *  is clickable to scroll to + highlight that field. */
 function ValidationRail(props: {
   validation: { errors: any[]; warnings: any[] } | null;
   onValidate: () => Promise<void>;
+  nodes: GraphNode[];
+  onSelectSpec: (sel: { kind: string; id: string }) => void;
+  /** Null when nothing is selected — show everything, no scoping UI. */
+  scope: RailScope | null;
+  showAll: boolean;
+  onToggleShowAll: () => void;
+  /** The exact spec currently open in the editor (selected?.id) — a finding's
+   *  message is only scroll-clickable when it matches this exactly (its
+   *  mapped field only actually renders on THIS spec's panel). */
+  openSpecId: string | null;
+  onRequestScroll: (field: string) => void;
 }) {
   const toast = useToast();
   const v = props.validation;
   const total = v ? v.errors.length + v.warnings.length : 0;
-  const Finding = (i: any, kindLabel: 'error' | 'warn', key: string) => (
-    <li key={key} className={`finding f-${kindLabel}`}>
-      <span className={kindLabel === 'error' ? 'err' : 'badge-warn'} style={kindLabel === 'warn' ? { padding: 0 } : undefined}>{kindLabel}</span>{' '}
-      {i.code ? <code className="subtle">{i.code}</code> : null} {i.message}
-      {i.specId ? <span className="hint"> ({i.specId})</span> : null}
-    </li>
-  );
+  const inScope = (i: any) => !props.scope || issueInScope(i.specId, props.scope);
+  const scopedErrors = v ? v.errors.filter(inScope) : [];
+  const scopedWarnings = v ? v.warnings.filter(inScope) : [];
+  const inScopeCount = scopedErrors.length + scopedWarnings.length;
+  const elsewhereCount = total - inScopeCount;
+  const showingAll = !props.scope || props.showAll;
+  const displayedErrors = showingAll ? (v?.errors ?? []) : scopedErrors;
+  const displayedWarnings = showingAll ? (v?.warnings ?? []) : scopedWarnings;
+
+  const Finding = (i: any, kindLabel: 'error' | 'warn', key: string) => {
+    const field = CODE_FIELD_MAP[i.code];
+    const scrollable = !!field && !!props.openSpecId && i.specId === props.openSpecId;
+    return (
+      <li key={key} className={`finding f-${kindLabel}`}>
+        <div className="finding-row">
+          <span className={kindLabel === 'error' ? 'err' : 'badge-warn'} style={kindLabel === 'warn' ? { padding: 0 } : undefined}>{kindLabel}</span>
+          {i.code ? <code className="subtle">{i.code}</code> : null}
+        </div>
+        <div
+          className={scrollable ? 'finding-msg finding-msg-clickable' : 'finding-msg'}
+          role={scrollable ? 'button' : undefined}
+          onClick={scrollable ? () => props.onRequestScroll(field) : undefined}
+          title={scrollable ? 'Jump to this field' : undefined}
+        >
+          {i.message}
+        </div>
+        {i.specId && (
+          <div className="finding-chip-row">
+            <IssueSpecChip specId={i.specId} nodes={props.nodes} onSelectSpec={props.onSelectSpec} />
+          </div>
+        )}
+      </li>
+    );
+  };
+
   return (
     <aside className="spec-validation">
       <div className="spec-validation-head">
@@ -383,13 +554,26 @@ function ValidationRail(props: {
       {v && total === 0 && <Badge tone="ok">clean — no errors or warnings</Badge>}
       {v && total > 0 && (
         <>
+          {props.scope && (
+            <div className="spec-validation-scope">
+              <span className="hint">
+                {inScopeCount} on this {SCOPE_NOUN_LABEL[props.scope.noun]} · {elsewhereCount} elsewhere
+              </span>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={props.onToggleShowAll}>
+                {props.showAll ? 'Show scoped' : 'Show all'}
+              </button>
+            </div>
+          )}
           <div className="spec-validation-counts">
-            {v.errors.length > 0 && <Badge tone="bad">{v.errors.length} errors</Badge>}{' '}
-            {v.warnings.length > 0 && <Badge tone="warn">{v.warnings.length} warnings</Badge>}
+            {displayedErrors.length > 0 && <Badge tone="bad">{displayedErrors.length} errors</Badge>}{' '}
+            {displayedWarnings.length > 0 && <Badge tone="warn">{displayedWarnings.length} warnings</Badge>}
+            {displayedErrors.length === 0 && displayedWarnings.length === 0 && (
+              <Badge tone="ok">clean — no issues on this {SCOPE_NOUN_LABEL[props.scope!.noun]}</Badge>
+            )}
           </div>
           <ul className="finding-list">
-            {v.errors.map((i, n) => Finding(i, 'error', `e${n}`))}
-            {v.warnings.map((i, n) => Finding(i, 'warn', `w${n}`))}
+            {displayedErrors.map((i, n) => Finding(i, 'error', `e${n}`))}
+            {displayedWarnings.map((i, n) => Finding(i, 'warn', `w${n}`))}
           </ul>
         </>
       )}
@@ -434,6 +618,25 @@ function profileGroups(profiles: AvailableProfile[]): { label: string; options: 
   // Built-in first, then packs alphabetically.
   order.sort((a, b) => (a === 'Built-in' ? -1 : b === 'Built-in' ? 1 : a.localeCompare(b)));
   return order.map((label) => ({ label, options: bySource.get(label)! }));
+}
+
+/** Layer a " — adopts pack" suffix onto adoptable (`installed === false`)
+ *  options. `profileGroups()` itself stays source-only (it's shared between
+ *  every profile picker, where "installed" is meaningless without a
+ *  project-scoped catalog) — the installed/adoptable distinction is layered
+ *  on top here, per-picker, so both the project-type control
+ *  (ProjectConfigPanel) and the subsystem Profile picker (SpecForm) can show
+ *  which options aren't yet registered in this project before the choice is
+ *  made. Kept as one shared function so the two pickers can't drift. */
+function labelAdoptable(
+  groups: { label: string; options: { value: string; label: string }[] }[],
+  profiles: AvailableProfile[],
+): { label: string; options: { value: string; label: string }[] }[] {
+  const adoptableIds = new Set(profiles.filter((p) => p.installed === false).map((p) => p.id));
+  return groups.map((g) => ({
+    ...g,
+    options: g.options.map((o) => (adoptableIds.has(o.value) ? { ...o, label: `${o.label} — adopts pack` } : o)),
+  }));
 }
 
 /** Ensure the current value is selectable even if the catalog no longer lists it. */
@@ -650,15 +853,33 @@ function SpecForm(props: {
   onSaved: () => void;
   /** When present (implementation tab), each method offers a "view flow" deep-link. */
   onViewFlow?: (method: string) => void;
+  /** This spec's field → severity flags, from the validation rail (already
+   *  pre-filtered to sel.id by SpecsTab — see openSpecFieldFlags). */
+  fieldFlags?: FieldFlags;
+  /** Bumped by the validation rail when a finding's message is clicked;
+   *  scrolls to + (via fieldFlags) highlights the named field. */
+  scrollRequest?: { field: string; nonce: number } | null;
 }) {
   const { projectId, sel, spec, typeSuggestions } = props;
   const toast = useToast();
   const [draft, setDraft] = useState<any>(() => clone(spec));
+  const formRef = useRef<HTMLDivElement>(null);
+  const fieldFlags = props.fieldFlags ?? EMPTY_FIELD_FLAGS;
+  const flagFor = (field: string) => fieldFlags.get(field);
 
   // Re-sync when a fresh load arrives (useAsync mints a new object on reload).
   useEffect(() => {
     setDraft(clone(spec));
   }, [spec]);
+
+  // Scroll to + (via the field's own `highlight` prop) flash the field a
+  // clicked finding names — only reachable when that field is on THIS spec.
+  useEffect(() => {
+    if (!props.scrollRequest) return;
+    const el = formRef.current?.querySelector(`[data-field="${CSS.escape(props.scrollRequest.field)}"]`);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.scrollRequest]);
 
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(spec), [draft, spec]);
 
@@ -678,16 +899,59 @@ function SpecForm(props: {
       toast.ok('No value changes to save.');
       return;
     }
+
+    // The subsystem Profile picker lists the same project-scoped catalog as
+    // ProjectConfigPanel's project-type control, including server-global pack
+    // profiles this project hasn't adopted yet (installed === false). Mirror
+    // that control's fix here: adopt the contributing pack FIRST, then write
+    // the spec — a profile written without its pack resolves to nothing
+    // (UNKNOWN_PROFILE) and its doctrine silently never applies. `delta.profile`
+    // is only present when the field actually changed (scalarDelta), so this
+    // never fires on an unrelated save (e.g. editing just the description).
+    let adoptedPackName: string | undefined;
+    if (sel.kind === 'subsystem' && typeof delta.profile === 'string' && delta.profile) {
+      const target = props.profiles.find((p) => p.id === delta.profile);
+      if (target?.installed === false) {
+        try {
+          await post('/web/projects/packs/adopt', { projectId, name: target.source });
+          adoptedPackName = target.source;
+        } catch (e) {
+          // Adopting a pack requires project:admin; a spec write only needs
+          // write access, so this can 403 where the write below would have
+          // succeeded. Do NOT write the profile in that case — surface a
+          // clear error naming the pack instead of silently shipping a
+          // profile that resolves to nothing.
+          if (e instanceof ApiError && e.status === 403) {
+            throw new Error(
+              `Can't save — profile “${target.id}” needs pack “${target.source}”, and adopting a pack requires project admin access. Ask a project admin to add the pack, or choose an already-installed profile.`,
+            );
+          }
+          throw e;
+        }
+      }
+    }
+
     await mcpCall(projectId, 'sdd_update_spec', { kind: sel.kind, id: sel.id, delta });
-    toast.ok(`Saved ${sel.kind} “${sel.label}”`);
+    toast.ok(adoptedPackName
+      ? `Saved ${sel.kind} “${sel.label}” — adopted pack “${adoptedPackName}” so this profile applies.`
+      : `Saved ${sel.kind} “${sel.label}”`);
     props.onSaved();
   }
 
-  const profGroups = useMemo(() => withCurrent(profileGroups(props.profiles), draft.profile ?? ''), [props.profiles, draft.profile]);
+  const profGroups = useMemo(
+    () => withCurrent(labelAdoptable(profileGroups(props.profiles), props.profiles), draft.profile ?? ''),
+    [props.profiles, draft.profile],
+  );
+  // Mirrors ProjectConfigPanel's typeHint — tells the user up front that
+  // picking this profile will adopt a pack on save (see save() above).
+  const selectedProfile = props.profiles.find((p) => p.id === draft.profile);
+  const profileHint = selectedProfile?.installed === false
+    ? `Not yet installed in this project — saving will adopt the “${selectedProfile.source}” pack so this profile applies.`
+    : 'Architectural profile (built-in or pack-provided).';
   const paramSuggestions = useMemo(() => [...PRIMITIVES, ...typeSuggestions], [typeSuggestions]);
 
   return (
-    <div className="stack-lg">
+    <div className="stack-lg" ref={formRef}>
       <div className="view-head">
         <div className="cell-stack">
           <div>
@@ -752,16 +1016,16 @@ function SpecForm(props: {
             <Field label="Name"><TextInput value={draft.name ?? ''} onChange={(v) => set('name', v)} /></Field>
             <Field label="Status"><EnumSelect value={draft.status} onChange={(v) => set('status', v)} options={STATUS} /></Field>
           </div>
-          <Field label="Description"><textarea className="input" rows={3} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field>
+          <Field label="Description" fieldKey="description" highlight={flagFor('description')}><textarea className="input" rows={3} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field>
           <div className="row-form">
-            <Field label="Profile" hint="Architectural profile (built-in or pack-provided).">
+            <Field label="Profile" hint={profileHint} fieldKey="profile" highlight={flagFor('profile')}>
               <GroupedSelect value={draft.profile ?? ''} onChange={(v) => set('profile', v)} groups={profGroups} includeNone noneLabel="(inherit)" />
             </Field>
             <Field label="Design depth"><EnumSelect value={draft.designDepth} onChange={(v) => set('designDepth', v)} options={DESIGN_DEPTH} allowNone noneLabel="(project default)" /></Field>
             <Field label="Target language"><TextInput value={draft.targetLanguage ?? ''} onChange={(v) => set('targetLanguage', v)} placeholder="(inherit system)" /></Field>
           </div>
           {(draft.publicInterfaces ?? []).length > 0 && (
-            <div className="stack-lg">
+            <div className={`stack-lg${flagFor('publicInterfaces') ? ` field-flag field-flag-${flagFor('publicInterfaces')}` : ''}`} data-field="publicInterfaces">
               <span className="field-label">Public interfaces</span>
               {draft.publicInterfaces.map((pi: any, i: number) => (
                 <div key={i} className="sub-card">
@@ -798,14 +1062,14 @@ function SpecForm(props: {
             <Field label="Name"><TextInput value={draft.name ?? ''} onChange={(v) => set('name', v)} /></Field>
             <Field label="Status"><EnumSelect value={draft.status} onChange={(v) => set('status', v)} options={STATUS} /></Field>
           </div>
-          <Field label="Description"><textarea className="input" rows={3} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field>
+          <Field label="Description" fieldKey="description" highlight={flagFor('description')}><textarea className="input" rows={3} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field>
           <div className="row-form">
-            <Field label="Component type"><EnumSelect value={draft.componentType} onChange={(v) => set('componentType', v)} options={COMPONENT_TYPE} /></Field>
+            <Field label="Component type" fieldKey="componentType" highlight={flagFor('componentType')}><EnumSelect value={draft.componentType} onChange={(v) => set('componentType', v)} options={COMPONENT_TYPE} /></Field>
             {draft.componentType === 'Portal' && (
               <Field label="Portal type"><EnumSelect value={draft.portalType} onChange={(v) => set('portalType', v)} options={PORTAL_TYPE} allowNone /></Field>
             )}
             {draft.componentType === 'Store' && (
-              <Field label="Durability"><EnumSelect value={draft.durability} onChange={(v) => set('durability', v)} options={DURABILITY} allowNone /></Field>
+              <Field label="Durability" fieldKey="durability" highlight={flagFor('durability')}><EnumSelect value={draft.durability} onChange={(v) => set('durability', v)} options={DURABILITY} allowNone /></Field>
             )}
           </div>
           {draft.componentType === 'Portal' && (
@@ -828,7 +1092,7 @@ function SpecForm(props: {
           <div className="row-form">
             <Field label="Name"><TextInput value={draft.name ?? ''} onChange={(v) => set('name', v)} /></Field>
           </div>
-          <Field label="Description"><textarea className="input" rows={3} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field>
+          <Field label="Description" fieldKey="description" highlight={flagFor('description')}><textarea className="input" rows={3} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field>
           {(draft.methods ?? []).length > 0 && (
             <div className="stack-lg">
               <span className="field-label">Methods</span>
@@ -875,7 +1139,7 @@ function SpecForm(props: {
             <Field label="Name"><TextInput value={draft.name ?? ''} onChange={(v) => set('name', v)} /></Field>
             <Field label="Status"><EnumSelect value={draft.status} onChange={(v) => set('status', v)} options={STATUS} /></Field>
           </div>
-          <Field label="Description"><textarea className="input" rows={3} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field>
+          <Field label="Description" fieldKey="description" highlight={flagFor('description')}><textarea className="input" rows={3} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field>
           <div className="row-form">
             <Field label="Narrative detail (default)"><EnumSelect value={draft.detail} onChange={(v) => set('detail', v)} options={NARRATIVE_DETAIL} allowNone noneLabel="(stereotype default)" /></Field>
             <Field label="Conformance (default)"><EnumSelect value={draft.conformance} onChange={(v) => set('conformance', v)} options={CONFORMANCE} allowNone noneLabel="(stereotype default)" /></Field>
@@ -924,7 +1188,7 @@ function SpecForm(props: {
             <Field label="Name"><TextInput value={draft.name ?? ''} onChange={(v) => set('name', v)} /></Field>
             <Field label="Kind"><EnumSelect value={draft.kind} onChange={(v) => set('kind', v)} options={TYPE_KIND} /></Field>
           </div>
-          <Field label="Description"><textarea className="input" rows={3} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field>
+          <Field label="Description" fieldKey="description" highlight={flagFor('description')}><textarea className="input" rows={3} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field>
           {(draft.fields ?? []).length > 0 && (
             <div className="stack-lg">
               <span className="field-label">Fields</span>
@@ -959,6 +1223,8 @@ function SpecEditor(props: {
   profiles: AvailableProfile[];
   onGraphChange: () => void;
   onViewFlow?: (method: string) => void;
+  fieldFlags?: FieldFlags;
+  scrollRequest?: { field: string; nonce: number } | null;
 }) {
   const { projectId, sel } = props;
   const spec = useAsync<any>(() => mcpCall(projectId, 'sdd_get_spec', { kind: sel.kind, id: sel.id }), [projectId, sel.kind, sel.id]);
@@ -973,6 +1239,8 @@ function SpecEditor(props: {
           typeSuggestions={props.typeSuggestions}
           profiles={props.profiles}
           onViewFlow={props.onViewFlow}
+          fieldFlags={props.fieldFlags}
+          scrollRequest={props.scrollRequest}
           onSaved={() => {
             spec.reload();
             props.onGraphChange();
@@ -1111,6 +1379,8 @@ function ComponentUnitEditor(props: {
   profiles: AvailableProfile[];
   onSelectSpec: (sel: { kind: string; id: string }) => void;
   onGraphChange: () => void;
+  fieldFlags?: FieldFlags;
+  scrollRequest?: { field: string; nonce: number } | null;
 }) {
   const { componentId, selection, nodes } = props;
   const navigate = useNavigate();
@@ -1179,6 +1449,8 @@ function ComponentUnitEditor(props: {
           profiles={props.profiles}
           onViewFlow={(method) => navigate(`${canvasBase}#flow=${componentId}~${method}`)}
           onGraphChange={props.onGraphChange}
+          fieldFlags={props.fieldFlags}
+          scrollRequest={props.scrollRequest}
         />
       )}
     </div>
@@ -1196,14 +1468,26 @@ function ProjectConfigPanel(props: { projectId: string; config: Async<ProjectCon
   if (!cfg) return null; // route not deployed / not readable — hide, keep the rest working
 
   const locked = !!cfg.locked;
-  const groups = withCurrent(
+
+  // Adoptable options (server-global pack profiles not yet registered in this
+  // project) get a label suffix via the shared labelAdoptable() — see its doc
+  // comment — so the choice is visible before you make it.
+  const labeledGroups = labelAdoptable(
     [...profileGroups(props.profiles), { label: 'Project kinds', options: PROJECT_KINDS.map((k) => ({ value: k, label: k })) }],
-    projectType,
+    props.profiles,
   );
+  const groups = withCurrent(labeledGroups, projectType);
+
+  const selectedProfile = props.profiles.find((p) => p.id === projectType);
+  const typeHint = selectedProfile?.installed === false
+    ? `Not yet installed in this project — saving will adopt the “${selectedProfile.source}” pack so this profile applies.`
+    : 'Configures targeted rules/templates for the whole project.';
 
   async function save() {
-    await post('/web/projects/config', { projectId: props.projectId, projectType });
-    toast.ok('Project type saved');
+    const resp = await post<ProjectConfigResp>('/web/projects/config', { projectId: props.projectId, projectType });
+    toast.ok(resp.adoptedPackName
+      ? `Project type saved — adopted pack “${resp.adoptedPackName}” so this profile applies.`
+      : 'Project type saved');
     props.config.reload();
   }
 
@@ -1214,14 +1498,33 @@ function ProjectConfigPanel(props: { projectId: string; config: Async<ProjectCon
           This project is locked — saving a spec change will invalidate the lock (a re-lock is required before promote).
         </div>
       )}
+      {cfg.profileResolvable === false && (
+        <div className="lock-banner">
+          The recorded project type “{cfg.projectType}” doesn't resolve to a loaded profile, so its rules aren't being applied. Pick a profile from the list below to fix this.
+        </div>
+      )}
       <div className="row-form">
-        <Field label="Project type" hint="Configures targeted rules/templates for the whole project.">
+        <Field label="Project type" hint={typeHint}>
           <GroupedSelect value={projectType} onChange={setProjectType} groups={groups} />
         </Field>
         <div className="row-form-action">
           <AsyncButton variant="primary" action={save} onError={toast.bad} disabled={projectType === (cfg.projectType ?? 'backend')}>Save type</AsyncButton>
         </div>
       </div>
+      {(!!cfg.unappliedProfileIds?.length || !!cfg.overridingSubsystemIds?.length) && (
+        <div className="stack-sm">
+          {!!cfg.unappliedProfileIds?.length && (
+            <span className="hint">
+              Also recorded but not applied at the project level (these govern individual subsystems instead): {cfg.unappliedProfileIds.join(', ')}.
+            </span>
+          )}
+          {!!cfg.overridingSubsystemIds?.length && (
+            <span className="hint">
+              {cfg.overridingSubsystemIds.length} subsystem{cfg.overridingSubsystemIds.length === 1 ? ' declares its' : 's declare their'} own profile and {cfg.overridingSubsystemIds.length === 1 ? "isn't" : "aren't"} governed by the project type: {cfg.overridingSubsystemIds.join(', ')}.
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1257,11 +1560,14 @@ export function SpecsTab({
     () => get<ProjectConfigResp>(`/web/projects/config?projectId=${enc}`).catch(() => null),
     [projectId],
   );
+  // Project-scoped catalog (not the instance-wide /web/admin/profiles): it can
+  // see packs registered in THIS project and marks each entry `installed`, so
+  // the project-type picker can tell "ready to use" from "adopts a pack".
   const profiles = useAsync<AvailableProfile[]>(
-    () => get('/web/admin/profiles')
+    () => get(`/web/projects/profiles?projectId=${enc}`)
       .then((d) => asList<AvailableProfile>(d, 'profiles'))
-      .catch(() => BUILTIN_PROFILES.map((id) => ({ id, source: 'builtin' } as AvailableProfile))),
-    [],
+      .catch(() => BUILTIN_PROFILES.map((id) => ({ id, source: 'builtin', installed: true } as AvailableProfile))),
+    [projectId],
   );
 
   const typeSuggestions = useMemo(
@@ -1288,6 +1594,63 @@ export function SpecsTab({
     }
     return null;
   }, [selection, graph.data]);
+
+  // Validation rail scope: a component/interface/implementation selection
+  // scopes to the WHOLE unit (the component + its interface(s) + its
+  // implementation(s) — the same set ComponentUnitEditor tabs between);
+  // a subsystem/type/system selection scopes to just that one id. Null
+  // (nothing selected) means "show everything", unchanged from before.
+  const scope: RailScope | null = useMemo(() => {
+    if (!selected) return null;
+    if (selected.kind === 'component' || selected.kind === 'interface' || selected.kind === 'implementation') {
+      // Normally activeComponentId resolves (it's derived from the same
+      // selection); if a stale/broken deep-link ever leaves it null, still
+      // scope to at least the selected id itself rather than showing nothing.
+      const ids = new Set<string>([selected.id]);
+      if (activeComponentId) {
+        ids.add(activeComponentId);
+        for (const n of graph.data?.nodes ?? []) {
+          if ((n.kind === 'interface' || n.kind === 'implementation') && n.parentId === activeComponentId) ids.add(n.id);
+        }
+      }
+      return { ids, noun: 'component' };
+    }
+    return { ids: new Set([selected.id]), noun: selected.kind };
+  }, [selected, activeComponentId, graph.data]);
+
+  // The rail's show-all escape hatch — reset to scoped whenever the focused
+  // unit changes, so a fresh selection never silently inherits a stale
+  // "show everything" choice left over from browsing a different spec.
+  const [showAll, setShowAll] = useState(false);
+  const scopeKey = scope ? [...scope.ids].sort().join('|') : null;
+  useEffect(() => {
+    setShowAll(false);
+  }, [scopeKey]);
+
+  // Bumped (via requestScroll) when a finding's message is clicked in the
+  // rail; SpecForm scrolls to + highlights the named field when it matches
+  // the spec it currently has open.
+  const [scrollRequest, setScrollRequest] = useState<{ field: string; nonce: number } | null>(null);
+  const requestScroll = (field: string) => setScrollRequest((r) => ({ field, nonce: (r?.nonce ?? 0) + 1 }));
+
+  // Field-level flags for whatever spec is CURRENTLY open — pre-filtered to
+  // its exact id (not the broader scope group) because CODE_FIELD_MAP names
+  // a field that only actually renders on that one spec's own panel.
+  const openSpecFieldFlags: FieldFlags = useMemo(() => {
+    const map: FieldFlags = new Map();
+    if (!validation || !selected) return map;
+    for (const i of validation.errors) {
+      if (i.specId !== selected.id) continue;
+      const field = CODE_FIELD_MAP[i.code];
+      if (field) map.set(field, 'error');
+    }
+    for (const i of validation.warnings) {
+      if (i.specId !== selected.id) continue;
+      const field = CODE_FIELD_MAP[i.code];
+      if (field && map.get(field) !== 'error') map.set(field, 'warning');
+    }
+    return map;
+  }, [validation, selected]);
 
   async function runValidate() {
     const res = await mcpCall<{ errors?: any[]; warnings?: any[] }>(projectId, 'sdd_validate_tree', {});
@@ -1320,7 +1683,13 @@ export function SpecsTab({
                     onGraphChange={() => {
                       graph.reload();
                       setValidation(null);
+                      // A subsystem-profile save can ADOPT a pack, which flips
+                      // that profile to installed — refetch so the picker stops
+                      // saying "adopts pack" for something now in the project.
+                      profiles.reload();
                     }}
+                    fieldFlags={openSpecFieldFlags}
+                    scrollRequest={scrollRequest}
                   />
                 ) : (
                   <SpecEditor
@@ -1332,7 +1701,11 @@ export function SpecsTab({
                       graph.reload();
                       // A spec write can change what validates — drop stale results.
                       setValidation(null);
+                      // …and a subsystem-profile save may have adopted a pack.
+                      profiles.reload();
                     }}
+                    fieldFlags={openSpecFieldFlags}
+                    scrollRequest={scrollRequest}
                   />
                 )
               ) : (
@@ -1341,7 +1714,17 @@ export function SpecsTab({
                 </EmptyState>
               )}
             </div>
-            <ValidationRail validation={validation} onValidate={runValidate} />
+            <ValidationRail
+              validation={validation}
+              onValidate={runValidate}
+              nodes={g.nodes ?? []}
+              onSelectSpec={onSelectSpec}
+              scope={scope}
+              showAll={showAll}
+              onToggleShowAll={() => setShowAll((s) => !s)}
+              openSpecId={selected?.id ?? null}
+              onRequestScroll={requestScroll}
+            />
           </div>
         )}
       </AsyncView>
