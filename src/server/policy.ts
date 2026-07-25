@@ -529,6 +529,36 @@ function unappliedIds(selectedProfileIds: string[], governingProfileId: string):
   return selectedProfileIds.filter((id) => id !== governingProfileId);
 }
 
+/**
+ * Fold an applied profile id to the FRONT of the project's recorded selection,
+ * keeping every other recorded id as the unapplied remainder and stamping the
+ * acting identity. Returns the selection as written.
+ *
+ * Shared by BOTH paths that apply a governing profile — an explicit profile write
+ * and a reconciliation repair — because the record is what compliance reads. A
+ * repair that wrote projectType without folding would leave a policy's required
+ * profile reported as "not selected" even though it now governs, so reconciliation
+ * could never converge: the operator would be told to reconcile a project that
+ * reconciliation had just fixed. A project with no recorded selection yet gets one
+ * carrying just this id.
+ */
+function foldAppliedProfile(
+  root: string,
+  profileId: string,
+  actor: PrincipalSubject,
+): ProjectProfileSelection {
+  const recorded = readProjectProfileSelection(root);
+  const folded: ProjectProfileSelection = {
+    profileIds: [profileId, ...unappliedIds(recorded?.profileIds ?? [], profileId)],
+    requiredPackNames: recorded?.requiredPackNames ?? [],
+    selectedBy: actor,
+    selectedAt: new Date().toISOString(),
+  };
+  if (recorded?.defaultPackNames) folded.defaultPackNames = recorded.defaultPackNames;
+  recordProjectProfileSelection(root, folded);
+  return folded;
+}
+
 /** The ids of the project's subsystems declaring a profile of their OWN, which
  *  therefore takes precedence over the project-level profile for their components.
  *  Bound-root read of the L1 specs. */
@@ -934,6 +964,7 @@ export function reconcileProjectPolicy(
   const policyUnsatisfied = requiredProfileIds.length > 0 && !requiredProfileIds.includes(governingProfileId);
   const governingUnresolvable = !classifyProfile(governingProfileId, catalog).resolvable;
   let repairedProfileId: string | undefined;
+  let selectedProfileIds = selection?.profileIds ?? [];
   if (policyUnsatisfied || governingUnresolvable) {
     // The policy's required ids come BEFORE the recorded selection ids: a
     // reconciliation serves the instance policy first.
@@ -946,6 +977,11 @@ export function reconcileProjectPolicy(
       writeProjectType(root, application.profileId);
       governingProfileId = application.profileId;
       repairedProfileId = application.profileId;
+      // Fold the repair into the recorded selection, exactly as an explicit
+      // profile write does: compliance reads the RECORD, so a repair that only
+      // wrote projectType would keep reporting the policy's required profile as
+      // unselected and reconciliation would never converge.
+      selectedProfileIds = foldAppliedProfile(root, application.profileId, principalSubject(principal)).profileIds;
     }
   }
 
@@ -954,7 +990,7 @@ export function reconcileProjectPolicy(
   const result = buildEvaluation({
     policy,
     presentPackNames: installedPackNames(cfg, projectId),
-    selectedProfileIds: selection?.profileIds ?? [],
+    selectedProfileIds,
     hasSelection: !!selection,
     countMissingPacksAsViolation: true,
     requiredDefaultResolution: resolution,
@@ -1062,20 +1098,10 @@ export function setProjectType(
 
   writeProjectType(root, application.profileId);
 
-  // Fold the applied id to the FRONT of the recorded selection, keeping the other
-  // recorded ids as the unapplied remainder — the record and the governing reality
-  // must not drift apart. A project with no recorded selection yet gets one carrying
-  // just this id.
-  const recorded = readProjectProfileSelection(root);
-  const remainder = unappliedIds(recorded?.profileIds ?? [], application.profileId);
-  const folded: ProjectProfileSelection = {
-    profileIds: [application.profileId, ...remainder],
-    requiredPackNames: recorded?.requiredPackNames ?? [],
-    selectedBy: principalSubject(principal),
-    selectedAt: new Date().toISOString(),
-  };
-  if (recorded?.defaultPackNames) folded.defaultPackNames = recorded.defaultPackNames;
-  recordProjectProfileSelection(root, folded);
+  // Fold the applied id to the FRONT of the recorded selection so the record and
+  // the governing reality do not drift apart.
+  const folded = foldAppliedProfile(root, application.profileId, principalSubject(principal));
+  const remainder = folded.profileIds.slice(1);
 
   const locked = runWithProjectRoot(root, () => hostCore.readLockRecord() !== null);
   const overriding = overridingSubsystemIds(root);

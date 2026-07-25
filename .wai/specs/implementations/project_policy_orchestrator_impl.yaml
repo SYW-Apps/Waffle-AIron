@@ -508,7 +508,7 @@ methods:
           straight to building the result.
         type: branch
         condition: a repair target was chosen
-        onFalseStep: 20
+        onFalseStep: 21
       - stepNumber: 18
         description: >-
           Make the repair target resolvable for the project, vendoring and registering its
@@ -524,20 +524,29 @@ methods:
         type: local
       - stepNumber: 20
         description: >-
+          Fold the repaired profile id into the recorded profileSelection (front position, keeping
+          the other recorded ids, stamped from the reconciling caller) so the record agrees with the
+          governing reality — exactly as an explicit profile write does. Without this, compliance
+          (which reads the recorded selection) keeps reporting the policy's required profile as
+          unselected even though it now governs, and reconciliation could never converge: the
+          operator would be told to reconcile a project that reconciliation just fixed.
+        type: local
+      - stepNumber: 21
+        description: >-
           Re-list the project's installed packs and build the PolicyEvaluationResult reflecting
           post-reconciliation state: remaining missingPackNames, unresolvedPacks (the resolution's
           unresolved names), blocked packs present, missing required profile ids, governingProfileId
           (the projectType now in force), unappliedProfileIds (recorded selection ids that are not
           governing), and human-readable messages.
         type: local
-      - stepNumber: 21
+      - stepNumber: 22
         description: Append a redacted audit event without letting a failure fail the reconciliation
         type: try
-        endStep: 23
+        endStep: 24
         catches:
           - error: audit append failure
-            step: 24
-      - stepNumber: 22
+            step: 25
+      - stepNumber: 23
         description: >-
           Append the redacted policy.reconcile audit event (noting the packs applied, any profile
           repair written to the governing projectType, and any required/default packs the instance
@@ -545,14 +554,14 @@ methods:
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 23
+      - stepNumber: 24
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 25
-      - stepNumber: 24
+        toStep: 26
+      - stepNumber: 25
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 25
+      - stepNumber: 26
         description: Return the policy evaluation result
         type: return
         outcome: policy evaluation result
@@ -820,4 +829,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-09T20:50:11.443Z'
-updatedAt: '2026-07-24T23:38:46.995Z'
+updatedAt: '2026-07-25T00:49:34.122Z'

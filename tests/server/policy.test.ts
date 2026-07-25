@@ -517,6 +517,36 @@ describe('project policy orchestrator (sdd_host)', () => {
     expect(auditMetadata('policy.reconcile', 'keep-proj').filter((m) => m.repairedProfileId)).toEqual([]);
   });
 
+  it('reconcileProjectPolicy CONVERGES: a repair folds into the recorded selection, so compliance is satisfied', () => {
+    // The non-convergence trap: compliance reads the RECORDED SELECTION, while a
+    // repair writes projectType. A project created BEFORE the policy required a
+    // profile has that id in neither place, so a repair that only wrote
+    // projectType would leave "Required profile is not selected" reported
+    // forever — the operator told to reconcile a project reconciliation just
+    // fixed (the same loop the pack-name canonicalization fix removed).
+    seedProfilePack('acme', 'acme-doctrine', 'ddd');
+    createPlacedProject(cfg, MASTER, 'conv-proj'); // created under a policy with NO profile requirement
+    const root = existingProjectRoot(dataDir, 'conv-proj')!;
+    expect(readRawConfig(root).profileSelection?.profileIds ?? []).not.toContain('ddd');
+
+    // The policy CHANGES afterwards to require the profile.
+    setPackPolicy(cfg, MASTER, samplePolicy({ requiredProfileIds: ['ddd'] }));
+    expect(evaluateProjectPolicy(cfg, MASTER, 'conv-proj').compliant).toBe(false);
+
+    // One reconcile both repairs the governing profile AND records it.
+    const res = reconcileProjectPolicy(cfg, MASTER, 'conv-proj');
+    expect(res.governingProfileId).toBe('ddd');
+    expect(readRawConfig(root).profileSelection.profileIds[0]).toBe('ddd'); // folded to the FRONT
+    expect(res.missingProfileIds).toEqual([]);
+    expect(res.compliant).toBe(true); // converged in ONE pass
+
+    // And it STAYS converged: a plain evaluation afterwards agrees, and a second
+    // reconcile finds nothing left to repair.
+    expect(evaluateProjectPolicy(cfg, MASTER, 'conv-proj').compliant).toBe(true);
+    reconcileProjectPolicy(cfg, MASTER, 'conv-proj');
+    expect(auditMetadata('policy.reconcile', 'conv-proj').filter((m) => m.repairedProfileId)).toHaveLength(1);
+  });
+
   it('reconcileProjectPolicy repairs a projectType that resolves to nothing, from the recorded selection', () => {
     // The pack-removed recovery: the name is recorded on both projectType and the
     // selection, but no loaded profile carries it until its pack is re-vendored.
