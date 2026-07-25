@@ -2,26 +2,9 @@
 
 ## Unreleased (from v5.0.1)
 
-> **Release-line note (2026-07-25).** The `[major]` → v5.0.0 instruction below is
-> SPENT: v5.0.0 and then v5.0.1 were cut from this section (main is at v5.0.1,
-> `WAIRON_VERSION = '5.0.1'`), but the bullets were never rolled into version
-> headings — so most of what follows has ALREADY SHIPPED. Treat the sections
-> below as the accumulated 4.x→5.x record, not as pending work, and note that
-> splitting them into `## v5.0.0` / `## v5.0.1` / genuinely-unreleased is
-> outstanding housekeeping. For the next stable release from main = v5.0.1, the
-> newest section (hosted profile application) is **additive features + fixes**, so
-> merge dev → main with `[minor]` in the merge commit message → **v5.1.0**
-> (`[major]` would now wrongly jump to v6).
-
-Accumulated capabilities since v4.0.0 around extension packs, the hosted
-server, chained subprojects, agent-topology scale, the RBAC permission model,
-and the Level-3 semantic-conformance program. Interim tags v4.1.0–v4.3.0 were
-cut from earlier dev merges, so some earlier bullets shipped in those; the
-release line's package.json (on main, currently 4.3.0) is authoritative —
-dev's stale version fields are bumped by the auto-tag workflow at release
-time, never by hand. **Merge dev → main with `[major]` in the merge commit
-message → v5.0.0** (the RBAC permission model changes hosted authorization
-behavior, and the stereotype matrix gained newly enforced edges).
+Additive features plus fixes: merge dev → main with `[minor]` in the merge commit
+message → **v5.1.0**. (`[major]` would wrongly jump to v6 — that instruction was
+spent on v5.0.0.)
 
 ### Hosted profile application: a selected profile now actually governs (new, `feat/profile-apply-into-spec`)
 
@@ -77,6 +60,87 @@ pack still resolves to nothing (no adopt step on that path) — the project-leve
 write is the one that adopts. Tracked as the next step, together with the
 subproject-vs-internal-subsystem inheritance model (a subproject is its own
 project and may carry its own `projectType`; internal subsystems inherit).
+
+### Subproject-scoped credentials are actually scoped (new, `feat/subproject-confinement`)
+
+A hosted token can be narrowed to a chained subproject (`projectId::subsystemId`),
+and the data plane binds the CHILD root for ordinary `sdd_*` tools. Eleven tools
+bypassed that: they act on the hosted project RECORD with the TOP project id, so a
+credential scoped to one subproject could act across the WHOLE parent. Not
+privilege escalation (a narrowing never widens grants) but a confinement failure,
+with no workaround but avoiding narrowed tokens.
+
+- **Record-level tools are refused** on a subproject-qualified binding —
+  `sdd_host_initialize_project`, `sdd_host_get_approval_status`,
+  `sdd_host_await_approval`, and the six project-ops tools (pack list/install,
+  policy evaluate/reconcile, produce, commit). The refusal is an `isError` tool
+  result naming the tool and the bound qualifier (HTTP stays 200), raised BEFORE
+  the lifecycle dispatch and BEFORE the permission gate, and audited through the
+  same path as any other outcome.
+- **`lock` / `promote` are confined rather than refused**: the qualifier is
+  forwarded and binds the child's tree through the containment-guarded mount
+  resolution, so a narrowed agent can freeze exactly its own subtree. An
+  unresolvable qualifier fails loudly — it never falls back to the parent, which
+  was the defect.
+- **The approval path is confined too.** Approval is the one path where the
+  requester does not perform the action, so the qualifier is recorded on the
+  `ApprovalRequest` via the existing `payload`/`payloadType` fields (the mechanism
+  `project:init` already uses), named in the summary so an approver sees the real
+  scope, and forwarded by both the auto-execute and the retry path. A malformed
+  scope payload refuses rather than widening to the whole project.
+- A subproject-scoped lock performs **no git sync and no publish**: the git binding
+  is read from the bound root, so a child tree carries none. Note the frozen child
+  tree is not staged by the project's own `.wai/`-scoped commit either — a chained
+  child lives outside that pathspec — so reaching a remote takes a commit whose
+  scope covers the child's path.
+
+### Sibling surfaces include Gateway- and Observer-published subsystems (fix)
+
+A chained child receives each sibling subsystem's published surface, but the
+projection only accepted a `Portal`. A subsystem published through a `Gateway` was
+legitimately published in-project yet absent from every child, leaving the child's
+cross-tree references permanently unverifiable with no user workaround. The
+projection now accepts what the boundary rules already sanction as a cross-boundary
+target — `Portal`, `Gateway`, or an `Observer` for an event surface. A published
+entry whose backing component can never serve a cross-boundary caller (a `Custom`
+entry over a Specialist, say) is omitted and reported as a diagnostic when the
+surfaces are generated; unbound entries and ones naming a missing component stay
+silent, because the validator already raises those as errors.
+
+## v5.0.1 (from v5.0.0)
+
+Undocumented at the time; recorded here from the release range.
+
+### ZIP (`.wpack`) extension packs + `@wairon/sdk` (new)
+
+A portable, versioned `.wpack` archive became the pack unit across the CLI, the
+webapp, and the hosted API, with a companion `@wairon/sdk` authoring library
+(`wairon pack init|build|add|list|remove`; `packs` kept as a deprecated alias). A
+`.wpack` is a directory pack plus a root `wairon-pack.yaml` envelope, extracted at
+INSTALL time into `.wai/packs/<name>/` — a directory pack the loader already reads,
+so the runtime load path is unchanged. The extractor enforces zip-slip
+normalization and caps on entries, uncompressed size, per-entry size, compression
+ratio and depth (stricter on hosted, which also keeps a max-body cap). Hosted
+install stays declarative-only; code packs remain a filesystem/image concern.
+
+### Distribution: scoped packages, tag-sourced releases, provenance
+
+`@wairon/cli` (renamed from the unscoped package) and `@wairon/sdk` publish in
+lockstep from a version tag with npm provenance; every `dev` push auto-tags
+`-dev.N` and publishes to the `dev` dist-tag. Windows binaries are
+Authenticode-signed behind a gate. The root build became self-sufficient (it builds
+the `sdk/` workspace first), and the workspace package is bundled rather than left
+as a runtime dependency — an unpublished workspace sibling must be bundled or the
+shipped image cannot resolve it.
+
+## v5.0.0 (from v4.3.0)
+
+Accumulated capabilities since v4.0.0 around extension packs, the hosted server,
+chained subprojects, agent-topology scale, the RBAC permission model, and the
+Level-3 semantic-conformance program. Interim tags v4.1.0–v4.3.0 were cut from
+earlier dev merges, so some bullets shipped in those. The RBAC permission model
+changed hosted authorization behavior and the stereotype matrix gained newly
+enforced edges, which is what made this a major.
 
 ### Level-3 semantic conformance + model-review program (new, `feat/level3-conformance`)
 
