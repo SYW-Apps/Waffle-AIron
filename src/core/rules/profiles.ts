@@ -1,4 +1,4 @@
-import { BUILTIN_PROFILES, SddRule } from './types.js';
+import { BUILTIN_PROFILES, PROJECT_KINDS as PROJECT_KIND_IDS, SddRule } from './types.js';
 
 /**
  * Architectural profile constraints. Built-in profiles carry built-in
@@ -11,8 +11,10 @@ import { BUILTIN_PROFILES, SddRule } from './types.js';
  */
 const BACKEND_LIKE = new Set(['backend', 'lowlevel-os', 'game-ecs', 'realtime-embedded', 'plc-cyclic']);
 const FRONTEND_LIKE = new Set(['frontend-reactive', 'frontend-controller']);
-/** projectType additionally allows the composite project kinds. */
-const PROJECT_KINDS = new Set(['fullstack', 'system-of-systems', 'monorepo']);
+/** projectType additionally allows the composite project kinds — the shared
+ *  registry constant (PROJECT_KINDS), so the hosted profile-application path and
+ *  this rule can never disagree about which kinds are legal. */
+const PROJECT_KINDS = new Set<string>(PROJECT_KIND_IDS);
 
 export const profilesRule: SddRule = {
   name: 'architectural-profiles',

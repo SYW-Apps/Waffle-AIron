@@ -16,6 +16,7 @@ import { hostCore } from './adapters.js';
 import type {
   AuditEvent,
   AuditRetentionPolicy,
+  AvailableProfile,
   HostConfig,
   HostedProjectRecord,
   HostExposurePolicy,
@@ -417,8 +418,16 @@ function installResolvedPacks(cfg: HostConfig, projectId: string, resolution: Pa
 // ── project config: recorded profile selection ───────────────────────────────
 //
 // project_config carries an optional profileSelection (see the ProjectConfig
-// spec). The ProjectConfig zod schema does not yet model it, so we read/write the
-// raw project.yaml directly to avoid the schema stripping the key on a round trip.
+// spec), NOW modeled in the ProjectConfig zod schema — which is what stopped a
+// later saveProjectConfig (a pack install, a profile write) from stripping the key
+// and silently erasing the record.
+//
+// These reads/writes still go through the RAW project.yaml deliberately, as the
+// narratives specify (raw read, merge, write): a raw merge preserves every other
+// config key exactly as written, including keys the schema would default,
+// normalize, or reorder on a parse/serialize round trip. The schema change removed
+// the data-loss bug; it did not make a full-document rewrite the right way to
+// touch one key.
 
 function readProjectProfileSelection(root: string): ProjectProfileSelection | undefined {
   return runWithProjectRoot(root, () => {
@@ -463,6 +472,75 @@ function requestPackNames(request: ProjectInitRequest): string[] {
   return [...new Set([...(sel.requiredPackNames ?? []), ...(sel.defaultPackNames ?? [])])];
 }
 
+// ── governing profile: classification + candidate choice ─────────────────────
+//
+// projectType is what actually GOVERNS a project (the profile whose doctrine the
+// validator enforces); profileSelection is only the RECORD of what was chosen. The
+// two used to drift freely — a selection could be recorded and never applied — so
+// every path that reports or repairs the governing profile shares these two reads.
+
+/**
+ * Classify a recorded projectType against a project-scoped profile catalog: where
+ * it comes from, and whether it resolves to a governing profile at all.
+ *
+ * 'builtin' covers both a built-in architectural profile and a composite project
+ * kind (a legal projectType carrying no doctrine of its own — and absent from the
+ * catalog, which lists profiles only). Otherwise only a catalog entry INSTALLED in
+ * this project resolves: a profile contributed solely by a not-yet-adopted
+ * server-global pack is NOT governing, and a source is reported only when the value
+ * really resolves.
+ */
+function classifyProfile(
+  projectType: string,
+  catalog: AvailableProfile[],
+): { source?: string; resolvable: boolean } {
+  if (
+    hostCore.builtinProfileIds().includes(projectType) ||
+    hostCore.builtinProjectKinds().includes(projectType)
+  ) {
+    return { source: 'builtin', resolvable: true };
+  }
+  const installed = catalog.find((p) => p.id === projectType && p.installed);
+  if (installed) return { source: installed.source, resolvable: true };
+  return { resolvable: false };
+}
+
+/**
+ * The first candidate id this instance can actually apply as a projectType: a known
+ * composite project kind, or an entry in the project-scoped catalog — installed OR
+ * adoptable, because the ensure seam vendors an adoptable profile's contributing
+ * pack before the id is written. Undefined when no candidate qualifies, which is
+ * reported (and audited) rather than throwing: a selection the instance cannot
+ * resolve must never fail project creation.
+ */
+function firstApplicableProfileId(candidates: string[], catalog: AvailableProfile[]): string | undefined {
+  const kinds = hostCore.builtinProjectKinds();
+  const catalogIds = new Set(catalog.map((p) => p.id));
+  return candidates.find((id) => kinds.includes(id) || catalogIds.has(id));
+}
+
+/** The recorded selection ids that are NOT the given governing profile — the honest
+ *  remainder. projectType takes exactly one profile, so a multi-id selection always
+ *  leaves one; those ids belong on individual subsystems (subsystem.profile).
+ *  Takes a KNOWN governing id: what "nothing governs" means differs by caller (all
+ *  ids unapplied at init; nothing unapplied when no project exists yet), so each
+ *  decides that itself rather than having it hidden in here. */
+function unappliedIds(selectedProfileIds: string[], governingProfileId: string): string[] {
+  return selectedProfileIds.filter((id) => id !== governingProfileId);
+}
+
+/** The ids of the project's subsystems declaring a profile of their OWN, which
+ *  therefore takes precedence over the project-level profile for their components.
+ *  Bound-root read of the L1 specs. */
+function overridingSubsystemIds(root: string): string[] {
+  return runWithProjectRoot(root, () =>
+    hostCore
+      .loadSubsystemSpecs()
+      .filter((s) => !!s.profile)
+      .map((s) => s.id),
+  );
+}
+
 /** The resolved ProjectProfileSelection recorded onto an initialized project: the
  *  request's selected profile ids plus the policy's required profile ids, and the
  *  policy's required/default pack names merged with the request's own. */
@@ -502,11 +580,19 @@ interface EvalInput {
    *  request-time (no instance probe): then missing = required/default not present,
    *  and unresolvedPacks is empty. */
   requiredDefaultResolution?: PackResolution;
+  /** The project's governing projectType — the profile the validator really
+   *  enforces. Supplied for an existing project so the evaluation reports profile
+   *  REALITY (governingProfileId + the unapplied remainder) beside recorded-
+   *  selection compliance. OMITTED for an init-request evaluation, where no project
+   *  exists yet: then governingProfileId is absent and the remainder is empty. */
+  governingProfileId?: string;
 }
 
 /** Build a PolicyEvaluationResult from present packs / selected profiles against
  *  the effective policy: missing required/default packs, blocked packs present,
- *  missing required profiles, disallowed profiles, and requireProfileSelection. */
+ *  missing required profiles, disallowed profiles, requireProfileSelection — and,
+ *  for an existing project, the profile REALITY (which profile actually governs and
+ *  which recorded ids do not). */
 function buildEvaluation(input: EvalInput): PolicyEvaluationResult {
   const {
     policy,
@@ -515,6 +601,7 @@ function buildEvaluation(input: EvalInput): PolicyEvaluationResult {
     hasSelection,
     countMissingPacksAsViolation,
     requiredDefaultResolution,
+    governingProfileId,
   } = input;
 
   const present = new Set(presentPackNames);
@@ -547,6 +634,10 @@ function buildEvaluation(input: EvalInput): PolicyEvaluationResult {
 
   const selectionRequiredUnmet = policy.requireProfileSelection && !hasSelection;
 
+  // Profile REALITY: which recorded ids are NOT the governing projectType. Empty at
+  // request time (no project exists yet, so nothing governs and nothing is unapplied).
+  const unappliedProfileIds = governingProfileId ? unappliedIds(selectedProfileIds, governingProfileId) : [];
+
   const messages: string[] = [];
   if (selectionRequiredUnmet) {
     messages.push('Profile selection is required by policy but none was provided.');
@@ -558,6 +649,12 @@ function buildEvaluation(input: EvalInput): PolicyEvaluationResult {
   for (const n of blockedPackNames) messages.push(`Pack "${n}" is blocked by policy.`);
   for (const id of missingProfileIds) messages.push(`Required profile "${id}" is not selected.`);
   for (const id of disallowedProfileIds) messages.push(`Profile "${id}" is not permitted by policy.`);
+  for (const id of unappliedProfileIds) {
+    messages.push(
+      `Selected profile "${id}" is recorded but does not govern the project ` +
+        `(projectType is "${governingProfileId}") — a project has exactly one governing profile.`,
+    );
+  }
 
   const violation =
     selectionRequiredUnmet ||
@@ -566,15 +663,18 @@ function buildEvaluation(input: EvalInput): PolicyEvaluationResult {
     disallowedProfileIds.length > 0 ||
     (countMissingPacksAsViolation && (missingPackNames.length > 0 || unresolvedPacks.length > 0));
 
-  return {
+  const result: PolicyEvaluationResult = {
     compliant: !violation,
     mode: policy.enforcementMode,
     missingPackNames,
     blockedPackNames,
     missingProfileIds,
     unresolvedPacks,
+    unappliedProfileIds,
     messages,
   };
+  if (governingProfileId) result.governingProfileId = governingProfileId;
+  return result;
 }
 
 // ── shared initialization body ───────────────────────────────────────────────
@@ -583,9 +683,13 @@ function buildEvaluation(input: EvalInput): PolicyEvaluationResult {
  *  (initializeProjectWithProfile) and approval execution (executeApprovedInit):
  *  validate against the active policy (throwing on violations under a 'block'
  *  policy), create the project, apply required/default + selected declarative
- *  packs, record the resolved profile selection, and audit 'project.init.policy'.
- *  When `principal` is supplied the selection/audit are attributed to the caller;
- *  the pre-authorized entry runs without one. */
+ *  packs, record the resolved profile selection, APPLY that selection so it
+ *  actually governs the new project (the first recorded id the instance can
+ *  resolve becomes projectType; the rest stay recorded as the unapplied
+ *  remainder), and audit 'project.init.policy'. A selection no tier can resolve
+ *  leaves the default projectType and is reported in the audit rather than failing
+ *  creation. When `principal` is supplied the selection/audit are attributed to the
+ *  caller; the pre-authorized entry runs without one. */
 function performInit(
   cfg: HostConfig,
   request: ProjectInitRequest,
@@ -614,18 +718,38 @@ function performInit(
     principal ? principalSubject(principal) : undefined,
   );
 
-  installResolvedPacks(
-    cfg,
-    record.id,
-    packs.executeApprovedResolveGlobalPacks([
-      ...policy.requiredGlobalPacks,
-      ...policy.defaultProjectPacks,
-      ...requestPackNames(request),
-    ]),
-  );
+  const packResolution = packs.executeApprovedResolveGlobalPacks([
+    ...policy.requiredGlobalPacks,
+    ...policy.defaultProjectPacks,
+    ...requestPackNames(request),
+  ]);
+  installResolvedPacks(cfg, record.id, packResolution);
 
   const selectedBy = principal ? principalSubject(principal) : undefined;
-  recordProjectProfileSelection(record.rootPath, resolvedSelection(request, policy, selectedBy));
+  const selection = resolvedSelection(request, policy, selectedBy);
+  recordProjectProfileSelection(record.rootPath, selection);
+
+  // APPLY the recorded selection, so it governs the new project from day one
+  // instead of being a name nothing enforces. The project-scoped catalog is listed
+  // AFTER the packs above were vendored in, so their profiles count; the choice is
+  // then made by inspection rather than exception-driven probing.
+  const catalog = packs.executeApprovedListProjectProfiles(cfg, record.id);
+  const appliedProfileId = firstApplicableProfileId(selection.profileIds, catalog);
+  let appliedSource: string | undefined;
+  if (appliedProfileId) {
+    // Vendors the contributing pack when the profile comes only from the
+    // server-global tiers, so the written projectType really resolves.
+    const application = packs.executeApprovedEnsureProfileInstalled(cfg, record.id, appliedProfileId);
+    writeProjectType(record.rootPath, application.profileId);
+    appliedSource = application.source;
+  }
+  // An empty selection, or one no tier can resolve, leaves the default projectType
+  // in place: the reason is carried into the audit, never raised as a failure —
+  // policy bookkeeping must not be able to break project creation. Nothing applied
+  // means the WHOLE selection is the unapplied remainder.
+  const unapplied = appliedProfileId
+    ? unappliedIds(selection.profileIds, appliedProfileId)
+    : [...selection.profileIds];
 
   const actor = principal ? principalSubject(principal) : SYSTEM_SUBJECT;
   tryAppendAudit(
@@ -635,7 +759,23 @@ function performInit(
       'project.init.policy',
       'info',
       'project',
-      { target: record.id, projectId: record.id },
+      {
+        target: record.id,
+        projectId: record.id,
+        metadata: JSON.stringify({
+          ...(appliedProfileId
+            ? { appliedProfileId, profileSource: appliedSource }
+            : {
+                appliedProfileId: null,
+                profileNotApplied:
+                  selection.profileIds.length === 0
+                    ? 'no profile was selected — the default projectType stands'
+                    : 'no selected profile is resolvable on this instance — the default projectType stands',
+              }),
+          ...(unapplied.length > 0 ? { unappliedProfileIds: unapplied } : {}),
+          ...(packResolution.unresolved.length > 0 ? { unresolvedPacks: packResolution.unresolved } : {}),
+        }),
+      },
       principal?.tokenId,
     ),
   );
@@ -701,7 +841,10 @@ export function evaluateInitRequest(cfg: HostConfig, request: ProjectInitRequest
  * scope covering the project (a grant on the project itself, a unit-scoped grant
  * whose subtree contains it, or a genuine instance-wide wildcard — scope.all),
  * resolve the project, and evaluate its active packs and recorded profile
- * selection against the effective policy without side effects.
+ * selection against the effective policy without side effects. Also reports the
+ * profile REALITY beside pack compliance — governingProfileId (the projectType the
+ * validator actually enforces) and the recorded ids that are not governing — so a
+ * selection that was recorded but never applied is visible instead of invisible.
  */
 export function evaluateProjectPolicy(
   cfg: HostConfig,
@@ -718,6 +861,10 @@ export function evaluateProjectPolicy(
   if (!root) throw new Error(`Unknown project "${projectId}".`);
 
   const policy = effectivePolicy(cfg.dataDir);
+  // Read the governing projectType alongside the recorded selection: a
+  // recorded-but-never-applied selection must not read as satisfied. Report only —
+  // this method repairs nothing and writes nothing.
+  const governingProfileId = readProjectType(root);
   const selection = readProjectProfileSelection(root);
   return buildEvaluation({
     policy,
@@ -726,6 +873,7 @@ export function evaluateProjectPolicy(
     hasSelection: !!selection,
     countMissingPacksAsViolation: true,
     requiredDefaultResolution: packs.executeApprovedResolveGlobalPacks(requiredDefaultNames(policy)),
+    governingProfileId,
   });
 }
 
@@ -736,8 +884,10 @@ export function evaluateProjectPolicy(
  * then apply the resolvable missing required/default declarative packs REGARDLESS
  * of enforcementMode (an explicit, authorized reconciliation applies only the
  * instance policy's own packs), surfacing names the server-global set cannot
- * resolve as unresolvedPacks and auditing 'policy.reconcile'. Returns the
- * post-reconciliation evaluation.
+ * resolve as unresolvedPacks and auditing 'policy.reconcile'. Also REPAIRS the
+ * governing profile, but only when it is broken or non-compliant — a resolvable,
+ * policy-compliant projectType is reported and left alone, so a deliberate local
+ * choice survives reconciliation. Returns the post-reconciliation evaluation.
  */
 export function reconcileProjectPolicy(
   cfg: HostConfig,
@@ -762,21 +912,53 @@ export function reconcileProjectPolicy(
   // project:write (not project:admin) suffices. Names the server-global set cannot
   // resolve are surfaced as unresolvedPacks by the evaluation, never silently skipped.
   const resolution = packs.executeApprovedResolveGlobalPacks(requiredDefaultNames(policy));
-  let installed = installedPackNames(cfg, projectId);
-  const installedSet = new Set(installed);
+  const installedSet = new Set(installedPackNames(cfg, projectId));
   const toApply = resolution.resolved.filter((p) => !installedSet.has(p.name));
+  const appliedPackNames = toApply.map((p) => p.name);
   if (toApply.length > 0) {
     installResolvedPacks(cfg, projectId, { resolved: toApply, unresolved: [] });
-    installed = installedPackNames(cfg, projectId);
   }
 
+  // The profile half runs whether or not a pack was missing: a broken governing
+  // profile is its own defect. The catalog is listed after the pack application so a
+  // just-vendored pack's profiles count as candidates.
+  const catalog = packs.executeApprovedListProjectProfiles(cfg, projectId);
+  const previousProfileId = readProjectType(root);
+  let governingProfileId = previousProfileId;
+  const requiredProfileIds = policy.requiredProfileIds ?? [];
+
+  // Repair ONLY a governing profile that is broken or non-compliant: (a) the policy
+  // requires profiles and none of them governs, or (b) the recorded projectType
+  // resolves to no loaded profile at all. A resolvable, policy-compliant projectType
+  // is reported and left exactly as it is — a deliberate local choice survives.
+  const policyUnsatisfied = requiredProfileIds.length > 0 && !requiredProfileIds.includes(governingProfileId);
+  const governingUnresolvable = !classifyProfile(governingProfileId, catalog).resolvable;
+  let repairedProfileId: string | undefined;
+  if (policyUnsatisfied || governingUnresolvable) {
+    // The policy's required ids come BEFORE the recorded selection ids: a
+    // reconciliation serves the instance policy first.
+    const target = firstApplicableProfileId(
+      [...requiredProfileIds, ...(selection?.profileIds ?? [])],
+      catalog,
+    );
+    if (target) {
+      const application = packs.executeApprovedEnsureProfileInstalled(cfg, projectId, target);
+      writeProjectType(root, application.profileId);
+      governingProfileId = application.profileId;
+      repairedProfileId = application.profileId;
+    }
+  }
+
+  // Re-list the installed packs for the post-reconciliation report — a profile
+  // repair can itself have vendored the contributing pack in.
   const result = buildEvaluation({
     policy,
-    presentPackNames: installed,
+    presentPackNames: installedPackNames(cfg, projectId),
     selectedProfileIds: selection?.profileIds ?? [],
     hasSelection: !!selection,
     countMissingPacksAsViolation: true,
     requiredDefaultResolution: resolution,
+    governingProfileId,
   });
 
   tryAppendAudit(
@@ -786,7 +968,15 @@ export function reconcileProjectPolicy(
       'policy.reconcile',
       'info',
       'policy',
-      { target: projectId, projectId },
+      {
+        target: projectId,
+        projectId,
+        metadata: JSON.stringify({
+          ...(appliedPackNames.length > 0 ? { appliedPackNames } : {}),
+          ...(repairedProfileId ? { repairedProfileId, previousProfileId } : {}),
+          ...(resolution.unresolved.length > 0 ? { unresolvedPacks: resolution.unresolved } : {}),
+        }),
+      },
       principal.tokenId,
     ),
   );
@@ -796,9 +986,12 @@ export function reconcileProjectPolicy(
 
 /**
  * Authenticate the caller, authorize project:read over the target project, bind
- * its isolated root, and return the project's editable configuration view: the
- * project.yaml projectType (project-level architectural profile, 'backend'
- * default) and whether the project currently holds a lock record.
+ * its isolated root, and return the project's configuration view AND whether it is
+ * genuinely in force: the project.yaml projectType (project-level architectural
+ * profile, 'backend' default), whether the project holds a lock record, where the
+ * profile comes from and whether it resolves at all, the recorded selection ids
+ * that are not governing, and the subsystems declaring their own profile. No side
+ * effects: an unresolvable recorded projectType is REPORTED, never repaired here.
  */
 export function getProjectConfig(
   cfg: HostConfig,
@@ -815,14 +1008,37 @@ export function getProjectConfig(
   if (!root) throw new Error(`Unknown project "${projectId}".`);
 
   const projectType = readProjectType(root);
+  const selection = readProjectProfileSelection(root);
+
+  // Classify the recorded type against the project-scoped catalog rather than
+  // echoing it back unexamined: profileResolvable false means the profile's
+  // doctrine is NOT being applied even though a name is recorded (a hand-edited or
+  // legacy project.yaml, or a pack removed afterwards). Reported honestly here — the
+  // repair path is reconcileProjectPolicy / setProjectType.
+  const classified = classifyProfile(projectType, packs.executeApprovedListProjectProfiles(cfg, projectId));
+
   const locked = runWithProjectRoot(root, () => hostCore.readLockRecord() !== null);
-  return { projectType, locked };
+  const overriding = overridingSubsystemIds(root);
+
+  const view: ProjectConfigView = {
+    projectType,
+    locked,
+    profileResolvable: classified.resolvable,
+    unappliedProfileIds: unappliedIds(selection?.profileIds ?? [], projectType),
+    overridingSubsystemIds: overriding,
+  };
+  if (classified.source) view.profileSource = classified.source;
+  return view;
 }
 
 /**
  * Authenticate the caller, authorize project:write over the target project, bind
- * its isolated root, write the supplied projectType (the project-level
- * architectural profile) into the project's config, and return the updated view.
+ * its isolated root, and make the requested projectType actually GOVERN the project
+ * rather than merely recording a name: ensure it is resolvable first (vendoring a
+ * server-global pack's contribution when needed, REFUSING an id no tier
+ * contributes), write it into project.yaml, and fold the applied id to the FRONT of
+ * the recorded profileSelection so the record and the governing reality agree.
+ * Returns the enriched view.
  */
 export function setProjectType(
   cfg: HostConfig,
@@ -839,9 +1055,42 @@ export function setProjectType(
   const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
   if (!root) throw new Error(`Unknown project "${projectId}".`);
 
-  writeProjectType(root, projectType);
+  // Ensure BEFORE anything is written: an id no tier contributes throws here, so a
+  // projectType that would silently disable the whole profile doctrine is never
+  // persisted and the previous one stands untouched.
+  const application = packs.executeApprovedEnsureProfileInstalled(cfg, projectId, projectType);
+
+  writeProjectType(root, application.profileId);
+
+  // Fold the applied id to the FRONT of the recorded selection, keeping the other
+  // recorded ids as the unapplied remainder — the record and the governing reality
+  // must not drift apart. A project with no recorded selection yet gets one carrying
+  // just this id.
+  const recorded = readProjectProfileSelection(root);
+  const remainder = unappliedIds(recorded?.profileIds ?? [], application.profileId);
+  const folded: ProjectProfileSelection = {
+    profileIds: [application.profileId, ...remainder],
+    requiredPackNames: recorded?.requiredPackNames ?? [],
+    selectedBy: principalSubject(principal),
+    selectedAt: new Date().toISOString(),
+  };
+  if (recorded?.defaultPackNames) folded.defaultPackNames = recorded.defaultPackNames;
+  recordProjectProfileSelection(root, folded);
+
   const locked = runWithProjectRoot(root, () => hostCore.readLockRecord() !== null);
-  return { projectType, locked };
+  const overriding = overridingSubsystemIds(root);
+
+  const view: ProjectConfigView = {
+    projectType: application.profileId,
+    locked,
+    profileSource: application.source,
+    // The write path guarantees resolvability — the ensure seam refused anything else.
+    profileResolvable: true,
+    unappliedProfileIds: remainder,
+    overridingSubsystemIds: overriding,
+  };
+  if (application.adoptedPackName) view.adoptedPackName = application.adoptedPackName;
+  return view;
 }
 
 /**

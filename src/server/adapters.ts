@@ -6,7 +6,7 @@ import { validateAsComplete } from '../core/validation.js';
 import { renderDiagram, buildCanvasDataModel } from '../core/diagram.js';
 import { loadProjectConfig } from '../config/loader.js';
 import { globalPacksDir, discoverPacks, loadExtensionPacks, DeclarativePackSchema } from '../core/extensions.js';
-import { BUILTIN_PROFILES } from '../core/rules/types.js';
+import { BUILTIN_PROFILES, PROJECT_KINDS } from '../core/rules/types.js';
 import { createMcpServer } from '../mcp/server.js';
 import * as gitPortal from '../git/index.js';
 import * as producerPortal from '../producers/index.js';
@@ -54,6 +54,14 @@ export const hostCore = {
    *  registry's built-in profile set (BUILTIN_PROFILES) — a pure, side-effect-free
    *  read of a bundled constant. */
   builtinProfileIds: (): string[] => [...BUILTIN_PROFILES],
+  /** The ids of wairon's built-in COMPOSITE PROJECT KINDS, read from the core
+   *  rules registry's bundled constant (PROJECT_KINDS) — a pure, side-effect-free
+   *  read. The counterpart of builtinProfileIds: legal projectType values that
+   *  are not architectural profiles and carry no profile doctrine of their own,
+   *  so the hosted profile-application path recognizes a project kind as
+   *  resolvable-as-is (no contributing pack to adopt) instead of refusing it as
+   *  an unknown profile. */
+  builtinProjectKinds: (): string[] => [...PROJECT_KINDS],
 };
 
 /** host_core_adapter.resolveContainedProjectPath — resolve a subsystem's

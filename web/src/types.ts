@@ -127,6 +127,13 @@ export interface AvailableProfile {
   source: string;
   family?: string;
   description?: string;
+  /** Project-scoped catalogs only (`GET /web/projects/profiles`): true for
+   *  built-ins and for profiles from packs already registered in that project.
+   *  false means the profile is adoptable — selecting it makes the backend
+   *  vendor the contributing pack into the project automatically. Absent on
+   *  the instance-wide `/web/admin/profiles` catalog, which can't see a
+   *  project's own packs. */
+  installed?: boolean;
 }
 
 export interface PolicyEvaluationResult {

@@ -108,6 +108,17 @@ methods:
         type: string
       - name: projectPath
         type: string
+  - name: builtinProjectKinds
+    description: >-
+      The ids of wairon's built-in COMPOSITE PROJECT KINDS (fullstack, system-of-systems, monorepo)
+      — legal projectType values that are not architectural profiles and carry no profile doctrine
+      of their own, read from the core rules registry's bundled constant. A pure, side-effect-free
+      read, and the counterpart of builtinProfileIds: the hosted profile-application path must
+      recognize a project kind as resolvable-as-is (no contributing pack to adopt) instead of
+      refusing it as an unknown profile.
+    signature: 'builtinProjectKinds(): string[]'
+    returns: string[]
+    params: []
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-07-24T20:50:40.991Z'
+updatedAt: '2026-07-24T23:52:27.050Z'

@@ -116,6 +116,20 @@ interface Graph {
 interface ProjectConfigResp {
   projectType: string;
   locked?: boolean;
+  /** "builtin" or the contributing pack's name — where the recorded projectType
+   *  currently resolves from. */
+  profileSource?: string;
+  /** False means the recorded projectType resolves to nothing, so its doctrine
+   *  is NOT being applied. */
+  profileResolvable?: boolean;
+  /** Set on a save that had to vendor a pack to make the profile resolvable. */
+  adoptedPackName?: string;
+  /** Recorded selection ids that aren't the governing project type — they
+   *  belong on individual subsystems instead. */
+  unappliedProfileIds?: string[];
+  /** Subsystems declaring their own profile, which the project-level one does
+   *  not govern. */
+  overridingSubsystemIds?: string[];
 }
 
 const byLabel = (a: GraphNode, b: GraphNode) => a.label.localeCompare(b.label);
@@ -1196,14 +1210,32 @@ function ProjectConfigPanel(props: { projectId: string; config: Async<ProjectCon
   if (!cfg) return null; // route not deployed / not readable — hide, keep the rest working
 
   const locked = !!cfg.locked;
-  const groups = withCurrent(
-    [...profileGroups(props.profiles), { label: 'Project kinds', options: PROJECT_KINDS.map((k) => ({ value: k, label: k })) }],
-    projectType,
-  );
+
+  // profileGroups() itself stays source-only (it's shared with the subsystem
+  // profile picker, where "installed" is meaningless) — the installed/adoptable
+  // distinction is layered on top here, for this picker only: adoptable options
+  // (server-global pack profiles not yet registered in this project) get a
+  // label suffix so the choice is visible before you make it.
+  const adoptableIds = new Set(props.profiles.filter((p) => p.installed === false).map((p) => p.id));
+  const labeledGroups = [
+    ...profileGroups(props.profiles),
+    { label: 'Project kinds', options: PROJECT_KINDS.map((k) => ({ value: k, label: k })) },
+  ].map((g) => ({
+    ...g,
+    options: g.options.map((o) => (adoptableIds.has(o.value) ? { ...o, label: `${o.label} — adopts pack` } : o)),
+  }));
+  const groups = withCurrent(labeledGroups, projectType);
+
+  const selectedProfile = props.profiles.find((p) => p.id === projectType);
+  const typeHint = selectedProfile?.installed === false
+    ? `Not yet installed in this project — saving will adopt the “${selectedProfile.source}” pack so this profile applies.`
+    : 'Configures targeted rules/templates for the whole project.';
 
   async function save() {
-    await post('/web/projects/config', { projectId: props.projectId, projectType });
-    toast.ok('Project type saved');
+    const resp = await post<ProjectConfigResp>('/web/projects/config', { projectId: props.projectId, projectType });
+    toast.ok(resp.adoptedPackName
+      ? `Project type saved — adopted pack “${resp.adoptedPackName}” so this profile applies.`
+      : 'Project type saved');
     props.config.reload();
   }
 
@@ -1214,14 +1246,33 @@ function ProjectConfigPanel(props: { projectId: string; config: Async<ProjectCon
           This project is locked — saving a spec change will invalidate the lock (a re-lock is required before promote).
         </div>
       )}
+      {cfg.profileResolvable === false && (
+        <div className="lock-banner">
+          The recorded project type “{cfg.projectType}” doesn't resolve to a loaded profile, so its rules aren't being applied. Pick a profile from the list below to fix this.
+        </div>
+      )}
       <div className="row-form">
-        <Field label="Project type" hint="Configures targeted rules/templates for the whole project.">
+        <Field label="Project type" hint={typeHint}>
           <GroupedSelect value={projectType} onChange={setProjectType} groups={groups} />
         </Field>
         <div className="row-form-action">
           <AsyncButton variant="primary" action={save} onError={toast.bad} disabled={projectType === (cfg.projectType ?? 'backend')}>Save type</AsyncButton>
         </div>
       </div>
+      {(!!cfg.unappliedProfileIds?.length || !!cfg.overridingSubsystemIds?.length) && (
+        <div className="stack-sm">
+          {!!cfg.unappliedProfileIds?.length && (
+            <span className="hint">
+              Also recorded but not applied at the project level (these govern individual subsystems instead): {cfg.unappliedProfileIds.join(', ')}.
+            </span>
+          )}
+          {!!cfg.overridingSubsystemIds?.length && (
+            <span className="hint">
+              {cfg.overridingSubsystemIds.length} subsystem{cfg.overridingSubsystemIds.length === 1 ? ' declares its' : 's declare their'} own profile and {cfg.overridingSubsystemIds.length === 1 ? "isn't" : "aren't"} governed by the project type: {cfg.overridingSubsystemIds.join(', ')}.
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1257,11 +1308,14 @@ export function SpecsTab({
     () => get<ProjectConfigResp>(`/web/projects/config?projectId=${enc}`).catch(() => null),
     [projectId],
   );
+  // Project-scoped catalog (not the instance-wide /web/admin/profiles): it can
+  // see packs registered in THIS project and marks each entry `installed`, so
+  // the project-type picker can tell "ready to use" from "adopts a pack".
   const profiles = useAsync<AvailableProfile[]>(
-    () => get('/web/admin/profiles')
+    () => get(`/web/projects/profiles?projectId=${enc}`)
       .then((d) => asList<AvailableProfile>(d, 'profiles'))
-      .catch(() => BUILTIN_PROFILES.map((id) => ({ id, source: 'builtin' } as AvailableProfile))),
-    [],
+      .catch(() => BUILTIN_PROFILES.map((id) => ({ id, source: 'builtin', installed: true } as AvailableProfile))),
+    [projectId],
   );
 
   const typeSuggestions = useMemo(

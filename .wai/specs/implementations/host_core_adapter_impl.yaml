@@ -108,6 +108,16 @@ methods:
           (assertContainedProjectPath — a pure path utility of the core module, not a portal
           workflow), returning the contained absolute child root
         type: local
+  - name: builtinProjectKinds
+    narrative: []
+    detail: intent
+    intent: >-
+      Return the ids of wairon's built-in composite project kinds by reading the core rules
+      registry's bundled PROJECT_KINDS constant (fullstack, system-of-systems, monorepo). A pure,
+      side-effect-free read of a bundled constant; never fails. Kept beside builtinProfileIds so the
+      two halves of a legal projectType value — architectural profiles and composite project kinds —
+      come from the same core source instead of being restated in the hosting layer, where they
+      would drift.
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-07-24T20:50:42.698Z'
+updatedAt: '2026-07-24T23:52:35.483Z'
