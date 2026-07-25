@@ -1,6 +1,17 @@
 # Changelog
 
-## Unreleased (major — from v4.3.0)
+## Unreleased (from v5.0.1)
+
+> **Release-line note (2026-07-25).** The `[major]` → v5.0.0 instruction below is
+> SPENT: v5.0.0 and then v5.0.1 were cut from this section (main is at v5.0.1,
+> `WAIRON_VERSION = '5.0.1'`), but the bullets were never rolled into version
+> headings — so most of what follows has ALREADY SHIPPED. Treat the sections
+> below as the accumulated 4.x→5.x record, not as pending work, and note that
+> splitting them into `## v5.0.0` / `## v5.0.1` / genuinely-unreleased is
+> outstanding housekeeping. For the next stable release from main = v5.0.1, the
+> newest section (hosted profile application) is **additive features + fixes**, so
+> merge dev → main with `[minor]` in the merge commit message → **v5.1.0**
+> (`[major]` would now wrongly jump to v6).
 
 Accumulated capabilities since v4.0.0 around extension packs, the hosted
 server, chained subprojects, agent-topology scale, the RBAC permission model,
