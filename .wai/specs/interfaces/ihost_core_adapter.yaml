@@ -89,6 +89,36 @@ methods:
     params:
       - name: manifest
         type: Json
+  - name: builtinProfileIds
+    description: >-
+      List the ids of wairon's built-in architectural profiles (backend, frontend-reactive, …),
+      forwarded to the core rules registry — the built-in half of the selectable-profile catalog.
+    signature: 'builtinProfileIds(): string[]'
+    returns: string[]
+    params: []
+  - name: resolveContainedProjectPath
+    description: >-
+      Resolve a subsystem's projectPath WITHIN the given root through the core containment guard —
+      absolute and '..'-escaping paths rejected. The hosted mount-resolution seam: the project
+      repository never touches core modules directly.
+    signature: 'resolveContainedProjectPath(projectRoot: string, projectPath: string): string'
+    returns: string
+    params:
+      - name: projectRoot
+        type: string
+      - name: projectPath
+        type: string
+  - name: builtinProjectKinds
+    description: >-
+      The ids of wairon's built-in COMPOSITE PROJECT KINDS (fullstack, system-of-systems, monorepo)
+      — legal projectType values that are not architectural profiles and carry no profile doctrine
+      of their own, read from the core rules registry's bundled constant. A pure, side-effect-free
+      read, and the counterpart of builtinProfileIds: the hosted profile-application path must
+      recognize a project kind as resolvable-as-is (no contributing pack to adopt) instead of
+      refusing it as an unknown profile.
+    signature: 'builtinProjectKinds(): string[]'
+    returns: string[]
+    params: []
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-07-15T06:52:59.636Z'
+updatedAt: '2026-07-24T23:52:27.050Z'

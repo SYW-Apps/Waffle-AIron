@@ -225,7 +225,49 @@ methods:
         description: Return the installed pack descriptor
         type: return
         outcome: installed pack descriptor
+  - name: listAvailableProfiles
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator with the caller's credential
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: listAvailableProfiles
+  - name: listAdoptableProjectPacks
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator with the caller's credential
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: listAdoptableProjectPacks
+  - name: adoptProjectPack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator with the caller's credential
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: adoptProjectPack
+  - name: getProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project policy orchestrator with the caller's credential
+        type: call
+        targetComponent: project_policy_orchestrator
+        targetMethod: getProjectConfig
+  - name: setProjectType
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project policy orchestrator with the caller's credential
+        type: call
+        targetComponent: project_policy_orchestrator
+        targetMethod: setProjectType
+  - name: listProjectProfiles
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator with the caller's credential
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: listProjectProfiles
 detail: calls-only
 status: complete
 createdAt: '2026-07-16T15:31:04.418Z'
-updatedAt: '2026-07-21T18:43:10.862Z'
+updatedAt: '2026-07-24T23:39:18.636Z'

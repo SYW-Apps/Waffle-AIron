@@ -98,6 +98,9 @@ import { CANVAS_SKELETON } from './skeleton';
 export interface CanvasHandle {
   destroy(): void;
   setTheme(theme: string, vars?: Record<string, string>): void;
+  /** Apply a URL route (Stage J) to the engine WITHOUT echoing onViewChange —
+   *  used by the shell for browser back/forward that changed the URL. */
+  openRoute(route: string): void;
 }
 
 /** Mount the classic canvas into \`host\`. shadow (default true) isolates its CSS
@@ -107,7 +110,13 @@ export interface CanvasHandle {
  *  so the whole chrome follows the host app's selected theme. */
 export function mountCanvas(host, model, opts = {}) {
   const useShadow = opts.shadow !== false;
-  const rootEl = useShadow ? host.attachShadow({ mode: 'open' }) : host;
+  // attachShadow is once-per-element and a shadow root can never be detached, so
+  // a REMOUNT onto the same host (e.g. a realtime refetch re-running a React
+  // mount effect) must REUSE the existing root — a second attachShadow throws
+  // NotSupportedError and the refreshed canvas never renders. Clearing rootEl
+  // makes the mount idempotent for shadow and light-DOM hosts alike.
+  const rootEl = useShadow ? (host.shadowRoot || host.attachShadow({ mode: 'open' })) : host;
+  rootEl.innerHTML = '';
   const styleEl = document.createElement('style');
   styleEl.textContent = CANVAS_CSS;
   rootEl.appendChild(styleEl);
@@ -135,10 +144,37 @@ export function mountCanvas(host, model, opts = {}) {
 
 ${eng}
 
+  // A realtime refetch destroys + remounts this canvas on the SAME host (see the
+  // shadow-root reuse above) — restore the previous selection so the details
+  // sidebar survives a live update instead of reverting to the default panel.
+  // Only selections whose target still exists in the FRESH model are restored
+  // (the very change that triggered the refetch may have deleted it); type and
+  // external-port selections are view-local artifacts and stay cleared.
+  try {
+    var prevSel = host.__waironLastSel;
+    if (prevSel && typeof select === 'function') {
+      var selExists =
+        (prevSel.kind === 'component' && typeof compById !== 'undefined' && compById[prevSel.id]) ||
+        (prevSel.kind === 'subsystem' && typeof subById !== 'undefined' && subById[prevSel.id]);
+      if (selExists) select(prevSel.kind, prevSel.id, false);
+    }
+  } catch (e) { /* ignore */ }
+
   return {
     destroy() {
+      try {
+        // Stash the live selection on the host node so the NEXT mount on this
+        // host (the realtime-remount path) can restore it.
+        if (typeof state !== 'undefined' && state && state.selectedKind && state.selected) {
+          host.__waironLastSel = { kind: state.selectedKind, id: state.selected };
+        } else {
+          delete host.__waironLastSel;
+        }
+      } catch (e) { /* ignore */ }
       try { if (typeof cy !== 'undefined' && cy) cy.destroy(); } catch (e) { /* ignore */ }
-      host.innerHTML = '';
+      // The content lives in rootEl — the SHADOW tree when mounted with shadow;
+      // host.innerHTML there would only touch the (empty) light DOM.
+      rootEl.innerHTML = '';
     },
     // Drive the engine's OWN theme state (not just the CSS attribute) so the
     // cytoscape node fills recolor too, and a later view switch keeps the theme
@@ -156,6 +192,12 @@ ${eng}
         if (typeof renderLegend === 'function') renderLegend();
         if (typeof persist === 'function') persist();
       } catch (e) { /* ignore */ }
+    },
+    // Drive the engine to a URL route (Stage J). The engine's own openRoute sets
+    // an applyingRoute guard so this does NOT echo back through onViewChange —
+    // letting the shell honour browser back/forward without a mount/unmount.
+    openRoute(route) {
+      try { if (typeof openRoute === 'function') openRoute(route); } catch (e) { /* ignore */ }
     },
   };
 }

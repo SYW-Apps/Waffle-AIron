@@ -694,7 +694,61 @@ methods:
         targetMethod: installProjectPackArchive
     detail: calls-only
     symbol: opsInstallProjectPackArchive
+  - name: availableProfilesList
+    narrative:
+      - stepNumber: 1
+        description: Forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: listAvailableProfiles
+    detail: calls-only
+    symbol: opsListAvailableProfiles
+  - name: projectPacksAdoptable
+    narrative:
+      - stepNumber: 1
+        description: Read projectId from the query and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: listAdoptableProjectPacks
+    detail: calls-only
+    symbol: opsListAdoptableProjectPacks
+  - name: projectPackAdopt
+    narrative:
+      - stepNumber: 1
+        description: Parse { projectId, name } and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: adoptProjectPack
+    detail: calls-only
+    symbol: opsAdoptProjectPack
+  - name: webGetProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: Read projectId from the query and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: getProjectConfig
+    detail: calls-only
+    symbol: opsGetProjectConfig
+  - name: webSetProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: Parse { projectId, projectType } and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: setProjectType
+    detail: calls-only
+    symbol: opsSetProjectConfig
+  - name: projectProfilesList
+    narrative:
+      - stepNumber: 1
+        description: Read projectId from the query and forward with the session as the credential
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: listProjectProfiles
+    detail: calls-only
+    symbol: opsListProjectProfiles
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-07-21T18:48:16.289Z'
+updatedAt: '2026-07-24T23:39:22.383Z'

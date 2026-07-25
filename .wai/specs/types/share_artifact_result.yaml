@@ -18,10 +18,15 @@ fields:
     optional: true
   - name: content
     type: string
+    description: >-
+      The served payload for the artifact kind. The string type is unchanged regardless of what it
+      carries: for openapi it holds EITHER a single OpenAPI document OR an openapi_spec_index
+      (openapiIndex=true, listing the per-portal APIs) served when several were captured and none
+      was selected.
     optional: true
   - name: contentType
     type: string
     optional: true
 methods: []
 createdAt: '2026-07-17T22:32:54.133Z'
-updatedAt: '2026-07-17T22:32:54.204Z'
+updatedAt: '2026-07-24T09:47:47.193Z'

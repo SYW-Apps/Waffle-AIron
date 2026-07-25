@@ -40,7 +40,17 @@ methods:
         targetComponent: project_write_registry
         targetMethod: remove
     symbol: removeProjectRecord
+  - name: resolveBinding
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the project index (full authorized binding — root, top project id, bound mount
+          chain)
+        type: call
+        targetComponent: project_index
+        targetMethod: resolveBinding
+    symbol: resolveProjectBinding
 detail: calls-only
 status: complete
 createdAt: '2026-07-04T12:53:36.287Z'
-updatedAt: '2026-07-19T09:01:03.550Z'
+updatedAt: '2026-07-24T20:50:35.517Z'

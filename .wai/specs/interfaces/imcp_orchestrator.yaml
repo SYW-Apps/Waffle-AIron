@@ -60,6 +60,13 @@ methods:
       - name: resourceId
         type: string
         description: The MCP resource id / skill id to read.
+  - name: listExternalInterfaces
+    description: >-
+      The sdd_list_external_interfaces tool workflow: read the project's consumable external
+      surfaces (parent family, siblings, foreign imports) with origin, provenance, and freshness
+      verdicts, and shape the tool response.
+    signature: 'listExternalInterfaces(): ExternalSurfaceEntry[]'
+    returns: ExternalSurfaceEntry[]
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-07-10T12:22:03.471Z'
+updatedAt: '2026-07-24T18:14:22.238Z'

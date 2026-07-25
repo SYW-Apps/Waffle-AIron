@@ -53,6 +53,12 @@ export interface CanvasModel {
     targetLanguage?: string;
     status?: string;
     trustedLinks: { subsystem: string; reason: string }[];
+    /** Opt-in deep expansion: with Internals on, this subsystem's box renders
+     *  its WHOLE subtree (nested boundary boxes + leaf tiles + direct relation
+     *  lines) instead of one layer. Never set by buildCanvasModel — the hosted
+     *  environment adapter stamps it on unit-derived frames. Absent ⇒ the
+     *  engine behaves exactly as before. */
+    deepInternals?: boolean;
   }[];
   components: {
     id: string;
@@ -111,6 +117,9 @@ export interface CanvasModel {
         err?: string;
       }[];
     }[];
+    /** Opaque external references surfaced on the canvas element (see ExternalLinkSchema).
+     *  wairon never fetches them; an `implementation` link is the external source-of-record. */
+    externalLinks?: { url: string; type: string; label?: string }[];
     /** Methods specified as intent prose instead of a narrative (the detail dial). */
     intents: { method: string; text: string }[];
   }[];
@@ -225,6 +234,7 @@ export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
       ...(ownerOf.has(comp.id) ? { owner: ownerOf.get(comp.id) } : {}),
       owns: comp.owns.filter(o => componentIds.has(o)),
       dependsOn: comp.dependsOn,
+      ...(comp.externalLinks && comp.externalLinks.length ? { externalLinks: comp.externalLinks } : {}),
       interfaces: compInterfaces.map(i => ({
         id: i.id,
         name: i.name,
@@ -536,6 +546,16 @@ header input[type="search"]::placeholder { color:var(--dim); }
 #moreMenu .dropdown { display:block; width:100%; }
 #moreMenu .dropdown > .tbtn, #moreMenu > .tbtn { display:block; width:100%; text-align:left; border:none; background:transparent; margin:2px 0; }
 #moreMenu .dropdown > .tbtn:hover, #moreMenu > .tbtn:hover { background:var(--hover-bg); }
+/* Staged header compaction (responsive only, never persisted): compact
+   stand-ins for the search input, the mode tabs, and the ancestor crumbs.
+   All hidden at full width, so a roomy header renders exactly as before. */
+#searchBtn { position:relative; }
+#searchBtn.hasq::after { content:''; position:absolute; top:3px; right:3px; width:7px; height:7px; border-radius:50%; background:var(--accent); }
+.search-menu { min-width:210px; padding:8px; }
+.search-menu input[type="search"] { width:100%; }
+#modeMenu button.active { background:var(--accent); color:#fff; font-weight:700; }
+#crumbs .dropdown { display:inline-flex; }
+#crumbs .crumbmore { font-weight:700; }
 
 /* Settings panel — toggle switches */
 .settings-menu { min-width:266px; }
@@ -659,9 +679,17 @@ body.presentation #exitPresent, body.presentation #presentDetails { display:bloc
     <button data-vm="types">Types</button>
     <button data-vm="databases">Databases</button>
   </div>
+  <div class="dropdown" id="modeDd" style="display:none">
+    <button class="tbtn" id="modeBtn" title="Switch between the component architecture, the type ERD, or the database schemas">Components ▾</button>
+    <div class="menu" id="modeMenu"></div>
+  </div>
   <nav id="crumbs"></nav>
   <span class="divider"></span>
   <input id="search" type="search" placeholder="Search this view…">
+  <div class="dropdown" id="searchDd" style="display:none">
+    <button class="tbtn" id="searchBtn" title="Search this view">🔍</button>
+    <div class="menu search-menu" id="searchMenu"></div>
+  </div>
   <div class="seg" id="typesDetailSeg" style="display:none" title="ERD detail level">
     <button data-td="full">Full</button>
     <button data-td="fields">Fields</button>
@@ -895,12 +923,21 @@ var MODEL = __MODEL_JSON__;
   var configuredLineStyle = ['bezier', 'straight', 'taxi'].indexOf(diagramConfig.lineStyle) >= 0 ? diagramConfig.lineStyle : 'bezier';
   var defaultViewKind = diagramConfig.defaultView === 'types' ? 'types' : (diagramConfig.defaultView === 'databases' && showDatabaseTab ? 'databases' : 'system');
 
+  // Stage J: a deep link (opts.initialRoute) seeds the initial view directly so a
+  // refresh / shared URL renders the right scope with NO root-first flash. Parsed
+  // by the same resolver as openRoute (hoisted below). No onViewChange fires for
+  // this initial seed.
+  var initialView = { kind: defaultViewKind, id: null };
+  if (typeof opts !== 'undefined' && opts && typeof opts.initialRoute === 'string' && opts.initialRoute.length) {
+    initialView = resolveRoute(opts.initialRoute);
+  }
+
   var state = {
-    view: { kind: defaultViewKind, id: null },
-    internals: false,
-    externals: true,
-    dataCoupling: false,
-    showIssues: false,
+    view: initialView,
+    internals: typeof saved.internals === 'boolean' ? saved.internals : false,
+    externals: typeof saved.externals === 'boolean' ? saved.externals : true,
+    dataCoupling: typeof saved.dataCoupling === 'boolean' ? saved.dataCoupling : false,
+    showIssues: typeof saved.showIssues === 'boolean' ? saved.showIssues : false,
     query: '',
     selected: null,
     selectedKind: null,
@@ -915,6 +952,9 @@ var MODEL = __MODEL_JSON__;
   // Set by buildTypeElements when the ERD is degraded for performance (huge
   // scopes); consumed by renderTypesNotice to explain the level-of-detail.
   var typesNotice = '';
+  // Stage J: true while openRoute is applying a URL-driven view change, so the
+  // onViewChange callback is suppressed and we do not loop URL -> engine -> URL.
+  var applyingRoute = false;
 
   function viewKey() {
     // 'types2' + detail level: table sizes differ per detail, and the prefix
@@ -934,6 +974,10 @@ var MODEL = __MODEL_JSON__;
         lineStyle: state.lineStyle,
         panelOpen: state.panelOpen,
         panelWidth: state.panelWidth,
+        internals: state.internals,
+        externals: state.externals,
+        dataCoupling: state.dataCoupling,
+        showIssues: state.showIssues,
       }));
     } catch (e) { /* non-fatal */ }
   }
@@ -1162,13 +1206,300 @@ var MODEL = __MODEL_JSON__;
   var BOX_W = 200, BOX_H = 56, SUBBOX_W = 230, SUBBOX_H = 84, GAP_X = 110, GAP_Y = 34;
   var INNER_W = 130, INNER_H = 36, INNER_GAPX = 26, INNER_GAPY = 12, HEAD_H = 34, PADI = 14;
 
+  // ---- deep expansion (opt-in via subsystem.deepInternals) -------------------
+  // When Internals is on and a subsystem record carries deepInternals:true, its
+  // box renders its WHOLE subtree instead of one layer: deep-flagged child
+  // subsystems become NESTED boundary boxes (recursing, defensively capped),
+  // every other child renders as a fixed leaf tile that is never expanded
+  // further. Sizes are computed bottom-up (a nested container tile takes its
+  // recursive {w,h}); positions are emitted top-down by accumulating parent
+  // top-left offsets. Relations between concrete visible endpoints are drawn
+  // as ONE direct line each by buildDeepContext — crossing nested boundaries
+  // on purpose (the full org overview of project relations); only relations
+  // that cannot resolve to two concrete endpoints keep today's port machinery,
+  // and ONLY at the outermost box. Without the flag this whole path is inert
+  // and the classic one-layer innerLayout runs unchanged.
+  var DEEP_MAX_DEPTH = 6;
+  function isDeepId(subId) {
+    var s = subById[subId];
+    return !!(s && s.deepInternals);
+  }
+  // The DEEPEST visible tile representing compId inside the deep-expanded box
+  // rooted at rootSubId: descend deep-flagged containers (the same expansion
+  // rule as deepContainerLayout) until the containing child is a leaf tile.
+  // Returns the child entry { kind, id } (its node id is IN(kind, id)).
+  function deepLeafFor(compId, rootSubId) {
+    var subId = rootSubId, depth = 1;
+    for (;;) {
+      var child = childOfScopeContaining(compId, { kind: 'subsystem', id: subId });
+      if (!child) return null;
+      if (child.kind === 'subsystem' && isDeepId(child.id) && depth < DEEP_MAX_DEPTH) {
+        subId = child.id; depth += 1;
+        continue;
+      }
+      return child;
+    }
+  }
+  // One deep container's DIRECT children, placed with PER-TILE sizes (nested
+  // containers take their recursive size; leaves stay INNER_W x INNER_H). The
+  // placement mirrors innerLayout's strategy switch, generalised to variable
+  // tile sizes. Tiles are centres relative to THIS container's top-left corner
+  // (content sits right of PADI, below the HEAD_H label band); nested tiles
+  // are relative to their own container, so emission accumulates offsets.
+  function deepContainerLayout(subId, depth) {
+    var kids = childrenOf({ kind: 'subsystem', id: subId });
+    if (!kids.length) {
+      // An EMPTY deep subsystem still shows as a (min-size) boundary box.
+      return { tiles: [], w: INNER_W + 2 * PADI, h: HEAD_H + PADI };
+    }
+    var scope = { kind: 'subsystem', id: subId };
+    var kidKey = function (k) { return k.kind + ':' + k.id; };
+    var size = {};
+    kids.forEach(function (k) {
+      if (k.kind === 'subsystem' && isDeepId(k.id) && depth < DEEP_MAX_DEPTH) {
+        var nested = deepContainerLayout(k.id, depth + 1);
+        size[kidKey(k)] = { w: nested.w, h: nested.h, sub: nested };
+      } else {
+        size[kidKey(k)] = { w: INNER_W, h: INNER_H, sub: null };
+      }
+    });
+    // Intra-container edges lifted to DIRECT children — for LAYOUT ONLY (the
+    // drawn lines come from buildDeepContext's direct pass, never per level).
+    var intra = {};
+    MODEL.edges.forEach(function (edge) {
+      var a = childOfScopeContaining(edge.from, scope);
+      var b = childOfScopeContaining(edge.to, scope);
+      if (!a || !b) return;
+      var ak = a.kind + ':' + a.id, bk = b.kind + ':' + b.id;
+      if (!size[ak] || !size[bk] || ak === bk) return;
+      intra[ak + '=>' + bk] = 1;
+    });
+    var layer = {};
+    function calc(k, stack) {
+      var key = kidKey(k);
+      if (layer[key] !== undefined) return layer[key];
+      if (stack[key]) return 0;
+      stack[key] = 1;
+      var l = 0;
+      if (k.kind === 'component') {
+        var c = compById[k.id];
+        if (c && (c.componentType === 'Portal' || c.componentType === 'Observer')) { layer[key] = 0; delete stack[key]; return 0; }
+      }
+      Object.keys(intra).forEach(function (ek) {
+        var cut = ek.indexOf('=>');
+        if (ek.slice(cut + 2) !== key) return;
+        var srcKid = kids.filter(function (x) { return kidKey(x) === ek.slice(0, cut); })[0];
+        if (srcKid) l = Math.max(l, calc(srcKid, stack) + 1);
+      });
+      delete stack[key];
+      layer[key] = l;
+      return l;
+    }
+    kids.forEach(function (k) { calc(k, {}); });
+    var tiles = [], contentW = 0, contentH = 0;
+    if (state.layout === 'grid') {
+      // Row packing by ACTUAL tile size (the fixed per-column grid assumed
+      // uniform tiles); the target row width follows the tile count, widened
+      // to at least the widest single tile.
+      var gsorted = kids.slice().sort(function (a, b) { return a.id < b.id ? -1 : 1; });
+      var target = Math.max(1, Math.ceil(Math.sqrt(kids.length))) * (INNER_W + INNER_GAPX);
+      kids.forEach(function (k) { var s0 = size[kidKey(k)]; if (s0.w > target) target = s0.w; });
+      var gx = 0, gy = 0, rowH = 0;
+      gsorted.forEach(function (k) {
+        var s = size[kidKey(k)];
+        if (gx > 0 && gx + s.w > target) { gx = 0; gy += rowH + INNER_GAPY; rowH = 0; }
+        tiles.push({ kid: k, x: gx + s.w / 2, y: gy + s.h / 2, w: s.w, h: s.h, sub: s.sub });
+        gx += s.w + INNER_GAPX;
+        if (s.h > rowH) rowH = s.h;
+        if (gx - INNER_GAPX > contentW) contentW = gx - INNER_GAPX;
+        if (gy + rowH > contentH) contentH = gy + rowH;
+      });
+    } else if (state.layout === 'concentric' || state.layout === 'force') {
+      var ideg = {};
+      kids.forEach(function (k) { ideg[kidKey(k)] = 0; });
+      Object.keys(intra).forEach(function (ek) {
+        var cut2 = ek.indexOf('=>');
+        var sk = ek.slice(0, cut2), tk = ek.slice(cut2 + 2);
+        if (ideg[sk] !== undefined) ideg[sk]++;
+        if (ideg[tk] !== undefined) ideg[tk]++;
+      });
+      var rel = concentricPositions(
+        kids.map(kidKey),
+        function (key) { return ideg[key] || 0; },
+        function (key) { return { w: size[key].w, h: size[key].h }; }
+      );
+      // Normalise by the tiles' BOUNDING BOX (not just the centres) so a wide
+      // nested container on the rim still clears the container's left/top pad.
+      var minL = Infinity, minT = Infinity;
+      kids.forEach(function (k) {
+        var s1 = size[kidKey(k)], p1 = rel[kidKey(k)] || { x: 0, y: 0 };
+        if (p1.x - s1.w / 2 < minL) minL = p1.x - s1.w / 2;
+        if (p1.y - s1.h / 2 < minT) minT = p1.y - s1.h / 2;
+      });
+      if (minL === Infinity) { minL = 0; minT = 0; }
+      kids.forEach(function (k) {
+        var s2 = size[kidKey(k)], p2 = rel[kidKey(k)] || { x: 0, y: 0 };
+        var cx = p2.x - minL, cyy = p2.y - minT;
+        tiles.push({ kid: k, x: cx, y: cyy, w: s2.w, h: s2.h, sub: s2.sub });
+        if (cx + s2.w / 2 > contentW) contentW = cx + s2.w / 2;
+        if (cyy + s2.h / 2 > contentH) contentH = cyy + s2.h / 2;
+      });
+    } else {
+      // Layered dependency columns: the column is as wide as its widest tile,
+      // and each tile advances by ITS OWN height.
+      var cols = {};
+      kids.forEach(function (k) { var l = layer[kidKey(k)] || 0; (cols[l] = cols[l] || []).push(k); });
+      var colKeys = Object.keys(cols).map(Number).sort(function (a, b) { return a - b; });
+      var x = 0;
+      colKeys.forEach(function (ck) {
+        var col = cols[ck].sort(function (a, b) { return a.id < b.id ? -1 : 1; });
+        var colW = 0, y = 0;
+        col.forEach(function (k) { var s3 = size[kidKey(k)]; if (s3.w > colW) colW = s3.w; });
+        col.forEach(function (k) {
+          var s = size[kidKey(k)];
+          tiles.push({ kid: k, x: x + colW / 2, y: y + s.h / 2, w: s.w, h: s.h, sub: s.sub });
+          y += s.h + INNER_GAPY;
+        });
+        if (y - INNER_GAPY > contentH) contentH = y - INNER_GAPY;
+        x += colW + INNER_GAPX;
+      });
+      contentW = x - INNER_GAPX;
+    }
+    tiles.forEach(function (t) { t.x += PADI; t.y += HEAD_H; });
+    return { tiles: tiles, w: contentW + 2 * PADI, h: HEAD_H + contentH + PADI };
+  }
+  // Top-level deep box: the recursive interior plus today's port machinery at
+  // the OUTERMOST box only (buildDeepContext supplies which relations still
+  // need ports; stubs run port <-> the DEEPEST visible leaf tile). Returns the
+  // same shape as innerLayout, plus deep:true so emission recurses.
+  function deepLayout(entry, portRec) {
+    var box = deepContainerLayout(entry.id, 1);
+    var parentId = anchorNodeId(entry);
+    var pBaseIn = 'p~in~' + parentId + '~', pBaseOut = 'p~out~' + parentId + '~';
+    var extIn = portRec ? portRec.extIn : {}, extOut = portRec ? portRec.extOut : {};
+    var inIds = Object.keys(extIn).sort(), outIds = Object.keys(extOut).sort();
+    var hasIn = inIds.length > 0, hasOut = outIds.length > 0;
+    var PROXY_W = 22, PROXY_H = 22, PROXY_GAP = 8;
+    var shift = hasIn ? PROXY_W + INNER_GAPX : 0;
+    var tiles = box.tiles;
+    if (shift) tiles.forEach(function (t) { t.x += shift; });
+    var w = box.w + shift + (hasOut ? PROXY_W + INNER_GAPX : 0);
+    if (w < SUBBOX_W) w = SUBBOX_W;
+    var stackMax = Math.max(inIds.length, outIds.length);
+    var h = Math.max(box.h, HEAD_H + stackMax * PROXY_H + Math.max(0, stackMax - 1) * PROXY_GAP + PADI);
+    var midY = HEAD_H + Math.max(0, (h - HEAD_H - PADI) / 2);
+    function stackPorts(ids, recs, base, cx, dir) {
+      var total = ids.length * PROXY_H + Math.max(0, ids.length - 1) * PROXY_GAP;
+      var y0 = Math.max(HEAD_H + PROXY_H / 2, midY - total / 2 + PROXY_H / 2);
+      return ids.map(function (eid, i) {
+        var km = recs[eid].kids, klist = [];
+        Object.keys(km).forEach(function (key) { klist.push(km[key]); });
+        return { id: base + eid, extId: eid, dir: dir, kids: klist, raws: Object.keys(recs[eid].raws), x: cx, y: y0 + i * (PROXY_H + PROXY_GAP), w: PROXY_W, h: PROXY_H };
+      });
+    }
+    return {
+      deep: true,
+      tiles: tiles,
+      edges: portRec ? Object.keys(portRec.stubs).map(function (k) { return portRec.stubs[k]; }) : [],
+      proxies: stackPorts(inIds, extIn, pBaseIn, PADI + PROXY_W / 2, 'in')
+        .concat(stackPorts(outIds, extOut, pBaseOut, w - PADI - PROXY_W / 2, 'out')),
+      w: w,
+      h: h,
+    };
+  }
+  // View-level deep context (null unless Internals is on AND at least one
+  // in-view entry is deep-flagged — the classic path never sees it): which
+  // top-level entries are deep-expanded; every relation drawn as a DIRECT
+  // concrete line (deduped per src=>tgt pair); the per-top-pair count used to
+  // suppress aggregated edges whose constituents are ALL drawn directly; and
+  // the port records for relations that keep today's port semantics.
+  function buildDeepContext(scope, entries) {
+    if (!state.internals) return null;
+    var deepByAnchor = {}, any = false;
+    entries.forEach(function (e) {
+      if (e.kind === 'subsystem' && isDeepId(e.id)) { deepByAnchor[anchorNodeId(e)] = e; any = true; }
+    });
+    if (!any) return null;
+    var entryByAnchor = {};
+    entries.forEach(function (e) { entryByAnchor[e.kind + ':' + e.id] = e; });
+    // A relation endpoint's DIRECT-line node in this view: the deepest leaf
+    // tile inside a deep-expanded entry, or a top-level component box ITSELF.
+    // null = this endpoint keeps aggregated/port semantics (interiors of
+    // non-deep entries, out-of-scope counterparts).
+    function directEnd(compId) {
+      var child = childOfScopeContaining(compId, scope);
+      var entry = child && entryByAnchor[child.kind + ':' + child.id];
+      if (!entry) return null;
+      var aid = anchorNodeId(entry);
+      if (deepByAnchor[aid]) {
+        var leaf = deepLeafFor(compId, entry.id);
+        return leaf ? { node: IN(leaf.kind, leaf.id), top: aid, deep: true } : null;
+      }
+      if (entry.kind === 'component' && entry.id === compId) return { node: aid, top: aid, deep: false };
+      return null;
+    }
+    var direct = {}, directTopCount = {}, ports = {};
+    function portRec(aid) { return ports[aid] = ports[aid] || { extIn: {}, extOut: {}, stubs: {} }; }
+    MODEL.edges.forEach(function (edge) {
+      var a = directEnd(edge.from), b = directEnd(edge.to);
+      if (a && b && (a.deep || b.deep) && a.node !== b.node) {
+        // Drawn as ONE direct line — never ALSO as ports/stubs (dedupe rule).
+        var key = a.node + '=>' + b.node;
+        if (!direct[key]) direct[key] = { src: a.node, tgt: b.node, cross: false, aTop: a.top, bTop: b.top };
+        if (edge.cross) direct[key].cross = true;
+        if (a.top !== b.top) {
+          var tk = a.top + '=>' + b.top;
+          directTopCount[tk] = (directTopCount[tk] || 0) + 1;
+        }
+        return;
+      }
+      // Not a direct line: keep today's port semantics on any deep box with
+      // exactly one endpoint inside its subtree, stubbed to the deepest leaf.
+      var ac = childOfScopeContaining(edge.from, scope);
+      var bc = childOfScopeContaining(edge.to, scope);
+      var aEnt = ac && entryByAnchor[ac.kind + ':' + ac.id];
+      var bEnt = bc && entryByAnchor[bc.kind + ':' + bc.id];
+      var aAid = aEnt ? anchorNodeId(aEnt) : null;
+      var bAid = bEnt ? anchorNodeId(bEnt) : null;
+      if (aAid === bAid) return; // internal to one entry, or neither in scope
+      if (aAid && deepByAnchor[aAid]) {
+        var leafA = deepLeafFor(edge.from, aEnt.id);
+        if (leafA) {
+          var recA = portRec(aAid);
+          var ro = recA.extOut[edge.to] = recA.extOut[edge.to] || { kids: {}, raws: {} };
+          ro.kids[leafA.kind + ':' + leafA.id] = leafA;
+          ro.raws[edge.from] = 1;
+          var poId = 'p~out~' + aAid + '~' + edge.to;
+          recA.stubs[IN(leafA.kind, leafA.id) + '=>' + poId] = { src: IN(leafA.kind, leafA.id), tgt: poId, stub: true };
+        }
+      }
+      if (bAid && deepByAnchor[bAid]) {
+        var leafB = deepLeafFor(edge.to, bEnt.id);
+        if (leafB) {
+          var recB = portRec(bAid);
+          var ri = recB.extIn[edge.from] = recB.extIn[edge.from] || { kids: {}, raws: {} };
+          ri.kids[leafB.kind + ':' + leafB.id] = leafB;
+          ri.raws[edge.to] = 1;
+          var piId = 'p~in~' + bAid + '~' + edge.from;
+          recB.stubs[piId + '=>' + IN(leafB.kind, leafB.id)] = { src: piId, tgt: IN(leafB.kind, leafB.id), stub: true };
+        }
+      }
+    });
+    return { deepByAnchor: deepByAnchor, direct: direct, directTopCount: directTopCount, ports: ports };
+  }
+
   // Micro-layout for a container's direct children when Internals is on:
   // layered mini columns + intra-container edges. Each external relation gets
   // its own small PORT node INSIDE the container (one per external
   // counterpart; incoming left, outgoing right). Children connect to ports
   // with short edges that never leave the box — the real cross-boundary line
   // is only revealed on hover, or pinned while the port is selected.
-  function innerLayout(entry) {
+  function innerLayout(entry, deepCtx) {
+    // Deep-flagged subsystems take the recursive path (deepCtx exists only
+    // when Internals is on and the view has deep entries — see buildElements).
+    if (deepCtx && entry.kind === 'subsystem' && deepCtx.deepByAnchor[anchorNodeId(entry)]) {
+      return deepLayout(entry, deepCtx.ports[anchorNodeId(entry)]);
+    }
     var kids = state.internals && entry.hasKids ? childrenOf({ kind: entry.kind, id: entry.id }) : [];
     if (!kids.length) return null;
     var scope = { kind: entry.kind, id: entry.id };
@@ -1740,12 +2071,42 @@ var MODEL = __MODEL_JSON__;
     if (scope.kind === 'types' || scope.kind === 'databases') return buildTypeElements();
     var entries = childrenOf(scope);
     var eles = [];
+    var deepCtx = buildDeepContext(scope, entries);
     var ve = viewEdges(scope, entries);
     // Data-coupling overlay: same scoping pipeline, a different edge source.
     var vd = state.dataCoupling ? viewEdges(scope, entries, MODEL.dataEdges) : { agg: {}, ghosts: {} };
     Object.keys(vd.ghosts).forEach(function (g) { if (!ve.ghosts[g]) ve.ghosts[g] = vd.ghosts[g]; });
     var inners = {};
-    entries.forEach(function (e) { inners[anchorNodeId(e)] = innerLayout(e); });
+    entries.forEach(function (e) { inners[anchorNodeId(e)] = innerLayout(e, deepCtx); });
+
+    // Deep-mode recursive tile emission: a nested container becomes a cytoscape
+    // compound parent (no explicit position — a compound derives its bounds
+    // from its children); leaves and EMPTY containers are plain positioned
+    // nodes. ox/oy = the emitting container's absolute top-left; tile.x/y are
+    // centres relative to it, so offsets accumulate top-down. Search dimming
+    // propagates the TOP entry's dim to the whole subtree.
+    function emitDeepTiles(tiles, parentNodeId, ox, oy, dimCls) {
+      tiles.forEach(function (tile) {
+        var ax = ox + tile.x, ay = oy + tile.y;
+        if (tile.sub) {
+          var nid = SN(tile.kid.id);
+          var selCls = state.selectedKind === 'subsystem' && state.selected === tile.kid.id ? ' sel' : '';
+          var nested = {
+            data: { id: nid, parent: parentNodeId, label: nameOf(tile.kid), w: tile.w, h: tile.h, tw: tile.w - 16 },
+            classes: 'subsysBox' + (tile.sub.tiles.length ? ' drillable' : '') + dimCls + selCls,
+          };
+          if (!tile.sub.tiles.length) nested.position = { x: ax, y: ay };
+          eles.push(nested);
+          emitDeepTiles(tile.sub.tiles, nid, ax - tile.w / 2, ay - tile.h / 2, dimCls);
+        } else {
+          eles.push({
+            data: { id: IN(tile.kid.kind, tile.kid.id), parent: parentNodeId, label: nameOf(tile.kid), w: INNER_W, h: INNER_H, tw: INNER_W - 10 },
+            position: { x: ax, y: ay },
+            classes: 'inner' + dimCls,
+          });
+        }
+      });
+    }
 
     // Resolve a port's reveal target(s) in THIS view. Preference order: the
     // MATCHING PORT inside the counterpart's container (a port-to-port line
@@ -1877,17 +2238,25 @@ var MODEL = __MODEL_JSON__;
         + (state.showIssues && issuesBySpec[e.id] ? ' hasIssue' : '')
         + (state.selectedKind === e.kind && state.selected === e.id ? ' sel' : '');
       if (inner) {
-        eles.push({ data: { id: aid, label: e.kind === 'subsystem' ? nameOf(e) : nameOf(e), w: p.w, h: p.h, tw: p.w - 16 }, classes: classes });
-        inner.tiles.forEach(function (tile) {
-          eles.push({
-            data: {
-              id: IN(tile.kid.kind, tile.kid.id), parent: aid,
-              label: nameOf(tile.kid), w: INNER_W, h: INNER_H, tw: INNER_W - 10,
-            },
-            position: { x: p.x - p.w / 2 + tile.x, y: p.y - p.h / 2 + tile.y },
-            classes: 'inner' + (dim ? ' dimmed' : ''),
+        var boxNode = { data: { id: aid, label: e.kind === 'subsystem' ? nameOf(e) : nameOf(e), w: p.w, h: p.h, tw: p.w - 16 }, classes: classes };
+        // An EMPTY deep boundary box has no children, so it is NOT a compound
+        // parent — it needs (and honours) an explicit position and size.
+        if (inner.deep && !inner.tiles.length && !(inner.proxies && inner.proxies.length)) boxNode.position = { x: p.x, y: p.y };
+        eles.push(boxNode);
+        if (inner.deep) {
+          emitDeepTiles(inner.tiles, aid, p.x - p.w / 2, p.y - p.h / 2, dim ? ' dimmed' : '');
+        } else {
+          inner.tiles.forEach(function (tile) {
+            eles.push({
+              data: {
+                id: IN(tile.kid.kind, tile.kid.id), parent: aid,
+                label: nameOf(tile.kid), w: INNER_W, h: INNER_H, tw: INNER_W - 10,
+              },
+              position: { x: p.x - p.w / 2 + tile.x, y: p.y - p.h / 2 + tile.y },
+              classes: 'inner' + (dim ? ' dimmed' : ''),
+            });
           });
-        });
+        }
         (inner.proxies || []).forEach(function (px) {
           eles.push({
             data: {
@@ -2040,9 +2409,28 @@ var MODEL = __MODEL_JSON__;
 
     var dimmedAnchors = {};
     entries.forEach(function (e) { if (state.query && !matches(e)) dimmedAnchors[anchorNodeId(e)] = true; });
+
+    // Deep mode: ONE direct line per related pair of concrete visible nodes —
+    // leaf tiles at any depth and/or top-level component boxes (deduped by
+    // buildDeepContext). These lines cross nested boundaries on purpose.
+    if (deepCtx) {
+      var ddi = 0;
+      Object.keys(deepCtx.direct).sort().forEach(function (key) {
+        var d = deepCtx.direct[key];
+        var ddim = state.query && (dimmedAnchors[d.aTop] || dimmedAnchors[d.bTop]);
+        eles.push({
+          data: { id: 'dd' + (ddi++), source: d.src, target: d.tgt, lbl: '' },
+          classes: 'inneredge' + (d.cross ? ' cross' : '') + (ddim ? ' dimmed' : ''),
+        });
+      });
+    }
+
     var i = 0;
     Object.keys(ve.agg).forEach(function (key) {
       var e = ve.agg[key];
+      // Prefer the leaf lines: drop an aggregated container edge whose
+      // constituent relations were ALL drawn as direct deep lines above.
+      if (deepCtx && deepCtx.directTopCount[key] >= e.n) return;
       var bundle = e.n > 1;
       var dim = state.query && (dimmedAnchors[e.src] || dimmedAnchors[e.tgt]);
       var route = routeData(e.src, e.tgt, key);
@@ -2301,22 +2689,58 @@ var MODEL = __MODEL_JSON__;
     }
     return path;
   }
+  // Crumb compaction (compaction stage 5) is a RENDER MODE, not marker-based
+  // reparenting: renderCrumbs rebuilds #crumbs' innerHTML on every navigation,
+  // so nodes physically moved elsewhere would be destroyed by the next render.
+  // The header-compaction stage toggles crumbsCompact and re-renders; compact
+  // keeps the CURRENT scope visible and folds the ancestors into an ordered
+  // "\\u2026" dropdown (document order, root first) whose entries navigate
+  // exactly like the crumbs they replace.
+  var crumbsCompact = false;
+  var lastCrumbsHtml; // no initializer: the boot render at cy-init time precedes this line
+  // Set by the header-compaction IIFE: crumb re-renders change the header's
+  // CONTENT width without resizing #hdr itself (it is edge-anchored), so the
+  // ResizeObserver never fires for them — renderCrumbs nudges a reflow here.
+  var headerReflowHook = null;
+  function crumbBtnHtml(p, cur) {
+    return '<button class="crumb' + (cur ? ' cur' : '') + '" data-ck="' + p.kind + '" data-ci="' + (p.id || '') + '">' + p.label + '</button>';
+  }
   function renderCrumbs() {
     var el = document.getElementById('crumbs');
     var path = crumbPath();
-    el.innerHTML = path.map(function (p, i) {
-      var cur = i === path.length - 1;
-      return '<button class="crumb' + (cur ? ' cur' : '') + '" data-ck="' + p.kind + '" data-ci="' + (p.id || '') + '">' + p.label + '</button>'
-        + (cur ? '' : '<span class="sep">\\u203A</span>');
-    }).join('');
+    var html;
+    if (crumbsCompact && path.length > 1) {
+      html = '<span class="dropdown" id="crumbDd">'
+        + '<button class="crumb crumbmore" id="crumbMoreBtn" title="Show the collapsed ancestor path">\\u2026</button>'
+        + '<span class="menu" id="crumbMenu">'
+        + path.slice(0, path.length - 1).map(function (p) {
+          return '<button data-ck="' + p.kind + '" data-ci="' + (p.id || '') + '">' + p.label + '</button>';
+        }).join('')
+        + '</span></span>'
+        + '<span class="sep">\\u203A</span>'
+        + crumbBtnHtml(path[path.length - 1], true);
+    } else {
+      html = path.map(function (p, i) {
+        var cur = i === path.length - 1;
+        return crumbBtnHtml(p, cur) + (cur ? '' : '<span class="sep">\\u203A</span>');
+      }).join('');
+    }
+    // No-op renders keep the already-wired nodes (and an open "\\u2026" menu)
+    // intact — and don't churn the reflow scheduler while a search query types.
+    if (html === lastCrumbsHtml) return;
+    lastCrumbsHtml = html;
+    el.innerHTML = html;
     var btns = el.querySelectorAll('button');
     for (var i = 0; i < btns.length; i++) {
       (function (b) {
+        if (!b.getAttribute('data-ck')) return; // the "\\u2026" trigger toggles, never navigates
         b.addEventListener('click', function () {
           navigateTo(b.getAttribute('data-ck'), b.getAttribute('data-ci') || null);
         });
       })(btns[i]);
     }
+    if (crumbsCompact && path.length > 1) wireDropdown('crumbDd', 'crumbMoreBtn');
+    if (headerReflowHook) headerReflowHook();
   }
   function renderViewHint() {
     if (state.view.kind === 'types' || state.view.kind === 'databases') {
@@ -2340,6 +2764,78 @@ var MODEL = __MODEL_JSON__;
     state.typesRenderAll = false; // a fresh scope re-evaluates the LOD budget
     rebuild(true);
     renderPanel();
+    notifyViewChange();
+  }
+
+  // ---- Stage J: URL <-> view routing ----------------------------------------
+  // The canvas navigation lives in the URL path (refresh-safe + shareable). A
+  // route is the string AFTER /canvas/<project>: '' = system root; a '/'-joined
+  // NAMESPACE (e.g. 'a/b') that resolves against the model to a subsystem or a
+  // component; or the 'types'/'databases' view modes with an optional scope.
+  // A segment is the '::' namespace with '/' as separator, each part encoded.
+  function encSeg(s) { return encodeURIComponent(String(s)); }
+  function routeOf(view) {
+    if (!view) return '';
+    var k = view.kind;
+    if (k === 'system') return '';
+    if (k === 'types' || k === 'databases') {
+      return view.id ? k + '/' + view.id.split('::').map(encSeg).join('/') : k;
+    }
+    if (k === 'subsystem') {
+      return view.id ? view.id.split('::').map(encSeg).join('/') : '';
+    }
+    if (k === 'component') {
+      // A component's full namespace path IS its id: a chained subproject carries
+      // the subsystem prefix in the id (a::b::comp), a flat project uses the bare
+      // id (comp). Serializing comp.id split on '::' round-trips exactly via the
+      // compById lookup in resolveRoute. Owner-pattern nesting is deliberately NOT
+      // encoded (ownership is a separate axis; comp.id does not embed the owner).
+      var c = compById[view.id];
+      var full = c ? c.id : view.id;
+      return full.split('::').map(encSeg).join('/');
+    }
+    return '';
+  }
+  function resolveRoute(routeStr) {
+    var parts = String(routeStr || '').split('/').filter(function (s) { return s.length > 0; }).map(decodeURIComponent);
+    if (!parts.length) return { kind: 'system', id: null };
+    // NOTE: a subsystem literally named 'types'/'databases' is SHADOWED by these
+    // view-mode routes (acceptable — the modes own those first segments).
+    if (parts[0] === 'types') {
+      return { kind: 'types', id: parts.length > 1 ? parts.slice(1).join('::') : null };
+    }
+    if (parts[0] === 'databases') {
+      if (!showDatabaseTab) return { kind: 'system', id: null };
+      return { kind: 'databases', id: parts.length > 1 ? parts.slice(1).join('::') : null };
+    }
+    var joined = parts.join('::');
+    if (subById[joined]) return { kind: 'subsystem', id: joined };
+    if (compById[joined]) return { kind: 'component', id: joined };
+    return { kind: 'system', id: null }; // unknown id -> fall back to the root
+  }
+  // Apply a route (URL -> engine) WITHOUT echoing back through onViewChange.
+  function openRoute(routeStr) {
+    var v = resolveRoute(routeStr);
+    if (state.view.kind === v.kind && state.view.id === v.id) return;
+    applyingRoute = true;
+    try {
+      state.view = { kind: v.kind, id: v.id };
+      state.selected = null;
+      state.selectedKind = null;
+      state.typesRenderAll = false;
+      rebuild(true);
+      renderPanel();
+    } finally {
+      applyingRoute = false;
+    }
+  }
+  // Notify the embedder (engine -> URL) of the current view; suppressed while a
+  // route is being applied so the URL is not driven in a loop.
+  function notifyViewChange() {
+    if (applyingRoute) return;
+    if (typeof opts !== 'undefined' && opts && typeof opts.onViewChange === 'function') {
+      try { opts.onViewChange(routeOf(state.view)); } catch (e) { /* ignore */ }
+    }
   }
   // Explain (and offer to override) a performance-degraded ERD.
   function renderTypesNotice() {
@@ -2490,6 +2986,7 @@ var MODEL = __MODEL_JSON__;
     if (t.ghost) {
       state.view = parentViewOf(t.kind, t.id);
       rebuild(true);
+      notifyViewChange();
       select(t.kind, t.id, true);
       return;
     }
@@ -2510,11 +3007,26 @@ var MODEL = __MODEL_JSON__;
     return c ? { kind: 'subsystem', id: c.subsystem } : { kind: 'system', id: null };
   }
 
-  document.getElementById('search').addEventListener('input', function (ev) { state.query = ev.target.value.trim(); rebuild(false); });
-  document.getElementById('internalsToggle').addEventListener('change', function (ev) { state.internals = ev.target.checked; rebuild(true); });
-  document.getElementById('externalsToggle').addEventListener('change', function (ev) { state.externals = ev.target.checked; rebuild(true); });
-  document.getElementById('dataCouplingToggle').addEventListener('change', function (ev) { state.dataCoupling = ev.target.checked; renderLegend(); rebuild(true); });
-  document.getElementById('issuesToggle').addEventListener('change', function (ev) { state.showIssues = ev.target.checked; rebuild(false); renderPanel(); });
+  // While the search input is compacted behind the magnifier icon (compaction
+  // stage 3), a non-empty query must stay discoverable — mark the icon with an
+  // accent dot. The class is kept in sync on every query edit; the dot is only
+  // ever visible while the compact icon itself is.
+  function updateSearchBadge() {
+    var b = document.getElementById('searchBtn');
+    if (b && b.classList) b.classList[state.query ? 'add' : 'remove']('hasq');
+  }
+  document.getElementById('search').addEventListener('input', function (ev) { state.query = ev.target.value.trim(); updateSearchBadge(); rebuild(false); });
+  updateSearchBadge();
+  // Sync each View toggle's checkbox from the (possibly persisted) state, then
+  // persist on change so the choices survive a refresh (see persist()/saved).
+  document.getElementById('internalsToggle').checked = state.internals;
+  document.getElementById('internalsToggle').addEventListener('change', function (ev) { state.internals = ev.target.checked; persist(); rebuild(true); });
+  document.getElementById('externalsToggle').checked = state.externals;
+  document.getElementById('externalsToggle').addEventListener('change', function (ev) { state.externals = ev.target.checked; persist(); rebuild(true); });
+  document.getElementById('dataCouplingToggle').checked = state.dataCoupling;
+  document.getElementById('dataCouplingToggle').addEventListener('change', function (ev) { state.dataCoupling = ev.target.checked; persist(); renderLegend(); rebuild(true); });
+  document.getElementById('issuesToggle').checked = state.showIssues;
+  document.getElementById('issuesToggle').addEventListener('change', function (ev) { state.showIssues = ev.target.checked; persist(); rebuild(false); renderPanel(); });
   document.getElementById('dragToggle').addEventListener('change', function (ev) { cy.autolock(!ev.target.checked); });
   // Mode seg: Components ⇄ Types. Entering Types keeps the current subsystem
   // scope, so a subsystem's own types (plus shared ones) show scoped.
@@ -2558,9 +3070,24 @@ var MODEL = __MODEL_JSON__;
       })(btns[i]);
     }
   })();
+  // Compaction stage 4 replaces the mode tabs with one dropdown trigger; its
+  // label must follow the CURRENT mode. updateHeaderSegs runs on every rebuild,
+  // so a mode change made while compact re-labels the trigger immediately.
+  function updateModeBtn() {
+    var b = document.getElementById('modeBtn');
+    if (!b) return;
+    var lbl = state.view.kind === 'types' ? 'Types' : state.view.kind === 'databases' ? 'Databases' : 'Components';
+    b.textContent = lbl + ' \\u25BE';
+  }
   function updateHeaderSegs() {
     var seg = document.getElementById('modeSeg');
     var btns = seg.querySelectorAll('button');
+    if (!btns.length) {
+      // Compaction stage 4 moved the real tab buttons into the mode dropdown —
+      // keep driving THEIR active classes there (they move back node-identical).
+      var mm = document.getElementById('modeMenu');
+      if (mm && mm.querySelectorAll) btns = mm.querySelectorAll('button');
+    }
     for (var i = 0; i < btns.length; i++) {
       var vm = btns[i].getAttribute('data-vm');
       var active = vm === 'components'
@@ -2568,6 +3095,7 @@ var MODEL = __MODEL_JSON__;
         : vm === state.view.kind;
       if (btns[i].classList) btns[i].classList[active ? 'add' : 'remove']('active');
     }
+    updateModeBtn();
     var td = document.getElementById('typesDetailSeg');
     td.style.display = (state.view.kind === 'types' || state.view.kind === 'databases') ? '' : 'none';
     var tbs = td.querySelectorAll('button');
@@ -2631,7 +3159,13 @@ var MODEL = __MODEL_JSON__;
     var r = btn.getBoundingClientRect();
     menu.style.top = (r.bottom + 6) + 'px';
     menu.style.left = 'auto';
-    menu.style.right = Math.max(6, window.innerWidth - r.right) + 'px';
+    // Right-aligned to the trigger, but never pushed off the LEFT edge — the
+    // compact search / crumb triggers (header compaction) sit on the header's
+    // left side, where a 200px menu right-aligned to a narrow button would clip.
+    var right = Math.max(6, window.innerWidth - r.right);
+    var mw = menu.getBoundingClientRect ? menu.getBoundingClientRect().width : 0;
+    if (mw && window.innerWidth - right - mw < 6) right = Math.max(6, window.innerWidth - mw - 6);
+    menu.style.right = right + 'px';
   }
   function wireDropdown(ddId, btnId) {
     var dd = document.getElementById(ddId);
@@ -2650,11 +3184,29 @@ var MODEL = __MODEL_JSON__;
   var ldd = wireDropdown('layoutDd', 'layoutBtn');
   var sdd = wireDropdown('settingsDd', 'settingsBtn');
   var mdd = wireDropdown('moreDd', 'moreBtn');
+  // Compact stand-ins (header compaction stages 3-4): the search panel and the
+  // mode-tab dropdown are ordinary dropdowns; their triggers stay hidden until
+  // their compaction stage shows them, so wiring them here is inert at full width.
+  var qdd = wireDropdown('searchDd', 'searchBtn');
+  var vdd = wireDropdown('modeDd', 'modeBtn');
+  // Opening the compact search panel focuses the REAL input (stage 3 moves the
+  // node, never clones it, so its input listener keeps driving state.query).
+  // Registered after wireDropdown's toggle, so 'open' reflects the new state.
+  document.getElementById('searchBtn').addEventListener('click', function () {
+    if (String(qdd.className || '').indexOf('open') >= 0) {
+      var inp = document.getElementById('search');
+      if (inp && inp.focus) inp.focus();
+    }
+  });
   // Keep the settings panel open while flipping switches (clicks inside it don't
   // bubble to the document-level close handler).
   (function () {
     var m = document.getElementById('settingsMenu');
     if (m && m.addEventListener) m.addEventListener('click', function (ev) { if (ev && ev.stopPropagation) ev.stopPropagation(); });
+    // Same for the floating search panel: clicking into the input must not
+    // bubble to the document-level close handler and shut the panel mid-typing.
+    var sm = document.getElementById('searchMenu');
+    if (sm && sm.addEventListener) sm.addEventListener('click', function (ev) { if (ev && ev.stopPropagation) ev.stopPropagation(); });
   })();
 
   // Layout picker: choose the auto-layout algorithm. Components use cytoscape's
@@ -2678,6 +3230,12 @@ var MODEL = __MODEL_JSON__;
   });
   updateLayoutBtn();
 
+  // The compact crumb dropdown (compaction stage 5) is re-created by every
+  // compact crumb render, so it is looked up per close instead of captured.
+  function closeCrumbDd() {
+    var cdd = document.getElementById('crumbDd');
+    if (cdd && cdd.classList) cdd.classList.remove('open');
+  }
   if (document.addEventListener) {
     document.addEventListener('click', function () {
       if (dd.classList) dd.classList.remove('open');
@@ -2685,6 +3243,9 @@ var MODEL = __MODEL_JSON__;
       if (ldd.classList) ldd.classList.remove('open');
       if (sdd.classList) sdd.classList.remove('open');
       if (mdd && mdd.classList) mdd.classList.remove('open');
+      if (qdd && qdd.classList) qdd.classList.remove('open');
+      if (vdd && vdd.classList) vdd.classList.remove('open');
+      closeCrumbDd();
     });
     document.addEventListener('keydown', function (ev) {
       if (ev.key === 'Escape') {
@@ -2692,16 +3253,27 @@ var MODEL = __MODEL_JSON__;
         if (modal.classList && String(modal.className).indexOf('open') >= 0) { closeFlow(); return; }
         setPresentation(false);
         if (dd.classList) dd.classList.remove('open');
+        if (qdd && qdd.classList) qdd.classList.remove('open');
+        if (vdd && vdd.classList) vdd.classList.remove('open');
+        closeCrumbDd();
       }
     });
   }
 
-  // ── Responsive header overflow → "⋯" dropdown ─────────────────────────────
-  // When the floating header no longer fits its controls, trailing items
-  // COLLAPSE into the More menu instead of relying on horizontal scroll —
-  // every control stays one click away. Whole items move (listeners survive
-  // reparenting); a hidden placeholder pins each item's original position so
-  // restoring keeps the exact order. Collapse order = least-used first.
+  // ── Responsive header compaction → ordered stages ─────────────────────────
+  // When the floating header no longer fits its controls, standard reusable
+  // COMPACTION BEHAVIORS apply progressively — each stage only while the row
+  // still overflows — and restore in REVERSE order when space returns:
+  //   1. trailing buttons fold into the "⋯" menu (least-used first, one by one)
+  //   2. the View dropdown folds in after them
+  //   3. the search input compacts to a 🔍 icon + floating panel
+  //   4. the mode tabs compact to one current-mode dropdown
+  //   5. ancestor crumbs compact into an ordered "…" dropdown
+  // Stages 1-2 move whole items (listeners survive reparenting) with a hidden
+  // placeholder pinning each item's original spot for restore; stage 5 is a
+  // render mode (renderCrumbs rebuilds its innerHTML, so reparenting would not
+  // survive navigation). Nothing here is persisted — compaction is purely
+  // responsive to the available width.
   (function () {
     if (typeof window === 'undefined') return;
     var hdr = document.getElementById('hdr');
@@ -2729,47 +3301,185 @@ var MODEL = __MODEL_JSON__;
       }
       return markers[id];
     }
-    var collapsed = [];
-    // True content overflow in px, measured with FRACTIONAL rect precision:
-    // scrollWidth/clientWidth are rounded integers and scrollWidth never reads
-    // below clientWidth, so a sub-pixel overflow that still paints a scrollbar
-    // is invisible to them. Positive = overflowing; negative = headroom.
-    function overflowPx() {
-      var box = hdr.getBoundingClientRect();
-      var edge = box.left;
-      for (var c = hdr.firstElementChild; c; c = c.nextElementSibling) {
-        var cr = c.getBoundingClientRect();
-        if (cr.width > 0 && cr.right > edge) edge = cr.right;
-      }
-      return edge - (box.right - 14); // 14 = the header's right padding
+    // Fold stage (the classic behavior): move items into the "⋯" menu ONE per
+    // apply() call — the reflow loop keeps a stage active until it reports no
+    // further progress, preserving the original per-button granularity.
+    function foldStage(ids) {
+      var folded = [];
+      return {
+        apply: function () {
+          while (folded.length < ids.length) {
+            var id = ids[folded.length];
+            var el = movableFor(id);
+            if (!el || el === moreDd || el.parentNode === moreMenu) { folded.push({ el: null, marker: null }); continue; }
+            var m = markerFor(id, el);
+            // A dropdown moved while open would strand its fixed-positioned menu.
+            if (el.classList) el.classList.remove('open');
+            moreDd.style.display = '';
+            moreMenu.appendChild(el);
+            folded.push({ el: el, marker: m });
+            return true;
+          }
+          return false;
+        },
+        restore: function () {
+          for (var i = folded.length - 1; i >= 0; i--) {
+            var it = folded[i];
+            if (it.el && it.marker && it.marker.parentNode) it.marker.parentNode.insertBefore(it.el, it.marker);
+          }
+          folded = [];
+        },
+      };
     }
+    // Stage 3: the search input compacts behind a 🔍 icon; the REAL input node
+    // MOVES into the floating panel (fixed-positioned by the same helper as
+    // every dropdown menu), so its input listener keeps driving state.query.
+    function searchStage() {
+      var on = false;
+      return {
+        apply: function () {
+          if (on) return false;
+          var inp = document.getElementById('search');
+          var ddw = document.getElementById('searchDd');
+          var menu = document.getElementById('searchMenu');
+          if (!inp || !ddw || !menu) return false;
+          menu.appendChild(inp);
+          ddw.style.display = '';
+          on = true;
+          return true;
+        },
+        restore: function () {
+          if (!on) return;
+          on = false;
+          var inp = document.getElementById('search');
+          var ddw = document.getElementById('searchDd');
+          if (inp && ddw && ddw.parentNode) ddw.parentNode.insertBefore(inp, ddw);
+          if (ddw) { ddw.style.display = 'none'; if (ddw.classList) ddw.classList.remove('open'); }
+        },
+      };
+    }
+    // Stage 4: the mode tabs collapse into ONE dropdown labelled with the
+    // current mode. The REAL tab buttons move into its menu (listeners and
+    // active styling survive); updateHeaderSegs keeps the trigger label in
+    // sync when the mode changes while compact.
+    function modeStage() {
+      var moved = [];
+      return {
+        apply: function () {
+          if (moved.length) return false;
+          var seg = document.getElementById('modeSeg');
+          var ddw = document.getElementById('modeDd');
+          var menu = document.getElementById('modeMenu');
+          if (!seg || !ddw || !menu) return false;
+          var btns = seg.querySelectorAll('button');
+          if (!btns.length) return false;
+          for (var i = 0; i < btns.length; i++) moved.push(btns[i]);
+          for (var j = 0; j < moved.length; j++) menu.appendChild(moved[j]);
+          seg.style.display = 'none';
+          ddw.style.display = '';
+          updateModeBtn();
+          return true;
+        },
+        restore: function () {
+          if (!moved.length) return;
+          var seg = document.getElementById('modeSeg');
+          var ddw = document.getElementById('modeDd');
+          for (var i = 0; i < moved.length; i++) seg.appendChild(moved[i]);
+          moved = [];
+          seg.style.display = '';
+          if (ddw) { ddw.style.display = 'none'; if (ddw.classList) ddw.classList.remove('open'); }
+        },
+      };
+    }
+    // Stage 5: crumb compaction is a render-mode toggle consulted by
+    // renderCrumbs itself — see crumbsCompact there. Never reparenting.
+    function crumbStage() {
+      return {
+        apply: function () {
+          if (crumbsCompact) return false;
+          crumbsCompact = true;
+          renderCrumbs();
+          return true;
+        },
+        restore: function () {
+          if (!crumbsCompact) return;
+          crumbsCompact = false;
+          renderCrumbs();
+        },
+      };
+    }
+    // Ordered compaction stages: applied first-to-last only while the header
+    // overflows, restored last-to-first when space returns.
+    var STAGES = [
+      foldStage(COLLAPSE),        // 1: trailing buttons → "⋯" menu
+      foldStage(['settingsBtn']), // 2: the View dropdown folds in too
+      searchStage(),              // 3: search input → 🔍 + floating panel
+      modeStage(),                // 4: mode tabs → current-mode dropdown
+      crumbStage(),               // 5: ancestor crumbs → "…" dropdown
+    ];
+    // Signed fit measure in px: positive = overflowing, negative = headroom.
+    // The header is a flex row whose ONLY flex:1 child is the .spacer, so the
+    // spacer's rendered width IS the free space -- it grows to absorb all slack
+    // and collapses to 0 the instant the row is full. That makes a right-edge
+    // measurement useless (the spacer keeps the trailing controls pinned to the
+    // right padding at every width, so their edge always reads as a bare fit),
+    // and scrollWidth clamps at clientWidth so it can't report headroom either.
+    // So take headroom from the spacer's own (fractional) width, and true
+    // overflow from scrollWidth - clientWidth (only ever > 0 once the spacer has
+    // already collapsed to 0). The two terms are mutually exclusive.
+    function overflowPx() {
+      var spacer = hdr.querySelector('.spacer');
+      var slack = spacer ? spacer.getBoundingClientRect().width : 0;
+      return (hdr.scrollWidth - hdr.clientWidth) - slack;
+    }
+    var inReflow = false;
     function reflow() {
       // Not laid out (hidden tab, non-browser DOM) — measuring would misfire.
       var box = hdr.getBoundingClientRect();
       if (!box || box.width <= 0) return;
-      // Restore everything, then collapse until the row fits (idempotent).
-      for (var i = collapsed.length - 1; i >= 0; i--) {
-        var it = collapsed[i];
-        if (it.el && it.marker && it.marker.parentNode) it.marker.parentNode.insertBefore(it.el, it.marker);
+      inReflow = true;
+      try {
+        // The floating search panel must survive a reflow cycle: restore-all
+        // would close it (and reparenting blurs the input), so capture its
+        // open/focus state up front and reinstate it after the stage walk.
+        var ddw = document.getElementById('searchDd');
+        var inp = document.getElementById('search');
+        var searchOpen = !!(ddw && String(ddw.className || '').indexOf('open') >= 0);
+        var searchFocus = false;
+        try {
+          var ae = (typeof ROOT !== 'undefined' && ROOT ? ROOT : document).activeElement;
+          searchFocus = !!(ae && inp && ae === inp);
+        } catch (e) { /* stubbed DOM */ }
+        // Restore every stage in REVERSE order, then re-apply progressively
+        // while the row still overflows (idempotent).
+        for (var i = STAGES.length - 1; i >= 0; i--) STAGES[i].restore();
+        moreDd.style.display = 'none';
+        hdr.scrollLeft = 0;
+        // Demand a few px of headroom, not a bare fit — the marginal-fit widths
+        // are exactly where the phantom scrollbar appeared. Every apply()
+        // changes the very widths being measured, but restore-all + a strictly
+        // forward stage walk make the outcome a pure function of the current
+        // width, and reflow never reschedules itself (renderCrumbs' nudge is
+        // suppressed via inReflow, and #hdr's own box never changes here), so
+        // boundary widths settle in ONE pass instead of oscillating.
+        var si = 0;
+        var guard = 0;
+        var bound = COLLAPSE.length + STAGES.length + 8;
+        while (overflowPx() > -8 && si < STAGES.length && guard < bound) {
+          guard++;
+          if (!STAGES[si].apply()) si++;
+        }
+        if (searchOpen || searchFocus) {
+          var compactNow = ddw && ddw.style && ddw.style.display !== 'none';
+          if (compactNow && searchOpen) {
+            if (ddw.classList) ddw.classList.add('open');
+            positionDropdownMenu(ddw, document.getElementById('searchBtn'));
+          }
+          if (searchFocus && inp && inp.focus) inp.focus();
+        }
+      } finally {
+        inReflow = false;
       }
-      collapsed = [];
-      moreDd.style.display = 'none';
-      hdr.scrollLeft = 0;
-      var guard = 0;
-      // Demand a few px of headroom, not a bare fit — the marginal-fit widths
-      // are exactly where the phantom scrollbar appeared.
-      while (overflowPx() > -8 && guard < COLLAPSE.length) {
-        var id = COLLAPSE[guard++];
-        var el = movableFor(id);
-        if (!el || el === moreDd || el.parentNode === moreMenu) continue;
-        var m = markerFor(id, el);
-        // A dropdown moved while open would strand its fixed-positioned menu.
-        if (el.classList) el.classList.remove('open');
-        moreDd.style.display = '';
-        moreMenu.appendChild(el);
-        collapsed.push({ el: el, marker: m });
-      }
-      if (collapsed.length === 0) moreDd.style.display = 'none';
     }
     var raf = null;
     var defer = window.requestAnimationFrame
@@ -2779,6 +3489,9 @@ var MODEL = __MODEL_JSON__;
       if (raf !== null) return;
       raf = defer(function () { raf = null; reflow(); });
     }
+    // Crumb re-renders change the header's content width without resizing #hdr
+    // itself — renderCrumbs nudges a reflow through this hook (no-op mid-reflow).
+    headerReflowHook = function () { if (!inReflow) schedule(); };
     if (typeof ResizeObserver !== 'undefined') {
       new ResizeObserver(schedule).observe(hdr);
     } else if (window.addEventListener) {
@@ -3502,10 +4215,12 @@ var MODEL = __MODEL_JSON__;
     if (kind === 'type' && state.view.kind !== 'types' && state.view.kind !== 'databases') {
       state.view = { kind: 'types', id: typesScopeFromView() };
       rebuild(true);
+      notifyViewChange();
     } else if (kind === 'component' && (state.view.kind === 'types' || state.view.kind === 'databases')) {
       var c = compById[id];
       state.view = { kind: 'subsystem', id: c ? c.subsystem : null };
       rebuild(true);
+      notifyViewChange();
     }
     state.selectedKind = kind;
     state.selected = id;
@@ -3564,6 +4279,14 @@ var MODEL = __MODEL_JSON__;
     if (!exposes || !openApiAllowed()) return '';
     return '<div class="openbtn"><button class="tbtn" data-openapi-tag="' + esc(tag || '') + '">\\u25A4 View OpenAPI \\u2197</button></div>';
   }
+  // "Open in Specs" — deep-links the focused spec into the hosted Specs value
+  // editor via a host hook (opts.onOpenSpec). Hidden when no host provides it
+  // (standalone file, shared page): those have no editor to open. kind is the
+  // spec layer, id its qualified spec id.
+  function openSpecButton(kind, id) {
+    if (typeof opts === 'undefined' || !opts || typeof opts.onOpenSpec !== 'function') return '';
+    return '<div class="openbtn"><button class="tbtn" data-openspec-kind="' + kind + '" data-openspec-id="' + esc(id) + '">\\u270E Open in Specs \\u2197</button></div>';
+  }
 
   function renderPanel() {
     var head = '', body = '';
@@ -3586,7 +4309,8 @@ var MODEL = __MODEL_JSON__;
         + (scopeFocus ? staticChip('current view') : '')
         + chip(c.subsystem, 'subsystem', c.subsystem)
         + (scopeFocus ? '' : openViewButton('component', c.id, c.owns.length > 0))
-        + openApiButton(componentExposesApi(c), c.apiTag);
+        + openApiButton(componentExposesApi(c), c.id)
+        + openSpecButton('component', c.id);
       
       var linkedTypes = MODEL.types.filter(function (t) { return t.componentClass === c.id; });
       if (linkedTypes.length) {
@@ -3595,6 +4319,14 @@ var MODEL = __MODEL_JSON__;
           + '</div>';
       }
       body += '<p class="desc">' + esc(c.description) + '</p>';
+
+      if (c.externalLinks && c.externalLinks.length) {
+        body += section('External links', c.externalLinks.length, c.externalLinks.map(function (l) {
+          var label = l.label || l.url;
+          var tag = l.type === 'implementation' ? staticChip('source') : '';
+          return '<div class="method">' + tag + '<a href="' + esc(l.url) + '" target="_blank" rel="noopener" style="color:var(--accent);word-break:break-all">' + esc(label) + ' \\u2197</a></div>';
+        }).join(''), true);
+      }
 
       var depInner = (c.dependsOn.length ? c.dependsOn.map(function (d) { return chip(d, 'component', d); }).join('') : '<span class="desc">none</span>')
         + (c.owns.length ? '<div style="margin-top:8px"><b style="font-size:11px">Owns:</b><br>' + c.owns.map(function (d) { return chip(d, 'component', d); }).join('') + '</div>' : '');
@@ -3670,7 +4402,8 @@ var MODEL = __MODEL_JSON__;
       MODEL.types.forEach(function (t2) { if (t2.id === focusId) ty = t2; });
       if (ty) {
         head = '<h2>' + esc(ty.name) + '</h2>' + staticChip('\\u00AB' + ty.kind + '\\u00BB')
-          + (ty.subsystem ? chip(ty.subsystem, 'subsystem', ty.subsystem) : staticChip('system-level shared'));
+          + (ty.subsystem ? chip(ty.subsystem, 'subsystem', ty.subsystem) : staticChip('system-level shared'))
+          + openSpecButton('type', ty.id);
         
         if (ty.componentClass) {
           head += '<div style="margin-top:6px"><b style="font-size:11px">Class Component:</b> ' + chip(ty.componentClass, 'component', ty.componentClass) + '</div>';
@@ -3746,7 +4479,8 @@ var MODEL = __MODEL_JSON__;
         + (s.status ? staticChip(s.status) : '')
         + (scopeFocus ? staticChip('current view') : '')
         + (scopeFocus ? '' : openViewButton('subsystem', s.id, subKids > 0))
-        + openApiButton(subsystemExposesApi(s.id), '');
+        + openApiButton(subsystemExposesApi(s.id), '')
+        + openSpecButton('subsystem', s.id);
       body += '<p class="desc">' + esc(s.description) + '</p>';
       if (s.trustedLinks.length) {
         body += section('Trusted links (fast lanes)', s.trustedLinks.length, s.trustedLinks.map(function (t2) {
@@ -3804,6 +4538,16 @@ var MODEL = __MODEL_JSON__;
         });
       })(oapis[oi]);
     }
+    var ospecs = panel.querySelectorAll('[data-openspec-kind]');
+    for (var si = 0; si < ospecs.length; si++) {
+      (function (b) {
+        b.addEventListener('click', function () {
+          if (typeof opts !== 'undefined' && opts && typeof opts.onOpenSpec === 'function') {
+            opts.onOpenSpec(b.getAttribute('data-openspec-kind'), b.getAttribute('data-openspec-id') || '');
+          }
+        });
+      })(ospecs[si]);
+    }
     var flows = panel.querySelectorAll('[data-flow-comp]');
     for (var j = 0; j < flows.length; j++) {
       (function (b) {
@@ -3816,6 +4560,23 @@ var MODEL = __MODEL_JSON__;
   }
 
   renderPanel();
+  // Stage G: a deep link may focus a component and/or open a method's narrative
+  // modal once the seeded view + DOM + cy graph exist. The host parses the URL hash
+  // into opts.initialSelect / opts.initialFlow — both carry the component id, so this
+  // works whether the seeded view is the component itself or its parent subsystem
+  // (a leaf component has no meaningful "inside", so Specs deep-links open the parent
+  // and focus the component here).
+  (function () {
+    if (typeof opts === 'undefined' || !opts) return;
+    var f = opts.initialFlow, s = opts.initialSelect;
+    var focusComp = (f && f.comp) || (s && s.comp);
+    if (focusComp && compById[focusComp]) {
+      try { select('component', focusComp, true); } catch (e) { /* ignore */ }
+    }
+    if (f && f.comp && f.method && compById[f.comp]) {
+      try { openFlow(f.comp, f.method, f.mode === 'steps' ? 'steps' : 'flow'); } catch (e) { /* ignore */ }
+    }
+  })();
 })();
 </script>
 </body>

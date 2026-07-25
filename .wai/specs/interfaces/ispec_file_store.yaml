@@ -26,6 +26,15 @@ methods:
     signature: 'listTree(directory: string): string[]'
     returns: string[]
     effect: read
+  - name: findChainingParent
+    description: >-
+      The filesystem walk realizing chaining-parent detection: from the bound root, examine
+      ancestors (bounded depth) for a spec directory containing a subsystem spec whose projectPath
+      resolves exactly to the bound root; return its root and subsystem id, or null. File I/O lives
+      here — the store is the only spec-tree component that touches the disk.
+    signature: 'findChainingParent(): ChainingParentRef | null'
+    returns: ChainingParentRef | null
+    effect: read
 status: complete
 createdAt: '2026-07-18T22:57:53.287Z'
-updatedAt: '2026-07-18T22:59:16.791Z'
+updatedAt: '2026-07-24T18:01:45.212Z'

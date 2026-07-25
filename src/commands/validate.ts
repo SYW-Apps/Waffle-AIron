@@ -1,14 +1,21 @@
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
 import { assertProjectInitialized, loadProjectConfig, loadRegistry } from '../config/loader.js';
-import { validateRegistry, validateProjectConfig, ValidationIssue } from '../core/validation.js';
+import { validateRegistry, validateProjectConfig, validateAsComplete, ValidationIssue } from '../core/validation.js';
 
 // ---------------------------------------------------------------------------
-// validate command
+// validate command (cli_validator_adapter)
 //
 // Checks the project config and registry for issues.
 // Exits with code 1 if there are errors (or warnings in --ci mode).
 // ---------------------------------------------------------------------------
+
+// cli_validator_adapter.validateAsComplete — the as-complete conformance gate:
+// validate the tree as if every spec were already complete (the status flip
+// happens in-memory inside the validator and is restored — nothing on disk
+// changes). Republished here as the adapter's forward to the validator portal;
+// `wairon lock` gates its dry-run on this and refuses to freeze on errors.
+export { validateAsComplete };
 
 export interface ValidateOptions {
   ci?: boolean; // treat warnings as errors (for CI pipelines)

@@ -7,6 +7,7 @@ import {
   importSurface,
   listSnapshots,
   generateChildSnapshots,
+  listExternalInterfaces,
 } from '../core/surfaces.js';
 import { SURFACE_AUDIENCES, SurfaceOrigin } from '../models/index.js';
 
@@ -17,7 +18,14 @@ import { SURFACE_AUDIENCES, SurfaceOrigin } from '../models/index.js';
 // import           — store a foreign surface (native snapshot or OpenAPI)
 // list             — stored snapshots available to this project
 // generate-children — write the family surface into every chained child
+// externals        — the project's consumable external surfaces (parent
+//                    family, siblings, foreign imports) with freshness
 // ---------------------------------------------------------------------------
+
+// cli_surfaces_client_adapter.generateChildSnapshots — also consumed by the
+// runner's lock workflow (`wairon lock`: a locked parent ships fresh
+// surfaces), so the adapter republishes the surface portal's function here.
+export { generateChildSnapshots };
 
 export interface SurfaceOptions {
   audience?: string;
@@ -25,6 +33,9 @@ export interface SurfaceOptions {
   out?: string;
   source?: string;
   origin?: string;
+  /** OpenAPI export: select ONE portal's document. An OpenAPI spec is one API,
+   *  so a multi-portal project renders one document per portal. */
+  portal?: string;
 }
 
 export async function runSurface(action: string, options: SurfaceOptions = {}): Promise<void> {
@@ -40,14 +51,33 @@ export async function runSurface(action: string, options: SurfaceOptions = {}): 
       if (format !== 'native' && format !== 'openapi') {
         throw new WaironError(`Unknown format "${format}" (supported: native, openapi).`);
       }
-      const result = exportSurface(audience, format, options.out);
+      if (options.portal && format !== 'openapi') {
+        throw new WaironError('`--portal` selects one OpenAPI document and only applies to `--format openapi`.');
+      }
+      const result = exportSurface(audience, format, options.out, options.portal);
       logger.success(
         `Projected surface of "${result.snapshot.projectName}": ${result.snapshot.interfaces.length} interface(s), ${result.snapshot.types.length} type(s) at audience ≥ ${audience}.`,
       );
-      if (result.writtenTo) {
-        logger.info(`Written to ${result.writtenTo}`);
+
+      // Report EVERY written path: a multi-portal OpenAPI export writes one file
+      // per portal, and naming only the first would silently hide the other APIs.
+      const written = result.writtenPaths ?? (result.writtenTo ? [result.writtenTo] : []);
+      if (written.length === 1) {
+        logger.info(`Written to ${written[0]}`);
+      } else if (written.length > 1) {
+        logger.info(`Written ${written.length} document(s) — one per portal:`);
+        for (const p of written) logger.info(`  ${p}`);
       } else if (result.rendered) {
         process.stdout.write(`${result.rendered}\n`);
+      } else if (result.renderedSet && result.renderedSet.length > 1) {
+        // An OpenAPI document IS one API. With several portals and no selection
+        // there is no single document to print — name them so the caller can pick.
+        logger.info(
+          `This project publishes ${result.renderedSet.length} portals — pick one with \`--portal <id>\` (or use --out to write them all):`,
+        );
+        for (const spec of result.renderedSet) {
+          logger.info(`  ${chalk.cyan(spec.portalId)} — ${spec.name}`);
+        }
       } else {
         for (const entry of result.snapshot.interfaces) {
           logger.info(`  ${chalk.cyan(entry.id)} (${entry.type}, ${entry.audience}) — ${entry.methods.length} method(s)`);
@@ -95,7 +125,25 @@ export async function runSurface(action: string, options: SurfaceOptions = {}): 
       return;
     }
 
+    case 'externals': {
+      const entries = listExternalInterfaces();
+      if (!entries.length) {
+        logger.info('No external surfaces available (.wai/surfaces/ holds no snapshots).');
+        return;
+      }
+      // One row per entry: sourceKind, key, origin, freshness, interface ids.
+      const freshness = (f: string): string =>
+        f === 'fresh' ? chalk.green(f) : f === 'stale' ? chalk.yellow(f) : chalk.gray(f);
+      for (const e of entries) {
+        logger.info(
+          `${e.sourceKind.padEnd(8)} ${chalk.cyan(e.projectName)} [${e.origin}] ${freshness(e.freshness)} — ` +
+            `${e.interfaceIds.length ? e.interfaceIds.join(', ') : '(no interfaces)'}`,
+        );
+      }
+      return;
+    }
+
     default:
-      throw new WaironError(`Unknown surface action "${action}" (supported: export, import, list, generate-children).`);
+      throw new WaironError(`Unknown surface action "${action}" (supported: export, import, list, generate-children, externals).`);
   }
 }

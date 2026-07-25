@@ -137,7 +137,14 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: internalizeSubsystem
+  - name: resolveChainingParent
+    narrative:
+      - stepNumber: 1
+        description: Forward chaining-parent detection to the core subsystem's published portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: resolveChainingParent
 conformance: anchored
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-11T19:16:32.172Z'
+updatedAt: '2026-07-24T18:14:40.597Z'

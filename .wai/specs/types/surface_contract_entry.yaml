@@ -54,6 +54,19 @@ fields:
     type: string
     description: draft | stable | deprecated.
     optional: true
+  - name: auth
+    type: PortalAuth
+    description: >-
+      Projected copy of the backing Portal's authentication requirement (security scheme). Absent or
+      scheme 'none' means the surface requires no security. Copied onto the entry by the projector;
+      the codec renders it into OpenAPI securitySchemes/security.
+    optional: true
+  - name: basePath
+    type: string
+    description: >-
+      The backing Portal's basePath, projected onto the entry so the codec can emit this portal's
+      OpenAPI `servers`.
+    optional: true
 methods: []
 createdAt: '2026-07-10T23:11:38.492Z'
-updatedAt: '2026-07-10T23:11:38.601Z'
+updatedAt: '2026-07-23T15:53:56.510Z'

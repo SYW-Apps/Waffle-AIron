@@ -1,0 +1,29 @@
+kind: value-object
+id: project_binding
+name: ProjectBinding
+description: >-
+  The resolved binding of one authorized data-plane request: which filesystem root the request
+  operates on and which hosted project it belongs to for provenance. When the narrowing/selector is
+  subproject-qualified, rootPath is the mounted CHILD root while projectId stays the TOP project
+  (audit + permissions anchor there).
+subsystem: sdd_host
+fields:
+  - name: rootPath
+    type: string
+    description: >-
+      Absolute root the request binds — the project's isolated root, or the mounted chained-child
+      root for a subproject-qualified binding.
+    optional: false
+  - name: projectId
+    type: string
+    description: The TOP hosted project id — permission resolution and audit provenance always anchor here.
+    optional: false
+  - name: subproject
+    type: string
+    description: >-
+      The bound mount chain ('a' or 'a::b') when the binding is subproject-qualified; absent for a
+      plain project binding.
+    optional: true
+methods: []
+createdAt: '2026-07-24T20:50:13.159Z'
+updatedAt: '2026-07-24T20:50:13.178Z'

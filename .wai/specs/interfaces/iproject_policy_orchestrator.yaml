@@ -16,8 +16,14 @@ methods:
       perform the same profile-aware initialization body as executeApprovedInit: validate the
       request against the active pack policy (throwing on violations under an enforcing policy),
       create the hosted project, apply the instance's required/default declarative packs via the
-      pack registry, record the resolved profile selection into the project's config, and audit the
-      initialization. Returns the created hosted project record.
+      pack registry, record the resolved profile selection into the project's config, APPLY that
+      selection so it actually governs the new project (the first recorded id that resolves —
+      project kind, built-in, or pack-contributed profile whose pack is vendored as part of the same
+      step — is written as projectType; the remaining ids stay recorded but unapplied, since
+      projectType takes exactly one profile), and audit the initialization including the applied
+      profile and any unapplied remainder. A selection no tier can resolve leaves the default
+      projectType in place and is recorded in the audit rather than failing project creation.
+      Returns the created hosted project record.
     signature: >-
       initializeProjectWithProfile(credential: string, request: ProjectInitRequest):
       HostedProjectRecord
@@ -34,7 +40,11 @@ methods:
       Authenticate the caller credential and resolve the caller's project:write permission over the
       target project through the authorization seam (must be yes; an instance-admin bypasses),
       resolve the hosted project, and evaluate its active packs and recorded profile selection
-      against the active instance pack policy without side effects.
+      against the active instance pack policy without side effects. Also reports the profile REALITY
+      alongside policy compliance: governingProfileId (the projectType the validator actually
+      enforces) and unappliedProfileIds (recorded selection ids that are not governing) — so a
+      profile that was selected, or required by policy, but never applied is visible instead of
+      passing as compliant.
     signature: 'evaluateProjectPolicy(credential: string, projectId: string): PolicyEvaluationResult'
     returns: PolicyEvaluationResult
     params:
@@ -45,12 +55,22 @@ methods:
   - name: reconcileProjectPolicy
     description: >-
       Authenticate the caller credential and resolve the caller's project:write permission over the
-      target project through the authorization seam (must be yes; an instance-admin bypasses),
-      evaluate the project against the active instance pack policy, and — when the policy mode
-      permits auto-reconciliation — apply the allowed steps for missing required/default declarative
-      packs, auditing the reconciliation. Reconciliation only ever applies the INSTANCE POLICY's own
-      required/default packs, never discretionary changes, which is why project:write (not
-      project:admin) suffices.
+      target project through the authorization seam (must be yes; an instance-admin bypasses), then
+      — as an EXPLICIT, authorized reconciliation — evaluate the project against the active instance
+      pack policy and apply the missing required/default declarative packs that the server-global
+      set can resolve, REGARDLESS of enforcementMode. This action only ever applies the INSTANCE
+      POLICY's own required/default packs, never discretionary changes, which is why project:write
+      (not project:admin) suffices. Required/default packs the server-global set cannot resolve are
+      reported as unresolvedPacks (never silently skipped); enforcementMode governs init-time
+      blocking and automatic reconciliation, not this explicit action. Reconciliation also REPAIRS
+      the governing profile, but only when it is broken or non-compliant: when instance policy
+      requires profiles and none of the required ids is governing, or when the recorded projectType
+      resolves to no loaded profile, apply the first resolvable id (required ids first, then the
+      recorded selection) through the pack registry's ensure seam — vendoring its contributing pack
+      — and write it as projectType. A resolvable, policy-compliant projectType is reported, never
+      overwritten, so a deliberate local choice survives reconciliation. Audit the reconciliation
+      and return the post-reconciliation PolicyEvaluationResult, including governingProfileId and
+      any unapplied selection remainder.
     signature: 'reconcileProjectPolicy(credential: string, projectId: string): PolicyEvaluationResult'
     returns: PolicyEvaluationResult
     params:
@@ -93,9 +113,12 @@ methods:
       enforcing policy, throws on violations), creates the hosted project via
       admin_orchestrator.executeApprovedCreate, applies the instance's requiredGlobalPacks and
       defaultProjectPacks as declarative packs via the pack registry, records the resolved
-      ProjectProfileSelection into the project's config, and audits 'project.init.policy'. This is
-      the single initialization body shared by the gated portal path (initializeProjectWithProfile)
-      and approval execution.
+      ProjectProfileSelection into the project's config, APPLIES that selection as the project's
+      governing projectType (first resolvable id, contributing pack vendored through the pack
+      registry's ensure seam; remaining ids recorded but unapplied; an entirely unresolvable
+      selection leaves the default projectType and is reported in the audit rather than failing
+      creation), and audits 'project.init.policy'. This is the single initialization body shared by
+      the gated portal path (initializeProjectWithProfile) and approval execution.
     signature: 'executeApprovedInit(request: ProjectInitRequest): HostedProjectRecord'
     returns: HostedProjectRecord
     params:
@@ -114,6 +137,51 @@ methods:
     params:
       - name: request
         type: ProjectInitRequest
+  - name: getProjectConfig
+    description: >-
+      Authenticate the caller credential and resolve the caller's project:read permission over the
+      target project through the authorization seam (must be yes; an instance-admin bypasses),
+      resolve and bind the project's isolated root, then read the project's project-level
+      configuration AND whether it is genuinely in force: the projectType from project.yaml
+      (defaulting to 'backend' when the config omits it), whether the project currently holds a lock
+      (via the core adapter's lock record), where that profile comes from and whether it resolves at
+      all (against the project-scoped profile catalog — built-ins, the project's own registered
+      packs, the server-global packs), the recorded profile-selection ids that are not the governing
+      one, and the subsystems declaring their own profile (which the project-level profile does not
+      govern). Returns the assembled ProjectConfigView. No side effects: an unresolvable recorded
+      projectType is REPORTED via profileResolvable, never repaired here.
+    signature: 'getProjectConfig(credential: string, projectId: string): ProjectConfigView'
+    returns: ProjectConfigView
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+  - name: setProjectType
+    description: >-
+      Authenticate the caller credential and resolve the caller's project:write permission over the
+      target project through the authorization seam (must be yes; an instance-admin bypasses),
+      resolve and bind the project's isolated root, then make the requested projectType actually
+      GOVERN the project rather than merely recording a name: ensure the profile is resolvable
+      through the pack registry's ensure-profile-installed seam (a built-in profile or project kind
+      and an already-registered pack profile pass through unchanged; a profile contributed only by a
+      server-global pack has that pack vendored into the project and registered in extensions.packs;
+      an id no tier contributes is REFUSED, because writing it would silently disable the whole
+      profile doctrine), write the profile into the project's project.yaml, and fold the applied id
+      to the FRONT of the project's recorded profileSelection — keeping the other recorded ids and
+      stamping selectedBy/selectedAt from the authenticated caller, so the record and the governing
+      reality agree. Returns the enriched ProjectConfigView: projectType, lock status,
+      profileSource, profileResolvable, any adoptedPackName, the unapplied selection remainder, and
+      the subsystems whose own profile overrides the project-level one.
+    signature: 'setProjectType(credential: string, projectId: string, projectType: string): ProjectConfigView'
+    returns: ProjectConfigView
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+      - name: projectType
+        type: string
 status: complete
 createdAt: '2026-07-08T21:59:46.667Z'
-updatedAt: '2026-07-16T15:20:12.632Z'
+updatedAt: '2026-07-24T23:31:48.662Z'

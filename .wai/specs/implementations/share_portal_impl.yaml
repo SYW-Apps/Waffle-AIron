@@ -27,7 +27,12 @@ methods:
   - name: getSharedOpenApi
     narrative:
       - stepNumber: 1
-        description: Fetch the permitted OpenAPI document and wrap it in a bundled, self-contained viewer page.
+        description: >-
+          Read the `spec` query parameter (a portalId), fetch that permitted per-portal OpenAPI
+          document, and wrap it in a bundled, self-contained Swagger UI page. With several captured
+          specs and no `spec`, the access orchestrator returns an openapi_spec_index and this portal
+          renders it as an index page listing every shared API, each linking to its own viewer; with
+          exactly one, open it directly.
         type: call
         targetComponent: share_access_orchestrator
         targetMethod: downloadArtifact
@@ -35,7 +40,11 @@ methods:
   - name: downloadSharedArtifact
     narrative:
       - stepNumber: 1
-        description: Serve the permitted artifact download (html | openapi), or 404/403.
+        description: >-
+          Serve the permitted artifact download (html | openapi), forwarding the `spec` query
+          parameter (a portalId) for openapi so one per-portal document is downloaded; with several
+          captured specs and no `spec` the payload is an openapi_spec_index listing the APIs rather
+          than a document, or 404/403.
         type: call
         targetComponent: share_access_orchestrator
         targetMethod: downloadArtifact
@@ -43,4 +52,4 @@ methods:
 conformance: declared
 status: complete
 createdAt: '2026-07-18T09:31:51.087Z'
-updatedAt: '2026-07-18T13:16:52.063Z'
+updatedAt: '2026-07-24T09:47:29.557Z'

@@ -1,0 +1,33 @@
+kind: value-object
+id: resolved_global_pack
+name: ResolvedGlobalPack
+description: >-
+  A server-global declarative pack resolved to its content for vendoring into a project. Produced by
+  the pack registry's pre-authorized resolver across BOTH server-global tiers (immutable image-layer
+  + mutable instance) and BOTH file- and directory-form packs. Carries the pack's canonical identity
+  so a project's compliance is checked and reported on the SAME key the pack is installed under
+  (closing the file-stem-vs-manifest-name drift that made reconciliation never converge).
+fields:
+  - name: requestedName
+    type: string
+    description: The policy-supplied name that resolved to this pack (a file stem or a manifest name).
+    optional: false
+  - name: name
+    type: string
+    description: >-
+      The pack's CANONICAL manifest name — the identity it is vendored under and compliance-checked
+      against.
+    optional: false
+  - name: content
+    type: string
+    description: >-
+      The pack's serialized declarative content (profiles + language/platform tables), ready to
+      vendor via executeApprovedInstallProjectPack.
+    optional: false
+  - name: tier
+    type: string
+    description: 'The server-global tier it resolved from: "instance" or "image".'
+    optional: false
+methods: []
+createdAt: '2026-07-22T17:27:36.292Z'
+updatedAt: '2026-07-22T17:27:36.308Z'

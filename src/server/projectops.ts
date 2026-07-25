@@ -9,6 +9,7 @@ import type { ProducerConfig } from '../producers/index.js';
 import type {
   AuditEvent,
   AuditQuery,
+  AvailableProfile,
   GitBackingBinding,
   HostConfig,
   HostedProjectRecord,
@@ -16,6 +17,7 @@ import type {
   InstancePackPolicy,
   PackDescriptor,
   PolicyEvaluationResult,
+  ProjectConfigView,
 } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -68,6 +70,18 @@ export function installProjectPackArchive(cfg: HostConfig, credential: string | 
   return packs.installProjectPackArchive(cfg, credential, project, archive, name);
 }
 
+export function listAvailableProfiles(cfg: HostConfig, credential: string | null): AvailableProfile[] {
+  return packs.listAvailableProfiles(cfg, credential);
+}
+
+export function listAdoptableProjectPacks(cfg: HostConfig, credential: string | null, project: string): PackDescriptor[] {
+  return packs.listAdoptableProjectPacks(cfg, credential, project);
+}
+
+export function adoptProjectPack(cfg: HostConfig, credential: string | null, project: string, name: string): PackDescriptor {
+  return packs.adoptProjectPack(cfg, credential, project, name);
+}
+
 // ── pack/profile policy ───────────────────────────────────────────────────────
 
 export function getPackPolicy(cfg: HostConfig, credential: string | null): InstancePackPolicy {
@@ -84,6 +98,18 @@ export function evaluateProjectPolicy(cfg: HostConfig, credential: string | null
 
 export function reconcileProjectPolicy(cfg: HostConfig, credential: string | null, projectId: string): PolicyEvaluationResult {
   return policy.reconcileProjectPolicy(cfg, credential, projectId);
+}
+
+export function getProjectConfig(cfg: HostConfig, credential: string | null, projectId: string): ProjectConfigView {
+  return policy.getProjectConfig(cfg, credential, projectId);
+}
+
+export function setProjectType(cfg: HostConfig, credential: string | null, projectId: string, projectType: string): ProjectConfigView {
+  return policy.setProjectType(cfg, credential, projectId, projectType);
+}
+
+export function listProjectProfiles(cfg: HostConfig, credential: string | null, project: string): AvailableProfile[] {
+  return packs.listProjectProfiles(cfg, credential, project);
 }
 
 // ── producers ─────────────────────────────────────────────────────────────────

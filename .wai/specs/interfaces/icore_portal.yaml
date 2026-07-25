@@ -146,6 +146,21 @@ methods:
     signature: 'loadProjectExtensions(): LoadedExtensions'
     returns: LoadedExtensions
     params: []
+  - name: resolveChainingParent
+    description: >-
+      Report the chaining-mount context of the bound root (parent root + mounting subsystem id), or
+      null. Pure 1:1 forward.
+    signature: 'resolveChainingParent(): ChainingParentRef | null'
+    returns: ChainingParentRef | null
+  - name: computeStateIdAt
+    description: >-
+      Compute the current state hash of the project at the given root (read-only bind). Pure 1:1
+      forward.
+    signature: 'computeStateIdAt(root: string): string | null'
+    returns: string | null
+    params:
+      - name: root
+        type: string
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-14T19:02:55.252Z'
+updatedAt: '2026-07-24T18:01:53.812Z'

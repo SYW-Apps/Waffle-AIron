@@ -47,6 +47,23 @@ fields:
       True for an image-tier pack that is shadowed by a same-named instance pack (the instance copy
       is the effective one). Reported as drift; absent/false otherwise.
     optional: true
+  - name: profileIds
+    type: string[]
+    description: >-
+      The ids of the architectural profiles this pack contributes (the same profiles the `profiles`
+      count summarizes) — lets a UI offer a pack's profiles as structured choices instead of a bare
+      count. Absent on a pack that failed to load.
+    optional: true
+  - name: languageIds
+    type: string[]
+    description: The ids of the language/platform tables this pack contributes. Absent on a load failure.
+    optional: true
+  - name: ruleIds
+    type: string[]
+    description: >-
+      The ids/codes of the programmatic rules this pack contributes (empty for a declarative pack).
+      Absent on a load failure.
+    optional: true
 methods: []
 createdAt: '2026-07-04T18:42:23.978Z'
-updatedAt: '2026-07-10T12:36:00.564Z'
+updatedAt: '2026-07-22T19:11:38.733Z'

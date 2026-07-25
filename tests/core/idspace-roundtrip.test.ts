@@ -358,7 +358,7 @@ describe('standalone child: cross-tree refs warn instead of erroring like typos'
     expect(res.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE')).toHaveLength(0);
   });
 
-  it('validating a chained subproject STANDALONE downgrades parent-tree refs to warnings + a clear notice (does not explode)', async () => {
+  it('validating a chained subproject STANDALONE replaces uncovered parent-tree refs with UNVERIFIED_EXTERNAL_REF + a clear notice (does not explode)', async () => {
     // Parent project mounts `kid` as a chained subproject; kid references a
     // component that lives in the parent (absent when kid is validated alone).
     rootDir = makeRoot();
@@ -386,21 +386,30 @@ describe('standalone child: cross-tree refs warn instead of erroring like typos'
     const fromParent = validateSddTree();
     expect(fromParent.issues.filter(i => i.code === 'CHAINED_SUBPROJECT_CONTEXT')).toHaveLength(0);
 
-    // From KID's own root the parent ref cannot resolve — but it is DOWNGRADED to
-    // a warning (not a hard INVALID_DEPENDENCY_REFERENCE error) with one notice,
-    // so `validate` passes (valid) instead of exploding.
+    // From KID's own root the parent ref cannot resolve — no vendored surface
+    // snapshot covers it, so the finding is REPLACED by one precise
+    // UNVERIFIED_EXTERNAL_REF warning (the old behavior downgraded the original
+    // code in place) with one notice, so `validate` passes instead of exploding.
     setProjectRoot(kidDir);
     invalidateSpecCache();
     const fromKid = validateSddTree();
-    expect(fromKid.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE' && i.severity === 'error')).toHaveLength(0);
+    expect(fromKid.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE')).toHaveLength(0);
     const notice = fromKid.issues.find(i => i.code === 'CHAINED_SUBPROJECT_CONTEXT');
     expect(notice).toBeDefined();
     expect(notice!.message).toMatch(/chained subproject/);
+    expect(notice!.message).toMatch(/1 cross-tree reference/);
     expect(notice!.crossTreeContext).toBe(true);
-    // The dependency warning is present but marked cross-tree (so --ci waives it).
-    const dep = fromKid.issues.find(i => i.code === 'INVALID_DEPENDENCY_REFERENCE');
-    expect(dep?.severity).toBe('warning');
-    expect(dep?.crossTreeContext).toBe(true);
+    // The replacement warning names the original finding, the unresolvable
+    // reference, and the remedy — and is marked cross-tree (so --ci waives it).
+    const unverified = fromKid.issues.filter(i => i.code === 'UNVERIFIED_EXTERNAL_REF');
+    expect(unverified).toHaveLength(1);
+    expect(unverified[0].severity).toBe('warning');
+    expect(unverified[0].crossTreeContext).toBe(true);
+    expect(unverified[0].message).toContain('INVALID_DEPENDENCY_REFERENCE');
+    expect(unverified[0].message).toContain('parent-portal');
+    expect(unverified[0].message).toMatch(/re-lock the parent/);
+    expect(unverified[0].message).toMatch(/surface externals/);
+    expect(fromKid.valid).toBe(true);
   });
 
   it('a root-name-qualified target (waffler_core::x form, authored from a parent) warns, not errors, from the child root', async () => {

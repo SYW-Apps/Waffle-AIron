@@ -1,5 +1,6 @@
 import type { StateId } from '../core/statehash.js';
 import type { LockRecord } from '../core/lockfile.js';
+import type { NamedOpenApiSpec } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
 // Hosting value types (sdd_host)
@@ -171,7 +172,9 @@ export interface Principal {
   /** Coarse display projection — NOT an authorization source. */
   role: DisplayRole;
   /** Coarse projection of the token's project narrowing; '*' denotes no
-   *  narrowing (the resolver still gates per project). */
+   *  narrowing (the resolver still gates per project). Entries may be
+   *  subproject-qualified ('projectId::subsystemId') — carried through verbatim
+   *  so root resolution can bind the mounted child root. */
   projects: string[];
   authenticated: boolean;
   /** Resolved human, service, or bootstrap identity behind the action. */
@@ -198,8 +201,14 @@ export interface ApiKeyRecord {
    *  source. Set by the legacy master-only mintKey path; unset by the
    *  user-bound mint flows. */
   role?: DisplayRole;
-  /** The project ids this token may act on, or ['*'] for the owner's full
-   *  accessible set — the token's narrowing, not a grant. */
+  /** The token's project narrowing: the project ids this token may act on, or
+   *  ['*'] for the owner's full accessible set. An entry MAY be
+   *  subproject-qualified — 'projectId::subsystemId' (nested mounts compose,
+   *  e.g. 'proj::a::b') — scoping the token INTO that chained subproject:
+   *  data-plane requests then bind the mounted child root instead of the
+   *  project root. Never a grant — within this narrowing the token acts as the
+   *  owner's LIVE permission (the resolver gates per project; a subproject
+   *  qualifier narrows reach, it never widens or refines grants). */
   projects: string[];
   createdAt: string;
   /** Human or service identity that owns this token — the identity it acts as. */
@@ -430,8 +439,49 @@ export interface PolicyEvaluationResult {
   missingPackNames: string[];
   blockedPackNames: string[];
   missingProfileIds: string[];
+  /** Required/default packs the server-global set cannot resolve at all — absent
+   *  from both tiers, or a directory/name-mismatch the resolver cannot map. Distinct
+   *  from missingPackNames (resolvable, just not installed): an unresolved pack
+   *  signals an instance-side gap that reconciliation cannot remedy. */
+  unresolvedPacks: string[];
+  /** The project's effective projectType at evaluation time — the architectural
+   *  profile actually governing its components. Absent for an init-request
+   *  evaluation (no project exists yet). Reported so a selection that was
+   *  recorded but never applied is visible: profile compliance is about the
+   *  recorded selection, while this is what the validator really enforces. */
+  governingProfileId?: string;
+  /** Recorded profileSelection ids that are not the governing projectType. Empty
+   *  for an init-request evaluation. Non-empty is the honest report of
+   *  selection-versus-reality drift: reconciliation applies the first resolvable
+   *  one when policy requires a profile that is not governing, or when the
+   *  recorded projectType resolves to no loaded profile — a deliberate,
+   *  resolvable, policy-compliant choice is reported here and left alone. */
+  unappliedProfileIds: string[];
   /** Human-readable findings for summaries and UI. */
   messages: string[];
+}
+
+/** A server-global declarative pack resolved to its content for vendoring into a
+ *  project, carrying its canonical identity so a project's compliance is checked
+ *  and reported on the same key it is installed under. */
+export interface ResolvedGlobalPack {
+  /** The policy-supplied name that resolved to this pack (a file stem or manifest name). */
+  requestedName: string;
+  /** The pack's canonical manifest name — the identity it is vendored under. */
+  name: string;
+  /** The pack's serialized declarative content, ready to vendor. */
+  content: string;
+  /** The server-global tier it resolved from. */
+  tier: 'instance' | 'image';
+}
+
+/** The outcome of resolving policy-supplied pack names against the server-global
+ *  set: the packs that resolved (canonical name + content) and the names with no
+ *  match in either tier — the unresolved list that lets init/reconcile report
+ *  honestly instead of silently skipping. */
+export interface PackResolution {
+  resolved: ResolvedGlobalPack[];
+  unresolved: string[];
 }
 
 /** A node in the hosted organization hierarchy (department, team, domain, …). */
@@ -574,10 +624,19 @@ export interface ShareSnapshot {
   capturedAt: string;
   /** Serialized CanvasModel JSON for the view. */
   canvasModel?: string;
-  /** Serialized OpenAPI document, when captured. */
+  /** Serialized OpenAPI document — captured when the shared surface has exactly
+   *  ONE portal. Retained so share links created before per-portal capture keep
+   *  serving their document unchanged; multi-portal shares populate openapiSet
+   *  instead. */
   openapi?: string;
   /** Standalone HTML export, when captured. */
   html?: string;
+  /** Every per-portal OpenAPI document in the shared surface, one per published
+   *  Portal, so a multi-portal project shares each API separately — distinct
+   *  portals are never merged into a combined document. Serving selects one by
+   *  portalId; when more than one is present and none is selected, an index
+   *  lists them. */
+  openapiSet?: NamedOpenApiSpec[];
 }
 
 /** One recorded access to a share link on the public surface. */
@@ -867,9 +926,10 @@ export interface WebSession {
 export interface WebGraphNode {
   id: string;
   label: string;
-  /** 'unit' | 'project' | 'subsystem' | 'component' | 'interface' | 'type' */
+  /** 'unit' | 'project' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type' */
   kind: string;
-  /** Detail level: lower = higher-level (landscape/subsystem), deeper = L2/L3. */
+  /** Detail level: lower = higher-level (landscape/subsystem), deeper = L2/L3/L4
+   *  (0 unit/project, 1 subsystem, 2 component, 3 interface/type, 4 implementation). */
   level: number;
   /** Id of the containing node, for hierarchical expand/collapse. Spans the full
    *  environment tree: unit→unit (nested org hierarchy over the qualified unit
@@ -898,6 +958,38 @@ export interface WebGraphModel {
   level: number;
   generatedAt: string;
   scope?: string;
+}
+
+/** A project's editable configuration view for the web UI: the project-level
+ *  architectural profile GOVERNING the project (project.yaml `projectType`,
+ *  'backend' default), whether the project currently holds a lock record, and —
+ *  so the UI can tell whether that profile is actually in force — where it comes
+ *  from, whether it resolves at all, any pack adopted to make it resolve, and the
+ *  parts of the project it does not govern. */
+export interface ProjectConfigView {
+  projectType: string;
+  locked: boolean;
+  /** "builtin" for a built-in profile or project kind, otherwise the canonical
+   *  name of the registered pack contributing it. Absent when the recorded value
+   *  resolves to no loaded profile. */
+  profileSource?: string;
+  /** Whether the recorded projectType actually resolves to a governing profile.
+   *  False means the project's doctrine — stereotype fencing and the profile's
+   *  rules block — is NOT being applied even though a name is recorded. A write
+   *  through setProjectType always leaves this true; false is reachable via a
+   *  hand-edited/legacy project.yaml, or a pack removed afterwards. */
+  profileResolvable: boolean;
+  /** Set only on the view returned by a setProjectType call that had to vendor a
+   *  server-global pack into the project to make the selected profile resolve. */
+  adoptedPackName?: string;
+  /** Recorded profileSelection ids that are NOT the governing projectType.
+   *  projectType takes exactly one profile, so a multi-id selection leaves a
+   *  remainder: reported rather than silently dropped, and belonging on
+   *  individual subsystems (subsystem.profile) if it should apply at all. */
+  unappliedProfileIds?: string[];
+  /** Ids of subsystems declaring a profile of their own, which therefore takes
+   *  precedence over the project-level profile for their components. */
+  overridingSubsystemIds?: string[];
 }
 
 /** The pre-auth login-options projection the login screen renders from: which
@@ -1067,6 +1159,16 @@ export interface PackDescriptor {
   /** True on an image-tier pack shadowed by a same-named instance pack
    *  (instance wins; shadowing is drift and surfaces in the health report). */
   shadowed?: boolean;
+  /** The ids of the architectural profiles this pack contributes (the same
+   *  profiles the `profiles` count summarizes) — lets a UI offer a pack's
+   *  profiles as structured choices instead of a bare count. Absent on a pack
+   *  that failed to load. */
+  profileIds?: string[];
+  /** The ids of the language/platform tables this pack contributes. Absent on a load failure. */
+  languageIds?: string[];
+  /** The ids/codes of the programmatic rules this pack contributes (empty for a
+   *  declarative pack). Absent on a load failure. */
+  ruleIds?: string[];
 }
 
 /** A project's declared pack/profile references — path-free, safe for
@@ -1075,4 +1177,46 @@ export interface ProjectPackReference {
   projectId: string;
   packNames: string[];
   profileIds?: string[];
+}
+
+/** An architectural profile a hosted project may select, tagged with where it
+ *  comes from so a UI can present the choices grouped by source (built-in vs a
+ *  specific extension pack). Two catalogs project this type: the instance-wide
+ *  one (built-ins plus the server-global packs' profiles) and the PROJECT-SCOPED
+ *  one, which also carries the profiles contributed by the project's OWN
+ *  registered packs and marks each entry installed or adoptable-on-selection. */
+export interface AvailableProfile {
+  /** The profile id (e.g. "backend", "frontend-reactive", or a pack-provided id). */
+  id: string;
+  /** Where the profile comes from: "builtin" for a wairon built-in profile,
+   *  otherwise the name of the server-global pack that contributes it. */
+  source: string;
+  /** The profile's doctrine family when known (backend-like | frontend-like | neutral). */
+  family?: string;
+  /** Optional human-readable summary of the profile for the picker. */
+  description?: string;
+  /** Whether this profile can already govern the project it was listed for:
+   *  true for a built-in, and for a profile contributed by a pack registered in
+   *  that project's own extensions.packs; false for a server-global pack profile
+   *  the project has not adopted yet (selecting it adopts the contributing pack
+   *  first). Omitted by the instance-wide catalog, where project installation is
+   *  not a meaningful question. */
+  installed?: boolean;
+}
+
+/** The outcome of making an architectural profile actually able to GOVERN a
+ *  hosted project: the profile id, where it comes from, and the pack that had to
+ *  be adopted into the project (if any) for the profile to resolve at validation
+ *  time. The ensure seam THROWS for a profile id no tier contributes rather than
+ *  returning one of these — a projectType naming an unresolvable profile
+ *  silently disables its whole doctrine, so it is never written. */
+export interface ProfileApplication {
+  /** The profile id that is now resolvable for the project. */
+  profileId: string;
+  /** "builtin" for a built-in profile or project kind, otherwise the canonical
+   *  name of the pack contributing it. */
+  source: string;
+  /** Set only when the ensure step had to vendor a server-global pack into the
+   *  project (registering it in extensions.packs) to make the profile resolve. */
+  adoptedPackName?: string;
 }

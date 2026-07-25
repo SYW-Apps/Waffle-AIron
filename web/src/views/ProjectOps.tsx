@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { get, post, postBinary } from '../api';
+import { asList, get, post, postBinary } from '../api';
 import {
   AsyncButton,
   AsyncView,
@@ -18,51 +18,91 @@ import {
 } from '../ui';
 import { GitCredentialCard, GitPatSummary } from '../components/GitCredentialCard';
 import { SharingTab } from './Sharing';
+import { SpecsTab } from './SpecsEditor';
 import type { GitBackingStatus, PackDescriptor, PolicyEvaluationResult, ProducerConfig } from '../types';
 
 // ── Packs ────────────────────────────────────────────────────────────────────
 
+// Contents counts prefer the enriched id arrays, falling back to numeric counts.
+const packProfileCount = (p: PackDescriptor): number => p.profileIds?.length ?? p.profiles ?? 0;
+const packLanguageCount = (p: PackDescriptor): number => p.languageIds?.length ?? p.languages ?? 0;
+const packRuleCount = (p: PackDescriptor): number => p.ruleIds?.length ?? p.rules ?? 0;
+const packContentsHint = (p: PackDescriptor): string =>
+  `${packProfileCount(p)} profiles · ${packLanguageCount(p)} langs · ${packRuleCount(p)} rules`;
+
 function PacksTab({ projectId }: { projectId: string }) {
   const toast = useToast();
-  const packs = useAsync<{ packs: PackDescriptor[] }>(() => get(`/web/projects/packs?projectId=${encodeURIComponent(projectId)}`), [projectId]);
-  const [adding, setAdding] = useState(false);
+  const enc = encodeURIComponent(projectId);
+  const packs = useAsync<PackDescriptor[]>(
+    () => get(`/web/projects/packs?projectId=${enc}`).then((d) => asList<PackDescriptor>(d, 'packs')),
+    [projectId],
+  );
+  // The server-global catalog this project may adopt without an upload.
+  const adoptable = useAsync<PackDescriptor[]>(
+    () => get(`/web/projects/packs/adoptable?projectId=${enc}`).then((d) => asList<PackDescriptor>(d, 'packs')),
+    [projectId],
+  );
+  const [adoptOpen, setAdoptOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [nameOverride, setNameOverride] = useState('');
 
+  // Adoptable minus what's already installed here (match by name).
+  const installedNames = new Set((packs.data ?? []).map((p) => p.name));
+  const available = (adoptable.data ?? []).filter((p) => !installedNames.has(p.name));
+
+  async function adopt(name: string) {
+    await post('/web/projects/packs/adopt', { projectId, name });
+    toast.ok(`Added “${name}”`);
+    packs.reload();
+    adoptable.reload();
+  }
   async function install() {
     if (!file) return;
     const headers: Record<string, string> = nameOverride.trim() ? { 'X-Wairon-Pack-Name': nameOverride.trim() } : {};
     const d = await postBinary<PackDescriptor>(
-      `/web/projects/packs/upload?projectId=${encodeURIComponent(projectId)}`,
+      `/web/projects/packs/upload?projectId=${enc}`,
       file,
       headers,
     );
     toast.ok(`Installed pack “${d.name}”`);
-    setAdding(false);
+    setUploadOpen(false);
     setFile(null);
     setNameOverride('');
     packs.reload();
+    adoptable.reload();
   }
   async function remove(n: string) {
     await post('/web/projects/packs/remove', { projectId, name: n });
     toast.ok('Pack removed');
     packs.reload();
+    adoptable.reload();
   }
 
   return (
     <div className="stack-lg">
       <div className="view-head">
         <p className="hint">Declarative extension packs registered on this project.</p>
-        <Button variant="primary" onClick={() => setAdding(true)}>
-          + Install pack
-        </Button>
+        <div className="row-actions">
+          <Button variant="ghost" onClick={() => setUploadOpen(true)} title="Upload a .wpack archive">
+            Advanced: upload .wpack
+          </Button>
+          <Button variant="primary" onClick={() => setAdoptOpen(true)}>
+            + Add from available
+          </Button>
+        </div>
       </div>
       <AsyncView state={packs}>
         {(d) => (
           <DataTable<PackDescriptor>
             rowKey={(p) => p.name}
-            empty="No packs installed on this project."
-            rows={d.packs}
+            empty={
+              <div className="cell-stack">
+                <span>No packs installed on this project.</span>
+                <span className="hint">Use “Add from available” to adopt a server-global pack, or upload a .wpack.</span>
+              </div>
+            }
+            rows={d}
             columns={[
               {
                 key: 'name',
@@ -76,7 +116,7 @@ function PacksTab({ projectId }: { projectId: string }) {
                 ),
               },
               { key: 'scope', header: 'Scope', cell: (p) => <Badge tone={p.scope === 'global' ? 'accent' : 'neutral'}>{p.tier ?? p.scope}</Badge> },
-              { key: 'counts', header: 'Contents', cell: (p) => <span className="hint">{p.profiles} profiles · {p.languages} langs · {p.rules} rules</span> },
+              { key: 'counts', header: 'Contents', cell: (p) => <span className="hint">{packContentsHint(p)}</span> },
               {
                 key: 'act',
                 header: '',
@@ -94,13 +134,58 @@ function PacksTab({ projectId }: { projectId: string }) {
           />
         )}
       </AsyncView>
-      {adding && (
+      {adoptOpen && (
         <Modal
-          title="Install a declarative pack"
-          onClose={() => setAdding(false)}
+          title="Add a pack from the catalog"
+          wide
+          onClose={() => setAdoptOpen(false)}
+          footer={<Button variant="ghost" onClick={() => setAdoptOpen(false)}>Done</Button>}
+        >
+          <div className="stack-lg">
+            <p className="hint">Server-global packs this project can adopt directly — no upload needed.</p>
+            <AsyncView state={adoptable}>
+              {() => (
+                <DataTable<PackDescriptor>
+                  rowKey={(p) => p.name}
+                  empty="No more packs available to adopt."
+                  rows={available}
+                  columns={[
+                    {
+                      key: 'name',
+                      header: 'Pack',
+                      cell: (p) => (
+                        <div className="cell-stack">
+                          <strong>{p.name}</strong>
+                          <code className="subtle">{p.ref}</code>
+                        </div>
+                      ),
+                    },
+                    { key: 'tier', header: 'Tier', cell: (p) => <Badge tone={p.scope === 'global' ? 'accent' : 'neutral'}>{p.tier ?? p.scope}</Badge> },
+                    { key: 'counts', header: 'Contents', cell: (p) => <span className="hint">{packContentsHint(p)}</span> },
+                    {
+                      key: 'act',
+                      header: '',
+                      width: '1%',
+                      cell: (p) => (
+                        <AsyncButton size="sm" variant="primary" action={() => adopt(p.name)} onError={toast.bad}>
+                          Add
+                        </AsyncButton>
+                      ),
+                    },
+                  ]}
+                />
+              )}
+            </AsyncView>
+          </div>
+        </Modal>
+      )}
+      {uploadOpen && (
+        <Modal
+          title="Advanced: upload a .wpack"
+          onClose={() => setUploadOpen(false)}
           footer={
             <>
-              <Button variant="ghost" onClick={() => setAdding(false)}>
+              <Button variant="ghost" onClick={() => setUploadOpen(false)}>
                 Cancel
               </Button>
               <AsyncButton variant="primary" action={install} onError={toast.bad} disabled={!file}>
@@ -110,6 +195,7 @@ function PacksTab({ projectId }: { projectId: string }) {
           }
         >
           <div className="stack-lg">
+            <p className="hint">Prefer “Add from available” for catalog packs. Upload is for a pack not yet on this server.</p>
             <Field label="Pack archive (.wpack)" hint="Declarative packs only — code packs are installed via the filesystem tier.">
               <input className="input" type="file" accept=".wpack,.zip,application/zip"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
@@ -363,6 +449,7 @@ function GitTab({ projectId }: { projectId: string }) {
 // ── Ops shell ────────────────────────────────────────────────────────────────
 
 const OPS_TABS = [
+  { id: 'specs', label: 'Specs' },
   { id: 'packs', label: 'Packs' },
   { id: 'policy', label: 'Policy' },
   { id: 'producers', label: 'Producers' },
@@ -371,12 +458,33 @@ const OPS_TABS = [
 ];
 
 export function ProjectOps() {
-  const { projectId = '' } = useParams();
+  const params = useParams();
+  const projectId = params.projectId ?? '';
+  const splat = params['*'] ?? '';
   const nav = useNavigate();
-  const [tab, setTab] = useState('packs');
+  const base = `/projects/${encodeURIComponent(projectId)}`;
+
+  // The tab (and, on Specs, the open spec) live in the URL path so a view is
+  // shareable and the canvas can deep-link into it. `/projects/<id>` → Specs;
+  // `/projects/<id>/<tab>`; `/projects/<id>/specs/<kind>/<id…>` opens a spec,
+  // the qualified id's `::` mapped to `/` path segments (so no %3A).
+  const segs = splat.split('/').filter(Boolean);
+  const tab = segs[0] && OPS_TABS.some((t) => t.id === segs[0]) ? segs[0] : 'specs';
+  const selection = useMemo(() => {
+    if (tab !== 'specs' || segs.length < 3) return null;
+    return { kind: segs[1], id: segs.slice(2).map(decodeURIComponent).join('::') };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [splat]);
+
+  const selectTab = (id: string) => nav(id === 'specs' ? `${base}/specs` : `${base}/${id}`);
+  const selectSpec = (sel: { kind: string; id: string } | null) => {
+    if (!sel) return nav(`${base}/specs`);
+    const idPath = sel.id.split('::').map(encodeURIComponent).join('/');
+    nav(`${base}/specs/${sel.kind}/${idPath}`);
+  };
 
   return (
-    <div className="view-pad">
+    <div className={`view-pad ${tab === 'specs' ? 'view-pad-wide' : ''}`}>
       <div className="view-head">
         <div className="cell-stack">
           <button className="btn btn-ghost btn-sm back-link" onClick={() => nav('/projects')}>
@@ -384,12 +492,13 @@ export function ProjectOps() {
           </button>
           <h2>{projectId} · operations</h2>
         </div>
-        <Button variant="ghost" onClick={() => nav(`/?project=${encodeURIComponent(projectId)}`)}>
+        <Button variant="ghost" onClick={() => nav(`/canvas/${encodeURIComponent(projectId)}`)}>
           Open canvas
         </Button>
       </div>
-      <Tabs tabs={OPS_TABS} active={tab} onSelect={setTab} />
+      <Tabs tabs={OPS_TABS} active={tab} onSelect={selectTab} />
       <div className="tab-panel">
+        {tab === 'specs' && <SpecsTab projectId={projectId} selection={selection} onSelectSpec={selectSpec} />}
         {tab === 'packs' && <PacksTab projectId={projectId} />}
         {tab === 'policy' && <PolicyTab projectId={projectId} />}
         {tab === 'producers' && <ProducersTab projectId={projectId} />}

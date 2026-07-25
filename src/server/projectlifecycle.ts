@@ -315,22 +315,31 @@ export function initializeProject(
  * over the project — yes locks directly via the admin plane's pre-authorized
  * executeApprovedLock (completed outcome carrying the lock record), approval
  * creates a pending project:lock request, no forbids.
+ *
+ * An optional `subproject` qualifier ('a' or 'a::b' — the mount chain only)
+ * CONFINES the action to a chained child's tree: it is forwarded to the
+ * pre-authorized entry, which freezes that child's own spec tree instead of the
+ * whole project. Permission resolution and audit provenance stay anchored at the
+ * TOP project id — a qualifier narrows which tree is acted on, never which grants
+ * apply — so nothing below the switch changes.
  */
 export function lockProject(
   cfg: HostConfig,
   credential: string | null,
   projectId: string,
+  subproject?: string,
 ): ProjectActionOutcome {
   return lifecycleAction(cfg, credential, projectId, {
     action: 'project:lock',
     verb: 'Lock',
     noun: 'lock',
+    subproject,
     execute: () => {
-      const lock = executeApprovedLock(cfg, projectId);
+      const lock = executeApprovedLock(cfg, projectId, subproject);
       return {
         status: 'completed',
         action: 'project:lock',
-        summary: `Locked project "${projectId}" (status: ${lock.status}).`,
+        summary: `Locked project "${projectId}"${subprojectSuffix(subproject)} (status: ${lock.status}).`,
         lock,
       };
     },
@@ -342,32 +351,95 @@ export function lockProject(
  * permission over the project — yes promotes directly via the admin plane's
  * pre-authorized executeApprovedPromote (completed outcome carrying the promote
  * result), approval creates a pending project:promote request, no forbids.
+ *
+ * An optional `subproject` qualifier CONFINES the action to a chained child's
+ * tree (forwarded to the pre-authorized entry, which reads and re-checks THAT
+ * child's own lock and StateId). Permission resolution and audit provenance stay
+ * anchored at the TOP project id.
  */
 export function promoteProject(
   cfg: HostConfig,
   credential: string | null,
   projectId: string,
+  subproject?: string,
 ): ProjectActionOutcome {
   return lifecycleAction(cfg, credential, projectId, {
     action: 'project:promote',
     verb: 'Promote',
     noun: 'promotion',
+    subproject,
     execute: () => {
-      const promo = executeApprovedPromote(cfg, projectId);
+      const promo = executeApprovedPromote(cfg, projectId, subproject);
       return {
         status: 'completed',
         action: 'project:promote',
-        summary: `Promotion of project "${projectId}": ${promo.status} — ${promo.message}`,
+        summary:
+          `Promotion of project "${projectId}"${subprojectSuffix(subproject)}: ` +
+          `${promo.status} — ${promo.message}`,
         promote: promo,
       };
     },
   });
 }
 
+/** The completed-outcome summary fragment naming the confined child tree, empty
+ *  for an unqualified action (whose wording is unchanged). */
+function subprojectSuffix(subproject?: string): string {
+  return subproject ? ` subproject "${subproject}"` : '';
+}
+
+/** The payloadType a lock/promote ApprovalRequest carries when its requester was
+ *  confined to a chained subproject. */
+const SUBPROJECT_SCOPE_PAYLOAD = 'SubprojectScope';
+
+/**
+ * The ApprovalRequest payload fields recording a subproject qualifier — empty for
+ * an unqualified request, so existing requests keep their exact shape.
+ *
+ * Approval is the one path where the requester does not perform the action, so the
+ * qualifier has to survive on the REQUEST or the confinement is lost the moment
+ * someone approves it (a subproject-bound caller would obtain a whole-project
+ * lock). It rides in the existing payload/payloadType fields — the same mechanism
+ * project:init already uses to carry its execution input — rather than a new
+ * ApprovalRequest field, and carries no secret: a mount chain is spec topology.
+ */
+function subprojectScopePayload(subproject?: string): { payloadType?: string; payload?: string } {
+  if (!subproject) return {};
+  return { payloadType: SUBPROJECT_SCOPE_PAYLOAD, payload: JSON.stringify({ subproject }) };
+}
+
+/** The subproject qualifier recorded on an approved lock/promote request, or
+ *  undefined for an unqualified one (or a payload that does not parse — a
+ *  malformed payload must not silently widen the action to the whole project,
+ *  so the caller treats undefined as "no confinement was requested" only when
+ *  payloadType is absent; see readSubprojectScope's callers). */
+function readSubprojectScope(req: ApprovalRequest): string | undefined {
+  if (req.payloadType !== SUBPROJECT_SCOPE_PAYLOAD || !req.payload) return undefined;
+  const parsed = JSON.parse(req.payload) as { subproject?: unknown };
+  if (typeof parsed.subproject !== 'string' || !parsed.subproject) {
+    throw new Error(
+      `Approved ${req.kind} request "${req.id}" carries a ${SUBPROJECT_SCOPE_PAYLOAD} payload with no usable ` +
+        `subproject qualifier — refusing to execute, because falling back to the whole project would widen the ` +
+        `scope the requester was confined to.`,
+    );
+  }
+  return parsed.subproject;
+}
+
 /** Shared body for the lock/promote lifecycle actions: authenticate → resolve
  *  project:write over the project → switch on the resolved value (yes executes
  *  through the supplied pre-authorized entry, no forbids, approval creates the
- *  pending request), differing only in the kind, wording, and execution. */
+ *  pending request), differing only in the kind, wording, and execution.
+ *
+ *  A subproject qualifier is CLOSED OVER by opts.execute (the yes path) and is
+ *  deliberately absent from this body: the permission resolved here and the audit
+ *  event appended below anchor at the TOP project id, exactly as before. The
+ *  APPROVAL path likewise carries no qualifier — an ApprovalRequest records only
+ *  `projectId`, so a request queued from a qualified credential describes, and on
+ *  approval executes, the WHOLE project (its summary says so). Confining the
+ *  approval path would need a qualifier field on ApprovalRequest, i.e. a spec
+ *  change; until then a qualified credential should hold a yes-valued
+ *  project:write. */
 function lifecycleAction(
   cfg: HostConfig,
   credential: string | null,
@@ -377,6 +449,10 @@ function lifecycleAction(
     verb: string;
     noun: string;
     execute: () => ProjectActionOutcome;
+    /** The bound mount chain, when the caller is confined to a chained subproject.
+     *  Recorded onto an APPROVAL request so the approved execution stays confined
+     *  (see subprojectScopePayload) — the direct path is confined by `execute`. */
+    subproject?: string;
   },
 ): ProjectActionOutcome {
   const principal = requirePrincipal(cfg, credential);
@@ -406,11 +482,17 @@ function lifecycleAction(
       if (!existingProjectRoot(cfg.dataDir, projectId)) {
         throw new Error(`Unknown project "${projectId}".`);
       }
+      // A subproject-bound caller must not be able to obtain a WHOLE-PROJECT
+      // action by routing through approval: record the qualifier on the request
+      // (the same payload mechanism a project:init request uses to carry its
+      // execution input) so executeApproved forwards it, and name the subproject
+      // in the summary so an approver sees the real scope before deciding.
       const pending = buildPendingRequest(
         principal,
         opts.action,
-        `${opts.verb} project ${projectId}`,
+        `${opts.verb} project ${projectId}${subprojectSuffix(opts.subproject)}`,
         projectId,
+        subprojectScopePayload(opts.subproject),
       );
       return createPendingOutcome(cfg, principal, pending, opts.action);
     }
@@ -565,12 +647,17 @@ function executeApproved(cfg: HostConfig, req: ApprovalRequest): string {
       return `Initialized project "${rec.id}" under the active pack policy.`;
     }
     case 'project:lock': {
-      const lock = executeApprovedLock(cfg, req.projectId ?? '');
-      return `Locked project "${req.projectId}" (status: ${lock.status}).`;
+      // Forward the qualifier the requester was confined to, so approving a
+      // subproject-scoped request freezes THAT child tree — an approval must never
+      // widen the scope its requester was bound to.
+      const scope = readSubprojectScope(req);
+      const lock = executeApprovedLock(cfg, req.projectId ?? '', scope);
+      return `Locked project "${req.projectId}"${subprojectSuffix(scope)} (status: ${lock.status}).`;
     }
     case 'project:promote': {
-      const promo = executeApprovedPromote(cfg, req.projectId ?? '');
-      return `Promotion of project "${req.projectId}": ${promo.status} — ${promo.message}`;
+      const scope = readSubprojectScope(req);
+      const promo = executeApprovedPromote(cfg, req.projectId ?? '', scope);
+      return `Promotion of project "${req.projectId}"${subprojectSuffix(scope)}: ${promo.status} — ${promo.message}`;
     }
     default:
       throw new Error(`Unsupported approval kind "${req.kind}".`);

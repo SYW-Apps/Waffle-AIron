@@ -1,0 +1,16 @@
+id: mcp_surfaces_adapter_impl
+name: MCP Surfaces Adapter Implementation
+description: In-process forwarding to the surface portal, alongside the server's other client adapters.
+contract: imcp_surfaces_adapter
+sourcePath: src/mcp/server.ts
+methods:
+  - name: listExternalInterfaces
+    narrative:
+      - stepNumber: 1
+        description: Forward the discovery read to the surface-exchange subsystem's published portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: listExternalInterfaces
+status: complete
+createdAt: '2026-07-24T18:14:33.463Z'
+updatedAt: '2026-07-24T20:48:49.566Z'

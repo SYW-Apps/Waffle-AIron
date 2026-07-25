@@ -351,6 +351,68 @@ methods:
       - name: name
         type: string
         optional: true
+  - name: listAvailableProfiles
+    description: Forward to pack_orchestrator.listAvailableProfiles with the caller's credential.
+    signature: 'listAvailableProfiles(credential: string): AvailableProfile[]'
+    returns: AvailableProfile[]
+    params:
+      - name: credential
+        type: string
+  - name: listAdoptableProjectPacks
+    description: Forward to pack_orchestrator.listAdoptableProjectPacks with the caller's credential.
+    signature: 'listAdoptableProjectPacks(credential: string, project: string): PackDescriptor[]'
+    returns: PackDescriptor[]
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+  - name: adoptProjectPack
+    description: Forward to pack_orchestrator.adoptProjectPack with the caller's credential.
+    signature: 'adoptProjectPack(credential: string, project: string, name: string): PackDescriptor'
+    returns: PackDescriptor
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: name
+        type: string
+  - name: getProjectConfig
+    description: >-
+      Forward to project_policy_orchestrator.getProjectConfig (project:read over the project
+      upstream).
+    signature: 'getProjectConfig(credential: string, projectId: string): ProjectConfigView'
+    returns: ProjectConfigView
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+  - name: setProjectType
+    description: >-
+      Forward to project_policy_orchestrator.setProjectType (project:write over the project
+      upstream).
+    signature: 'setProjectType(credential: string, projectId: string, projectType: string): ProjectConfigView'
+    returns: ProjectConfigView
+    params:
+      - name: credential
+        type: string
+      - name: projectId
+        type: string
+      - name: projectType
+        type: string
+  - name: listProjectProfiles
+    description: >-
+      Forward to pack_orchestrator.listProjectProfiles with the caller's credential (project:read
+      over the project upstream).
+    signature: 'listProjectProfiles(credential: string, project: string): AvailableProfile[]'
+    returns: AvailableProfile[]
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
 status: complete
 createdAt: '2026-07-16T15:30:37.725Z'
-updatedAt: '2026-07-21T18:42:23.908Z'
+updatedAt: '2026-07-24T23:30:48.615Z'

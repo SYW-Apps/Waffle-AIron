@@ -97,7 +97,12 @@ methods:
         type: return
         outcome: denied-download
       - stepNumber: 9
-        description: Load the permitted artifact payload.
+        description: >-
+          Load the permitted artifact payload. For openapi: serve the captured per-portal document
+          named by portalId; with several captured specs and no portalId, build an
+          openapi_spec_index of them (portalId + name) rather than merging or silently picking the
+          first; with exactly one captured spec, serve that document. A portalId naming no captured
+          spec is refused, not silently substituted.
         type: call
         targetComponent: share_snapshot_repository
         targetMethod: getArtifact
@@ -112,4 +117,4 @@ methods:
         outcome: served
 status: complete
 createdAt: '2026-07-18T09:30:59.945Z'
-updatedAt: '2026-07-18T10:10:40.238Z'
+updatedAt: '2026-07-24T09:45:48.456Z'

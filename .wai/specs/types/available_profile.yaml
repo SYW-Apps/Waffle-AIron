@@ -1,0 +1,41 @@
+kind: value-object
+id: available_profile
+name: AvailableProfile
+description: >-
+  An architectural profile a hosted project may select, tagged with where it comes from so a UI can
+  present the choices grouped by source (built-in vs a specific extension pack). Two catalogs
+  project this type: the instance-wide catalog (built-ins plus the profiles contributed by the
+  server-global packs) and the PROJECT-SCOPED catalog, which additionally carries the profiles
+  contributed by the project's OWN registered packs and marks each entry as already installed or
+  adoptable-on-selection.
+fields:
+  - name: id
+    type: string
+    description: The profile id (e.g. "backend", "frontend-reactive", or a pack-provided id).
+    optional: false
+  - name: source
+    type: string
+    description: >-
+      Where the profile comes from: "builtin" for a wairon built-in profile, otherwise the name of
+      the server-global pack that contributes it.
+    optional: false
+  - name: family
+    type: string
+    description: The profile's doctrine family when known (backend-like | frontend-like | neutral).
+    optional: true
+  - name: description
+    type: string
+    description: Optional human-readable summary of the profile for the picker.
+    optional: true
+  - name: installed
+    type: boolean
+    description: >-
+      Whether this profile can already govern the project it was listed for: true for a built-in,
+      and for a profile contributed by a pack registered in that project's own extensions.packs;
+      false for a server-global pack profile the project has not adopted yet (selecting it adopts
+      the contributing pack first). Omitted by the instance-wide catalog, where project installation
+      is not a meaningful question.
+    optional: true
+methods: []
+createdAt: '2026-07-22T19:11:42.715Z'
+updatedAt: '2026-07-24T23:30:01.908Z'

@@ -20,7 +20,7 @@ import {
 import * as userRepo from './users.js';
 import { listAssignments } from './permissions.js';
 import * as auditRepo from './audit.js';
-import { listProjectRecords } from './projects.js';
+import { assertMintableNarrowingEntry, parseQualifiedSelector } from './projects.js';
 import { removeAllWebSessionsForSubject } from './websessions.js';
 import {
   authorize,
@@ -290,8 +290,12 @@ function requirePrincipal(cfg: HostConfig, credential: string | null): Principal
  * may mint here; delegated minting-with-dominance is deferred. Rejects a
  * reserved owner id (the built-in subjects can never own a mintable bearer), a
  * deactivated owner (deactivation must stay revoked), and unknown projects in
- * the narrowing. Persists only the hashed record with owner/narrowing metadata
- * and appends a redacted audit event. Returns the plaintext token exactly once.
+ * the narrowing — a subproject-qualified entry ('projectId::subsystemId') is
+ * validated at mint time: the named subsystem must exist on that project and
+ * carry a projectPath (unknown/non-chained mounts are rejected with guidance,
+ * never stored broken). Persists only the hashed record with owner/narrowing
+ * metadata and appends a redacted audit event. Returns the plaintext token
+ * exactly once.
  */
 export function mintToken(cfg: HostConfig, credential: string | null, request: TokenMintRequest): string {
   const principal = requirePrincipal(cfg, credential);
@@ -306,12 +310,13 @@ export function mintToken(cfg: HostConfig, credential: string | null, request: T
 
   // The token's project NARROWING (never a grant): which projects it may name.
   // ['*'] (or omitted) = the owner's full accessible set, still resolved live.
+  // An entry MAY be subproject-qualified ('projectId::subsystemId', nested
+  // mounts composing) — validated at MINT time: the named subsystem must exist
+  // on that project and carry a projectPath. An unknown project or an
+  // unknown/non-chained mount is rejected with guidance, never stored broken.
   const projects = request.projects?.length ? request.projects : ['*'];
-  const knownProjects = new Set(listProjectRecords(cfg.dataDir).map((p) => p.id));
   for (const p of projects) {
-    if (p !== '*' && !knownProjects.has(p)) {
-      throw new Error(`unknown project "${p}"`);
-    }
+    assertMintableNarrowingEntry(cfg.dataDir, p);
   }
 
   // Refuse minting a token for a user record that has been deactivated — else
@@ -385,13 +390,19 @@ export function revokeToken(cfg: HostConfig, credential: string | null, tokenId:
 /**
  * Self-service single-project MCP token mint. Authenticate the caller (a ws_ session
  * or bearer token) to their principal; require the caller's OWN resolved permission
- * to already cover project:read on projectId (and project:write when write) — the
+ * to already cover project:read on the project (and project:write when write) — the
  * token can never exceed the caller's own access at mint time, and it acts as the
- * OWNER's LIVE permission afterwards. Mint a token OWNED BY the caller
- * (ownerSubject AND createdBySubject = the caller's subject, so deactivating the
- * caller revokes it via revokeAllForOwner) NARROWED to exactly one project, persist
- * only its hashed record, append a best-effort token.mint.self (security) audit
- * event, and return the plaintext once.
+ * OWNER's LIVE permission afterwards. `projectId` may be subproject-qualified
+ * ('projectId::subsystemId', nested mounts composing), scoping the caller's own
+ * token INTO a chained subproject — validated at MINT time (the named subsystem
+ * must exist on that project and carry a projectPath; unknown/non-chained mounts
+ * are rejected with guidance, never stored broken), while permission keeps
+ * resolving over the TOP project (the qualifier narrows reach, it never refines
+ * grants). Mint a token OWNED BY the caller (ownerSubject AND createdBySubject =
+ * the caller's subject, so deactivating the caller revokes it via
+ * revokeAllForOwner) NARROWED to exactly one (possibly qualified) project,
+ * persist only its hashed record, append a best-effort token.mint.self
+ * (security) audit event, and return the plaintext once.
  */
 export function mintSelfToken(
   cfg: HostConfig,
@@ -401,14 +412,30 @@ export function mintSelfToken(
 ): string {
   const principal = requirePrincipal(cfg, credential);
 
+  // Parse the possibly-qualified project id: permission resolves over the TOP
+  // project — a subproject qualifier narrows reach, never what the token may do.
+  const parsed = parseQualifiedSelector(projectId);
+  if (!parsed) {
+    throw new Error(
+      `invalid project id "${projectId}" (expected a project id, optionally ` +
+        `subproject-qualified as projectId::subsystemId)`,
+    );
+  }
+
   // Self-scoped authorization through the resolver: the caller must ALREADY hold
-  // a yes-valued permission over this exact project (a unit-scoped assignment
-  // covers its own subtree, never another tenant's).
-  if (authorize(cfg.dataDir, principal, PROJECT_READ_CAPABILITY, 'project', projectId).value !== 'yes') {
+  // a yes-valued permission over this exact (TOP) project (a unit-scoped
+  // assignment covers its own subtree, never another tenant's).
+  if (authorize(cfg.dataDir, principal, PROJECT_READ_CAPABILITY, 'project', parsed.projectId).value !== 'yes') {
     throw new ForbiddenError('caller lacks project:read on the requested project');
   }
-  if (write && authorize(cfg.dataDir, principal, PROJECT_WRITE_CAPABILITY, 'project', projectId).value !== 'yes') {
+  if (write && authorize(cfg.dataDir, principal, PROJECT_WRITE_CAPABILITY, 'project', parsed.projectId).value !== 'yes') {
     throw new ForbiddenError('caller lacks project:write on the requested project');
+  }
+
+  // A subproject qualifier is validated at MINT time — the named subsystem must
+  // exist on the project and carry a projectPath; never store a broken mount.
+  if (parsed.mounts.length > 0) {
+    assertMintableNarrowingEntry(cfg.dataDir, projectId);
   }
 
   // Mint the token owned by the caller, NARROWED to exactly the one project. It

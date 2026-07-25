@@ -4,8 +4,17 @@ description: Workflow contract behind the surface portal — same five operation
 component: surface_orchestrator
 methods:
   - name: exportSurface
-    description: Own-surface projection workflow with optional codec rendering and file output.
-    signature: 'exportSurface(maxAudience: string, format: string, outPath?: string): SurfaceSnapshot'
+    description: >-
+      Own-surface projection workflow with optional codec rendering and file output. When format is
+      openapi the result carries renderedSet — one OpenAPI 3.1 document per backing portal — and
+      `rendered` is set to the single document only when exactly one portal is present. portalId
+      selects a single portal's document (rejected when it names no portal). With several portals
+      and no portalId, an outPath writes ONE FILE PER PORTAL — the out path's stem suffixed with
+      each portalId — rather than silently writing only the first; distinct portals are never merged
+      into a combined document.
+    signature: >-
+      exportSurface(maxAudience: string, format: string, outPath?: string, portalId?: string):
+      SurfaceSnapshot
     returns: SurfaceSnapshot
     params:
       - name: maxAudience
@@ -13,6 +22,9 @@ methods:
       - name: format
         type: string
       - name: outPath
+        type: string
+        optional: true
+      - name: portalId
         type: string
         optional: true
   - name: importSurface
@@ -36,7 +48,11 @@ methods:
       - name: projectName
         type: string
   - name: generateChildSnapshots
-    description: Project and deliver the family-scoped parent surface into each chained child.
+    description: >-
+      Project and deliver the outward world into each chained child's .wai/surfaces/: the
+      family-scoped parent surface AND each SIBLING subsystem's published surface (every subsystem
+      except the child's own mount), all stamped with the parent tree's StateId provenance. Returns
+      the written file paths.
     signature: 'generateChildSnapshots(): string[]'
     returns: string[]
   - name: removeSnapshot
@@ -46,6 +62,17 @@ methods:
     params:
       - name: projectName
         type: string
+  - name: listExternalInterfaces
+    description: >-
+      Scope-aware discovery of this project's outward world: enumerate every vendored surface
+      snapshot as an ExternalSurfaceEntry — origin, family role (parent | sibling | foreign),
+      provenance, exposed interface ids — with a per-entry freshness verdict. Freshness compares the
+      vendored StateId against the chaining parent's CURRENT state hash when a chaining parent is
+      reachable (resolveChainingParent + computeParentStateId); entries are 'unverifiable' when
+      standalone or foreign. The read behind the sdd_list_external_interfaces MCP tool and the
+      surface externals CLI.
+    signature: 'listExternalInterfaces(): ExternalSurfaceEntry[]'
+    returns: ExternalSurfaceEntry[]
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-07-11T09:04:02.551Z'
+updatedAt: '2026-07-24T17:53:56.767Z'

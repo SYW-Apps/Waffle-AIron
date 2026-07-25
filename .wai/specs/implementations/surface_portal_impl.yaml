@@ -46,6 +46,13 @@ methods:
         type: call
         targetComponent: surface_orchestrator
         targetMethod: removeSnapshot
+  - name: listExternalInterfaces
+    narrative:
+      - stepNumber: 1
+        description: Forward to the orchestrator's external-surface discovery
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: listExternalInterfaces
 status: complete
 createdAt: '2026-07-10T23:14:37.431Z'
-updatedAt: '2026-07-11T18:44:23.796Z'
+updatedAt: '2026-07-24T17:55:31.278Z'

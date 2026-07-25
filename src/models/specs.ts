@@ -337,6 +337,49 @@ export const EventBindingSchema = z.object({
 });
 export type EventBinding = z.infer<typeof EventBindingSchema>;
 
+/**
+ * An opaque external reference on a component — a documented URL wairon does NOT
+ * fetch, resolve, or validate. `implementation` marks the external source-of-record
+ * (a cloud console, a Make.com scenario, a GitHub file) and stands in for a local
+ * sourcePath; `informative` is context only (docs, dashboards).
+ */
+export const ExternalLinkTypeSchema = z.enum(['implementation', 'informative']);
+export type ExternalLinkType = z.infer<typeof ExternalLinkTypeSchema>;
+
+export const ExternalLinkSchema = z.object({
+  url: z.string(),
+  /** Defaults to 'informative' so an untyped link never silently satisfies the source requirement. */
+  type: ExternalLinkTypeSchema.default('informative'),
+  label: z.string().optional(),
+});
+export type ExternalLink = z.infer<typeof ExternalLinkSchema>;
+
+/**
+ * A Portal's authentication scheme, OpenAPI-securityScheme-shaped. Drives the
+ * generated OpenAPI `securitySchemes`/`security`. `none` (or omitted) ⇒ no
+ * security. Fields are per-scheme: apiKey (in+name), bearer (bearerFormat),
+ * oauth2 (flow + urls + scopes), openIdConnect (openIdConnectUrl), custom
+ * (free-form, carried via description/name). wairon never contacts these URLs.
+ */
+export const PortalAuthSchemeSchema = z.enum(['none', 'apiKey', 'bearer', 'basic', 'oauth2', 'openIdConnect', 'custom']);
+export type PortalAuthScheme = z.infer<typeof PortalAuthSchemeSchema>;
+
+export const PortalAuthSchema = z.object({
+  scheme: PortalAuthSchemeSchema,
+  in: z.enum(['header', 'query', 'cookie']).optional(),
+  name: z.string().optional(),
+  bearerFormat: z.string().optional(),
+  authorizationUrl: z.string().optional(),
+  tokenUrl: z.string().optional(),
+  refreshUrl: z.string().optional(),
+  scopes: z.array(z.object({ name: z.string(), description: z.string() })).optional(),
+  flow: z.enum(['authorizationCode', 'clientCredentials', 'implicit', 'password']).optional(),
+  openIdConnectUrl: z.string().optional(),
+  description: z.string().optional(),
+  example: z.string().optional(),
+});
+export type PortalAuth = z.infer<typeof PortalAuthSchema>;
+
 export const ComponentSpecSchema = z.object({
   id: SpecIdSchema,
   name: z.string(),
@@ -349,6 +392,10 @@ export const ComponentSpecSchema = z.object({
   dependsOn: z.array(z.string()).default([]),
   portalType: PortalTypeSchema.optional(),
   basePath: z.string().optional(),
+  /** Portal-only: the API's authentication scheme (see PortalAuthSchema) — projected
+   *  into the generated OpenAPI's securitySchemes/security. Portals with different auth
+   *  must be separate components (one auth per portal ⇒ one OpenAPI spec per portal). */
+  auth: PortalAuthSchema.optional(),
   /** Portal-only: capability → component.method dispatch table (see DispatchBindingSchema). */
   dispatch: z.array(DispatchBindingSchema).optional(),
   /** Store-only: whether held state survives restart (see DurabilitySchema). */
@@ -361,6 +408,11 @@ export const ComponentSpecSchema = z.object({
   patterns: z.array(PatternRefSchema).optional(),
   /** Optional component variant — a declared, base-anchored specialization of this component's stereotype (resolved against the variant registry; UNKNOWN_VARIANT / VARIANT_BASE_MISMATCH). */
   variant: z.string().optional(),
+  /** Opaque external references (see ExternalLinkSchema) — documented URLs wairon does
+   *  not fetch or validate. An `implementation` link is the external source-of-record and
+   *  satisfies the source requirement for a source-less implementation (suppresses
+   *  MISSING_SOURCE_PATH); `informative` links are context only. */
+  externalLinks: z.array(ExternalLinkSchema).optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
   /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
@@ -542,6 +594,18 @@ export const NarrativeStepSchema = z.object({
   targetComponent: z.string().optional(), // Required if type is 'call' or 'dispatch', references L2 Component id
   targetMethod: z.string().optional(),    // Required if type is 'call', references Method name on target interface
   capability: z.string().optional(),      // Required if type is 'dispatch': the capability routed through the target Portal's dispatch table
+  /**
+   * call/dispatch only: the credential this step presents to an authed callee
+   * Portal, and WHERE it is loaded from (`from`). Two forms: an OPAQUE source
+   * (`env:API_KEY`, a config key, `vault:path`, a free note) — a design note
+   * wairon never resolves; or a MODELED reference `component:<id>` pointing at
+   * the Adapter/Store that provides the secret — validated to resolve, be an
+   * Adapter/Store, and be wired to the presenter (a checked graph edge). The
+   * actual secret is never stored here. Absence on a call into a Portal whose
+   * `auth ≠ none` warns (PORTAL_AUTH_UNMET), so credential loading is never
+   * overlooked.
+   */
+  auth: z.object({ from: z.string(), note: z.string().optional() }).optional(),
   assertsGuarantees: z.array(GuaranteeSchema).optional(),
   /**
    * Declared entity invariants this step upholds, as "<type-id>.<invariant-id>"
@@ -807,6 +871,11 @@ export const SurfaceContractEntrySchema = z.object({
   details: z.string().default(''),
   version: z.string().optional(),
   stability: z.string().optional(),
+  /** Projected copy of the backing Portal's auth (see PortalAuthSchema) — the codec
+   *  emits it as OpenAPI securitySchemes/security. */
+  auth: PortalAuthSchema.optional(),
+  /** The backing Portal's basePath — becomes the per-portal OpenAPI `servers` url. */
+  basePath: z.string().optional(),
 });
 export type SurfaceContractEntry = z.infer<typeof SurfaceContractEntrySchema>;
 
@@ -824,6 +893,14 @@ export const SurfaceSnapshotSchema = z.object({
   types: z.array(SurfaceTypeDefSchema).default([]),
 });
 export type SurfaceSnapshot = z.infer<typeof SurfaceSnapshotSchema>;
+
+/** One rendered per-portal OpenAPI document (see the codec's toOpenApiSet). */
+export const NamedOpenApiSpecSchema = z.object({
+  portalId: z.string(),
+  name: z.string(),
+  document: z.string(),
+});
+export type NamedOpenApiSpec = z.infer<typeof NamedOpenApiSpecSchema>;
 
 export const GroupSpecSchema = z.object({
   kind: z.literal('group'),

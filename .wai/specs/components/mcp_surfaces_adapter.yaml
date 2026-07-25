@@ -1,0 +1,14 @@
+id: mcp_surfaces_adapter
+name: MCP Surfaces Adapter
+description: >-
+  MCP-side client of the surface-exchange subsystem's published portal: forwards the
+  external-surface discovery read behind the sdd_list_external_interfaces tool. The stdio server's
+  first surfaces hop — until now agents could not see a subproject's outward world at all.
+subsystem: sdd_mcp
+componentType: Adapter
+owns: []
+dependsOn:
+  - surface_portal
+status: complete
+createdAt: '2026-07-24T18:14:12.835Z'
+updatedAt: '2026-07-24T20:48:49.241Z'

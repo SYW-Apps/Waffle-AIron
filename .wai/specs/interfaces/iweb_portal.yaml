@@ -943,6 +943,90 @@ methods:
       transport: HTTP
       method: POST
       path: /web/projects/packs/upload
+  - name: availableProfilesList
+    description: >-
+      List the profiles available for selection (built-in + server-global pack profiles, each tagged
+      with its source); forwards to project_ops_orchestrator.listAvailableProfiles.
+    signature: 'availableProfilesList(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/admin/profiles
+  - name: projectPacksAdoptable
+    description: >-
+      List the server-global packs a project may adopt (the instance catalog with contents);
+      forwards to project_ops_orchestrator.listAdoptableProjectPacks.
+    signature: 'projectPacksAdoptable(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/projects/packs/adoptable
+  - name: projectPackAdopt
+    description: >-
+      Adopt a server-global pack into a project by name (no archive upload); forwards to
+      project_ops_orchestrator.adoptProjectPack. The catalog counterpart of
+      projectPackInstall/projectPackInstallArchive.
+    signature: 'projectPackAdopt(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/projects/packs/adopt
+  - name: webGetProjectConfig
+    description: >-
+      Read a project's architectural config — its projectType (project-level architectural profile)
+      and lock status; forwards to project_ops_orchestrator.getProjectConfig with the session as the
+      credential.
+    signature: 'webGetProjectConfig(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/projects/config
+  - name: webSetProjectConfig
+    description: >-
+      Set a project's projectType (project-level architectural profile); forwards to
+      project_ops_orchestrator.setProjectType with the session as the credential.
+    signature: 'webSetProjectConfig(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/projects/config
+  - name: projectProfilesList
+    description: >-
+      List the architectural profiles selectable FOR ONE PROJECT — built-ins plus the profiles
+      contributed by the project's own registered packs (installed) plus those contributed by the
+      server-global packs (adoptable on selection, vendored by the write path); forwards to
+      project_ops_orchestrator.listProjectProfiles with the session as the credential. The
+      project-type picker reads this instead of the instance-wide /web/admin/profiles catalog, which
+      cannot see a project's own packs and cannot say which profiles still need adopting.
+    signature: 'projectProfilesList(request: HttpRequest): HttpResponse'
+    returns: HttpResponse
+    params:
+      - name: request
+        type: HttpRequest
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/projects/profiles
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-07-21T18:48:13.364Z'
+updatedAt: '2026-07-24T23:31:05.797Z'

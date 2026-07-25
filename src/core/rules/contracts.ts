@@ -101,6 +101,7 @@ export const contractsRule: SddRule = {
                       `Method "${implMethod.name}" in implementation "${impl.id}" dispatches capability "${step.capability}" through cross-tree portal "${step.targetComponent}" (step ${step.stepNumber}), but the surface snapshot of "${resolved.snapshot.projectName}" does not serve that capability on "${resolved.entry.id}".`,
                       impl.id,
                       isDraftCtx,
+                      true,
                     );
                   }
                   continue;
@@ -163,6 +164,7 @@ export const contractsRule: SddRule = {
                     `Method "${implMethod.name}" in implementation "${impl.id}" calls "${step.targetMethod}" on cross-tree component "${step.targetComponent}" (step ${step.stepNumber}), but the surface snapshot of "${resolved.snapshot.projectName}" does not expose that method on "${resolved.entry.id}".`,
                     impl.id,
                     isDraftCtx,
+                    true,
                   );
                 } else if (step.assertsGuarantees) {
                   const declared = new Set(surfaceMethod.guarantees ?? []);
@@ -174,6 +176,7 @@ export const contractsRule: SddRule = {
                         `Step ${step.stepNumber} of "${implMethod.name}" in implementation "${impl.id}" asserts guarantee "${g}", but the surface snapshot of "${resolved.snapshot.projectName}" does not declare it on "${resolved.entry.id}.${step.targetMethod}".`,
                         impl.id,
                         isDraftCtx,
+                        true,
                       );
                     }
                   }

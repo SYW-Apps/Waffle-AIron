@@ -177,6 +177,32 @@ describe('project ops over HTTP (/web routes + MCP data-plane tools)', () => {
     expect(JSON.parse(commit.body).published).toBe(false);
   });
 
+  it('GET /web/projects/profiles lists the project-scoped profile catalog (project:read) and fails closed', async () => {
+    const cookie = adminCookie();
+    createPlacedProject(cfg, MASTER, 'demo');
+
+    // Authorized (instance admin): the project-scoped catalog, envelope-keyed
+    // 'profiles' exactly like /web/admin/profiles, includes the built-ins.
+    const listed = await raw({ method: 'GET', path: '/web/projects/profiles?projectId=demo', headers: { cookie } });
+    expect(listed.status).toBe(200);
+    const profiles = JSON.parse(listed.body).profiles;
+    expect(Array.isArray(profiles)).toBe(true);
+    expect(profiles.map((p: { id: string }) => p.id)).toContain('backend');
+
+    // No session at all: unauthenticated.
+    const anon = await raw({ method: 'GET', path: '/web/projects/profiles?projectId=demo' });
+    expect(anon.status).toBe(401);
+
+    // A session with no grant over the project (or its unit/instance): forbidden.
+    const viewer = createWebSession(dataDir, {
+      id: '', subject: { userId: 'viewer-profiles', kind: 'human', issuer: 'local' },
+      projects: ['*'], createdAt: '', expiresAt: FUTURE(),
+    });
+    const vc = `wairon_session=${viewer.id}`;
+    const forbidden = await raw({ method: 'GET', path: '/web/projects/profiles?projectId=demo', headers: { cookie: vc } });
+    expect(forbidden.status).toBe(403);
+  });
+
   it('MCP data plane: the hosted ops tools dispatch bound to THE authorized project, resolver-gated upstream', async () => {
     createPlacedProject(cfg, MASTER, 'demo');
     allow(dataDir, 'u-agent', 'project:read', 'project', 'demo');

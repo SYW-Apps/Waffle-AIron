@@ -103,13 +103,20 @@ export const structuralConformanceRule: SddRule = {
       const draft = ctx.isImplementationDraft(impl);
 
       if (!impl.sourcePath) {
-        ctx.addIssue(
-          'warning',
-          'MISSING_SOURCE_PATH',
-          `Implementation "${impl.id}" declares no sourcePath — its contract "${impl.contract}" cannot be structurally checked against code.`,
-          impl.id,
-          draft,
-        );
+        // An `implementation`-type external link on the component IS the external
+        // source-of-record (a cloud console / Make.com scenario / GitHub file). wairon
+        // cannot analyze it, so there is no local file to structurally check — and
+        // MISSING_SOURCE_PATH would just be noise. Suppress it when such a link exists.
+        const hasExternalSource = (component.externalLinks ?? []).some((l) => l.type === 'implementation');
+        if (!hasExternalSource) {
+          ctx.addIssue(
+            'warning',
+            'MISSING_SOURCE_PATH',
+            `Implementation "${impl.id}" declares no sourcePath — its contract "${impl.contract}" cannot be structurally checked against code.`,
+            impl.id,
+            draft,
+          );
+        }
         continue;
       }
 

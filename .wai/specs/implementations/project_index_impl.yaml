@@ -83,6 +83,50 @@ methods:
     narrative: []
     intent: Loads the persisted set and returns every hosted-project record.
     symbol: listProjectRecords
+  - name: resolveBinding
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse the target — the explicit selector, or the principal's single narrowing entry: first
+          '::'-segment = TOP project id, remainder = the mount chain; a malformed target returns
+          null
+        type: local
+      - stepNumber: 2
+        description: >-
+          Authorize with at-or-below coverage: an entry covers the target iff equal or the target
+          extends it with '::' (wildcard passes) — a qualified principal can never reach the top
+          project or a sibling; an uncovered target returns null with no existence leak
+        type: local
+      - stepNumber: 3
+        description: Resolve the TOP project record; a missing or inactive project returns null
+        type: local
+      - stepNumber: 4
+        description: Walk the mount chain hop by hop
+        type: loop
+        loopKind: forEach
+        over: mount hops in the qualifier chain
+        endStep: 6
+      - stepNumber: 5
+        description: >-
+          Look up the named subsystem spec on the current root: an unknown subsystem or one without
+          a projectPath fails with an actionable error — never a silent fallback to the project root
+        type: local
+      - stepNumber: 6
+        description: >-
+          Resolve the child directory within the current root through the host core adapter's
+          containment guard (escape rejected) and advance the current root
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: resolveContainedProjectPath
+      - stepNumber: 7
+        description: >-
+          Return the binding: bound root, TOP project id, and the joined mount chain (absent when
+          unqualified)
+        type: return
+        outcome: ProjectBinding or null
+    detail: full
+    intent: ''
+    symbol: resolveProjectBinding
 status: complete
 createdAt: '2026-07-19T09:00:19.960Z'
-updatedAt: '2026-07-19T09:01:01.141Z'
+updatedAt: '2026-07-24T20:51:12.055Z'

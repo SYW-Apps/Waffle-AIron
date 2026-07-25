@@ -77,20 +77,23 @@ methods:
         type: local
       - stepNumber: 12
         description: >-
-          Assemble the effective declarative pack set from the policy (requiredGlobalPacks then
-          defaultProjectPacks), resolving each pack's declarative content from the server-global
-          pack set
-        type: local
+          Resolve the policy's required/default declarative pack name set (requiredGlobalPacks then
+          defaultProjectPacks) to their content via the pack registry — across both server-global
+          tiers and both file- and directory-form packs — yielding the resolved packs (canonical
+          name + content) and any names the instance cannot resolve.
+        type: call
+        targetComponent: pack_registry
+        targetMethod: executeApprovedResolveGlobalPacks
       - stepNumber: 13
-        description: For each required/default declarative pack in the assembled set
+        description: For each RESOLVED required/default declarative pack
         type: loop
         loopKind: forEach
-        over: the assembled required/default declarative packs
+        over: the resolution's resolved packs (each carrying canonical name + content)
         endStep: 14
       - stepNumber: 14
         description: >-
-          Vendor and register each required/default declarative pack into the new project via the
-          pre-authorized entry (skipping names the server-global set cannot resolve)
+          Vendor and register each resolved declarative pack into the new project by its canonical
+          name via the pre-authorized entry.
         type: call
         targetComponent: pack_registry
         targetMethod: executeApprovedInstallProjectPack
@@ -101,25 +104,62 @@ methods:
           caller and selectedAt) into the project's config
         type: local
       - stepNumber: 16
+        description: >-
+          List the profiles selectable for the new project — built-ins, the packs just vendored into
+          it, and the server-global tiers — so the recorded selection can be applied by inspection
+          rather than exception-driven probing.
+        type: call
+        targetComponent: pack_registry
+        targetMethod: executeApprovedListProjectProfiles
+      - stepNumber: 17
+        description: >-
+          Choose the profile to apply: the FIRST recorded selection id that is a known project kind
+          or appears in the catalog. projectType takes exactly one profile, so any remaining ids
+          stay recorded as the unapplied remainder — they belong on individual subsystems.
+        type: local
+      - stepNumber: 18
+        description: >-
+          When no recorded id qualifies (an empty selection, or none the instance can resolve),
+          leave the default projectType in place and carry the reason into the audit rather than
+          failing the initialization.
+        type: branch
+        condition: a qualifying profile id was chosen
+        onFalseStep: 21
+      - stepNumber: 19
+        description: >-
+          Make the chosen profile resolvable for the new project, vendoring and registering its
+          contributing pack when it comes only from the server-global tiers.
+        type: call
+        targetComponent: pack_registry
+        targetMethod: executeApprovedEnsureProfileInstalled
+      - stepNumber: 20
+        description: >-
+          Write the applied profile id as the new project's projectType in its project.yaml, so the
+          recorded selection actually governs validation from the project's first day.
+        type: local
+      - stepNumber: 21
         description: Append a redacted audit event without letting a failure fail the initialization
         type: try
-        endStep: 18
+        endStep: 23
         catches:
           - error: audit append failure
-            step: 19
-      - stepNumber: 17
-        description: Append the redacted project.init.policy audit event under the active retention policy
+            step: 24
+      - stepNumber: 22
+        description: >-
+          Append the redacted project.init.policy audit event (noting the applied governing profile,
+          any unapplied selection remainder, and any required/default packs the instance could not
+          resolve) under the active retention policy.
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 18
+      - stepNumber: 23
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 20
-      - stepNumber: 19
+        toStep: 25
+      - stepNumber: 24
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 20
+      - stepNumber: 25
         description: Return the created hosted project record
         type: return
         outcome: created hosted project record
@@ -169,20 +209,23 @@ methods:
         type: local
       - stepNumber: 8
         description: >-
-          Assemble the effective declarative pack set from the policy (requiredGlobalPacks then
-          defaultProjectPacks), resolving each pack's declarative content from the server-global
-          pack set
-        type: local
+          Resolve the policy's required/default declarative pack name set (requiredGlobalPacks then
+          defaultProjectPacks) to their content via the pack registry — across both server-global
+          tiers and both file- and directory-form packs — yielding the resolved packs (canonical
+          name + content) and any names the instance cannot resolve.
+        type: call
+        targetComponent: pack_registry
+        targetMethod: executeApprovedResolveGlobalPacks
       - stepNumber: 9
-        description: For each required/default declarative pack in the assembled set
+        description: For each RESOLVED required/default declarative pack
         type: loop
         loopKind: forEach
-        over: the assembled required/default declarative packs
+        over: the resolution's resolved packs (each carrying canonical name + content)
         endStep: 10
       - stepNumber: 10
         description: >-
-          Vendor and register each required/default declarative pack into the new project via the
-          pre-authorized entry (skipping names the server-global set cannot resolve)
+          Vendor and register each resolved declarative pack into the new project by its canonical
+          name via the pre-authorized entry.
         type: call
         targetComponent: pack_registry
         targetMethod: executeApprovedInstallProjectPack
@@ -193,25 +236,62 @@ methods:
           request and selectedAt) into the project's config
         type: local
       - stepNumber: 12
+        description: >-
+          List the profiles selectable for the new project — built-ins, the packs just vendored into
+          it, and the server-global tiers — so the recorded selection can be applied by inspection
+          rather than exception-driven probing.
+        type: call
+        targetComponent: pack_registry
+        targetMethod: executeApprovedListProjectProfiles
+      - stepNumber: 13
+        description: >-
+          Choose the profile to apply: the FIRST recorded selection id that is a known project kind
+          or appears in the catalog. projectType takes exactly one profile, so any remaining ids
+          stay recorded as the unapplied remainder — they belong on individual subsystems.
+        type: local
+      - stepNumber: 14
+        description: >-
+          When no recorded id qualifies (an empty selection, or none the instance can resolve),
+          leave the default projectType in place and carry the reason into the audit rather than
+          failing the initialization.
+        type: branch
+        condition: a qualifying profile id was chosen
+        onFalseStep: 17
+      - stepNumber: 15
+        description: >-
+          Make the chosen profile resolvable for the new project, vendoring and registering its
+          contributing pack when it comes only from the server-global tiers.
+        type: call
+        targetComponent: pack_registry
+        targetMethod: executeApprovedEnsureProfileInstalled
+      - stepNumber: 16
+        description: >-
+          Write the applied profile id as the new project's projectType in its project.yaml, so the
+          recorded selection actually governs validation from the project's first day.
+        type: local
+      - stepNumber: 17
         description: Append a redacted audit event without letting a failure fail the initialization
         type: try
-        endStep: 14
+        endStep: 19
         catches:
           - error: audit append failure
-            step: 15
-      - stepNumber: 13
-        description: Append the redacted project.init.policy audit event under the active retention policy
+            step: 20
+      - stepNumber: 18
+        description: >-
+          Append the redacted project.init.policy audit event (noting the applied governing profile,
+          any unapplied selection remainder, and any required/default packs the instance could not
+          resolve) under the active retention policy.
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 14
+      - stepNumber: 19
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 16
-      - stepNumber: 15
+        toStep: 21
+      - stepNumber: 20
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 16
+      - stepNumber: 21
         description: Return the created hosted project record
         type: return
         outcome: created hosted project record
@@ -235,8 +315,9 @@ methods:
           Evaluate the ProjectInitRequest against the effective policy: flag a missing required
           profile selection (when requireProfileSelection is set and the request omits it),
           requested blocked packs, and profile ids not permitted by allowedProfileIds; build a
-          PolicyEvaluationResult with the compliance flag, missing/blocked lists, and human-readable
-          messages. No side effects.
+          PolicyEvaluationResult with the compliance flag, missing/blocked lists, an empty
+          unresolvedPacks list (request-time evaluation does not probe instance-side pack
+          availability), and human-readable messages. No side effects.
         type: local
       - stepNumber: 4
         description: Return the policy evaluation result
@@ -291,11 +372,29 @@ methods:
         targetMethod: executeApprovedListProjectPacks
       - stepNumber: 9
         description: >-
-          Evaluate the project's active packs and recorded profile selection against the effective
-          policy, building a PolicyEvaluationResult (missing required/default packs, blocked packs
-          present, missing required profile ids, and human-readable messages). No side effects.
-        type: local
+          Resolve the policy's required/default pack name set (requiredGlobalPacks then
+          defaultProjectPacks) via the pack registry, to obtain each resolvable pack's canonical
+          name and the names the instance cannot resolve at all.
+        type: call
+        targetComponent: pack_registry
+        targetMethod: executeApprovedResolveGlobalPacks
       - stepNumber: 10
+        description: >-
+          Read the project's governing projectType and its recorded profileSelection from
+          project.yaml, so the evaluation can report profile REALITY alongside pack compliance
+          instead of treating a recorded-but-never-applied selection as satisfied.
+        type: local
+      - stepNumber: 11
+        description: >-
+          Evaluate the project's active packs and recorded profile selection against the effective
+          policy USING THE RESOLUTION: compute missingPackNames (resolved required/default packs
+          whose canonical name is absent from the project's installed packs), unresolvedPacks (the
+          resolution's unresolved names — required/default packs with no server-global pack in
+          either tier), blocked packs present, missing required profile ids, governingProfileId (the
+          projectType the validator actually enforces), unappliedProfileIds (recorded selection ids
+          that are not governing), and human-readable messages. No side effects.
+        type: local
+      - stepNumber: 12
         description: Return the policy evaluation result
         type: return
         outcome: policy evaluation result
@@ -348,61 +447,121 @@ methods:
         targetMethod: executeApprovedListProjectPacks
       - stepNumber: 9
         description: >-
-          Evaluate the project against the effective policy, computing the missing required/default
-          declarative packs
+          Assemble the policy's required/default declarative pack name set (requiredGlobalPacks then
+          defaultProjectPacks).
         type: local
       - stepNumber: 10
         description: >-
-          If the effective policy permits auto-reconciliation (enforcementMode 'auto_reconcile') and
-          required/default packs are missing, apply them; otherwise skip to building the result
-        type: branch
-        condition: >-
-          the effective policy permits auto-reconciliation (enforcementMode 'auto_reconcile') and
-          required/default packs are missing
-        onFalseStep: 14
+          Resolve the assembled required/default pack name set via the pack registry — across both
+          server-global tiers and both file- and directory-form packs — yielding the resolved packs
+          (canonical name + content) and the unresolved names the instance cannot satisfy.
+        type: call
+        targetComponent: pack_registry
+        targetMethod: executeApprovedResolveGlobalPacks
       - stepNumber: 11
         description: >-
-          Assemble the missing required/default declarative packs with their content from the
-          server-global pack set
-        type: local
+          If any resolved required/default pack is not yet installed in the project, apply the
+          resolvable missing packs — regardless of enforcementMode, since this explicit
+          reconciliation applies only the instance policy's own required/default packs; otherwise
+          skip the pack application and go straight to judging the governing profile (which is
+          repaired independently of whether any pack was missing).
+        type: branch
+        condition: any resolved required/default pack is not yet installed in the project
+        onFalseStep: 15
       - stepNumber: 12
-        description: For each missing required/default declarative pack
+        description: >-
+          Select the resolved packs whose canonical name is not already installed in the project;
+          their declarative content is already carried in the resolution.
+        type: local
+      - stepNumber: 13
+        description: For each resolved pack to apply
         type: loop
         loopKind: forEach
-        over: the missing required/default declarative packs
-        endStep: 13
-      - stepNumber: 13
+        over: the resolved packs not already installed (canonical name + content)
+        endStep: 14
+      - stepNumber: 14
         description: >-
-          Vendor and register each missing required/default declarative pack via the pre-authorized
-          entry
+          Vendor and register each resolved pack into the project by its canonical name via the
+          pre-authorized entry.
         type: call
         targetComponent: pack_registry
         targetMethod: executeApprovedInstallProjectPack
-      - stepNumber: 14
-        description: >-
-          Build the PolicyEvaluationResult reflecting the post-reconciliation compliance state,
-          remaining gaps, and human-readable messages
-        type: local
       - stepNumber: 15
+        description: >-
+          List the profiles selectable for this project (built-ins, its own registered packs, the
+          server-global tiers) so the governing profile can be judged: whether the recorded
+          projectType still resolves, and which candidates could repair it.
+        type: call
+        targetComponent: pack_registry
+        targetMethod: executeApprovedListProjectProfiles
+      - stepNumber: 16
+        description: >-
+          Read the governing projectType and the recorded profileSelection, then choose a repair
+          target: none when the projectType resolves and — where the policy requires profiles — is
+          one of the required ids; otherwise the first candidate the catalog can satisfy, taking the
+          policy's required ids before the recorded selection ids. A deliberate, resolvable,
+          policy-compliant projectType is left untouched.
+        type: local
+      - stepNumber: 17
+        description: >-
+          When no repair target was chosen, leave the governing profile exactly as it is and go
+          straight to building the result.
+        type: branch
+        condition: a repair target was chosen
+        onFalseStep: 21
+      - stepNumber: 18
+        description: >-
+          Make the repair target resolvable for the project, vendoring and registering its
+          contributing pack when the profile comes only from the server-global tiers.
+        type: call
+        targetComponent: pack_registry
+        targetMethod: executeApprovedEnsureProfileInstalled
+      - stepNumber: 19
+        description: >-
+          Write the ensured profile id as the project's projectType, preserving every other config
+          key, so the instance policy's profile requirement is actually in force rather than merely
+          recorded.
+        type: local
+      - stepNumber: 20
+        description: >-
+          Fold the repaired profile id into the recorded profileSelection (front position, keeping
+          the other recorded ids, stamped from the reconciling caller) so the record agrees with the
+          governing reality — exactly as an explicit profile write does. Without this, compliance
+          (which reads the recorded selection) keeps reporting the policy's required profile as
+          unselected even though it now governs, and reconciliation could never converge: the
+          operator would be told to reconcile a project that reconciliation just fixed.
+        type: local
+      - stepNumber: 21
+        description: >-
+          Re-list the project's installed packs and build the PolicyEvaluationResult reflecting
+          post-reconciliation state: remaining missingPackNames, unresolvedPacks (the resolution's
+          unresolved names), blocked packs present, missing required profile ids, governingProfileId
+          (the projectType now in force), unappliedProfileIds (recorded selection ids that are not
+          governing), and human-readable messages.
+        type: local
+      - stepNumber: 22
         description: Append a redacted audit event without letting a failure fail the reconciliation
         type: try
-        endStep: 17
+        endStep: 24
         catches:
           - error: audit append failure
-            step: 18
-      - stepNumber: 16
-        description: Append the redacted policy.reconcile audit event under the active retention policy
+            step: 25
+      - stepNumber: 23
+        description: >-
+          Append the redacted policy.reconcile audit event (noting the packs applied, any profile
+          repair written to the governing projectType, and any required/default packs the instance
+          could not resolve) under the active retention policy.
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 17
+      - stepNumber: 24
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 19
-      - stepNumber: 18
+        toStep: 26
+      - stepNumber: 25
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 19
+      - stepNumber: 26
         description: Return the policy evaluation result
         type: return
         outcome: policy evaluation result
@@ -462,41 +621,212 @@ methods:
         type: throw
         error: Forbidden — policy administration requires instance-level project:admin
       - stepNumber: 5
+        label: modecheck
+        description: >-
+          If the supplied policy's enforcementMode is not one of the closed set {warn, block,
+          auto_reconcile}, reject the administration.
+        type: branch
+        condition: the supplied enforcementMode is not a recognized mode (warn, block, auto_reconcile)
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        label: badmode
+        description: Reject the policy administration — unknown enforcementMode.
+        type: throw
+        error: invalid enforcementMode — must be one of warn, block, auto_reconcile
+      - stepNumber: 7
+        label: stampupdatedby
         description: >-
           Stamp updatedBy on the supplied policy from the authenticated caller's principal subject
           (the registry stamps updatedAt)
         type: local
-      - stepNumber: 6
+      - stepNumber: 8
         description: Persist the replacement active pack/profile policy wholesale through the repository
         type: call
         targetComponent: policy_repository
         targetMethod: setPackPolicy
-      - stepNumber: 7
+      - stepNumber: 9
         description: Append a redacted audit event without letting a failure fail the policy change
         type: try
-        endStep: 9
+        endStep: 11
         catches:
           - error: audit append failure
-            step: 10
-      - stepNumber: 8
+            step: 12
+      - stepNumber: 10
         description: >-
           Append the redacted policy.set audit event at security level under the active retention
           policy
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 9
+      - stepNumber: 11
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 11
-      - stepNumber: 10
+        toStep: 13
+      - stepNumber: 12
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 11
+      - stepNumber: 13
         description: Return the stored policy
         type: return
         outcome: the stored policy
+  - name: getProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          Resolve the caller's project:read permission over the target project (an instance-admin
+          bypasses to yes)
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the caller's project:read is not yes, deny
+        type: branch
+        condition: the effective project:read value is not yes
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the read
+        type: throw
+        error: Forbidden — reading a project's configuration requires project:read over the project
+      - stepNumber: 5
+        description: >-
+          Resolve and bind the target project's isolated root within the principal's authorized set
+          (rejects cross-project access)
+        type: call
+        targetComponent: project_registry
+        targetMethod: resolveRoot
+      - stepNumber: 6
+        description: >-
+          Read the project's projectType and its recorded profileSelection from its project.yaml
+          config (the project-level architectural profile, and the profile ids selected for the
+          project), substituting the default 'backend' when the config omits the type.
+        type: local
+      - stepNumber: 7
+        description: >-
+          List the profiles selectable for this project — built-ins, the profiles contributed by its
+          own registered packs, and those contributed by the server-global packs — so the recorded
+          projectType can be classified rather than echoed back unexamined.
+        type: call
+        targetComponent: pack_registry
+        targetMethod: executeApprovedListProjectProfiles
+      - stepNumber: 8
+        description: >-
+          Classify the recorded projectType against that catalog: profileSource is 'builtin' for a
+          built-in profile or a project kind and otherwise the contributing pack's name, and
+          profileResolvable is false when the value matches neither a project kind nor any catalog
+          entry installed in this project — which means the profile's doctrine is NOT being applied
+          even though a name is recorded. This read reports that honestly and never repairs it.
+        type: local
+      - stepNumber: 9
+        description: Read the project's current lock record (or null when the project has never been locked)
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: readLockRecord
+      - stepNumber: 10
+        description: >-
+          Read the project's L1 subsystem specs to collect the subsystems declaring their own
+          profile, which the project-level profile does not govern.
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 11
+        description: >-
+          Assemble the ProjectConfigView from the resolved projectType, the locked flag (true when
+          the lock record is non-null), the classified profileSource and profileResolvable, the
+          recorded selection ids that are not the governing one (unappliedProfileIds), and the
+          overriding subsystem ids.
+        type: local
+      - stepNumber: 12
+        description: Return the project configuration view
+        type: return
+        outcome: the project configuration view
+    detail: full
+  - name: setProjectType
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: auth_specialist
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          Resolve the caller's project:write permission over the target project (an instance-admin
+          bypasses to yes)
+        type: call
+        targetComponent: authorization_specialist
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the caller's project:write is not yes, deny
+        type: branch
+        condition: the effective project:write value is not yes
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the change
+        type: throw
+        error: Forbidden — changing a project's configuration requires project:write over the project
+      - stepNumber: 5
+        description: >-
+          Resolve and bind the target project's isolated root within the principal's authorized set
+          (rejects cross-project access)
+        type: call
+        targetComponent: project_registry
+        targetMethod: resolveRoot
+      - stepNumber: 6
+        description: >-
+          Make the requested projectType able to actually GOVERN the project before anything is
+          written: a built-in profile or project kind, and a profile contributed by a pack already
+          registered in this project, pass through unchanged; a profile contributed only by a
+          server-global pack has that pack vendored into the project and registered in
+          extensions.packs. The step yields the applied profile id, its source, and any adopted pack
+          name. An id no tier contributes throws here, so a profile that would silently disable the
+          whole doctrine is never written.
+        type: call
+        targetComponent: pack_registry
+        targetMethod: executeApprovedEnsureProfileInstalled
+      - stepNumber: 7
+        description: >-
+          Write the ensured profile id as the project's projectType into its project.yaml,
+          preserving every other config key (raw read, merge, write), so validation resolves the
+          project-level architectural profile through it.
+        type: local
+      - stepNumber: 8
+        description: >-
+          Fold the applied profile id to the FRONT of the project's recorded profileSelection,
+          keeping the other recorded ids as the unapplied remainder and stamping selectedBy from the
+          authenticated caller with selectedAt, so the recorded selection and the governing reality
+          agree instead of drifting apart.
+        type: local
+      - stepNumber: 9
+        description: Read the project's current lock record (or null when the project has never been locked)
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: readLockRecord
+      - stepNumber: 10
+        description: >-
+          Read the project's L1 subsystem specs to collect the subsystems declaring a profile of
+          their own, which takes precedence over the project-level profile for their components.
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 11
+        description: >-
+          Assemble the updated ProjectConfigView: the applied projectType, the locked flag (true
+          when the lock record is non-null), profileSource from the ensure result, profileResolvable
+          true (the write path guarantees resolvability), adoptedPackName when a pack had to be
+          vendored, the unapplied recorded-selection remainder, and the ids of the subsystems that
+          override the project-level profile.
+        type: local
+      - stepNumber: 12
+        description: Return the updated project configuration view
+        type: return
+        outcome: the updated project configuration view
+    detail: full
 detail: full
 status: complete
 createdAt: '2026-07-09T20:50:11.443Z'
-updatedAt: '2026-07-19T08:57:56.420Z'
+updatedAt: '2026-07-25T00:49:34.122Z'

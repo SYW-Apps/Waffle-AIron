@@ -112,7 +112,67 @@ methods:
       adapter), and register the '.wai/packs/<name>' directory ref in .wai/project.yaml (committed
       with the project, so every clone and CI enforce it). Assumes the orchestrator has already
       bound the project root. Fails loudly on unsafe / code / non-declarative input.
+  - name: executeApprovedResolveGlobalPacks
+    narrative: []
+    detail: intent
+    intent: >-
+      Resolve a set of policy-supplied pack names against the server-global pack set, with no
+      authentication (a pre-authorized internal entry) and no mutation of any tier. For each
+      requested name, search BOTH tiers — the mutable instance directory (WAIRON_PACKS_DIR) first,
+      then the immutable image-layer directory (WAIRON_IMAGE_PACKS_DIR) — accepting both a file-form
+      pack (<name>.yaml/.yml) and a directory-form pack (a <name>/ directory holding a pack entry
+      file), and matching the requested name against EITHER the file stem OR the loaded pack's
+      manifest name. On a match, load and serialize the pack's declarative content to a single
+      declarative document suitable for vendoring, and emit a ResolvedGlobalPack carrying the
+      requested name, the pack's CANONICAL manifest name, the serialized content, and the
+      originating tier ('instance' or 'image'); the instance tier wins on a same-name collision. A
+      requested name with no match in either tier — or one whose only candidate is
+      unreadable/corrupt and fails to probe — is collected into the unresolved list rather than
+      throwing, so a bad or absent pack is REPORTED, never silently dropped. Returns a
+      PackResolution partitioning the input into resolved packs and unresolved names. Never writes
+      to any packs directory.
+  - name: storeListAvailableProfiles
+    narrative: []
+    detail: intent
+    intent: >-
+      Aggregate the selectable profiles with no authentication (a pre-authorized internal read).
+      Read the built-in profile ids via the core adapter and emit each as an AvailableProfile with
+      source "builtin". Then probe the server-global packs across both tiers (reusing the two-tier
+      listing) and, for each successfully loaded pack, emit each profile id it contributes with
+      source set to the pack's canonical name and family carried through from the pack's ProfileDef
+      when present. Dedupe by (id, source). A pack that fails to load contributes nothing (its error
+      rides on its descriptor elsewhere); this read never throws. Never mutates any tier.
+  - name: executeApprovedListProjectProfiles
+    narrative: []
+    detail: intent
+    intent: >-
+      Aggregates the profiles selectable for ONE project with no authentication (a pre-authorized
+      internal read), binding that project's isolated root. Emits every built-in profile id via the
+      core adapter with source "builtin" and installed true. Then loads the packs registered in the
+      project's OWN config (extensions.packs) through the core extension loader and emits each
+      profile they contribute with source set to the pack's canonical name and installed true — the
+      tier the instance-wide catalog cannot see, so a pack uploaded straight into a project no
+      longer hides its profiles. Finally probes the server-global packs across both tiers and emits
+      each profile they contribute with installed false: adoptable, and vendored by the write path
+      when selected. Carries family through from each ProfileDef when present, dedupes by (id,
+      source) with the project tier winning, and never throws — a pack that fails to load simply
+      contributes nothing. Mutates no tier.
+  - name: executeApprovedEnsureProfileInstalled
+    narrative: []
+    detail: intent
+    intent: >-
+      Makes one profile id able to actually govern a project, with no authentication (a
+      pre-authorized internal call). A known project kind or built-in profile id resolves
+      immediately with source "builtin" and nothing adopted. Otherwise the project-scoped catalog
+      decides: a profile already contributed by a pack registered in the project returns with that
+      pack as its source and nothing adopted; a profile contributed only by a server-global pack has
+      that pack resolved through the two-tier resolution seam and vendored into the project by its
+      canonical name (registering it in extensions.packs), returned with adoptedPackName set so the
+      side effect is reported rather than hidden. A profile id no tier contributes RAISES an error
+      naming the id and the tiers searched — writing it as the project's projectType would leave the
+      whole profile doctrine silently unenforced, so it is refused instead of applied. Idempotent: a
+      profile already resolvable is returned untouched, and a second call adopts nothing further.
 detail: intent
 status: complete
 createdAt: '2026-07-04T18:42:57.340Z'
-updatedAt: '2026-07-21T18:42:59.465Z'
+updatedAt: '2026-07-24T23:39:10.012Z'

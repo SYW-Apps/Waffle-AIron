@@ -625,7 +625,7 @@ export function getWebProjectCanvasModel(cfg: HostConfig, sessionId: string, pro
  * (audience 'project' ceiling — every gateway entry), unlike a public share link,
  * which projects only the external surface.
  */
-export function getWebProjectOpenApi(cfg: HostConfig, sessionId: string, projectId: string): string {
+export function getWebProjectOpenApi(cfg: HostConfig, sessionId: string, projectId: string, portalId?: string): string {
   const principal = authenticateSession(cfg.dataDir, sessionId);
   if (!principal.authenticated) throw new UnauthenticatedError();
   if (!webproject.listProjects(cfg, sessionId).some((r) => r.id === projectId)) {
@@ -635,17 +635,50 @@ export function getWebProjectOpenApi(cfg: HostConfig, sessionId: string, project
   if (!root) throw new ForbiddenError('project not authorized or unknown');
   const result = runWithProjectRoot(root, () => hostSurfaces.exportBoundSurface('project', 'openapi')) as {
     rendered?: string;
+    renderedSet?: { portalId: string; name: string; document: string }[];
   };
-  return swaggerUiPage(result.rendered ?? '{}', projectId);
+  // One named spec per public portal. Fall back to the single `rendered` doc.
+  const specs = result.renderedSet ?? (result.rendered ? [{ portalId: '', name: projectId, document: result.rendered }] : []);
+  // Never serve an EMPTY explorer, and never substitute a DIFFERENT API for the
+  // one that was asked for — both misrepresent what this project publishes. An
+  // unknown spec lands on the index of the APIs that actually exist.
+  if (specs.length === 0) return openApiIndexPage(projectId, []);
+  if (portalId) {
+    const sel = specs.find((s) => s.portalId === portalId);
+    return sel ? swaggerUiPage(sel.document, sel.name) : openApiIndexPage(projectId, specs);
+  }
+  if (specs.length === 1) return swaggerUiPage(specs[0].document, specs[0].name);
+  // Multiple public portals ⇒ separate APIs. List them rather than merge.
+  return openApiIndexPage(projectId, specs);
+}
+
+/** A landing page listing a multi-portal project's per-portal OpenAPI specs — each
+ *  a separate API (own document + auth), opened via ?spec=<portalId>. */
+function openApiIndexPage(projectId: string, specs: { portalId: string; name: string }[]): string {
+  const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
+  const items = specs
+    .map((s) => `<li><a href="/web/openapi?projectId=${encodeURIComponent(projectId)}&spec=${encodeURIComponent(s.portalId)}">${esc(s.name)}</a> <code>${esc(s.portalId)}</code></li>`)
+    .join('');
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(projectId)} — API specs</title>`
+    + `<style>body{font-family:system-ui,sans-serif;max-width:680px;margin:48px auto;padding:0 20px;color:#e6e6e6;background:#161616}`
+    + `h1{font-size:20px}a{color:#6ea8fe;text-decoration:none}a:hover{text-decoration:underline}li{margin:10px 0}code{color:#8a94a6;font-size:12px;margin-left:8px}</style></head>`
+    + `<body><h1>${esc(projectId)} — API specs</h1>`
+    + (specs.length
+      ? `<p>This project exposes ${specs.length} separate public APIs, each with its own OpenAPI document and auth:</p><ul>${items}</ul>`
+      : `<p>This project publishes no HTTP API — no public portal exposes one.</p>`)
+    + `</body></html>`;
 }
 
 /**
  * Reshape an already-scoped LandscapeGraphModel into a level-of-detail
  * WebGraphModel: orgUnit → kind 'unit' at level 0 (carrying its parent unit as
  * parentId, derived from the hierarchy edges), project → kind 'project' at level 0,
- * publicInterface → kind 'interface' at level 2. Reuse the landscape edges as-is,
- * keep only nodes at or below the requested detail level, drop any edge whose
- * endpoint was filtered out, and stamp tier 'landscape', scope 'instance'.
+ * publicInterface → kind 'interface' at level 2. Keep only nodes at or below the
+ * requested detail level and carry the landscape edges over: a relation edge
+ * (relationId set) whose publishedInterface endpoint was dropped by the cutoff is
+ * retargeted to that interface's owning project node — one edge per relation — so
+ * cross-project relations stay visible at the project level of detail; any other
+ * edge touching a dropped node is dropped. Stamp tier 'landscape', scope 'instance'.
  */
 function reshapeLandscapeGraph(model: LandscapeGraphModel, level: number): WebGraphModel {
   const unitNodeIds = new Set(model.nodes.filter((n) => n.nodeKind === 'orgUnit').map((n) => n.id));
@@ -684,7 +717,33 @@ function reshapeLandscapeGraph(model: LandscapeGraphModel, level: number): WebGr
 
   const kept = nodes.filter((n) => n.level <= level);
   const keptIds = new Set(kept.map((n) => n.id));
-  const edges = model.edges.filter((e) => keptIds.has(e.from) && keptIds.has(e.to));
+  const projectNodeIdByProject = new Map<string, string>();
+  const interfaceOwnerProject = new Map<string, string>();
+  for (const n of model.nodes) {
+    if (n.projectId === undefined) continue;
+    if (n.nodeKind === 'project') projectNodeIdByProject.set(n.projectId, n.id);
+    else if (n.nodeKind === 'publicInterface') interfaceOwnerProject.set(n.id, n.projectId);
+  }
+  // A dropped endpoint retargets to its owning project node only for relation
+  // edges — publishes/hierarchy edges to filtered nodes stay dropped.
+  const retarget = (endpoint: string): string | undefined => {
+    if (keptIds.has(endpoint)) return endpoint;
+    const owner = interfaceOwnerProject.get(endpoint);
+    const projectNode = owner === undefined ? undefined : projectNodeIdByProject.get(owner);
+    return projectNode !== undefined && keptIds.has(projectNode) ? projectNode : undefined;
+  };
+  const edges: WebGraphModel['edges'] = [];
+  for (const e of model.edges) {
+    if (keptIds.has(e.from) && keptIds.has(e.to)) {
+      edges.push(e);
+      continue;
+    }
+    if (e.relationId === undefined) continue;
+    const from = retarget(e.from);
+    const to = retarget(e.to);
+    if (from === undefined || to === undefined || from === to) continue;
+    edges.push({ ...e, from, to });
+  }
 
   return {
     tier: 'landscape',
@@ -3023,6 +3082,16 @@ function opsInstallGlobalPackArchive(cfg: HostConfig, sessionId: string, req: In
 function opsInstallProjectPackArchive(cfg: HostConfig, sessionId: string, req: IncomingMessage, url: URL, body: Body, res: ServerResponse): void {
   sendJson(res, 200, projectops.installProjectPackArchive(cfg, sessionId, q(url, 'projectId') ?? '', archiveBody(body), packNameOverride(req)));
 }
+// Stage B+C: the selectable-profile catalog and server-global pack adoption.
+function opsListAvailableProfiles(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
+  sendJson(res, 200, { profiles: projectops.listAvailableProfiles(cfg, sessionId) });
+}
+function opsListAdoptableProjectPacks(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  sendJson(res, 200, { packs: projectops.listAdoptableProjectPacks(cfg, sessionId, q(url, 'projectId') ?? '') });
+}
+function opsAdoptProjectPack(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, projectops.adoptProjectPack(cfg, sessionId, String(body?.projectId ?? ''), String(body?.name ?? '')));
+}
 function opsGetPackPolicy(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
   sendJson(res, 200, projectops.getPackPolicy(cfg, sessionId));
 }
@@ -3034,6 +3103,19 @@ function opsPolicyEvaluate(cfg: HostConfig, sessionId: string, url: URL, res: Se
 }
 function opsPolicyReconcile(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
   sendJson(res, 200, projectops.reconcileProjectPolicy(cfg, sessionId, String(body?.projectId ?? '')));
+}
+function opsGetProjectConfig(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  sendJson(res, 200, projectops.getProjectConfig(cfg, sessionId, q(url, 'projectId') ?? ''));
+}
+function opsSetProjectConfig(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
+  sendJson(res, 200, projectops.setProjectType(cfg, sessionId, String(body?.projectId ?? ''), String(body?.projectType ?? '')));
+}
+// The project-scoped profile catalog (built-ins + the project's own packs +
+// server-global packs still needing adoption). Same envelope key as
+// opsListAvailableProfiles (/web/admin/profiles) — the client's list-unwrapping
+// helper reads both routes through the same 'profiles' key.
+function opsListProjectProfiles(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
+  sendJson(res, 200, { profiles: projectops.listProjectProfiles(cfg, sessionId, q(url, 'projectId') ?? '') });
 }
 function opsListProducers(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
   sendJson(res, 200, { producers: projectops.listProducers(cfg, sessionId, q(url, 'projectId') ?? '') });
@@ -3285,7 +3367,8 @@ export async function handleWebRequest(
     // interactive Swagger UI page (owner view — all audiences). Cross-project → 403.
     if (req.method === 'GET' && parts.length === 2 && parts[1] === 'openapi') {
       const projectId = url.searchParams.get('projectId') ?? '';
-      const html = getWebProjectOpenApi(cfg, sessionId, projectId);
+      const spec = url.searchParams.get('spec') ?? undefined;
+      const html = getWebProjectOpenApi(cfg, sessionId, projectId, spec);
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       res.end(html);
       return;
@@ -3357,6 +3440,31 @@ export async function handleWebRequest(
       // POST /web/projects/packs/remove { projectId, name }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'remove') {
         return opsRemoveProjectPack(cfg, sessionId, body, res);
+      }
+      // GET /web/projects/packs/adoptable?projectId= — the server-global catalog
+      // the project may adopt from (project:read).
+      if (req.method === 'GET' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'adoptable') {
+        return opsListAdoptableProjectPacks(cfg, sessionId, url, res);
+      }
+      // POST /web/projects/packs/adopt { projectId, name } — vendor a server-global
+      // pack into the project by name (project:admin).
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'adopt') {
+        return opsAdoptProjectPack(cfg, sessionId, body, res);
+      }
+      // GET /web/projects/config?projectId= — the project's editable config (projectType + lock) (project:read).
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'config') {
+        return opsGetProjectConfig(cfg, sessionId, url, res);
+      }
+      // POST /web/projects/config { projectId, projectType } — set the project-level type (project:write).
+      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'config') {
+        return opsSetProjectConfig(cfg, sessionId, body, res);
+      }
+      // GET /web/projects/profiles?projectId= — the profiles selectable FOR ONE
+      // PROJECT (built-ins + the project's own registered packs + server-global
+      // packs still adoptable on selection) (project:read). The project-type
+      // picker reads this instead of the instance-wide /web/admin/profiles catalog.
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'profiles') {
+        return opsListProjectProfiles(cfg, sessionId, url, res);
       }
       // GET /web/projects/policy?projectId= — pack/profile compliance (project:write).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'policy') {
@@ -3529,6 +3637,12 @@ export async function handleWebRequest(
       // POST /web/admin/packs/remove { name }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'remove') {
         return opsRemoveGlobalPack(cfg, sessionId, body, res);
+      }
+      // GET /web/admin/profiles — the selectable architectural-profile catalog
+      // (built-in + server-global pack profiles, each tagged with its source).
+      // Any authenticated read.
+      if (req.method === 'GET' && parts.length === 3 && parts[2] === 'profiles') {
+        return opsListAvailableProfiles(cfg, sessionId, res);
       }
       // GET /web/admin/policy — the instance pack/profile policy (any authenticated read).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'policy') {

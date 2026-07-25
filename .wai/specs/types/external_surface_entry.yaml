@@ -1,0 +1,62 @@
+kind: value-object
+id: external_surface_entry
+name: ExternalSurfaceEntry
+description: >-
+  One row of the scope-aware external-interface discovery listing: a vendored surface snapshot this
+  project can consume, summarized with its origin, family role, provenance, and a freshness verdict.
+  The full contracts stay in the referenced SurfaceSnapshot — this entry is the catalog view served
+  to agents (MCP) and the CLI so a subproject can SEE its outward world (parent, siblings, foreign
+  imports) instead of discovering it by failed reference resolution.
+subsystem: sdd_surfaces
+fields:
+  - name: projectName
+    type: string
+    description: >-
+      The snapshot's storage key: the producing project's name, or '<systemName>::<subsystemId>' for
+      a parent-generated sibling surface.
+    optional: false
+  - name: origin
+    type: string
+    description: >-
+      Snapshot origin: 'generated' (parent-produced family/sibling surface) | 'exchanged' (another
+      wairon project) | 'authored' (external third-party document).
+    optional: false
+  - name: sourceKind
+    type: string
+    description: >-
+      Family role of the snapshot from THIS project's standpoint: 'parent' (the family surface
+      delivered by the chaining parent) | 'sibling' (a sibling subsystem's published surface) |
+      'foreign' (imported exchanged/authored).
+    optional: false
+  - name: generatedAt
+    type: string
+    description: ISO-8601 timestamp the snapshot was produced.
+    optional: false
+  - name: stateId
+    type: string
+    description: >-
+      Producing tree's state hash at generation time, when the producer stamped one (generated
+      family/sibling surfaces always do).
+    optional: true
+  - name: version
+    type: string
+    description: >-
+      Producer-declared version, for authored/exchanged snapshots that carry one instead of a state
+      hash.
+    optional: true
+  - name: freshness
+    type: string
+    description: >-
+      Freshness verdict: 'fresh' (vendored stateId matches the chaining parent's CURRENT state hash)
+      | 'stale' (parent tree changed since generation) | 'unverifiable' (no reachable chaining
+      parent to compare against, or a foreign snapshot with no comparison source).
+    optional: false
+  - name: interfaceIds
+    type: string[]
+    description: >-
+      Ids of the interfaces the snapshot exposes — the discovery summary; contracts are read from
+      the snapshot itself.
+    optional: false
+methods: []
+createdAt: '2026-07-24T17:53:32.174Z'
+updatedAt: '2026-07-24T17:53:32.190Z'

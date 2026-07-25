@@ -6,9 +6,17 @@ export const CANVAS_SKELETON = `<header id="hdr">
     <button data-vm="types">Types</button>
     <button data-vm="databases">Databases</button>
   </div>
+  <div class="dropdown" id="modeDd" style="display:none">
+    <button class="tbtn" id="modeBtn" title="Switch between the component architecture, the type ERD, or the database schemas">Components ▾</button>
+    <div class="menu" id="modeMenu"></div>
+  </div>
   <nav id="crumbs"></nav>
   <span class="divider"></span>
   <input id="search" type="search" placeholder="Search this view…">
+  <div class="dropdown" id="searchDd" style="display:none">
+    <button class="tbtn" id="searchBtn" title="Search this view">🔍</button>
+    <div class="menu search-menu" id="searchMenu"></div>
+  </div>
   <div class="seg" id="typesDetailSeg" style="display:none" title="ERD detail level">
     <button data-td="full">Full</button>
     <button data-td="fields">Fields</button>

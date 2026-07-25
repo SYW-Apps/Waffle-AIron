@@ -115,6 +115,64 @@ methods:
       - name: name
         type: string
         optional: true
+  - name: listAvailableProfiles
+    description: >-
+      Authenticate the caller credential (any authenticated principal may read the catalog — the
+      policy UI and agents both need to see what profiles are selectable) and return the profiles
+      available for selection: the wairon built-in profiles plus every profile contributed by the
+      server-global packs, each tagged with its source ("builtin" or the providing pack's name) so a
+      UI can present them grouped by source.
+    signature: 'listAvailableProfiles(credential: string): AvailableProfile[]'
+    returns: AvailableProfile[]
+    params:
+      - name: credential
+        type: string
+  - name: adoptProjectPack
+    description: >-
+      Authenticate, require project:admin over the project, bind its scope, and install a
+      server-global declarative pack into it BY NAME — resolving the pack's declarative content from
+      the server-global set (across both tiers, file- or directory-form) rather than uploading an
+      archive, and rejecting a name the server-global set cannot resolve. The catalog counterpart of
+      installProjectPack/installProjectPackArchive: adopt an already-available instance pack without
+      re-uploading it.
+    signature: 'adoptProjectPack(credential: string, project: string, name: string): PackDescriptor'
+    returns: PackDescriptor
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: name
+        type: string
+  - name: listAdoptableProjectPacks
+    description: >-
+      Authenticate, require project:read over the project, and list the server-global packs
+      available for the project to adopt (the instance catalog, each descriptor carrying its
+      contents) so a project admin can pick from available packs instead of uploading an archive.
+      The already-installed ones are marked by the caller against listProjectPacks.
+    signature: 'listAdoptableProjectPacks(credential: string, project: string): PackDescriptor[]'
+    returns: PackDescriptor[]
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+  - name: listProjectProfiles
+    description: >-
+      Authenticate the caller credential and resolve project:read over the target project through
+      the authorization seam (mirroring listProjectPacks / listAdoptableProjectPacks), then return
+      the PROJECT-SCOPED profile catalog from the pre-authorized store read: built-ins plus the
+      profiles contributed by the project's own registered packs (installed) plus the profiles
+      contributed by the server-global packs (adoptable on selection). This is the catalog a
+      project-type picker must use — the instance-wide listAvailableProfiles cannot see a project's
+      own packs and cannot say which profiles would need adopting.
+    signature: 'listProjectProfiles(credential: string, project: string): AvailableProfile[]'
+    returns: AvailableProfile[]
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
 status: complete
 createdAt: '2026-07-04T18:46:52.736Z'
-updatedAt: '2026-07-21T18:42:19.895Z'
+updatedAt: '2026-07-24T23:30:46.978Z'

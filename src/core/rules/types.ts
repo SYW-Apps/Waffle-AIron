@@ -44,6 +44,14 @@ export const BUILTIN_PROFILES = [
 ] as const;
 
 /**
+ * The built-in COMPOSITE PROJECT KINDS: legal `projectType` values that are not
+ * architectural profiles and carry no profile doctrine of their own. Kept beside
+ * BUILTIN_PROFILES so both halves of a legal projectType value come from one
+ * source instead of being restated per consumer, where they would drift.
+ */
+export const PROJECT_KINDS = ['fullstack', 'system-of-systems', 'monorepo'] as const;
+
+/**
  * A profile id — one of BUILTIN_PROFILES or a pack-registered name (open
  * string; UNKNOWN_PROFILE flags anything unregistered).
  */
@@ -132,6 +140,11 @@ export interface RuleContext {
    * Report an issue. Applies scope filtering, user severity overrides
    * (rules.sddRuleSeverity), and draft-context downgrades for completeness
    * rules. 'off' suppresses the issue entirely.
+   *
+   * `surfaceResolved` marks a finding whose reference DID resolve against a
+   * vendored surface snapshot — a genuine contract/boundary verdict rather
+   * than a resolution failure, so the chained-subproject pass never replaces
+   * it with UNVERIFIED_EXTERNAL_REF.
    */
   addIssue(
     defaultSeverity: Severity,
@@ -139,6 +152,7 @@ export interface RuleContext {
     message: string,
     specId?: string,
     isDraftContext?: boolean,
+    surfaceResolved?: boolean,
   ): void;
 }
 

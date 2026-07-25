@@ -137,6 +137,80 @@ methods:
       - name: name
         type: string
         optional: true
+  - name: executeApprovedResolveGlobalPacks
+    description: >-
+      Pre-authorized entry for internal policy/health flows (no credential — the caller has already
+      enforced authorization; never exposed on any portal): resolve a set of server-global pack
+      names to their declarative content. Searches BOTH server-global tiers (immutable image-layer +
+      mutable instance, instance winning on a name collision) and handles BOTH file-form and
+      directory-form packs, matching each requested name against a pack's file stem OR its manifest
+      name; a directory-form pack's declarative content is serialized for vendoring. Returns a
+      PackResolution partitioning the input into resolved packs — each carrying its CANONICAL
+      manifest name, serialized declarative content, and originating tier — and unresolved names
+      with no server-global match in either tier. This is the single resolution seam the project
+      policy orchestrator uses to apply required/default packs, so a name it cannot resolve is
+      REPORTED (never silently skipped).
+    signature: 'executeApprovedResolveGlobalPacks(names: string[]): PackResolution'
+    returns: PackResolution
+    params:
+      - name: names
+        type: string[]
+        description: >-
+          Policy-supplied pack names (file stems or manifest names) to resolve against the
+          server-global set.
+  - name: storeListAvailableProfiles
+    description: >-
+      List the profiles available for selection straight from the store layer — the PRE-AUTHORIZED
+      read the pack orchestrator's catalog surface uses (no credential; the caller has already
+      authenticated): the built-in profiles (via the core adapter, source "builtin") unioned with
+      every profile contributed by the server-global packs across both tiers (source = the
+      contributing pack's name), deduped. Never throws for a bad pack — a pack that fails to load
+      simply contributes no profiles.
+    signature: 'storeListAvailableProfiles(): AvailableProfile[]'
+    returns: AvailableProfile[]
+    params: []
+  - name: executeApprovedListProjectProfiles
+    description: >-
+      Pre-authorized entry for the policy plane and the project-scoped catalog surface (no
+      credential — the caller has already enforced authorization; never exposed on any portal): list
+      every architectural profile SELECTABLE FOR ONE PROJECT, tagged with its source and whether it
+      can already govern that project. Three contributions, deduped by (id, source) with the project
+      tier winning: the built-in profiles via the core adapter (source "builtin", installed true);
+      every profile contributed by the packs registered in THAT project's own extensions.packs
+      (source = the pack's canonical name, installed true) — the tier the instance-wide catalog
+      cannot see, so a pack uploaded straight into a project no longer has invisible profiles; and
+      every profile contributed by the server-global packs across both tiers (installed false —
+      adoptable, selecting it vendors the contributing pack). Never throws for a bad pack: a pack
+      that fails to load simply contributes no profiles.
+    signature: 'executeApprovedListProjectProfiles(project: string): AvailableProfile[]'
+    returns: AvailableProfile[]
+    params:
+      - name: project
+        type: string
+        description: Hosted project id whose isolated root is bound for the project-tier half of the listing.
+  - name: executeApprovedEnsureProfileInstalled
+    description: >-
+      Pre-authorized entry for the policy plane (no credential — the caller has already enforced
+      authorization; never exposed on any portal): make one profile id able to actually GOVERN a
+      project, and report what that took. A built-in profile or project kind, or a profile
+      contributed by a pack already registered in the project, resolves as-is. A profile contributed
+      only by a server-global pack is made resolvable by resolving that pack through
+      executeApprovedResolveGlobalPacks and vendoring it into the project
+      (executeApprovedInstallProjectPack), reported as adoptedPackName. A profile id no tier
+      contributes THROWS — writing it as the project's projectType would silently disable the whole
+      profile doctrine (UNKNOWN_PROFILE), so an unresolvable id is refused with the id and the tiers
+      searched, never applied.
+    signature: 'executeApprovedEnsureProfileInstalled(project: string, profileId: string): ProfileApplication'
+    returns: ProfileApplication
+    params:
+      - name: project
+        type: string
+        description: Hosted project id the profile must become resolvable for.
+      - name: profileId
+        type: string
+        description: The profile id (or project kind) to make resolvable.
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-04T18:42:41.273Z'
-updatedAt: '2026-07-21T18:42:15.281Z'
+updatedAt: '2026-07-24T23:30:44.030Z'

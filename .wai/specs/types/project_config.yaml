@@ -28,6 +28,18 @@ fields:
       Hosted/profile selection applied to this project, when initialized or reconciled through
       hosted policy workflows.
     optional: true
+  - name: projectType
+    type: string
+    description: >-
+      The project-level architectural profile GOVERNING the project: a built-in profile, a project
+      kind (fullstack | system-of-systems | monorepo), or a profile id contributed by a registered
+      extension pack. This is the field validation reads — every component whose subsystem declares
+      no profile of its own resolves to it, and the profile's doctrine (stereotype fencing plus its
+      rules block: designDepth, rule severities, naming, complexity) applies through it. A value
+      that resolves to no loaded profile disables that doctrine (UNKNOWN_PROFILE), which is why
+      hosted writes ensure the contributing pack is registered before writing it. Defaults to
+      'backend' when the config omits it.
+    optional: true
 methods: []
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-08T22:03:03.910Z'
+updatedAt: '2026-07-24T23:30:05.014Z'

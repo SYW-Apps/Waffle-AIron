@@ -57,12 +57,16 @@ export const stereotypeDepsRule: SddRule = {
             const resolved = resolveSurfaceRef(ctx, depId);
             if (resolved) {
               if (comp.componentType !== 'Adapter') {
+                // surfaceResolved: verified against the vendored snapshot — a
+                // genuine boundary verdict that keeps full strength even when
+                // this tree is a chained subproject validated standalone.
                 ctx.addIssue(
                   'error',
                   'CROSS_SUBSYSTEM_NON_ADAPTER',
                   `Boundary violation: ${comp.componentType} "${comp.id}" depends directly on "${depId}", a surface of project "${resolved.snapshot.projectName}". Only a local client Adapter may cross a project boundary — route this hop through an Adapter.`,
                   comp.id,
                   isDraftCtx,
+                  true,
                 );
               }
               continue;

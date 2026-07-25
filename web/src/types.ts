@@ -108,8 +108,32 @@ export interface PackDescriptor {
   profiles: number;
   languages: number;
   rules: number;
+  /** Enriched contents: the concrete ids each pack contributes (optional — the
+   *  server may send only the numeric counts on some endpoints). */
+  profileIds?: string[];
+  languageIds?: string[];
+  ruleIds?: string[];
   error?: string;
   tier?: string;
+  /** True when a higher tier already provides a pack of the same name. */
+  shadowed?: boolean;
+}
+
+/** A profile the instance policy can allow/require, sourced from the built-in set
+ *  or a specific installed pack (grouped by `source` in the policy pickers). */
+export interface AvailableProfile {
+  id: string;
+  /** "builtin" or the name of the pack that provides it. */
+  source: string;
+  family?: string;
+  description?: string;
+  /** Project-scoped catalogs only (`GET /web/projects/profiles`): true for
+   *  built-ins and for profiles from packs already registered in that project.
+   *  false means the profile is adoptable — selecting it makes the backend
+   *  vendor the contributing pack into the project automatically. Absent on
+   *  the instance-wide `/web/admin/profiles` catalog, which can't see a
+   *  project's own packs. */
+  installed?: boolean;
 }
 
 export interface PolicyEvaluationResult {

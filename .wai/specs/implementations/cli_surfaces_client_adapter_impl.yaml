@@ -7,7 +7,7 @@ methods:
   - name: exportSurface
     narrative:
       - stepNumber: 1
-        description: Forward to the surface portal
+        description: Forward to the surface portal, passing the --portal selection through as portalId
         type: call
         targetComponent: surface_portal
         targetMethod: exportSurface
@@ -32,6 +32,13 @@ methods:
         type: call
         targetComponent: surface_portal
         targetMethod: generateChildSnapshots
+  - name: listExternalInterfaces
+    narrative:
+      - stepNumber: 1
+        description: Forward the discovery read to the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: listExternalInterfaces
 status: complete
 createdAt: '2026-07-10T23:16:03.846Z'
-updatedAt: '2026-07-11T18:45:14.135Z'
+updatedAt: '2026-07-24T18:14:58.210Z'

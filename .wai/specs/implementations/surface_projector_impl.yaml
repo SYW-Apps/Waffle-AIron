@@ -40,12 +40,19 @@ methods:
           with params, returns, guarantees, effect, endpoints, plus the portal's dispatch table
         type: local
       - stepNumber: 8
-        description: Compute the transitive type closure of every exported signature and embed the definitions
+        description: >-
+          Copy the backing Portal's authentication requirement and basePath onto each surface
+          contract entry: set the entry's `auth` to the portal's projected PortalAuth (its security
+          scheme, or none) and the entry's `basePath` to the portal's basePath, so the codec can
+          emit per-portal OpenAPI servers and securitySchemes.
         type: local
       - stepNumber: 9
-        description: Stamp identity, origin generated, the current StateId, and generatedAt
+        description: Compute the transitive type closure of every exported signature and embed the definitions
         type: local
       - stepNumber: 10
+        description: Stamp identity, origin generated, the current StateId, and generatedAt
+        type: local
+      - stepNumber: 11
         description: Return the self-contained snapshot
         type: return
         outcome: SurfaceSnapshot
@@ -68,6 +75,67 @@ methods:
         description: Return the child-scoped snapshot
         type: return
         outcome: SurfaceSnapshot
+  - name: projectSubsystemSurface
+    narrative:
+      - stepNumber: 1
+        description: Load the L0 system spec (the system name keys the sibling snapshot)
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: loadSystemSpec
+      - stepNumber: 2
+        description: >-
+          Load subsystem specs and resolve the target subsystem's L1 publicInterfaces (its published
+          surface)
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 3
+        description: Load component specs (the subsystem's inbound Portal and its dispatch table)
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: loadComponentSpecs
+      - stepNumber: 4
+        description: Load interface specs (the full L3 contracts)
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 5
+        description: Load type specs (closure source)
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: loadTypeSpecs
+      - stepNumber: 6
+        description: >-
+          Resolve the target subsystem's published entries to the components that can legally serve
+          a cross-boundary caller — a Portal, a Gateway, or an Observer for an event surface, the
+          same set the boundary rules sanction as a cross-subsystem dependency target — and copy the
+          full contracts at the family ('project') ceiling: methods with params, returns,
+          guarantees, effect, endpoints, the dispatch table, and the backing component's projected
+          auth and basePath. Siblings expose exactly what they publish, nothing wider; a published
+          entry whose backing component can never be a cross-boundary target is collected as
+          unprojectable rather than exported.
+        type: local
+      - stepNumber: 7
+        description: >-
+          Report each unprojectable published entry as a non-fatal diagnostic naming the subsystem,
+          the entry's backing component and its stereotype (the same skipped-what-and-why shape the
+          variant loader uses), so a gap in a child's sibling surface is explained at the moment the
+          surfaces are generated instead of being discovered later as unexplained missing contracts.
+          Unbound entries and entries naming a component that does not exist are NOT reported here —
+          the validator already raises those as errors.
+        type: local
+      - stepNumber: 8
+        description: Compute the transitive type closure of every exported signature and embed the definitions
+        type: local
+      - stepNumber: 9
+        description: >-
+          Stamp projectName '<systemName>::<subsystemId>', origin generated, the current StateId,
+          and generatedAt
+        type: local
+      - stepNumber: 10
+        description: Return the self-contained sibling snapshot
+        type: return
+        outcome: SurfaceSnapshot
 status: complete
 createdAt: '2026-07-10T23:15:11.894Z'
-updatedAt: '2026-07-11T18:45:03.920Z'
+updatedAt: '2026-07-25T16:35:33.728Z'
