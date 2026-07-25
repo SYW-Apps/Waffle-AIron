@@ -4,7 +4,7 @@ import { runWithProjectRoot } from '../utils/fs.js';
 import { authenticate, authenticateSession, verifyViewToken } from './auth.js';
 import { authorize } from './authorization.js';
 import { WEB_SESSION_PREFIX } from './types.js';
-import { resolveProjectBinding, existingProjectRoot } from './projects.js';
+import { resolveProjectBinding, existingProjectRoot, SUBPROJECT_SEPARATOR } from './projects.js';
 import { createScopedServer, hostCore } from './adapters.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import {
@@ -179,6 +179,23 @@ const PROJECT_OPS_TOOLS = new Set<string>([
   'sdd_host_commit_project',
 ]);
 
+/** The RECORD-level hosted tools: they act on the hosted project RECORD (or its
+ *  repository), never on the bound spec tree, so they always receive the TOP
+ *  project id. A subproject-qualified credential is REFUSED them (steps 10–11) —
+ *  serving them would let a token scoped to one chained child act on the whole
+ *  parent, i.e. the qualifier would narrow nothing.
+ *
+ *  The two TREE-scoped lifecycle tools — sdd_host_lock_project and
+ *  sdd_host_promote_project — are deliberately ABSENT: they are confined by
+ *  FORWARDING the qualifier (steps 16/18) so the action lands on exactly the child
+ *  tree the credential is scoped to. */
+const PROJECT_RECORD_TOOLS = new Set<string>([
+  'sdd_host_initialize_project',
+  'sdd_host_get_approval_status',
+  'sdd_host_await_approval',
+  ...PROJECT_OPS_TOOLS,
+]);
+
 /** The MCP tool-result envelope — the exact shape the scoped sdd_* server returns:
  *  text content, optionally flagged as an error. */
 interface McpToolResult {
@@ -325,6 +342,57 @@ function dataPlanePermissionError(
   };
 }
 
+// ── Subproject confinement guard (steps 10–11 of handleRequest) ──────────────
+//
+// A hosted token may be narrowed to a chained subproject ('projectId::subsystemId'),
+// and the data plane then binds the CHILD root for every ordinary sdd_* tool. The
+// RECORD-level hosted tools bypass that binding by construction: they act on the
+// hosted project record with the TOP project id. Serving one to a qualified
+// credential would let a token scoped to one child lock, publish, produce, install
+// packs or reconcile policy across the WHOLE parent — not an escalation (a
+// narrowing never widens grants) but a confinement failure, with no workaround.
+// So they are refused BEFORE any dispatch.
+
+/**
+ * Steps 10–11: refuse a RECORD-level hosted tool when the resolved binding carries
+ * a subproject qualifier. Returns the `isError` tool-result response to send (HTTP
+ * still 200; the caller still runs the SAME best-effort audit path), or undefined
+ * to let the call proceed.
+ *
+ * Never a silent success and never a partial action: the refusal happens before the
+ * lifecycle dispatch AND before the ordinary permission gate, so nothing the tool
+ * would have done can have started. An unqualified binding is untouched, and the
+ * two TREE-scoped lifecycle tools are never refused here (see PROJECT_RECORD_TOOLS).
+ */
+export function subprojectConfinementError(
+  projectId: string,
+  subproject: string | undefined,
+  body: unknown,
+): { jsonrpc: '2.0'; id: unknown; result: McpToolResult } | undefined {
+  if (!subproject) return undefined;
+  const msg = jsonRpcRequest(body);
+  if (!msg || msg.method !== 'tools/call') return undefined;
+  const name = msg.params?.name;
+  if (typeof name !== 'string' || !PROJECT_RECORD_TOOLS.has(name)) return undefined;
+
+  return {
+    jsonrpc: '2.0',
+    id: msg.id ?? null,
+    result: {
+      content: [
+        {
+          type: 'text',
+          text:
+            `Refused — ${name} acts on the whole project "${projectId}", but this credential is ` +
+            `bound to subproject "${projectId}${SUBPROJECT_SEPARATOR}${subproject}". ` +
+            `An unqualified credential for "${projectId}" is required to call ${name}.`,
+        },
+      ],
+      isError: true,
+    },
+  };
+}
+
 /**
  * Steps 10–24: when the message is a `tools/call` for one of the five execute-primary
  * project-lifecycle tools or one of the hosted landscape discovery tools, dispatch it to
@@ -340,12 +408,19 @@ function dataPlanePermissionError(
  * neighbourhood of, a project it is not scoped to. Initialization carries the (new) project
  * as its decoded ProjectInitRequest arguments, and interface discovery reads its TARGET
  * project (the neighbour to inspect, still gated by reachability) from arguments.projectId.
+ *
+ * `subproject` is the bound mount chain (absent for an unqualified binding). It reaches
+ * ONLY the two TREE-scoped lifecycle tools (steps 16/18) — a lock or promotion then
+ * concerns exactly that child tree, while permission resolution and audit provenance stay
+ * anchored at the TOP project id. Every RECORD-level tool has already been refused
+ * upstream by subprojectConfinementError, so none of them can be reached with a qualifier.
  */
 export async function dispatchProjectLifecycleTool(
   cfg: HostConfig,
   credential: string | null,
   projectId: string,
   body: unknown,
+  subproject?: string,
 ): Promise<{ jsonrpc: '2.0'; id: unknown; result: McpToolResult } | undefined> {
   const msg = jsonRpcRequest(body);
   if (!msg || msg.method !== 'tools/call') return undefined;
@@ -367,10 +442,14 @@ export async function dispatchProjectLifecycleTool(
         value = initializeProject(cfg, credential, args as unknown as ProjectInitRequest);
         break;
       case 'sdd_host_lock_project':
-        value = lockProject(cfg, credential, projectId); // bound project; args ignored
+        // Bound project (args ignored) + the bound qualifier: a qualified
+        // credential freezes exactly the child tree it is scoped to.
+        value = lockProject(cfg, credential, projectId, subproject);
         break;
       case 'sdd_host_promote_project':
-        value = promoteProject(cfg, credential, projectId); // bound project; args ignored
+        // Bound project (args ignored) + the bound qualifier: the lock/StateId
+        // re-check then concerns that child tree.
+        value = promoteProject(cfg, credential, projectId, subproject);
         break;
       case 'sdd_host_await_approval':
         // Long-poll for a decision on the caller's own approval request.
@@ -522,12 +601,28 @@ export async function handleMcpRequest(
     const projectId = binding.projectId;
     const subproject = binding.subproject;
 
-    // Steps 10–24: the five execute-primary project-lifecycle tools and the hosted
+    // Steps 10–11: confine a subproject-qualified credential. The RECORD-level
+    // hosted tools act on the hosted project record with the TOP project id, never
+    // on the bound tree, so a qualified credential would reach the WHOLE parent
+    // through them — the qualifier would narrow nothing. Refuse BEFORE any
+    // dispatch (and before the ordinary permission gate) as an isError tool result
+    // (HTTP still 200), flowing through the SAME best-effort audit path every other
+    // outcome uses. The TREE-scoped lock/promote are NOT refused: they are confined
+    // by forwarding the qualifier below.
+    const confinementError = subprojectConfinementError(projectId, subproject, body);
+    if (confinementError !== undefined) {
+      sendJson(res, 200, confinementError);
+      auditToolCall(cfg.dataDir, principal, projectId, body, deriveMcpOutcome(confinementError), subproject);
+      return;
+    }
+
+    // Steps 12–24: the five execute-primary project-lifecycle tools and the hosted
     // landscape discovery tools are handled here, bypassing the scoped sdd_* MCP
-    // server. They operate on the hosted project RECORD, so they receive the TOP
-    // project id. The response still flows through the SAME best-effort audit path
-    // (auditToolCall) the scoped dispatch uses.
-    const dispatchedResponse = await dispatchProjectLifecycleTool(cfg, cred, projectId, body);
+    // server. The record-level ones receive the TOP project id; the TREE-scoped
+    // lock/promote additionally receive the bound qualifier. The response still
+    // flows through the SAME best-effort audit path (auditToolCall) the scoped
+    // dispatch uses.
+    const dispatchedResponse = await dispatchProjectLifecycleTool(cfg, cred, projectId, body, subproject);
     if (dispatchedResponse !== undefined) {
       sendJson(res, 200, dispatchedResponse);
       auditToolCall(cfg.dataDir, principal, projectId, body, deriveMcpOutcome(dispatchedResponse), subproject);

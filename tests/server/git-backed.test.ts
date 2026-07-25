@@ -19,7 +19,9 @@ import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { readYamlFile } from '../../src/utils/yaml.js';
 import * as admin from '../../src/server/admin.js';
 import { AdminAuthError } from '../../src/server/admin.js';
+import { hostCore } from '../../src/server/adapters.js';
 import { resolveSecret } from '../../src/utils/secrets.js';
+import { seedChainedMount } from './helpers.js';
 import type { HostConfig } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
@@ -202,6 +204,57 @@ describe('git-backed projects (sdd_git)', () => {
     const tracked = git(['ls-files'], root);
     expect(tracked).not.toContain('lock.json');
     expect(tracked).not.toContain('git.json');
+  });
+
+  // ── subproject confinement: a child freeze is NOT a repository event ─────────
+  //
+  // The git binding is read from the BOUND root, so a subproject-scoped lock finds
+  // no binding at the child and both the sync and the publish no-op naturally (no
+  // conditional anywhere says so). This is THE confinement point: a token narrowed
+  // to one chained child must not be able to commit and push the parent's
+  // repository. Asserted through the same real-git seams the tests above use.
+  it('a subproject-scoped lock performs NO commit and NO push against the parent repository', { timeout: 30_000 }, () => {
+    admin.enableGit(cfg, ADMIN, 'demo', remote, 'main');
+    const root = projectRoot();
+
+    // A chained subproject inside the bound repo, itself a provisioned (lockable)
+    // wairon project. Its .wai/ is the CHILD's, not the repo-root .wai/.
+    const child = seedChainedMount(root, 'billing', 'packages/billing');
+    runWithProjectRoot(child, () => hostCore.provisionProject('billing'));
+    invalidateSpecCache();
+
+    // Dirty the PARENT's .wai/ too, so a publish would definitely have something
+    // to commit if one were attempted.
+    const idx = path.join(root, '.wai', 'specs', '.index.yaml');
+    fs.writeFileSync(idx, fs.readFileSync(idx, 'utf8').replace(/vision:.*/, 'vision: parent edit, must stay unpublished'));
+    invalidateSpecCache();
+
+    const headBefore = git(['rev-parse', 'wairon/work'], root);
+
+    const rec = admin.executeApprovedLock(cfg, 'demo', 'billing');
+
+    // The child really froze …
+    expect(rec.status).toBe('ready');
+    expect(fs.existsSync(path.join(child, '.wai', 'lock.json'))).toBe(true);
+    // … and DID NOT HAPPEN: no commit was recorded on the lock record (publish
+    // no-opped because the bound child root carries no git.json).
+    expect(rec.commitSha).toBeUndefined();
+    expect(rec.compareUrl).toBeUndefined();
+    // DID NOT HAPPEN: the working branch never moved — no commit was created.
+    expect(git(['rev-parse', 'wairon/work'], root)).toBe(headBefore);
+    // DID NOT HAPPEN: nothing was pushed — the remote still has no working branch.
+    expect(git(['branch'], remote)).not.toContain('wairon/work');
+    // DID NOT HAPPEN: the parent's dirty .wai/ edit is still uncommitted, and the
+    // parent tree was not locked at all.
+    expect(git(['status', '--porcelain', '--', '.wai/'], root)).toContain('.wai/specs/.index.yaml');
+    expect(fs.existsSync(path.join(root, '.wai', 'lock.json'))).toBe(false);
+
+    // The repository was live and capable all along: an UNQUALIFIED lock of the
+    // same project commits and pushes exactly as before (no regression).
+    const parentRec = admin.executeApprovedLock(cfg, 'demo');
+    expect(parentRec.commitSha).toMatch(/^[0-9a-f]{40}$/);
+    expect(git(['rev-parse', 'wairon/work'], root)).not.toBe(headBefore);
+    expect(git(['branch'], remote)).toContain('wairon/work');
   });
 
   it('sync integrates a collaborator commit from the default branch', () => {

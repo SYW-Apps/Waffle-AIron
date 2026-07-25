@@ -17,6 +17,8 @@ import {
   listProjectRecords,
   removeProjectRecord,
   existingProjectRoot,
+  resolveSubprojectMounts,
+  SUBPROJECT_SEPARATOR,
 } from './projects.js';
 import { hostCore, hostGit, hostProducer, validateProjectAsComplete } from './adapters.js';
 import type { GitBackingStatus, GitPublish } from '../git/index.js';
@@ -212,14 +214,44 @@ export function lockProject(cfg: HostConfig, credential: string | null, project:
 }
 
 /**
+ * Step 1 of executeApprovedLock / executeApprovedPromote: the root the action
+ * concerns. Without a qualifier that is the project's own isolated root; WITH one
+ * it is the CHAINED CHILD's tree, resolved through the project registry's
+ * containment-checked qualified resolution — the SAME seam the data plane binds
+ * through, so a qualifier can never resolve outside the project root.
+ *
+ * `subproject` is the mount chain only ('a' or 'a::b'), exactly as
+ * ProjectBinding.subproject carries it — never the project id. An unknown mount,
+ * a subsystem carrying no projectPath, or an escaping path THROWS (the helper's
+ * own actionable errors): the resolution never silently falls back to the project
+ * root, because that fallback is precisely the confinement failure being closed.
+ */
+function boundLifecycleRoot(cfg: HostConfig, projectId: string, subproject?: string): string {
+  const root = existingProjectRoot(cfg.dataDir, projectId);
+  if (!root) throw new Error(`Unknown project "${projectId}".`);
+  if (!subproject) return root;
+  return resolveSubprojectMounts(projectId, root, subproject.split(SUBPROJECT_SEPARATOR));
+}
+
+/**
  * Pre-authorized entry for the approval workflow: the same privileged action as
  * lockProject but WITHOUT credential authentication — the caller
  * (project_lifecycle_orchestrator) has already enforced permission-based
  * authorization. Never routed from any portal.
+ *
+ * An optional `subproject` qualifier binds the CHAINED CHILD's tree instead of
+ * the project's own, so every step below (validate-as-complete, promote,
+ * StateId, lock record) concerns THAT tree. Note what falls out for free and is
+ * deliberately NOT special-cased: the git binding is read from the BOUND root, so
+ * a child tree carries none and both the sync (step 2) and the publish (step 8)
+ * no-op naturally — a subproject freeze never commits or pushes against the
+ * parent's repository. The frozen child tree persists in the project's working
+ * tree, but it is NOT staged by the project's own .wai/-scoped commit either: a
+ * chained child lives outside that pathspec (e.g. packages/billing/.wai/), so
+ * reaching a remote takes a commit whose scope covers the child's path.
  */
-export function executeApprovedLock(cfg: HostConfig, projectId: string): LockRecord {
-  const root = existingProjectRoot(cfg.dataDir, projectId);
-  if (!root) throw new Error(`Unknown project "${projectId}".`);
+export function executeApprovedLock(cfg: HostConfig, projectId: string, subproject?: string): LockRecord {
+  const root = boundLifecycleRoot(cfg, projectId, subproject);
   return runWithProjectRoot(root, () => {
     // Git-backed: pull the default branch into the working branch first so the
     // lock (and PR) is based on the latest. No-op for native projects.
@@ -498,10 +530,13 @@ export function promoteProject(cfg: HostConfig, credential: string | null, proje
  * promoteProject but WITHOUT credential authentication — the caller
  * (project_lifecycle_orchestrator) has already enforced permission-based
  * authorization. Never routed from any portal.
+ *
+ * An optional `subproject` qualifier binds the CHAINED CHILD's tree instead of
+ * the project's own, so the lock-record read, the StateId recomputation and the
+ * staleness verdict all concern that child's tree.
  */
-export function executeApprovedPromote(cfg: HostConfig, projectId: string): PromoteResult {
-  const root = existingProjectRoot(cfg.dataDir, projectId);
-  if (!root) throw new Error(`Unknown project "${projectId}".`);
+export function executeApprovedPromote(cfg: HostConfig, projectId: string, subproject?: string): PromoteResult {
+  const root = boundLifecycleRoot(cfg, projectId, subproject);
   return runWithProjectRoot(root, () => {
     const lock = hostCore.readLockRecord();
     if (!lock) {

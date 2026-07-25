@@ -182,14 +182,31 @@ function localName(id: string): string {
 }
 
 /**
+ * The stereotypes that can legally serve a cross-boundary caller, and therefore
+ * the only ones a sibling surface may project. This is exactly the set the
+ * boundary rules already sanction as a cross-subsystem dependency target
+ * (Portal / Gateway — see rules/stereotype-deps.ts) plus the Observer that may
+ * back a MessageBus public interface (see rules/public-surface.ts). Anything
+ * else is declarable as a published entry but never consumable across a
+ * boundary, so projecting it would export a contract no sibling can call.
+ */
+const CROSS_BOUNDARY_TARGETS: ReadonlySet<string> = new Set(['Portal', 'Gateway', 'Observer']);
+
+/**
  * Project ONE subsystem's published surface — its L1 publicInterfaces realized
- * by its inbound Portal, with full L3 contracts, dispatch tables, and the
- * transitive type closure — into a self-contained contract-grade snapshot at
- * the family ('project') audience ceiling. This is the SIBLING view a chained
- * child receives: siblings expose exactly what they publish (their Portal),
- * nothing wider. The snapshot is keyed '<systemName>::<subsystemId>' so
- * sibling surfaces never collide with the parent family surface or foreign
- * imports, and carries the parent tree's StateId provenance.
+ * by a component that can legally serve a cross-boundary caller (a Portal, a
+ * Gateway, or an Observer for an event surface), with full L3 contracts,
+ * dispatch tables, and the transitive type closure — into a self-contained
+ * contract-grade snapshot at the family ('project') audience ceiling. This is
+ * the SIBLING view a chained child receives: siblings expose exactly what they
+ * publish, nothing wider. The publishable set matches what the boundary rules
+ * already sanction as a cross-subsystem dependency target, so a subsystem
+ * publishing through a Gateway is projected rather than silently absent from
+ * every child. A published entry whose backing component can NEVER be a
+ * cross-boundary target is omitted and REPORTED as a non-fatal diagnostic. The
+ * snapshot is keyed '<systemName>::<subsystemId>' so sibling surfaces never
+ * collide with the parent family surface or foreign imports, and carries the
+ * parent tree's StateId provenance.
  */
 export function projectSubsystemSurface(subsystemId: string): SurfaceSnapshot {
   const system = loadSystemSpec();
@@ -206,15 +223,28 @@ export function projectSubsystemSurface(subsystemId: string): SurfaceSnapshot {
   const types = loadTypeSpecs();
 
   const entries: SurfaceContractEntry[] = [];
+  // Published entries whose backing component can never be a cross-boundary
+  // target: omitted from the projection AND reported below, so an author learns
+  // why a child cannot see them instead of finding an unexplained gap.
+  const unprojectable: { component: string; componentType: string }[] = [];
   for (const pub of target.publicInterfaces ?? []) {
+    // Unbound entries, and entries naming a component that does not exist, are
+    // deliberately NOT reported here — the validator already raises those as
+    // errors (PUBLIC_INTERFACE_UNBOUND / PUBLIC_INTERFACE_INVALID_COMPONENT), so
+    // a diagnostic would be duplicate noise.
     if (!pub.component) continue; // unbound published entries cannot be exported
     // An external (chained) sibling's members load namespace-qualified; match both forms.
     const comp = components.find(c =>
       c.id === pub.component || c.id === `${subsystemId}::${pub.component}`);
     if (!comp) continue;
-    // Siblings expose exactly what they publish through their inbound Portal —
-    // a published non-Portal never joins the sibling surface.
-    if (comp.componentType !== 'Portal') continue;
+    // Siblings expose exactly what they publish, and only through a component a
+    // cross-boundary caller can actually reach. A published entry backed by
+    // anything else (a 'Custom' entry over a Specialist or an Orchestrator, say)
+    // is unprojectable — collected for reporting rather than silently dropped.
+    if (!CROSS_BOUNDARY_TARGETS.has(comp.componentType)) {
+      unprojectable.push({ component: pub.component, componentType: comp.componentType });
+      continue;
+    }
 
     const compInterfaces = interfaces.filter(i =>
       i.component === comp.id
@@ -232,12 +262,21 @@ export function projectSubsystemSurface(subsystemId: string): SurfaceSnapshot {
       component: localName(comp.id),
       methods,
       ...(comp.dispatch && comp.dispatch.length ? { dispatch: comp.dispatch } : {}),
-      // Project the backing Portal's auth + basePath so the codec can emit
+      // Project the backing component's auth + basePath so the codec can emit
       // OpenAPI security + per-portal servers self-contained from the snapshot.
       ...(comp.auth && comp.auth.scheme !== 'none' ? { auth: comp.auth } : {}),
       ...(comp.basePath ? { basePath: comp.basePath } : {}),
       details: pub.details ?? '',
     });
+  }
+
+  // Report the skipped-what-and-why at generation time (same shape the variant
+  // loader uses for a skipped variant file) — a gap in a child's sibling surface
+  // is explained now rather than discovered later as a missing contract.
+  for (const skipped of unprojectable) {
+    console.error(
+      `[surfaces] skipped "${subsystemId}::${skipped.component}": a published ${skipped.componentType} can never serve a cross-boundary caller, so it stays out of every chained child's sibling surface — publish this surface through a Portal, a Gateway, or an Observer (for events).`,
+    );
   }
 
   return SurfaceSnapshotSchema.parse({

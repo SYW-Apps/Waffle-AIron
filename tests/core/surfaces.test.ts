@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -599,6 +599,124 @@ describe('sibling surface projection + per-sibling delivery', () => {
     expect(gateway.dispatch).toEqual([{ capability: 'spec.get', component: 'core-orch', method: 'getRecord' }]);
     // Transitive type closure travels with the sibling snapshot.
     expect(snap.types.map(t => t.id).sort()).toEqual(['customer-ref', 'invoice-record']);
+  });
+
+  it('projects a subsystem published through a Gateway — the same target the boundary rules sanction', () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
+    buildParent(rootDir);
+    // A subsystem whose front door is a Gateway pattern, not a Portal. The
+    // boundary rules accept a Gateway as a cross-subsystem dependency target,
+    // so a child MUST be able to see (and verify against) its contract.
+    saveSubsystemSpec(subsystem('gw-sub', {
+      publicInterfaces: [{ type: 'Custom', details: 'gateway-fronted api', component: 'edge-gateway' }],
+    }));
+    saveComponentSpec(component('edge-gateway', 'gw-sub', {
+      componentType: 'Gateway',
+      basePath: '/edge',
+      auth: { scheme: 'bearer', bearerFormat: 'JWT' },
+      dispatch: [{ capability: 'edge.relay', component: 'core-orch', method: 'getRecord' }],
+    } as Partial<ComponentSpec>));
+    saveInterfaceSpec(iface('iedge-gateway', 'edge-gateway', [
+      {
+        name: 'relay',
+        description: 'Relays a record request inward.',
+        signature: 'relay(id: string): invoice-record',
+        returns: 'invoice-record',
+        params: [{ name: 'id', type: 'string' }],
+        guarantees: ['idempotent'],
+      },
+    ]));
+    invalidateSpecCache();
+    setProjectRoot(rootDir);
+
+    const snap = projectSubsystemSurface('gw-sub');
+    expect(snap.projectName).toBe('root-system::gw-sub');
+    expect(snap.interfaces.map(e => e.component)).toEqual(['edge-gateway']);
+
+    // Contracts intact: the full L3 methods, dispatch table, auth and basePath.
+    const gw = snap.interfaces[0];
+    expect(gw.audience).toBe('project');
+    expect(gw.methods.map(m => m.name)).toEqual(['relay']);
+    expect(gw.methods[0].guarantees).toEqual(['idempotent']);
+    expect(gw.dispatch).toEqual([{ capability: 'edge.relay', component: 'core-orch', method: 'getRecord' }]);
+    expect(gw.auth).toEqual({ scheme: 'bearer', bearerFormat: 'JWT' });
+    expect(gw.basePath).toBe('/edge');
+    // And the transitive type closure travels with it.
+    expect(snap.types.map(t => t.id).sort()).toEqual(['customer-ref', 'invoice-record']);
+  });
+
+  it('projects an Observer-backed event surface', () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
+    buildParent(rootDir);
+    // public-surface.ts sanctions an Observer as the backing of a MessageBus entry.
+    saveSubsystemSpec(subsystem('evt-sub', {
+      publicInterfaces: [{ type: 'MessageBus', details: 'domain events', component: 'evt-observer' }],
+    }));
+    saveComponentSpec(component('evt-observer', 'evt-sub', { componentType: 'Observer' } as Partial<ComponentSpec>));
+    saveInterfaceSpec(iface('ievt-observer', 'evt-observer', [
+      { name: 'onRecordChanged', description: 'handles a record-changed event', signature: 'onRecordChanged(record: invoice-record): void', returns: 'void', params: [{ name: 'record', type: 'invoice-record' }] },
+    ]));
+    invalidateSpecCache();
+    setProjectRoot(rootDir);
+
+    const snap = projectSubsystemSurface('evt-sub');
+    expect(snap.interfaces.map(e => e.component)).toEqual(['evt-observer']);
+    expect(snap.interfaces[0].type).toBe('MessageBus');
+    expect(snap.interfaces[0].methods.map(m => m.name)).toEqual(['onRecordChanged']);
+    expect(snap.types.map(t => t.id).sort()).toEqual(['customer-ref', 'invoice-record']);
+  });
+
+  it('omits a Custom entry backed by a non-target stereotype AND reports it as a diagnostic', () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
+    buildParent(rootDir);
+    // Declarable (Custom carries no backing obligation) but never consumable
+    // across a boundary — the author must learn WHY the child cannot see it.
+    saveSubsystemSpec(subsystem('calc-sub', {
+      publicInterfaces: [{ type: 'Custom', details: 'a narrow capability', component: 'rate-specialist' }],
+    }));
+    saveComponentSpec(component('rate-specialist', 'calc-sub', { componentType: 'Specialist' } as Partial<ComponentSpec>));
+    saveInterfaceSpec(iface('irate-specialist', 'rate-specialist', [
+      { name: 'rate', description: 'computes a rate', signature: 'rate(): string', returns: 'string' },
+    ]));
+    invalidateSpecCache();
+    setProjectRoot(rootDir);
+
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const snap = projectSubsystemSurface('calc-sub');
+      expect(snap.interfaces).toEqual([]);
+      expect(spy).toHaveBeenCalledTimes(1);
+      const line = spy.mock.calls[0][0] as string;
+      // Names the subsystem, the backing component and its stereotype.
+      expect(line).toContain('[surfaces] skipped "calc-sub::rate-specialist"');
+      expect(line).toContain('Specialist');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('reports NOTHING for an unbound entry or one naming a missing component — the validator owns those', () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
+    buildParent(rootDir);
+    saveSubsystemSpec(subsystem('gap-sub', {
+      publicInterfaces: [
+        { type: 'Custom', details: 'not bound to a component yet' },
+        { type: 'REST', details: 'names a component that does not exist', component: 'ghost-portal' },
+      ],
+    }));
+    invalidateSpecCache();
+    setProjectRoot(rootDir);
+
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const snap = projectSubsystemSurface('gap-sub');
+      expect(snap.interfaces).toEqual([]);
+      // PUBLIC_INTERFACE_UNBOUND / PUBLIC_INTERFACE_INVALID_COMPONENT are errors
+      // the validator already raises — a diagnostic here would be duplicate noise.
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('projectSubsystemSurface refuses an unknown subsystem', () => {

@@ -291,10 +291,17 @@ methods:
   - name: executeApprovedLock
     narrative:
       - stepNumber: 1
-        description: Bind the project's isolated root
+        description: >-
+          Bind the root this lock concerns: the project's isolated root, or — when a subproject
+          qualifier was supplied — the chained CHILD's tree, resolved through the project registry's
+          containment-checked qualified resolution so a qualifier can never resolve outside the
+          project root. Every step below therefore operates on the bound tree.
         type: local
       - stepNumber: 2
-        description: Sync the default branch into the working branch (no-op for native projects)
+        description: >-
+          Sync the default branch into the working branch so the lock is based on the latest (no-op
+          for a native project, and equally a no-op for a subproject-scoped lock: the git binding is
+          read from the BOUND root and a child tree carries none — the child is not the git unit).
         type: call
         targetComponent: host_git_adapter
         targetMethod: sync
@@ -324,10 +331,11 @@ methods:
         targetMethod: computeStateId
       - stepNumber: 8
         description: >-
-          Publish to git: commit ONLY the .wai/ tree (the lock is the semantic checkpoint — the
-          auto-publish trigger; the message references the validated StateId) and push, returning
-          the commit + compare URL (no-op for native projects; a backup failure never fails the
-          lock)
+          Commit the .wai/-scoped tree and push, returning the commit and compare URL a human opens
+          the PR from — the lock is the semantic checkpoint that triggers the auto-publish. A no-op
+          for a native project, and for a subproject-scoped lock (no binding at the bound child
+          root), so a subproject freeze never commits or pushes against the parent's repository; the
+          parent's next lock or scoped commit carries the frozen child tree.
         type: call
         targetComponent: host_git_adapter
         targetMethod: publish
@@ -348,7 +356,11 @@ methods:
   - name: executeApprovedPromote
     narrative:
       - stepNumber: 1
-        description: Bind the project's isolated root
+        description: >-
+          Bind the root this promotion concerns: the project's isolated root, or — when a subproject
+          qualifier was supplied — the chained CHILD's tree, resolved through the project registry's
+          containment-checked qualified resolution. The lock record read, the StateId recomputation
+          and the staleness verdict below all concern the bound tree.
         type: local
       - stepNumber: 2
         description: Read the current lock record
@@ -1035,4 +1047,4 @@ lint:
         host_core_adapter — documented shortcut on the lock/promote path; refactor candidate.
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-07-16T15:27:40.368Z'
+updatedAt: '2026-07-25T16:36:39.166Z'
