@@ -548,7 +548,11 @@ describe('id-space fixpoint fuzz (seeded, deterministic)', () => {
     // Every generated spec's mount-chain length is bounded by `depth` (the l1
     // sibling mount, chain length 2, is only generated when depth >= 2).
     const runner = depth >= 2 && SKIP_KNOWN_DEPTH2_COUNTEREXAMPLE ? it.skip : it;
-    runner(`tree #${i} (mount depth ${depth}) load->save->load is a fixpoint across two cycles`, () => {
+    // Each case generates a whole spec tree on disk and round-trips it twice, so a
+    // single case can exceed the 5s default under full-suite parallel load (it
+    // passes comfortably in isolation). Same contention allowance the git-backed
+    // lock test carries — the assertions are unchanged, only the wall clock.
+    runner(`tree #${i} (mount depth ${depth}) load->save->load is a fixpoint across two cycles`, { timeout: 30_000 }, () => {
       rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-fuzz-'));
       runTree(i, rootDir);
     });

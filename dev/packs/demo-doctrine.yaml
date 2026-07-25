@@ -1,0 +1,59 @@
+# DEMO extension pack — a server-global pack for exercising profile application
+# on the local dev stack. Mounted read-only into the container's IMAGE tier
+# (/opt/wairon/packs) by docker-compose.local.yml, so it is present on boot with
+# no setup and is offered as ADOPTABLE to every project.
+#
+# Its profile carries doctrine that is deliberately easy to SEE: a forbidden
+# stereotype, a discouraged one, and a rules block whose description-length floor
+# is high enough that ordinary specs trip it. Picking this profile for a project
+# and then switching back is a clean A/B of "the profile's rules actually apply".
+#
+# NOT for production. See dev/packs/README.md for the walkthrough.
+name: demo-doctrine
+version: 1.0.0
+
+profiles:
+  # Selectable as a project type (and as a subsystem `profile:`). Appears in the
+  # web project-type picker grouped under "demo-doctrine".
+  demo-strict:
+    family: backend-like
+    forbiddenStereotypes:
+      - types: [Actor, Supervisor]
+        reason: this demo platform runs stateless triggered work — there are no long-lived concurrent processes to model, so express async work as scheduled runs
+    discouragedStereotypes:
+      - types: [Store]
+        reason: demo services keep authoritative state in the platform's own tables — a local Store usually signals state that belongs upstream
+    # A pack profile's `rules` block is resolved THROUGH the governing profile,
+    # so these apply to every component the profile governs. They are the part of
+    # profile application that used to be silently lost when the contributing
+    # pack was not installed in the project.
+    rules:
+      documentation:
+        # Deliberately demanding: ordinary short descriptions trip it, which makes
+        # "is this profile in force?" answerable at a glance.
+        minDescriptionLength: 120
+        requireDescriptions: true
+      complexity:
+        maxComponentDependencies: 3
+      sddRuleSeverity:
+        # A warning this profile treats as a hard error.
+        UNOWNED_STORE: error
+
+languages:
+  # Registered via targetLanguage (L0 or per-subsystem); surfaced in the pack's
+  # contents on the instance Packs page.
+  demo-flow:
+    unsupportedFlow:
+      doWhile: this platform has no do-while — model it as a counted loop with a post-check branch
+      jump: steps cannot jump arbitrarily — restructure with a switch and branches so control flow stays a forward pipeline
+    foreignBuiltins: [bundle]
+
+patterns:
+  - id: demo-pipeline
+    version: 1.0.0
+    description: A linear trigger -> transform -> deliver pipeline; referenced from a component's `patterns` list.
+
+guarantees:
+  # Extends the builtin guarantee vocabulary (idempotent | atomic | transactional
+  # | exactly-once) so L3 methods in a demo project may declare it.
+  - demo-audited

@@ -1,0 +1,22 @@
+# DEMO extension pack #2 — a SECOND server-global pack, so the project-type
+# picker shows more than one pack group and switching between two pack-provided
+# profiles is testable (each adoption vendors its own pack into the project).
+#
+# Its profile flips the doctrine FAMILY: under a frontend-like profile the
+# backend runtime stereotypes are warned rather than forbidden, and the frontend
+# stereotypes (View / FeatureComponent / RouterComponent) become legal. Its
+# description floor is much lower than demo-strict's, so the same unchanged spec
+# tree produces a visibly different finding set under each profile.
+#
+# NOT for production. See dev/packs/README.md for the walkthrough.
+name: demo-frontend-doctrine
+version: 1.0.0
+
+profiles:
+  demo-frontend:
+    family: frontend-like
+    rules:
+      documentation:
+        # Low enough that the seeded demo specs PASS this one — the contrast with
+        # demo-strict's floor of 120 is the point.
+        minDescriptionLength: 40

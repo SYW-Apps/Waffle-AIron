@@ -1,0 +1,13 @@
+# An Actor — the stereotype demo-strict FORBIDS and demo-frontend merely warns
+# about. Switching the project type between them changes this component's verdict.
+schemaVersion: 1.0.0
+id: flow_runner
+name: Flow Runner
+description: Seeded actor for exercising profile doctrine.
+subsystem: demo_flows
+componentType: Actor
+dependsOn: []
+owns: []
+status: draft
+createdAt: '2026-07-25T00:00:00.000Z'
+updatedAt: '2026-07-25T00:00:00.000Z'

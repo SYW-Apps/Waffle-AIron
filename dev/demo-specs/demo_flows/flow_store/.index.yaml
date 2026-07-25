@@ -1,0 +1,13 @@
+# A standalone Store — demo-strict DISCOURAGES the stereotype and raises the
+# UNOWNED_STORE warning to an error through its profile rules block.
+schemaVersion: 1.0.0
+id: flow_store
+name: Flow Store
+description: Seeded store for exercising profile doctrine.
+subsystem: demo_flows
+componentType: Store
+dependsOn: []
+owns: []
+status: draft
+createdAt: '2026-07-25T00:00:00.000Z'
+updatedAt: '2026-07-25T00:00:00.000Z'

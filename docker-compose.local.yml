@@ -16,6 +16,14 @@
 #   4) Bootstrap a project (admin plane is loopback-in-container — reach it via exec):
 #        docker compose -f docker-compose.local.yml exec wairon wairon host project create --id demo
 #        docker compose -f docker-compose.local.yml exec wairon wairon host key mint --project demo --role editor
+#   5) OPTIONAL — seed the demo project so extension-pack doctrine has something
+#      to bite on (a fresh project holds only an L0 spec):
+#        docker compose -f docker-compose.local.yml cp dev/demo-specs/demo_flows wairon:/data/projects/demo/.wai/specs/demo_flows
+#        docker compose -f docker-compose.local.yml exec --user root wairon chown -R wairon:wairon /data/projects/demo/.wai
+#      (cp writes as root; the server runs as uid 10001, so hand the files over or
+#      they are readable but not writable from the Specs editor.)
+#      Two demo packs are already mounted into the image pack tier (see volumes
+#      below). Walkthrough + expected output: dev/packs/README.md
 #
 # Rebuild after new commits:   docker compose -f docker-compose.local.yml up -d --build
 # Tail logs:                   docker compose -f docker-compose.local.yml logs -f
@@ -77,6 +85,12 @@ services:
       # Turns the web UI ON over plain http for local dev (webUiEnabled +
       # requireTls:false). In serve mode the web UI is OFF by default.
       - ./dev/exposure-policy.json:/data/exposure-policy.json:ro
+      # DEMO extension packs, mounted into the IMMUTABLE image-layer pack tier —
+      # present on boot with no setup, offered as ADOPTABLE to every project, and
+      # not removable at runtime (so the adopt flow stays repeatable). The mutable
+      # instance tier (/data/packs) is untouched, so installing/removing packs over
+      # the API still works. See dev/packs/README.md for the walkthrough.
+      - ./dev/packs:/opt/wairon/packs:ro
     restart: unless-stopped
 
 volumes:
