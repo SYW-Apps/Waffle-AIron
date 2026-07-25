@@ -769,10 +769,38 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
   display: flex; flex-direction: column; gap: 10px;
 }
 .spec-validation-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+/* Scope header ("3 on this component · 9 elsewhere") + the show-all/scoped
+   escape-hatch toggle — always visible together so the counts are never
+   silently hidden by the toggle's current position. */
+.spec-validation-scope { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .spec-validation-counts { display: flex; gap: 6px; flex-wrap: wrap; }
 .spec-validation .finding-list { padding-left: 0; list-style: none; gap: 0; }
 .spec-validation .finding { padding: 6px 0; border-top: 1px solid var(--border-soft); line-height: 1.5; word-break: break-word; }
 .spec-validation .finding:first-child { border-top: none; }
+.finding-row { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+.finding-msg { color: var(--ink); }
+/* Only rendered clickable when the issue's code maps to a real field on the
+   spec that is currently open in the editor (SpecsEditor CODE_FIELD_MAP). */
+.finding-msg-clickable { cursor: pointer; }
+.finding-msg-clickable:hover { text-decoration: underline dotted; }
+.finding-chip-row { margin-top: 4px; }
+/* The affected-spec chip — same visual language as .badge, just an
+   interactive <button> instead of a <span> so it can navigate on click. */
+.finding-chip { cursor: pointer; font: inherit; border: 1px solid var(--border-strong); }
+.finding-chip:hover { background: var(--hover); }
+.finding-chip-unresolved { cursor: default; }
+
+/* Validation-rail field flags (ui.tsx Field's `highlight` prop) — a subtle
+   accent strip reusing the .token-help/.lock-banner left-border language, not
+   a new design element. Applies to whatever the Field wraps: one input, or
+   (e.g. subsystem publicInterfaces) a whole group of sub-cards. */
+.field-flag {
+  border-left: 3px solid var(--warn);
+  background: var(--panel-soft);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+}
+.field-flag-error { border-left-color: var(--bad); }
 /* ComponentUnitEditor — the Component/Interface/Implementation tab header. */
 .unit-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .unit-head .btn { margin-left: auto; }
