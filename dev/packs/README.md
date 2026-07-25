@@ -20,22 +20,40 @@ grouping options by contributing pack.
 
 ## Setup
 
+> **Use a DEDICATED project and seed it — both are required for the findings below.**
+> The walkthrough deliberately uses a project id of its own (`packdemo`) rather
+> than `demo`, because a long-lived dev volume usually already has a `demo`
+> project whose contents have nothing to do with this kit. Every expected finding
+> here comes from the seeded specs: both stereotype rules fire on the seeded
+> **Actor**, and the description findings depend on the seeded descriptions
+> sitting between the two packs' floors. Run this against a project with different
+> content and the profile still applies, but you will see DIFFERENT codes — with
+> no Actor anywhere, neither `PROFILE_FORBIDDEN_STEREOTYPE` nor
+> `BACKEND_STEREOTYPE_IN_FRONTEND` can fire, which reads as "the profile isn't
+> working" when it is.
+
 ```bash
 docker compose -f docker-compose.local.yml up -d --build
-docker compose -f docker-compose.local.yml exec wairon wairon host project create --id demo
+# A unit is required (projects are placed at creation); skip if you have one.
+docker compose -f docker-compose.local.yml exec wairon wairon host unit create --slug root --name Root --kind business_entity
+docker compose -f docker-compose.local.yml exec wairon wairon host project create --id packdemo --unit root
 # Seed a small spec tree — a fresh project holds only an L0 spec, so profile
 # doctrine would have nothing to bite on:
-docker compose -f docker-compose.local.yml cp dev/demo-specs/demo_flows wairon:/data/projects/demo/.wai/specs/demo_flows
+docker compose -f docker-compose.local.yml cp dev/demo-specs/demo_flows wairon:/data/projects/packdemo/.wai/specs/demo_flows
 # `cp` writes as root while the server runs as uid 10001 — hand the files over,
 # or the seeded specs are readable but NOT writable from the Specs editor:
-docker compose -f docker-compose.local.yml exec --user root wairon chown -R wairon:wairon /data/projects/demo/.wai
+docker compose -f docker-compose.local.yml exec --user root wairon chown -R wairon:wairon /data/projects/packdemo/.wai
 ```
+
+Starting over: `wairon host project destroy --id packdemo` and repeat (no need to
+wipe the volume — the point of a dedicated id is that your other projects and the
+instance state stay untouched).
 
 The seed adds a subsystem (`demo_flows`) with an **Actor** (`flow_runner`) and a
 standalone **Store** (`flow_store`), each with a deliberately short description
 (~45 chars — under `demo-strict`'s floor of 120, over `demo-frontend`'s 40).
 
-> The seed's `parentSystem: demo` must match the project's L0 name, which is the
+> The seed's `parentSystem: packdemo` must match the project's L0 name, which is the
 > id you created the project with. Using a different id? Edit
 > `dev/demo-specs/demo_flows/.index.yaml` first.
 
@@ -102,7 +120,7 @@ picker by design — the catalog only offers resolvable profiles. Over the API:
 ```bash
 curl -X POST http://localhost:8080/web/projects/config \
   -H 'Content-Type: application/json' -b <your session cookie> \
-  -d '{"projectId":"demo","projectType":"ghost-profile"}'
+  -d '{"projectId":"packdemo","projectType":"ghost-profile"}'
 ```
 
 is refused, and the project's previous type is left untouched — an unresolvable
@@ -118,6 +136,33 @@ On the **Instance** page, set the pack policy's *required profile ids* to
 - **An existing project** that predates the policy → its *Policy* evaluation
   reports non-compliance; hitting **Reconcile** repairs the governing profile,
   records it, and the next evaluation reports compliant. One pass, no loop.
+
+## If a profile looks like it isn't applying
+
+Check these in order — the first two are by far the most common:
+
+1. **Does the tree actually contain what the doctrine targets?** No `Actor`
+   anywhere means no `PROFILE_FORBIDDEN_STEREOTYPE` and no
+   `BACKEND_STEREOTYPE_IN_FRONTEND`, however correctly the profile resolves. Seed
+   the specs above, or compare the findings against your own tree's stereotypes.
+2. **Is the server running the build that has profile application?** The route
+   only exists in newer builds, and it needs no auth to probe:
+   ```bash
+   curl -s -o /dev/null -w '%{http_code}\n' 'http://localhost:8080/web/projects/profiles?projectId=packdemo'
+   ```
+   `401`/`403` = the route exists (rebuild is current). `404` = the container
+   predates the feature; `docker compose -f docker-compose.local.yml up -d --build`.
+3. **Did the pack actually get vendored into the project?** The profile only
+   resolves when its pack is registered in that project:
+   ```bash
+   docker compose -f docker-compose.local.yml exec wairon cat /data/projects/packdemo/.wai/project.yaml
+   ```
+   Look at `projectType` and `extensions.packs`. A `projectType` naming a pack
+   profile with no matching entry under `extensions.packs` is precisely the state
+   the resolvability banner warns about.
+4. **Is a subsystem overriding the project profile?** A `profile:` line in a
+   subsystem's `.index.yaml` wins over the project type for that subsystem's
+   components — the panel lists any such subsystems under the picker.
 
 ## Removing the demo packs
 
