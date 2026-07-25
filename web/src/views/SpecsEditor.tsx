@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { asList, get, mcpCall, post } from '../api';
+import { ApiError, asList, get, mcpCall, post } from '../api';
 import {
   AsyncButton,
   AsyncView,
@@ -620,6 +620,25 @@ function profileGroups(profiles: AvailableProfile[]): { label: string; options: 
   return order.map((label) => ({ label, options: bySource.get(label)! }));
 }
 
+/** Layer a " — adopts pack" suffix onto adoptable (`installed === false`)
+ *  options. `profileGroups()` itself stays source-only (it's shared between
+ *  every profile picker, where "installed" is meaningless without a
+ *  project-scoped catalog) — the installed/adoptable distinction is layered
+ *  on top here, per-picker, so both the project-type control
+ *  (ProjectConfigPanel) and the subsystem Profile picker (SpecForm) can show
+ *  which options aren't yet registered in this project before the choice is
+ *  made. Kept as one shared function so the two pickers can't drift. */
+function labelAdoptable(
+  groups: { label: string; options: { value: string; label: string }[] }[],
+  profiles: AvailableProfile[],
+): { label: string; options: { value: string; label: string }[] }[] {
+  const adoptableIds = new Set(profiles.filter((p) => p.installed === false).map((p) => p.id));
+  return groups.map((g) => ({
+    ...g,
+    options: g.options.map((o) => (adoptableIds.has(o.value) ? { ...o, label: `${o.label} — adopts pack` } : o)),
+  }));
+}
+
 /** Ensure the current value is selectable even if the catalog no longer lists it. */
 function withCurrent(groups: { label: string; options: { value: string; label: string }[] }[], value: string) {
   if (!value) return groups;
@@ -880,12 +899,55 @@ function SpecForm(props: {
       toast.ok('No value changes to save.');
       return;
     }
+
+    // The subsystem Profile picker lists the same project-scoped catalog as
+    // ProjectConfigPanel's project-type control, including server-global pack
+    // profiles this project hasn't adopted yet (installed === false). Mirror
+    // that control's fix here: adopt the contributing pack FIRST, then write
+    // the spec — a profile written without its pack resolves to nothing
+    // (UNKNOWN_PROFILE) and its doctrine silently never applies. `delta.profile`
+    // is only present when the field actually changed (scalarDelta), so this
+    // never fires on an unrelated save (e.g. editing just the description).
+    let adoptedPackName: string | undefined;
+    if (sel.kind === 'subsystem' && typeof delta.profile === 'string' && delta.profile) {
+      const target = props.profiles.find((p) => p.id === delta.profile);
+      if (target?.installed === false) {
+        try {
+          await post('/web/projects/packs/adopt', { projectId, name: target.source });
+          adoptedPackName = target.source;
+        } catch (e) {
+          // Adopting a pack requires project:admin; a spec write only needs
+          // write access, so this can 403 where the write below would have
+          // succeeded. Do NOT write the profile in that case — surface a
+          // clear error naming the pack instead of silently shipping a
+          // profile that resolves to nothing.
+          if (e instanceof ApiError && e.status === 403) {
+            throw new Error(
+              `Can't save — profile “${target.id}” needs pack “${target.source}”, and adopting a pack requires project admin access. Ask a project admin to add the pack, or choose an already-installed profile.`,
+            );
+          }
+          throw e;
+        }
+      }
+    }
+
     await mcpCall(projectId, 'sdd_update_spec', { kind: sel.kind, id: sel.id, delta });
-    toast.ok(`Saved ${sel.kind} “${sel.label}”`);
+    toast.ok(adoptedPackName
+      ? `Saved ${sel.kind} “${sel.label}” — adopted pack “${adoptedPackName}” so this profile applies.`
+      : `Saved ${sel.kind} “${sel.label}”`);
     props.onSaved();
   }
 
-  const profGroups = useMemo(() => withCurrent(profileGroups(props.profiles), draft.profile ?? ''), [props.profiles, draft.profile]);
+  const profGroups = useMemo(
+    () => withCurrent(labelAdoptable(profileGroups(props.profiles), props.profiles), draft.profile ?? ''),
+    [props.profiles, draft.profile],
+  );
+  // Mirrors ProjectConfigPanel's typeHint — tells the user up front that
+  // picking this profile will adopt a pack on save (see save() above).
+  const selectedProfile = props.profiles.find((p) => p.id === draft.profile);
+  const profileHint = selectedProfile?.installed === false
+    ? `Not yet installed in this project — saving will adopt the “${selectedProfile.source}” pack so this profile applies.`
+    : 'Architectural profile (built-in or pack-provided).';
   const paramSuggestions = useMemo(() => [...PRIMITIVES, ...typeSuggestions], [typeSuggestions]);
 
   return (
@@ -956,7 +1018,7 @@ function SpecForm(props: {
           </div>
           <Field label="Description" fieldKey="description" highlight={flagFor('description')}><textarea className="input" rows={3} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field>
           <div className="row-form">
-            <Field label="Profile" hint="Architectural profile (built-in or pack-provided)." fieldKey="profile" highlight={flagFor('profile')}>
+            <Field label="Profile" hint={profileHint} fieldKey="profile" highlight={flagFor('profile')}>
               <GroupedSelect value={draft.profile ?? ''} onChange={(v) => set('profile', v)} groups={profGroups} includeNone noneLabel="(inherit)" />
             </Field>
             <Field label="Design depth"><EnumSelect value={draft.designDepth} onChange={(v) => set('designDepth', v)} options={DESIGN_DEPTH} allowNone noneLabel="(project default)" /></Field>
@@ -1407,19 +1469,13 @@ function ProjectConfigPanel(props: { projectId: string; config: Async<ProjectCon
 
   const locked = !!cfg.locked;
 
-  // profileGroups() itself stays source-only (it's shared with the subsystem
-  // profile picker, where "installed" is meaningless) — the installed/adoptable
-  // distinction is layered on top here, for this picker only: adoptable options
-  // (server-global pack profiles not yet registered in this project) get a
-  // label suffix so the choice is visible before you make it.
-  const adoptableIds = new Set(props.profiles.filter((p) => p.installed === false).map((p) => p.id));
-  const labeledGroups = [
-    ...profileGroups(props.profiles),
-    { label: 'Project kinds', options: PROJECT_KINDS.map((k) => ({ value: k, label: k })) },
-  ].map((g) => ({
-    ...g,
-    options: g.options.map((o) => (adoptableIds.has(o.value) ? { ...o, label: `${o.label} — adopts pack` } : o)),
-  }));
+  // Adoptable options (server-global pack profiles not yet registered in this
+  // project) get a label suffix via the shared labelAdoptable() — see its doc
+  // comment — so the choice is visible before you make it.
+  const labeledGroups = labelAdoptable(
+    [...profileGroups(props.profiles), { label: 'Project kinds', options: PROJECT_KINDS.map((k) => ({ value: k, label: k })) }],
+    props.profiles,
+  );
   const groups = withCurrent(labeledGroups, projectType);
 
   const selectedProfile = props.profiles.find((p) => p.id === projectType);
@@ -1627,6 +1683,10 @@ export function SpecsTab({
                     onGraphChange={() => {
                       graph.reload();
                       setValidation(null);
+                      // A subsystem-profile save can ADOPT a pack, which flips
+                      // that profile to installed — refetch so the picker stops
+                      // saying "adopts pack" for something now in the project.
+                      profiles.reload();
                     }}
                     fieldFlags={openSpecFieldFlags}
                     scrollRequest={scrollRequest}
@@ -1641,6 +1701,8 @@ export function SpecsTab({
                       graph.reload();
                       // A spec write can change what validates — drop stale results.
                       setValidation(null);
+                      // …and a subsystem-profile save may have adopted a pack.
+                      profiles.reload();
                     }}
                     fieldFlags={openSpecFieldFlags}
                     scrollRequest={scrollRequest}
