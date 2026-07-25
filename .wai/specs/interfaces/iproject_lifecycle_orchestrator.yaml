@@ -32,14 +32,27 @@ methods:
       permission over the project: yes -> lock directly via the admin plane's pre-authorized
       executeApprovedLock and return a completed ProjectActionOutcome carrying the lock record;
       approval -> create a pending project:lock ApprovalRequest and return a pending-approval
-      outcome; no -> Forbidden.
-    signature: 'lockProject(credential: string, projectId: string): ProjectActionOutcome'
+      outcome; no -> Forbidden. An optional subproject qualifier confines the ACTION to a chained
+      child's tree: on the direct path it is forwarded to the pre-authorized entry, which freezes
+      that child's own spec tree instead of the whole project; on the APPROVAL path it is recorded
+      in the request's payload (the same mechanism project:init uses to carry its execution input)
+      and named in the summary, so the approved execution stays confined and an approval can never
+      widen the scope the requester was bound to. Permission resolution and audit provenance stay
+      anchored at the TOP project id — a qualifier narrows which tree is acted on, never which
+      grants apply.
+    signature: 'lockProject(credential: string, projectId: string, subproject?: string): ProjectActionOutcome'
     returns: ProjectActionOutcome
     params:
       - name: credential
         type: string
       - name: projectId
         type: string
+      - name: subproject
+        type: string
+        description: >-
+          Chained-subsystem mount chain ('a' or 'a::b') to confine the lock to; absent locks the
+          project's own tree.
+        optional: true
     guarantees:
       - atomic
   - name: promoteProject
@@ -48,14 +61,26 @@ methods:
       permission over the project: yes -> promote directly via the admin plane's pre-authorized
       executeApprovedPromote and return a completed ProjectActionOutcome carrying the promote
       result; approval -> create a pending project:promote ApprovalRequest and return a
-      pending-approval outcome; no -> Forbidden.
-    signature: 'promoteProject(credential: string, projectId: string): ProjectActionOutcome'
+      pending-approval outcome; no -> Forbidden. An optional subproject qualifier confines the
+      ACTION to a chained child's tree (forwarded to the pre-authorized entry on the direct path;
+      recorded in the request's payload and named in the summary on the approval path, so an
+      approved promotion re-checks that child's lock and StateId rather than the whole project's).
+      Permission resolution and audit provenance stay anchored at the TOP project id.
+    signature: >-
+      promoteProject(credential: string, projectId: string, subproject?: string):
+      ProjectActionOutcome
     returns: ProjectActionOutcome
     params:
       - name: credential
         type: string
       - name: projectId
         type: string
+      - name: subproject
+        type: string
+        description: >-
+          Chained-subsystem mount chain ('a' or 'a::b') to confine the promotion to; absent promotes
+          the project's own tree.
+        optional: true
     guarantees:
       - atomic
   - name: getApprovalStatus
@@ -92,9 +117,11 @@ methods:
       — a yes-permission caller executes directly and never enters the approval path, so this guard
       cannot deadlock); record the approve/deny decision; then AUTO-EXECUTE an approved request
       immediately by dispatching by kind to the pre-authorized entrypoints (project:init ->
-      executeApprovedInit; project:lock/project:promote -> the admin plane) and mark it completed.
-      Audit at security level. A re-evaluation failure at execution leaves the approval approved,
-      not completed (retryable via executeApprovedRequest).
+      executeApprovedInit; project:lock/project:promote -> the admin plane, forwarding any
+      subproject qualifier recorded on the request's payload so the execution stays confined to the
+      tree the requester was bound to) and mark it completed. Audit at security level. A
+      re-evaluation failure at execution leaves the approval approved, not completed (retryable via
+      executeApprovedRequest).
     signature: 'decideRequest(credential: string, decision: ApprovalDecision): ApprovalRequest'
     returns: ApprovalRequest
     params:
@@ -111,9 +138,10 @@ methods:
       policy orchestrator's pre-authorized executeApprovedInit (which enforces pack policy,
       provisions the project via the admin plane, applies required/default packs, and records the
       profile selection), and project:lock / project:promote to the admin plane's pre-authorized
-      executeApprovedLock / executeApprovedPromote; mark the approval completed, and audit the
-      execution at security level. Rejects pending, denied, expired, completed, or unauthorized
-      requests.
+      executeApprovedLock / executeApprovedPromote — forwarding any subproject qualifier recorded on
+      the request's payload, so this retry path confines exactly as the auto-execute path does; mark
+      the approval completed, and audit the execution at security level. Rejects pending, denied,
+      expired, completed, or unauthorized requests.
     signature: 'executeApprovedRequest(credential: string, requestId: string): string'
     returns: string
     params:
@@ -139,4 +167,4 @@ methods:
         type: number
 status: complete
 createdAt: '2026-07-16T00:08:59.412Z'
-updatedAt: '2026-07-16T07:27:54.607Z'
+updatedAt: '2026-07-25T17:26:44.431Z'

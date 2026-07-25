@@ -205,23 +205,45 @@ methods:
       Pre-authorized entry for the approval workflow: performs the same privileged action as
       lockProject but WITHOUT credential authentication — the caller
       (project_lifecycle_orchestrator) has already enforced permission-based authorization. Never
-      exposed on any portal.
-    signature: 'executeApprovedLock(projectId: string): LockRecord'
+      exposed on any portal. An optional subproject qualifier binds the CHAINED CHILD's tree instead
+      of the project's own, resolved through the project registry's containment-checked qualified
+      resolution (the same seam the data plane binds through, so a qualifier can never resolve
+      outside the project root). Because the git binding is read from the BOUND root, a
+      subproject-scoped lock finds no repository binding there and therefore performs no sync and no
+      publish: the child is not the git unit. The frozen child tree persists in the project's
+      working tree, but note it is NOT staged by the project's own .wai/-scoped commit either — a
+      chained child lives outside that pathspec — so reaching a remote requires a commit whose scope
+      covers the child's path.
+    signature: 'executeApprovedLock(projectId: string, subproject?: string): LockRecord'
     returns: LockRecord
     params:
       - name: projectId
         type: string
+      - name: subproject
+        type: string
+        description: >-
+          Chained-subsystem mount chain to bind instead of the project root; absent binds the
+          project's own tree.
+        optional: true
   - name: executeApprovedPromote
     description: >-
       Pre-authorized entry for the approval workflow: performs the same privileged action as
       promoteProject but WITHOUT credential authentication — the caller
       (project_lifecycle_orchestrator) has already enforced permission-based authorization. Never
-      exposed on any portal.
-    signature: 'executeApprovedPromote(projectId: string): PromoteResult'
+      exposed on any portal. An optional subproject qualifier binds the CHAINED CHILD's tree instead
+      of the project's own (containment-checked qualified resolution), so the lock record read, the
+      StateId recomputation and the staleness verdict all concern that child's tree.
+    signature: 'executeApprovedPromote(projectId: string, subproject?: string): PromoteResult'
     returns: PromoteResult
     params:
       - name: projectId
         type: string
+      - name: subproject
+        type: string
+        description: >-
+          Chained-subsystem mount chain to bind instead of the project root; absent binds the
+          project's own tree.
+        optional: true
   - name: commitProject
     description: >-
       Authenticate, require project:write over the project, and publish a DELIBERATE, SCOPED backup:
@@ -291,4 +313,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-07-16T15:26:18.659Z'
+updatedAt: '2026-07-25T17:04:41.956Z'

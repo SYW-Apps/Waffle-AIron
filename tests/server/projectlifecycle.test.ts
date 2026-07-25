@@ -13,8 +13,12 @@ import {
   executeApprovedRequest,
   awaitApproval,
 } from '../../src/server/projectlifecycle.js';
-import { createProject } from '../../src/server/admin.js';
+import { createProject, executeApprovedLock, executeApprovedPromote } from '../../src/server/admin.js';
 import { setPackPolicyRecord } from '../../src/server/policy.js';
+import { hostCore } from '../../src/server/adapters.js';
+import { runWithProjectRoot } from '../../src/utils/fs.js';
+import { invalidateSpecCache } from '../../src/core/specs.js';
+import { seedChainedMount, seedSubsystem } from './helpers.js';
 import { createUnit, placeProject as placeProjectInUnit } from '../../src/server/organization.js';
 import { listProjectPacks } from '../../src/server/packs.js';
 import { UnauthenticatedError, ForbiddenError } from '../../src/server/errors.js';
@@ -346,6 +350,173 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     allow('u-gh', 'project:write', 'project', 'ghost', 'approval');
     expect(() => lockProject(cfg, requester, 'ghost')).toThrow(/unknown project/i);
     expect(listApprovalRequests(dataDir)).toHaveLength(0);
+  });
+
+  // ── lock/promote CONFINED to a chained subproject ────────────────────────────
+  //
+  // An optional subproject qualifier ('a' or 'a::b' — the mount chain only) is
+  // forwarded to the admin plane's pre-authorized entry, which binds the CHAINED
+  // CHILD's tree instead of the project's own. Permission resolution and audit
+  // provenance stay anchored at the TOP project id: a qualifier narrows WHICH TREE
+  // is acted on, never WHICH GRANTS apply. An unresolvable qualifier must fail
+  // loudly — never fall back to the parent, which is the confinement bug itself.
+
+  /** Provision `projectId` with a chained subproject mounted at packages/<mountId>
+   *  (itself provisioned so it locks on its own), plus a NON-chained in-tree
+   *  subsystem "plain". Returns both roots. */
+  function seedChainedSubproject(projectId: string, mountId: string): { parent: string; child: string } {
+    seedProject(projectId);
+    const parent = existingProjectRoot(dataDir, projectId)!;
+    const child = seedChainedMount(parent, mountId, `packages/${mountId}`);
+    runWithProjectRoot(child, () => hostCore.provisionProject(mountId));
+    seedSubsystem(parent, 'plain'); // exists, but carries no projectPath
+    invalidateSpecCache();
+    return { parent, child };
+  }
+
+  const lockPathOf = (root: string) => path.join(root, '.wai', 'lock.json');
+  const readLock = (root: string) =>
+    JSON.parse(fs.readFileSync(lockPathOf(root), 'utf8')) as { stateId: { digest: string }; status: string };
+
+  it('a qualified lock freezes the CHILD tree; the PARENT is never locked, and permission + audit stay at the TOP project', () => {
+    const { parent, child } = seedChainedSubproject('confine-lock', 'billing');
+    // A writer scoped to the TOP project only — the qualifier confers nothing.
+    const writer = mintToken('cw', 'u-cw');
+    allow('u-cw', 'project:write', 'project', 'confine-lock', 'yes');
+
+    const outcome = lockProject(cfg, writer, 'confine-lock', 'billing');
+
+    expect(outcome.status).toBe('completed');
+    expect(outcome.action).toBe('project:lock');
+    expect(outcome.lock?.status).toBe('ready');
+    expect(outcome.summary).toContain('subproject "billing"');
+
+    // The lock record landed in the CHILD's own .wai/ at the CHILD's StateId …
+    expect(fs.existsSync(lockPathOf(child))).toBe(true);
+    expect(readLock(child).stateId.digest).toBe(outcome.lock!.stateId.digest);
+    expect(readLock(child).stateId.digest).not.toBe(
+      runWithProjectRoot(parent, () => hostCore.computeStateId()).digest,
+    );
+
+    // DID NOT HAPPEN: the PARENT tree was NOT locked — it has no record at all.
+    expect(fs.existsSync(lockPathOf(parent))).toBe(false);
+
+    // Audit provenance anchors at the TOP project id (no per-subproject target).
+    const events = queryAuditEvents(dataDir, { action: 'lifecycle.completed' });
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ projectId: 'confine-lock', target: 'confine-lock' });
+  });
+
+  it('an unqualified lock still locks the project itself and never touches the child (no regression)', () => {
+    const { parent, child } = seedChainedSubproject('confine-plain', 'billing');
+
+    const outcome = lockProject(cfg, MASTER, 'confine-plain');
+    expect(outcome.status).toBe('completed');
+    expect(outcome.summary).toContain('Locked project "confine-plain"');
+    expect(outcome.summary).not.toContain('subproject');
+
+    expect(fs.existsSync(lockPathOf(parent))).toBe(true);
+    // DID NOT HAPPEN: a project-level lock never wrote a lock record into the child.
+    expect(fs.existsSync(lockPathOf(child))).toBe(false);
+  });
+
+  it('a qualified promote reads and re-checks the CHILD’s lock (ready → promoted → stale on child drift)', () => {
+    const { parent, child } = seedChainedSubproject('confine-promo', 'billing');
+
+    // No child lock yet → not-locked, even though the PARENT is locked.
+    lockProject(cfg, MASTER, 'confine-promo');
+    expect(promoteProject(cfg, MASTER, 'confine-promo', 'billing').promote?.status).toBe('not-locked');
+
+    // Lock the child, then promote it: the child's own StateId matches.
+    lockProject(cfg, MASTER, 'confine-promo', 'billing');
+    const promoted = promoteProject(cfg, MASTER, 'confine-promo', 'billing');
+    expect(promoted.status).toBe('completed');
+    expect(promoted.promote?.status).toBe('ready');
+    expect(promoted.summary).toContain('subproject "billing"');
+    expect(readLock(child).status).toBe('promoted');
+    // The parent's own record is untouched by the child's promotion.
+    expect(readLock(parent).status).toBe('ready');
+
+    // Drift in the CHILD tree makes the CHILD's lock stale.
+    fs.writeFileSync(
+      path.join(child, '.wai', 'specs', '.index.yaml'),
+      fs.readFileSync(path.join(child, '.wai', 'specs', '.index.yaml'), 'utf8').replace(/vision:.*/, 'vision: drifted'),
+    );
+    invalidateSpecCache();
+    expect(promoteProject(cfg, MASTER, 'confine-promo', 'billing').promote?.status).toBe('stale');
+  });
+
+  it('an unknown or non-chained subproject qualifier FAILS LOUDLY — it never acts on the parent', () => {
+    const { parent, child } = seedChainedSubproject('confine-bad', 'billing');
+
+    // Unknown mount, a subsystem carrying no projectPath, and a nested unknown all throw.
+    expect(() => lockProject(cfg, MASTER, 'confine-bad', 'ghost')).toThrow(
+      /unknown subproject mount "ghost" on "confine-bad"/,
+    );
+    expect(() => lockProject(cfg, MASTER, 'confine-bad', 'plain')).toThrow(/not a chained subproject/);
+    expect(() => lockProject(cfg, MASTER, 'confine-bad', 'billing::ghost')).toThrow(
+      /unknown subproject mount "ghost" on "confine-bad::billing"/,
+    );
+    expect(() => promoteProject(cfg, MASTER, 'confine-bad', 'ghost')).toThrow(/unknown subproject mount/);
+    expect(() => executeApprovedLock(cfg, 'confine-bad', 'ghost')).toThrow(/unknown subproject mount/);
+    expect(() => executeApprovedPromote(cfg, 'confine-bad', 'plain')).toThrow(/not a chained subproject/);
+
+    // DID NOT HAPPEN: nothing was locked anywhere — not the parent (the silent
+    // fallback that IS the bug) and not the child.
+    expect(fs.existsSync(lockPathOf(parent))).toBe(false);
+    expect(fs.existsSync(lockPathOf(child))).toBe(false);
+  });
+
+  it('the APPROVAL path stays confined: an approved qualified lock freezes the CHILD, never the parent', () => {
+    const { parent, child } = seedChainedSubproject('confine-appr', 'billing');
+    const requester = mintToken('ca', 'u-ca');
+    allow('u-ca', 'project:write', 'project', 'confine-appr', 'approval');
+
+    // Approval is the one path where the REQUESTER does not perform the action, so
+    // the qualifier has to survive on the request itself — otherwise approving a
+    // subproject-scoped request would silently widen it to the whole project.
+    const outcome = lockProject(cfg, requester, 'confine-appr', 'billing');
+    expect(outcome.status).toBe('pending-approval');
+    expect(outcome.approval?.projectId).toBe('confine-appr'); // permission scope stays TOP
+    // The approver must SEE the real scope before deciding.
+    expect(outcome.approval?.summary).toContain('billing');
+    // …and the qualifier is carried in the existing payload mechanism.
+    expect(outcome.approval?.payloadType).toBe('SubprojectScope');
+    expect(JSON.parse(outcome.approval!.payload!)).toEqual({ subproject: 'billing' });
+
+    // A DIFFERENT identity approves (self-approval is refused), which auto-executes.
+    const decider = mintToken('cd', 'u-cd');
+    allow('u-cd', 'approval:decide', 'project', 'confine-appr', 'yes');
+    const decided = decideRequest(cfg, decider, {
+      ...decision(outcome.approval!.id, true),
+      decidedBy: subject({ userId: 'u-cd' }),
+    });
+    expect(decided.status).toBe('completed');
+
+    // CONFINED: the child froze; the parent did NOT — the widening this closes.
+    expect(fs.existsSync(lockPathOf(child))).toBe(true);
+    expect(readLock(child).status).toBe('ready');
+    expect(fs.existsSync(lockPathOf(parent))).toBe(false);
+  });
+
+  it('an approved UNQUALIFIED lock still locks the project itself (no regression)', () => {
+    const { parent, child } = seedChainedSubproject('confine-appr2', 'billing');
+    const requester = mintToken('ca2', 'u-ca2');
+    allow('u-ca2', 'project:write', 'project', 'confine-appr2', 'approval');
+
+    const outcome = lockProject(cfg, requester, 'confine-appr2');
+    expect(outcome.approval?.payloadType).toBeUndefined(); // shape unchanged for existing requests
+    expect(outcome.approval?.summary).toBe('Lock project confine-appr2');
+
+    const decider = mintToken('cd2', 'u-cd2');
+    allow('u-cd2', 'approval:decide', 'project', 'confine-appr2', 'yes');
+    decideRequest(cfg, decider, {
+      ...decision(outcome.approval!.id, true),
+      decidedBy: subject({ userId: 'u-cd2' }),
+    });
+
+    expect(fs.existsSync(lockPathOf(parent))).toBe(true);
+    expect(fs.existsSync(lockPathOf(child))).toBe(false);
   });
 
   // ── getApprovalStatus visibility ─────────────────────────────────────────────

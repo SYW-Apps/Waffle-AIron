@@ -133,7 +133,11 @@ methods:
             step: 7
         defaultStep: 8
       - stepNumber: 4
-        description: 'Authorized: lock the project directly via the admin plane''s pre-authorized entry'
+        description: >-
+          Authorized: lock directly via the admin plane's pre-authorized entry, forwarding the
+          project id AND the optional subproject qualifier so the freeze lands on the chained
+          child's tree when one was supplied — the permission just resolved and the audit below stay
+          anchored at the TOP project id.
         type: call
         targetComponent: admin_orchestrator
         targetMethod: executeApprovedLock
@@ -150,8 +154,13 @@ methods:
         error: Forbidden — caller may not lock this project
       - stepNumber: 8
         description: >-
-          Approval required: build a pending project:lock ApprovalRequest (redacted summary,
-          requester subject + token id)
+          Build the pending project:lock ApprovalRequest: kind, the TOP project id, the requester's
+          subject and token id, expiry, and a redacted human summary. When the caller is bound to a
+          subproject, record that qualifier in the request's payload (payloadType naming the scope
+          shape) — the SAME mechanism a project:init request already uses to carry what its
+          execution needs — so the approved action stays confined to that child tree instead of
+          silently widening to the whole project when someone approves it. The summary names the
+          subproject too, so an approver sees the real scope before deciding.
         type: local
       - stepNumber: 9
         description: Create the pending approval request
@@ -208,7 +217,11 @@ methods:
             step: 7
         defaultStep: 8
       - stepNumber: 4
-        description: 'Authorized: promote the project directly via the admin plane''s pre-authorized entry'
+        description: >-
+          Authorized: promote directly via the admin plane's pre-authorized entry, forwarding the
+          project id AND the optional subproject qualifier so the lock/StateId re-check concerns the
+          chained child's tree when one was supplied — permission and audit stay anchored at the TOP
+          project id.
         type: call
         targetComponent: admin_orchestrator
         targetMethod: executeApprovedPromote
@@ -227,8 +240,12 @@ methods:
         error: Forbidden — caller may not promote this project
       - stepNumber: 8
         description: >-
-          Approval required: build a pending project:promote ApprovalRequest (redacted summary,
-          requester subject + token id)
+          Build the pending project:promote ApprovalRequest: kind, the TOP project id, the
+          requester's subject and token id, expiry, and a redacted human summary. When the caller is
+          bound to a subproject, record that qualifier in the request's payload (payloadType naming
+          the scope shape), so the approved promotion re-checks THAT child's lock and StateId rather
+          than the whole project's, and the summary names the subproject so an approver sees the
+          real scope.
         type: local
       - stepNumber: 9
         description: Create the pending approval request
@@ -433,7 +450,11 @@ methods:
         type: jump
         toStep: 20
       - stepNumber: 15
-        description: Execute the approved lock via the admin plane's pre-authorized entry
+        description: >-
+          project:lock — execute through the admin plane's pre-authorized lock entry, forwarding the
+          subproject qualifier recorded on the request's payload when it carries one, so an approved
+          subproject lock freezes exactly that child tree and an approval can never widen the scope
+          the requester was confined to.
         type: call
         targetComponent: admin_orchestrator
         targetMethod: executeApprovedLock
@@ -442,7 +463,10 @@ methods:
         type: jump
         toStep: 20
       - stepNumber: 17
-        description: Execute the approved promotion via the admin plane's pre-authorized entry
+        description: >-
+          project:promote — execute through the admin plane's pre-authorized promote entry,
+          forwarding the subproject qualifier recorded on the request's payload when it carries one,
+          so the lock/StateId re-check concerns that child tree.
         type: call
         targetComponent: admin_orchestrator
         targetMethod: executeApprovedPromote
@@ -555,7 +579,10 @@ methods:
         type: jump
         toStep: 19
       - stepNumber: 14
-        description: Execute the approved project lock
+        description: >-
+          project:lock — execute through the admin plane's pre-authorized lock entry, forwarding the
+          subproject qualifier recorded on the request's payload when it carries one (the retry path
+          must confine exactly as the auto-execute path does).
         type: call
         targetComponent: admin_orchestrator
         targetMethod: executeApprovedLock
@@ -564,7 +591,9 @@ methods:
         type: jump
         toStep: 19
       - stepNumber: 16
-        description: Execute the approved project promotion
+        description: >-
+          project:promote — execute through the admin plane's pre-authorized promote entry,
+          forwarding the subproject qualifier recorded on the request's payload when it carries one.
         type: call
         targetComponent: admin_orchestrator
         targetMethod: executeApprovedPromote
@@ -658,4 +687,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-16T00:10:14.534Z'
-updatedAt: '2026-07-18T23:40:10.796Z'
+updatedAt: '2026-07-25T17:26:30.125Z'
