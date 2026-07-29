@@ -1,15 +1,30 @@
 id: variant_registry_adapter
 name: Variant Registry Adapter
 description: >-
-  The filesystem loader for the component-variant registry — a dynamic layer on top of packs. Reads
-  variant definitions from the global variants directory (WAIRON_VARIANTS_DIR) and the project's
-  .wai/variants/, and merges them (project wins on id collision) into the VariantDef set the
-  validator and agent resolver consume. A malformed variant file is skipped, never fatal; the
-  registry lives outside packs so variants can be defined and shared without a pack release.
+  The filesystem loader for the component-variant registry — a dynamic layer on top of packs — plus
+  the resolution and rendering of a component's variant guidance. Reads variant definitions from the
+  global variants directory (WAIRON_VARIANTS_DIR) and the project's .wai/variants/, and merges them
+  (project wins on id collision) into the VariantDef set the validator and agent resolver consume.
+  Resolution and composition live here rather than in the agent resolver so the generated-agent
+  renderer and the MCP spec-read path share ONE implementation: a hosted agent and a local session
+  are told the same thing about a variant by construction. A malformed variant file is skipped,
+  never fatal; the registry lives outside packs so variants can be defined and shared without a pack
+  release.
 subsystem: sdd_core
 componentType: Adapter
 owns: []
 dependsOn: []
+lint:
+  allow:
+    - code: UNUSED_METHOD
+      reason: >-
+        resolveVariantGuidance is driven by the MCP spec-read path (sdd_get_spec attaches a
+        variant-tagged component's resolved guidance and siblings, so a HOSTED agent gets what only
+        generated agent files used to carry). That caller is in sdd_mcp and reaches sdd_core through
+        its published barrel surface rather than as a modeled component edge — the
+        cli_variants_adapter pattern, since a cross-subsystem edge onto an internal Adapter is a
+        boundary violation — so no narrative call step names it. composeVariantGuidance IS modeled
+        (agent_resolver calls it), and would not need this suppression on its own.
 status: complete
 createdAt: '2026-07-15T12:23:50.906Z'
-updatedAt: '2026-07-15T12:25:44.662Z'
+updatedAt: '2026-07-29T20:47:09.761Z'

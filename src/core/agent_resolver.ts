@@ -16,7 +16,7 @@ import {
   resolveSubprojectForNamespace,
 } from './specs.js';
 import { ComponentSpec } from '../models/specs.js';
-import { loadProjectVariants, type VariantDef } from './variants.js';
+import { loadProjectVariants, composeVariantGuidance, type VariantDef } from './variants.js';
 
 // Cache for project files relative to the system root
 const projectFilesCache = new Map<string, string[]>();
@@ -208,34 +208,17 @@ function summarize(text: string, max = 140): string {
 }
 
 /**
- * Build the "Component variants" guidance block injected into an owner/implementer
- * agent for its variant-tagged components: each component's variant guidance plus
- * the same-variant siblings elsewhere in the project, so the implementer reuses one
- * shared approach. Empty when none of the given components declare a known variant.
+ * The "Component variants" guidance block for an owner/implementer agent.
+ * Composition lives in core/variants.ts so the generated-agent renderer and the
+ * MCP `sdd_get_spec` path share ONE implementation — a hosted agent and a local
+ * session are told the same thing about a variant, by construction.
  */
 function buildVariantGuidance(
   comps: ComponentSpec[],
   allComponents: ComponentSpec[],
   variantsById: Map<string, VariantDef>,
 ): string {
-  const tagged = comps.filter((c) => c.variant && variantsById.has(c.variant));
-  if (tagged.length === 0) return '';
-  const lines = [
-    '## Component variants — reuse the shared approach',
-    '',
-    'One or more of your components declare a variant — a base-anchored kind with implementation guidance. Implement every component of the same variant alike, reusing one shared approach instead of reinventing it per instance:',
-    '',
-  ];
-  for (const c of tagged) {
-    const v = variantsById.get(c.variant!)!;
-    const siblings = allComponents.filter((o) => o.variant === c.variant && o.id !== c.id).map((o) => o.id);
-    let line = `- **${c.id}** — variant \`${c.variant}\` (a kind of ${v.base}): ${v.guidance}`;
-    if (siblings.length > 0) {
-      line += ` Same-variant components elsewhere: ${siblings.join(', ')} — implement them consistently, reusing the same logic/concept.`;
-    }
-    lines.push(line);
-  }
-  return lines.join('\n');
+  return composeVariantGuidance(comps, allComponents, variantsById);
 }
 
 // ---------------------------------------------------------------------------

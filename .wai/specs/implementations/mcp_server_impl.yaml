@@ -41,6 +41,14 @@ methods:
         targetMethod: loadSystemSpec
       - stepNumber: 7
         description: >-
+          Register the PROMPTS capability over the same skill set the resources publish. Resources
+          are pull-only — a client must already know to fetch wairon-skill://… — so prompts are what
+          makes a skill discoverable to a human driving an agent, as a slash command or attachable
+          context. Mirrored from the same descriptor list, so one skill set is served two ways and
+          the surfaces cannot drift.
+        type: local
+      - stepNumber: 8
+        description: >-
           Register MCP resource endpoints (resources/list and resources/read) on the SDK server so
           the MCP server now publishes the four built-in SDD skills (sdd-architect, sdd-auditor,
           sdd-implement, sdd-narrative) as read-only MCP resources for cloud-only agents that cannot
@@ -49,7 +57,7 @@ methods:
           mcp_portal.createMcpServer), both transports publish the resources automatically; inbound
           resource reads dispatch through the MCP portal to the resource workflow.
         type: local
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Resolve the bound root's chaining context through the core adapter; when the root is a
           chained subproject, announce the parent project, the mounting subsystem id, and the
@@ -59,9 +67,9 @@ methods:
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: resolveChainingParent
-      - stepNumber: 9
+      - stepNumber: 10
         description: Return configured McpServer instance
         type: local
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-29T10:51:08.666Z'
+updatedAt: '2026-07-29T20:45:51.694Z'

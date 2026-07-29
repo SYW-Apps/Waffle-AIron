@@ -6,6 +6,8 @@ import {
   RootsListChangedNotificationSchema,
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
+  ListPromptsRequestSchema,
+  GetPromptRequestSchema,
   McpError,
   ErrorCode,
 } from '@modelcontextprotocol/sdk/types.js';
@@ -23,7 +25,13 @@ import {
   buildServerInstructions as coreBuildServerInstructions,
   type SkillResourceDescriptor,
 } from '../core/skills.js';
-import { resolveChainingParent } from '../core/specs.js';
+import { resolveChainingParent, loadComponentSpecs } from '../core/specs.js';
+import * as specsModule from '../core/specs.js';
+// Statically imported for the same reason as the skills adapter: these read the
+// request-scoped project root at CALL time, so a static binding stays correct per
+// bound project — and a lazy require of a relative path does not resolve under the
+// test runner, which silently turned this hop into a tool error.
+import { loadProjectVariants, resolveVariantGuidance } from '../core/variants.js';
 import {
   listExternalInterfaces as coreListExternalInterfaces,
   type ExternalSurfaceEntry,
@@ -50,14 +58,35 @@ function requireValidation() {
   return require('../core/validation.js') as typeof import('../core/validation.js');
 }
 
-function requireSpecs() {
-  /* eslint-disable @typescript-eslint/no-require-imports */
-  return require('../core/specs.js') as typeof import('../core/specs.js');
+/**
+ * The core spec surface. STATIC, not lazily required: the loaders read the
+ * request-scoped project root at call time, so a static binding stays correct per
+ * bound project (this module already imports core/specs.js eagerly for
+ * resolveChainingParent, so nothing is loaded that was not loaded before).
+ *
+ * It matters because a lazy `require('../core/specs.js')` does not resolve under
+ * the test runner — which made every sdd_* tool built on it fail with a module
+ * error instead of running, so none of them could be driven end-to-end from a
+ * test through an MCP client.
+ */
+function requireSpecs(): typeof specsModule {
+  return specsModule;
 }
 
 function requireProvision() {
   /* eslint-disable @typescript-eslint/no-require-imports */
   return require('../core/provision.js') as typeof import('../core/provision.js');
+}
+
+/**
+ * mcp_core_adapter — resolve a component's variant guidance across the boundary
+ * into sdd_core. Lazily required like the other project-root-sensitive core hops:
+ * the variant registry is read per bound project.
+ */
+function resolveComponentVariantGuidance(component: { id: string; variant?: string }) {
+  if (!component.variant) return null;
+  const byId = new Map(loadProjectVariants().map((v) => [v.id, v]));
+  return resolveVariantGuidance(component, loadComponentSpecs(), byId);
 }
 
 // mcp_surfaces_adapter — thin forwarder across the boundary into the surface
@@ -226,6 +255,42 @@ function registerSkillResources(server: McpServer): void {
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       throw new McpError(ErrorCode.InvalidParams, message);
+    }
+  });
+}
+
+/**
+ * Publish the same skill set as MCP PROMPTS.
+ *
+ * Resources are pull-only: a client must already know to fetch
+ * `wairon-skill://…`. Prompts are what makes a skill *discoverable* — clients
+ * surface them as slash commands or attachable context, so a human driving an
+ * agent can reach `sdd-architect` or `appenser-make-implementer` directly.
+ *
+ * Deliberately mirrored from the SAME descriptor list the resources use, so the
+ * two surfaces can never drift: one skill set, two ways in.
+ */
+function registerSkillPrompts(server: McpServer): void {
+  server.server.registerCapabilities({ prompts: {} });
+
+  server.server.setRequestHandler(ListPromptsRequestSchema, () => ({
+    prompts: listSkillResources().map((d) => ({
+      name: d.id,
+      title: d.name,
+      description: d.description,
+    })),
+  }));
+
+  server.server.setRequestHandler(GetPromptRequestSchema, (request) => {
+    const name = request.params.name;
+    try {
+      const content = readSkillResource(name);
+      return {
+        description: `The wairon "${name}" skill.`,
+        messages: [{ role: 'user' as const, content: { type: 'text' as const, text: content } }],
+      };
+    } catch (e) {
+      throw new McpError(ErrorCode.InvalidParams, e instanceof Error ? e.message : String(e));
     }
   });
 }
@@ -1028,7 +1093,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type'; id: string }>(server,
     'sdd_get_spec',
     {
-      description: 'Get/read the parsed JSON contents of a specific spec from the spec tree. Returns structural contents without file system path searching.',
+      description: 'Get/read the parsed JSON contents of a specific spec from the spec tree. Returns structural contents without file system path searching. For a variant-tagged COMPONENT the result also carries a derived, read-only "variantGuidance" (the variant\'s base, its implementation guidance, and the same-variant sibling components to implement alike) — it is resolved from the variant registry, not part of the spec, so never write it back.',
       inputSchema: {
         kind: z.enum(['system', 'subsystem', 'component', 'interface', 'implementation', 'type']).describe('The kind of specification'),
         id: z.string().describe('The identifier of the spec to fetch (the L0 system spec is a singleton — pass the system name or "system")'),
@@ -1047,6 +1112,14 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           case 'type':           result = specs.loadTypeSpec(id); break;
         }
         if (!result) return errText(`Spec of kind "${kind}" with ID "${id}" does not exist.`);
+        // A variant carries implementation guidance that attaches to the component
+        // an implementer is holding — the right hook for platform guidance, with no
+        // doctrine duplication. It reached only GENERATED agent files, so a hosted
+        // agent never saw it; attach it here as a clearly-derived read-only field.
+        if (kind === 'component') {
+          const guidance = resolveComponentVariantGuidance(result as { id: string; variant?: string });
+          if (guidance) return json({ ...(result as object), variantGuidance: guidance });
+        }
         return json(result);
       } catch (e) {
         return errText(String(e));
@@ -1142,6 +1215,9 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
 
   // ── Built-in SDD skills as read-only MCP resources ────────────────────────
   registerSkillResources(server);
+
+  // ── The same skills as MCP prompts (discoverable, not merely fetchable) ────
+  registerSkillPrompts(server);
 
   // ── Chained-subproject bind-time announcement ─────────────────────────────
   // When the bound root is a chained subproject, announce it on the startup

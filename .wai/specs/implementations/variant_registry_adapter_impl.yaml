@@ -12,7 +12,22 @@ methods:
       list — parses each against the VariantDef schema, and merges them with the project winning on
       an id collision. A missing/unreadable directory is an empty set; a single malformed file is
       skipped with a diagnostic, never fatal.
+  - name: resolveVariantGuidance
+    narrative: []
+    intent: >-
+      Returns null when the component declares no variant, or declares one the loaded registry does
+      not contain (an unresolvable variant is reported by the conformance gate, not silently
+      invented here). Otherwise returns the variant id, the base stereotype it specializes, its
+      guidance, any target/profile scope the variant declares, and the ids of every other component
+      sharing the variant — pure resolution over the arguments, touching no filesystem.
+  - name: composeVariantGuidance
+    narrative: []
+    intent: >-
+      Resolves each of the given components in turn and renders the surviving ones as a markdown
+      block headed "Component variants — reuse the shared approach", one line per component naming
+      its variant, base, guidance, and same-variant siblings. Returns the empty string when nothing
+      resolves, so an agent with no variant-tagged components carries no block at all.
 detail: intent
 status: complete
 createdAt: '2026-07-15T12:24:24.647Z'
-updatedAt: '2026-07-15T12:26:32.734Z'
+updatedAt: '2026-07-29T20:46:13.994Z'

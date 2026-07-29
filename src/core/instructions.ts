@@ -66,6 +66,7 @@ function waironInstructions(
   profile: string | null,
   packNames: string[],
   skills: SkillResourceDescriptor[],
+  variants: { id: string; base: string }[],
 ): string {
   return `# wairon — Spec-Driven Development (SDD)
 
@@ -116,7 +117,14 @@ extra rules apply. A subsystem may override the profile for itself.
 
 ${packNames.length === 0 ? 'None — only wairon\'s built-in doctrine applies.' : `${packNames.map((n) => `\`${n}\``).join(', ')} — these inject profiles, language tables, patterns, and\nadditional conformance rules. Their doctrine is enforced by the same gate.`}
 
-## Read the skills BEFORE authoring
+${variants.length === 0 ? '' : `## Component variants in play
+
+This project defines variants — named, base-anchored kinds carrying implementation
+guidance, so every component of the same kind is built alike: ${variants.map((v) => `\`${v.id}\` (a kind of ${v.base})`).join(', ')}.
+Tag a component with \`variant\` where it fits, and read a component's resolved
+guidance and its same-variant siblings from \`sdd_get_spec\` (kind: component).
+
+`}## Read the skills BEFORE authoring
 
 This server publishes its skills as MCP resources. **Read \`wairon-skill://sdd-architect\`
 before you design anything**, and the others when their turn comes — they carry the
@@ -140,6 +148,13 @@ export function buildServerInstructions(): string {
   let skills: SkillResourceDescriptor[] = [];
   let blocks: LoadedInstructionBlock[] = [];
   let packNames: string[] = [];
+  // The variant vocabulary is deliberately NOT listed here. Reading the variant
+  // registry from this module would be an sdd_skills → sdd_core hop onto an
+  // internal Adapter, which the boundary rules refuse; routing it through the
+  // core portal would mean a barrel import cycle for what is only a pointer.
+  // A component's variant guidance is served where the hop is already legal:
+  // `sdd_get_spec` (kind: component) returns it resolved, with its siblings.
+  const variants: { id: string; base: string }[] = [];
   try {
     skills = listSkillResources();
     const extensions = loadProjectExtensions();
@@ -149,7 +164,7 @@ export function buildServerInstructions(): string {
     // Degrade to wairon's own briefing — see the contract above.
   }
 
-  const sections = [waironInstructions(profile, packNames, skills)];
+  const sections = [waironInstructions(profile, packNames, skills, variants)];
   for (const block of blocks) {
     if (!blockApplies(block, profile)) continue;
     // Attribution is what keeps a pack's delta legible AS a delta instead of
