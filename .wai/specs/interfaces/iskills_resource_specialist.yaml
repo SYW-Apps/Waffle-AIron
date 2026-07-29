@@ -1,21 +1,25 @@
 id: iskills_resource_specialist
 name: Skills Resource Specialist Interface
 description: >-
-  Resolves the built-in SDD skill documents for MCP publication: lists MCP-safe descriptors and
-  reads each skill's markdown content from Wairon's packaged skill templates.
+  Resolves the SDD skill documents for MCP publication: lists MCP-safe descriptors and reads each
+  skill's markdown, composing a builtin with any pack sections that extend it so a cloud-only agent
+  reads the SAME instruction a local session gets from disk.
 component: skills_resource_specialist
 methods:
   - name: listSkillResources
     description: >-
-      List the built-in SDD skill resources as MCP-safe descriptors, one per packaged skill
-      template.
+      List the skill resources as MCP-safe descriptors: one per packaged builtin template, plus
+      genuinely NEW pack skills (namespaced by pack id). A pack skill that EXTENDS a builtin gets no
+      descriptor of its own — it composed into that builtin's content, which is the point: one
+      coherent instruction rather than two an agent must reconcile.
     signature: 'listSkillResources(): SkillResourceDescriptor[]'
     returns: SkillResourceDescriptor[]
     params: []
   - name: readSkillResource
     description: >-
-      Read one built-in skill's markdown content from the packaged skill templates, addressed by its
-      resource id.
+      Read one skill's markdown by resource id. A builtin is returned COMPOSED with every pack
+      section extending it (identical to what the exporter writes to disk), keeping the builtin's
+      own frontmatter so the skill's identity stays wairon's; a new pack skill is returned verbatim.
     signature: 'readSkillResource(resourceId: string): string'
     returns: string
     params:
@@ -24,4 +28,4 @@ methods:
         description: The skill resource id, e.g. "sdd-architect".
 status: complete
 createdAt: '2026-07-08T22:01:40.898Z'
-updatedAt: '2026-07-10T12:20:51.081Z'
+updatedAt: '2026-07-29T20:58:54.031Z'

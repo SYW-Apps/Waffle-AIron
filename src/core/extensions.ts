@@ -85,9 +85,24 @@ export type LanguagePackDef = z.infer<typeof LanguagePackDefSchema>;
  * supported client targets and the MCP resource mirror. Not an MCP tool.
  */
 export const PackSkillSchema = z.object({
-  id: z.string().min(1),
+  /** A NEW skill, installed namespaced as `<pack-id>-<id>`. Mutually exclusive with `extends`. */
+  id: z.string().min(1).optional(),
+  /**
+   * EXTEND a builtin skill (`sdd-architect` | `sdd-narrative` | `sdd-auditor` |
+   * `sdd-implement`) instead of standing beside it.
+   *
+   * Without this, a platform delta could only exist as a PARALLEL skill
+   * (`appenser-make-implementer` next to `sdd-implement`), leaving the agent to
+   * notice both and reconcile them — and tempting every wrapper to fork the
+   * builtin wholesale, which is worse for everyone. The pack's section is
+   * appended under `## Platform: <pack>`; the builtin stays wairon's, so an
+   * upgrade still updates it.
+   */
+  extends: z.string().min(1).optional(),
   source: z.string().min(1),
   targets: z.array(z.string()).default([]),
+}).refine((s) => (s.id === undefined) !== (s.extends === undefined), {
+  message: 'a pack skill declares either `id` (a new skill) or `extends` (a section appended to a builtin), not both and not neither',
 });
 export type PackSkill = z.infer<typeof PackSkillSchema>;
 
@@ -236,6 +251,20 @@ export type DeclarativePack = z.infer<typeof DeclarativePackSchema>;
 
 /** A pack skill tagged with the pack that ships it (provenance for install + `skills list`) and the absolute path to its SKILL.md. */
 export type LoadedPackSkill = PackSkill & { pack: string; packVersion?: string; sourcePath: string };
+
+/** The builtin skills a pack may extend. Kept here so the pack loader can reject an unknown target without importing the skills subsystem. */
+const EXTENDABLE_BUILTIN_SKILLS = ['sdd-architect', 'sdd-narrative', 'sdd-auditor', 'sdd-implement'];
+
+/**
+ * Load errors for pack skills that extend a builtin which does not exist.
+ * Surfaced as EXTENSION_LOAD_ERROR rather than dropped, so a pack written against
+ * a newer wairon fails visibly instead of losing its platform section in silence.
+ */
+export function skillExtendErrors(skills: LoadedPackSkill[]): string[] {
+  return skills
+    .filter((s) => s.extends !== undefined && !EXTENDABLE_BUILTIN_SKILLS.includes(s.extends))
+    .map((s) => `Extension pack "${s.pack}" declares a skill extending "${s.extends}", which is not a builtin skill (extendable: ${EXTENDABLE_BUILTIN_SKILLS.join(', ')}).`);
+}
 /** A pack pattern definition tagged with the pack that declares it. */
 export type LoadedPattern = PatternDef & { pack: string };
 /** A pack instruction block tagged with the pack that contributes it (the attribution rendered into the composed instructions). */
@@ -529,6 +558,10 @@ export function loadProjectExtensions(): LoadedExtensions {
 
     if (refs.length === 0 && unresolved.length === 0) return emptyExtensions();
     const loaded = loadExtensionPacks(refs, projectRoot);
+    // A pack extending a builtin skill that does not exist is a LOUD failure, not
+    // a silently-dropped section: an older wairon must never quietly not-apply a
+    // newer pack's doctrine (the same rule the assertion kinds follow).
+    for (const problem of skillExtendErrors(loaded.skills)) loaded.errors.push(problem);
     // A declared-but-unresolvable pack rides the SAME error channel as a pack that
     // fails to parse: EXTENSION_LOAD_ERROR, error severity, surfaced by validate,
     // status, lock, generate, and every sdd_* MCP call. Never a silent skip —

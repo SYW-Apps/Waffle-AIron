@@ -1,6 +1,6 @@
 # Teaching the connecting agent — the MCP entrypoint
 
-> Status: 7.1 + 7.2 shipped; 7.3–7.5 designed. Written against wairon 5.1.0.
+> Status: 7.1–7.5 all shipped. Written against wairon 5.1.0.
 > Source request: "Teaching the connecting agent: wairon needs the entrypoint,
 > packs only adjust it" (2026-07-27).
 
@@ -66,9 +66,9 @@ project.
 
 ---
 
-## Planned
+## Shipped (continued)
 
-### 7.4 — skills as MCP prompts (smallest, fully independent)
+### 7.4 — skills as MCP prompts — SHIPPED
 
 Resources are pull-only; prompts are what makes a skill *discoverable* to a human
 driving an agent (as a slash command or attachable context).
@@ -82,7 +82,7 @@ driving an agent (as a slash command or attachable context).
 - Test over an in-memory transport (`client.listPrompts()` / `getPrompt()`),
   matching `tests/mcp/skill-resources.test.ts`.
 
-### 7.5 — variant guidance over MCP
+### 7.5 — variant guidance over MCP — SHIPPED
 
 `agent_resolver.buildVariantGuidance` (`src/core/agent_resolver.ts:216`) is the
 right hook for platform implementation guidance — it attaches to the component
@@ -94,13 +94,11 @@ the implementer is holding, with no doctrine duplication. But it only reaches
 - `sdd_get_spec` on a variant-tagged component returns the resolved variant
   guidance and its same-variant siblings as a clearly-derived, **read-only**
   field, documented in the tool description as not part of the spec.
-- Name the active variants in the `initialize` instructions (a small addition to
-  7.1's text), so an agent knows a variant vocabulary exists before it reads a
-  component.
-- Needs `core_portal.loadProjectVariants` — the core portal does not expose it
-  today, so `mcp_core_adapter` has no sanctioned hop to it.
+- Naming the active variants in the `initialize` instructions was **not** built —
+  see the outcome note below. The request said "and/or", and the `sdd_get_spec`
+  half is the substantive one.
 
-### 7.3 — pack skills that EXTEND a builtin (largest)
+### 7.3 — pack skills that EXTEND a builtin — SHIPPED
 
 Today `PackSkillSchema` is `{id, source, targets}` and pack skills are namespaced
 `<pack>-<id>` so they cannot shadow `sdd-*`. A platform delta can therefore only
@@ -137,10 +135,33 @@ Also touched: `exportSddSkills` (write composed), `readSkillResource` /
 
 ---
 
-## Sequencing
+## Sequencing (as built)
 
-7.4 → 7.5 → 7.3, in ascending order of blast radius. All three are independent of
-the pack-scoping work (`docs/design/pack-scoping.md`), which touches the loader
-and CLI rather than skills or MCP — except that 7.3's composition runs over
-whatever pack set resolution yields, so it should land after the selection model
-settles if both are in flight.
+7.4 → 7.5 → 7.3, in ascending order of blast radius, after the pack-scoping work
+(`docs/design/pack-scoping.md`) had settled the selection model — 7.3's
+composition runs over whatever pack set resolution yields.
+
+---
+
+## Outcome notes
+
+**7.5 — one half deliberately not built.** The request said "include the resolved
+variant guidance in `sdd_get_spec` … **and/or** name the active variants in the
+`initialize` instructions". The first is done. The second is not: reading the
+variant registry from the instructions composer would be an `sdd_skills` →
+`sdd_core` hop onto an internal Adapter, which the boundary rules refuse, and
+routing it through the core portal would mean a barrel import cycle for what is
+only a pointer. The substantive requirement — guidance reaching a hosted agent —
+is satisfied by the tool that hands an implementer its component.
+
+**7.3 — the trap was real.** `checkSkillFreshness` byte-compared installed skills
+against the raw builtin template. Left alone, every extended skill would have
+reported permanently *stale* in `wairon doctor`, telling users to run `generate`
+on a loop. It now compares against what `exportSddSkills` would write.
+
+**A latent bug found while testing 7.5.** `requireSpecs()` in `mcp/server.ts`
+lazily required a relative path, which does not resolve under the test runner — so
+every `sdd_*` tool built on it failed with a module error instead of running. No
+test had ever driven one through an MCP client, so nothing caught it. The
+remaining lazy requires in that file (loader / validation / provision) are the
+same latent landmine for any future test that exercises those tools.

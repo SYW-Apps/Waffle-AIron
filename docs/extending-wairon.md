@@ -207,10 +207,42 @@ skills:
     targets: [claude, gemini]                     # client targets to install into
 ```
 
-- **Namespaced install.** Every pack skill installs as
+### Extending a builtin skill instead of standing beside it
+
+A platform delta usually belongs *inside* the relevant builtin, not next to it.
+Declare `extends` instead of `id`:
+
+```yaml
+skills:
+  - extends: sdd-implement          # sdd-architect | sdd-narrative | sdd-auditor
+    source: skills/make-implementer/SKILL.md
+    targets: [claude]
+  - id: make-control-plane          # unchanged: a genuinely new skill
+    source: skills/make-control-plane/SKILL.md
+    targets: [claude]
+```
+
+The section is appended to the builtin under `## Platform: <pack>`, in pack load
+order, both on install and on `resources/read`. So an implementing agent reads
+**one coherent instruction** with the platform part clearly attributed — instead
+of noticing a parallel `appenser-make-implementer` and reconciling it, or (worse)
+every wrapper forking the builtin wholesale.
+
+- The **builtin stays wairon's**: an upgrade still updates the base text, and the
+  composed skill keeps the builtin's own frontmatter, so its identity does not
+  change. Only the appended sections come from packs.
+- An extending skill publishes **no separate resource** — it *is* part of the
+  builtin now. Untouched builtins stay byte-identical to their templates.
+- `extends` pointing at a skill that does not exist is an
+  `EXTENSION_LOAD_ERROR`, not a silently dropped section: an older wairon must
+  never quietly fail to apply a newer pack's doctrine.
+- Exactly one of `id` / `extends` per entry.
+
+- **Namespaced install.** Every *new* pack skill installs as
   `<pack-id>-<skill-id>` (e.g. `appenser-domain-implementer`) — so skills from
   different packs never collide, and provenance is legible in the name. The
-  built-in `sdd-*` skill names are reserved; a pack cannot shadow them.
+  built-in `sdd-*` skill names are reserved; a pack cannot shadow them, only
+  extend them.
 - **Provenance + version** come from the pack (`name` + `version`), visible in
   `wairon skills list` and each MCP resource descriptor.
 - **Reproducibility** is automatic — pack skills are vendored under
