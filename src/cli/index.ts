@@ -27,7 +27,7 @@ import { runDiagram } from '../commands/diagram.js';
 import { listRules } from '../commands/rules.js';
 import { listPatterns } from '../commands/patterns.js';
 import { listVariants } from '../commands/variants.js';
-import { addPack, listPacks, removePack, initPack, buildPack, installPack, uninstallStorePack, whichPack, usePack, unusePack, bundlePack } from '../commands/packs.js';
+import { addPack, listPacks, removePack, initPack, buildPack, installPack, uninstallStorePack, whichPack, usePack, unusePack, bundlePack, syncPacks } from '../commands/packs.js';
 import {
   runServe,
   runDev,
@@ -288,7 +288,8 @@ async function runPack(
   else if (action === 'use') await usePack(arg!, { source: opts.source, bundle: opts.bundle, pin: opts.pin });
   else if (action === 'unuse') await unusePack(arg!);
   else if (action === 'bundle') await bundlePack(arg, { all: opts.all });
-  else throw new WaironError('unknown pack action (expected init | build | install | uninstall | which | use | unuse | bundle | add | list | remove)');
+  else if (action === 'sync') await syncPacks();
+  else throw new WaironError('unknown pack action (expected init | build | install | uninstall | which | use | unuse | bundle | sync | add | list | remove)');
 }
 
 const rulesCmd = program
@@ -351,6 +352,13 @@ packCmd
   .option('--bundle', 'mark for committing a copy under .wai/packs/ so the repo needs no machine setup')
   .action(async (name: string, opts) => {
     await runPack('use', name, { source: opts.source, bundle: opts.bundle, pin: opts.pin });
+  });
+
+packCmd
+  .command('sync')
+  .description('Install every declared-but-missing pack from the source its selection records — the one command a fresh machine or CI runner needs')
+  .action(async () => {
+    await runPack('sync');
   });
 
 packCmd

@@ -557,6 +557,8 @@ methods:
             step: 21
           - value: bundle
             step: 23
+          - value: sync
+            step: 25
         defaultStep: 12
       - stepNumber: 2
         label: doInit
@@ -614,7 +616,7 @@ methods:
         type: throw
         error: >-
           unknown pack action (expected init | build | install | uninstall | which | use | unuse |
-          bundle | add | list | remove)
+          bundle | sync | add | list | remove)
       - stepNumber: 13
         label: doInstall
         description: >-
@@ -677,6 +679,16 @@ methods:
         description: Done.
         type: return
         outcome: bundle done
+      - stepNumber: 25
+        label: doSync
+        description: Install every declared-but-missing pack from its recorded source.
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: syncPacks
+      - stepNumber: 26
+        description: Done.
+        type: return
+        outcome: sync done
   - name: runLock
     narrative:
       - stepNumber: 1
@@ -718,4 +730,4 @@ methods:
         outcome: locked
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-29T20:01:59.107Z'
+updatedAt: '2026-07-29T20:21:15.010Z'

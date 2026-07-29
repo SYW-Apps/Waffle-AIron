@@ -5,6 +5,7 @@ import * as os from 'os';
 import { loadProjectExtensions, packEntryLabel, packEntryRef, diagnoseProjectPacks, pinInstalledPacksAsSelections } from '../../src/core/extensions.js';
 import { installPackFromDirectory, uninstallPack } from '../../src/core/packstore.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
+import { expandSource } from '../../src/commands/packs.js';
 
 // ---------------------------------------------------------------------------
 // Pack SELECTION (A2) — the project declares which packs apply, by name.
@@ -296,5 +297,34 @@ describe('the machine-wide default is OFF (A4) and the migration is loud (A7)', 
     expect(loadProjectExtensions().packNames).toEqual(['org-doctrine']);
     // Opting in is legal but the doctrine does not travel — doctor says so.
     expect(diagnoseProjectPacks().globalsApplied.map((p) => p.name)).toEqual(['org-doctrine']);
+  });
+});
+
+describe('source expansion (what `pack sync` fetches)', () => {
+  it('substitutes the pinned version into a {version} template', () => {
+    expect(expandSource('https://h/rel/download/v{version}/p-{version}.wpack', '1.2.0'))
+      .toBe('https://h/rel/download/v1.2.0/p-1.2.0.wpack');
+  });
+
+  it('leaves a source with no placeholders alone — the floating-latest form', () => {
+    // GitHub resolves "latest" with no API call and no token, so an unpinned
+    // selection needs no substitution at all.
+    const url = 'https://github.com/org/appenser/releases/latest/download/appenser.wpack';
+    expect(expandSource(url)).toBe(url);
+  });
+
+  it('expands ${VAR} from the environment, so a private URL keeps its token out of the repo', () => {
+    process.env.WAIRON_TEST_PACK_TOKEN = 'secret-value';
+    try {
+      expect(expandSource('https://${WAIRON_TEST_PACK_TOKEN}@git.internal/p.wpack'))
+        .toBe('https://secret-value@git.internal/p.wpack');
+    } finally {
+      delete process.env.WAIRON_TEST_PACK_TOKEN;
+    }
+  });
+
+  it('expands an unset ${VAR} to empty rather than leaving the literal in a URL', () => {
+    delete process.env.WAIRON_TEST_ABSENT;
+    expect(expandSource('https://${WAIRON_TEST_ABSENT}host/p.wpack')).toBe('https://host/p.wpack');
   });
 });

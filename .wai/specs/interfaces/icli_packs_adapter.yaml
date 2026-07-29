@@ -58,11 +58,13 @@ methods:
         description: '{ out?: string }'
   - name: installPack
     description: >-
-      `wairon pack install <source>` — install a pack DIRECTORY or .wpack archive into this wairon
-      install's store, recording its origin. Applies to nothing: a project opts in separately by
-      selecting the pack by name. An archive is extracted through the SDK's hardened path first, so
-      untrusted bytes never reach the store adapter, and a local-path origin is reported as
-      unfetchable because CI and a fresh clone could not obtain it.
+      `wairon pack install <source>` — install a pack into this wairon install's store from a pack
+      DIRECTORY, a local .wpack archive, or an HTTP(S) URL. Applies to nothing: a project opts in
+      separately by selecting the pack by name. A URL is fetched to a temporary file and then
+      follows the identical archive path (SDK envelope inspection, code-pack refusal, extraction
+      limits), so a remote pack is validated exactly like a local one with no second code path to
+      diverge. A local-path origin is reported as unfetchable, because CI and a fresh clone could
+      not obtain it.
     signature: 'installPack(source: string): void'
     returns: void
     params:
@@ -137,6 +139,20 @@ methods:
       - name: options
         type: object
         description: all — bundle every selection this project declares.
+  - name: syncPacks
+    description: >-
+      `wairon pack sync` — install every declared-but-missing pack from the source its selection
+      records. Takes NO arguments, because each selection carries its own source (copied from the
+      store's install record when the pack was selected): this is the single command a fresh machine
+      or CI runner needs, and the reason a cloned repository can reproduce its own doctrine.
+      Already-resolvable selections (installed or bundled) are skipped; a selection with no source,
+      an unexpanded {version} placeholder with no pinned version, or a non-URL source is an error
+      naming the manual route. A pinned integrity digest is verified at install time rather than
+      being discovered later by the gate. Fetching happens ONLY here and in `pack install <url>` —
+      never during validation — because the core workflow must work offline.
+    signature: 'syncPacks(): void'
+    returns: void
+    params: []
 status: complete
 createdAt: '2026-07-14T20:09:24.660Z'
-updatedAt: '2026-07-29T20:01:41.112Z'
+updatedAt: '2026-07-29T20:20:54.864Z'

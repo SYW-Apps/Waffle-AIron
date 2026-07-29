@@ -1,0 +1,72 @@
+name: 'Setup wairon'
+description: 'Install the wairon CLI and restore a project''s extension packs, so `wairon validate --ci` enforces the same doctrine as the author''s machine.'
+
+# ---------------------------------------------------------------------------
+# A fresh runner has an empty pack store, so a project that selects packs would
+# fail its gate with PACK_NOT_INSTALLED — correct, but it needs one line to fix.
+#
+# `packs: sync` needs no arguments because every selection in .wai/project.yaml
+# carries its own recorded source (written when the pack was selected). That is
+# what lets a cloned repository reproduce its own doctrine with no workflow
+# configuration. See docs/design/pack-scoping.md.
+# ---------------------------------------------------------------------------
+
+inputs:
+  version:
+    description: 'wairon version to install (e.g. 5.1.0). Defaults to the latest stable release.'
+    required: false
+    default: ''
+  packs:
+    description: >-
+      How to restore extension packs: "sync" (default — install every declared
+      pack from its recorded source), "none" (for repositories that commit their
+      packs with `wairon pack bundle`), or a newline-separated list of sources to
+      install explicitly (for private packs whose source is not recorded).
+    required: false
+    default: 'sync'
+
+runs:
+  using: composite
+  steps:
+    # WAIRON_VERSION pins the install and skips the release-lookup API call, so a
+    # pipeline is never silently upgraded by a new release. Empty = latest stable.
+    - name: Install wairon
+      shell: bash
+      env:
+        WAIRON_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        curl -fsSL "https://raw.githubusercontent.com/SYW-Apps/Waffle-AIron/main/install.sh" | sh
+        wairon --version
+
+    # Cache the pack store on the project's declared selections, so a warm run
+    # skips the downloads entirely. Keyed on project.yaml because that file IS
+    # the declaration of what the store must contain.
+    - name: Cache the pack store
+      if: inputs.packs != 'none'
+      uses: actions/cache@v4
+      with:
+        path: ~/.wairon/packs
+        key: wairon-packs-${{ runner.os }}-${{ hashFiles('**/.wai/project.yaml') }}
+        restore-keys: wairon-packs-${{ runner.os }}-
+
+    - name: Restore extension packs
+      shell: bash
+      run: |
+        set -euo pipefail
+        case "${{ inputs.packs }}" in
+          none)
+            echo "packs: none — expecting bundled packs under .wai/packs/"
+            ;;
+          sync)
+            wairon pack sync
+            ;;
+          *)
+            # An explicit list: each entry goes through the same `pack install`
+            # a human runs, so there is no CI-only code path to diverge.
+            printf '%s\n' "${{ inputs.packs }}" | while IFS= read -r source; do
+              [ -z "$source" ] && continue
+              wairon pack install "$source"
+            done
+            ;;
+        esac

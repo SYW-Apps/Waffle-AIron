@@ -1,5 +1,4 @@
 import * as https from 'https';
-import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -9,6 +8,7 @@ import { logger } from '../utils/logger.js';
 import { WAIRON_VERSION, GITHUB_REPO } from '../config/defaults.js';
 import { getChannel, setChannel, UpdateChannel } from '../config/userconfig.js';
 import { isNewerVersion } from '../utils/version.js';
+import { downloadFile } from '../utils/download.js';
 
 // ---------------------------------------------------------------------------
 // update command
@@ -233,46 +233,9 @@ function fetchReleases(repo: string): Promise<GithubRelease[]> {
 }
 
 // ---------------------------------------------------------------------------
-// Download
+// Download — lifted to utils/download.ts so the pack store fetches a .wpack
+// with the same redirect-following implementation this uses for a release.
 // ---------------------------------------------------------------------------
-
-function downloadFile(url: string, dest: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(dest);
-    const get = url.startsWith('https://') ? https.get : http.get;
-
-    // agent: false disables keep-alive so the socket closes as soon as the
-    // response is done, preventing the event loop from hanging afterwards.
-    get(url, { headers: { 'User-Agent': `wairon/${WAIRON_VERSION}` }, agent: false }, (res) => {
-      if (res.statusCode === 301 || res.statusCode === 302) {
-        file.close();
-        res.destroy();
-        downloadFile(res.headers.location!, dest).then(resolve).catch(reject);
-        return;
-      }
-      if (res.statusCode !== 200) {
-        file.close();
-        res.destroy();
-        reject(new Error(`Download returned ${res.statusCode}`));
-        return;
-      }
-
-      res.pipe(file);
-      file.on('finish', () => {
-        res.destroy();
-        file.close(() => resolve());
-      });
-      file.on('error', (err) => {
-        res.destroy();
-        fs.unlink(dest, () => {});
-        reject(err);
-      });
-    }).on('error', (err) => {
-      fs.unlink(dest, () => {});
-      reject(err);
-    });
-  });
-}
 
 // ---------------------------------------------------------------------------
 // Checksum verification

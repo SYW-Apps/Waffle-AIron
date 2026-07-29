@@ -516,16 +516,27 @@ with or before A4, so migration reporting lands before behaviour changes.
    `GLOBAL_PACKS_DEFAULT` constant that every reader and config writer shares.
 6. **A5** `applyByDefault` seeding at `init`.
 7. **A6** `enforceReproducibility` raises `UNPINNED_PACK_SELECTION`.
-8. **A8** `pack sync` + `pack bundle` + **URL support in `pack install`**.
-   Until `pack sync` exists, the unresolvable-pack message deliberately names
-   `pack install <source>` rather than advertising a command that does not run.
+8. ~~**A8**~~ **DONE** — `pack bundle` (a committed copy that resolves before the
+   store, pinning the selection's version so the bytes and the declared intent
+   cannot drift), URL support in `pack install` (fetched to a temp file, then the
+   identical SDK archive path — no second validation route), and `pack sync`,
+   which takes **no arguments** because every selection carries its own source.
+   `{version}` and `${VAR}` expansion make one recorded template serve pinned,
+   floating, and private-with-a-CI-token cases. Fetching lives only in these two
+   commands, never in resolution, so the offline invariant holds.
 9. ~~**A9**~~ **DONE** — the gate StateId. Implemented as a *second* identity
    rather than a change to the existing one: `computeStateId` still hashes the
    spec tree alone (surface snapshot stamps, freshness comparisons), and
    `computeGateStateId` hashes the tree plus the doctrine projection. `lock` and
    the promote-time re-check use the gate flavour; `algorithm: 'sha256+doctrine'`
    makes the two incomparable, so pre-upgrade lock records read as stale.
-10. **A10** the `setup-wairon` composite action.
+10. ~~**A10**~~ **DONE** — `.github/actions/setup-wairon`, with `packs: sync |
+    none | <explicit list>` and the store cached on `.wai/project.yaml` (that file
+    *is* the declaration of what the store must contain). Landing it exposed that
+    `install.sh` had no way to pin a version at all — it always fetched latest —
+    so the action's `version` input would have silently lied. `install.sh` now
+    honours `WAIRON_VERSION`, which is what makes a pinned CI install real.
+    (`install.ps1` still has no equivalent; a Windows runner cannot pin yet.)
 
 A3 before A4 (name refs must exist before the default flips). A7 before A4
 (reporting before behaviour). A8 before A10 (the action calls `pack sync`). A9 is

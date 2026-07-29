@@ -216,26 +216,31 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
+          An HTTP(S) source is downloaded to a temporary archive first, so a remote pack rejoins the
+          identical local-archive path below instead of getting its own validation route.
+        type: local
+      - stepNumber: 2
+        description: >-
           A .wpack/.zip source is extracted into a temp directory through the SDK portal's hardened
           path (envelope inspection, code-pack refusal, extraction limits); a plain directory source
           is used as-is, and a bare pack FILE is refused because the store versions directories.
         type: call
         targetComponent: sdk_portal
         targetMethod: extractPack
-      - stepNumber: 2
+      - stepNumber: 3
         description: >-
           Install the materialized directory into the pack store via the core surface, recording the
           origin it came from.
         type: local
         targetComponent: pack_store_adapter
         targetMethod: installPackFromDirectory
-      - stepNumber: 3
+      - stepNumber: 4
         description: >-
           Report what was installed (name, version, path, digest) and state plainly that it applies
           to NOTHING until a project selects it — the distinction the old --global install never
           made.
         type: local
-      - stepNumber: 4
+      - stepNumber: 5
         description: >-
           Warn when the origin is a local path rather than a fetchable URL: a selection recorded
           from it cannot be resolved by CI or a fresh clone.
@@ -301,6 +306,87 @@ methods:
       intent can never drift from the committed bytes. Reports each written path plus the reminder
       to commit .wai/; a pack that is not installed is an error naming the store, and the remaining
       targets still proceed.
+  - name: syncPacks
+    narrative:
+      - stepNumber: 1
+        description: Sync writes into this project's store selections, so it needs a project.
+        type: branch
+        condition: not inside a wairon project
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Refuse, naming `wairon init`.
+        type: return
+        outcome: refused — no project
+      - stepNumber: 3
+        description: >-
+          Read the project's selections and keep only those that resolve to NOTHING today. An
+          already-installed or bundled pack is left untouched, which is what makes `pack sync` safe
+          to run unconditionally in CI.
+        type: local
+      - stepNumber: 4
+        description: A project may select no packs at all.
+        type: branch
+        condition: the project selects no packs
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Report that there is nothing to sync.
+        type: return
+        outcome: nothing selected
+      - stepNumber: 6
+        description: Everything may already be available.
+        type: branch
+        condition: every selection already resolves
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Report that all selected packs are already available.
+        type: return
+        outcome: already available
+      - stepNumber: 8
+        description: Fetch each missing selection in turn.
+        type: loop
+        loopKind: forEach
+        over: the unresolvable selections
+        endStep: 11
+      - stepNumber: 9
+        description: >-
+          Refuse this selection when it records no source, carries a {version} placeholder but pins
+          no version, or expands to something that is not a fetchable URL — each naming the manual
+          route. Otherwise expand {version} and ${VAR}, so a private URL takes its token from a CI
+          secret without ever being committed.
+        type: local
+      - stepNumber: 10
+        description: >-
+          Download the archive to a temporary file and extract it through the SDK portal's hardened
+          path — the same envelope inspection, code-pack refusal, and extraction limits a local
+          install gets, so a remote pack has no separate validation route.
+        type: call
+        targetComponent: sdk_portal
+        targetMethod: extractPack
+      - stepNumber: 11
+        label: sync_done
+        description: >-
+          Install into the store via the core surface, recording the ORIGINAL source template rather
+          than the expanded URL so a later sync re-expands it, and verify a pinned integrity digest
+          immediately — a substituted pack is caught here rather than later by the gate. One failed
+          selection never stops the others, and every temporary file is removed on both paths.
+        type: local
+      - stepNumber: 12
+        description: Report how many packs were synced.
+        type: return
+        outcome: the synced count
+    detail: full
+    intent: >-
+      Refuses outside a wairon project. Reads the project's selections and keeps only those that
+      resolve to nothing today — an already-installed or bundled pack is left untouched, so sync is
+      safe to run unconditionally in CI. For each missing one: refuses when it records no source,
+      when its source carries a {version} placeholder but the selection pins no version, or when the
+      expanded source is not a fetchable URL, each with the manual route named. Otherwise expands
+      {version} and ${VAR} (so a private URL takes its token from a CI secret without being
+      committed), downloads the archive to a temp file, extracts it through the SDK's hardened path,
+      and installs it into the store recording the ORIGINAL source template rather than the expanded
+      URL. A pinned integrity digest is checked immediately, so a substituted pack is caught at
+      install rather than later by the gate. One failed selection never stops the others; every temp
+      file is cleaned up on both paths.
 detail: calls-only
 lint:
   allow:
@@ -314,4 +400,4 @@ lint:
         limitation at the workspace-package boundary.
 status: complete
 createdAt: '2026-07-14T20:10:02.916Z'
-updatedAt: '2026-07-29T20:01:50.527Z'
+updatedAt: '2026-07-29T20:22:51.942Z'

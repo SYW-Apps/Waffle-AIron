@@ -697,12 +697,9 @@ function resolveSelection(
   // 2. The machine's pack store.
   const installed = resolveInstalledPack(selection.name, selection.version);
   if (!installed) {
-    // Only ever suggest commands that exist today: `pack sync` (bulk install from
-    // recorded sources) lands with the sync work, so the hint names the concrete
-    // install instead of promising a command the user cannot run.
     const hint = selection.source
-      ? `Install it from the source this selection records: \`wairon pack install ${selection.source}\`.`
-      : `Install it with \`wairon pack install <source>\` and re-select it — this selection records no source, so it cannot be fetched automatically.`;
+      ? `Run \`wairon pack sync\` to install every declared pack from its recorded source (this one: ${selection.source}).`
+      : 'Install it with `wairon pack install <source>` and re-select it — this selection records no source, so it cannot be fetched automatically.';
     return {
       error: `Pack "${wanted}" is declared by this project but is not installed in this wairon install (${packStoreDir()}) and is not bundled under .wai/packs/. ${hint}`,
     };

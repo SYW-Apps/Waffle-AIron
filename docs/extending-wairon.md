@@ -53,6 +53,35 @@ project declared is worse than one that fails.
 If you install from a local path, no fetchable source can be recorded and
 `pack use` says so — bundle it, or pass `--source`.
 
+### CI and a fresh machine
+
+`wairon pack install` accepts an HTTP(S) URL, and **`wairon pack sync` takes no
+arguments** — each selection carries its own source, so one command restores a
+project's doctrine anywhere:
+
+```yaml
+- uses: SYW-Apps/Waffle-AIron/.github/actions/setup-wairon@v5
+  with:
+    packs: sync          # sync (default) | none (bundled repos) | explicit sources
+- run: wairon validate --ci
+```
+
+Publishing a pack needs no registry — `wairon pack build` already emits
+`<name>-<version>.wpack`, which is a release asset as-is:
+
+```sh
+wairon pack build && gh release create v1.2.0 appenser-1.2.0.wpack
+```
+
+`source` supports `{version}` for pinned selections, and GitHub's
+`releases/latest/download/<asset>` resolves floating ones with no API call or
+token. `${VAR}` expands from the environment, so a private URL can take a token
+from a CI secret without committing it.
+
+Fetching happens **only** in `pack install <url>` and `pack sync` — never during
+`validate`, `status`, `generate`, or an MCP call, because the core workflow is
+required to work offline.
+
 ## Installing packs (legacy vendoring)
 
 **Per project (recommended for repo doctrine):**

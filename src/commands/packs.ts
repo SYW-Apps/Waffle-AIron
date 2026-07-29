@@ -6,6 +6,7 @@ import { scaffoldPack, buildPack as sdkBuildPack, extractPack } from '@wairon/sd
 import type { PackScaffoldRequest, PackBuildResult, PackExtractionResult } from '@wairon/sdk';
 import { logger } from '../utils/logger.js';
 import { getProjectRoot } from '../utils/fs.js';
+import { downloadFile } from '../utils/download.js';
 import { isProjectInitialized, loadProjectConfig, saveProjectConfig } from '../config/loader.js';
 import type { PackSelection } from '../models/project.js';
 import {
@@ -294,11 +295,62 @@ export async function buildPack(source: string, options: { out?: string } = {}):
 // disagreed with every local run. See docs/design/pack-scoping.md.
 // ---------------------------------------------------------------------------
 
+/** A source wairon can fetch, as opposed to a path on this machine. */
+function isUrl(source: string): boolean {
+  return /^https?:\/\//i.test(source);
+}
+
+/**
+ * Expand a recorded `source` into a concrete URL: `{version}` becomes the pinned
+ * version, and `${VAR}` reads the environment so a private URL can carry a token
+ * from a CI secret without it ever being committed.
+ */
+export function expandSource(source: string, version?: string): string {
+  return source
+    .replace(/\{version\}/g, version ?? '')
+    .replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, name: string) => process.env[name] ?? '');
+}
+
+/** Fetch a remote .wpack into a temp file, returning its path. */
+async function fetchArchive(url: string): Promise<string> {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-packdl-'));
+  const dest = path.join(dir, 'pack.wpack');
+  await downloadFile(url, dest);
+  return dest;
+}
+
 /** `wairon pack install <source>` — install into the store; applies to nothing until selected. */
 export async function installPack(source: string): Promise<void> {
   let sourceDir: string;
   let origin: string;
   let cleanup: string | null = null;
+
+  // A URL is fetched first, then follows the identical archive path — so a remote
+  // pack gets exactly the same envelope inspection and extraction limits as a
+  // local one, with no second code path to diverge.
+  if (isUrl(source)) {
+    let archive: string;
+    try {
+      archive = await fetchArchive(source);
+    } catch (e) {
+      logger.error(`Could not download "${source}": ${e instanceof Error ? e.message : String(e)}`);
+      process.exitCode = 1;
+      return;
+    }
+    const extracted = extractArchiveToTemp(archive);
+    try { fs.rmSync(path.dirname(archive), { recursive: true, force: true }); } catch { /* temp */ }
+    if (!extracted) return;
+    try {
+      const installed = installPackFromDirectory(extracted.dir, source);
+      reportInstalled(installed, source);
+    } catch (e) {
+      logger.error(e instanceof Error ? e.message : String(e));
+      process.exitCode = 1;
+    } finally {
+      try { fs.rmSync(extracted.dir, { recursive: true, force: true }); } catch { /* temp */ }
+    }
+    return;
+  }
 
   if (isArchiveRef(source)) {
     // Archives go through the SDK's hardened path (envelope inspection, code-pack
@@ -328,20 +380,24 @@ export async function installPack(source: string): Promise<void> {
   }
 
   try {
-    const installed = installPackFromDirectory(sourceDir, origin);
-    logger.success(`Installed ${installed.name} v${installed.version} into the pack store.`);
-    console.log(`  ${chalk.dim(installed.path)}`);
-    console.log(`  ${chalk.dim(installed.digest)}`);
-    logger.blank();
-    logger.info(`This applies to NOTHING yet — a project opts in with: ${chalk.cyan(`wairon pack use ${installed.name}`)}`);
-    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(origin)) {
-      logger.warn('Installed from a local path, so no fetchable source was recorded — CI and a fresh clone cannot obtain it. Bundle it into the project, or record a URL when selecting it.');
-    }
+    reportInstalled(installPackFromDirectory(sourceDir, origin), origin);
   } catch (e) {
     logger.error(e instanceof Error ? e.message : String(e));
     process.exitCode = 1;
   } finally {
     if (cleanup) { try { fs.rmSync(cleanup, { recursive: true, force: true }); } catch { /* temp dir */ } }
+  }
+}
+
+/** Report a successful store install, and whether it can be reproduced elsewhere. */
+function reportInstalled(installed: InstalledPack, origin: string): void {
+  logger.success(`Installed ${installed.name} v${installed.version} into the pack store.`);
+  console.log(`  ${chalk.dim(installed.path)}`);
+  console.log(`  ${chalk.dim(installed.digest)}`);
+  logger.blank();
+  logger.info(`This applies to NOTHING yet — a project opts in with: ${chalk.cyan(`wairon pack use ${installed.name}`)}`);
+  if (!isUrl(origin)) {
+    logger.warn('Installed from a local path, so no fetchable source was recorded — CI and a fresh clone cannot obtain it. Bundle it into the project, or record a URL when selecting it.');
   }
 }
 
@@ -497,6 +553,96 @@ function warnIfUnobtainable(selection: PackSelection, recorded: string | undefin
  * bundle is a copy of one specific version — leaving the selection floating would
  * let the committed bytes and the declared intent drift apart.
  */
+/**
+ * `wairon pack sync` — install every declared-but-missing pack from the source its
+ * selection records.
+ *
+ * This is the one command a fresh machine or CI runner needs, and it takes no
+ * arguments: each selection carries its own source, recorded when the pack was
+ * selected. Nothing here is implicit — resolution never fetches, so `sync` is the
+ * only place the network is touched.
+ */
+export async function syncPacks(): Promise<void> {
+  if (!isProjectInitialized()) {
+    logger.error('Not inside a wairon project — run `wairon init` first.');
+    process.exitCode = 1;
+    return;
+  }
+  const root = getProjectRoot();
+  const selections = (loadProjectConfig().extensions?.packs ?? [])
+    .filter((e): e is PackSelection => typeof e !== 'string');
+
+  // Already resolvable (installed or bundled) selections are left alone.
+  const missing = selections.filter((s) => packEntryRef(s, root) === null);
+  if (selections.length === 0) {
+    logger.info('This project selects no packs — nothing to sync.');
+    return;
+  }
+  if (missing.length === 0) {
+    logger.success(`All ${selections.length} selected pack(s) are already available.`);
+    return;
+  }
+
+  let installed = 0;
+  for (const selection of missing) {
+    const label = packEntryLabel(selection);
+    const blocker = syncBlocker(selection);
+    if (blocker) {
+      logger.error(`"${label}" ${blocker}`);
+      process.exitCode = 1;
+      continue;
+    }
+    const url = expandSource(selection.source!, selection.version);
+    try {
+      const pack = await fetchAndInstall(selection, url);
+      if (!pack) continue;
+      console.log(`  ${chalk.green('+')} ${pack.name} v${pack.version} ${chalk.dim(`← ${url}`)}`);
+      installed++;
+    } catch (e) {
+      logger.error(`Could not sync "${label}" from ${url}: ${e instanceof Error ? e.message : String(e)}`);
+      process.exitCode = 1;
+    }
+  }
+
+  if (installed > 0) logger.success(`Synced ${installed} pack(s) into the pack store.`);
+}
+
+/** Why a selection cannot be synced (a sentence completing `"<label>" …`), or null when it can. */
+function syncBlocker(selection: PackSelection): string | null {
+  if (!selection.source) {
+    return 'records no source, so it cannot be fetched. Install it manually (`wairon pack install <source>`) and re-select it, or bundle it into the repository.';
+  }
+  if (selection.source.includes('{version}') && !selection.version) {
+    return `has a {version} placeholder in its source but pins no version. Pin one (\`wairon pack use ${selection.name}@<version>\`) so the URL can be resolved.`;
+  }
+  const url = expandSource(selection.source, selection.version);
+  if (!isUrl(url)) return `has a source that is not a fetchable URL (${url}).`;
+  return null;
+}
+
+/**
+ * Fetch one selection's archive and install it into the store, recording the
+ * ORIGINAL source template (not the expanded URL) so a later sync re-expands it.
+ * A pinned integrity digest is verified here, at install time, rather than being
+ * discovered later by the gate. Throws on download failure; returns null when
+ * extraction failed (already reported).
+ */
+async function fetchAndInstall(selection: PackSelection, url: string): Promise<InstalledPack | null> {
+  const archive = await fetchArchive(url);
+  const extracted = extractArchiveToTemp(archive);
+  try { fs.rmSync(path.dirname(archive), { recursive: true, force: true }); } catch { /* temp */ }
+  if (!extracted) return null;
+  try {
+    const pack = installPackFromDirectory(extracted.dir, selection.source);
+    if (selection.integrity && selection.integrity !== pack.digest) {
+      throw new Error(`downloaded content does not match its pinned integrity (expected ${selection.integrity}, got ${pack.digest}). Left installed for inspection; fix the pin or the source.`);
+    }
+    return pack;
+  } finally {
+    try { fs.rmSync(extracted.dir, { recursive: true, force: true }); } catch { /* temp */ }
+  }
+}
+
 /** Which selections to bundle: the named one, all of them, or those already marked. */
 function bundleTargets(selections: PackSelection[], name: string | undefined, all: boolean): PackSelection[] {
   if (all) return selections;
