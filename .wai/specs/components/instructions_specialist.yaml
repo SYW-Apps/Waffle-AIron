@@ -1,0 +1,23 @@
+id: instructions_specialist
+name: Server Instructions Specialist
+description: >-
+  Composes the `instructions` string wairon returns on the MCP `initialize` handshake — the map that
+  TEACHES a connecting agent the SDD model before it authors anything. Because wairon owns the
+  model, wairon must teach it: what an SDD spec tree is, the L0→L5 shape, the authoring workflow
+  order, that the sdd_* tool schemas are self-describing, the bound project's governing
+  projectType/profile and what it implies, the loaded packs, and an explicit instruction to read
+  wairon-skill://sdd-architect (and the other relevant skills) BEFORE authoring. Kept short and
+  pointer-heavy — the depth lives in the skill documents this text points at, so the briefing never
+  drifts from them. Pack-contributed instruction blocks are appended after wairon's own text under
+  an attributed per-pack heading in pack load order, scoped to the governing profile when the block
+  declares one — the hook that lets a platform wrapper ADJUST the default without owning or
+  restating it.
+subsystem: sdd_skills
+componentType: Specialist
+owns: []
+dependsOn:
+  - skills_core_adapter
+  - skills_resource_specialist
+status: complete
+createdAt: '2026-07-29T10:49:01.675Z'
+updatedAt: '2026-07-29T11:56:11.946Z'

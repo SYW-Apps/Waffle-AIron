@@ -5,9 +5,13 @@ import { createRequire } from 'module';
 import { z } from 'zod';
 import { readYamlFile } from '../utils/yaml.js';
 import { getProjectRoot } from '../utils/fs.js';
-import { loadProjectConfig } from '../config/loader.js';
+import { loadProjectConfig, saveProjectConfig, AI_PATHS } from '../config/loader.js';
+import { isNewerVersion } from '../utils/version.js';
 import type { SddRule } from './rules/types.js';
-import { RulesConfigSchema } from '../models/project.js';
+import { RulesConfigSchema, type PackSelection } from '../models/project.js';
+// The store is a sibling adapter; both modules reach each other only inside
+// function bodies, so the import cycle never runs at module-init time.
+import { resolveInstalledPack, packStoreDir, listInstalledPacks } from './packstore.js';
 
 // ---------------------------------------------------------------------------
 // Extension packs — wairon's plugin surface.
@@ -86,6 +90,46 @@ export const PackSkillSchema = z.object({
   targets: z.array(z.string()).default([]),
 });
 export type PackSkill = z.infer<typeof PackSkillSchema>;
+
+/**
+ * One block of connecting-agent guidance contributed by a pack, appended to
+ * wairon's OWN MCP `initialize` instructions under an attributed heading.
+ *
+ * The split is deliberate and load-bearing: wairon owns the SDD model, so
+ * wairon teaches it by default (see core/instructions.ts). A pack states its
+ * platform DELTA only — "and here is what each of those means on my platform" —
+ * and never restates the model, which would drift on every wairon release.
+ * `profile` scopes a block to the governing profile exactly as declarative
+ * assertions scope their doctrine.
+ */
+export interface PackInstructionBlock {
+  /** The guidance itself — the pack's platform delta, never a restatement of wairon's model. */
+  text: string;
+  /** Optional scope: apply only when the bound project's governing profile is one of these. */
+  profile?: string[];
+}
+
+// Annotated rather than inferred: the string arm normalizes to the SAME shape as
+// the object arm, so consumers see one block type instead of a union they have to
+// narrow before reading `profile`.
+export const PackInstructionBlockSchema: z.ZodType<PackInstructionBlock, z.ZodTypeDef, unknown> = z.union([
+  // Scalar shorthand: `instructions: >- …` — the common case, unscoped.
+  z.string().min(1).transform((text) => ({ text })),
+  z.object({
+    text: z.string().min(1),
+    profile: z.array(z.string().min(1)).min(1).optional(),
+  }),
+]);
+
+/**
+ * A pack's `instructions` field, normalized to a list. Accepts a bare string, a
+ * single block, or a list of either — so the simple case stays one line of YAML
+ * while a pack that needs profile scoping can spell blocks out.
+ */
+const PackInstructionsSchema = z.preprocess(
+  (raw) => (raw === undefined || raw === null ? [] : Array.isArray(raw) ? raw : [raw]),
+  z.array(PackInstructionBlockSchema),
+);
 
 /**
  * A named, versioned reusable architecture pattern declared by a pack. Core
@@ -182,6 +226,11 @@ export const DeclarativePackSchema = z.object({
    * builtin + declared are flagged UNKNOWN_GUARANTEE by the validator.
    */
   guarantees: z.array(z.string().min(1)).default([]),
+  /**
+   * Connecting-agent guidance appended to wairon's own MCP `initialize`
+   * instructions, attributed to this pack, in pack load order.
+   */
+  instructions: PackInstructionsSchema,
 });
 export type DeclarativePack = z.infer<typeof DeclarativePackSchema>;
 
@@ -189,6 +238,20 @@ export type DeclarativePack = z.infer<typeof DeclarativePackSchema>;
 export type LoadedPackSkill = PackSkill & { pack: string; packVersion?: string; sourcePath: string };
 /** A pack pattern definition tagged with the pack that declares it. */
 export type LoadedPattern = PatternDef & { pack: string };
+/** A pack instruction block tagged with the pack that contributes it (the attribution rendered into the composed instructions). */
+export type LoadedInstructionBlock = PackInstructionBlock & { pack: string };
+
+/**
+ * Whether machine-wide packs also apply to a project, when the project has not
+ * said. **False**: doctrine is what a project declares. Kept as one exported
+ * constant so every reader and every config writer agrees on the default.
+ */
+export const GLOBAL_PACKS_DEFAULT = false;
+
+/** Does this project apply machine-wide packs on top of its own selections? */
+export function globalPacksEnabled(config: { extensions?: { useGlobalPacks?: boolean } }): boolean {
+  return config.extensions?.useGlobalPacks ?? GLOBAL_PACKS_DEFAULT;
+}
 
 /** Where a pack came from — global installs load before (and lose to) project packs. */
 export type PackScope = 'global' | 'project';
@@ -216,12 +279,18 @@ export interface LoadedExtensions {
   guarantees: string[];
   /** Declarative rule assertions across all loaded packs (with provenance + namespaced codes). */
   assertions: LoadedAssertion[];
+  /**
+   * Pack-contributed MCP instruction blocks, with provenance. The one merged
+   * field whose ORDER is semantic: preserved in pack LOAD order, because that
+   * is the order they are appended to wairon's own instructions.
+   */
+  instructions: LoadedInstructionBlock[];
   /** Pack loading failures — surfaced as EXTENSION_LOAD_ERROR (error). */
   errors: string[];
 }
 
 export function emptyExtensions(): LoadedExtensions {
-  return { packNames: [], packs: [], rules: [], profiles: {}, languages: {}, skills: [], patterns: [], guarantees: [], assertions: [], errors: [] };
+  return { packNames: [], packs: [], rules: [], profiles: {}, languages: {}, skills: [], patterns: [], guarantees: [], assertions: [], instructions: [], errors: [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -254,9 +323,36 @@ export function packDirEntry(dir: string): string | null {
 }
 
 /**
+ * The newest `<name>/<version>/` subdirectory of a versioned store entry, or null
+ * when the directory holds no version subdirectory with a pack entry file.
+ */
+function latestVersionDir(nameDir: string): string | null {
+  let versions: fs.Dirent[];
+  try {
+    versions = fs.readdirSync(nameDir, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  let best: { version: string; dir: string } | null = null;
+  for (const v of versions) {
+    if (!v.isDirectory()) continue;
+    const dir = path.join(nameDir, v.name);
+    if (!packDirEntry(dir)) continue;
+    if (!best || isNewerVersion(best.version, v.name)) best = { version: v.name, dir };
+  }
+  return best?.dir ?? null;
+}
+
+/**
  * Pack refs discovered in a directory (used for the global packs folder):
  * *.yaml/*.yml/*.cjs/*.js files, and subdirectories containing a pack entry
  * file. Sorted for deterministic load order.
+ *
+ * Also understands the pack store's VERSIONED layout (`<name>/<version>/`,
+ * see core/packstore.ts), resolving such an entry to its newest installed
+ * version. Without this, a pack installed through `wairon pack install` would be
+ * invisible to the legacy auto-load path — the doctrine would silently stop
+ * applying, which is the one failure direction that must never happen quietly.
  */
 export function discoverPacks(dir: string): string[] {
   let entries: fs.Dirent[];
@@ -270,6 +366,10 @@ export function discoverPacks(dir: string): string[] {
     const full = path.join(dir, e.name);
     if (e.isDirectory()) {
       if (packDirEntry(full)) refs.push(full);
+      else {
+        const latest = latestVersionDir(full);
+        if (latest) refs.push(latest);
+      }
     } else if (/\.(ya?ml|cjs|js)$/i.test(e.name)) {
       refs.push(full);
     }
@@ -306,6 +406,10 @@ function mergePack(out: LoadedExtensions, pack: DeclarativePack, ref: string, sc
   out.guarantees = [...new Set([...out.guarantees, ...pack.guarantees])];
   // Assertions accumulate with provenance; the namespaced code keeps packs collision-free.
   for (const a of pack.assertions) out.assertions.push({ ...a, pack: pack.name, fullCode: assertionFullCode(pack.name, a.code) });
+  // Instruction blocks accumulate in LOAD order — unlike every other merged
+  // field, order is meaning here (it is append order in the composed
+  // instructions), so blocks are never deduped or overwritten on collision.
+  for (const b of pack.instructions) out.instructions.push({ ...b, pack: pack.name });
 }
 
 /**
@@ -359,6 +463,7 @@ export function readManifest(target: string, projectRoot: string): DeclarativePa
     patterns: mod.patterns ?? [],
     guarantees: mod.guarantees ?? [],
     assertions: mod.assertions ?? [],
+    instructions: mod.instructions ?? [],
   });
   const rules: SddRule[] = [];
   for (const r of (mod.rules as unknown[] | undefined) ?? []) {
@@ -401,14 +506,239 @@ export function loadExtensions(packRefs: string[], projectRoot: string): LoadedE
 export function loadProjectExtensions(): LoadedExtensions {
   try {
     const config = loadProjectConfig();
+    const projectRoot = getProjectRoot();
     const refs: PackRef[] = [];
-    if (config.extensions?.useGlobalPacks ?? true) {
+    const unresolved: string[] = [];
+
+    // Off by default: a project's doctrine is what the project declares.
+    if (globalPacksEnabled(config)) {
       for (const ref of discoverPacks(globalPacksDir())) refs.push({ ref, scope: 'global' });
     }
-    for (const ref of config.extensions?.packs ?? []) refs.push({ ref, scope: 'project' });
-    if (refs.length === 0) return emptyExtensions();
-    return loadExtensionPacks(refs, getProjectRoot());
+
+    for (const entry of config.extensions?.packs ?? []) {
+      // Legacy path/module ref — resolved as it always was.
+      if (typeof entry === 'string') {
+        refs.push({ ref: entry, scope: 'project' });
+        continue;
+      }
+      // A SELECTION: resolve it to a concrete pack, or record why it could not be.
+      const resolution = resolveSelection(entry, projectRoot);
+      if (resolution.ref) refs.push({ ref: resolution.ref, scope: 'project' });
+      else unresolved.push(resolution.error);
+    }
+
+    if (refs.length === 0 && unresolved.length === 0) return emptyExtensions();
+    const loaded = loadExtensionPacks(refs, projectRoot);
+    // A declared-but-unresolvable pack rides the SAME error channel as a pack that
+    // fails to parse: EXTENSION_LOAD_ERROR, error severity, surfaced by validate,
+    // status, lock, generate, and every sdd_* MCP call. Never a silent skip —
+    // validation must not appear clean while the declared doctrine is absent.
+    loaded.errors.push(...unresolved);
+    return loaded;
   } catch {
     return emptyExtensions();
   }
+}
+
+// ---------------------------------------------------------------------------
+// Migration diagnostics (`wairon doctor`)
+//
+// Global packs auto-load for every project unless a project opts out, which means
+// doctrine can apply to a project that never mentioned it. Moving to explicit
+// selection has one dangerous direction: a project that relied on implicit global
+// loading would silently lose rules and go QUIET rather than loud. These
+// diagnostics make the implicit set visible BEFORE that happens, so `doctor --fix`
+// can convert it into explicit selections that survive the change.
+// ---------------------------------------------------------------------------
+
+/** What `wairon doctor` reports about this project's packs. */
+export interface PackDiagnosis {
+  /** True when the project never decided about machine-wide packs — so the default governs it. */
+  globalsUndeclared: boolean;
+  /**
+   * Installed packs this project does NOT apply. When `globalsUndeclared`, these
+   * are the packs that WOULD have applied under the old machine-wide default —
+   * the migration set, worth flagging in case the project relied on them.
+   */
+  notApplied: { name: string; version: string; origin?: string }[];
+  /** Declared selections that do not resolve; the gate already errors on these. */
+  unresolved: { label: string; message: string }[];
+  /** Machine-wide packs this project applies because it opted IN explicitly. */
+  globalsApplied: { name: string; version: string }[];
+}
+
+/**
+ * Whether `extensions.useGlobalPacks` is absent from the project file. The parsed
+ * config defaults it to true, so the raw file is the only place that distinguishes
+ * "never decided" (will change under a new default) from "explicitly true" (will
+ * not) — and only the former needs migrating.
+ */
+function globalPacksLeftUnset(): boolean {
+  try {
+    const raw = readYamlFile(AI_PATHS.projectConfig()) as { extensions?: Record<string, unknown> } | null;
+    return raw?.extensions?.useGlobalPacks === undefined;
+  } catch {
+    return false;
+  }
+}
+
+/** Diagnose this project's pack situation for `wairon doctor`. Never throws. */
+export function diagnoseProjectPacks(): PackDiagnosis {
+  const empty: PackDiagnosis = { globalsUndeclared: false, notApplied: [], unresolved: [], globalsApplied: [] };
+  try {
+    const config = loadProjectConfig();
+    const projectRoot = getProjectRoot();
+    const entries = config.extensions?.packs ?? [];
+    const globalsUndeclared = globalPacksLeftUnset();
+
+    // Selections that do not resolve — reported with the same message the gate uses.
+    const unresolved: PackDiagnosis['unresolved'] = [];
+    const selectedNames = new Set<string>();
+    for (const entry of entries) {
+      if (typeof entry === 'string') continue;
+      selectedNames.add(entry.name);
+      const resolution = resolveSelection(entry, projectRoot);
+      if (!resolution.ref) unresolved.push({ label: packEntryLabel(entry), message: resolution.error });
+    }
+
+    const installed = listInstalledPacks();
+    const globalsOn = globalPacksEnabled(config);
+
+    // Machine-wide packs this project applies by opting in — surfaced so the
+    // dependency on machine state is visible rather than assumed.
+    const globalsApplied: PackDiagnosis['globalsApplied'] = [];
+    if (globalsOn) {
+      for (const ref of discoverPacks(globalPacksDir())) {
+        const match = installed.find((p) => path.resolve(p.path) === path.resolve(ref));
+        if (match) globalsApplied.push({ name: match.name, version: match.version });
+      }
+    }
+
+    const applying = new Set([...selectedNames, ...globalsApplied.map((p) => p.name)]);
+    const notApplied = installed
+      .filter((p) => !applying.has(p.name))
+      .map((p) => ({ name: p.name, version: p.version, origin: p.origin }));
+
+    return { globalsUndeclared, notApplied, unresolved, globalsApplied };
+  } catch {
+    return empty;
+  }
+}
+
+/**
+ * Convert the implicitly-applied global packs into EXPLICIT selections and turn
+ * global auto-load off, so this project's doctrine survives a change of default
+ * and is visible in a diff. Returns the names recorded.
+ */
+export function pinInstalledPacksAsSelections(): string[] {
+  const diagnosis = diagnoseProjectPacks();
+  // Only migrate a project that never decided. One that explicitly set
+  // useGlobalPacks, or that simply has packs installed it deliberately does not
+  // apply, must not have selections invented for it.
+  if (!diagnosis.globalsUndeclared || diagnosis.notApplied.length === 0) return [];
+
+  const config = loadProjectConfig();
+  const existing = config.extensions?.packs ?? [];
+
+  const added: string[] = [];
+  const selections: PackSelection[] = [];
+  for (const pack of diagnosis.notApplied) {
+    selections.push({
+      name: pack.name,
+      version: pack.version,
+      // Carry the origin so the selection can be obtained elsewhere; a local
+      // path is not fetchable, so it is deliberately not recorded as a source.
+      ...(pack.origin && /^[a-z][a-z0-9+.-]*:\/\//i.test(pack.origin) ? { source: pack.origin } : {}),
+    });
+    added.push(`${pack.name}@${pack.version}`);
+  }
+
+  config.extensions = { packs: [...existing, ...selections], useGlobalPacks: false };
+  saveProjectConfig(config);
+  return added;
+}
+
+/**
+ * A stable human label for a config pack entry — the path for a legacy ref, or
+ * `name[@version]` for a selection. For messages and listings, never for loading.
+ */
+export function packEntryLabel(entry: string | PackSelection): string {
+  if (typeof entry === 'string') return entry;
+  return entry.version ? `${entry.name}@${entry.version}` : entry.name;
+}
+
+/**
+ * The loadable ref for one config pack entry: a legacy path/module ref passes
+ * through unchanged; a selection is resolved against the committed bundle, then
+ * the store. Returns null when a selection cannot be resolved (the caller decides
+ * whether that is an error it reports or an entry it skips).
+ */
+export function packEntryRef(entry: string | PackSelection, projectRoot: string): string | null {
+  if (typeof entry === 'string') return entry;
+  return resolveSelection(entry, projectRoot).ref ?? null;
+}
+
+/**
+ * Resolve one pack selection to a loadable ref: the committed BUNDLE first (so a
+ * clone and CI resolve with an empty store and no network), then this wairon
+ * install's STORE. Returns the failure message instead of throwing, so one
+ * unresolvable selection never suppresses the packs that did resolve.
+ */
+function resolveSelection(
+  selection: PackSelection,
+  projectRoot: string,
+): { ref?: string; error: string } {
+  const wanted = selection.version ? `${selection.name}@${selection.version}` : selection.name;
+
+  // 1. The committed bundle under .wai/packs/<name>/[<version>/].
+  const bundled = findBundledPack(projectRoot, selection);
+  if (bundled) return { ref: bundled, error: '' };
+
+  // 2. The machine's pack store.
+  const installed = resolveInstalledPack(selection.name, selection.version);
+  if (!installed) {
+    // Only ever suggest commands that exist today: `pack sync` (bulk install from
+    // recorded sources) lands with the sync work, so the hint names the concrete
+    // install instead of promising a command the user cannot run.
+    const hint = selection.source
+      ? `Install it from the source this selection records: \`wairon pack install ${selection.source}\`.`
+      : `Install it with \`wairon pack install <source>\` and re-select it — this selection records no source, so it cannot be fetched automatically.`;
+    return {
+      error: `Pack "${wanted}" is declared by this project but is not installed in this wairon install (${packStoreDir()}) and is not bundled under .wai/packs/. ${hint}`,
+    };
+  }
+  if (selection.integrity && selection.integrity !== installed.digest) {
+    return {
+      error: `Pack "${wanted}" resolved to content that does not match the pinned integrity: expected ${selection.integrity}, found ${installed.digest} (${installed.path}). Reinstall the pinned version, or update the pin if the change is intended.`,
+    };
+  }
+  return { ref: installed.path, error: '' };
+}
+
+/**
+ * A bundled copy of a selection, if the project commits one. `<name>/<version>/`
+ * is preferred; `<name>/` directly is accepted so a hand-placed bundle works.
+ */
+function findBundledPack(projectRoot: string, selection: PackSelection): string | null {
+  const base = path.join(projectRoot, '.wai', 'packs', selection.name);
+  if (selection.version) {
+    const pinned = path.join(base, selection.version);
+    return packDirEntry(pinned) ? pinned : null;
+  }
+  if (packDirEntry(base)) return base;
+  // Unpinned: take the newest bundled version.
+  let versions: fs.Dirent[];
+  try {
+    versions = fs.readdirSync(base, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  let best: { version: string; dir: string } | null = null;
+  for (const v of versions) {
+    if (!v.isDirectory()) continue;
+    const dir = path.join(base, v.name);
+    if (!packDirEntry(dir)) continue;
+    if (!best || isNewerVersion(best.version, v.name)) best = { version: v.name, dir };
+  }
+  return best?.dir ?? null;
 }

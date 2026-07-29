@@ -25,6 +25,13 @@ methods:
         type: call
         targetComponent: skills_resource_orchestrator
         targetMethod: readResource
+  - name: buildServerInstructions
+    narrative:
+      - stepNumber: 1
+        description: Forward the instructions composition to the skills guidance workflow.
+        type: call
+        targetComponent: skills_resource_orchestrator
+        targetMethod: buildServerInstructions
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-10T12:21:35.026Z'
+updatedAt: '2026-07-29T10:53:20.020Z'

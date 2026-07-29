@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import { ensureDir, fromProjectRoot } from '../utils/fs.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import { loadProjectExtensions as loadCoreExtensions, LoadedPackSkill } from './extensions.js';
+import { buildServerInstructions as composeServerInstructions } from './instructions.js';
 
 // ---------------------------------------------------------------------------
 // SDD skills export
@@ -15,8 +16,15 @@ import { loadProjectExtensions as loadCoreExtensions, LoadedPackSkill } from './
 
 const SKILL_NAMES = ['sdd-architect', 'sdd-narrative', 'sdd-auditor', 'sdd-implement'];
 
-/** skills_core_adapter: forward to the core surface to load the governing extension packs (for their pack-provided skills). */
-function loadProjectExtensions() {
+/**
+ * skills_core_adapter: forward to the core surface to load the governing
+ * extension packs — for their pack-provided skills (the exporter and the
+ * resource mirror) and their contributed instruction blocks (the instructions
+ * composer). Exported so the composer goes through this ONE adapter rather than
+ * reaching into sdd_core itself; it is the single seam this subsystem crosses
+ * the boundary through.
+ */
+export function loadProjectExtensions() {
   return loadCoreExtensions();
 }
 
@@ -288,6 +296,15 @@ export function readSkillResource(resourceId: string): string {
 /** Portal: list the built-in SDD skills as MCP resource descriptors. */
 export function listResources(): SkillResourceDescriptor[] {
   return listSkillResources();
+}
+
+/**
+ * Orchestrator + Portal: compose the `instructions` the MCP server returns on
+ * the initialize handshake, through the instructions specialist. (That module
+ * imports back into this one — see the note in core/instructions.ts.)
+ */
+export function buildServerInstructions(): string {
+  return composeServerInstructions();
 }
 
 /**

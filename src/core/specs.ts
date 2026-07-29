@@ -3,7 +3,8 @@ import * as path from 'path';
 import { z } from 'zod';
 import { aiPathsAt, WaiPaths } from '../config/loader.js';
 import { ensureDir, listFiles, listFilesRecursive, pathExists, getProjectRoot, runWithProjectRoot } from '../utils/fs.js';
-import { computeStateId } from './statehash.js';
+import { computeStateId, hashGateState, type StateId } from './statehash.js';
+import { loadProjectExtensions } from './extensions.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import {
   SystemSpec,
@@ -2454,6 +2455,22 @@ export function resolveChainingParent(): ChainingParentRef | null {
  * snapshots against what the (parent) tree looks like NOW; returns null when
  * the root holds no loadable spec tree.
  */
+/**
+ * Compute the GATE state identity of the current project
+ * (icore_orchestrator/icore_portal.computeGateStateId): load the governing
+ * extension packs, then digest the spec tree together with that doctrine.
+ *
+ * This is the identity `wairon lock` records and promotion re-checks, so a
+ * doctrine change invalidates a lock by state mismatch exactly as a spec edit
+ * does — nobody has to remember to invalidate it. Loading the doctrine here (not
+ * inside the hash specialist) keeps that specialist pure and makes every caller
+ * use the same doctrine source, so a lock and its promote-time re-check can never
+ * disagree about which rule set applied.
+ */
+export function computeGateStateId(): StateId {
+  return hashGateState(loadProjectExtensions());
+}
+
 export function computeStateIdAt(root: string): string | null {
   const resolved = path.resolve(root);
   return runWithProjectRoot(resolved, () => {

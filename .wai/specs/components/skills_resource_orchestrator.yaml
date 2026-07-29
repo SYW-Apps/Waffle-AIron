@@ -1,17 +1,20 @@
 id: skills_resource_orchestrator
-name: Skills Resource Orchestrator
+name: Skills Guidance Orchestrator
 description: >-
-  Owns the MCP-resource workflow for Wairon's built-in SDD skills: lists them as MCP resource
-  descriptors and reads a single skill's content for publication over the MCP protocol, rejecting
-  unknown resource ids. It resolves the underlying skill documents through the Skills Resource
-  Specialist. The MCP server publishes this surface as read-only MCP resources (reached from sdd_mcp
-  through the skills portal), so cloud-only agents that cannot receive filesystem-exported skills
-  can list and fetch the SDD guidance.
+  Owns the MCP-facing GUIDANCE workflow for wairon's built-in SDD skills: lists them as MCP resource
+  descriptors, reads a single skill's content for publication over the MCP protocol (rejecting
+  unknown resource ids), and composes the server `instructions` returned on the MCP initialize
+  handshake. It resolves the underlying skill documents through the Skills Resource Specialist and
+  the instructions text through the Server Instructions Specialist. The MCP server publishes this
+  surface (reached from sdd_mcp through the skills portal), so cloud-only agents that cannot receive
+  filesystem-exported skills are both TAUGHT the model on connect and able to fetch the depth on
+  demand.
 subsystem: sdd_skills
 componentType: Orchestrator
 owns: []
 dependsOn:
   - skills_resource_specialist
+  - instructions_specialist
 status: complete
 createdAt: '2026-07-08T22:02:30.528Z'
-updatedAt: '2026-07-10T12:21:07.094Z'
+updatedAt: '2026-07-29T10:50:28.200Z'

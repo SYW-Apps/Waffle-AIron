@@ -229,6 +229,13 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: computeStateIdAt
+  - name: computeGateStateId
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: computeGateStateId
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-24T18:02:15.398Z'
+updatedAt: '2026-07-29T14:55:11.675Z'

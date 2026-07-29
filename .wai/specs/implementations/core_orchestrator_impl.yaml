@@ -452,6 +452,27 @@ methods:
         description: Return the computed state hash
         type: return
         outcome: StateId or null
+  - name: computeGateStateId
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Load the governing extension packs through the extension workflow (global then project,
+          project winning on collision) — the doctrine the gate ran with.
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: loadProjectExtensions
+      - stepNumber: 2
+        description: >-
+          Hand that doctrine to the state hash specialist, which digests it together with the spec
+          tree.
+        type: call
+        targetComponent: state_hash_specialist
+        targetMethod: hashGateState
+      - stepNumber: 3
+        description: Return the gate StateId.
+        type: return
+        outcome: gate StateId
+    conformance: 'off'
 lint:
   allow:
     - code: UNREALIZED_DEPENDENCY
@@ -461,4 +482,4 @@ lint:
         documented on the structural-conformance per-method offs.
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-24T18:02:13.266Z'
+updatedAt: '2026-07-29T14:54:57.093Z'

@@ -1,8 +1,9 @@
 id: iskills_resource_orchestrator
 name: Skills Resource Orchestrator Interface
 description: >-
-  MCP-resource workflow contract for the built-in SDD skills: list resources and read one resource's
-  content (shaped for MCP registration), rejecting unknown ids.
+  MCP-facing guidance workflow contract for the built-in SDD skills: list resources, read one
+  resource's content (shaped for MCP registration, rejecting unknown ids), and compose the server
+  instructions returned on the MCP initialize handshake.
 component: skills_resource_orchestrator
 methods:
   - name: listResources
@@ -20,6 +21,13 @@ methods:
       - name: resourceId
         type: string
         description: The MCP resource id / skill id to read.
+  - name: buildServerInstructions
+    description: >-
+      Compose the MCP initialize instructions for the bound project — wairon's own SDD briefing plus
+      the governing packs' attributed, profile-scoped instruction blocks.
+    signature: 'buildServerInstructions(): string'
+    returns: string
+    params: []
 status: complete
 createdAt: '2026-07-08T22:02:40.411Z'
-updatedAt: '2026-07-10T12:21:10.081Z'
+updatedAt: '2026-07-29T10:50:32.770Z'

@@ -7,7 +7,7 @@ import {
   applySpecStatus,
   invalidateSpecCache,
   promoteAllComplete,
-  computeStateId,
+  computeGateStateId,
   writeLockRecord,
   type LockRecord,
 } from '../core/index.js';
@@ -93,12 +93,15 @@ export async function runLock(options: LockOptions = {}, gate?: ValidationResult
   // --- Persist the commit-scoped lock record at the tree's CURRENT StateId ---
   // Computed AFTER the freeze (like the hosted lock): the promotion is part of
   // the state the record certifies, and promotion re-checks against it.
+  // The GATE identity, not the content one: the record certifies "these specs
+  // passed THIS gate", so the governing doctrine is part of what is frozen —
+  // change a pack afterwards and the lock goes stale on its own.
   let lockedBy = 'local';
   try {
     lockedBy = `local:${os.userInfo().username}`;
   } catch { /* keep 'local' */ }
   const record: LockRecord = {
-    stateId: computeStateId(),
+    stateId: computeGateStateId(),
     lockedAt: new Date().toISOString(),
     lockedBy,
     validatorVersion: WAIRON_VERSION,

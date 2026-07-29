@@ -1,0 +1,82 @@
+id: ipack_store_adapter
+name: Pack Store Adapter Interface
+description: >-
+  Manage the machine-wide store of installed extension packs: enumerate, resolve by name/version,
+  install, uninstall, and identify by content digest.
+component: pack_store_adapter
+methods:
+  - name: packStoreDir
+    description: Resolve this wairon install's pack store directory (WAIRON_PACKS_DIR, else ~/.wairon/packs).
+    signature: 'packStoreDir(): string'
+    returns: string
+    params: []
+  - name: listInstalledPacks
+    description: >-
+      Enumerate every pack installed in the store, newest version first per name. Reads each install
+      record where present; a legacy FLAT store entry (a bare *.yaml/*.cjs file or an unversioned
+      directory from before the versioned layout) is reported as version "0.0.0-unversioned" so an
+      existing install keeps resolving.
+    signature: 'listInstalledPacks(): InstalledPack[]'
+    returns: InstalledPack[]
+    params: []
+  - name: resolveInstalledPack
+    description: >-
+      Resolve a project selection against the store: the exact version when one is pinned, otherwise
+      the HIGHEST installed version (latest-by-default). Returns null when nothing satisfies the
+      selection — the caller turns that into the PACK_NOT_INSTALLED finding rather than loading a
+      weakened rule set.
+    signature: 'resolveInstalledPack(name: string, version?: string): InstalledPack | null'
+    returns: InstalledPack | null
+    params:
+      - name: name
+        type: string
+        description: The pack name a project selection references.
+      - name: version
+        type: string
+        description: Optional exact version pin; omitted means latest installed.
+        optional: true
+  - name: installPackFromDirectory
+    description: >-
+      Install an already-materialized pack directory into the store at <name>/<version>/, computing
+      its content digest and writing the install record (origin, digest, wairon version, timestamp).
+      Reinstalling the same name@version replaces it in place. Archive handling is the caller's
+      concern — a .wpack is extracted through the SDK first, so this adapter never parses untrusted
+      bytes.
+    signature: 'installPackFromDirectory(sourceDir: string, origin?: string): InstalledPack'
+    returns: InstalledPack
+    params:
+      - name: sourceDir
+        type: string
+        description: A directory containing a pack entry file, already extracted/verified by the caller.
+      - name: origin
+        type: string
+        description: Where the pack came from (URL or path), recorded for later sync.
+        optional: true
+  - name: uninstallPack
+    description: >-
+      Remove a pack from the store: the named version, or every version when none is given. Returns
+      whether anything was removed. Refusing an uninstall that some project still selects is the
+      calling workflow's job — this adapter reports what it removed.
+    signature: 'uninstallPack(name: string, version?: string): boolean'
+    returns: boolean
+    params:
+      - name: name
+        type: string
+      - name: version
+        type: string
+        optional: true
+  - name: computePackDigest
+    description: >-
+      Compute the canonical sha256 content digest of a pack directory: every regular file's relative
+      path and bytes, folded in a stable order. Path-independent and layout-independent, so the same
+      pack installed from an archive, from a directory, or committed as a project bundle yields one
+      identity — which is what makes an `integrity:` pin and the bundle/store drift check
+      meaningful.
+    signature: 'computePackDigest(packDir: string): string'
+    returns: string
+    params:
+      - name: packDir
+        type: string
+status: draft
+createdAt: '2026-07-29T17:41:50.550Z'
+updatedAt: '2026-07-29T17:41:50.556Z'

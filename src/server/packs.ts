@@ -233,11 +233,15 @@ function scanGlobalPackProfiles(): ProfileContribution[] {
 function scanProjectPackProfiles(): ProfileContribution[] {
   const root = getProjectRoot();
   const out: ProfileContribution[] = [];
-  for (const ref of loadProjectConfig().extensions?.packs ?? []) {
+  for (const entry of loadProjectConfig().extensions?.packs ?? []) {
     try {
+      // A by-name selection resolves through the bundle/store first; an
+      // unresolvable one contributes no profiles, exactly like a bad pack.
+      const ref = hostCore.packEntryRef(entry, root);
+      if (!ref) continue;
       const loaded = hostCore.loadExtensionPacks([{ ref, scope: 'project' }], root);
       if (loaded.errors.length) continue; // a bad pack contributes nothing
-      const source = loaded.packNames[0] ?? stem(ref);
+      const source = loaded.packNames[0] ?? stem(hostCore.packEntryLabel(entry));
       for (const [id, def] of Object.entries(loaded.profiles)) out.push({ id, source, family: def.family });
     } catch {
       /* never throw for a bad pack — skip it */
@@ -425,8 +429,14 @@ function storeRemoveGlobalPack(name: string): void {
 
 function storeListProjectPacks(): PackDescriptor[] {
   const root = getProjectRoot();
-  const refs = loadProjectConfig().extensions?.packs ?? [];
-  return refs.map((ref) => probe(ref, root, 'project', ref));
+  const entries = loadProjectConfig().extensions?.packs ?? [];
+  // Selections are probed at their resolved location but LISTED under their
+  // declared label, so the hosted view shows what the project asked for.
+  return entries.map((entry) => {
+    const label = hostCore.packEntryLabel(entry);
+    const ref = hostCore.packEntryRef(entry, root);
+    return probe(ref ?? label, root, 'project', label);
+  });
 }
 
 function storeInstallProjectPack(name: string, content: string): PackDescriptor {
@@ -439,7 +449,7 @@ function storeInstallProjectPack(name: string, content: string): PackDescriptor 
   const config = loadProjectConfig();
   const packs = config.extensions?.packs ?? [];
   if (!packs.includes(relRef)) {
-    config.extensions = { packs: [...packs, relRef], useGlobalPacks: config.extensions?.useGlobalPacks ?? true };
+    config.extensions = { packs: [...packs, relRef], useGlobalPacks: hostCore.globalPacksEnabled(config) };
     saveProjectConfig(config);
   }
   return probe(relRef, root, 'project', relRef);
@@ -465,7 +475,7 @@ function storeInstallProjectPackArchive(archive: Uint8Array, name?: string): Pac
   const config = loadProjectConfig();
   const packs = config.extensions?.packs ?? [];
   if (!packs.includes(relRef)) {
-    config.extensions = { packs: [...packs, relRef], useGlobalPacks: config.extensions?.useGlobalPacks ?? true };
+    config.extensions = { packs: [...packs, relRef], useGlobalPacks: hostCore.globalPacksEnabled(config) };
     saveProjectConfig(config);
   }
   return probe(relRef, root, 'project', relRef);
@@ -477,15 +487,19 @@ function storeRemoveProjectPack(name: string): void {
   const config = loadProjectConfig();
   const packs = config.extensions?.packs ?? [];
   const relRef = `.wai/packs/${name}.yaml`;
-  const match = packs.find((ref) => ref === relRef || stem(ref) === name || path.basename(ref) === name);
+  // Matches either form: a legacy path ref by path/stem/basename, or a by-name
+  // selection by its declared name.
+  const match = packs.find((entry) => (typeof entry === 'string'
+    ? entry === relRef || stem(entry) === name || path.basename(entry) === name
+    : entry.name === name));
   if (!match) throw new Error(`Project has no registered pack named "${name}".`);
 
-  config.extensions = { packs: packs.filter((ref) => ref !== match), useGlobalPacks: config.extensions?.useGlobalPacks ?? true };
+  config.extensions = { packs: packs.filter((entry) => entry !== match), useGlobalPacks: hostCore.globalPacksEnabled(config) };
   saveProjectConfig(config);
 
   // Delete the vendored file, but never a path outside .wai/packs (the ref may
-  // point at a location the user owns).
-  const resolved = path.resolve(root, match);
+  // point at a location the user owns). A selection owns no vendored path here.
+  const resolved = path.resolve(root, typeof match === 'string' ? match : path.join('.wai', 'packs', match.name));
   const vendorDir = path.resolve(root, '.wai', 'packs');
   if (resolved.startsWith(vendorDir + path.sep)) {
     fs.rmSync(resolved, { recursive: true, force: true });

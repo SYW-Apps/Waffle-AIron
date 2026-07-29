@@ -24,7 +24,11 @@ reflects what is actually shipped in `src/` and what is planned.
 - **SDD skills** (`wairon skills`) — installed into each active target tool to
   drive the spec-driven workflow in-session.
 - **MCP server** (`wairon mcp`) — topology tools + `sdd_*` tools for authoring
-  and validating specs.
+  and validating specs, and MCP `instructions` returned on `initialize` so a
+  connecting agent is taught the SDD model (tree shape, authoring order, the
+  bound project's profile and packs, read-the-skill-first) instead of depending
+  on a human having briefed it. Packs append their platform delta to that text
+  via `instructions` in `pack.yaml`.
 - **Shared context** (`.wai/context/`) — project description + auto-generated
   domain map and AI guide.
 - **Tooling** — `init`, `status`, self-update with release channels, command

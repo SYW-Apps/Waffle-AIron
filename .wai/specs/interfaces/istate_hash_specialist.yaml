@@ -1,6 +1,8 @@
 id: istate_hash_specialist
 name: State Hash Specialist Interface
-description: Contract for computing the deterministic content identity of the spec tree.
+description: >-
+  Contract for computing the deterministic content identity of the spec tree, and the identity of
+  the GATE that validated it (spec tree + governing doctrine).
 component: state_hash_specialist
 methods:
   - name: hashSpecTree
@@ -11,6 +13,23 @@ methods:
     returns: StateId
     guarantees:
       - idempotent
+  - name: hashGateState
+    description: >-
+      Digest the spec tree TOGETHER WITH the governing doctrine into a gate StateId: what the
+      conformance gate actually consisted of when it passed. Doctrine is a parameter, not a load, so
+      this stays pure and reproducible. Only doctrine that can change a conformance verdict
+      participates — pack identities, merged profiles and language tables, patterns, guarantee
+      tokens, assertions, and programmatic rule names/codes; pack skills and instruction blocks are
+      excluded because they never affect a verdict. The returned algorithm is marked so a
+      content-only StateId can never compare equal to a gate StateId.
+    signature: 'hashGateState(doctrine: LoadedExtensions): StateId'
+    returns: StateId
+    params:
+      - name: doctrine
+        type: LoadedExtensions
+        description: The governing extension packs, already loaded and merged by the caller.
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-04T12:48:43.305Z'
-updatedAt: '2026-07-04T13:06:22.877Z'
+updatedAt: '2026-07-29T14:54:11.964Z'

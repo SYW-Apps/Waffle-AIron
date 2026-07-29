@@ -16,6 +16,7 @@ import { readStampVersion } from '../core/stamp.js';
 import { localGuideFilePath, reinjectLocalGuides } from '../utils/ai-guide.js';
 import { activeTargetTypes, checkSkillFreshness, exportSddSkills } from '../core/skills.js';
 import { findLegacySpecFiles } from '../core/specs.js';
+import { diagnoseProjectPacks, pinInstalledPacksAsSelections } from '../core/extensions.js';
 import { claudeMcpConfigPath } from './mcp.js';
 
 // ---------------------------------------------------------------------------
@@ -213,6 +214,47 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
     logger.blank();
   }
 
+  // ── Extension packs ─────────────────────────────────────────────────────────
+  // The migration surface: which packs govern this project, and which govern it
+  // only because nobody said otherwise.
+  if (isProjectInitialized()) {
+    const packs = diagnoseProjectPacks();
+    if (packs.unresolved.length || packs.notApplied.length || packs.globalsApplied.length) {
+      console.log(chalk.bold('Extension packs'));
+
+      // Declared but absent — the gate already fails on these; repeat them here
+      // because doctor is where a user looks when something is off.
+      for (const bad of packs.unresolved) {
+        line(tally, 'error', `${bad.label}: declared but unresolvable — ${bad.message}`);
+      }
+
+      // Installed and NOT applied. When the project never declared a position on
+      // machine-wide packs, these are exactly the packs that used to apply
+      // automatically — the migration set.
+      if (packs.notApplied.length > 0) {
+        const names = packs.notApplied.map((p) => `${p.name}@${p.version}`).join(', ');
+        if (packs.globalsUndeclared) {
+          line(tally, 'warn',
+            `${packs.notApplied.length} installed pack(s) are NOT applied to this project: ${names}. `
+            + 'Machine-wide packs no longer apply unless a project selects them, so if this project relied on them its gate is now weaker. '
+            + 'Run `wairon doctor --fix` to record them as explicit selections, or `wairon pack use <name>` for the ones you want.');
+        } else {
+          line(tally, 'ok', `${packs.notApplied.length} installed pack(s) are available but deliberately not applied: ${names}.`);
+        }
+      }
+
+      // Opted into machine-wide packs: legal, but the doctrine does not travel.
+      if (packs.globalsApplied.length > 0) {
+        line(tally, 'warn',
+          `${packs.globalsApplied.length} pack(s) apply from the machine-wide store via extensions.useGlobalPacks: true — `
+          + `${packs.globalsApplied.map((p) => `${p.name}@${p.version}`).join(', ')}. `
+          + 'That doctrine does not travel with the repository, so a clone or CI enforces different rules. '
+          + 'Prefer selecting each pack by name (`wairon pack use <name>`).');
+      }
+      logger.blank();
+    }
+  }
+
   // ── MCP server ──────────────────────────────────────────────────────────────
   console.log(chalk.bold('MCP server'));
   const wantClaude = targets.includes('claude') || targets.length === 0;
@@ -278,6 +320,19 @@ async function applyFixes(): Promise<void> {
     console.log(`  ${icon('ok')} Regenerated context files, skills, and ${guides.length} local guide(s).`);
   } catch (e) {
     console.log(`  ${icon('error')} Regeneration failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  // Migrate a project that never declared a position on machine-wide packs:
+  // record the installed packs it is no longer applying as explicit selections.
+  // Doctrine that governs a project must be declared BY that project, or a clone
+  // and CI enforce a different rule set and the difference is invisible.
+  try {
+    const pinned = pinInstalledPacksAsSelections();
+    if (pinned.length > 0) {
+      console.log(`  ${icon('ok')} Recorded ${pinned.length} installed pack(s) as explicit selections: ${pinned.join(', ')}.`);
+    }
+  } catch (e) {
+    console.log(`  ${icon('error')} Could not record pack selections: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   // Migrate legacy spec filenames

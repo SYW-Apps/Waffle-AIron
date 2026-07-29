@@ -56,6 +56,87 @@ methods:
       - name: options
         type: object
         description: '{ out?: string }'
+  - name: installPack
+    description: >-
+      `wairon pack install <source>` — install a pack DIRECTORY or .wpack archive into this wairon
+      install's store, recording its origin. Applies to nothing: a project opts in separately by
+      selecting the pack by name. An archive is extracted through the SDK's hardened path first, so
+      untrusted bytes never reach the store adapter, and a local-path origin is reported as
+      unfetchable because CI and a fresh clone could not obtain it.
+    signature: 'installPack(source: string): void'
+    returns: void
+    params:
+      - name: source
+        type: string
+        description: A pack directory or a .wpack/.zip archive.
+  - name: uninstallStorePack
+    description: >-
+      `wairon pack uninstall <name>[@version]` — remove a pack from the store: the named version, or
+      every version. Warns that a project still selecting it will now fail its gate rather than
+      quietly losing the doctrine.
+    signature: 'uninstallStorePack(spec: string): void'
+    returns: void
+    params:
+      - name: spec
+        type: string
+        description: A pack name, or name@version.
+  - name: whichPack
+    description: >-
+      `wairon pack which <name>[@version]` — identify exactly which installed pack a selection
+      resolves to: version (flagging when it came from latest-by-default), path, content digest, and
+      recorded origin. The answer to "which appenser am I actually getting?".
+    signature: 'whichPack(spec: string): void'
+    returns: void
+    params:
+      - name: spec
+        type: string
+        description: A pack name, or name@version.
+  - name: usePack
+    description: >-
+      `wairon pack use <name>[@version]` — SELECT an installed pack for this project, recorded by
+      name in .wai/project.yaml. The source is copied from the store's install record so the project
+      self-describes how a fresh machine or CI runner obtains the same doctrine; --source overrides
+      it, --pin freezes the resolved version and its content digest, and --bundle marks it for
+      committing. Re-selecting a pack replaces its existing entry rather than duplicating it, and an
+      origin that is not a fetchable URL is reported because CI and a fresh clone could not resolve
+      it.
+    signature: 'usePack(spec: string, options: object): void'
+    returns: void
+    params:
+      - name: spec
+        type: string
+        description: A pack name, or name@version.
+      - name: options
+        type: object
+        description: source / pin / bundle.
+  - name: unusePack
+    description: >-
+      `wairon pack unuse <name>` — drop this project's selection of a pack. The pack stays installed
+      in the store; only this project stops applying it.
+    signature: 'unusePack(name: string): void'
+    returns: void
+    params:
+      - name: name
+        type: string
+  - name: bundlePack
+    description: >-
+      `wairon pack bundle [name] [--all]` — commit a copy of a selected pack under
+      .wai/packs/<name>/<version>/. A bundled pack resolves BEFORE the store, so a clone and CI
+      apply the doctrine with an empty store and no network; this is what makes a repository
+      self-sufficient for private packs and air-gapped builds. Bundling also PINS the selection's
+      version, because a bundle is a copy of one specific version and a floating selection would let
+      the committed bytes and the declared intent drift apart. With no argument it bundles every
+      selection already marked for bundling.
+    signature: 'bundlePack(name: string, options: object): void'
+    returns: void
+    params:
+      - name: name
+        type: string
+        description: 'Optional pack name; omitted bundles every selection marked bundle: true.'
+        optional: true
+      - name: options
+        type: object
+        description: all — bundle every selection this project declares.
 status: complete
 createdAt: '2026-07-14T20:09:24.660Z'
-updatedAt: '2026-07-21T18:44:51.949Z'
+updatedAt: '2026-07-29T20:01:41.112Z'

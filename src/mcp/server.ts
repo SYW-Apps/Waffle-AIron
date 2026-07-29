@@ -20,6 +20,7 @@ import { EndpointSchema, type Endpoint, type SubsystemSpec } from '../models/spe
 import {
   listResources as coreListSkillResources,
   readResource as coreReadSkillResource,
+  buildServerInstructions as coreBuildServerInstructions,
   type SkillResourceDescriptor,
 } from '../core/skills.js';
 import { resolveChainingParent } from '../core/specs.js';
@@ -177,6 +178,16 @@ function listSkillResources(): SkillResourceDescriptor[] {
 function readSkillResource(resourceId: string): string {
   return coreReadSkillResource(resourceId);
 }
+/**
+ * mcp_skills_adapter.buildServerInstructions — the composed briefing the server
+ * returns on `initialize`. Unlike the two forwarders above, this one DOES read
+ * the request-scoped project root (it reports the bound project's profile and
+ * packs); resolving it per createMcpServer call is what keeps the hosted
+ * per-request scoped server correct.
+ */
+function buildServerInstructions(): string {
+  return coreBuildServerInstructions();
+}
 
 /** Resolve an MCP resource URI (wairon-skill://<id>) back to its skill id. */
 function skillIdFromResourceUri(uri: string): string {
@@ -236,9 +247,15 @@ export interface McpServerOptions {
 }
 
 export function createMcpServer(options: McpServerOptions = {}): McpServer {
+  // The protocol's own "how to use this server" channel, which clients inject
+  // into the agent's system prompt. Composed BEFORE construction because it is a
+  // constructor option, and composed per call so the hosted per-request scoped
+  // server reports ITS bound project's profile and packs, not a stale snapshot.
   const server = new McpServer({
     name: 'wairon',
     version: WAIRON_VERSION,
+  }, {
+    instructions: buildServerInstructions(),
   });
 
   // ── Topology tools ────────────────────────────────────────────────────────

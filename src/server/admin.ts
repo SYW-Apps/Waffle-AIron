@@ -263,7 +263,9 @@ export function executeApprovedLock(cfg: HostConfig, projectId: string, subproje
       throw new LockValidationError(errors.map((e) => ({ code: e.code, message: e.message, specId: e.specId })));
     }
     hostCore.promoteAllComplete();
-    const stateId = hostCore.computeStateId();
+    // The GATE identity: the lock certifies that these specs passed THIS gate,
+    // so the governing doctrine is part of the frozen state.
+    const stateId = hostCore.computeGateStateId();
 
     // Git-backed: the lock is the semantic checkpoint — the auto-publish
     // trigger. Commit ONLY the .wai/ tree (pathspec-scoped, never the shared
@@ -542,9 +544,12 @@ export function executeApprovedPromote(cfg: HostConfig, projectId: string, subpr
     if (!lock) {
       return { status: 'not-locked', message: 'Project is not locked; run lock first.' };
     }
-    const current = hostCore.computeStateId();
+    // Recompute the GATE identity — the same flavour the lock recorded. A pack
+    // change (or a lock record written before doctrine was covered, whose
+    // algorithm marker differs) therefore reads as stale instead of passing.
+    const current = hostCore.computeGateStateId();
     if (!stateIdEquals(current, lock.stateId)) {
-      return { status: 'stale', stateId: current, message: 'Spec tree changed since lock; re-lock required.' };
+      return { status: 'stale', stateId: current, message: 'Spec tree or governing doctrine changed since lock; re-lock required.' };
     }
     hostCore.writeLockRecord({ ...lock, status: 'promoted' });
     return { status: 'ready', stateId: current, message: 'Locked state matches; change-set marked ready for promotion.' };

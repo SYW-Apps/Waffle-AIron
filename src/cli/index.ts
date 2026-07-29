@@ -27,7 +27,7 @@ import { runDiagram } from '../commands/diagram.js';
 import { listRules } from '../commands/rules.js';
 import { listPatterns } from '../commands/patterns.js';
 import { listVariants } from '../commands/variants.js';
-import { addPack, listPacks, removePack, initPack, buildPack } from '../commands/packs.js';
+import { addPack, listPacks, removePack, initPack, buildPack, installPack, uninstallStorePack, whichPack, usePack, unusePack, bundlePack } from '../commands/packs.js';
 import {
   runServe,
   runDev,
@@ -275,14 +275,20 @@ async function runPacks(action: string, arg?: string, opts: { global?: boolean }
 async function runPack(
   action: string,
   arg?: string,
-  opts: { global?: boolean; kind?: string; dir?: string; skill?: boolean; out?: string } = {},
+  opts: { global?: boolean; kind?: string; dir?: string; skill?: boolean; out?: string; source?: string; bundle?: boolean; pin?: boolean; all?: boolean } = {},
 ): Promise<void> {
   if (action === 'init') await initPack(arg!, { kind: opts.kind === 'code' ? 'code' : 'declarative', dir: opts.dir, skill: opts.skill });
   else if (action === 'build') await buildPack(arg ?? '.', { out: opts.out });
   else if (action === 'add') await addPack(arg!, { global: opts.global });
   else if (action === 'list') await listPacks();
   else if (action === 'remove') await removePack(arg!, { global: opts.global });
-  else throw new WaironError('unknown pack action (expected init | build | add | list | remove)');
+  else if (action === 'install') await installPack(arg!);
+  else if (action === 'uninstall') await uninstallStorePack(arg!);
+  else if (action === 'which') await whichPack(arg!);
+  else if (action === 'use') await usePack(arg!, { source: opts.source, bundle: opts.bundle, pin: opts.pin });
+  else if (action === 'unuse') await unusePack(arg!);
+  else if (action === 'bundle') await bundlePack(arg, { all: opts.all });
+  else throw new WaironError('unknown pack action (expected init | build | install | uninstall | which | use | unuse | bundle | add | list | remove)');
 }
 
 const rulesCmd = program
@@ -321,6 +327,52 @@ packCmd
   .option('--out <file>', 'output file path (default <name>-<version>.wpack)')
   .action(async (source: string | undefined, opts) => {
     await runPack('build', source, { out: opts.out });
+  });
+
+packCmd
+  .command('install <source>')
+  .description('Install a pack into this wairon install\'s store (a .wpack/.zip or a pack directory). Applies to NOTHING until a project selects it')
+  .action(async (source: string) => {
+    await runPack('install', source);
+  });
+
+packCmd
+  .command('uninstall <name>')
+  .description('Remove a pack from the store (name or name@version; every version when unversioned)')
+  .action(async (name: string) => {
+    await runPack('uninstall', name);
+  });
+
+packCmd
+  .command('use <name>')
+  .description('Select an installed pack for THIS project (name or name@version), recording it in .wai/project.yaml')
+  .option('--source <url>', 'record an explicit fetch URL (overrides the origin recorded at install time)')
+  .option('--pin', 'freeze the resolved version and its content digest instead of tracking latest installed')
+  .option('--bundle', 'mark for committing a copy under .wai/packs/ so the repo needs no machine setup')
+  .action(async (name: string, opts) => {
+    await runPack('use', name, { source: opts.source, bundle: opts.bundle, pin: opts.pin });
+  });
+
+packCmd
+  .command('bundle [name]')
+  .description('Commit a copy of a selected pack under .wai/packs/ so a clone and CI need no pack store (default: every selection marked --bundle)')
+  .option('--all', 'bundle every pack this project selects')
+  .action(async (name: string | undefined, opts) => {
+    await runPack('bundle', name, { all: opts.all });
+  });
+
+packCmd
+  .command('unuse <name>')
+  .description('Deselect a pack for this project (it stays installed in the store)')
+  .action(async (name: string) => {
+    await runPack('unuse', name);
+  });
+
+packCmd
+  .command('which <name>')
+  .description('Identify which installed pack a name resolves to: version, path, content digest, and recorded origin')
+  .action(async (name: string) => {
+    await runPack('which', name);
   });
 
 packCmd

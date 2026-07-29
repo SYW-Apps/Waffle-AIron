@@ -161,6 +161,13 @@ methods:
     params:
       - name: root
         type: string
+  - name: computeGateStateId
+    description: >-
+      Compute the GATE state identity (spec tree + governing doctrine) of the current project — the
+      identity a lock is scoped to. Pure 1:1 forward.
+    signature: 'computeGateStateId(): StateId'
+    returns: StateId
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-24T18:01:53.812Z'
+updatedAt: '2026-07-29T14:55:01.546Z'

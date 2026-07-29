@@ -20,6 +20,13 @@ methods:
       - name: resourceId
         type: string
         description: The MCP resource id / skill id to read.
+  - name: buildServerInstructions
+    description: >-
+      Compose the MCP initialize instructions for the bound project, for the MCP server to return on
+      the handshake.
+    signature: 'buildServerInstructions(): string'
+    returns: string
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-10T12:21:28.128Z'
+updatedAt: '2026-07-29T10:50:36.696Z'

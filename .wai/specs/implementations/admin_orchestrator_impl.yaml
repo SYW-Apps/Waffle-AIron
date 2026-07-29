@@ -325,10 +325,12 @@ methods:
         targetComponent: host_core_adapter
         targetMethod: promoteAllComplete
       - stepNumber: 7
-        description: Compute the validated StateId
+        description: >-
+          Compute the validated GATE StateId (spec content + governing doctrine) — the lock
+          certifies that these specs passed THIS gate
         type: call
         targetComponent: host_core_adapter
-        targetMethod: computeStateId
+        targetMethod: computeGateStateId
       - stepNumber: 8
         description: >-
           Commit the .wai/-scoped tree and push, returning the commit and compare URL a human opens
@@ -377,10 +379,12 @@ methods:
         type: return
         outcome: not locked — lock first
       - stepNumber: 5
-        description: Recompute the current StateId
+        description: >-
+          Recompute the current GATE StateId — a doctrine change since the lock makes it mismatch,
+          so the lock reads stale exactly as a spec edit would
         type: call
         targetComponent: host_core_adapter
-        targetMethod: computeStateId
+        targetMethod: computeGateStateId
       - stepNumber: 6
         description: If the current StateId differs from the lock's StateId, refuse as stale
         type: branch
@@ -538,10 +542,10 @@ methods:
         targetComponent: host_core_adapter
         targetMethod: promoteAllComplete
       - stepNumber: 11
-        description: Compute the validated StateId
+        description: Compute the validated GATE StateId (spec content + governing doctrine)
         type: call
         targetComponent: host_core_adapter
-        targetMethod: computeStateId
+        targetMethod: computeGateStateId
       - stepNumber: 12
         description: >-
           Publish to git: commit the promoted working tree and push, returning the commit + compare
@@ -605,10 +609,10 @@ methods:
         type: return
         outcome: not locked — lock first
       - stepNumber: 9
-        description: Recompute the current StateId
+        description: Recompute the current GATE StateId for the staleness verdict
         type: call
         targetComponent: host_core_adapter
-        targetMethod: computeStateId
+        targetMethod: computeGateStateId
       - stepNumber: 10
         description: If the current StateId differs from the lock's StateId, refuse as stale
         type: branch
@@ -1047,4 +1051,4 @@ lint:
         host_core_adapter — documented shortcut on the lock/promote path; refactor candidate.
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-07-25T16:36:39.166Z'
+updatedAt: '2026-07-29T15:21:13.240Z'

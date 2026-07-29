@@ -4,8 +4,8 @@ name: LoadedExtensions
 description: >-
   The merged result of loading all governing extension packs (global then project — project wins on
   collision). Consumed by the validator (rules/profiles/languages/patterns/guarantees), the skills
-  exporter (skills), and the CLI. A pack that fails to load contributes an EXTENSION_LOAD_ERROR
-  rather than being silently skipped.
+  exporter (skills), the MCP instructions composer (instructions), and the CLI. A pack that fails to
+  load contributes an EXTENSION_LOAD_ERROR rather than being silently skipped.
 fields:
   - name: packNames
     type: string[]
@@ -51,6 +51,13 @@ fields:
       Merged declarative assertions across all loaded packs, each tagged with pack provenance and
       its namespaced finding code (<PACK>_<CODE>).
     optional: false
+  - name: instructions
+    type: PackInstructionBlock[]
+    description: >-
+      Merged pack-contributed instruction blocks across all loaded packs, each tagged with its pack
+      provenance, preserved in pack LOAD ORDER (load order is append order in the composed
+      instructions).
+    optional: false
 methods: []
 createdAt: '2026-07-14T18:57:07.906Z'
-updatedAt: '2026-07-18T22:42:18.487Z'
+updatedAt: '2026-07-29T10:48:39.071Z'

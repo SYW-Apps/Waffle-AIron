@@ -166,6 +166,40 @@ export const PathsConfigSchema = z.object({
 export type PathsConfig = z.infer<typeof PathsConfigSchema>;
 
 /**
+ * A pack SELECTION: the project states which pack it applies, by name, and the
+ * pack itself lives in the committed bundle or this wairon install's store.
+ *
+ * This is the separation the old `--global` install never made: installing a pack
+ * on a machine must not grant it authority over every project there, because then
+ * the gate differs per developer and CI disagrees with every local run. A project
+ * declares its doctrine; the machine merely has it available.
+ *
+ * See docs/design/pack-scoping.md.
+ */
+export const PackSelectionSchema = z.object({
+  /** The pack name — the only required field. */
+  name: z.string().min(1),
+  /** Exact version pin. Omitted = the latest version installed in the store. */
+  version: z.string().min(1).optional(),
+  /** Content digest pin (`sha256-…`), verified on resolution. */
+  integrity: z.string().min(1).optional(),
+  /**
+   * Where to obtain this pack — recorded automatically from the store's install
+   * record at selection time, so a fresh machine or CI runner can fetch it
+   * (`wairon pack sync`). Supports a `{version}` placeholder and `${VAR}` env
+   * expansion for private URLs.
+   */
+  source: z.string().min(1).optional(),
+  /**
+   * Commit a copy under `.wai/packs/<name>/<version>/` and resolve from there
+   * first, so the project needs no machine setup at all — the answer for private
+   * packs, air-gapped CI, and repos that must be self-sufficient.
+   */
+  bundle: z.boolean().optional(),
+});
+export type PackSelection = z.infer<typeof PackSelectionSchema>;
+
+/**
  * The identity a profile selection was made by — structurally the hosting
  * layer's PrincipalSubject, modeled here because project.yaml is core's file.
  */
@@ -237,13 +271,34 @@ export const ProjectConfigSchema = z.object({
    * Loaded identically by CLI and MCP at validation time.
    */
   extensions: z.object({
-    packs: z.array(z.string()).default([]),
     /**
-     * Whether to also load machine-wide packs from the global folder
-     * (WAIRON_PACKS_DIR or ~/.wairon/packs). Default true; set false for
-     * strict reproducibility (only committed project packs apply).
+     * The packs this project APPLIES. Two forms:
+     *
+     *  - A SELECTION (preferred): `{ name, version?, integrity?, source?, bundle? }`
+     *    — the project names what it wants and the pack is resolved from the
+     *    committed bundle, else this wairon install's store. Omitting `version`
+     *    means "latest installed".
+     *  - A legacy PATH string (`.wai/packs/foo.yaml`, an absolute path, or a
+     *    module id) — still loaded, deprecated.
+     *
+     * A declared pack that cannot be resolved is an error, never a silent skip:
+     * a project whose doctrine is absent is misconfigured, and the gate says so.
      */
-    useGlobalPacks: z.boolean().default(true),
+    packs: z.array(z.union([z.string(), PackSelectionSchema])).default([]),
+    /**
+     * Whether to ALSO apply every pack installed machine-wide (WAIRON_PACKS_DIR
+     * or ~/.wairon/packs) to this project, without the project naming them.
+     *
+     * Defaults to **false**: a project's doctrine is what the project declares.
+     * Installing a pack on a machine makes it available, not authoritative —
+     * otherwise the gate, the skills list, and the MCP instructions differ per
+     * developer, and CI (which has no store) disagrees with every local run.
+     *
+     * Set true to restore the old machine-wide behaviour; `wairon doctor` reports
+     * packs that are installed but applied by no route, and `--fix` records them
+     * as explicit selections.
+     */
+    useGlobalPacks: z.boolean().default(false),
   }).optional(),
 
   paths: PathsConfigSchema.default({}),

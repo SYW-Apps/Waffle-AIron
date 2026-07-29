@@ -95,6 +95,13 @@ methods:
           Print each pack with its name, scope, version, and what it provides (profiles, languages,
           rules, skills, patterns), plus any load errors.
         type: local
+    detail: intent
+    intent: >-
+      Prints the global/store tier and the project tier. A project entry is shown under its declared
+      label — a path for a legacy ref, name[@version] for a selection — probed at wherever it
+      resolves, with a selection annotated as resolving to its store or bundle location. A declared
+      selection that resolves to nothing is printed as an error, because the project is not getting
+      doctrine it asked for. Notes where pack rules surface and how to add packs.
   - name: removePack
     narrative:
       - stepNumber: 1
@@ -205,6 +212,95 @@ methods:
       Build a .wpack archive from a pack directory via the SDK portal and write it to
       <name>-<version>.wpack (or --out), reporting the path and size. The SDK seals integrity and
       validates the envelope against the inner pack manifest before emitting the archive.
+  - name: installPack
+    narrative:
+      - stepNumber: 1
+        description: >-
+          A .wpack/.zip source is extracted into a temp directory through the SDK portal's hardened
+          path (envelope inspection, code-pack refusal, extraction limits); a plain directory source
+          is used as-is, and a bare pack FILE is refused because the store versions directories.
+        type: call
+        targetComponent: sdk_portal
+        targetMethod: extractPack
+      - stepNumber: 2
+        description: >-
+          Install the materialized directory into the pack store via the core surface, recording the
+          origin it came from.
+        type: local
+        targetComponent: pack_store_adapter
+        targetMethod: installPackFromDirectory
+      - stepNumber: 3
+        description: >-
+          Report what was installed (name, version, path, digest) and state plainly that it applies
+          to NOTHING until a project selects it — the distinction the old --global install never
+          made.
+        type: local
+      - stepNumber: 4
+        description: >-
+          Warn when the origin is a local path rather than a fetchable URL: a selection recorded
+          from it cannot be resolved by CI or a fresh clone.
+        type: local
+    detail: calls-only
+  - name: uninstallStorePack
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Report the removal and warn that any project still selecting the pack will now fail its
+          gate with PACK_NOT_INSTALLED — a loud failure, not a silently weakened rule set.
+        type: local
+    detail: intent
+    intent: >-
+      Splits the name@version spec and removes the pack from the store via the core surface — that
+      version, or every version when none is named. Reports the removal, or errors naming the store
+      directory when nothing matched, and warns that a project still selecting the pack will now
+      fail its gate with PACK_NOT_INSTALLED rather than quietly losing the doctrine.
+  - name: whichPack
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Print the resolved version (marked when it came from latest-by-default), path, content
+          digest, and recorded origin; when nothing resolves, name the installed packs so a typo is
+          obvious.
+        type: local
+    detail: intent
+    intent: >-
+      Splits the name@version spec and resolves it against the store via the core surface — the
+      exact version when pinned, otherwise the latest installed. Prints the resolved version (marked
+      when it came from latest-by-default), path, content digest, and recorded origin, flagging an
+      unrecorded origin; when nothing resolves it names the installed packs so a typo is obvious.
+  - name: usePack
+    narrative: []
+    detail: intent
+    intent: >-
+      Refuses outside a wairon project. Resolves the requested name (and optional version) against
+      the store via the core surface, erroring with the installed names when nothing matches. Builds
+      the selection: the name always; the resolved version when one was requested or --pin was
+      passed; the content digest under --pin; the source from --source or the store's recorded
+      origin, but ONLY when that origin is a fetchable URL; and the bundle flag when asked. Replaces
+      any existing selection of the same pack rather than duplicating it, saves project.yaml, and
+      reports whether it selected or re-selected. Warns when no fetchable source was recorded and no
+      bundle was requested, because CI and a fresh clone would then be unable to obtain the pack.
+  - name: unusePack
+    narrative: []
+    detail: intent
+    intent: >-
+      Refuses outside a wairon project. Removes the selection whose name matches (leaving legacy
+      path refs untouched, which `pack remove` handles), erroring when this project selects no such
+      pack. Saves project.yaml and states plainly that the pack remains installed in the store while
+      its profiles, rules, and assertions no longer apply here.
+  - name: bundlePack
+    narrative: []
+    detail: intent
+    intent: >-
+      Refuses outside a wairon project. Picks the targets: the named selection, every selection
+      under --all, or (with no argument) those already marked for bundling — erroring when nothing
+      matches. For each, resolves the pack against the STORE specifically (a bundle is what is being
+      created, so the existing bundle must not satisfy the lookup), replaces any previous copy at
+      .wai/packs/<name>/<version>/, and copies the pack in. Then pins that exact version on the
+      selection and records bundle: true, so resolution prefers the committed copy and the declared
+      intent can never drift from the committed bytes. Reports each written path plus the reminder
+      to commit .wai/; a pack that is not installed is an error naming the store, and the remaining
+      targets still proceed.
 detail: calls-only
 lint:
   allow:
@@ -218,4 +314,4 @@ lint:
         limitation at the workspace-package boundary.
 status: complete
 createdAt: '2026-07-14T20:10:02.916Z'
-updatedAt: '2026-07-21T18:45:19.246Z'
+updatedAt: '2026-07-29T20:01:50.527Z'

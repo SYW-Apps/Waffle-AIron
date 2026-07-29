@@ -1,0 +1,41 @@
+kind: value-object
+id: pack_diagnosis
+name: PackDiagnosis
+description: >-
+  What `wairon doctor` reports about a project's extension packs. Exists to make one transition
+  safe: machine-wide packs used to apply to every project automatically, and now apply only where a
+  project selects them. A project that never declared a position could therefore lose doctrine
+  silently — a gate going QUIET rather than loud, the one failure direction that must never happen
+  unnoticed. This diagnosis names the packs at stake so `doctor --fix` can convert the implicit past
+  into explicit, reproducible selections.
+fields:
+  - name: globalsUndeclared
+    type: boolean
+    description: >-
+      True when extensions.useGlobalPacks is ABSENT from the project file — the project never
+      decided, so the default governs it. The parsed config cannot express this (it defaults the
+      field), so only the raw file distinguishes "never decided" from "explicitly chosen", and only
+      the former may have depended on machine-wide doctrine.
+    optional: false
+  - name: notApplied
+    type: InstalledPack[]
+    description: >-
+      Installed packs this project applies by no route. When globalsUndeclared, these are exactly
+      the packs that would have applied automatically before — the migration set.
+    optional: false
+  - name: unresolved
+    type: string[]
+    description: >-
+      Declared selections that do not resolve, each with the same message the conformance gate
+      reports. Repeated here because doctor is where a user looks when something is off.
+    optional: false
+  - name: globalsApplied
+    type: InstalledPack[]
+    description: >-
+      Machine-wide packs this project applies because it opted in explicitly. Legal, but that
+      doctrine does not travel with the repository, so a clone or CI enforces different rules —
+      worth surfacing rather than assuming.
+    optional: false
+methods: []
+createdAt: '2026-07-29T19:43:44.384Z'
+updatedAt: '2026-07-29T19:43:44.609Z'

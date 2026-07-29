@@ -166,5 +166,8 @@ describe('demo-project seeder', () => {
       return buildCanvasModel();
     });
     expect(reseeded.components).toHaveLength(22);
-  });
+    // Provisions a hosted project and seeds a 22-component tree twice (the
+    // --force idempotency half), so it needs more than the 5s default once the
+    // suite is running it alongside everything else.
+  }, 60_000);
 });

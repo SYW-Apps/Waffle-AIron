@@ -7,29 +7,39 @@ methods:
   - name: createMcpServer
     narrative:
       - stepNumber: 1
-        description: Instantiate McpServer with name 'wairon' and version
-        type: local
+        description: >-
+          Compose the server instructions for the bound project through the skills client adapter —
+          the MCP protocol's own channel for "how to use this server", which clients inject into the
+          agent's system prompt. Composed BEFORE instantiation because instructions are constructor
+          options, and resolved per construction so the hosted per-request scoped server reports its
+          own bound project's profile and packs.
+        type: call
+        targetComponent: mcp_skills_adapter
+        targetMethod: buildServerInstructions
       - stepNumber: 2
+        description: Instantiate McpServer with name 'wairon', the version, and the composed instructions
+        type: local
+      - stepNumber: 3
         description: Register tool 'listAgents' which resolves dynamic agent topology using agent_resolver
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: resolveAgentTopology
-      - stepNumber: 3
+      - stepNumber: 4
         description: Register tool 'getAgent' which retrieves a single resolved agent's details
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: resolveAgentTopology
-      - stepNumber: 4
+      - stepNumber: 5
         description: Register validation tools executing validateSddTree
         type: call
         targetComponent: mcp_validator_adapter
         targetMethod: validateSddTree
-      - stepNumber: 5
+      - stepNumber: 6
         description: Register loader tools to fetch system, subsystem, and component specs from spec_loader
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: loadSystemSpec
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           Register MCP resource endpoints (resources/list and resources/read) on the SDK server so
           the MCP server now publishes the four built-in SDD skills (sdd-architect, sdd-auditor,
@@ -39,7 +49,7 @@ methods:
           mcp_portal.createMcpServer), both transports publish the resources automatically; inbound
           resource reads dispatch through the MCP portal to the resource workflow.
         type: local
-      - stepNumber: 7
+      - stepNumber: 8
         description: >-
           Resolve the bound root's chaining context through the core adapter; when the root is a
           chained subproject, announce the parent project, the mounting subsystem id, and the
@@ -49,9 +59,9 @@ methods:
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: resolveChainingParent
-      - stepNumber: 8
+      - stepNumber: 9
         description: Return configured McpServer instance
         type: local
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-24T18:14:47.036Z'
+updatedAt: '2026-07-29T10:51:08.666Z'

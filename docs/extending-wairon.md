@@ -13,7 +13,47 @@ A working wrapper lives at [`examples/wrapper/`](../examples/wrapper/) and
 is guarded by `tests/examples/wrapper-example.test.ts`, so it cannot
 silently rot.
 
-## Installing packs
+## Installing and selecting packs
+
+> **New model (preferred).** Installing a pack makes it *available*; a project
+> then *selects* it. Installing no longer grants a pack authority over every
+> project on the machine — see [pack scoping](design/pack-scoping.md).
+
+```sh
+wairon pack install ./appenser-1.2.0.wpack   # into this wairon install's store
+wairon pack which appenser                   # which version/digest/origin resolves?
+cd my-project
+wairon pack use appenser                     # THIS project applies it
+```
+
+`pack use` records the selection by name in `.wai/project.yaml`, carrying the
+origin the pack was installed from so a fresh clone or CI runner can obtain it:
+
+```yaml
+extensions:
+  packs:
+    - name: appenser
+      version: 1.2.0          # only when pinned; omit to track latest installed
+      integrity: sha256-…      # written by --pin
+      source: https://…/appenser-{version}.wpack
+```
+
+- `--pin` freezes the resolved version **and** its content digest.
+- `--source <url>` records an explicit fetch URL (overriding the install origin).
+- `--bundle` marks the pack for committing under `.wai/packs/`, so the repo needs
+  no machine setup at all — the answer for private packs and air-gapped CI. A
+  committed bundle resolves *before* the store.
+- `wairon pack unuse <name>` drops the selection; the pack stays installed.
+
+**A declared pack that cannot be resolved is an error**, not a silent skip:
+`validate`, `status`, `lock`, `generate`, and every `sdd_*` MCP call refuse and
+name the pack plus how to install it. A gate that quietly enforces less than the
+project declared is worse than one that fails.
+
+If you install from a local path, no fetchable source can be recorded and
+`pack use` says so — bundle it, or pass `--source`.
+
+## Installing packs (legacy vendoring)
 
 **Per project (recommended for repo doctrine):**
 
@@ -148,6 +188,50 @@ skills:
   `.wai/packs/` and pinned in `project.yaml`, so they travel with the repo.
 - **No change when unused** — projects with no pack skills install exactly the
   built-ins, as before.
+
+## Teaching the connecting agent (`instructions`)
+
+An agent that connects to a wairon MCP server is **taught the SDD model on the
+handshake**: wairon returns MCP `instructions` on `initialize` — the protocol's
+field for "how to use this server", which clients inject into the agent's system
+prompt. It states what a spec tree is, the L0→L5 shape, the authoring order, that
+the `sdd_*` schemas are self-describing, the bound project's governing profile,
+the loaded packs, and — pointing rather than repeating — that
+`wairon-skill://sdd-architect` must be read **before** authoring.
+
+That default is **wairon's**, deliberately: wairon owns the model, so wairon
+teaches it, and it changes with wairon versions instead of drifting across every
+wrapper that would otherwise reimplement it. A pack does not restate it — a pack
+appends its **platform delta**:
+
+```yaml
+# pack.yaml
+instructions: >-
+  Specs in this project stay target-agnostic. Make.com mechanics (method
+  selector, JSON argument envelope, Router branches, blueprint patches) never
+  enter a spec — read wairon-skill://appenser-architect first.
+```
+
+Blocks are appended after wairon's own text under an attributed heading
+(`## From pack "appenser"`), in **pack load order** — so a reader can always tell
+platform doctrine from wairon doctrine. For finer control, spell blocks out and
+scope them to the governing profile the way assertions scope theirs:
+
+```yaml
+instructions:
+  - text: Applies to every project this pack governs.
+  - text: Router branches never appear in a spec — model them as narrative branch steps.
+    profile: [make-automation]        # only when this profile governs the project
+```
+
+- A block with no `profile` always applies; a scoped block applies only when the
+  project's `projectType` matches one of its entries (a block scoped to a profile
+  that cannot be resolved is withheld, so platform doctrine never leaks into an
+  unrelated project).
+- Because the text is composed **per server construction**, a hosted instance
+  reports each request's own bound project — its profile, its packs.
+- Pack skills stay the place for depth. `instructions` is the map that makes an
+  agent go and read them; keeping it short is the point.
 
 ## Reusable, versioned pattern references
 

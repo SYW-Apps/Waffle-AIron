@@ -1,0 +1,32 @@
+kind: value-object
+id: pack_instruction_block
+name: PackInstructionBlock
+description: >-
+  One block of connecting-agent guidance contributed by an extension pack, appended to wairon's OWN
+  MCP `initialize` instructions under an attributed heading (## From pack "<name>") in pack load
+  order. The split is deliberate: wairon owns the SDD model and teaches it by default, so a pack
+  states only its platform delta and never restates the model. An optional `profile` list scopes the
+  block to the bound project's governing profile/projectType, exactly as declarative assertions
+  scope their doctrine.
+fields:
+  - name: text
+    type: string
+    description: >-
+      The guidance appended to wairon's instructions — the pack's platform delta only, never a
+      restatement of wairon's SDD model.
+    optional: false
+  - name: profile
+    type: string[]
+    description: >-
+      Optional scope: apply this block only when the bound project's governing profile/projectType
+      is one of these. Absent = applies to every project the pack governs.
+    optional: true
+  - name: pack
+    type: string
+    description: >-
+      Provenance: the name of the pack contributing this block, rendered into the attributed
+      heading.
+    optional: true
+methods: []
+createdAt: '2026-07-29T10:47:52.530Z'
+updatedAt: '2026-07-29T10:47:52.677Z'

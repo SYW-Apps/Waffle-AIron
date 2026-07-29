@@ -3,8 +3,9 @@ id: extension_pack
 name: ExtensionPack
 description: >-
   A parsed extension-pack manifest — wairon's plugin unit. A declarative (YAML) pack carries data
-  only (profiles, languages, skills, patterns, guarantees); a programmatic (JS) pack adds rules.
-  Listed in project.yaml under extensions.packs, vendored into .wai/packs for reproducibility.
+  only (profiles, languages, skills, patterns, guarantees, instructions); a programmatic (JS) pack
+  adds rules. Listed in project.yaml under extensions.packs, vendored into .wai/packs for
+  reproducibility.
 fields:
   - name: name
     type: string
@@ -43,6 +44,13 @@ fields:
       Declarative rule assertions — instances of the closed kinds (forbid-edge / require-field /
       endpoint-shape), the hosted-safe doctrine channel; an unknown kind fails the pack load loudly.
     optional: false
+  - name: instructions
+    type: PackInstructionBlock[]
+    description: >-
+      Connecting-agent guidance appended to wairon's own MCP initialize instructions under an
+      attributed per-pack heading, in pack load order. A pack contributes its platform delta only —
+      wairon owns and teaches the SDD model itself.
+    optional: false
 methods: []
 createdAt: '2026-07-14T18:57:01.915Z'
-updatedAt: '2026-07-18T22:42:18.358Z'
+updatedAt: '2026-07-29T10:48:27.495Z'

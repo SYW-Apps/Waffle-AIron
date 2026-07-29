@@ -15,3 +15,11 @@ export * from './skills.js';
 export * from './context.js';
 export * from './surfaces.js';
 export * from './openapi.js';
+export * from './packstore.js';
+
+// Two components legitimately expose a `loadProjectExtensions`: sdd_core's real
+// pack loader (extensions.js) and sdd_skills' thin client adapter onto it
+// (skills.js, named for the contract method it realizes). On the PUBLIC core
+// surface the loader is the one callers mean — stated explicitly so the star
+// exports above are not ambiguous.
+export { loadProjectExtensions } from './extensions.js';

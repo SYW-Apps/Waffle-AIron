@@ -163,6 +163,17 @@ methods:
     params:
       - name: root
         type: string
+  - name: computeGateStateId
+    description: >-
+      Compute the GATE state identity of the current project: load the governing extension packs,
+      then digest the spec tree together with that doctrine via the state hash specialist. This is
+      the identity a lock must be scoped to — a lock asserts "these specs pass this gate", and the
+      pack set IS part of the gate. Content-only consumers (surface snapshots, freshness
+      comparisons) keep using computeStateId, so a pack bump never marks a vendored contract
+      snapshot stale.
+    signature: 'computeGateStateId(): StateId'
+    returns: StateId
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-24T18:01:48.922Z'
+updatedAt: '2026-07-29T14:54:50.484Z'

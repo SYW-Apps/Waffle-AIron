@@ -8,6 +8,7 @@ import { execSync } from 'child_process';
 import { logger } from '../utils/logger.js';
 import { WAIRON_VERSION, GITHUB_REPO } from '../config/defaults.js';
 import { getChannel, setChannel, UpdateChannel } from '../config/userconfig.js';
+import { isNewerVersion } from '../utils/version.js';
 
 // ---------------------------------------------------------------------------
 // update command
@@ -402,33 +403,9 @@ export function cleanStaleBinary(oldPath?: string): void {
 }
 
 // ---------------------------------------------------------------------------
-// Version comparison (semver-lite, handles X.Y.Z and X.Y.Z-suffix.N)
+// Version comparison — lifted to utils/version.ts so the pack store shares one
+// comparator with the update check instead of a second copy that drifts.
+// Aliased (not re-exported) so this module's own call site still binds locally.
 // ---------------------------------------------------------------------------
 
-export function isNewer(current: string, candidate: string): boolean {
-  // Strip pre-release suffix for base version comparison
-  const baseVersion = (v: string) => v.replace(/-.*$/, '');
-  const preRelease = (v: string) => {
-    const match = v.match(/-(.+)\.(\d+)$/);
-    return match ? { label: match[1], n: parseInt(match[2], 10) } : null;
-  };
-
-  const parse = (v: string) => baseVersion(v).split('.').map((n) => parseInt(n, 10) || 0);
-  const [cMaj, cMin, cPat] = parse(current);
-  const [nMaj, nMin, nPat] = parse(candidate);
-
-  if (nMaj !== cMaj) return nMaj > cMaj;
-  if (nMin !== cMin) return nMin > cMin;
-  if (nPat !== cPat) return nPat > cPat;
-
-  // Same base version: stable > pre-release; higher pre-release N wins
-  const cPre = preRelease(current);
-  const nPre = preRelease(candidate);
-
-  if (!cPre && !nPre) return false;    // same stable
-  if (!cPre && nPre) return false;     // current stable, candidate is pre-release — not newer
-  if (cPre && !nPre) return true;      // current pre-release, candidate stable — stable wins
-  if (cPre && nPre) return nPre.n > cPre.n; // both pre-release, higher N wins
-
-  return false;
-}
+export const isNewer = isNewerVersion;
