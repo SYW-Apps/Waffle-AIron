@@ -1,10 +1,165 @@
 # Changelog
 
-## Unreleased (from v5.0.1)
+## Unreleased (from v5.1.0)
 
-Additive features plus fixes: merge dev → main with `[minor]` in the merge commit
-message → **v5.1.0**. (`[major]` would wrongly jump to v6 — that instruction was
-spent on v5.0.0.)
+**Breaking.** Merge dev → main with `[major]` in the merge commit message →
+**v6.0.0**. Three changes are visible on upgrade without any action by the user,
+and each needs one (see *Upgrading* below): machine-wide packs no longer apply to
+a project that has not declared them, existing lock records read as stale, and a
+project referencing a global pack's profile can newly fail `validate --ci`. Nothing
+here is purely additive, so `[minor]` would understate it.
+
+### Pack scoping: installing a pack no longer governs every project on the machine
+
+A pack installed machine-wide used to apply to every project on that machine,
+including projects that never mentioned it. The gate, `skills list`, and the MCP
+instructions therefore differed per developer, and CI — which has no pack store —
+enforced a different rule set than the author's laptop. Installing a pack now makes
+it *available*; a project *selects* what it applies.
+
+- **The pack store** — `wairon pack install <source>` puts a pack in this wairon
+  install's store (`WAIRON_PACKS_DIR`, else `~/.wairon/packs`), laid out
+  `<name>/<version>/` so several versions coexist. `pack uninstall`, and
+  `pack which <name>` to see exactly which version, path, content digest, and
+  recorded origin a name resolves to. Installing applies to nothing.
+- **Per-project selection** — `wairon pack use <name>[@version]` records the pack
+  by name in `.wai/project.yaml`. `--pin` freezes the resolved version and its
+  digest, `--source <url>` records an explicit fetch URL, `--bundle` marks it for
+  committing. `pack unuse` drops the selection and leaves the pack installed.
+  Unpinned means "latest installed".
+- **A selection carries its own source** — copied from the store's install record
+  at selection time, so the project self-describes how a fresh machine or CI runner
+  obtains the same doctrine. `wairon pack sync` installs every declared-but-missing
+  pack from it; `pack install` accepts a URL. A local-path origin is not fetchable
+  and `pack use` says so rather than leaving CI to discover it.
+- **Bundling for self-sufficiency** — `wairon pack bundle [name] [--all]` commits a
+  copy under `.wai/packs/<name>/<version>/`, which resolves **before** the store, so
+  a clone and CI need no store and no network. The answer for private packs and
+  air-gapped CI.
+- **A declared pack that cannot be resolved is an error**, never a silent skip:
+  `validate`, `status`, `lock`, `generate`, and every `sdd_*` MCP call refuse. The
+  code names the remedy — `PACK_NOT_INSTALLED` (absent), `PACK_VERSION_UNSATISFIED`
+  (installed, but not at the pin — the message lists what *is* installed),
+  `PACK_INTEGRITY_MISMATCH` (content off the pinned digest). All error severity, all
+  in `wairon rules list` and tunable via `rules.sddRuleSeverity`.
+- **A pinned `integrity` is verified on whichever path wins, recomputed from the
+  files.** A committed bundle is not exempt — it overrides the store, which makes it
+  the most important place to honour a pin, not a place to skip it. The store's
+  recorded digest is not trusted as the answer either, since a pack edited in place
+  would otherwise satisfy a pin it no longer matches.
+- **`PACK_STORE_DRIFT`** (warning) when a bundle and the store hold different
+  content for the same `name@version`. The bundle still applies, so this exists to
+  explain why an edit to the installed copy had no effect.
+- **`applyByDefault: true`** in a pack manifest seeds that pack into new projects at
+  `wairon init` — what a machine-wide install *should* mean: a default for projects
+  you create from now on, recorded where it is visible, not retroactive authority
+  over everything on disk.
+- **`rules.enforceReproducibility` now does something.** It has existed since `init`
+  started writing it and was read nowhere. It backs `UNPINNED_PACK_SELECTION` and
+  `PACK_SOURCE_UNFETCHABLE` — warnings while you work, errors under `--ci` and at
+  `lock`. You may develop against a floating pack set; CI will not accept one. A
+  bundled selection is exempt: its committed bytes are the pin.
+- **`wairon doctor`** reports unresolvable selections, installed-but-unapplied packs,
+  and packs applying via an explicit `useGlobalPacks: true`. `doctor --fix` records
+  the unapplied set as explicit selections. It never invents selections for a
+  project that deliberately applies nothing, distinguishing "never decided" (the
+  field absent from the file) from "chose deliberately".
+- **`.github/actions/setup-wairon`** — a composite action with `packs: sync | none |
+  <explicit list>`, so a cloned repo's CI needs no pack configuration.
+
+### The lock now covers the doctrine that validated the tree
+
+`wairon lock` recorded a hash of the spec tree alone. The pack set — which *is* the
+gate — was invisible to it, so you could lock a tree validated under one rule set,
+change the packs, and still promote on the strength of the earlier lock because the
+spec digest never moved. That is the stale-approval hole the commit-scoped lock
+exists to close, entering through the doctrine door.
+
+Implemented as a **second** identity rather than a change to the existing one,
+because the same StateId also stamps surface snapshots and drives their freshness
+comparison, where doctrine is irrelevant:
+
+- `computeStateId()` — spec tree only. Surface/landscape snapshots, freshness.
+- `computeGateStateId()` — tree **+** doctrine projection. `lock`, hosted lock, and
+  the promote-time re-check.
+
+The projection covers only what can change a verdict: pack identities, merged
+profile and language tables, patterns, guarantee tokens, assertions, and rule
+names/codes. Pack `skills` and `instructions` are excluded — prose cannot alter a
+verdict, and including it would invalidate every lock on a documentation tweak.
+
+### Teaching the connecting agent over MCP
+
+An agent connecting to a wairon MCP server received nothing: `initialize` carried no
+`instructions`, there was no prompts capability, and skills were pull-only
+resources. Spec-authoring quality depended on whether a human remembered to brief
+the agent.
+
+- **`instructions` on `initialize`** — the protocol's own "how to use this server"
+  field, which clients inject into the system prompt. Carries the L0→L5 shape, the
+  authoring order by tool name, the fact that the `sdd_*` schemas are
+  self-describing, the bound project's governing profile, the loaded packs, and the
+  directive to read `wairon-skill://sdd-architect` *before* authoring. Short and
+  pointer-heavy by design; composed per server construction, so a hosted
+  per-request server reports its own project.
+- **Packs contribute, wairon owns the default** — `instructions:` in a pack manifest
+  is appended under `## From pack "<name>"` in pack load order, optionally scoped to
+  the governing profile. A pack states its platform delta; it never restates
+  wairon's model, which would drift on every release.
+- **Skills as MCP prompts** as well as resources, so clients that surface prompts can
+  offer them directly.
+- **Pack skills can EXTEND a builtin** — `extends: sdd-implement` appends the pack's
+  section to the builtin under `## Platform: <pack>` instead of standing beside it as
+  a parallel skill the agent has to notice and reconcile. The builtin stays wairon's,
+  so an upgrade still updates it.
+- **Variant guidance reaches hosted agents** — `sdd_get_spec` on a variant-tagged
+  component returns the resolved guidance and its same-variant siblings as a derived,
+  read-only field. Previously it only reached generated agent files.
+
+### Fixes
+
+- **Organizations page crashed on a hosted instance upgraded to v5** with
+  `Cannot read properties of undefined (reading 'localeCompare')`. Units persisted
+  before slugs existed have no `slug`, `host doctor --fix` is operator-invoked, and
+  the units view sorted on `slug` straight off the wire — a data-shape problem
+  surfacing as an unreadable minified UI crash. The read path now derives a missing
+  slug from the id (a unit's id is its dot-qualified path and the slug is its last
+  segment, so a root unit's id *is* its slug — the same rule the migration applies).
+  Identity is never rewritten and a present slug never overwritten.
+- **An unmigrated data dir now announces itself at startup.** `wairon serve` reports
+  pending legacy shapes and names the remedy, reusing the migration's own dry run as
+  the detector so the two cannot disagree. It writes nothing and never blocks
+  startup. Previously the first symptom was zero permissions or a crashed page.
+- **CI typechecks the web app.** `web/` is a separate package, not an npm workspace,
+  so the root `typecheck` never covered it and `build:web` does not run in CI — a
+  type error in `web/src` could reach main unnoticed.
+- **A test no longer rebuilds the project mid-suite.** The hosted-server example test
+  ran `npm run build`, whose `prebuild` cleans `sdk/dist`, while ~126 other test
+  files loaded in parallel workers — so any file importing `@wairon/sdk` in that
+  window died with `Cannot find module '/sdk/dist/index.js'`. Intermittent, invisible
+  when run alone, and more likely the more tests the suite gained.
+
+### Upgrading
+
+1. **Hosted instances: run `wairon host doctor` (dry run), then `--fix`.** Required
+   if you upgraded from a pre-permission-model version — legacy users and API tokens
+   otherwise resolve to zero permissions, and units without slugs break the
+   organizations page. `wairon serve` now warns when this is pending.
+2. **Re-lock any locked project.** The lock now covers doctrine, so records written
+   before this release read as *stale* and `promote` refuses until you re-lock. This
+   fails closed by design: those locks were taken without doctrine coverage and
+   cannot be retro-verified.
+3. **Declare the packs your projects apply.** Machine-wide packs no longer apply
+   unless a project selects them. Run `wairon doctor` to see what is installed but
+   unapplied and `wairon doctor --fix` to record it as explicit selections — or set
+   `extensions.useGlobalPacks: true` in `.wai/project.yaml` to keep the old
+   behaviour. **A project whose subsystem references a global pack's `profile` will
+   otherwise report `UNKNOWN_PROFILE`, which fails `validate --ci`.**
+4. **Embedding wairon as a library:** `LoadedExtensions` gained required
+   `instructions` and `selectionFailures` fields. Use the exported
+   `emptyExtensions()` rather than hand-constructing one.
+
+## v5.1.0 (from v5.0.1)
 
 ### Hosted profile application: a selected profile now actually governs (new, `feat/profile-apply-into-spec`)
 
