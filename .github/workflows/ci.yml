@@ -33,6 +33,13 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # The web app is a SEPARATE package (not an npm workspace), so the root
+      # typecheck above never covers it and `build:web` does not run in CI — a
+      # type error in web/src reached main unnoticed. Its own `tsc --noEmit`,
+      # with its deps installed on demand.
+      - name: Typecheck web app
+        run: npm run typecheck:web
+
       - name: Run tests
         run: npm test
 

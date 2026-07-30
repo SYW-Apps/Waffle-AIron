@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { migratePermissionModel } from '../../src/server/migration.js';
-import { getInstanceIdentity } from '../../src/server/instance.js';
+import { getInstanceIdentity, ensureInstanceIdentity } from '../../src/server/instance.js';
+import { warnIfDataDirUnmigrated } from '../../src/server/http.js';
 import { authenticate, LEGACY_SUPERADMIN_USER_ID } from '../../src/server/auth.js';
 import { authorize } from '../../src/server/authorization.js';
 import { listAssignments } from '../../src/server/permissions.js';
@@ -230,5 +231,99 @@ describe('permission-model migration (sdd_host)', () => {
     migratePermissionModel(dataDir, true); // seeds identity on an empty dir
     const report = migratePermissionModel(dataDir, false);
     expect(report.findings).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Startup detection (host_server) — the diagnostic half of the migration.
+//
+// `host doctor --fix` is operator-invoked, so an instance can upgrade and keep
+// serving unmigrated records. A live instance hit exactly that: units written
+// before slugs existed crashed the organizations page with a minified
+// `undefined.localeCompare`, which named neither the cause nor the remedy. The
+// server now says so on startup, reusing the migration's own dry run as the
+// detector so the two can never disagree about what is stale.
+// ---------------------------------------------------------------------------
+
+describe('startup warning for an unmigrated data dir', () => {
+  let dataDir: string;
+  let errors: string[];
+  let spy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-startupwarn-'));
+    errors = [];
+    spy = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      errors.push(args.map(String).join(' '));
+    });
+  });
+  afterEach(() => {
+    spy.mockRestore();
+    try { fs.rmSync(dataDir, { recursive: true, force: true }); } catch { /* windows file locks */ }
+  });
+
+  const cfg = (dir: string) => ({ dataDir: dir }) as unknown as Parameters<typeof warnIfDataDirUnmigrated>[0];
+
+  it('names the pending migration, the remedy, and each stale shape', () => {
+    // The exact record shape the live instance served: no `slug`.
+    fs.writeFileSync(path.join(dataDir, 'organization.json'), JSON.stringify({
+      units: [{
+        id: 'test', name: 'Test', kind: 'organization', status: 'active',
+        createdAt: '2026-07-01T12:44:34.510Z', visibility: 'open',
+      }],
+      placements: [],
+    }));
+
+    warnIfDataDirUnmigrated(cfg(dataDir));
+
+    const joined = errors.join('\n');
+    expect(joined).toContain('has NOT been migrated');
+    // The remedy, spelled out — the thing a stack trace could never tell them.
+    expect(joined).toContain('wairon host doctor --fix');
+    // And what specifically is stale.
+    expect(joined).toMatch(/units:.*test/);
+  });
+
+  it('stays silent for a seeded data dir with nothing to migrate', () => {
+    // Startup seeds instance identity BEFORE this check runs, and that ordering is
+    // load-bearing: an unseeded dir legitimately reports "identity is not seeded",
+    // so checking first would tell every brand-new instance it needs migrating.
+    ensureInstanceIdentity(dataDir);
+    fs.writeFileSync(path.join(dataDir, 'organization.json'),
+      JSON.stringify({ units: [], placements: [] }));
+
+    warnIfDataDirUnmigrated(cfg(dataDir));
+    expect(errors.filter((e) => e.includes('[wairon migrate]'))).toEqual([]);
+  });
+
+  it('a FRESH instance is never told it needs migrating (the check runs after identity seeding)', () => {
+    // Guards the ordering in startHostServer. Before seeding, the migration
+    // legitimately reports the missing identity; after, there is nothing to say.
+    warnIfDataDirUnmigrated(cfg(dataDir));
+    expect(errors.join('\n')).toMatch(/instance identity is not seeded/);
+
+    errors.length = 0;
+    ensureInstanceIdentity(dataDir);
+    warnIfDataDirUnmigrated(cfg(dataDir));
+    expect(errors.filter((e) => e.includes('[wairon migrate]'))).toEqual([]);
+  });
+
+  it('never throws — a broken diagnostic must not stop a server from starting', () => {
+    fs.writeFileSync(path.join(dataDir, 'organization.json'), '{ this is not json');
+    expect(() => warnIfDataDirUnmigrated(cfg(dataDir))).not.toThrow();
+  });
+
+  it('writes nothing: the check is a DRY RUN, not a silent migration', () => {
+    const orgPath = path.join(dataDir, 'organization.json');
+    const before = JSON.stringify({
+      units: [{ id: 'test', name: 'Test', kind: 'organization', status: 'active', createdAt: 'x', visibility: 'open' }],
+      placements: [],
+    });
+    fs.writeFileSync(orgPath, before);
+
+    warnIfDataDirUnmigrated(cfg(dataDir));
+    // Mutating an operator's data at startup without consent is exactly what the
+    // explicit --fix flag exists to prevent.
+    expect(fs.readFileSync(orgPath, 'utf8')).toBe(before);
   });
 });
