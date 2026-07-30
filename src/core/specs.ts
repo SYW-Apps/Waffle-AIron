@@ -2120,6 +2120,66 @@ export class SpecWorkspace {
       return merged;
     };
 
+    /**
+     * The identity key for an element of a delta-mergeable array, or null when the
+     * array has no per-element identity (a list of plain strings like `owns` or
+     * `guarantees`, where wholesale replacement is the only sane semantic).
+     *
+     * This table is what makes the documented contract true. Arrays used to be
+     * upserted only if they were explicitly listed below; everything else fell to
+     * wholesale replacement, so a delta naming ONE element silently deleted every
+     * element it did not mention — the same data loss already fixed for `dispatch`
+     * and `lifecycle`, still live for trustedLinks, invariants, patterns, lint
+     * allows, boundaries, and global requirements. Keyed here rather than guessed,
+     * with a name/id fallback so a future array field inherits upsert semantics
+     * instead of silently regressing to destructive replace.
+     */
+    const identityKeyOf = (field: string, item: unknown): string | null => {
+      if (item === null || typeof item !== 'object') return null; // string lists: replace wholesale
+      const o = item as Record<string, unknown>;
+      const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
+      switch (field) {
+        case 'dispatch':           return str(o.capability);
+        case 'lifecycle':          return `${String(o.phase)} ${String(o.component)} ${String(o.method)}`;
+        case 'emits':
+        case 'subscribesTo':       return `${String(o.topic)} ${o.event === undefined ? '' : String(o.event)}`;
+        case 'trustedLinks':       return str(o.subsystem);
+        case 'allow':              return str(o.code);       // lint.allow
+        case 'invariants':         return str(o.id);
+        case 'patterns':           return str(o.id);
+        case 'boundaries':         return str(o.name);
+        case 'globalRequirements': return str(o.description);
+        case 'databases':          return str(o.id) ?? str(o.name);
+        default:                   return str(o.name) ?? str(o.id);
+      }
+    };
+
+    /** Upsert an array whose elements carry an identity, honouring delete markers. */
+    const mergeIdentifiedArray = (field: string, existing: any[], delta: any[]): any[] => {
+      const merged = [...existing];
+      for (const deltaItem of delta) {
+        const key = identityKeyOf(field, deltaItem);
+        // An element with no resolvable identity cannot be addressed; fall back to
+        // appending it rather than guessing which existing entry it replaces.
+        const idx = key === null
+          ? -1
+          : merged.findIndex((item) => identityKeyOf(field, item) === key);
+        const isDelete = deltaItem?.remove === true || deltaItem?.action === 'delete';
+        if (idx !== -1) {
+          if (isDelete) merged.splice(idx, 1);
+          else merged[idx] = { ...merged[idx], ...deltaItem };
+        } else if (!isDelete) {
+          merged.push(deltaItem);
+        }
+      }
+      return merged.map((item) =>
+        (item && typeof item === 'object' ? (({ action, remove, ...rest }) => rest)(item) : item));
+    };
+
+    /** True when every element of both sides can be addressed by identity. */
+    const isIdentifiedArray = (field: string, a: unknown[], b: unknown[]): boolean =>
+      a.every((i) => identityKeyOf(field, i) !== null) && b.every((i) => identityKeyOf(field, i) !== null);
+
     const mergeDelta = (existing: any, delta2: any): any => {
       const res = { ...existing };
       for (const [key, value] of Object.entries(delta2)) {
@@ -2140,9 +2200,17 @@ export class SpecWorkspace {
           res.dispatch = mergeKeyedArray(existing.dispatch, value, b => String(b?.capability));
         } else if (key === 'lifecycle' && Array.isArray(value) && Array.isArray(existing.lifecycle)) {
           res.lifecycle = mergeKeyedArray(existing.lifecycle, value, le => `${le?.phase} ${le?.component} ${le?.method}`);
-        } else if ((key === 'emits' || key === 'subscribesTo') && Array.isArray(value) && Array.isArray(existing[key])) {
-          res[key] = mergeKeyedArray(existing[key], value, (b: { topic?: string; event?: string }) => `${b?.topic} ${b?.event ?? ''}`);
+        } else if (Array.isArray(value) && value.length > 0 && Array.isArray(existing[key])
+                   && isIdentifiedArray(key, existing[key], value)) {
+          // Every other array whose elements carry an identity: upsert by it and
+          // honour delete markers, instead of replacing the list wholesale and
+          // silently dropping whatever the delta did not mention.
+          res[key] = mergeIdentifiedArray(key, existing[key], value);
         } else if (Array.isArray(value)) {
+          // No per-element identity (a list of plain strings), or an explicitly
+          // EMPTY array. Empty stays a wholesale clear on purpose: under upsert
+          // semantics it would otherwise mean "change nothing", leaving no way to
+          // empty a keyed list short of enumerating a delete per key.
           res[key] = value;
         } else if (typeof value === 'object' && typeof existing[key] === 'object' && existing[key] !== null) {
           res[key] = mergeDelta(existing[key], value);
