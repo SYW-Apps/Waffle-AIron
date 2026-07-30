@@ -16,6 +16,24 @@ import {
 import { buildRuleContext, makeScopeFilter, SddRule } from './rules/index.js';
 import { registerBuiltinRules, registerPackRules, ruleSequence } from './rules/repository.js';
 import { LoadedExtensions, loadProjectExtensions } from './extensions.js';
+import type { PackSelection } from '../models/project.js';
+// Static, NOT a lazy require: a relative require does not resolve under the test
+// runner, and the catch below would swallow it into "no selections" — silently
+// disabling the reproducibility rule in every test.
+import { loadProjectConfig } from '../config/loader.js';
+
+/**
+ * The project's BY-NAME pack selections, for the reproducibility rule. Legacy
+ * path refs are excluded: they pin nothing to check. Never throws — an
+ * uninitialized project simply selects nothing.
+ */
+function projectPackSelections(): PackSelection[] {
+  try {
+    return (loadProjectConfig().extensions?.packs ?? []).filter((e): e is PackSelection => typeof e !== 'string');
+  } catch {
+    return [];
+  }
+}
 import { loadProjectVariants } from './variants.js';
 import { loadSurfaceSnapshots } from './surfaces.js';
 import { buildCodeModel } from './source-analysis.js';
@@ -385,6 +403,8 @@ export function validateSddTree(
       scopeSubsystem,
       extensions,
       variants: loadProjectVariants(),
+      // By-name selections only: a legacy path ref pins nothing to check.
+      packSelections: projectPackSelections(),
       surfaceSnapshots,
       codeModel,
       issues,

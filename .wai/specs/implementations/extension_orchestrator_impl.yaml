@@ -261,7 +261,49 @@ methods:
       pack, carrying its recorded origin as a source only when that origin is a fetchable URL, sets
       useGlobalPacks false to make the decision explicit, saves the config, and returns the recorded
       names.
+  - name: defaultPackSelections
+    narrative:
+      - stepNumber: 1
+        description: Enumerate every pack installed in the store.
+        type: call
+        targetComponent: pack_store_adapter
+        targetMethod: listInstalledPacks
+      - stepNumber: 2
+        description: Consider each installed pack in turn.
+        type: loop
+        loopKind: forEach
+        over: the installed packs
+        endStep: 4
+      - stepNumber: 3
+        description: >-
+          Read the pack's manifest to learn whether it asks to be applied by default, skipping any
+          pack whose manifest will not load — a broken pack seeds nothing rather than seeding
+          something broken.
+        type: call
+        targetComponent: pack_source_adapter
+        targetMethod: readManifest
+      - stepNumber: 4
+        label: pack_considered
+        description: >-
+          When the manifest declares applyByDefault, record a name+version selection, carrying the
+          pack's recorded origin as its source only when that origin is a fetchable URL (a local
+          path could not be resolved by a clone or CI).
+        type: local
+      - stepNumber: 5
+        description: >-
+          Return the selections to seed. Any failure degrades to an empty list: initializing a
+          project must never fail because of a bad pack sitting in the store.
+        type: return
+        outcome: the default selections
+    detail: full
+    intent: >-
+      Enumerates the pack store, reads each installed pack's manifest through the pack source
+      adapter, and keeps only those declaring applyByDefault. Each becomes a name+version selection
+      carrying the pack's recorded origin as its source when that origin is a fetchable URL. A pack
+      whose manifest will not load is skipped rather than seeded broken, and any failure degrades to
+      an empty list — initializing a project must never fail because of a bad pack sitting in the
+      store.
 detail: calls-only
 status: complete
 createdAt: '2026-07-14T19:01:00.434Z'
-updatedAt: '2026-07-29T19:44:02.027Z'
+updatedAt: '2026-07-29T21:28:00.320Z'

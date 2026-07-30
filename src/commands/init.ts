@@ -12,6 +12,7 @@ import {
   setProjectRoot,
 } from '../utils/fs.js';
 import { loadSystemSpec } from '../core/specs.js';
+import { defaultPackSelections } from '../core/extensions.js';
 import { createChainedSubsystem } from '../core/provision.js';
 import type { SubsystemSpec } from '../models/index.js';
 import {
@@ -560,6 +561,15 @@ function buildProjectConfig(
     },
     paths: {
       specsDir: '.wai/specs',
+    },
+    // Seed the store packs that declare `applyByDefault`, and record the
+    // machine-wide decision explicitly. This is what a machine-wide install
+    // should mean: a default for projects created from now on, written where it is
+    // visible in review and removable — not retroactive authority over projects
+    // that never mentioned it.
+    extensions: {
+      packs: defaultPackSelections(),
+      useGlobalPacks: false,
     },
     createdAt: now,
     updatedAt: now,

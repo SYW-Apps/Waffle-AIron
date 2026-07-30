@@ -10,6 +10,7 @@ import {
 } from '../../models/index.js';
 import type { ProfileDef, LanguagePackDef, LoadedPattern, LoadedAssertion } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
+import type { PackSelection } from '../../models/project.js';
 import type { CodeModel } from '../source-analysis.js';
 
 // ---------------------------------------------------------------------------
@@ -118,6 +119,13 @@ export interface RuleContext {
     guarantees: string[];
     /** Declarative rule assertions (closed kinds, pack-instantiated) evaluated by the declarative-assertions rule. */
     assertions: LoadedAssertion[];
+    /**
+     * The project's by-name pack SELECTIONS (legacy path refs excluded). The
+     * reproducibility rule checks these for a version/integrity pin, since a
+     * floating selection resolved off a mutable machine store is exactly what
+     * `enforceReproducibility` exists to prevent.
+     */
+    packSelections: PackSelection[];
   };
 
   /**

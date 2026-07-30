@@ -51,6 +51,15 @@ fields:
       attributed per-pack heading, in pack load order. A pack contributes its platform delta only —
       wairon owns and teaches the SDD model itself.
     optional: false
+  - name: applyByDefault
+    type: boolean
+    description: >-
+      Seed this pack into the selections of projects created FROM NOW ON (wairon init) rather than
+      applying it retroactively to every project on the machine. This is what a machine-wide install
+      should mean: a default for new work, written explicitly into the new project's config where it
+      is visible in review and removable — never silent authority over projects that never mentioned
+      it.
+    optional: false
 methods: []
 createdAt: '2026-07-14T18:57:01.915Z'
-updatedAt: '2026-07-29T10:48:27.495Z'
+updatedAt: '2026-07-29T21:27:19.013Z'

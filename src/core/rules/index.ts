@@ -10,6 +10,7 @@ import {
 import type { ValidationIssue } from '../validation.js';
 import { emptyExtensions, LoadedExtensions } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
+import type { PackSelection } from '../../models/project.js';
 import { ArchProfile, BUILTIN_PROFILES, RuleContext, SddRule, Severity } from './types.js';
 import { BUILTIN_TYPES, matchTypeRef, normalizeLanguage } from './type-analysis.js';
 
@@ -45,6 +46,7 @@ import { integrationConformanceRule } from './integration-conformance.js';
 import { hiddenStateRule } from './hidden-state.js';
 import { dependencyConformanceRule } from './dependency-conformance.js';
 import { lintAllowsRule } from './lint-allows.js';
+import { reproducibilityRule } from './reproducibility.js';
 import { portalCallAuthRule } from './portal-call-auth.js';
 import { emptyCodeModel, CodeModel } from '../source-analysis.js';
 
@@ -121,6 +123,9 @@ export const SDD_RULES: SddRule[] = [
   technologyRule,
   namingRule,
   complexityRule,
+  // Pack reproducibility runs late: it is about project CONFIGURATION (can this
+  // pack set be reproduced elsewhere?) rather than spec content.
+  reproducibilityRule,
   // MUST run last: it audits which lint.allow entries the earlier rules
   // actually consumed (stale/unknown allows).
   lintAllowsRule,
@@ -282,6 +287,8 @@ export interface BuildContextOptions {
   extensions?: LoadedExtensions;
   /** Loaded component-variant registry (dynamic layer on top of packs); empty when absent. */
   variants?: VariantDef[];
+  /** The project's by-name pack selections (legacy path refs excluded); empty when absent. */
+  packSelections?: PackSelection[];
   /** Stored surface snapshots for cross-tree/remote reference resolution. */
   surfaceSnapshots?: import('../../models/index.js').SurfaceSnapshot[];
   /** Source-code model for structural conformance; empty when not built. */
@@ -534,7 +541,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     isTypeResolved,
     targetLanguageFor,
     isSpecInScope,
-    ext: { profiles: extensions.profiles, languages: extensions.languages, patterns: extensions.patterns, guarantees: extensions.guarantees, assertions: extensions.assertions },
+    ext: { profiles: extensions.profiles, languages: extensions.languages, patterns: extensions.patterns, guarantees: extensions.guarantees, assertions: extensions.assertions, packSelections: opts.packSelections ?? [] },
     variants: opts.variants ?? [],
     surfaceSnapshots: opts.surfaceSnapshots ?? [],
     codeModel: opts.codeModel ?? emptyCodeModel(),

@@ -53,6 +53,33 @@ project declared is worse than one that fails.
 If you install from a local path, no fetchable source can be recorded and
 `pack use` says so — bundle it, or pass `--source`.
 
+### Applying a pack to new projects by default
+
+A pack in the store can ask to be selected by every project created from then on:
+
+```yaml
+# pack.yaml
+applyByDefault: true
+```
+
+`wairon init` seeds it into the new project's `extensions.packs` as an explicit
+`name@version` selection. That is what a machine-wide install *should* mean — a
+default for new work, written where it is visible in review and removable — rather
+than retroactive authority over projects that never mentioned it.
+
+### Reproducibility
+
+With `rules.enforceReproducibility` (the default), a selection that neither pins a
+version nor bundles is reported: `UNPINNED_PACK_SELECTION` resolves to whatever
+this machine happens to have installed, so a clone or CI can enforce a different
+rule set than you do. `PACK_SOURCE_UNFETCHABLE` means nothing can obtain the pack
+elsewhere at all.
+
+Both are **warnings while you work** and errors under `wairon validate --ci`, so
+`wairon pack use appenser` stays a one-liner while CI refuses a pack set it cannot
+reproduce. `--pin` or `pack bundle` clears them; `enforceReproducibility: false`
+accepts the drift deliberately.
+
 ### CI and a fresh machine
 
 `wairon pack install` accepts an HTTP(S) URL, and **`wairon pack sync` takes no

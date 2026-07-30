@@ -246,6 +246,16 @@ export const DeclarativePackSchema = z.object({
    * instructions, attributed to this pack, in pack load order.
    */
   instructions: PackInstructionsSchema,
+  /**
+   * Seed this pack into the selections of projects created from now on
+   * (`wairon init`), rather than applying it retroactively to every project on
+   * the machine.
+   *
+   * This is what a machine-wide install *should* mean: a default for new work,
+   * explicit in the new project's `project.yaml` where it is visible in review
+   * and removable — never silent authority over projects that never mentioned it.
+   */
+  applyByDefault: z.boolean().default(false),
 });
 export type DeclarativePack = z.infer<typeof DeclarativePackSchema>;
 
@@ -493,6 +503,7 @@ export function readManifest(target: string, projectRoot: string): DeclarativePa
     guarantees: mod.guarantees ?? [],
     assertions: mod.assertions ?? [],
     instructions: mod.instructions ?? [],
+    applyByDefault: mod.applyByDefault ?? false,
   });
   const rules: SddRule[] = [];
   for (const r of (mod.rules as unknown[] | undefined) ?? []) {
@@ -612,6 +623,39 @@ function globalPacksLeftUnset(): boolean {
     return raw?.extensions?.useGlobalPacks === undefined;
   } catch {
     return false;
+  }
+}
+
+/**
+ * The store packs whose manifests declare `applyByDefault: true`, as selections
+ * ready to seed into a NEW project (`wairon init`).
+ *
+ * The distinction that matters: a machine-wide install becomes a default for
+ * projects created from now on — written into the new project's config, visible in
+ * review and removable — rather than retroactive authority over every project on
+ * disk. Never throws; a machine with no such packs seeds nothing.
+ */
+export function defaultPackSelections(): PackSelection[] {
+  try {
+    const out: PackSelection[] = [];
+    for (const pack of listInstalledPacks()) {
+      const entry = packDirEntry(pack.path) ?? pack.path;
+      let manifest: DeclarativePack;
+      try {
+        manifest = readManifest(entry, path.dirname(entry));
+      } catch {
+        continue; // a pack that will not load seeds nothing
+      }
+      if (!manifest.applyByDefault) continue;
+      out.push({
+        name: pack.name,
+        version: pack.version,
+        ...(pack.origin && /^[a-z][a-z0-9+.-]*:\/\//i.test(pack.origin) ? { source: pack.origin } : {}),
+      });
+    }
+    return out;
+  } catch {
+    return [];
   }
 }
 

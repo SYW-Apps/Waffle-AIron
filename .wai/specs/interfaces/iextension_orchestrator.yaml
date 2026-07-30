@@ -81,6 +81,17 @@ methods:
     signature: 'pinInstalledPacksAsSelections(): string[]'
     returns: string[]
     params: []
+  - name: defaultPackSelections
+    description: >-
+      The store packs whose manifests declare `applyByDefault: true`, shaped as selections ready to
+      seed into a NEW project. Reads each installed pack's manifest and skips any that fails to
+      load, so a broken pack seeds nothing. Never throws — a machine with no such packs seeds an
+      empty list. The distinction it exists for: a machine-wide install becomes a default for
+      projects created from now on (written into the new project's config, visible in review and
+      removable) rather than retroactive authority over every project on disk.
+    signature: 'defaultPackSelections(): PackSelection[]'
+    returns: PackSelection[]
+    params: []
 status: complete
 createdAt: '2026-07-14T18:59:08.560Z'
-updatedAt: '2026-07-29T19:39:45.818Z'
+updatedAt: '2026-07-29T21:27:30.204Z'

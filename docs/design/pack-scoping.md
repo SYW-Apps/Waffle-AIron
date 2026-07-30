@@ -1,11 +1,12 @@
 # Pack scoping — the central store, project selection, and reproducibility
 
-> Status: design. Supersedes the current "global packs auto-load for every
-> project" behaviour. Written against wairon 5.1.0.
+> Status: **implemented (A1–A10)**. Kept as the rationale record — the "problem"
+> section below describes the behaviour as it was BEFORE this work (global packs
+> auto-loading for every project), not as it is now. Written against wairon 5.1.0.
 
 ---
 
-## The problem
+## The problem (as it was)
 
 wairon has two pack stores and no concept that connects them:
 
@@ -116,12 +117,20 @@ Floating has a cost, so it is graded rather than forbidden:
 |---------|----------------------|
 | `wairon validate`, `status`, MCP | **warning** — `UNPINNED_PACK_SELECTION` |
 | `wairon validate --ci` | **error** (warnings are errors in CI) |
-| `wairon lock` | **error** — `validateAsComplete` runs at full strictness |
+| `wairon lock` | **warning only** — see below |
 
 This is the severity model wairon already uses for draft specs: relaxed while you
-work, strict at the gate and at the freeze. You may develop against a floating
-pack set; you may not *lock* one. `enforceReproducibility: true` (the existing
-default) is what raises the warning — set it `false` to silence it entirely.
+work, strict at the gate. `enforceReproducibility: true` (the existing default) is
+what raises the warning — set it `false` to silence it entirely.
+
+**As-built correction:** the original design said `lock` would refuse a floating
+selection. It does not. `validateAsComplete` escalates only the *draft-gated*
+completeness codes (it flips spec statuses in memory), and `runLock` refuses on
+errors alone — so a warning does not block a freeze. Making `lock` refuse would
+need the rule to know it is running as-complete, which is a separate change.
+Today the practical guard is `validate --ci`, which every pipeline runs anyway.
+A9 (the gate StateId) does cover the related risk: a lock records WHICH pack set
+validated it, so a later doctrine change invalidates the lock regardless.
 
 Version comparison reuses the `isNewer` comparator already in
 `commands/update.ts:409` (lifted into core), so no semver dependency is added.
@@ -514,8 +523,15 @@ with or before A4, so migration reporting lands before behaviour changes.
    (absent field in the raw file) from "chose deliberately".
 5. ~~**A4**~~ **DONE** — `useGlobalPacks` defaults to `false`, behind the single
    `GLOBAL_PACKS_DEFAULT` constant that every reader and config writer shares.
-6. **A5** `applyByDefault` seeding at `init`.
-7. **A6** `enforceReproducibility` raises `UNPINNED_PACK_SELECTION`.
+6. ~~**A5**~~ **DONE** — a store pack declaring `applyByDefault: true` is seeded
+   into the selections of projects created from then on by `wairon init`, as an
+   explicit name@version entry. A pack whose manifest will not load seeds nothing.
+7. ~~**A6**~~ **DONE** — the flag was declared, defaulted to true, and read
+   NOWHERE. A new `pack-reproducibility` rule raises
+   `UNPINNED_PACK_SELECTION` and `PACK_SOURCE_UNFETCHABLE` as warnings while you
+   work and errors under `--ci`, so a one-line `pack use` stays frictionless
+   while CI refuses a pack set it cannot reproduce. A bundled selection is exempt:
+   its committed bytes ARE the pin.
 8. ~~**A8**~~ **DONE** — `pack bundle` (a committed copy that resolves before the
    store, pinning the selection's version so the bytes and the declared intent
    cannot drift), URL support in `pack install` (fetched to a temp file, then the

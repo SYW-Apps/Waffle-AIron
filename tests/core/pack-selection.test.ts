@@ -6,6 +6,9 @@ import { loadProjectExtensions, packEntryLabel, packEntryRef, diagnoseProjectPac
 import { installPackFromDirectory, uninstallPack } from '../../src/core/packstore.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { expandSource } from '../../src/commands/packs.js';
+import { defaultPackSelections } from '../../src/core/extensions.js';
+import { validateSddTree } from '../../src/core/validation.js';
+import { loadProjectConfig } from '../../src/config/loader.js';
 
 // ---------------------------------------------------------------------------
 // Pack SELECTION (A2) — the project declares which packs apply, by name.
@@ -326,5 +329,86 @@ describe('source expansion (what `pack sync` fetches)', () => {
   it('expands an unset ${VAR} to empty rather than leaving the literal in a URL', () => {
     delete process.env.WAIRON_TEST_ABSENT;
     expect(expandSource('https://${WAIRON_TEST_ABSENT}host/p.wpack')).toBe('https://host/p.wpack');
+  });
+});
+
+describe('applyByDefault seeds NEW projects (A5)', () => {
+  it('offers only the store packs that declare applyByDefault', () => {
+    store();
+    installPackFromDirectory(packSource('opt-in', '1.0.0'));
+    installPackFromDirectory(packSource('default-on', '2.0.0', 'applyByDefault: true\n'));
+    project([]);
+
+    const seeded = defaultPackSelections();
+    // A machine-wide install becomes a default for projects created FROM NOW ON,
+    // not retroactive authority over everything on disk.
+    expect(seeded.map((s) => s.name)).toEqual(['default-on']);
+    expect(seeded[0].version).toBe('2.0.0');
+  });
+
+  it('seeds nothing when no installed pack asks for it', () => {
+    store();
+    installPackFromDirectory(packSource('opt-in', '1.0.0'));
+    project([]);
+    expect(defaultPackSelections()).toEqual([]);
+  });
+});
+
+describe('enforceReproducibility finally enforces something (A6)', () => {
+  /** Validate a project holding one selection, returning its issue codes. */
+  function codesFor(selection: unknown, rules: Record<string, unknown> = {}): string[] {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-repro-'));
+    created.push(dir);
+    fs.mkdirSync(path.join(dir, '.wai', 'specs'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), JSON.stringify({
+      schemaVersion: '1.0.0', name: 'p', projectType: 'backend',
+      targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+      rules,
+      extensions: { useGlobalPacks: false, packs: [selection] },
+      createdAt: '2026-07-03T10:00:00Z', updatedAt: '2026-07-03T10:00:00Z',
+    }));
+    fs.writeFileSync(path.join(dir, '.wai', 'specs', '.index.yaml'),
+      "schemaVersion: 1.0.0\nname: S\nvision: v\ncreatedAt: '2026-07-03T10:00:00Z'\nupdatedAt: '2026-07-03T10:00:00Z'\n");
+    vi.spyOn(process, 'cwd').mockReturnValue(dir);
+    invalidateSpecCache();
+    // Pass rules exactly as the validate command and the MCP tool do — otherwise
+    // the project's opt-out never reaches the rule.
+    return validateSddTree({ rules: loadProjectConfig().rules }).issues.map((i) => i.code);
+  }
+
+  it('warns on a floating selection — it resolves off whatever this machine has', () => {
+    store();
+    installPackFromDirectory(packSource('demo', '1.2.0'));
+    expect(codesFor({ name: 'demo', source: 'https://h/demo-{version}.wpack' }))
+      .toContain('UNPINNED_PACK_SELECTION');
+  });
+
+  it('accepts a pinned selection', () => {
+    store();
+    installPackFromDirectory(packSource('demo', '1.2.0'));
+    const codes = codesFor({ name: 'demo', version: '1.2.0', source: 'https://h/demo-1.2.0.wpack' });
+    expect(codes).not.toContain('UNPINNED_PACK_SELECTION');
+    expect(codes).not.toContain('PACK_SOURCE_UNFETCHABLE');
+  });
+
+  it('accepts a BUNDLED selection without a pin — its committed bytes are the pin', () => {
+    store();
+    const codes = codesFor({ name: 'demo', bundle: true });
+    expect(codes).not.toContain('UNPINNED_PACK_SELECTION');
+    expect(codes).not.toContain('PACK_SOURCE_UNFETCHABLE');
+  });
+
+  it('warns when nothing can obtain the pack elsewhere', () => {
+    store();
+    installPackFromDirectory(packSource('demo', '1.2.0'));
+    expect(codesFor({ name: 'demo', version: '1.2.0' })).toContain('PACK_SOURCE_UNFETCHABLE');
+  });
+
+  it('goes silent when the project opts out of reproducibility', () => {
+    store();
+    installPackFromDirectory(packSource('demo', '1.2.0'));
+    const codes = codesFor({ name: 'demo' }, { enforceReproducibility: false });
+    expect(codes).not.toContain('UNPINNED_PACK_SELECTION');
+    expect(codes).not.toContain('PACK_SOURCE_UNFETCHABLE');
   });
 });
