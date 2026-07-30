@@ -355,7 +355,15 @@ export function validateSddTree(
     // like every other finding.
 
     if (!system) {
-      issues.push(issue('error', 'MISSING_SYSTEM_SPEC', 'L0 System specification (.system.yaml) is missing.'));
+      // Everything below needs an L0 to walk, so this returns early — which means
+      // project CONFIGURATION checks (pack resolution, reproducibility) have not
+      // run yet. Say so rather than leaving their silence to be discovered: the
+      // result is already `valid: false`, so nothing is being passed off as clean,
+      // but a reader should not assume the pack set was verified.
+      const pending = (extensions.errors.length > 0 || extensions.selectionFailures.length > 0)
+        ? ' Extension packs were not checked yet either, and at least one problem is already known there — re-run once the L0 exists.'
+        : ' Extension-pack configuration is not checked until the L0 exists.';
+      issues.push(issue('error', 'MISSING_SYSTEM_SPEC', `L0 System specification (.system.yaml) is missing.${pending}`));
       return { valid: false, issues };
     }
 

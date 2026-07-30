@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { loadProjectExtensions, packEntryLabel, packEntryRef, diagnoseProjectPacks, pinInstalledPacksAsSelections } from '../../src/core/extensions.js';
-import { installPackFromDirectory, uninstallPack } from '../../src/core/packstore.js';
+import { installPackFromDirectory, uninstallPack, resolveInstalledPack } from '../../src/core/packstore.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { expandSource } from '../../src/commands/packs.js';
 import { defaultPackSelections } from '../../src/core/extensions.js';
@@ -433,5 +433,111 @@ describe('enforceReproducibility finally enforces something (A6)', () => {
     const codes = codesFor({ name: 'demo' }, { enforceReproducibility: false });
     expect(codes).not.toContain('UNPINNED_PACK_SELECTION');
     expect(codes).not.toContain('PACK_SOURCE_UNFETCHABLE');
+  });
+});
+
+describe('a pinned integrity digest holds on EVERY resolution path', () => {
+  // Regression: the bundle path returned before verifying `integrity`, so a
+  // committed bundle could carry arbitrary content while the project claimed a
+  // specific digest — and the bundle is the path that WINS, making it the worst
+  // place to skip the check.
+  it('rejects a tampered BUNDLE whose content does not match the pin', () => {
+    store();
+    installPackFromDirectory(packSource('demo', '1.0.0'));
+    const pinned = resolveInstalledPack('demo', '1.0.0')!;
+    const dir = project([{ name: 'demo', version: '1.0.0', integrity: pinned.digest }]);
+
+    // A bundle at the pinned name@version, but with different content.
+    const dest = path.join(dir, '.wai', 'packs', 'demo', '1.0.0');
+    fs.mkdirSync(dest, { recursive: true });
+    fs.writeFileSync(path.join(dest, 'pack.yaml'),
+      'name: demo\nversion: 1.0.0\nprofiles: {}\nguarantees: [smuggled-token]\n');
+
+    const ext = loadProjectExtensions();
+    expect(ext.selectionFailures[0].code).toBe('PACK_INTEGRITY_MISMATCH');
+    expect(ext.selectionFailures[0].severity).toBe('error');
+    // The decisive assertion: the smuggled doctrine never applies.
+    expect(ext.guarantees).not.toContain('smuggled-token');
+    expect(ext.packNames).toEqual([]);
+  });
+
+  it('accepts a bundle whose content DOES match the pin', () => {
+    store();
+    installPackFromDirectory(packSource('demo', '1.0.0'));
+    const pinned = resolveInstalledPack('demo', '1.0.0')!;
+    const dir = project([{ name: 'demo', version: '1.0.0', integrity: pinned.digest }]);
+    // Copy the store pack verbatim — the digest is path-independent, so it matches.
+    const dest = path.join(dir, '.wai', 'packs', 'demo', '1.0.0');
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.cpSync(pinned.path, dest, { recursive: true });
+
+    const ext = loadProjectExtensions();
+    expect(ext.selectionFailures).toEqual([]);
+    expect(ext.packNames).toEqual(['demo']);
+  });
+
+  it('recomputes the STORE copy from content, so an edited pack cannot satisfy a stale record', () => {
+    store();
+    installPackFromDirectory(packSource('demo', '1.0.0'));
+    const pinned = resolveInstalledPack('demo', '1.0.0')!;
+    project([{ name: 'demo', version: '1.0.0', integrity: pinned.digest }]);
+    expect(loadProjectExtensions().selectionFailures).toEqual([]);
+
+    // Edit the installed pack WITHOUT touching its .install.yaml record. Trusting
+    // the recorded digest would let this pass; recomputing catches it.
+    fs.writeFileSync(path.join(pinned.path, 'pack.yaml'),
+      'name: demo\nversion: 1.0.0\nprofiles: {}\nguarantees: [edited-after-install]\n');
+
+    const ext = loadProjectExtensions();
+    expect(ext.selectionFailures[0].code).toBe('PACK_INTEGRITY_MISMATCH');
+    expect(ext.guarantees).not.toContain('edited-after-install');
+  });
+
+  it('costs nothing when no pin is declared', () => {
+    store();
+    installPackFromDirectory(packSource('demo', '1.0.0'));
+    project([{ name: 'demo' }]); // unpinned
+    const ext = loadProjectExtensions();
+    expect(ext.selectionFailures).toEqual([]);
+    expect(ext.packNames).toEqual(['demo']);
+  });
+});
+
+describe('bundle/store drift is reported without blocking', () => {
+  it('warns when the committed bundle and the store disagree at the same version', () => {
+    store();
+    installPackFromDirectory(packSource('demo', '1.0.0'));
+    const dir = project([{ name: 'demo', version: '1.0.0' }]);
+    bundle(dir, 'demo', '1.0.0'); // different content from the store copy
+
+    const ext = loadProjectExtensions();
+    const drift = ext.selectionFailures.find((f) => f.code === 'PACK_STORE_DRIFT');
+    expect(drift).toBeDefined();
+    expect(drift?.severity).toBe('warning');
+    // The bundle WINS and still applies — drift explains, it does not block.
+    expect(ext.packNames).toEqual(['demo']);
+    expect(Object.keys(ext.profiles)).toContain('bundled-profile');
+  });
+
+  it('stays silent when bundle and store hold identical content', () => {
+    store();
+    installPackFromDirectory(packSource('demo', '1.0.0'));
+    const installed = resolveInstalledPack('demo', '1.0.0')!;
+    const dir = project([{ name: 'demo', version: '1.0.0' }]);
+    const dest = path.join(dir, '.wai', 'packs', 'demo', '1.0.0');
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.cpSync(installed.path, dest, { recursive: true });
+
+    expect(loadProjectExtensions().selectionFailures).toEqual([]);
+  });
+
+  it('stays silent when there is no store copy to compare against (CI with an empty store)', () => {
+    store(); // deliberately empty
+    const dir = project([{ name: 'demo', version: '1.0.0' }]);
+    bundle(dir, 'demo', '1.0.0');
+
+    const ext = loadProjectExtensions();
+    expect(ext.selectionFailures).toEqual([]);
+    expect(ext.packNames).toEqual(['demo']);
   });
 });

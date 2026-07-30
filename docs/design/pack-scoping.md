@@ -145,7 +145,20 @@ Version comparison reuses the `isNewer` comparator already in
 
 If both exist and their digests differ for the same `name@version`, that is
 `PACK_STORE_DRIFT` (warning): the repo and the machine disagree about what the
-pack contains.
+pack contains. The bundle still applies — it is the repository's own copy — so the
+warning exists to explain why an edit to the installed copy had no effect.
+
+**A pinned `integrity` is verified on whichever path wins, recomputed from the
+files.** Two things follow, and both matter:
+
+- A committed bundle is *not* exempt. It overrides the store, which makes it the
+  most important place to honour a pin, not a place to skip it — a bundle carrying
+  different content while the project claims a digest would be doctrine
+  substitution that validates clean.
+- The store's recorded digest (`.install.yaml`) is not trusted as the answer. A
+  recorded hash is only as good as the last writer, so a pack edited in place
+  would satisfy a pin it no longer matches. Recomputing costs a few small file
+  reads and only happens when a pin exists.
 
 ### Availability is enforced, not assumed
 
@@ -420,7 +433,7 @@ which is the point: its gate depends on nothing outside the repo.
 | `PACK_NOT_INSTALLED` | error | selected pack absent from store and bundle |
 | `PACK_VERSION_UNSATISFIED` | error | present, but no installed version satisfies the range |
 | `PACK_INTEGRITY_MISMATCH` | error | resolved content does not match the pinned digest |
-| `PACK_STORE_DRIFT` | warning | bundle and store disagree for the same `name@version` — **not built**: the bundle always wins on resolution, so the disagreement is currently invisible rather than reported |
+| `PACK_STORE_DRIFT` | warning | bundle and store disagree for the same `name@version`. The bundle applies, so the store copy is silently ignored — reported so "my edit had no effect" is explained rather than mysterious. Compared only when a store copy of that exact version exists, so bundling costs no extra I/O |
 | `UNSELECTED_STORE_PACK` | doctor-only | installed but applied by no route — **built as a `doctor` report rather than a named code** (it is project configuration, not a spec finding, so it never needed to enter the rule registry) |
 | `UNPINNED_PACK_SELECTION` | warning; error under `--ci` / `lock` | floating selection under `enforceReproducibility` |
 | `PACK_SOURCE_UNFETCHABLE` | warning; error under `--ci` / `lock` | selection is neither bundled nor fetchable (e.g. a local-path origin) |

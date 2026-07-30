@@ -25,15 +25,18 @@ import { SddRule } from './types.js';
 export const packResolutionRule: SddRule = {
   name: 'pack-resolution',
   description:
-    'Every pack a project declares must resolve — from a committed bundle under .wai/packs/, or from this wairon install\'s pack store. An unresolvable selection is an error reported under the code that names the remedy: PACK_NOT_INSTALLED (absent entirely), PACK_VERSION_UNSATISFIED (installed, but no version satisfies the pin), or PACK_INTEGRITY_MISMATCH (resolved content does not match the pinned digest). Never downgraded to a warning: a project whose declared doctrine is missing is misconfigured, and a gate running without it must not look clean.',
+    'Every pack a project declares must resolve — from a committed bundle under .wai/packs/, or from this wairon install\'s pack store — and must be the content it claims. An unresolvable selection is an error reported under the code that names the remedy: PACK_NOT_INSTALLED (absent entirely), PACK_VERSION_UNSATISFIED (installed, but no version satisfies the pin), or PACK_INTEGRITY_MISMATCH (resolved content does not match the pinned integrity digest, recomputed from the files rather than read from metadata, on whichever path won). Those never downgrade to warnings: a project whose declared doctrine is missing or altered is misconfigured, and a gate running without it must not look clean. PACK_STORE_DRIFT is the one warning — a committed bundle and the store hold different content for the same name@version; the bundle applies, so the store copy is silently ignored and that deserves saying.',
   codes: [
     { code: 'PACK_NOT_INSTALLED', defaultSeverity: 'error', summary: 'A declared pack is neither bundled nor installed in the pack store' },
     { code: 'PACK_VERSION_UNSATISFIED', defaultSeverity: 'error', summary: 'The pack is installed, but no installed version satisfies the selection\'s pin' },
     { code: 'PACK_INTEGRITY_MISMATCH', defaultSeverity: 'error', summary: 'Resolved pack content does not match the selection\'s pinned integrity digest' },
+    { code: 'PACK_STORE_DRIFT', defaultSeverity: 'warning', summary: 'A committed bundle and the pack store hold different content for the same name@version' },
   ],
   check(ctx) {
+    // The severity travels with the finding: the resolution failures stop a pack
+    // from applying, while drift resolves fine and only needs to be seen.
     for (const failure of ctx.ext.selectionFailures) {
-      ctx.addIssue('error', failure.code, failure.message);
+      ctx.addIssue(failure.severity, failure.code, failure.message);
     }
   },
 };

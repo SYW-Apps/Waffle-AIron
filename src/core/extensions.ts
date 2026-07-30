@@ -11,7 +11,7 @@ import type { SddRule } from './rules/types.js';
 import { RulesConfigSchema, type PackSelection } from '../models/project.js';
 // The store is a sibling adapter; both modules reach each other only inside
 // function bodies, so the import cycle never runs at module-init time.
-import { resolveInstalledPack, packStoreDir, listInstalledPacks } from './packstore.js';
+import { resolveInstalledPack, packStoreDir, listInstalledPacks, computePackDigest } from './packstore.js';
 
 // ---------------------------------------------------------------------------
 // Extension packs — wairon's plugin surface.
@@ -296,11 +296,21 @@ export function globalPacksEnabled(config: { extensions?: { useGlobalPacks?: boo
  * Why a declared pack selection could not be resolved. Distinct codes because the
  * remedies differ: obtain the pack, adjust the pin, or reconcile the content.
  */
-export type PackFailureCode = 'PACK_NOT_INSTALLED' | 'PACK_VERSION_UNSATISFIED' | 'PACK_INTEGRITY_MISMATCH';
+export type PackFailureCode =
+  | 'PACK_NOT_INSTALLED'
+  | 'PACK_VERSION_UNSATISFIED'
+  | 'PACK_INTEGRITY_MISMATCH'
+  | 'PACK_STORE_DRIFT';
 
-/** One unresolvable selection, carrying the code the gate reports it under. */
+/**
+ * One problem with a declared selection, carrying the code the gate reports it
+ * under. Most are errors that also stop the pack from applying; `PACK_STORE_DRIFT`
+ * is a warning and the pack still resolves, so the severity travels with the
+ * finding rather than being inferred from the code at the reporting end.
+ */
 export interface PackSelectionFailure {
   code: PackFailureCode;
+  severity: 'error' | 'warning';
   /** The declared pack name, so a finding can be attributed. */
   name: string;
   message: string;
@@ -584,8 +594,9 @@ export function loadProjectExtensions(): LoadedExtensions {
       }
       // A SELECTION: resolve it to a concrete pack, or record why it could not be.
       const resolution = resolveSelection(entry, projectRoot);
+      // A ref and a finding are not exclusive: drift resolves AND reports.
       if (resolution.ref) refs.push({ ref: resolution.ref, scope: 'project' });
-      else if (resolution.failure) unresolved.push(resolution.failure);
+      if (resolution.failure) unresolved.push(resolution.failure);
     }
 
     if (refs.length === 0 && unresolved.length === 0) return emptyExtensions();
@@ -791,11 +802,20 @@ function resolveSelection(
 ): { ref?: string; failure?: PackSelectionFailure } {
   const wanted = selection.version ? `${selection.name}@${selection.version}` : selection.name;
   const fail = (code: PackFailureCode, message: string) =>
-    ({ failure: { code, name: selection.name, message } });
+    ({ failure: { code, severity: 'error' as const, name: selection.name, message } });
 
   // 1. The committed bundle under .wai/packs/<name>/[<version>/].
   const bundled = findBundledPack(projectRoot, selection);
-  if (bundled) return { ref: bundled };
+  if (bundled) {
+    // The bundle WINS over the store, which makes it the most important place to
+    // honour a pin — not the place to skip it. Verified from actual content.
+    const mismatch = verifyIntegrity(selection, bundled, `the committed bundle at ${bundled}`);
+    if (mismatch) return { ref: undefined, failure: mismatch };
+    // Drift does NOT block: the bundle is the repository's truth and still
+    // applies. It is reported so "my store edit isn't taking effect" is visible
+    // instead of mysterious.
+    return { ref: bundled, failure: detectBundleStoreDrift(selection, bundled) };
+  }
 
   // 2. The machine's pack store.
   const installed = resolveInstalledPack(selection.name, selection.version);
@@ -819,13 +839,69 @@ function resolveSelection(
       `Pack "${wanted}" is declared by this project but is not installed in this wairon install (${packStoreDir()}) and is not bundled under .wai/packs/. ${hint}`,
     );
   }
-  if (selection.integrity && selection.integrity !== installed.digest) {
-    return fail(
-      'PACK_INTEGRITY_MISMATCH',
-      `Pack "${wanted}" resolved to content that does not match the pinned integrity: expected ${selection.integrity}, found ${installed.digest} (${installed.path}). Reinstall the pinned version, or update the pin if the change is intended.`,
-    );
-  }
+  // Verified from CONTENT, not from the digest recorded in the store's install
+  // record: a recorded digest is only as trustworthy as the last thing that wrote
+  // it, so trusting it would let an edited store pack satisfy a pin it no longer
+  // matches. A pin means "these bytes", or it means nothing.
+  const mismatch = verifyIntegrity(selection, installed.path, installed.path);
+  if (mismatch) return { ref: undefined, failure: mismatch };
   return { ref: installed.path };
+}
+
+/**
+ * Check a resolved pack's actual content against the selection's `integrity` pin.
+ * Returns null when nothing is pinned (the pin is opt-in) or when it matches.
+ *
+ * Deliberately recomputes rather than reading any recorded digest: the whole
+ * point of a pin is to detect content that changed without the metadata changing.
+ * Only runs when a pin exists, so the cost lands exactly where the guarantee was
+ * requested and nowhere else.
+ */
+function verifyIntegrity(
+  selection: PackSelection,
+  packDir: string,
+  where: string,
+): PackSelectionFailure | null {
+  if (!selection.integrity) return null;
+  const actual = computePackDigest(packDir);
+  if (actual === selection.integrity) return null;
+  const wanted = selection.version ? `${selection.name}@${selection.version}` : selection.name;
+  return {
+    code: 'PACK_INTEGRITY_MISMATCH',
+    severity: 'error',
+    name: selection.name,
+    message: `Pack "${wanted}" resolved to content that does not match the pinned integrity: expected ${selection.integrity}, found ${actual} (${where}). The pack was modified after it was pinned — reinstall or re-bundle the pinned version, or update the pin with \`wairon pack use ${selection.name} --pin\` if the change is intended.`,
+  };
+}
+
+/**
+ * Warn when a committed bundle and the pack store hold DIFFERENT content for the
+ * same `name@version`. The bundle wins, so without this the store copy is simply
+ * ignored — which reads as "my edit to the pack had no effect" with no explanation.
+ *
+ * Only compares when a store copy of that exact version exists, so a project that
+ * merely bundles its packs pays no extra I/O. A hand-placed bundle directly under
+ * `<name>/` carries no version and is skipped: there is nothing unambiguous to
+ * compare it against.
+ */
+function detectBundleStoreDrift(
+  selection: PackSelection,
+  bundleDir: string,
+): PackSelectionFailure | undefined {
+  const bundledVersion = path.basename(bundleDir);
+  const installed = resolveInstalledPack(selection.name, bundledVersion);
+  if (!installed) return undefined;
+
+  const bundleDigest = computePackDigest(bundleDir);
+  const storeDigest = computePackDigest(installed.path);
+  if (bundleDigest === storeDigest) return undefined;
+
+  return {
+    code: 'PACK_STORE_DRIFT',
+    severity: 'warning',
+    name: selection.name,
+    message: `Pack "${selection.name}@${bundledVersion}" differs between the committed bundle and the pack store: bundle ${bundleDigest}, store ${storeDigest}. The BUNDLE applies (it is the repository's own copy), so changes to the installed copy have no effect here. Re-bundle to adopt the store's version (\`wairon pack bundle ${selection.name}\`), or publish the change as a new version.`,
+  };
 }
 
 /**
