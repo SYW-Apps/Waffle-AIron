@@ -1,0 +1,30 @@
+kind: value-object
+id: pack_selection_failure
+name: PackSelectionFailure
+description: >-
+  One declared pack selection that could not be resolved, tagged with the code the conformance gate
+  reports it under. Three codes rather than one because the remedies differ: obtain the pack,
+  correct the pin, or reconcile the content. Resolution happens in the extension loader (committed
+  bundle first, then the pack store) and the pack-resolution rule only surfaces what the loader
+  found, so the loader and the gate can never disagree about whether a pack applies.
+fields:
+  - name: code
+    type: string
+    description: >-
+      PACK_NOT_INSTALLED (absent from both the bundle and the store) | PACK_VERSION_UNSATISFIED
+      (installed, but no version satisfies the pin) | PACK_INTEGRITY_MISMATCH (resolved content does
+      not match the pinned digest).
+    optional: false
+  - name: name
+    type: string
+    description: The declared pack name, so a finding can be attributed to the selection that caused it.
+    optional: false
+  - name: message
+    type: string
+    description: >-
+      The finding message, naming the remedy that fits this code — and, for a version mismatch,
+      which versions ARE installed.
+    optional: false
+methods: []
+createdAt: '2026-07-30T11:24:59.575Z'
+updatedAt: '2026-07-30T11:24:59.673Z'

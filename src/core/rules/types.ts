@@ -11,6 +11,7 @@ import {
 import type { ProfileDef, LanguagePackDef, LoadedPattern, LoadedAssertion } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
 import type { PackSelection } from '../../models/project.js';
+import type { PackSelectionFailure } from '../extensions.js';
 import type { CodeModel } from '../source-analysis.js';
 
 // ---------------------------------------------------------------------------
@@ -126,6 +127,14 @@ export interface RuleContext {
      * `enforceReproducibility` exists to prevent.
      */
     packSelections: PackSelection[];
+    /**
+     * Declared selections that could not be resolved, each carrying the code the
+     * pack-resolution rule reports it under. Resolution itself happens in the
+     * extension loader (bundle first, then the store), so the rule surfaces what
+     * the loader found rather than deciding again — the two can never disagree
+     * about whether a pack applies.
+     */
+    selectionFailures: PackSelectionFailure[];
   };
 
   /**

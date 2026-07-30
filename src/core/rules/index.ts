@@ -46,6 +46,7 @@ import { integrationConformanceRule } from './integration-conformance.js';
 import { hiddenStateRule } from './hidden-state.js';
 import { dependencyConformanceRule } from './dependency-conformance.js';
 import { lintAllowsRule } from './lint-allows.js';
+import { packResolutionRule } from './pack-resolution.js';
 import { reproducibilityRule } from './reproducibility.js';
 import { portalCallAuthRule } from './portal-call-auth.js';
 import { emptyCodeModel, CodeModel } from '../source-analysis.js';
@@ -123,8 +124,10 @@ export const SDD_RULES: SddRule[] = [
   technologyRule,
   namingRule,
   complexityRule,
-  // Pack reproducibility runs late: it is about project CONFIGURATION (can this
-  // pack set be reproduced elsewhere?) rather than spec content.
+  // Pack resolution and reproducibility run late: they are about project
+  // CONFIGURATION (does the declared pack set resolve, and can it be reproduced
+  // elsewhere?) rather than spec content.
+  packResolutionRule,
   reproducibilityRule,
   // MUST run last: it audits which lint.allow entries the earlier rules
   // actually consumed (stale/unknown allows).
@@ -541,7 +544,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     isTypeResolved,
     targetLanguageFor,
     isSpecInScope,
-    ext: { profiles: extensions.profiles, languages: extensions.languages, patterns: extensions.patterns, guarantees: extensions.guarantees, assertions: extensions.assertions, packSelections: opts.packSelections ?? [] },
+    ext: { profiles: extensions.profiles, languages: extensions.languages, patterns: extensions.patterns, guarantees: extensions.guarantees, assertions: extensions.assertions, packSelections: opts.packSelections ?? [], selectionFailures: extensions.selectionFailures ?? [] },
     variants: opts.variants ?? [],
     surfaceSnapshots: opts.surfaceSnapshots ?? [],
     codeModel: opts.codeModel ?? emptyCodeModel(),

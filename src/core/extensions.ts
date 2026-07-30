@@ -292,6 +292,20 @@ export function globalPacksEnabled(config: { extensions?: { useGlobalPacks?: boo
   return config.extensions?.useGlobalPacks ?? GLOBAL_PACKS_DEFAULT;
 }
 
+/**
+ * Why a declared pack selection could not be resolved. Distinct codes because the
+ * remedies differ: obtain the pack, adjust the pin, or reconcile the content.
+ */
+export type PackFailureCode = 'PACK_NOT_INSTALLED' | 'PACK_VERSION_UNSATISFIED' | 'PACK_INTEGRITY_MISMATCH';
+
+/** One unresolvable selection, carrying the code the gate reports it under. */
+export interface PackSelectionFailure {
+  code: PackFailureCode;
+  /** The declared pack name, so a finding can be attributed. */
+  name: string;
+  message: string;
+}
+
 /** Where a pack came from — global installs load before (and lose to) project packs. */
 export type PackScope = 'global' | 'project';
 
@@ -326,10 +340,17 @@ export interface LoadedExtensions {
   instructions: LoadedInstructionBlock[];
   /** Pack loading failures — surfaced as EXTENSION_LOAD_ERROR (error). */
   errors: string[];
+  /**
+   * Declared SELECTIONS that could not be resolved, each with a specific code.
+   * Kept separate from `errors` so the gate can report *why* a project is not
+   * getting the doctrine it declared — absent, wrong version, or wrong content —
+   * instead of one undifferentiated load error. Every code is error severity.
+   */
+  selectionFailures: PackSelectionFailure[];
 }
 
 export function emptyExtensions(): LoadedExtensions {
-  return { packNames: [], packs: [], rules: [], profiles: {}, languages: {}, skills: [], patterns: [], guarantees: [], assertions: [], instructions: [], errors: [] };
+  return { packNames: [], packs: [], rules: [], profiles: {}, languages: {}, skills: [], patterns: [], guarantees: [], assertions: [], instructions: [], errors: [], selectionFailures: [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -548,7 +569,7 @@ export function loadProjectExtensions(): LoadedExtensions {
     const config = loadProjectConfig();
     const projectRoot = getProjectRoot();
     const refs: PackRef[] = [];
-    const unresolved: string[] = [];
+    const unresolved: PackSelectionFailure[] = [];
 
     // Off by default: a project's doctrine is what the project declares.
     if (globalPacksEnabled(config)) {
@@ -564,7 +585,7 @@ export function loadProjectExtensions(): LoadedExtensions {
       // A SELECTION: resolve it to a concrete pack, or record why it could not be.
       const resolution = resolveSelection(entry, projectRoot);
       if (resolution.ref) refs.push({ ref: resolution.ref, scope: 'project' });
-      else unresolved.push(resolution.error);
+      else if (resolution.failure) unresolved.push(resolution.failure);
     }
 
     if (refs.length === 0 && unresolved.length === 0) return emptyExtensions();
@@ -573,11 +594,12 @@ export function loadProjectExtensions(): LoadedExtensions {
     // a silently-dropped section: an older wairon must never quietly not-apply a
     // newer pack's doctrine (the same rule the assertion kinds follow).
     for (const problem of skillExtendErrors(loaded.skills)) loaded.errors.push(problem);
-    // A declared-but-unresolvable pack rides the SAME error channel as a pack that
-    // fails to parse: EXTENSION_LOAD_ERROR, error severity, surfaced by validate,
-    // status, lock, generate, and every sdd_* MCP call. Never a silent skip —
+    // A declared-but-unresolvable pack is reported under its OWN code (absent /
+    // wrong version / wrong content) rather than as a generic load error, because
+    // the remedies differ. Still error severity, still surfaced by validate,
+    // status, lock, generate, and every sdd_* MCP call — never a silent skip:
     // validation must not appear clean while the declared doctrine is absent.
-    loaded.errors.push(...unresolved);
+    loaded.selectionFailures.push(...unresolved);
     return loaded;
   } catch {
     return emptyExtensions();
@@ -675,7 +697,9 @@ export function diagnoseProjectPacks(): PackDiagnosis {
       if (typeof entry === 'string') continue;
       selectedNames.add(entry.name);
       const resolution = resolveSelection(entry, projectRoot);
-      if (!resolution.ref) unresolved.push({ label: packEntryLabel(entry), message: resolution.error });
+      if (resolution.failure) {
+        unresolved.push({ label: packEntryLabel(entry), message: `[${resolution.failure.code}] ${resolution.failure.message}` });
+      }
     }
 
     const installed = listInstalledPacks();
@@ -764,12 +788,14 @@ export function packEntryRef(entry: string | PackSelection, projectRoot: string)
 function resolveSelection(
   selection: PackSelection,
   projectRoot: string,
-): { ref?: string; error: string } {
+): { ref?: string; failure?: PackSelectionFailure } {
   const wanted = selection.version ? `${selection.name}@${selection.version}` : selection.name;
+  const fail = (code: PackFailureCode, message: string) =>
+    ({ failure: { code, name: selection.name, message } });
 
   // 1. The committed bundle under .wai/packs/<name>/[<version>/].
   const bundled = findBundledPack(projectRoot, selection);
-  if (bundled) return { ref: bundled, error: '' };
+  if (bundled) return { ref: bundled };
 
   // 2. The machine's pack store.
   const installed = resolveInstalledPack(selection.name, selection.version);
@@ -777,16 +803,29 @@ function resolveSelection(
     const hint = selection.source
       ? `Run \`wairon pack sync\` to install every declared pack from its recorded source (this one: ${selection.source}).`
       : 'Install it with `wairon pack install <source>` and re-select it — this selection records no source, so it cannot be fetched automatically.';
-    return {
-      error: `Pack "${wanted}" is declared by this project but is not installed in this wairon install (${packStoreDir()}) and is not bundled under .wai/packs/. ${hint}`,
-    };
+
+    // A pinned version missing while OTHER versions of the pack are installed is
+    // a different problem from the pack being absent entirely, and the fix
+    // differs: adjust the pin, versus obtain the pack at all.
+    const otherVersions = listInstalledPacks().filter((p) => p.name === selection.name);
+    if (selection.version && otherVersions.length > 0) {
+      return fail(
+        'PACK_VERSION_UNSATISFIED',
+        `Pack "${wanted}" is declared by this project, but no installed version satisfies the pin. Installed: ${otherVersions.map((p) => p.version).join(', ')}. Re-pin the selection (\`wairon pack use ${selection.name}@<version> --pin\`), or install the pinned version. ${hint}`,
+      );
+    }
+    return fail(
+      'PACK_NOT_INSTALLED',
+      `Pack "${wanted}" is declared by this project but is not installed in this wairon install (${packStoreDir()}) and is not bundled under .wai/packs/. ${hint}`,
+    );
   }
   if (selection.integrity && selection.integrity !== installed.digest) {
-    return {
-      error: `Pack "${wanted}" resolved to content that does not match the pinned integrity: expected ${selection.integrity}, found ${installed.digest} (${installed.path}). Reinstall the pinned version, or update the pin if the change is intended.`,
-    };
+    return fail(
+      'PACK_INTEGRITY_MISMATCH',
+      `Pack "${wanted}" resolved to content that does not match the pinned integrity: expected ${selection.integrity}, found ${installed.digest} (${installed.path}). Reinstall the pinned version, or update the pin if the change is intended.`,
+    );
   }
-  return { ref: installed.path, error: '' };
+  return { ref: installed.path };
 }
 
 /**

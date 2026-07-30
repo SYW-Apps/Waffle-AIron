@@ -50,6 +50,17 @@ extensions:
 name the pack plus how to install it. A gate that quietly enforces less than the
 project declared is worse than one that fails.
 
+The code names the remedy, so the message tells you which fix applies:
+
+| Code | Meaning |
+|------|---------|
+| `PACK_NOT_INSTALLED` | absent from both the store and `.wai/packs/` — obtain it (`pack sync` / `pack install`) |
+| `PACK_VERSION_UNSATISFIED` | the pack *is* installed, but not at the pinned version (which the message lists) — correct the pin |
+| `PACK_INTEGRITY_MISMATCH` | resolved content does not match the pinned digest — reinstall, or update the pin if the change is intended |
+
+All three are error severity and appear in `wairon rules list`, so a project can
+retune them through `rules.sddRuleSeverity` if it must.
+
 If you install from a local path, no fetchable source can be recorded and
 `pack use` says so — bundle it, or pass `--source`.
 

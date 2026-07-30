@@ -118,16 +118,16 @@ describe('a selection resolves against the store', () => {
   });
 });
 
-describe('an unresolvable selection fails LOUDLY', () => {
-  it('reports a declared pack that is not installed, naming the fix', () => {
+describe('an unresolvable selection fails LOUDLY, under a code that names the remedy', () => {
+  it('PACK_NOT_INSTALLED when the pack is absent entirely', () => {
     store();
     project([{ name: 'missing-pack' }]);
 
     const ext = loadProjectExtensions();
-    expect(ext.errors).toHaveLength(1);
-    expect(ext.errors[0]).toContain('missing-pack');
-    expect(ext.errors[0]).toContain('not installed');
-    expect(ext.errors[0]).toContain('wairon pack install');
+    expect(ext.selectionFailures).toHaveLength(1);
+    expect(ext.selectionFailures[0].code).toBe('PACK_NOT_INSTALLED');
+    expect(ext.selectionFailures[0].name).toBe('missing-pack');
+    expect(ext.selectionFailures[0].message).toContain('wairon pack install');
     // No doctrine silently applied in its place.
     expect(ext.packNames).toEqual([]);
   });
@@ -135,27 +135,32 @@ describe('an unresolvable selection fails LOUDLY', () => {
   it('names the recorded source in the fix instructions', () => {
     store();
     project([{ name: 'missing-pack', source: 'https://example.test/missing-1.0.0.wpack' }]);
-    expect(loadProjectExtensions().errors[0]).toContain('https://example.test/missing-1.0.0.wpack');
+    const failure = loadProjectExtensions().selectionFailures[0];
+    expect(failure.message).toContain('wairon pack sync');
+    expect(failure.message).toContain('https://example.test/missing-1.0.0.wpack');
   });
 
-  it('reports a version pin that no installed version satisfies', () => {
+  it('PACK_VERSION_UNSATISFIED when the pack IS installed but the pin is not — a different remedy', () => {
     store();
     installPackFromDirectory(packSource('demo', '1.2.0'));
     project([{ name: 'demo', version: '9.9.9' }]);
 
     const ext = loadProjectExtensions();
-    expect(ext.errors[0]).toContain('demo@9.9.9');
+    expect(ext.selectionFailures[0].code).toBe('PACK_VERSION_UNSATISFIED');
+    expect(ext.selectionFailures[0].message).toContain('demo@9.9.9');
+    // The message names what IS installed, so the pin can be corrected.
+    expect(ext.selectionFailures[0].message).toContain('1.2.0');
     expect(ext.packNames).toEqual([]);
   });
 
-  it('refuses content that does not match a pinned integrity digest', () => {
+  it('PACK_INTEGRITY_MISMATCH when the content is not what was pinned', () => {
     store();
     installPackFromDirectory(packSource('demo', '1.2.0'));
     project([{ name: 'demo', version: '1.2.0', integrity: 'sha256-0000000000000000000000000000000000000000000000000000000000000000' }]);
 
     const ext = loadProjectExtensions();
-    expect(ext.errors).toHaveLength(1);
-    expect(ext.errors[0]).toMatch(/integrity/i);
+    expect(ext.selectionFailures).toHaveLength(1);
+    expect(ext.selectionFailures[0].code).toBe('PACK_INTEGRITY_MISMATCH');
     expect(ext.packNames).toEqual([]);
   });
 
@@ -165,18 +170,36 @@ describe('an unresolvable selection fails LOUDLY', () => {
     project([{ name: 'good' }, { name: 'missing-pack' }]);
 
     const ext = loadProjectExtensions();
-    expect(ext.packNames).toEqual(['good']);   // the good pack still applies
-    expect(ext.errors).toHaveLength(1);        // and the gap is still reported
+    expect(ext.packNames).toEqual(['good']);        // the good pack still applies
+    expect(ext.selectionFailures).toHaveLength(1);  // and the gap is still reported
   });
 
   it('an uninstall of a selected pack turns the gate red', () => {
     store();
     installPackFromDirectory(packSource('demo', '1.2.0'));
     project([{ name: 'demo' }]);
-    expect(loadProjectExtensions().errors).toEqual([]);
+    expect(loadProjectExtensions().selectionFailures).toEqual([]);
 
     uninstallPack('demo');
-    expect(loadProjectExtensions().errors[0]).toContain('not installed');
+    expect(loadProjectExtensions().selectionFailures[0].code).toBe('PACK_NOT_INSTALLED');
+  });
+
+  it('reaches the GATE as an error, not just the loader', () => {
+    store();
+    const dir = project([{ name: 'missing-pack' }]);
+    // A loadable L0 is required: validation short-circuits before the rule phase
+    // when there is no system spec, so an empty tree would never reach the rule.
+    fs.writeFileSync(path.join(dir, '.wai', 'specs', '.index.yaml'),
+      "schemaVersion: 1.0.0\nname: GateSys\nvision: v\ncreatedAt: '2026-07-03T10:00:00Z'\nupdatedAt: '2026-07-03T10:00:00Z'\n");
+    invalidateSpecCache();
+
+    // The end that matters: `validate` refuses. A gate running without the
+    // doctrine the project declared must never look clean.
+    const result = validateSddTree();
+    const failure = result.issues.find((i) => i.code === 'PACK_NOT_INSTALLED');
+    expect(failure).toBeDefined();
+    expect(failure?.severity).toBe('error');
+    expect(result.valid).toBe(false);
   });
 });
 

@@ -420,8 +420,8 @@ which is the point: its gate depends on nothing outside the repo.
 | `PACK_NOT_INSTALLED` | error | selected pack absent from store and bundle |
 | `PACK_VERSION_UNSATISFIED` | error | present, but no installed version satisfies the range |
 | `PACK_INTEGRITY_MISMATCH` | error | resolved content does not match the pinned digest |
-| `PACK_STORE_DRIFT` | warning | bundle and store disagree for the same `name@version` |
-| `UNSELECTED_STORE_PACK` | doctor-only | installed but selected by no project (migration aid) |
+| `PACK_STORE_DRIFT` | warning | bundle and store disagree for the same `name@version` — **not built**: the bundle always wins on resolution, so the disagreement is currently invisible rather than reported |
+| `UNSELECTED_STORE_PACK` | doctor-only | installed but applied by no route — **built as a `doctor` report rather than a named code** (it is project configuration, not a spec finding, so it never needed to enter the rule registry) |
 | `UNPINNED_PACK_SELECTION` | warning; error under `--ci` / `lock` | floating selection under `enforceReproducibility` |
 | `PACK_SOURCE_UNFETCHABLE` | warning; error under `--ci` / `lock` | selection is neither bundled nor fetchable (e.g. a local-path origin) |
 
@@ -508,13 +508,16 @@ with or before A4, so migration reporting lands before behaviour changes.
    (name-only, optional `version`/`integrity`/`source`/`bundle`). `use` copies the
    store's recorded origin into the selection, so the project self-describes how
    to obtain its doctrine, and warns when that origin is not fetchable.
-3. ~~**A3**~~ **DONE (resolution half)** — name-based resolution with
-   bundle-then-store order and latest-installed when unpinned, landed with A2
-   because a selection you can write but not resolve is worse than useless.
-   Unresolvable selections currently ride the existing `EXTENSION_LOAD_ERROR`
-   channel (error severity, surfaced by validate/status/lock/generate/MCP);
-   **still open**: splitting them into the distinct `PACK_NOT_INSTALLED` /
-   `PACK_VERSION_UNSATISFIED` / `PACK_INTEGRITY_MISMATCH` codes.
+3. ~~**A3**~~ **DONE** — name-based resolution with bundle-then-store order and
+   latest-installed when unpinned (landed with A2, because a selection you can
+   write but not resolve is worse than useless), plus the distinct finding codes
+   as a registered `pack-resolution` rule: `PACK_NOT_INSTALLED` (absent),
+   `PACK_VERSION_UNSATISFIED` (installed, but the pin is not — the message names
+   what *is* installed), and `PACK_INTEGRITY_MISMATCH` (content off the pinned
+   digest). All error severity, all in `wairon rules list` and therefore tunable
+   via `rules.sddRuleSeverity`, unlike the generic `EXTENSION_LOAD_ERROR` they
+   replaced. Resolution stays in the loader and the rule only surfaces what it
+   found, so the two can never disagree about whether a pack applies.
 4. ~~**A7**~~ **DONE** — `wairon doctor` reports unresolvable selections,
    installed-but-unapplied packs, and opted-in machine-wide packs;
    `doctor --fix` records the unapplied set as explicit name+version selections

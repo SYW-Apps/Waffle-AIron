@@ -58,6 +58,15 @@ fields:
       provenance, preserved in pack LOAD ORDER (load order is append order in the composed
       instructions).
     optional: false
+  - name: selectionFailures
+    type: PackSelectionFailure[]
+    description: >-
+      Declared by-name SELECTIONS that could not be resolved, each carrying the code the conformance
+      gate reports it under (absent / wrong version / wrong content). Kept separate from `errors` —
+      which covers packs that failed to parse — so the gate can report WHY a project is not getting
+      the doctrine it declared instead of one undifferentiated load error. Every code is error
+      severity: a gate running without declared doctrine must never look clean.
+    optional: false
 methods: []
 createdAt: '2026-07-14T18:57:07.906Z'
-updatedAt: '2026-07-29T10:48:39.071Z'
+updatedAt: '2026-07-30T11:24:50.873Z'
