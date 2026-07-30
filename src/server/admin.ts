@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
 import { runWithProjectRoot } from '../utils/fs.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
-import { stateIdEquals } from '../core/statehash.js';
+
 import type { LockRecord } from '../core/lockfile.js';
 import { authenticateMaster, authenticateCredential, signViewToken } from './auth.js';
 import { authorize } from './authorization.js';
@@ -540,15 +540,15 @@ export function promoteProject(cfg: HostConfig, credential: string | null, proje
 export function executeApprovedPromote(cfg: HostConfig, projectId: string, subproject?: string): PromoteResult {
   const root = boundLifecycleRoot(cfg, projectId, subproject);
   return runWithProjectRoot(root, () => {
-    const lock = hostCore.readLockRecord();
-    if (!lock) {
+    // One authority for "is this project locked?" — shared with the project config
+    // view, `status`, and `doctor`, so promotion and reporting can never disagree.
+    // A pack change (or a record written before doctrine was covered, whose
+    // algorithm marker differs) reads as stale instead of passing.
+    const { state, record: lock, current } = hostCore.readLockState();
+    if (state === 'unlocked' || !lock) {
       return { status: 'not-locked', message: 'Project is not locked; run lock first.' };
     }
-    // Recompute the GATE identity — the same flavour the lock recorded. A pack
-    // change (or a lock record written before doctrine was covered, whose
-    // algorithm marker differs) therefore reads as stale instead of passing.
-    const current = hostCore.computeGateStateId();
-    if (!stateIdEquals(current, lock.stateId)) {
+    if (state === 'stale') {
       return { status: 'stale', stateId: current, message: 'Spec tree or governing doctrine changed since lock; re-lock required.' };
     }
     hostCore.writeLockRecord({ ...lock, status: 'promoted' });

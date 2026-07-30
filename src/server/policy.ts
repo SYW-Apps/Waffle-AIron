@@ -1053,12 +1053,18 @@ export function getProjectConfig(
   // repair path is reconcileProjectPolicy / setProjectType.
   const classified = classifyProfile(projectType, packs.executeApprovedListProjectProfiles(cfg, projectId));
 
-  const locked = runWithProjectRoot(root, () => hostCore.readLockRecord() !== null);
+  const lockStatus = runWithProjectRoot(root, () => hostCore.readLockState());
+  // "locked" means the lock is IN FORCE, not merely that a record exists: a stale
+  // record freezes nothing (promotion refuses, and the tree already moved past it),
+  // so reporting it as locked claimed a freeze that was not real.
+  const locked = lockStatus.state === 'locked';
+  const lockStale = lockStatus.state === 'stale';
   const overriding = overridingSubsystemIds(root);
 
   const view: ProjectConfigView = {
     projectType,
     locked,
+    ...(lockStale ? { lockStale: true } : {}),
     profileResolvable: classified.resolvable,
     unappliedProfileIds: unappliedIds(selection?.profileIds ?? [], projectType),
     overridingSubsystemIds: overriding,
@@ -1103,12 +1109,18 @@ export function setProjectType(
   const folded = foldAppliedProfile(root, application.profileId, principalSubject(principal));
   const remainder = folded.profileIds.slice(1);
 
-  const locked = runWithProjectRoot(root, () => hostCore.readLockRecord() !== null);
+  const lockStatus = runWithProjectRoot(root, () => hostCore.readLockState());
+  // "locked" means the lock is IN FORCE, not merely that a record exists: a stale
+  // record freezes nothing (promotion refuses, and the tree already moved past it),
+  // so reporting it as locked claimed a freeze that was not real.
+  const locked = lockStatus.state === 'locked';
+  const lockStale = lockStatus.state === 'stale';
   const overriding = overridingSubsystemIds(root);
 
   const view: ProjectConfigView = {
     projectType: application.profileId,
     locked,
+    ...(lockStale ? { lockStale: true } : {}),
     profileSource: application.source,
     // The write path guarantees resolvability — the ensure seam refused anything else.
     profileResolvable: true,

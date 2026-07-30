@@ -15,7 +15,7 @@ import { CONTEXT_PATHS, syncContextFiles } from '../core/context.js';
 import { readStampVersion } from '../core/stamp.js';
 import { localGuideFilePath, reinjectLocalGuides } from '../utils/ai-guide.js';
 import { activeTargetTypes, checkSkillFreshness, exportSddSkills } from '../core/skills.js';
-import { findLegacySpecFiles } from '../core/specs.js';
+import { findLegacySpecFiles, readLockState } from '../core/specs.js';
 import { diagnoseProjectPacks, pinInstalledPacksAsSelections } from '../core/extensions.js';
 import { claudeMcpConfigPath } from './mcp.js';
 
@@ -212,6 +212,26 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
       }
     }
     logger.blank();
+  }
+
+  // ── Lock ────────────────────────────────────────────────────────────────────
+  // A voided lock used to be discoverable only by attempting a promote, which
+  // fails closed but tells you late. Silent for a project that was never locked.
+  if (isProjectInitialized()) {
+    try {
+      const lock = readLockState();
+      if (lock.state === 'locked') {
+        console.log(chalk.bold('Lock'));
+        line(tally, 'ok', `frozen at ${lock.record!.lockedAt} by ${lock.record!.lockedBy}`);
+        logger.blank();
+      } else if (lock.state === 'stale') {
+        console.log(chalk.bold('Lock'));
+        line(tally, 'warn',
+          `stale — the specs or the governing doctrine changed since ${lock.record!.lockedAt}, so this lock no longer holds `
+          + 'and promotion will refuse it. Re-run `wairon lock` to freeze the current state.');
+        logger.blank();
+      }
+    } catch { /* a health check must never break the health report */ }
   }
 
   // ── Extension packs ─────────────────────────────────────────────────────────

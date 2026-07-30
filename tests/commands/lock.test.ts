@@ -13,6 +13,7 @@ import {
   loadComponentSpec,
   collectPromotableSpecs,
   invalidateSpecCache,
+  readLockState,
 } from '../../src/core/specs.js';
 import { createChainedSubsystem } from '../../src/core/provision.js';
 import { runLock } from '../../src/commands/lock.js';
@@ -250,4 +251,82 @@ describe('cli_runner.runLock workflow (real CLI): gate, freeze, child surfaces',
     expect(collectPromotableSpecs().length).toBeGreaterThan(0);
     expect(loadComponentSpec('gateway-portal')?.status).toBe('draft');
   }, 180_000);
+});
+
+// ---------------------------------------------------------------------------
+// readLockState — the ONE authority for "is this project locked?".
+//
+// Staleness used to be compared in exactly one place (the hosted promote gate)
+// while the project config view answered from the mere EXISTENCE of a record. So a
+// project whose specs changed after locking still reported itself locked, claiming
+// a freeze that did not hold — the same time-of-check gap the lock exists to close,
+// reintroduced in the reporting surface. Every caller now shares this verdict.
+// ---------------------------------------------------------------------------
+
+describe('readLockState (the shared lock verdict)', () => {
+  let rootDir: string;
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    setProjectRoot(null);
+    invalidateSpecCache();
+    try { fs.rmSync(rootDir, { recursive: true, force: true }); } catch { /* win file locks */ }
+  });
+
+  function project(): void {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lockstate-'));
+    buildLockableProject(rootDir);
+  }
+
+  it('unlocked when no record exists', () => {
+    project();
+    expect(readLockState().state).toBe('unlocked');
+  });
+
+  it('locked immediately after a lock, against the CURRENT gate identity', async () => {
+    project();
+    await runLock({ yes: true }, { valid: true, issues: [] });
+
+    const { state, record, current } = readLockState();
+    expect(state).toBe('locked');
+    // The verdict is decided against the gate flavour, and they agree.
+    expect(current.algorithm).toBe('sha256+doctrine');
+    expect(record!.stateId.digest).toBe(current.digest);
+  });
+
+  it('STALE once the spec tree changes after locking — the case that used to report "locked"', async () => {
+    project();
+    await runLock({ yes: true }, { valid: true, issues: [] });
+    expect(readLockState().state).toBe('locked');
+
+    // Any edit moves the tree past what was frozen.
+    saveComponentSpec(component('gateway-portal', 'core-sub', {
+      componentType: 'Portal', portalType: 'HTTP_API', description: 'edited after the freeze',
+      status: 'complete',
+    } as Partial<ComponentSpec>));
+    invalidateSpecCache();
+    setProjectRoot(rootDir);
+
+    const after = readLockState();
+    expect(after.state).toBe('stale');
+    // The record survives: staleness is a verdict ABOUT it, not its deletion, so a
+    // caller can prompt for a re-lock rather than pretend it never happened.
+    expect(after.record).not.toBeNull();
+    expect(after.record!.stateId.digest).not.toBe(after.current.digest);
+  });
+
+  it('re-locking after the edit restores the freeze', async () => {
+    project();
+    await runLock({ yes: true }, { valid: true, issues: [] });
+    saveComponentSpec(component('gateway-portal', 'core-sub', {
+      componentType: 'Portal', portalType: 'HTTP_API', description: 'edited after the freeze',
+      status: 'complete',
+    } as Partial<ComponentSpec>));
+    invalidateSpecCache();
+    setProjectRoot(rootDir);
+    expect(readLockState().state).toBe('stale');
+
+    await runLock({ yes: true }, { valid: true, issues: [] });
+    expect(readLockState().state).toBe('locked');
+  });
 });

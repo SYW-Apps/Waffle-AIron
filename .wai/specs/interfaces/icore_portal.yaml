@@ -168,6 +168,13 @@ methods:
     signature: 'computeGateStateId(): StateId'
     returns: StateId
     params: []
+  - name: readLockState
+    description: >-
+      Resolve the project's lock verdict (unlocked | locked | stale) against the current gate
+      identity. Pure 1:1 forward.
+    signature: 'readLockState(): LockStatus'
+    returns: LockStatus
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-29T14:55:01.546Z'
+updatedAt: '2026-07-30T15:59:26.637Z'

@@ -125,6 +125,13 @@ methods:
         type: call
         targetComponent: core_portal
         targetMethod: computeGateStateId
+  - name: readLockState
+    narrative:
+      - stepNumber: 1
+        description: Forward the lock-verdict resolution to the core portal
+        type: call
+        targetComponent: core_portal
+        targetMethod: readLockState
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-07-29T14:55:26.871Z'
+updatedAt: '2026-07-30T16:00:00.079Z'

@@ -10,6 +10,7 @@ import {
   loadImplementationSpecs,
   getLoaderIssues,
   scanAllSpecs,
+  readLockState,
 } from '../core/specs.js';
 
 export interface StatusOptions {
@@ -177,7 +178,39 @@ export async function runStatus(options: StatusOptions = {}): Promise<void> {
     }
   }
 
+  // The same lock verdict the MCP report carries — the CLI is where a human
+  // actually looks, so it must not be the surface that stays quiet.
+  const lock = lockLine().trim();
+  if (lock) {
+    logger.blank();
+    if (lock.includes('STALE')) logger.warn(lock);
+    else logger.info(lock);
+  }
+
   logger.blank();
+}
+
+/**
+ * The project's lock state, reported here because staleness used to surface in
+ * exactly one place — the hosted promote gate — so a voided lock was invisible
+ * until someone tried to promote. A frozen design is a fact about the project;
+ * `status` is where a human looks for those.
+ *
+ * Silent for a project that was never locked: absence of a freeze is the normal
+ * state, not news.
+ */
+function lockLine(): string {
+  try {
+    const { state, record } = readLockState();
+    if (state === 'unlocked') return '';
+    if (state === 'locked') {
+      return `\nLock: FROZEN at ${record!.lockedAt} by ${record!.lockedBy} (wairon ${record!.validatorVersion}).\n`;
+    }
+    return `\nLock: STALE — the specs or the governing doctrine changed since ${record!.lockedAt}, `
+      + 'so this lock no longer holds and promotion will refuse it. Re-run `wairon lock` to freeze the current state.\n';
+  } catch {
+    return ''; // never let a report line break the report
+  }
 }
 
 export function getStatusReport(options: StatusOptions = {}): string {
@@ -317,6 +350,8 @@ export function getStatusReport(options: StatusOptions = {}): string {
       }
     }
   }
+
+  output += lockLine();
 
   return output;
 }

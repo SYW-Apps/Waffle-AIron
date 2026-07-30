@@ -1,5 +1,5 @@
 import { computeStateId } from '../core/statehash.js';
-import { computeGateStateId } from '../core/specs.js';
+import { computeGateStateId, readLockState } from '../core/specs.js';
 import { readLockRecord, writeLockRecord } from '../core/lockfile.js';
 import { loadSystemSpec, loadSubsystemSpecs, buildProjectGraph, assertContainedProjectPath } from '../core/specs.js';
 import { provisionProject, promoteAllComplete } from '../core/provision.js';
@@ -33,6 +33,9 @@ export const hostCore = {
   // lock records and the promote-time re-check must use.
   computeStateId,
   computeGateStateId,
+  // The shared lock verdict (unlocked | locked | stale). Reporting surfaces and
+  // the promote gate resolve it here rather than each comparing StateIds.
+  readLockState,
   readLockRecord,
   writeLockRecord,
   promoteAllComplete,

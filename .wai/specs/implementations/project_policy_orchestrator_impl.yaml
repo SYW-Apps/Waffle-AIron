@@ -723,10 +723,14 @@ methods:
           even though a name is recorded. This read reports that honestly and never repairs it.
         type: local
       - stepNumber: 9
-        description: Read the project's current lock record (or null when the project has never been locked)
+        description: >-
+          Resolve the lock VERDICT through the shared authority rather than testing whether a record
+          merely exists: a stale record freezes nothing, so reporting it as locked claimed a freeze
+          that did not hold. Reported as locked plus a distinct stale flag, so a UI can prompt for
+          the re-lock.
         type: call
         targetComponent: host_core_adapter
-        targetMethod: readLockRecord
+        targetMethod: readLockState
       - stepNumber: 10
         description: >-
           Read the project's L1 subsystem specs to collect the subsystems declaring their own
@@ -802,10 +806,12 @@ methods:
           agree instead of drifting apart.
         type: local
       - stepNumber: 9
-        description: Read the project's current lock record (or null when the project has never been locked)
+        description: >-
+          Resolve the lock VERDICT through the shared authority (locked only when a record exists
+          AND its gate identity still matches).
         type: call
         targetComponent: host_core_adapter
-        targetMethod: readLockRecord
+        targetMethod: readLockState
       - stepNumber: 10
         description: >-
           Read the project's L1 subsystem specs to collect the subsystems declaring a profile of
@@ -829,4 +835,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-09T20:50:11.443Z'
-updatedAt: '2026-07-25T00:49:34.122Z'
+updatedAt: '2026-07-30T16:00:17.576Z'

@@ -128,6 +128,13 @@ methods:
     signature: 'computeGateStateId(): StateId'
     returns: StateId
     params: []
+  - name: readLockState
+    description: >-
+      Resolve the bound project's lock verdict (unlocked | locked | stale) through the core portal —
+      the shared authority the promote gate and every reporting surface answer from.
+    signature: 'readLockState(): LockStatus'
+    returns: LockStatus
+    params: []
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-07-29T14:55:17.336Z'
+updatedAt: '2026-07-30T15:59:21.737Z'

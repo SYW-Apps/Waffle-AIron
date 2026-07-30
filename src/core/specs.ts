@@ -3,8 +3,9 @@ import * as path from 'path';
 import { z } from 'zod';
 import { aiPathsAt, WaiPaths } from '../config/loader.js';
 import { ensureDir, listFiles, listFilesRecursive, pathExists, getProjectRoot, runWithProjectRoot } from '../utils/fs.js';
-import { computeStateId, hashGateState, type StateId } from './statehash.js';
+import { computeStateId, hashGateState, stateIdEquals, type StateId } from './statehash.js';
 import { loadProjectExtensions } from './extensions.js';
+import { readLockRecord, type LockRecord } from './lockfile.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import {
   SystemSpec,
@@ -2469,6 +2470,35 @@ export function resolveChainingParent(): ChainingParentRef | null {
  */
 export function computeGateStateId(): StateId {
   return hashGateState(loadProjectExtensions());
+}
+
+/** Whether a lock is in force, void, or absent. */
+export type LockState = 'unlocked' | 'locked' | 'stale';
+
+export interface LockStatus {
+  state: LockState;
+  /** The persisted record, or null when the project was never locked. */
+  record: LockRecord | null;
+  /** The gate identity as it stands NOW — what `state` was decided against. */
+  current: StateId;
+}
+
+/**
+ * Resolve the project's lock into one of three honest states, comparing the
+ * recorded gate identity against the current one.
+ *
+ * The ONE authority for the question "is this project locked?". Before this,
+ * `promote` compared StateIds while the project config view answered from the mere
+ * EXISTENCE of a record — so a project whose specs changed after locking still
+ * reported itself locked, and the freeze it claimed did not exist. Two answers to
+ * one question is how a time-of-check gap gets reintroduced after being closed, so
+ * every caller now shares this.
+ */
+export function readLockState(): LockStatus {
+  const record = readLockRecord();
+  const current = computeGateStateId();
+  if (!record) return { state: 'unlocked', record: null, current };
+  return { state: stateIdEquals(record.stateId, current) ? 'locked' : 'stale', record, current };
 }
 
 export function computeStateIdAt(root: string): string | null {
