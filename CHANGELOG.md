@@ -116,8 +116,58 @@ the agent.
   component returns the resolved guidance and its same-variant siblings as a derived,
   read-only field. Previously it only reached generated agent files.
 
+### Spec authoring: array deltas upsert, and an optional field can be removed
+
+`sdd_update_spec` documented that arrays are "matched by name (or id) and
+merged/upserted", with `action: 'delete'` to remove an element. That held for
+`methods`, `fields`, `publicInterfaces`, `dispatch`, `lifecycle`, `emits`, and
+`subscribesTo` — and was **silently false for every other array**, which fell
+through to wholesale replacement. A delta naming ONE element deleted every element
+it did not mention:
+
+```
+trustedLinks  [x, y] + delta [x]     ->  [x]     (y silently gone)
+invariants    [i1,i2] + delta [i1]   ->  [i1]    (i2 silently gone)
+lint.allow    [A, B]  + delta [A]    ->  [A]     (B silently gone)
+```
+
+The same data loss already fixed once for dispatch tables, still live for six other
+fields — destroying authored specs through the sanctioned authoring path.
+
+- **One identity table replaces the per-field special cases**, so the contract is
+  true by construction and a future array field inherits upsert semantics instead
+  of regressing to destructive replace. Keys: `dispatch` by capability, `lifecycle`
+  by phase+component+method, `emits`/`subscribesTo` by topic+event, `trustedLinks`
+  by subsystem, `invariants` and `patterns` by id, `lint.allow` by code,
+  `boundaries` by name, `globalRequirements` by description, else name or id.
+- **`action: 'delete'` now works on all of them** — including a stale `lint.allow`,
+  which wairon reports and fails `--ci` on but which the tools previously could not
+  remove, dead-ending an agent restricted to the `sdd_*` surface.
+- **An explicitly empty array still clears a list.** Under pure upsert semantics it
+  would mean "change nothing", leaving no way to empty a keyed list.
+- **`unset` removes an optional field**: `{ unset: ['basePath', 'variant'] }`. It
+  could previously be set but never cleared — `null`/`undefined` mean "no change",
+  and writing `""` leaves the field present and empty, which is a different and
+  usually wrong spec. Explicit rather than overloading `null`: a destructive
+  meaning must be asked for, not inferred from an absent value.
+
 ### Fixes
 
+- **A stale lock reported itself as locked.** The hosted project config view judged
+  "locked" from the mere EXISTENCE of a lock record while the promote gate compared
+  state identities — so a project whose specs changed after locking still claimed a
+  freeze that did not hold, the same time-of-check gap the lock exists to close,
+  reintroduced in the reporting surface. `readLockState()` is now the single
+  authority (`unlocked | locked | stale`), shared by the promote gate, the config
+  view, `wairon status`, and `wairon doctor`, so they cannot disagree. `locked` now
+  means the lock is IN FORCE; `lockStale` distinguishes voided from never-locked so
+  a UI can prompt for the re-lock.
+- **Lock staleness was invisible until promote.** It was compared in exactly one
+  place, so a voided lock surfaced only when someone tried to promote — fail-closed,
+  but late. `status` and `doctor` now report it with the reason and the remedy.
+  Deliberately NOT auto-relocking on upgrade: the record carries `lockedBy` and
+  asserts that a human approved promoting this state, so regenerating it would make
+  that assertion untrue.
 - **Organizations page crashed on a hosted instance upgraded to v5** with
   `Cannot read properties of undefined (reading 'localeCompare')`. Units persisted
   before slugs existed have no `slug`, `host doctor --fix` is operator-invoked, and
