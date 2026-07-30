@@ -2286,7 +2286,25 @@ export class SpecWorkspace {
       return out;
     };
 
-    const mergedResult = mergeDelta(result, qualifyDeltaRefs(delta));
+    // `unset` REMOVES optional fields, and is not itself a spec field.
+    //
+    // Without it an optional scalar could be set but never cleared: null and
+    // undefined are skipped by the merge (so a caller passing them for "no change"
+    // is not punished), and the only workaround — writing "" — leaves the field
+    // PRESENT and empty, which is a different, usually wrong spec (a Portal with
+    // basePath: "" or a component with variant: "" is not the same as one without).
+    // Explicit rather than overloading null: a destructive meaning must be asked
+    // for, never inferred from an absent value.
+    //
+    // Unsetting a REQUIRED field is not special-cased — schema validation refuses
+    // the write and names the field, which is the honest failure.
+    const unsetFields: string[] = Array.isArray((delta as Record<string, unknown>).unset)
+      ? ((delta as Record<string, unknown>).unset as unknown[]).filter((f): f is string => typeof f === 'string')
+      : [];
+    const { unset: _unset, ...mergeableDelta } = delta as Record<string, unknown>;
+
+    const mergedResult = mergeDelta(result, qualifyDeltaRefs(mergeableDelta));
+    for (const field of unsetFields) delete mergedResult[field];
     mergedResult.updatedAt = new Date().toISOString();
 
     // Symbolic step-label references resolve AFTER the merge, so a delta can

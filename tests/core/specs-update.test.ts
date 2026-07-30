@@ -589,3 +589,60 @@ describe('array deltas upsert by identity and honour delete markers', () => {
     expect(loadSubsystemSpec('billing')!.trustedLinks).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Removing an optional field: the create/update/delete symmetry gap.
+//
+// An optional scalar could be SET but never CLEARED. null and undefined are
+// skipped by the merge (so a caller passing them for "no change" is not punished)
+// and the only workaround — writing "" — leaves the field PRESENT and empty, which
+// is a different and usually wrong spec: a Portal with basePath "" is not a Portal
+// without one. "unset" makes the removal explicit rather than inferred.
+// ---------------------------------------------------------------------------
+
+describe('unset removes an optional field', () => {
+  let proj: string;
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    if (proj) fs.rmSync(proj, { recursive: true, force: true });
+  });
+
+  function portal(): void {
+    proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-unset-'));
+    fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
+    setProjectRoot(proj);
+    saveSubsystemSpec({ schemaVersion: '1.0.0', id: 's', name: 'S', description: 'd', parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now } as never);
+    saveComponentSpec({ id: 'p', name: 'P', description: 'd', subsystem: 's', componentType: 'Portal', portalType: 'HTTP_API', basePath: '/v1', owns: [], dependsOn: [], createdAt: now, updatedAt: now } as never);
+    invalidateSpecCache();
+  }
+
+  it('removes the field entirely, leaving siblings untouched', () => {
+    portal();
+    updateSpec('component', 'p', { unset: ['basePath'] });
+    invalidateSpecCache();
+    const after = loadComponentSpec('p')!;
+    expect('basePath' in after).toBe(false);
+    expect(after.portalType).toBe('HTTP_API');
+    expect(after.componentType).toBe('Portal');
+  });
+
+  it('null and undefined still mean "no change", never a silent delete', () => {
+    portal();
+    updateSpec('component', 'p', { basePath: null });
+    invalidateSpecCache();
+    expect(loadComponentSpec('p')!.basePath).toBe('/v1');
+  });
+
+  it('refuses to unset a REQUIRED field, naming it', () => {
+    portal();
+    expect(() => updateSpec('component', 'p', { unset: ['componentType'] })).toThrow(/componentType/);
+  });
+
+  it('never leaks "unset" onto the spec as a field', () => {
+    portal();
+    updateSpec('component', 'p', { unset: ['basePath'] });
+    invalidateSpecCache();
+    expect('unset' in loadComponentSpec('p')!).toBe(false);
+  });
+});
