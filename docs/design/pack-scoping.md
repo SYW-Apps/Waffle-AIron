@@ -498,12 +498,17 @@ every project carries. `sdd_host_pack_install` installs into the instance store;
   instead of silently passing. Correct (those locks were taken without doctrine
   coverage and cannot be retro-verified) and it fails closed — still worth a
   release-note line.
-- **Should the wairon version join the gate identity?** A wairon upgrade changes
-  the *builtin* rules, and a lock taken under the old binary still matches today.
-  That is the same hole one level up. `LockRecord` already records
-  `validatorVersion`, so the data is there but unenforced. Deliberately not
-  changed here — it would invalidate every lock on every upgrade, which needs its
-  own decision.
+- ~~**Should the wairon version join the gate identity?**~~ **Resolved: no — the
+  rule REGISTRY does instead.** Hashing the version would invalidate every lock on
+  every patch; hashing nothing would let a minor that adds a rule leave locks
+  asserting they passed a gate that no longer exists. The identity keys on the
+  builtin rule set (names, codes, default severities), so a release touching no
+  rule keeps every lock valid and one that adds, removes, or re-grades a code
+  invalidates exactly the locks it should. The project's governing `projectType`
+  and `rules` config join it for the same reason — both decide verdicts.
+  Residual gap, accepted knowingly: a rule whose *implementation* grows stricter
+  without its name, codes, or default severity changing is not caught. Catching it
+  needs the version, at the cost of churning every lock on every release.
 
 ---
 

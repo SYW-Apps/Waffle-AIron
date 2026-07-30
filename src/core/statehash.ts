@@ -8,6 +8,11 @@ import {
   loadTypeSpecs,
 } from './specs.js';
 import type { LoadedExtensions } from './extensions.js';
+// The BUILTIN rule registry, read inside doctrineIdentity only. This closes an
+// import cycle (rules → coupling → specs → statehash), which is safe for the same
+// reason the existing statehash ↔ specs cycle is: nothing here runs at module init.
+import { SDD_RULES } from './rules/index.js';
+import type { RulesConfig } from '../models/project.js';
 
 // ---------------------------------------------------------------------------
 // State Hash Specialist (sdd_host / sdd_core)
@@ -24,6 +29,16 @@ import type { LoadedExtensions } from './extensions.js';
 export interface StateId {
   algorithm: string;
   digest: string;
+}
+
+/**
+ * The project-level half of the gate: which profile governs, and how the project
+ * tuned the rules. Supplied by the caller so the hash stays a pure function of its
+ * inputs rather than reading configuration behind the caller's back.
+ */
+export interface GateConfig {
+  projectType?: string;
+  rules?: RulesConfig;
 }
 
 /** Algorithm marker for the CONTENT identity: the spec tree alone. */
@@ -69,11 +84,42 @@ export function computeStateId(): StateId {
  * Programmatic rules are functions and cannot be digested, so a rule's name plus
  * its declared codes stands as its identity.
  */
-function doctrineIdentity(doctrine: LoadedExtensions): Record<string, unknown> {
+function doctrineIdentity(doctrine: LoadedExtensions, gate: GateConfig): Record<string, unknown> {
   const byKey = <T>(items: T[], key: (item: T) => string): T[] =>
     [...items].sort((a, b) => key(a).localeCompare(key(b)));
 
   return {
+    /**
+     * The BUILTIN rule set, by identity rather than by wairon version.
+     *
+     * A binary upgrade changes the gate only when the rules change, so hashing the
+     * version would invalidate every lock on every patch while hashing nothing
+     * would let a minor that ADDS a rule leave locks asserting they passed a gate
+     * that no longer exists. Keying on the registry means a release that touches no
+     * rule keeps every lock valid, and one that adds, removes, or re-grades a code
+     * invalidates exactly the locks it should.
+     *
+     * Residual gap, accepted knowingly: a rule whose IMPLEMENTATION grows stricter
+     * without its name, codes, or default severity changing is not caught. Folding
+     * in the wairon version would catch it at the cost of churning every lock on
+     * every release — the trade this projection deliberately declines.
+     */
+    builtinRules: byKey(
+      SDD_RULES.map((r) => ({
+        name: r.name,
+        codes: byKey(r.codes.map((c) => ({ code: c.code, severity: c.defaultSeverity })), (c) => c.code),
+      })),
+      (r) => r.name,
+    ),
+    /**
+     * Which profile GOVERNS, and the project's own rule tuning. Both decide
+     * verdicts — a projectType switch changes the doctrine family outright, and
+     * `rules` carries severity overrides, complexity caps, and designDepth — so a
+     * lock taken under one and promoted under another was never validated by the
+     * gate it claims to have passed.
+     */
+    projectType: gate.projectType ?? null,
+    rulesConfig: gate.rules ?? null,
     packs: byKey(
       doctrine.packs.map((p) => ({ name: p.name, version: p.version ?? null, scope: p.scope })),
       (p) => `${p.name}@${p.version ?? ''}#${p.scope}`,
@@ -106,8 +152,8 @@ function doctrineIdentity(doctrine: LoadedExtensions): Record<string, unknown> {
  * moved. Content-only consumers (surface snapshot stamps, freshness checks) stay
  * on computeStateId, so a pack bump never marks a vendored contract stale.
  */
-export function hashGateState(doctrine: LoadedExtensions): StateId {
-  const payload = { tree: loadTree(), doctrine: doctrineIdentity(doctrine) };
+export function hashGateState(doctrine: LoadedExtensions, gate: GateConfig = {}): StateId {
+  const payload = { tree: loadTree(), doctrine: doctrineIdentity(doctrine, gate) };
   const digest = crypto.createHash('sha256').update(canonicalize(payload)).digest('hex');
   return { algorithm: GATE_ALGORITHM, digest };
 }

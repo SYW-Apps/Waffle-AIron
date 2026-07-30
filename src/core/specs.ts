@@ -1,9 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { z } from 'zod';
-import { aiPathsAt, WaiPaths } from '../config/loader.js';
+import { aiPathsAt, loadProjectConfig, WaiPaths } from '../config/loader.js';
 import { ensureDir, listFiles, listFilesRecursive, pathExists, getProjectRoot, runWithProjectRoot } from '../utils/fs.js';
-import { computeStateId, hashGateState, stateIdEquals, type StateId } from './statehash.js';
+import { computeStateId, hashGateState, stateIdEquals, type StateId, type GateConfig } from './statehash.js';
 import { loadProjectExtensions } from './extensions.js';
 import { readLockRecord, type LockRecord } from './lockfile.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
@@ -2555,7 +2555,16 @@ export function resolveChainingParent(): ChainingParentRef | null {
  * disagree about which rule set applied.
  */
 export function computeGateStateId(): StateId {
-  return hashGateState(loadProjectExtensions());
+  // The gate is the packs AND the project's own governing configuration: which
+  // profile applies, and how it tuned the rules. A lock taken under one and
+  // promoted under another was never validated by the gate it claims to have
+  // passed. Config is read here and passed in, so the hash itself stays pure.
+  let gate: GateConfig = {};
+  try {
+    const config = loadProjectConfig();
+    gate = { projectType: config.projectType, rules: config.rules };
+  } catch { /* uninitialized project: the tree hash still stands on its own */ }
+  return hashGateState(loadProjectExtensions(), gate);
 }
 
 /** Whether a lock is in force, void, or absent. */

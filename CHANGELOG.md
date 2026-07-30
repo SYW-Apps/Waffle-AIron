@@ -88,6 +88,16 @@ profile and language tables, patterns, guarantee tokens, assertions, and rule
 names/codes. Pack `skills` and `instructions` are excluded — prose cannot alter a
 verdict, and including it would invalidate every lock on a documentation tweak.
 
+It also covers the **builtin rule registry** (names, codes, default severities) and
+the project's own governing configuration (`projectType` and `rules`). So "valid
+stays valid unless the rules truly change": a release touching no rule keeps every
+lock, one that adds, removes, or re-grades a code invalidates exactly the locks it
+should, and a severity override or profile switch counts as the gate change it is.
+Keyed on the registry rather than the wairon version deliberately — the version
+would churn every lock on every patch. Residual gap, accepted knowingly: a rule
+whose *implementation* grows stricter without its name, codes, or default severity
+changing is not caught.
+
 ### Teaching the connecting agent over MCP
 
 An agent connecting to a wairon MCP server received nothing: `initialize` carried no

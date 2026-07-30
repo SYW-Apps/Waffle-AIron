@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { computeStateId, stateIdEquals } from '../../src/core/statehash.js';
 import { computeGateStateId, invalidateSpecCache } from '../../src/core/specs.js';
+import { SDD_RULES } from '../../src/core/rules/index.js';
 
 // ---------------------------------------------------------------------------
 // The GATE StateId — doctrine coverage for the commit-scoped lock.
@@ -19,19 +20,19 @@ import { computeGateStateId, invalidateSpecCache } from '../../src/core/specs.js
 //   computeGateStateId — spec content + governing doctrine (lock / promote)
 // ---------------------------------------------------------------------------
 
-function createTempProject() {
+function createTempProject(opts: { projectType?: string; rules?: Record<string, unknown> } = {}) {
   invalidateSpecCache();
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-gatehash-'));
   const waiDir = path.join(tempDir, '.wai');
   fs.mkdirSync(waiDir);
 
-  const writeConfig = (packs: string[]) => {
+  const writeConfig = (packs: string[], over: { projectType?: string; rules?: Record<string, unknown> } = {}) => {
     fs.writeFileSync(path.join(waiDir, 'project.yaml'), JSON.stringify({
       schemaVersion: '1.0.0',
       name: 'test-project',
-      projectType: 'backend',
+      projectType: over.projectType ?? opts.projectType ?? 'backend',
       targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
-      rules: {},
+      rules: over.rules ?? opts.rules ?? {},
       // Hermetic: a contributor's machine-wide packs must not enter the digest.
       extensions: { useGlobalPacks: false, packs },
       createdAt: '2026-07-03T10:00:00Z',
@@ -227,6 +228,85 @@ describe('agent-facing prose does NOT invalidate a lock', () => {
     targets: [claude]
 `);
       expect(stateIdEquals(computeGateStateId(), before)).toBe(true);
+    } finally { proj.cleanup(); }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The gate is the RULES too, not just the packs.
+//
+// "Something valid stays valid unless the rules truly change" — so the identity
+// keys on the rule REGISTRY rather than the wairon version. Hashing the version
+// would churn every lock on every patch; hashing neither would let a release that
+// adds a rule leave locks asserting they passed a gate that no longer exists.
+// The project's own governing config counts as well: a projectType switch changes
+// the doctrine family outright, and `rules` carries severity overrides.
+// ---------------------------------------------------------------------------
+
+describe('the gate identity covers the rule set and the governing config', () => {
+  it('a change to the BUILTIN rule registry invalidates locks', () => {
+    const proj = createTempProject();
+    proj.activate();
+    try {
+      const before = computeGateStateId();
+
+      // Simulate a release that adds a rule. Restored in `finally`, so no other
+      // test observes the mutation.
+      SDD_RULES.push({
+        name: 'a-newly-shipped-rule',
+        description: 'added by a hypothetical release',
+        codes: [{ code: 'A_NEW_CODE', defaultSeverity: 'warning', summary: 's' }],
+        check: () => { /* identity only — never run here */ },
+      });
+      try {
+        expect(stateIdEquals(computeGateStateId(), before)).toBe(false);
+      } finally {
+        SDD_RULES.pop();
+      }
+
+      // Removing it again restores the identity: the gate is unchanged, so a lock
+      // taken before the hypothetical release is valid again.
+      expect(stateIdEquals(computeGateStateId(), before)).toBe(true);
+    } finally { proj.cleanup(); }
+  });
+
+  it('the wairon VERSION alone does not invalidate — only the rules do', () => {
+    const proj = createTempProject();
+    proj.activate();
+    try {
+      // Nothing about the registry or config changed between these two calls, which
+      // is the situation a patch release leaves behind. Locks must survive it.
+      expect(stateIdEquals(computeGateStateId(), computeGateStateId())).toBe(true);
+    } finally { proj.cleanup(); }
+  });
+
+  it('switching the governing projectType invalidates locks', () => {
+    const a = createTempProject({ projectType: 'backend' });
+    a.activate();
+    const backend = computeGateStateId();
+    a.cleanup();
+
+    const b = createTempProject({ projectType: 'frontend-reactive' });
+    b.activate();
+    try {
+      // Same (empty) tree, different governing doctrine family.
+      expect(stateIdEquals(computeGateStateId(), backend)).toBe(false);
+    } finally { b.cleanup(); }
+  });
+
+  it('a rules-config change (a severity override) invalidates locks, and the CONTENT id is untouched', () => {
+    const proj = createTempProject();
+    proj.activate();
+    try {
+      const gateBefore = computeGateStateId();
+      const contentBefore = computeStateId();
+
+      proj.writeConfig([], { rules: { sddRuleSeverity: { UNKNOWN_PROFILE: 'off' } } });
+
+      // Turning a rule off IS a change of gate.
+      expect(stateIdEquals(computeGateStateId(), gateBefore)).toBe(false);
+      // But no contract moved, so vendored surface snapshots must not go stale.
+      expect(stateIdEquals(computeStateId(), contentBefore)).toBe(true);
     } finally { proj.cleanup(); }
   });
 });

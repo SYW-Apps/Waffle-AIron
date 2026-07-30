@@ -64,7 +64,7 @@ Rules that make the sim honest:
 - The sim must be a **committed, re-runnable harness** — a one-off manual
   run that leaves no artifact does not satisfy the gate.
 
-## 4. DESIGNED — the static integration-conformance gate (not yet implemented)
+## 4. SHIPPED — the static integration-conformance gate
 
 Goal: "a component cannot claim `complete` until a harness wires it to its
 real dependencies and exercises its narrative paths" — enforced by the

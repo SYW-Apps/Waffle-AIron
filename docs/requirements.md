@@ -47,11 +47,11 @@
 
 ---
 
-## Scope (v0.1)
+## Scope
 
 In scope: the SDD spec tree, conformance validation, spec-derived topology,
 domains (subsystem-derived + free-standing), SDD skills, the MCP server, shared
 context, and multi-target generation.
 
-Out of scope for v0.1: deriving specs from existing code, CI conformance
+Still out of scope: deriving specs from existing code, CI conformance
 reporting, and org-scale shared standards (see the [roadmap](roadmap.md)).
