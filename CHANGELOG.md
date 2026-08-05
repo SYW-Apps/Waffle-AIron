@@ -161,6 +161,43 @@ fields — destroying authored specs through the sanctioned authoring path.
   usually wrong spec. Explicit rather than overloading `null`: a destructive
   meaning must be asked for, not inferred from an absent value.
 
+### A misplaced field is refused at the write, not discovered at validate time
+
+`sdd_add_component` accepted any field on any `componentType` — the write path only
+checked the schema, where `portalType`, `basePath`, and `durability` are all
+optional. The stereotype rules that reject them live in `sdd_validate_tree`, and two
+of their codes (`UNEXPECTED_PORTAL_FIELD`, `DURABILITY_ON_NON_STORE`) are errors that
+never relax while draft — correctly, since a misplaced field is wrong *now* rather
+than merely incomplete.
+
+The result was a trap rather than a warning. Setting `basePath` on an Orchestrator
+succeeded, then failed validation permanently, and before `unset` existed there was
+no way to remove the field again: the component was wedged, and recreating it was the
+only escape. Agents reported this as *"non-Portal components require Portal-only
+arguments"* — the schema never required them; the spec just could not be repaired.
+
+- **Rules now declare their scope.** `scope: 'spec'` marks a rule whose verdict reads
+  one spec's own fields and no cross-spec relationship; `'tree'` (the default, so an
+  undeclared rule can never leak into the write path) marks one that needs the loaded
+  tree. The intrinsic subset runs against a **candidate** spec before it is written.
+- **Two rules split along that line**, since each mixed intrinsic and tree checks:
+  `portal-fields` (field shape) out of `portal-endpoints` (endpoint bindings), and
+  `durability-declaration` (does the declaration belong here) out of
+  `durability-round-trip` (hydration reachability). Same codes, same messages, same
+  severities — relocated, not rewritten.
+- **`sdd_add_component` and `sdd_update_spec` gate on the merged spec**, so an update
+  cannot introduce a misplacement either. A refusal names the code and the remedy,
+  and nothing reaches disk — the fix is to retry the call, not repair a saved spec.
+- **Deliberately not the whole rule set.** A component is legitimately authored
+  before its interface, dependencies, and narratives exist, so tree rules would
+  reject every correct first step of the authoring order. A draft Portal without its
+  `portalType` yet still writes (a warning, as in a tree run); a Portal-only field on
+  a Store does not.
+- **Mechanical re-saves stay ungated** — status promotion, layout normalization, and
+  migrations pass no gate, so a spec that predates a rule remains loadable and
+  repairable via `unset`. `rules.sddRuleSeverity` disarms the gate exactly as it
+  disarms the same code in `validate`.
+
 ### Fixes
 
 - **A stale lock reported itself as locked.** The hosted project config view judged

@@ -252,32 +252,23 @@ export const lifecycleRule: SddRule = {
 // was this EDGE (no boot read-back into the RAM projection).
 // ---------------------------------------------------------------------------
 
-export const durabilityRule: SddRule = {
-  name: 'durability-round-trip',
+/**
+ * The INTRINSIC half of the durability family: whether the declaration itself
+ * belongs on this component. Both verdicts read one component's own
+ * componentType + durability and nothing else, so this is `scope: 'spec'` and
+ * also runs at the write boundary — durability on a non-Store is refused when
+ * authored rather than persisting as an unclearable validate-time error.
+ */
+export const durabilityDeclarationRule: SddRule = {
+  name: 'durability-declaration',
+  scope: 'spec',
   description:
-    'Every Store must declare its durability (MISSING_DURABILITY): durable = persisted RAM projection (effect-tagged methods; writes require a hydration read-back reachable from a lifecycle init entrypoint), read-through = persisted with no RAM copy (every read IS the read-back — hydration exempt), ram-projection = rebuilt not restored, cache = evictable loss-safe memo state. The round-trip requirement applies to durable Stores only — the flagship semantic check is opt-out by declaration, never silently absent.',
+    'Every Store declares its durability (MISSING_DURABILITY) and nothing but a Store may declare one (DURABILITY_ON_NON_STORE). Intrinsic to one component: no tree required. The round-trip consequences of the declaration are enforced by durability-round-trip.',
   codes: [
     { code: 'DURABILITY_ON_NON_STORE', defaultSeverity: 'error', summary: 'durability declared on a component that is not a Store' },
     { code: 'MISSING_DURABILITY', defaultSeverity: 'warning', summary: 'Store with no durability declaration — the round-trip machinery cannot know whether restart-survival is promised' },
-    { code: 'MISSING_EFFECT_TAG', defaultSeverity: 'warning', summary: 'Durable Store contract method lacks an effect: read | write tag' },
-    { code: 'MISSING_HYDRATION', defaultSeverity: 'error', summary: 'Durable Store is written but no read-back is reachable from any lifecycle init entrypoint' },
   ],
   check(ctx) {
-    // Reachability from lifecycle INIT flows only — the boot graph.
-    const initSeeds: WalkSeed[] = [];
-    for (const sub of ctx.subsystems) {
-      for (const le of sub.lifecycle ?? []) {
-        if (le.phase === 'init' && ctx.componentMap.has(le.component)) {
-          initSeeds.push({ compId: le.component, methodName: le.method });
-        }
-      }
-    }
-    // followDispatchTables: false — at boot only edges the init narratives
-    // actually TAKE count; a hydrating read merely offered in a reached
-    // portal's table is not a boot-time read (explicit dispatch steps in the
-    // init flow are still followed).
-    const initReach = initSeeds.length ? walkNarrativeGraph(ctx, initSeeds, { followDispatchTables: false }) : null;
-
     for (const comp of ctx.components) {
       const isDraftCtx = ctx.isComponentDraft(comp.id);
 
@@ -305,11 +296,43 @@ export const durabilityRule: SddRule = {
           comp.id,
           isDraftCtx,
         );
-        continue;
       }
+    }
+  },
+};
+
+export const durabilityRule: SddRule = {
+  name: 'durability-round-trip',
+  description:
+    'A durable Store (persisted RAM projection) must carry effect-tagged contract methods, and its writes require a hydration read-back reachable from a lifecycle init entrypoint. read-through is exempt (every read IS the read-back), as are ram-projection (rebuilt not restored) and cache (evictable, loss-safe). The flagship semantic check is opt-out by declaration, never silently absent — the declaration itself is enforced by durability-declaration.',
+  codes: [
+    { code: 'MISSING_EFFECT_TAG', defaultSeverity: 'warning', summary: 'Durable Store contract method lacks an effect: read | write tag' },
+    { code: 'MISSING_HYDRATION', defaultSeverity: 'error', summary: 'Durable Store is written but no read-back is reachable from any lifecycle init entrypoint' },
+  ],
+  check(ctx) {
+    // Reachability from lifecycle INIT flows only — the boot graph.
+    const initSeeds: WalkSeed[] = [];
+    for (const sub of ctx.subsystems) {
+      for (const le of sub.lifecycle ?? []) {
+        if (le.phase === 'init' && ctx.componentMap.has(le.component)) {
+          initSeeds.push({ compId: le.component, methodName: le.method });
+        }
+      }
+    }
+    // followDispatchTables: false — at boot only edges the init narratives
+    // actually TAKE count; a hydrating read merely offered in a reached
+    // portal's table is not a boot-time read (explicit dispatch steps in the
+    // init flow are still followed).
+    const initReach = initSeeds.length ? walkNarrativeGraph(ctx, initSeeds, { followDispatchTables: false }) : null;
+
+    for (const comp of ctx.components) {
+      const isDraftCtx = ctx.isComponentDraft(comp.id);
+
+      // Misplaced or absent declarations are durability-declaration's verdict.
       // Only `durable` (persisted RAM projection) needs the boot read-back:
       // read-through reads the medium on every call, ram-projection rebuilds,
       // cache loss is behavior-preserving.
+      if (comp.componentType !== 'Store') continue;
       if (comp.durability !== 'durable') continue;
 
       const methods = interfaceMethodsOf(ctx, comp.id);

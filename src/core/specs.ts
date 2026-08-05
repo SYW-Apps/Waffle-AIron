@@ -504,6 +504,28 @@ export interface SaveSpecOptions {
   allowStatusDemotion?: boolean;
 }
 
+/**
+ * Hooks an AUTHORING caller injects into a write.
+ *
+ * `gate` sees the fully merged spec immediately before it is persisted, and
+ * throws to refuse the write. It exists as an injected hook rather than a direct
+ * call because the spec store must not depend on the rule engine — rules/
+ * coupling.ts and rules/namespace.ts already read this module, so importing the
+ * validator here would close an import cycle. Inversion keeps the dependency
+ * pointing one way and keeps mechanical re-saves (status promotion, layout
+ * normalization, migrations) ungated: they pass no hooks and behave exactly as
+ * before, which matters because a spec that predates a rule must stay loadable
+ * and repairable.
+ *
+ * Return notices to surface alongside the write's own.
+ */
+export interface SpecWriteHooks {
+  gate?(
+    kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type',
+    merged: Record<string, any>,
+  ): string[] | void;
+}
+
 // ---------------------------------------------------------------------------
 // SpecWorkspace
 // ---------------------------------------------------------------------------
@@ -1866,7 +1888,8 @@ export class SpecWorkspace {
   updateSpec(
     kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type',
     id: string,
-    delta: Record<string, any>
+    delta: Record<string, any>,
+    hooks?: SpecWriteHooks,
   ): string[] {
     const notices: string[] = [];
     const result = (() => {
@@ -2321,6 +2344,13 @@ export class SpecWorkspace {
       }
     }
 
+    // Write-boundary gate, on the MERGED result — the only point where the spec
+    // the caller will actually get exists as one object, and still the last
+    // point before anything touches disk. A refusal throws, so "nothing was
+    // saved" stays literally true.
+    const gateNotices = hooks?.gate?.(kind, mergedResult);
+    if (gateNotices?.length) notices.push(...gateNotices);
+
     // An explicit status in the delta is a deliberate change — allow demotion
     // (e.g. reopening a completed spec to 'draft' for revision).
     const opts: SaveSpecOptions = {
@@ -2654,7 +2684,8 @@ export function findLegacySpecFiles(): { path: string; expected: string }[] {
 export function updateSpec(
   kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type',
   id: string,
-  delta: Record<string, any>
+  delta: Record<string, any>,
+  hooks?: SpecWriteHooks,
 ): string[] {
-  return current().updateSpec(kind, id, delta);
+  return current().updateSpec(kind, id, delta, hooks);
 }

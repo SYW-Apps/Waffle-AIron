@@ -19,7 +19,7 @@ import { typeReferencesRule } from './type-references.js';
 import { contractsRule } from './contracts.js';
 import { narrativeFlowRule } from './narrative-flow.js';
 import { narrativeDetailRule } from './narrative-detail.js';
-import { portalsRule } from './portals.js';
+import { portalsRule, portalFieldsRule } from './portals.js';
 import { stereotypeDepsRule } from './stereotype-deps.js';
 import { patternsRule } from './patterns.js';
 import { facadeForwardingRule } from './facade-forwarding.js';
@@ -29,7 +29,7 @@ import { declarativeAssertionsRule } from './declarative-assertions.js';
 import { profilesRule } from './profiles.js';
 import { publicSurfaceRule } from './public-surface.js';
 import { cyclesRule, reachabilityRule } from './graph.js';
-import { dispatchRule, lifecycleRule, durabilityRule, untypedSeamRule, proseClaimRule } from './semantic-edges.js';
+import { dispatchRule, lifecycleRule, durabilityRule, durabilityDeclarationRule, untypedSeamRule, proseClaimRule } from './semantic-edges.js';
 import { invariantBackingRule } from './invariants.js';
 import { guaranteeTokensRule } from './guarantee-tokens.js';
 import { eventTopologyRule } from './event-topology.js';
@@ -76,6 +76,10 @@ export const SDD_RULES: SddRule[] = [
   // graphs and only make sense once the graphs are structurally valid.
   narrativeAntipatternsRule,
   narrativeDetailRule,
+  // Field shape before endpoint bindings: a Portal-only field on the wrong
+  // stereotype explains the endpoint findings around it, and this half is
+  // spec-scoped so the write boundary refuses it first.
+  portalFieldsRule,
   portalsRule,
   // Cross-call auth: a narrative call into an authed Portal must name its
   // credential source (rides with the portal family).
@@ -98,6 +102,9 @@ export const SDD_RULES: SddRule[] = [
   dispatchRule,
   lifecycleRule,
   reachabilityRule,
+  // The declaration (spec-scoped, refused at the write boundary) before the
+  // round-trip consequences it enables.
+  durabilityDeclarationRule,
   durabilityRule,
   untypedSeamRule,
   proseClaimRule,

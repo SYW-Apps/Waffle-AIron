@@ -27,6 +27,11 @@ import {
 } from '../core/skills.js';
 import { resolveChainingParent, loadComponentSpecs } from '../core/specs.js';
 import * as specsModule from '../core/specs.js';
+// The gated authoring seam — shared by every access path (see core/authoring.ts).
+// Statically imported for the same reason as the core adapters below: it reads
+// the request-scoped project root at CALL time.
+import { addComponent, updateSpecGated } from '../core/authoring.js';
+import type { ComponentSpec } from '../models/specs.js';
 // Statically imported for the same reason as the skills adapter: these read the
 // request-scoped project root at CALL time, so a static binding stays correct per
 // bound project — and a lazy require of a relative path does not resolve under the
@@ -114,6 +119,11 @@ function json(value: unknown): CallToolResult {
 function errText(message: string): CallToolResult {
   return { content: [{ type: 'text', text: `Error: ${message}` }], isError: true };
 }
+
+// Spec WRITES go through core/authoring.ts, never straight to the store: the
+// candidate gate (and anything else that decides what may be written) lives
+// there so the CLI, this stdio server, the hosted MCP dispatch, and the hosted
+// web interface all share one behaviour. This module is a transport.
 
 // TypeScript hits TS2589 ("type instantiation excessively deep") on McpServer.registerTool
 // when inputSchema contains ZodOptional / ZodDefault / ZodString.describe() wrappers,
@@ -666,15 +676,15 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         componentType: z.enum(['Portal', 'Orchestrator', 'Supervisor', 'Actor', 'Store', 'Index', 'Registry', 'Adapter', 'Observer', 'Specialist', 'Repository', 'Gateway']).describe('The building block, or pattern (Repository/Gateway)'),
         owns: z.array(z.string()).optional().describe('Member block ids privately owned by this component (patterns only)'),
         dependsOn: z.array(z.string()).optional().describe('IDs of other components this collaborates with (facades or standalone blocks)'),
-        portalType: z.enum(['HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'Custom']).optional().describe('Required when componentType is Portal'),
-        basePath: z.string().optional().describe('Portal-only: base path/prefix all the portal\'s endpoints mount under (UNEXPECTED_PORTAL_FIELD on non-Portals)'),
+        portalType: z.enum(['HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'Custom']).optional().describe('Portal-only, and expected on every Portal. OMIT IT on any other componentType — passing it there is refused at the write (UNEXPECTED_PORTAL_FIELD), nothing is saved.'),
+        basePath: z.string().optional().describe('Portal-only: base path/prefix all the portal\'s endpoints mount under. OMIT IT on any other componentType — passing it there is refused at the write (UNEXPECTED_PORTAL_FIELD), nothing is saved.'),
         dispatch: z.array(z.object({
           capability: z.string().describe('Capability name exactly as dispatched at runtime (e.g. "shadow_module.get")'),
           component: z.string().describe('Component id serving this capability (must also appear under dependsOn/owns)'),
           method: z.string().describe('Method name on the serving component\'s interface'),
           description: z.string().optional(),
         })).optional().describe('Portal-only: capability → component.method dispatch table for generic-handle portals. Gives the reachability walker real edges and is validated against target interfaces (UNSERVED_CAPABILITY).'),
-        durability: z.enum(['ram-projection', 'durable', 'read-through', 'cache']).optional().describe('Store-only, and every Store should declare one (MISSING_DURABILITY): durable = persisted RAM projection (hydration read-back from a lifecycle init entrypoint required — MISSING_HYDRATION); read-through = persisted with no RAM copy (every read is the read-back, hydration exempt); ram-projection = rebuilt not restored; cache = evictable loss-safe memo state.'),
+        durability: z.enum(['ram-projection', 'durable', 'read-through', 'cache']).optional().describe('Store-only — OMIT IT on any other componentType, where it is refused at the write (DURABILITY_ON_NON_STORE) and nothing is saved. Every Store should declare one (MISSING_DURABILITY): durable = persisted RAM projection (hydration read-back from a lifecycle init entrypoint required — MISSING_HYDRATION); read-through = persisted with no RAM copy (every read is the read-back, hydration exempt); ram-projection = rebuilt not restored; cache = evictable loss-safe memo state.'),
         emits: z.array(z.object({
           topic: z.string().describe('Topic/channel name exactly as used on the bus'),
           event: z.string().optional().describe('Optional event name within the topic (informational; pairing is by topic)'),
@@ -690,11 +700,11 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ id, name, description, subsystem, componentType, owns, dependsOn, portalType, basePath, dispatch, durability, emits, subscribesTo, ext }) => {
       try {
-        const { loadSubsystemSpec, saveComponentSpec } = requireSpecs();
+        const { loadSubsystemSpec } = requireSpecs();
         const sub = loadSubsystemSpec(subsystem);
         if (!sub) return errText(`Parent subsystem "${subsystem}" does not exist.`);
         const now = new Date().toISOString();
-        const notices = saveComponentSpec({
+        const candidate: ComponentSpec = {
           id,
           name,
           description,
@@ -712,7 +722,12 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           status: 'draft',
           createdAt: now,
           updatedAt: now,
-        });
+        };
+
+        // addComponent gates the candidate before persisting it: a field that
+        // contradicts componentType is refused while it is still only an
+        // argument, so nothing reaches disk and the fix is to retry the call.
+        const notices = addComponent(candidate);
         const noticeBlock = notices.length ? `\n\nNOTICE:\n- ${notices.join('\n- ')}` : '';
         return text(`Successfully added L2 Component Spec "${name}" (${id}, ${componentType}).${noticeBlock}`);
       } catch (e) {
@@ -1167,8 +1182,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ kind, id, delta }) => {
       try {
-        const specs = requireSpecs();
-        const notices = specs.updateSpec(kind, id, delta);
+        const notices = updateSpecGated(kind, id, delta);
         const noticeBlock = notices.length ? `\n\nNOTICE:\n- ${notices.join('\n- ')}` : '';
         return text(`Successfully updated ${kind} spec "${id}".${noticeBlock}`);
       } catch (e) {

@@ -173,11 +173,35 @@ export interface RuleContext {
   ): void;
 }
 
+/**
+ * How much of the tree a rule must see to reach its verdict.
+ *
+ * - `'tree'` (the default) — the check reads relationships BETWEEN specs: a
+ *   component's interfaces, narrative reachability, the dependency graph. It is
+ *   only meaningful against a fully loaded tree.
+ * - `'spec'` — the check reads nothing but each spec's OWN fields, so it is a
+ *   pure function of one spec. That is what lets it also run against a
+ *   CANDIDATE spec BEFORE the write (see rules/candidate.ts), turning what
+ *   would otherwise be a permanent validate-time error into a refused write
+ *   with the same code and message.
+ *
+ * A rule that mixes the two belongs SPLIT in two, so the intrinsic half can
+ * reach the write boundary — see portalFieldsRule/portalsRule and
+ * durabilityDeclarationRule/durabilityRule.
+ */
+export type RuleScope = 'spec' | 'tree';
+
 export interface SddRule {
   /** Stable rule id (kebab-case), e.g. "stereotype-dependencies". */
   name: string;
   /** One-paragraph description of what the rule enforces and why. */
   description: string;
+  /**
+   * What the check needs to see (see RuleScope). Defaults to 'tree' — the
+   * conservative answer, since a rule that has not declared itself intrinsic
+   * must never be handed a one-spec context.
+   */
+  scope?: RuleScope;
   /** Every issue code this rule can emit, with default severity and summary. */
   codes: RuleCode[];
   check(ctx: RuleContext): void;
