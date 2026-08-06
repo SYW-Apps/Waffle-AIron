@@ -1,0 +1,15 @@
+{
+  "stateId": {
+    "algorithm": "sha256",
+    "digest": "61e48b3c9c45eb7128953c3c0117c0d49ef41e1c8027e9e017c9747e67e3d24d"
+  },
+  "lockedAt": "2026-07-25T17:33:42.941Z",
+  "lockedBy": "local:ShutYourWaffle",
+  "validatorVersion": "5.0.2-dev.14",
+  "validationResult": {
+    "valid": true,
+    "errors": 0,
+    "warnings": 0
+  },
+  "status": "ready"
+}
