@@ -53,10 +53,14 @@ methods:
   - name: saveComponentSpec
     narrative:
       - stepNumber: 1
-        description: Call saveComponentSpec on core portal
+        description: >-
+          Forward to sdd_core's gated authoring entry (addComponent): intrinsic candidate rules
+          judge the spec before anything reaches disk, then it performs the saveComponentSpec write
+          on the core portal
         type: call
         targetComponent: core_portal
         targetMethod: saveComponentSpec
+    symbol: addComponent
   - name: loadComponentSpec
     narrative:
       - stepNumber: 1
@@ -147,4 +151,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-24T18:14:40.597Z'
+updatedAt: '2026-08-06T08:21:58.298Z'
