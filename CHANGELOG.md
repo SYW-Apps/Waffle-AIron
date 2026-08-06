@@ -198,6 +198,34 @@ arguments"* — the schema never required them; the spec just could not be repai
   repairable via `unset`. `rules.sddRuleSeverity` disarms the gate exactly as it
   disarms the same code in `validate`.
 
+### Hosted web UI: custom theme builder (new, `feat/webapp-custom-theme-builder`)
+
+The theme picker's three built-in palettes are now a starting point, not the
+menu. A **theme builder** (`/themes`, reached from the header menu's new
+"Custom themes" section) lets a user author, duplicate, and delete their own
+themes, stored per browser alongside the existing UI settings.
+
+- **Sparse overrides over the derived engine.** wairon derives its whole
+  `--wairon-*` palette from one primary color, so a custom theme stores only
+  the edits: resolution is derive(primary, mode) → base overrides → per-mode
+  overrides. Every field in the builder shows the resolved value, marks whether
+  it is `derived` or `custom`, and resets per field — untouched tokens keep
+  adapting to light/dark/high-contrast. (The reference SYW builder this ports
+  layers derivation *over* a full snapshot, which silently discards base edits;
+  the inversion is deliberate.)
+- **The editor.** Grouped token editors (brand, surfaces, text, borders &
+  effects, status) with color pickers + alpha, shadow presets, and free-form
+  CSS for gradients; a seed control that re-derives the full palette from one
+  color; per-mode override pinning; live surface/typography previews with
+  WCAG contrast ratios; and a "generate accessible text set" pass that pins
+  AA-compliant (4.5:1) text tokens for the previewed mode. Edits stage in a
+  local draft with a floating save bar — nothing applies or persists until
+  saved.
+- **Custom themes are first-class everywhere**: they appear in the header-menu
+  and login-cog pickers, re-theme the canvas chrome through the bridge, and
+  `-rgb` companions + the accessible primary-contrast recompute from the final
+  colors automatically. A vanished custom id degrades to the default theme.
+
 ### Fixes
 
 - **A stale lock reported itself as locked.** The hosted project config view judged

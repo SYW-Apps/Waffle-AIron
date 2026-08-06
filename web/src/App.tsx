@@ -21,6 +21,7 @@ import { Approvals } from './views/Approvals';
 import { Audit } from './views/Audit';
 import { Health } from './views/Health';
 import { Instance } from './views/Instance';
+import { ThemeBuilder } from './views/ThemeBuilder';
 import { post } from './api';
 
 interface NavItem {
@@ -132,6 +133,7 @@ function Shell() {
             <Route path="/projects" element={<Projects />} />
             <Route path="/projects/:projectId/*" element={<ProjectOps />} />
             <Route path="/agents" element={<Tokens />} />
+            <Route path="/themes" element={<ThemeBuilder />} />
             <Route path="/admin/users" element={<Users />} />
             <Route path="/admin/roles" element={<Roles />} />
             <Route path="/admin/permissions" element={<Permissions />} />

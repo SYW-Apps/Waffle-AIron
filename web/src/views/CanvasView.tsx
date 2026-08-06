@@ -32,7 +32,7 @@ export function CanvasView({
     [projectId],
     [`project:${projectId}`, 'projects'],
   );
-  const { themeId, appearance } = useSettings();
+  const { themeId, appearance, customThemes } = useSettings();
   // Hosted app has a /projects/<id>/specs editor to deep-link into; the local-dev
   // canvas (ctx.local) does not, so the "Open in Specs" affordance stays hidden there.
   const { ctx } = useSession();
@@ -41,7 +41,7 @@ export function CanvasView({
   // semantic content colors; the SELECTED app palette is overlaid on the
   // chrome via CSS-variable overrides.
   const canvasTheme = engineTheme(appearance);
-  const canvasVars = useMemo(() => engineVars(themeId, appearance), [themeId, appearance]);
+  const canvasVars = useMemo(() => engineVars(themeId, appearance, customThemes), [themeId, appearance, customThemes]);
 
   const navigate = useNavigate();
   const hostRef = useRef<HTMLDivElement | null>(null);
